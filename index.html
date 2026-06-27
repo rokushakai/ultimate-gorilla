@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<!-- スマホでの拡大縮小・スクロールを抑制し、アプリっぽい操作感にする -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>究極ゴリラ ULTIMATE GORILLA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+
+  <!-- ===== 上部ステータスバー ===== -->
+  <div id="status-bar">
+    <div class="status-row">
+      <span id="status-name">勇者の子孫</span>
+      <span id="status-job">(サッカー部)</span>
+      <span id="status-lv">Lv.1</span>
+    </div>
+    <div class="status-row">
+      <span id="status-gold">💰 0G</span>
+      <button id="btn-dex" class="small-btn">📖図鑑(0/0)</button>
+      <button id="btn-settings" class="small-btn">⚙️設定</button>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">HP</span>
+      <div class="bar-bg"><div id="hp-bar" class="bar-fill hp"></div></div>
+      <span id="hp-text" class="bar-text">20/20</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">MP</span>
+      <div class="bar-bg"><div id="mp-bar" class="bar-fill mp"></div></div>
+      <span id="mp-text" class="bar-text">6/6</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">EXP</span>
+      <div class="bar-bg"><div id="exp-bar" class="bar-fill exp"></div></div>
+      <span id="exp-text" class="bar-text">0/20</span>
+    </div>
+  </div>
+
+  <!-- ===== フィールド画面 ===== -->
+  <div id="field-screen">
+    <div id="field-viewport"></div>
+    <div id="toast"></div>
+  </div>
+
+  <!-- ===== 十字キー（スマホ操作用） ===== -->
+  <div id="dpad">
+    <button id="btn-up"    class="dpad-btn dpad-up">▲</button>
+    <button id="btn-left"  class="dpad-btn dpad-left">◀</button>
+    <button id="btn-right" class="dpad-btn dpad-right">▶</button>
+    <button id="btn-down"  class="dpad-btn dpad-down">▼</button>
+  </div>
+
+  <!-- ===== 戦闘画面（普段は非表示） ===== -->
+  <div id="battle-screen" class="hidden">
+    <div id="battle-enemy">
+      <div id="enemy-emoji">❓</div>
+      <div id="enemy-name">敵の名前</div>
+      <div class="bar-bg"><div id="enemy-hp-bar" class="bar-fill hp"></div></div>
+      <div id="enemy-hp-text" class="bar-text">10/10</div>
+    </div>
+
+    <div id="battle-log"></div>
+
+    <div id="battle-player-status">
+      <span id="b-hp-text">HP 20/20</span>
+      <span id="b-mp-text">MP 6/6</span>
+    </div>
+
+    <!-- 通常メニュー：たたかう/まほう/アイテム/つかまえる/にげる -->
+    <div id="battle-menu">
+      <button id="btn-fight">⚔ たたかう</button>
+      <button id="btn-magic">✨ まほう</button>
+      <button id="btn-item">🧪 アイテム</button>
+      <button id="btn-catch">🪤 つかまえる</button>
+      <button id="btn-run">💨 にげる</button>
+    </div>
+
+    <!-- まほう選択サブメニュー（動的に生成） -->
+    <div id="magic-menu" class="hidden submenu"></div>
+    <!-- アイテム選択サブメニュー（やくそう/捕獲ロープ。動的に生成） -->
+    <div id="item-menu" class="hidden submenu"></div>
+  </div>
+
+  <!-- ===== UMA図鑑モーダル ===== -->
+  <div id="dex-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>UMA図鑑</h2>
+      <div id="dex-list"></div>
+      <button id="btn-dex-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+  <!-- ===== 究極ゴリラ発見モーダル ===== -->
+  <div id="discovery-modal" class="modal hidden">
+    <div class="modal-box discovery-box">
+      <div class="discovery-emoji">🦍</div>
+      <h2>ついに発見した!!</h2>
+      <p>伝説のUMA「究極ゴリラ」が目の前に現れた——</p>
+      <p class="small">勇者の子孫が探し求めていたものは、本当に存在した。</p>
+      <p class="small">あまりの強さに、体が震える……これはまだ歯が立つ相手ではないかもしれない。</p>
+      <button id="btn-discovery-continue" class="modal-btn">戦闘へ</button>
+    </div>
+  </div>
+
+  <!-- ===== レベルアップモーダル ===== -->
+  <div id="levelup-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>レベルアップ!</h2>
+      <p id="levelup-text"></p>
+      <button id="btn-levelup-close" class="modal-btn">OK</button>
+    </div>
+  </div>
+
+  <!-- ===== 商人モーダル(フィールドの🏪に触れると開く) ===== -->
+  <div id="merchant-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>🏪 商人</h2>
+      <div id="merchant-body"></div>
+      <button id="btn-merchant-close" class="modal-btn">やめる</button>
+    </div>
+  </div>
+
+  <!-- ===== 転職モーダル(フィールドの⛩️に触れると開く) ===== -->
+  <div id="god-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>⛩️ 転職の社</h2>
+      <p class="small">なりたい部活・職業を選んでください。</p>
+      <div id="god-body"></div>
+      <button id="btn-god-close" class="modal-btn">やめる</button>
+    </div>
+  </div>
+
+  <!-- ===== 設定モーダル(画面右上「⚙️設定」から開く) ===== -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>⚙️ 設定</h2>
+      <p class="small">主人公の歩く速さ(十字キーを押しっぱなしにした時の速度)</p>
+      <div id="settings-body"></div>
+      <button id="btn-settings-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- type="module" は file:// では動かないブラウザがあるため使わない -->
+<script src="script.js"></script>
+</body>
+</html>

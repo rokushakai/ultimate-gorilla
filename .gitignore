@@ -1,0 +1,31 @@
+# OS生成ファイル
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# エディタ/IDE設定
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# スクリーンショット・キャプチャ類
+*.png
+*.jpg
+*.jpeg
+*.gif
+screenshots/
+
+# ログ・一時ファイル
+*.log
+*.tmp
+*.bak
+
+# 旧バージョンのローカル控え(公開リポジトリには含めない)
+backup_v1/

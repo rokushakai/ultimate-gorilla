@@ -1,0 +1,464 @@
+/* =========================================================
+   究極ゴリラ ULTIMATE GORILLA - スタイルシート
+   スマホ縦画面を前提としたレイアウト。
+   PCブラウザでも中央に幅480pxで表示されるようにしている。
+   ========================================================= */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #1a1a2e;
+  color: #eee;
+  font-family: "Helvetica Neue", Arial, "Hiragino Sans", "Meiryo", sans-serif;
+  overscroll-behavior: none;
+}
+
+/* ゲーム全体のコンテナ。スマホなら画面いっぱい、PCなら480px幅で中央表示 */
+#game {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  height: 100dvh;
+  min-height: 100vh;
+  margin: 0 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f1a;
+  border-left: 1px solid #333;
+  border-right: 1px solid #333;
+}
+
+/* ===================== 上部ステータスバー ===================== */
+#status-bar {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  background: #16213e;
+  border-bottom: 2px solid #0f3460;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+#status-name {
+  font-weight: bold;
+  font-size: 14px;
+  flex: 1;
+}
+
+#status-job {
+  font-size: 11px;
+  color: #8ecae6;
+}
+
+#status-lv {
+  font-size: 13px;
+  color: #ffd166;
+  font-weight: bold;
+}
+
+#status-gold {
+  font-size: 12px;
+  color: #ffd166;
+  font-weight: bold;
+  flex: 1;
+}
+
+.small-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid #ffd166;
+  background: #1b263b;
+  color: #ffd166;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+
+.bar-label {
+  width: 26px;
+  font-size: 10px;
+  color: #aaa;
+}
+
+.bar-bg {
+  flex: 1;
+  height: 10px;
+  background: #333;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 100%;
+  transition: width 0.25s ease-out;
+}
+
+.bar-fill.hp { background: linear-gradient(90deg, #06d6a0, #1b9aaa); }
+.bar-fill.mp { background: linear-gradient(90deg, #4cc9f0, #4361ee); }
+.bar-fill.exp { background: linear-gradient(90deg, #ffd166, #f4a261); }
+
+.bar-text {
+  width: 64px;
+  text-align: right;
+  font-size: 10px;
+  color: #ccc;
+}
+
+/* ===================== フィールド画面 ===================== */
+#field-screen {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a14;
+  overflow: hidden;
+  touch-action: none; /* スワイプでページがスクロールしないようにする */
+}
+
+#field-viewport {
+  display: grid;
+  /* 列数・行数はJS側でCSS変数として設定する */
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  width: 100%;
+  aspect-ratio: var(--cols) / var(--rows);
+  background: #14532d;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: min(6vw, 28px);
+  line-height: 1;
+}
+
+/* 取得アイテムやレベルアップ等の通知トースト */
+#toast {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffd166;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 50;
+}
+#toast.show {
+  opacity: 1;
+}
+
+/* ===================== 十字キー ===================== */
+#dpad {
+  flex: 0 0 auto;
+  position: relative;
+  height: 140px;
+  background: #16213e;
+  border-top: 2px solid #0f3460;
+}
+
+.dpad-btn {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  font-size: 20px;
+  background: #1b263b;
+  color: #fff;
+  border: 1px solid #415a77;
+  border-radius: 10px;
+  touch-action: none; /* 押しっぱなし移動中にスクロール/ズームが起きないようにする */
+}
+.dpad-btn:active {
+  background: #415a77;
+}
+
+.dpad-up    { top: 14px;  left: 50%; transform: translateX(-50%); }
+.dpad-down  { bottom: 14px; left: 50%; transform: translateX(-50%); }
+.dpad-left  { top: 50%;  left: calc(50% - 64px); transform: translateY(-50%); }
+.dpad-right { top: 50%;  left: calc(50% + 14px); transform: translateY(-50%); }
+
+/* ===================== 戦闘画面 ===================== */
+#battle-screen {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, #3a1c1c, #0f0f1a 70%);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  z-index: 20;
+}
+
+#battle-enemy {
+  text-align: center;
+  margin-top: 10px;
+}
+
+#enemy-emoji {
+  font-size: 90px;
+  line-height: 1;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+#enemy-name {
+  font-weight: bold;
+  font-size: 16px;
+  margin: 6px 0;
+}
+
+#battle-enemy .bar-bg {
+  width: 70%;
+  margin: 0 auto;
+}
+#enemy-hp-text {
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+  color: #ccc;
+}
+
+#battle-log {
+  flex: 1 1 auto;
+  margin: 14px 0;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid #415a77;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+#battle-log p {
+  margin: 0 0 4px 0;
+}
+
+#battle-player-status {
+  display: flex;
+  justify-content: space-around;
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: #ffd166;
+  font-weight: bold;
+}
+
+#battle-menu, .submenu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+#battle-menu button, .submenu button {
+  padding: 14px 6px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid #ffd166;
+  background: #1b263b;
+  color: #fff;
+  font-weight: bold;
+}
+
+#battle-menu button:active, .submenu button:active {
+  background: #ffd166;
+  color: #1b263b;
+}
+
+#btn-run {
+  grid-column: span 2;
+  background: #533;
+}
+
+#battle-menu button:disabled, .submenu button:disabled {
+  opacity: 0.4;
+}
+
+/* ===================== モーダル共通 ===================== */
+.modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.modal-box {
+  width: 85%;
+  max-height: 80%;
+  overflow-y: auto;
+  background: #16213e;
+  border: 2px solid #ffd166;
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.modal-box h2 {
+  margin-top: 0;
+  color: #ffd166;
+}
+
+.modal-btn {
+  margin-top: 14px;
+  padding: 10px 24px;
+  border-radius: 20px;
+  border: none;
+  background: #ffd166;
+  color: #1b263b;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.discovery-box .discovery-emoji {
+  font-size: 80px;
+  animation: float 1.6s ease-in-out infinite;
+}
+
+.small {
+  font-size: 12px;
+  color: #ccc;
+}
+
+/* UMA図鑑リスト */
+#dex-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 10px 0;
+}
+.dex-item {
+  background: #0f3460;
+  border-radius: 10px;
+  padding: 8px 2px;
+  font-size: 24px;
+}
+.dex-item.unknown {
+  opacity: 0.25;
+}
+.dex-item.seen {
+  opacity: 0.6;
+}
+.dex-item .dex-item-name {
+  display: block;
+  font-size: 9px;
+  margin-top: 4px;
+  color: #ccc;
+}
+
+/* サブメニューの「戻る」ボタンは2列分の幅を使う */
+.submenu-back {
+  grid-column: span 2;
+  background: #0f3460 !important;
+}
+
+/* ===================== 商人・転職モーダル共通パーツ ===================== */
+.shop-menu-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid #ffd166;
+  background: #1b263b;
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  text-align: left;
+}
+
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid #333;
+  font-size: 12px;
+  text-align: left;
+}
+
+.shop-row button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #ffd166;
+  background: #0f3460;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+}
+.shop-row button:disabled {
+  opacity: 0.35;
+}
+
+.shop-back-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #415a77;
+  background: #0f3460;
+  color: #fff;
+  font-weight: bold;
+}
+
+.job-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  border-radius: 10px;
+  border: 1px solid #8ecae6;
+  background: #1b263b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  text-align: left;
+}
+.job-desc {
+  display: block;
+  font-size: 11px;
+  font-weight: normal;
+  color: #aad;
+  margin-top: 2px;
+}
+
+#merchant-body, #god-body {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.hidden {
+  display: none !important;
+}
