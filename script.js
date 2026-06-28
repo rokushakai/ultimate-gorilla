@@ -110,8 +110,8 @@
     { id: "bread", name: "パン", type: "misc", buyPrice: 0, sellPrice: 0 },
     { id: "bento", name: "お弁当", type: "misc", buyPrice: 0, sellPrice: 0 },
     { id: "ramen", name: "ラーメン", type: "misc", buyPrice: 0, sellPrice: 0 },
-    { id: "coughsyrup", name: "せき止めシロップ", type: "misc", cures: "allergy", buyPrice: 0, sellPrice: 0 },
-    { id: "deodorant", name: "デオドラントスプレー", type: "misc", cures: "smell", buyPrice: 0, sellPrice: 0 }
+    { id: "coughsyrup", name: "せき止めシロップ", type: "cure", cures: "allergy", buyPrice: 12, sellPrice: 4, trackable: true },
+    { id: "deodorant", name: "デオドラントスプレー", type: "cure", cures: "smell", buyPrice: 12, sellPrice: 4, trackable: true }
   ];
 
   // --- 武器データ(レガシー仕様。装備の概念は持たず、購入/取得した瞬間にこうげき力へ加算) ---
@@ -125,12 +125,12 @@
   // 入手手段(購入/ドロップ)は未実装。現在は装備変更画面からすべて選択できる。
   var EQUIP_WEAPON_DATA = [
     { id: "woodstick", name: "木の棒", atkBonus: 0 },
-    { id: "wirebrush", name: "ワイヤーブラシ", atkBonus: 2 },
+    { id: "wirebrush", name: "ワイヤーブラシ", atkBonus: 2, buyPrice: 8 },
     { id: "stone", name: "石", atkBonus: 3 },
-    { id: "saw", name: "ノコギリ", atkBonus: 4 },
+    { id: "saw", name: "ノコギリ", atkBonus: 4, buyPrice: 15 },
     { id: "magicwand", name: "魔法のステッキ", atkBonus: 5, mpBonus: 5 },
-    { id: "survivalknife", name: "サバイバルナイフ", atkBonus: 6 },
-    { id: "ironrod", name: "鉄の棒", atkBonus: 8 },
+    { id: "survivalknife", name: "サバイバルナイフ", atkBonus: 6, buyPrice: 25 },
+    { id: "ironrod", name: "鉄の棒", atkBonus: 8, buyPrice: 35 },
     { id: "boomerang", name: "ブーメラン", atkBonus: 9 },
     { id: "crowbar", name: "バールのようなもの", atkBonus: 10 },
     { id: "tennisracket", name: "テニスラケット", atkBonus: 10 },
@@ -150,8 +150,8 @@
 
   var ARMOR_DATA = [
     { id: "tshirt", name: "Tシャツ", defBonus: 0 },
-    { id: "rockt", name: "ロックT", defBonus: 2 },
-    { id: "leatherjacket", name: "革ジャン", defBonus: 4 },
+    { id: "rockt", name: "ロックT", defBonus: 2, buyPrice: 10 },
+    { id: "leatherjacket", name: "革ジャン", defBonus: 4, buyPrice: 20 },
     { id: "samuraiarmor", name: "武者よろい", defBonus: 8 },
     { id: "westernarmor", name: "西洋風よろい", defBonus: 12 },
     { id: "nobunagaarmor", name: "信長のよろい", defBonus: 16, hpBonus: 10 },
@@ -161,14 +161,14 @@
 
   var SHIELD_DATA = [
     { id: "cardboard", name: "段ボールのたて", defBonus: 0 },
-    { id: "ironshield", name: "鉄のたて", defBonus: 5 },
+    { id: "ironshield", name: "鉄のたて", defBonus: 5, buyPrice: 22 },
     { id: "dragonshield", name: "ドラゴンのたて", defBonus: 12 },
     { id: "sixfoldshield", name: "六連のたて", defBonus: 20 }
   ];
 
   var HELMET_DATA = [
     { id: "hachimaki", name: "男塾ハチマキ", defBonus: 0 },
-    { id: "helmet", name: "ヘルメット", defBonus: 2 },
+    { id: "helmet", name: "ヘルメット", defBonus: 2, buyPrice: 10 },
     { id: "steelkabuto", name: "鋼鉄のかぶと", defBonus: 5 },
     { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 8 },
     { id: "shingenkabuto", name: "信玄のかぶと", defBonus: 11 },
@@ -269,6 +269,8 @@
       gold: 20,
       potionCount: 1,
       ropeCount: 0,
+      coughsyrupCount: 0,
+      deodorantCount: 0,
       spells: [],        // 習得済みスペルのidリスト
       job: null,         // JOB_DATAへの参照。initで既定値を設定する
       dex: {},           // id -> "seen" | "captured"
@@ -276,8 +278,15 @@
       walkSpeed: "normal", // "slow" | "normal" | "fast" (設定画面で変更)
       // 装備スロット(§8.5)。値は各DATA配列のid。先頭=ボーナス0の初期装備。
       equipment: { weapon: "woodstick", armor: "tshirt", shield: "cardboard", helmet: "hachimaki" },
+      // 所持している装備のidリスト(Version 0.4.1: 装備の所持制)。
+      // 初期装備は無条件で所持している。
+      ownedWeapons: ["woodstick"],
+      ownedArmors: ["tshirt"],
+      ownedShields: ["cardboard"],
+      ownedHelmets: ["hachimaki"],
       statusAilments: {}, // id -> 残りターン/歩数(0より大きい間だけ効果がある)
-      seenOpening: false  // オープニングイベントを見たかどうか
+      seenOpening: false, // オープニングイベントを見たかどうか
+      seenGoal: false     // 目的説明画面を見たかどうか
     },
     stepsSinceEncounter: 0,
     inBattle: false,
@@ -331,9 +340,13 @@
     updateStatusBar();
     if (loaded) showToast("💾 前回のデータを読み込みました");
 
-    // オープニングイベント(初回起動時のみ)
+    // オープニングイベント(初回起動時のみ)。オープニング後に目的説明を表示する
+    // 流れだが、Version 0.4.1より前から遊んでいるプレイヤーはオープニング済み
+    // (seenOpening=true)なので、その場合は目的説明だけを表示する。
     if (!state.player.seenOpening) {
       openModal("opening-modal");
+    } else if (!state.player.seenGoal) {
+      openModal("goal-modal");
     }
   }
 
@@ -376,11 +389,11 @@
     updateStatusBar();
   }
 
-  function clearAilment(id) {
+  function clearAilment(id, silent) {
     if (!hasAilment(id)) return;
     var info = AILMENT_INFO[id];
     delete state.player.statusAilments[id];
-    showToast(info.icon + " " + info.name + "が治った！");
+    if (!silent) showToast(info.icon + " " + info.name + "が治った！");
     updateStatusBar();
   }
 
@@ -761,6 +774,10 @@
       '>🧪 やくそう x' + p.potionCount + "</button>";
     html += '<button id="item-rope"' + (p.ropeCount <= 0 ? " disabled" : "") +
       '>🪢 捕獲ロープ x' + p.ropeCount + "</button>";
+    html += '<button id="item-coughsyrup"' + (p.coughsyrupCount <= 0 ? " disabled" : "") +
+      '>🍯 せき止めシロップ x' + p.coughsyrupCount + "</button>";
+    html += '<button id="item-deodorant"' + (p.deodorantCount <= 0 ? " disabled" : "") +
+      '>🧴 デオドラントスプレー x' + p.deodorantCount + "</button>";
     html += '<button class="submenu-back" id="btn-item-back">戻る</button>';
     menu.innerHTML = html;
     menu.classList.remove("hidden");
@@ -768,6 +785,8 @@
 
     document.getElementById("item-potion").onclick = usePotion;
     document.getElementById("item-rope").onclick = useRope;
+    document.getElementById("item-coughsyrup").onclick = function () { useCureItem("coughsyrup"); };
+    document.getElementById("item-deodorant").onclick = function () { useCureItem("deodorant"); };
     document.getElementById("btn-item-back").onclick = function () {
       menu.classList.add("hidden");
       document.getElementById("battle-menu").classList.remove("hidden");
@@ -812,6 +831,30 @@
     if (!attemptCapture(ROPE_ITEM.captureBonus)) {
       setTimeout(enemyTurn, 600);
     }
+  }
+
+  // せき止めシロップ(アレルギーを治療)/デオドラントスプレー(においを治療)。
+  // 該当する状態異常でない時は何も消費せずメッセージだけ表示する。
+  function useCureItem(itemId) {
+    if (state.locked) return;
+    var p = state.player;
+    var it = findById(ITEM_DATA, itemId);
+    if (getItemCount(itemId) <= 0) {
+      log(it.name + "を持っていない！");
+      return;
+    }
+    backToBattleMenu();
+    if (!hasAilment(it.cures)) {
+      log("🤔 今は使う必要がない。");
+      return; // 不要な時は消費せず、ターンも経過させない
+    }
+    setBattleLocked(true);
+    addItemCount(itemId, -1);
+    var cureMessage = it.cures === "allergy" ? "アレルギーが治った！" : "においが消えた！";
+    clearAilment(it.cures, true);
+    log("✨ " + it.name + "を使った！ " + cureMessage);
+    updateStatusBar();
+    setTimeout(enemyTurn, 600);
   }
 
   // ---------------------------------------------------------
@@ -1058,6 +1101,55 @@
   }
 
   // ---------------------------------------------------------
+  // 19.5 ステータス確認画面
+  // ---------------------------------------------------------
+  function openStatusModal() {
+    openModal("status-modal");
+    renderStatusBody();
+  }
+
+  function renderStatusBody() {
+    var p = state.player;
+    var eq = p.equipment;
+    var weaponName = (findById(EQUIP_WEAPON_DATA, eq.weapon) || {}).name || "なし";
+    var armorName = (findById(ARMOR_DATA, eq.armor) || {}).name || "なし";
+    var shieldName = (findById(SHIELD_DATA, eq.shield) || {}).name || "なし";
+    var helmetName = (findById(HELMET_DATA, eq.helmet) || {}).name || "なし";
+    var spellNames = p.spells.length
+      ? p.spells.map(function (id) { return (findById(SPELL_DATA, id) || {}).name; }).join("、")
+      : "まだ覚えていない";
+    var ailmentText = getAilmentStatusText() || "なし";
+    var capturedCount = Object.keys(p.umaInventory).reduce(function (sum, id) { return sum + p.umaInventory[id]; }, 0);
+    var dexDiscovered = Object.keys(p.dex).length;
+
+    var html = "";
+    html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
+    html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
+    html += '<div class="shop-row"><span>レベル</span><span>Lv.' + p.level + "</span></div>";
+    html += '<div class="shop-row"><span>HP</span><span>' + p.hp + "/" + p.maxHp + "</span></div>";
+    html += '<div class="shop-row"><span>MP</span><span>' + p.mp + "/" + p.maxMp + "</span></div>";
+    html += '<div class="shop-row"><span>経験値</span><span>' + p.exp + "/" + p.nextExp + "</span></div>";
+    html += '<div class="shop-row"><span>所持金</span><span>💰' + p.gold + "G</span></div>";
+    html += '<div class="shop-row"><span>状態異常</span><span>' + ailmentText + "</span></div>";
+    html += "<h3>装備</h3>";
+    html += '<div class="shop-row"><span>武器</span><span>' + weaponName + "</span></div>";
+    html += '<div class="shop-row"><span>防具</span><span>' + armorName + "</span></div>";
+    html += '<div class="shop-row"><span>盾</span><span>' + shieldName + "</span></div>";
+    html += '<div class="shop-row"><span>兜</span><span>' + helmetName + "</span></div>";
+    html += "<h3>まほう</h3><p class=\"small\">" + spellNames + "</p>";
+    html += "<h3>所持アイテム</h3>";
+    html += '<div class="shop-row"><span>やくそう</span><span>x' + p.potionCount + "</span></div>";
+    html += '<div class="shop-row"><span>捕獲ロープ</span><span>x' + p.ropeCount + "</span></div>";
+    html += '<div class="shop-row"><span>せき止めシロップ</span><span>x' + p.coughsyrupCount + "</span></div>";
+    html += '<div class="shop-row"><span>デオドラントスプレー</span><span>x' + p.deodorantCount + "</span></div>";
+    html += "<h3>UMA</h3>";
+    html += '<div class="shop-row"><span>所持UMA総数</span><span>' + capturedCount + "匹</span></div>";
+    html += '<div class="shop-row"><span>図鑑進捗</span><span>' + dexDiscovered + "/" + UMA_DATA.length + "</span></div>";
+
+    document.getElementById("status-body").innerHTML = html;
+  }
+
+  // ---------------------------------------------------------
   // 20. 商人モーダル(買う/アイテムを売る/UMAを売る)
   // ---------------------------------------------------------
   function openMerchantModal() {
@@ -1067,14 +1159,59 @@
 
   function renderMerchantMain() {
     var body = document.getElementById("merchant-body");
-    body.innerHTML =
+    var html =
       "<p>所持金: " + state.player.gold + " G</p>" +
-      '<button class="shop-menu-btn" id="m-buy">🛍️ 買う</button>' +
+      '<button class="shop-menu-btn" id="m-buy">🛍️ 買う</button>';
+    EQUIP_SLOTS.forEach(function (slotInfo) {
+      html += '<button class="shop-menu-btn" data-buy-equip-slot="' + slotInfo.slot + '">' +
+        slotInfo.label + "を買う</button>";
+    });
+    html +=
       '<button class="shop-menu-btn" id="m-sell-item">📤 アイテムを売る</button>' +
       '<button class="shop-menu-btn" id="m-sell-uma">🦍 UMAを売る</button>';
+    body.innerHTML = html;
     document.getElementById("m-buy").onclick = renderMerchantBuy;
     document.getElementById("m-sell-item").onclick = renderMerchantSellItem;
     document.getElementById("m-sell-uma").onclick = renderMerchantSellUma;
+    body.querySelectorAll("button[data-buy-equip-slot]").forEach(function (btn) {
+      btn.onclick = function () {
+        renderMerchantBuyEquip(findEquipSlot(btn.getAttribute("data-buy-equip-slot")));
+      };
+    });
+  }
+
+  function renderMerchantBuyEquip(slotInfo) {
+    var body = document.getElementById("merchant-body");
+    var html = "<p>所持金: " + state.player.gold + " G</p>";
+    var purchasable = slotInfo.data().filter(function (item) { return item.buyPrice > 0; });
+    if (purchasable.length === 0) html += '<p class="small">今は販売中の' + slotInfo.label + 'がない。</p>';
+    purchasable.forEach(function (item) {
+      var owned = isEquipOwned(slotInfo, item.id);
+      html += '<div class="shop-row"><span>' + item.name + " (" + bonusText(item) + ", " + item.buyPrice + "G)</span>" +
+        '<button data-buy-equip="' + item.id + '"' + (owned ? " disabled" : "") + ">" +
+        (owned ? "購入済み" : "購入") + "</button></div>";
+    });
+    html += '<button class="shop-back-btn" id="shop-back">戻る</button>';
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-buy-equip]").forEach(function (btn) {
+      btn.onclick = function () {
+        buyEquip(slotInfo, btn.getAttribute("data-buy-equip"));
+        renderMerchantBuyEquip(slotInfo);
+      };
+    });
+    document.getElementById("shop-back").onclick = renderMerchantMain;
+  }
+
+  function buyEquip(slotInfo, id) {
+    var p = state.player;
+    var item = findById(slotInfo.data(), id);
+    if (isEquipOwned(slotInfo, id)) return;
+    if (p.gold < item.buyPrice) { showToast("お金が足りない！"); return; }
+    p.gold -= item.buyPrice;
+    p[slotInfo.ownedKey].push(id);
+    showToast(item.name + "を購入！装備変更画面で装備できます");
+    updateStatusBar();
+    saveGame();
   }
 
   function buyableList() {
@@ -1107,6 +1244,15 @@
     document.getElementById("shop-back").onclick = renderMerchantMain;
   }
 
+  // trackable: true のアイテムは player.<id>Count というフィールドで所持数を管理する。
+  // (例: potion -> potionCount, coughsyrup -> coughsyrupCount)
+  function getItemCount(id) {
+    return state.player[id + "Count"] || 0;
+  }
+  function addItemCount(id, delta) {
+    state.player[id + "Count"] = getItemCount(id) + delta;
+  }
+
   function buyThing(kind, id) {
     var p = state.player;
     if (kind === "weapon") {
@@ -1120,8 +1266,7 @@
       var it = findById(ITEM_DATA, id);
       if (p.gold < it.buyPrice) { showToast("お金が足りない！"); return; }
       p.gold -= it.buyPrice;
-      if (it.id === "potion") p.potionCount++;
-      else if (it.id === "rope") p.ropeCount++;
+      if (it.trackable) addItemCount(it.id, 1);
       showToast(it.name + "を購入！");
     }
     updateStatusBar();
@@ -1133,7 +1278,7 @@
     var p = state.player;
     var html = "<p>所持金: " + p.gold + " G</p>";
     ITEM_DATA.filter(function (it) { return it.trackable; }).forEach(function (it) {
-      var count = it.id === "potion" ? p.potionCount : it.id === "rope" ? p.ropeCount : 0;
+      var count = getItemCount(it.id);
       html += '<div class="shop-row"><span>' + it.name + " x" + count + " (" + it.sellPrice + "G)</span>" +
         '<button data-sellitem="' + it.id + '"' + (count <= 0 ? " disabled" : "") + ">売却</button></div>";
     });
@@ -1151,10 +1296,8 @@
   function sellItem(id) {
     var p = state.player;
     var it = findById(ITEM_DATA, id);
-    var count = id === "potion" ? p.potionCount : id === "rope" ? p.ropeCount : 0;
-    if (count <= 0) return;
-    if (id === "potion") p.potionCount--;
-    else if (id === "rope") p.ropeCount--;
+    if (getItemCount(id) <= 0) return;
+    addItemCount(id, -1);
     p.gold += it.sellPrice;
     showToast(it.name + "を売った！ +" + it.sellPrice + "G");
     updateStatusBar();
@@ -1234,12 +1377,26 @@
   // ---------------------------------------------------------
   // 21.6 装備モーダル(武器/防具/盾/兜。GAME_DESIGN.md §8.5)
   // ---------------------------------------------------------
+  // ownedKey: その区分の所持品リストを保持する player のフィールド名
   var EQUIP_SLOTS = [
-    { slot: "weapon", label: "⚔ 武器", data: function () { return EQUIP_WEAPON_DATA; } },
-    { slot: "armor", label: "🥋 防具", data: function () { return ARMOR_DATA; } },
-    { slot: "shield", label: "🛡 盾", data: function () { return SHIELD_DATA; } },
-    { slot: "helmet", label: "⛑ 兜", data: function () { return HELMET_DATA; } }
+    { slot: "weapon", label: "⚔ 武器", ownedKey: "ownedWeapons", data: function () { return EQUIP_WEAPON_DATA; } },
+    { slot: "armor", label: "🥋 防具", ownedKey: "ownedArmors", data: function () { return ARMOR_DATA; } },
+    { slot: "shield", label: "🛡 盾", ownedKey: "ownedShields", data: function () { return SHIELD_DATA; } },
+    { slot: "helmet", label: "⛑ 兜", ownedKey: "ownedHelmets", data: function () { return HELMET_DATA; } }
   ];
+
+  function isEquipOwned(slotInfo, id) {
+    return state.player[slotInfo.ownedKey].indexOf(id) !== -1;
+  }
+
+  function bonusText(item) {
+    var parts = [];
+    if (item.atkBonus) parts.push("攻+" + item.atkBonus);
+    if (item.defBonus) parts.push("防+" + item.defBonus);
+    if (item.hpBonus) parts.push("HP+" + item.hpBonus);
+    if (item.mpBonus) parts.push("MP+" + item.mpBonus);
+    return parts.join(" ") || "ボーナスなし";
+  }
 
   function openEquipModal() {
     openModal("equip-modal");
@@ -1254,15 +1411,12 @@
       html += "<h3>" + slotInfo.label + "</h3>";
       slotInfo.data().forEach(function (item) {
         var equipped = eq[slotInfo.slot] === item.id;
-        var bonusText = [];
-        if (item.atkBonus) bonusText.push("攻+" + item.atkBonus);
-        if (item.defBonus) bonusText.push("防+" + item.defBonus);
-        if (item.hpBonus) bonusText.push("HP+" + item.hpBonus);
-        if (item.mpBonus) bonusText.push("MP+" + item.mpBonus);
+        var owned = isEquipOwned(slotInfo, item.id);
+        var label = equipped ? "装備中" : owned ? "装備する" : "未所持";
         html += '<div class="shop-row"><span>' + (equipped ? "★ " : "") + item.name +
-          " (" + (bonusText.join(" ") || "ボーナスなし") + ")</span>" +
+          " (" + bonusText(item) + ")</span>" +
           '<button data-equip="' + slotInfo.slot + ":" + item.id + '"' +
-          (equipped ? " disabled" : "") + ">" + (equipped ? "装備中" : "装備する") + "</button></div>";
+          (equipped || !owned ? " disabled" : "") + ">" + label + "</button></div>";
       });
     });
     html += '<button class="shop-back-btn" id="equip-close-inner">とじる</button>';
@@ -1278,7 +1432,16 @@
     };
   }
 
+  function findEquipSlot(slot) {
+    for (var i = 0; i < EQUIP_SLOTS.length; i++) {
+      if (EQUIP_SLOTS[i].slot === slot) return EQUIP_SLOTS[i];
+    }
+    return null;
+  }
+
   function equipItem(slot, id) {
+    var slotInfo = findEquipSlot(slot);
+    if (!isEquipOwned(slotInfo, id)) return; // 未所持は装備できない(画面上も無効化済み)
     state.player.equipment[slot] = id;
     recomputeStats();
     updateStatusBar();
@@ -1304,10 +1467,26 @@
       html += '<button class="job-btn" data-speed="' + key + '">' +
         (key === current ? "★ " : "") + WALK_SPEED_LABELS[key] + "</button>";
     });
+    html += '<p class="small">💾 オートセーブ中: 行動するたびに自動で保存されます。</p>';
+    html += '<button class="shop-menu-btn" id="btn-manual-save">💾 今すぐセーブ</button>';
+    html += '<button class="shop-menu-btn" id="btn-show-goal">🎯 目的を見る</button>';
+    html += '<button class="shop-menu-btn" id="btn-show-help">❓ ヘルプ</button>';
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
       btn.onclick = function () { changeWalkSpeed(btn.getAttribute("data-speed")); };
     });
+    document.getElementById("btn-manual-save").onclick = function () {
+      saveGame();
+      showToast("💾 セーブしました");
+    };
+    document.getElementById("btn-show-goal").onclick = function () {
+      closeModal("settings-modal");
+      openModal("goal-modal");
+    };
+    document.getElementById("btn-show-help").onclick = function () {
+      closeModal("settings-modal");
+      openModal("help-modal");
+    };
   }
 
   function changeWalkSpeed(speed) {
@@ -1330,12 +1509,16 @@
         weaponAtkBonus: p.weaponAtkBonus,
         hp: p.hp, mp: p.mp,
         gold: p.gold, potionCount: p.potionCount, ropeCount: p.ropeCount,
+        coughsyrupCount: p.coughsyrupCount, deodorantCount: p.deodorantCount,
         spells: p.spells, jobId: p.job.id,
         dex: p.dex, umaInventory: p.umaInventory,
         walkSpeed: p.walkSpeed,
         equipment: p.equipment,
+        ownedWeapons: p.ownedWeapons, ownedArmors: p.ownedArmors,
+        ownedShields: p.ownedShields, ownedHelmets: p.ownedHelmets,
         statusAilments: p.statusAilments,
         seenOpening: p.seenOpening,
+        seenGoal: p.seenGoal,
         discoveredFinal: state.discoveredFinal
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1355,13 +1538,28 @@
       p.baseAtk = data.baseAtk; p.baseDef = data.baseDef;
       p.weaponAtkBonus = data.weaponAtkBonus || 0;
       p.gold = data.gold; p.potionCount = data.potionCount; p.ropeCount = data.ropeCount || 0;
+      p.coughsyrupCount = data.coughsyrupCount || 0; p.deodorantCount = data.deodorantCount || 0;
       p.spells = data.spells || [];
       p.dex = data.dex || {};
       p.umaInventory = data.umaInventory || {};
       p.walkSpeed = WALK_SPEED_MS[data.walkSpeed] ? data.walkSpeed : "normal";
       p.equipment = data.equipment || p.equipment;
+      // Version 0.4.1で所持制を追加。古いセーブ(ownedWeapons未保存)は、
+      // その時点で装備していたものを所持品として引き継ぐ救済措置。
+      EQUIP_SLOTS.forEach(function (slotInfo) {
+        var savedOwned = data[slotInfo.ownedKey];
+        if (savedOwned && savedOwned.length) {
+          p[slotInfo.ownedKey] = savedOwned;
+        } else {
+          var startingId = p[slotInfo.ownedKey][0];
+          var equippedId = p.equipment[slotInfo.slot];
+          p[slotInfo.ownedKey] = equippedId && equippedId !== startingId ?
+            [startingId, equippedId] : [startingId];
+        }
+      });
       p.statusAilments = data.statusAilments || {};
       p.seenOpening = !!data.seenOpening;
+      p.seenGoal = !!data.seenGoal;
       state.discoveredFinal = !!data.discoveredFinal;
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
@@ -1472,10 +1670,32 @@
       closeModal("equip-modal");
     });
 
+    // ステータス確認画面
+    document.getElementById("btn-status").addEventListener("click", openStatusModal);
+    document.getElementById("btn-status-close").addEventListener("click", function () {
+      closeModal("status-modal");
+    });
+
+    // 目的説明モーダル
+    document.getElementById("btn-goal-close").addEventListener("click", function () {
+      state.player.seenGoal = true;
+      closeModal("goal-modal");
+      saveGame();
+    });
+
+    // ヘルプモーダル
+    document.getElementById("btn-help-close").addEventListener("click", function () {
+      closeModal("help-modal");
+    });
+
     // オープニングモーダル(初回起動時のみ表示)
     document.getElementById("btn-opening-close").addEventListener("click", function () {
       state.player.seenOpening = true;
       closeModal("opening-modal");
+      // オープニングの直後、初回のみ目的説明を表示する
+      if (!state.player.seenGoal) {
+        openModal("goal-modal");
+      }
       saveGame();
     });
   }
