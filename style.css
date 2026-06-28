@@ -63,6 +63,12 @@ html, body {
   color: #8ecae6;
 }
 
+#status-ailment {
+  font-size: 11px;
+  color: #ff7b7b;
+  font-weight: bold;
+}
+
 #status-lv {
   font-size: 13px;
   color: #ffd166;
@@ -454,9 +460,16 @@ html, body {
   margin-top: 2px;
 }
 
-#merchant-body, #god-body {
+#merchant-body, #god-body, #equip-body {
   max-height: 50vh;
   overflow-y: auto;
+}
+
+#equip-body h3 {
+  color: #ffd166;
+  font-size: 13px;
+  margin: 10px 0 4px;
+  text-align: left;
 }
 
 .hidden {

@@ -15,11 +15,13 @@
     <div class="status-row">
       <span id="status-name">勇者の子孫</span>
       <span id="status-job">(サッカー部)</span>
+      <span id="status-ailment"></span>
       <span id="status-lv">Lv.1</span>
     </div>
     <div class="status-row">
       <span id="status-gold">💰 0G</span>
       <button id="btn-dex" class="small-btn">📖図鑑(0/0)</button>
+      <button id="btn-equip" class="small-btn">🎽装備</button>
       <button id="btn-settings" class="small-btn">⚙️設定</button>
     </div>
     <div class="bar-row">
@@ -140,6 +142,28 @@
       <p class="small">主人公の歩く速さ(十字キーを押しっぱなしにした時の速度)</p>
       <div id="settings-body"></div>
       <button id="btn-settings-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+  <!-- ===== 装備モーダル(画面右上「🎽装備」から開く) ===== -->
+  <div id="equip-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>🎽 装備変更</h2>
+      <p class="small">武器・防具・盾・兜を選べます。入手手段は未実装のため、今は全項目を自由に選べます。</p>
+      <div id="equip-body"></div>
+      <button id="btn-equip-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+  <!-- ===== オープニングモーダル(初回起動時のみ表示) ===== -->
+  <div id="opening-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="discovery-emoji">🤴</div>
+      <h2>王様のお言葉</h2>
+      <p>おお、勇者よ……<br>いや勇者の子孫よ。</p>
+      <p>ついにこの時が来た。</p>
+      <p>伝説のUMA<br>究極ゴリラを捕まえるのじゃ！</p>
+      <button id="btn-opening-close" class="modal-btn">ゲームをはじめる</button>
     </div>
   </div>
 

@@ -18,12 +18,12 @@
   //   '#' 木・壁(進入不可)        '~' 水(進入不可)
   //   '.' 草原(エンカウントあり)   ',' 村の道(エンカウントなし)
   //   'H' 村の入口(開始地点)      'M' 商人(接触で売買メニュー)
-  //   'G' 神様の社(接触で転職メニュー)
+  //   'G' 神様の社(接触で転職メニュー)  'T' 酒場(接触で簡易メッセージ。§9.5)
   //   'W' 武器アイテム(初期配置・読み込み後は'.'に変換)
   //   'P' 回復アイテム(初期配置・読み込み後は'.'に変換)
   var RAW_MAP = [
     "#############",
-    "#,,,H,,,,,,,#",
+    "#,,,H,,,T,,,#",
     "#,,,,,,M,,,,#",
     "#,,,,,,,,G,,#",
     "#...........#",
@@ -57,12 +57,13 @@
     ",": "🟫",
     "H": "🏠",
     "M": "🏪",
-    "G": "⛩️"
+    "G": "⛩️",
+    "T": "🍺"
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設の上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -79,7 +80,7 @@
     { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 18, attack: 7, def: 2, captureRate: 0.38, exp: 12, sellPrice: 10 },
     { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 24, attack: 8, def: 3, captureRate: 0.30, exp: 16, sellPrice: 16 },
     { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 22, attack: 9, def: 2, captureRate: 0.30, exp: 18, sellPrice: 18 },
-    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 40, attack: 11, def: 4, captureRate: 0.18, exp: 35, sellPrice: 60, fleeRate: 0.80 },
+    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 40, attack: 11, def: 4, captureRate: 0.18, exp: 35, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 } },
     { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 42, attack: 11, def: 5, captureRate: 0.16, exp: 38, sellPrice: 65, fleeRate: 0.80 },
     { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 45, attack: 12, def: 5, captureRate: 0.15, exp: 42, sellPrice: 70, fleeRate: 0.80 },
     { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 46, attack: 13, def: 4, captureRate: 0.14, exp: 44, sellPrice: 75, fleeRate: 0.80 },
@@ -94,28 +95,106 @@
     { id: "slime", name: "スライム", emoji: "🟢", isUMA: false, minLevel: 1, weight: 10, hp: 10, attack: 3, def: 1, captureRate: 0.60, exp: 5 },
     { id: "bat", name: "コウモリ", emoji: "🦇", isUMA: false, minLevel: 1, weight: 10, hp: 9, attack: 4, def: 0, captureRate: 0.55, exp: 5 },
     { id: "wilddog", name: "のらいぬ", emoji: "🐕", isUMA: false, minLevel: 1, weight: 8, hp: 13, attack: 5, def: 1, captureRate: 0.45, exp: 7 },
-    { id: "bandit", name: "山賊", emoji: "🥷", isUMA: false, minLevel: 3, weight: 6, hp: 22, attack: 8, def: 2, captureRate: 0.25, exp: 14 }
+    { id: "bandit", name: "山賊", emoji: "🥷", isUMA: false, minLevel: 3, weight: 6, hp: 22, attack: 8, def: 2, captureRate: 0.25, exp: 14, inflicts: { id: "smell", chance: 0.3, duration: 3 } }
   ];
 
   // --- アイテムデータ(消耗品。商人で売買・フィールドで取得) ---
+  // trackable: true のものだけ player.potionCount / ropeCount のような専用の
+  // 所持数カウンタを持ち、商人の売買UIに表示される。それ以外はデータのみで
+  // 購入/使用ロジックは未実装(GAME_DESIGN.md §8参照)。
   var ITEM_DATA = [
-    { id: "potion", name: "やくそう", type: "heal", healAmount: 15, buyPrice: 10, sellPrice: 4 },
-    { id: "rope", name: "捕獲ロープ", type: "capture", captureBonus: 0.25, buyPrice: 15, sellPrice: 5 }
+    { id: "potion", name: "やくそう", type: "heal", healAmount: 15, buyPrice: 10, sellPrice: 4, trackable: true },
+    { id: "rope", name: "捕獲ロープ", type: "capture", captureBonus: 0.25, buyPrice: 15, sellPrice: 5, trackable: true },
+    // 以下はデータのみ(未実装)。買う/使うUIにはまだ出てこない。
+    { id: "coffee", name: "コーヒー", type: "misc", buyPrice: 0, sellPrice: 0 },
+    { id: "bread", name: "パン", type: "misc", buyPrice: 0, sellPrice: 0 },
+    { id: "bento", name: "お弁当", type: "misc", buyPrice: 0, sellPrice: 0 },
+    { id: "ramen", name: "ラーメン", type: "misc", buyPrice: 0, sellPrice: 0 },
+    { id: "coughsyrup", name: "せき止めシロップ", type: "misc", cures: "allergy", buyPrice: 0, sellPrice: 0 },
+    { id: "deodorant", name: "デオドラントスプレー", type: "misc", cures: "smell", buyPrice: 0, sellPrice: 0 }
   ];
 
-  // --- 武器データ(装備の概念は持たず、購入/取得した瞬間にこうげき力へ加算) ---
+  // --- 武器データ(レガシー仕様。装備の概念は持たず、購入/取得した瞬間にこうげき力へ加算) ---
   var WEAPON_DATA = [
     { id: "fieldsword", name: "つるぎ", atkBonus: 3, buyPrice: 0, sellPrice: 0 },   // フィールド落下品専用
     { id: "ironsword", name: "鉄の剣", atkBonus: 6, buyPrice: 30, sellPrice: 12 }   // 商人で購入できる
   ];
 
-  // --- まほうデータ ---
-  var SPELL_DATA = [
-    { id: "fire", name: "ファイア", mpCost: 4, type: "attack", power: 9 },
-    { id: "thunder", name: "サンダー", mpCost: 6, type: "attack", power: 13 },
-    { id: "heal", name: "ヒール", mpCost: 5, type: "heal", power: 14 },
-    { id: "megaheal", name: "メガヒール", mpCost: 9, type: "heal", power: 30 }
+  // --- 装備データ(武器/防具/盾/兜の装備スロット) ---
+  // 各リストの先頭はボーナス0の初期装備(既存プレイヤーに影響を与えないため)。
+  // 入手手段(購入/ドロップ)は未実装。現在は装備変更画面からすべて選択できる。
+  var EQUIP_WEAPON_DATA = [
+    { id: "woodstick", name: "木の棒", atkBonus: 0 },
+    { id: "wirebrush", name: "ワイヤーブラシ", atkBonus: 2 },
+    { id: "stone", name: "石", atkBonus: 3 },
+    { id: "saw", name: "ノコギリ", atkBonus: 4 },
+    { id: "magicwand", name: "魔法のステッキ", atkBonus: 5, mpBonus: 5 },
+    { id: "survivalknife", name: "サバイバルナイフ", atkBonus: 6 },
+    { id: "ironrod", name: "鉄の棒", atkBonus: 8 },
+    { id: "boomerang", name: "ブーメラン", atkBonus: 9 },
+    { id: "crowbar", name: "バールのようなもの", atkBonus: 10 },
+    { id: "tennisracket", name: "テニスラケット", atkBonus: 10 },
+    { id: "shuriken", name: "手裏剣", atkBonus: 11 },
+    { id: "nunchaku", name: "ヌンチャク", atkBonus: 12 },
+    { id: "woodbat", name: "木製バット", atkBonus: 13 },
+    { id: "axe", name: "斧", atkBonus: 15 },
+    { id: "metalbat", name: "金属バット", atkBonus: 17 },
+    { id: "rockcutter", name: "斬岩剣", atkBonus: 22 },
+    { id: "ironcutter", name: "斬鉄剣", atkBonus: 27 },
+    { id: "megatonhammer", name: "メガトンハンマー", atkBonus: 33 },
+    { id: "spiritsword", name: "霊剣", atkBonus: 38 },
+    { id: "andromedachain", name: "アンドロメダの鎖", atkBonus: 44 },
+    { id: "chainsaw", name: "チェーンソー", atkBonus: 50 },
+    { id: "nyoibo", name: "如意棒", atkBonus: 58 }
   ];
+
+  var ARMOR_DATA = [
+    { id: "tshirt", name: "Tシャツ", defBonus: 0 },
+    { id: "rockt", name: "ロックT", defBonus: 2 },
+    { id: "leatherjacket", name: "革ジャン", defBonus: 4 },
+    { id: "samuraiarmor", name: "武者よろい", defBonus: 8 },
+    { id: "westernarmor", name: "西洋風よろい", defBonus: 12 },
+    { id: "nobunagaarmor", name: "信長のよろい", defBonus: 16, hpBonus: 10 },
+    { id: "pegasusarmor", name: "ペガサスのよろい", defBonus: 14, hpBonus: 5 },
+    { id: "turtlegi", name: "亀の武道着", defBonus: 20, hpBonus: 15 }
+  ];
+
+  var SHIELD_DATA = [
+    { id: "cardboard", name: "段ボールのたて", defBonus: 0 },
+    { id: "ironshield", name: "鉄のたて", defBonus: 5 },
+    { id: "dragonshield", name: "ドラゴンのたて", defBonus: 12 },
+    { id: "sixfoldshield", name: "六連のたて", defBonus: 20 }
+  ];
+
+  var HELMET_DATA = [
+    { id: "hachimaki", name: "男塾ハチマキ", defBonus: 0 },
+    { id: "helmet", name: "ヘルメット", defBonus: 2 },
+    { id: "steelkabuto", name: "鋼鉄のかぶと", defBonus: 5 },
+    { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 8 },
+    { id: "shingenkabuto", name: "信玄のかぶと", defBonus: 11 },
+    { id: "cosmickabuto", name: "宇宙のかぶと", defBonus: 15 }
+  ];
+
+  // --- まほうデータ(攻撃/回復に分離。SPELL_DATAは既存コード互換のための結合版) ---
+  var ATTACK_SPELL_DATA = [
+    { id: "fire", name: "ファイア", mpCost: 4, type: "attack", power: 9 },
+    { id: "hazukashigatame", name: "はずかし固め", mpCost: 3, type: "attack", power: 6 },
+    { id: "leftHook", name: "左フック", mpCost: 5, type: "attack", power: 11 },
+    { id: "thunder", name: "サンダー", mpCost: 6, type: "attack", power: 13 },
+    { id: "highKick", name: "ハイキック", mpCost: 7, type: "attack", power: 15 },
+    { id: "backdrop", name: "バックドロップ", mpCost: 9, type: "attack", power: 19 },
+    { id: "kidoClutch", name: "キドクラッチ", mpCost: 11, type: "attack", power: 24 },
+    { id: "sleeperHold", name: "魔性のスリーパー", mpCost: 14, type: "attack", power: 30 }
+  ];
+  var HEAL_SPELL_DATA = [
+    { id: "poimi", name: "ポイミ", mpCost: 2, type: "heal", power: 6 },
+    { id: "heal", name: "ヒール", mpCost: 5, type: "heal", power: 14 },
+    { id: "popoimi", name: "ポポイミ", mpCost: 7, type: "heal", power: 20 },
+    { id: "megaheal", name: "メガヒール", mpCost: 9, type: "heal", power: 30 },
+    { id: "popomalar", name: "ポポマラー", mpCost: 12, type: "heal", power: 40 },
+    { id: "popomazun", name: "ポポマズン", mpCost: 16, type: "heal", power: 55 }
+  ];
+  var SPELL_DATA = ATTACK_SPELL_DATA.concat(HEAL_SPELL_DATA);
 
   // --- 職業(部活)データ ---
   // hpMod/mpMod/atkMod/defMod: ステータス補正  fleeMod: 逃走成功率補正
@@ -156,6 +235,15 @@
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
 
+  // 状態異常の基礎値(GAME_DESIGN.md §13.5)
+  var AILMENT_INFO = {
+    allergy: { name: "アレルギー", icon: "🤧", durationUnit: "steps" },
+    smell: { name: "におい", icon: "👃", durationUnit: "battles" }
+  };
+  var ALLERGY_DURATION_STEPS = 12;
+  var SMELL_DURATION_BATTLES = 3;
+  var SMELL_CAPTURE_PENALTY = 0.15;
+
   // ---------------------------------------------------------
   // 4. セーブデータ
   // ---------------------------------------------------------
@@ -185,7 +273,11 @@
       job: null,         // JOB_DATAへの参照。initで既定値を設定する
       dex: {},           // id -> "seen" | "captured"
       umaInventory: {},  // id -> 所持数(同じUMAを複数捕まえられる)
-      walkSpeed: "normal" // "slow" | "normal" | "fast" (設定画面で変更)
+      walkSpeed: "normal", // "slow" | "normal" | "fast" (設定画面で変更)
+      // 装備スロット(§8.5)。値は各DATA配列のid。先頭=ボーナス0の初期装備。
+      equipment: { weapon: "woodstick", armor: "tshirt", shield: "cardboard", helmet: "hachimaki" },
+      statusAilments: {}, // id -> 残りターン/歩数(0より大きい間だけ効果がある)
+      seenOpening: false  // オープニングイベントを見たかどうか
     },
     stepsSinceEncounter: 0,
     inBattle: false,
@@ -238,21 +330,84 @@
     renderField();
     updateStatusBar();
     if (loaded) showToast("💾 前回のデータを読み込みました");
+
+    // オープニングイベント(初回起動時のみ)
+    if (!state.player.seenOpening) {
+      openModal("opening-modal");
+    }
   }
 
   // ---------------------------------------------------------
-  // 7. ステータス再計算(base + 職業補正 + 武器補正)
+  // 7. ステータス再計算(base + 職業補正 + 武器補正 + 装備補正)
   // ---------------------------------------------------------
   function recomputeStats() {
     var p = state.player;
     var job = p.job || {};
-    p.maxHp = p.baseMaxHp + (job.hpMod || 0);
-    p.maxMp = p.baseMaxMp + (job.mpMod || 0);
-    p.atk = p.baseAtk + (job.atkMod || 0) + p.weaponAtkBonus;
-    p.def = p.baseDef + (job.defMod || 0);
-    // 職業切替で上限が下がった場合、現在値が上限を超えないようにする
+    var eq = p.equipment || {};
+    var weapon = findById(EQUIP_WEAPON_DATA, eq.weapon) || EQUIP_WEAPON_DATA[0];
+    var armor = findById(ARMOR_DATA, eq.armor) || ARMOR_DATA[0];
+    var shield = findById(SHIELD_DATA, eq.shield) || SHIELD_DATA[0];
+    var helmet = findById(HELMET_DATA, eq.helmet) || HELMET_DATA[0];
+
+    p.maxHp = p.baseMaxHp + (job.hpMod || 0) + (armor.hpBonus || 0);
+    p.maxMp = p.baseMaxMp + (job.mpMod || 0) + (weapon.mpBonus || 0);
+    p.atk = p.baseAtk + (job.atkMod || 0) + p.weaponAtkBonus + (weapon.atkBonus || 0);
+    p.def = p.baseDef + (job.defMod || 0) +
+      (armor.defBonus || 0) + (shield.defBonus || 0) + (helmet.defBonus || 0);
+    // 職業切替・装備変更で上限が下がった場合、現在値が上限を超えないようにする
     if (p.hp > p.maxHp) p.hp = p.maxHp;
     if (p.mp > p.maxMp) p.mp = p.maxMp;
+  }
+
+  // ---------------------------------------------------------
+  // 7.5 状態異常(GAME_DESIGN.md §13.5)
+  // ---------------------------------------------------------
+  function hasAilment(id) {
+    return (state.player.statusAilments[id] || 0) > 0;
+  }
+
+  function applyAilment(id, duration) {
+    var info = AILMENT_INFO[id];
+    var isNew = !hasAilment(id);
+    state.player.statusAilments[id] = duration;
+    if (isNew) {
+      showToast(info.icon + " " + info.name + "になった！");
+    }
+    updateStatusBar();
+  }
+
+  function clearAilment(id) {
+    if (!hasAilment(id)) return;
+    var info = AILMENT_INFO[id];
+    delete state.player.statusAilments[id];
+    showToast(info.icon + " " + info.name + "が治った！");
+    updateStatusBar();
+  }
+
+  // アレルギー: フィールドを1歩歩くごとにHPが1減る(HP1未満にはしない)
+  function tickAllergyOnStep() {
+    if (!hasAilment("allergy")) return;
+    var p = state.player;
+    p.hp = Math.max(1, p.hp - 1);
+    state.player.statusAilments.allergy--;
+    if (state.player.statusAilments.allergy <= 0) clearAilment("allergy");
+    updateStatusBar();
+  }
+
+  // におい: 戦闘が1回終わるごとに持続ターンが減る(捕獲率penaltyはattemptCaptureで適用)
+  function tickSmellOnBattleEnd() {
+    if (!hasAilment("smell")) return;
+    state.player.statusAilments.smell--;
+    if (state.player.statusAilments.smell <= 0) clearAilment("smell");
+  }
+
+  function getAilmentStatusText() {
+    var p = state.player;
+    var parts = [];
+    Object.keys(AILMENT_INFO).forEach(function (id) {
+      if (hasAilment(id)) parts.push(AILMENT_INFO[id].icon + AILMENT_INFO[id].name);
+    });
+    return parts.join(" ");
   }
 
   // ---------------------------------------------------------
@@ -340,6 +495,9 @@
       delete state.items[key];
     }
 
+    // アレルギー中はフィールドを1歩歩くごとに少しHPが減る(§13.5)
+    tickAllergyOnStep();
+
     renderField();
 
     var tile = state.terrain[ny][nx];
@@ -349,6 +507,10 @@
     }
     if (tile === "G") {
       openGodModal();
+      return;
+    }
+    if (tile === "T") {
+      showToast("🍺 酒場(現在工事中) … 近日オープン予定");
       return;
     }
 
@@ -455,11 +617,14 @@
       exp: monster.exp,
       captureRateBase: monster.captureRate,
       sellPrice: monster.sellPrice || 0,
-      fleeRate: monster.fleeRate || 0.70
+      fleeRate: monster.fleeRate || 0.70,
+      inflicts: monster.inflicts || null // 攻撃時に状態異常を与える可能性(§13.5)
     };
 
     // UMAなら図鑑に「発見済み」を記録する(捕獲済みなら上書きしない)
+    var isFirstDiscovery = false;
     if (state.enemy.isUMA && state.player.dex[state.enemy.id] !== "captured") {
+      isFirstDiscovery = !state.player.dex[state.enemy.id];
       state.player.dex[state.enemy.id] = "seen";
     }
 
@@ -476,6 +641,9 @@
     clearLog();
     var tag = state.enemy.final ? "【伝説のUMA】" : (state.enemy.rare ? "【激レアUMA】" : "");
     log(tag + state.enemy.name + "が現れた！");
+    if (isFirstDiscovery) {
+      log("✨ " + state.enemy.name + "を見つけた！(UMA図鑑に登録された)");
+    }
     setBattleLocked(false);
   }
 
@@ -655,8 +823,9 @@
     var e = state.enemy;
     var job = state.player.job;
     var hpRatio = e.hp / e.maxHp;
+    var smellPenalty = hasAilment("smell") ? SMELL_CAPTURE_PENALTY : 0;
     var chance = clamp(
-      e.captureRateBase + (1 - hpRatio) * 0.30 + (job.captureMod || 0) + (bonusChance || 0),
+      e.captureRateBase + (1 - hpRatio) * 0.30 + (job.captureMod || 0) + (bonusChance || 0) - smellPenalty,
       0.05, 0.95
     );
     // 究極ゴリラはHPが減っても捕獲率がほぼ上がらないようにする(ラスボス級)
@@ -664,6 +833,7 @@
     if (Math.random() < chance) {
       log("🪤 " + e.name + "を捕まえた！");
       captureUma(e);
+      logExpGained(e.exp);
       addExp(e.exp);
       finishBattle();
       return true;
@@ -695,7 +865,9 @@
     var chance = clamp(e.fleeRate + (job.fleeMod || 0), 0.05, 0.97);
     if (Math.random() < chance) {
       log("💨 うまく逃げ切った！");
-      addExp(Math.max(1, Math.floor(e.exp * 0.2)));
+      var runExp = Math.max(1, Math.floor(e.exp * 0.2));
+      logExpGained(runExp);
+      addExp(runExp);
       finishBattle();
     } else {
       log("💨 しかし逃げられなかった！");
@@ -705,6 +877,7 @@
 
   function winBattle() {
     log("🎉 " + state.enemy.name + "をたおした！");
+    logExpGained(state.enemy.exp);
     addExp(state.enemy.exp);
     finishBattle();
   }
@@ -712,6 +885,10 @@
   // ---------------------------------------------------------
   // 16. 敵の行動
   // ---------------------------------------------------------
+  function logExpGained(amount) {
+    log("✨ 経験値" + amount + "を獲得！");
+  }
+
   function enemyTurn() {
     var p = state.player, e = state.enemy;
     if (!state.inBattle) return; // 既に戦闘が終わっている場合は何もしない
@@ -729,6 +906,11 @@
     log("💥 " + e.name + "の攻撃！ " + dmg + "のダメージを受けた！");
     updateBattlePlayerStatus();
     updateStatusBar();
+
+    // 状態異常を与える敵の攻撃が当たった時、低確率で発症する(§13.5)
+    if (e.inflicts && !hasAilment(e.inflicts.id) && Math.random() < e.inflicts.chance) {
+      applyAilment(e.inflicts.id, e.inflicts.duration);
+    }
 
     if (p.hp <= 0) {
       handlePlayerDown();
@@ -762,6 +944,7 @@
   function finishBattle() {
     state.inBattle = false;
     state.enemy = null;
+    tickSmellOnBattleEnd();
     document.getElementById("battle-screen").classList.add("hidden");
     document.getElementById("field-screen").classList.remove("hidden");
     document.getElementById("dpad").classList.remove("hidden");
@@ -788,6 +971,7 @@
 
   function levelUp() {
     var p = state.player;
+    log("🎉 レベルが上がった！");
     p.level++;
     p.nextExp = p.level * 15 + 20;
     p.baseMaxHp += 5 + randInt(0, 3);
@@ -835,6 +1019,7 @@
     document.getElementById("status-lv").textContent = "Lv." + p.level;
     document.getElementById("status-job").textContent = "(" + p.job.name + ")";
     document.getElementById("status-gold").textContent = "💰 " + p.gold + "G";
+    document.getElementById("status-ailment").textContent = getAilmentStatusText();
     var discovered = Object.keys(p.dex).length;
     document.getElementById("btn-dex").textContent =
       "📖図鑑(" + discovered + "/" + UMA_DATA.length + ")";
@@ -947,7 +1132,7 @@
     var body = document.getElementById("merchant-body");
     var p = state.player;
     var html = "<p>所持金: " + p.gold + " G</p>";
-    ITEM_DATA.forEach(function (it) {
+    ITEM_DATA.filter(function (it) { return it.trackable; }).forEach(function (it) {
       var count = it.id === "potion" ? p.potionCount : it.id === "rope" ? p.ropeCount : 0;
       html += '<div class="shop-row"><span>' + it.name + " x" + count + " (" + it.sellPrice + "G)</span>" +
         '<button data-sellitem="' + it.id + '"' + (count <= 0 ? " disabled" : "") + ">売却</button></div>";
@@ -1047,6 +1232,61 @@
   }
 
   // ---------------------------------------------------------
+  // 21.6 装備モーダル(武器/防具/盾/兜。GAME_DESIGN.md §8.5)
+  // ---------------------------------------------------------
+  var EQUIP_SLOTS = [
+    { slot: "weapon", label: "⚔ 武器", data: function () { return EQUIP_WEAPON_DATA; } },
+    { slot: "armor", label: "🥋 防具", data: function () { return ARMOR_DATA; } },
+    { slot: "shield", label: "🛡 盾", data: function () { return SHIELD_DATA; } },
+    { slot: "helmet", label: "⛑ 兜", data: function () { return HELMET_DATA; } }
+  ];
+
+  function openEquipModal() {
+    openModal("equip-modal");
+    renderEquipBody();
+  }
+
+  function renderEquipBody() {
+    var body = document.getElementById("equip-body");
+    var eq = state.player.equipment;
+    var html = "";
+    EQUIP_SLOTS.forEach(function (slotInfo) {
+      html += "<h3>" + slotInfo.label + "</h3>";
+      slotInfo.data().forEach(function (item) {
+        var equipped = eq[slotInfo.slot] === item.id;
+        var bonusText = [];
+        if (item.atkBonus) bonusText.push("攻+" + item.atkBonus);
+        if (item.defBonus) bonusText.push("防+" + item.defBonus);
+        if (item.hpBonus) bonusText.push("HP+" + item.hpBonus);
+        if (item.mpBonus) bonusText.push("MP+" + item.mpBonus);
+        html += '<div class="shop-row"><span>' + (equipped ? "★ " : "") + item.name +
+          " (" + (bonusText.join(" ") || "ボーナスなし") + ")</span>" +
+          '<button data-equip="' + slotInfo.slot + ":" + item.id + '"' +
+          (equipped ? " disabled" : "") + ">" + (equipped ? "装備中" : "装備する") + "</button></div>";
+      });
+    });
+    html += '<button class="shop-back-btn" id="equip-close-inner">とじる</button>';
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-equip]").forEach(function (btn) {
+      btn.onclick = function () {
+        var parts = btn.getAttribute("data-equip").split(":");
+        equipItem(parts[0], parts[1]);
+      };
+    });
+    document.getElementById("equip-close-inner").onclick = function () {
+      closeModal("equip-modal");
+    };
+  }
+
+  function equipItem(slot, id) {
+    state.player.equipment[slot] = id;
+    recomputeStats();
+    updateStatusBar();
+    renderEquipBody();
+    saveGame();
+  }
+
+  // ---------------------------------------------------------
   // 21.5 設定モーダル(歩く速度)
   // ---------------------------------------------------------
   var WALK_SPEED_LABELS = { slow: "遅い", normal: "普通", fast: "速い" };
@@ -1093,6 +1333,9 @@
         spells: p.spells, jobId: p.job.id,
         dex: p.dex, umaInventory: p.umaInventory,
         walkSpeed: p.walkSpeed,
+        equipment: p.equipment,
+        statusAilments: p.statusAilments,
+        seenOpening: p.seenOpening,
         discoveredFinal: state.discoveredFinal
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1116,6 +1359,9 @@
       p.dex = data.dex || {};
       p.umaInventory = data.umaInventory || {};
       p.walkSpeed = WALK_SPEED_MS[data.walkSpeed] ? data.walkSpeed : "normal";
+      p.equipment = data.equipment || p.equipment;
+      p.statusAilments = data.statusAilments || {};
+      p.seenOpening = !!data.seenOpening;
       state.discoveredFinal = !!data.discoveredFinal;
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
@@ -1218,6 +1464,19 @@
     document.getElementById("btn-settings").addEventListener("click", openSettingsModal);
     document.getElementById("btn-settings-close").addEventListener("click", function () {
       closeModal("settings-modal");
+    });
+
+    // 装備モーダル
+    document.getElementById("btn-equip").addEventListener("click", openEquipModal);
+    document.getElementById("btn-equip-close").addEventListener("click", function () {
+      closeModal("equip-modal");
+    });
+
+    // オープニングモーダル(初回起動時のみ表示)
+    document.getElementById("btn-opening-close").addEventListener("click", function () {
+      state.player.seenOpening = true;
+      closeModal("opening-modal");
+      saveGame();
     });
   }
 
