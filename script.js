@@ -128,13 +128,13 @@
   var ITEM_DATA = [
     { id: "potion", name: "やくそう", type: "heal", healAmount: 15, buyPrice: 10, sellPrice: 4, trackable: true },
     { id: "rope", name: "捕獲ロープ", type: "capture", captureBonus: 0.25, buyPrice: 15, sellPrice: 5, trackable: true },
-    // 以下はデータのみ(未実装)。買う/使うUIにはまだ出てこない。
-    { id: "coffee", name: "コーヒー", type: "misc", buyPrice: 0, sellPrice: 0 },
-    { id: "bread", name: "パン", type: "misc", buyPrice: 0, sellPrice: 0 },
-    { id: "bento", name: "お弁当", type: "misc", buyPrice: 0, sellPrice: 0 },
-    { id: "ramen", name: "ラーメン", type: "misc", buyPrice: 0, sellPrice: 0 },
-    { id: "coughsyrup", name: "せき止めシロップ", type: "cure", cures: "allergy", buyPrice: 12, sellPrice: 4, trackable: true },
-    { id: "deodorant", name: "デオドラントスプレー", type: "cure", cures: "smell", buyPrice: 12, sellPrice: 4, trackable: true }
+    // Version 0.4.3で実際に使用可能になった回復食料品
+    { id: "coffee", name: "コーヒー", type: "heal", healAmount: 10, buyPrice: 5, sellPrice: 1, trackable: true },
+    { id: "bread", name: "パン", type: "heal", healAmount: 20, buyPrice: 10, sellPrice: 3, trackable: true },
+    { id: "bento", name: "お弁当", type: "heal", healAmount: 40, buyPrice: 20, sellPrice: 7, trackable: true },
+    { id: "ramen", name: "ラーメン", type: "heal", healAmount: 9999, buyPrice: 40, sellPrice: 15, trackable: true },
+    { id: "coughsyrup", name: "せき止めシロップ", type: "cure", cures: "allergy", buyPrice: 15, sellPrice: 4, trackable: true },
+    { id: "deodorant", name: "デオドラントスプレー", type: "cure", cures: "smell", buyPrice: 15, sellPrice: 4, trackable: true }
   ];
 
   // --- 武器データ(レガシー仕様。装備の概念は持たず、購入/取得した瞬間にこうげき力へ加算) ---
@@ -151,17 +151,17 @@
     { id: "wirebrush", name: "ワイヤーブラシ", atkBonus: 2, buyPrice: 8 },
     { id: "stone", name: "石", atkBonus: 3 },
     { id: "saw", name: "ノコギリ", atkBonus: 4, buyPrice: 15 },
-    { id: "magicwand", name: "魔法のステッキ", atkBonus: 5, mpBonus: 5 },
+    { id: "magicwand", name: "魔法のステッキ", atkBonus: 5, mpBonus: 5, buyPrice: 40 },
     { id: "survivalknife", name: "サバイバルナイフ", atkBonus: 6, buyPrice: 25 },
     { id: "ironrod", name: "鉄の棒", atkBonus: 8, buyPrice: 35 },
-    { id: "boomerang", name: "ブーメラン", atkBonus: 9 },
-    { id: "crowbar", name: "バールのようなもの", atkBonus: 10 },
-    { id: "tennisracket", name: "テニスラケット", atkBonus: 10 },
-    { id: "shuriken", name: "手裏剣", atkBonus: 11 },
-    { id: "nunchaku", name: "ヌンチャク", atkBonus: 12 },
-    { id: "woodbat", name: "木製バット", atkBonus: 13 },
-    { id: "axe", name: "斧", atkBonus: 15 },
-    { id: "metalbat", name: "金属バット", atkBonus: 17 },
+    { id: "boomerang", name: "ブーメラン", atkBonus: 9, buyPrice: 40 },
+    { id: "crowbar", name: "バールのようなもの", atkBonus: 10, buyPrice: 45 },
+    { id: "tennisracket", name: "テニスラケット", atkBonus: 10, buyPrice: 45 },
+    { id: "shuriken", name: "手裏剣", atkBonus: 11, buyPrice: 55 },
+    { id: "nunchaku", name: "ヌンチャク", atkBonus: 12, buyPrice: 60 },
+    { id: "woodbat", name: "木製バット", atkBonus: 13, buyPrice: 65 },
+    { id: "axe", name: "斧", atkBonus: 15, buyPrice: 75 },
+    { id: "metalbat", name: "金属バット", atkBonus: 17, buyPrice: 85 },
     { id: "rockcutter", name: "斬岩剣", atkBonus: 22 },
     { id: "ironcutter", name: "斬鉄剣", atkBonus: 27 },
     { id: "megatonhammer", name: "メガトンハンマー", atkBonus: 33 },
@@ -175,8 +175,8 @@
     { id: "tshirt", name: "Tシャツ", defBonus: 0 },
     { id: "rockt", name: "ロックT", defBonus: 2, buyPrice: 10 },
     { id: "leatherjacket", name: "革ジャン", defBonus: 4, buyPrice: 20 },
-    { id: "samuraiarmor", name: "武者よろい", defBonus: 8 },
-    { id: "westernarmor", name: "西洋風よろい", defBonus: 12 },
+    { id: "samuraiarmor", name: "武者よろい", defBonus: 8, buyPrice: 60 },
+    { id: "westernarmor", name: "西洋風よろい", defBonus: 12, buyPrice: 90 },
     { id: "nobunagaarmor", name: "信長のよろい", defBonus: 16, hpBonus: 10 },
     { id: "pegasusarmor", name: "ペガサスのよろい", defBonus: 14, hpBonus: 5 },
     { id: "turtlegi", name: "亀の武道着", defBonus: 20, hpBonus: 15 }
@@ -185,15 +185,15 @@
   var SHIELD_DATA = [
     { id: "cardboard", name: "段ボールのたて", defBonus: 0 },
     { id: "ironshield", name: "鉄のたて", defBonus: 5, buyPrice: 22 },
-    { id: "dragonshield", name: "ドラゴンのたて", defBonus: 12 },
+    { id: "dragonshield", name: "ドラゴンのたて", defBonus: 12, buyPrice: 100 },
     { id: "sixfoldshield", name: "六連のたて", defBonus: 20 }
   ];
 
   var HELMET_DATA = [
     { id: "hachimaki", name: "男塾ハチマキ", defBonus: 0 },
     { id: "helmet", name: "ヘルメット", defBonus: 2, buyPrice: 10 },
-    { id: "steelkabuto", name: "鋼鉄のかぶと", defBonus: 5 },
-    { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 8 },
+    { id: "steelkabuto", name: "鋼鉄のかぶと", defBonus: 5, buyPrice: 35 },
+    { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 8, buyPrice: 70 },
     { id: "shingenkabuto", name: "信玄のかぶと", defBonus: 11 },
     { id: "cosmickabuto", name: "宇宙のかぶと", defBonus: 15 }
   ];
@@ -300,6 +300,10 @@
       gold: 20,
       potionCount: 1,
       ropeCount: 0,
+      coffeeCount: 0,
+      breadCount: 0,
+      bentoCount: 0,
+      ramenCount: 0,
       coughsyrupCount: 0,
       deodorantCount: 0,
       spells: [],        // 習得済みスペルのidリスト
@@ -545,6 +549,10 @@
     renderField();
 
     var tile = state.terrain[ny][nx];
+    if (tile === "H") {
+      openHomeModal();
+      return;
+    }
     if (tile === "M") {
       openMerchantModal();
       return;
@@ -820,6 +828,16 @@
       '>🧪 やくそう x' + p.potionCount + "</button>";
     html += '<button id="item-rope"' + (p.ropeCount <= 0 ? " disabled" : "") +
       '>🪢 捕獲ロープ x' + p.ropeCount + "</button>";
+    var foodItems = [
+      { id: "coffee", label: "☕ コーヒー", count: p.coffeeCount },
+      { id: "bread", label: "🍞 パン", count: p.breadCount },
+      { id: "bento", label: "🍱 お弁当", count: p.bentoCount },
+      { id: "ramen", label: "🍜 ラーメン", count: p.ramenCount }
+    ];
+    foodItems.forEach(function (f) {
+      html += '<button id="item-' + f.id + '"' + (f.count <= 0 ? " disabled" : "") +
+        ">" + f.label + " x" + f.count + "</button>";
+    });
     html += '<button id="item-coughsyrup"' + (p.coughsyrupCount <= 0 ? " disabled" : "") +
       '>🍯 せき止めシロップ x' + p.coughsyrupCount + "</button>";
     html += '<button id="item-deodorant"' + (p.deodorantCount <= 0 ? " disabled" : "") +
@@ -831,6 +849,9 @@
 
     document.getElementById("item-potion").onclick = usePotion;
     document.getElementById("item-rope").onclick = useRope;
+    foodItems.forEach(function (f) {
+      document.getElementById("item-" + f.id).onclick = function () { useFoodItem(f.id); };
+    });
     document.getElementById("item-coughsyrup").onclick = function () { useCureItem("coughsyrup"); };
     document.getElementById("item-deodorant").onclick = function () { useCureItem("deodorant"); };
     document.getElementById("btn-item-back").onclick = function () {
@@ -899,6 +920,33 @@
     var cureMessage = it.cures === "allergy" ? "アレルギーが治った！" : "においが消えた！";
     clearAilment(it.cures, true);
     log("✨ " + it.name + "を使った！ " + cureMessage);
+    updateStatusBar();
+    setTimeout(enemyTurn, 600);
+  }
+
+  // 回復食料品(コーヒー/パン/お弁当/ラーメン)を戦闘中に使う。
+  // HP満タンの場合は「今は使う必要がない」と表示し消費しない。
+  function useFoodItem(itemId) {
+    if (state.locked) return;
+    var p = state.player;
+    var it = findById(ITEM_DATA, itemId);
+    if (getItemCount(itemId) <= 0) {
+      log(it.name + "を持っていない！");
+      return;
+    }
+    backToBattleMenu();
+    if (p.hp >= p.maxHp) {
+      log("🤔 今は使う必要がない。");
+      return; // HP満タン時は消費せず、ターンも経過させない
+    }
+    setBattleLocked(true);
+    addItemCount(itemId, -1);
+    var heal = Math.min(it.healAmount, p.maxHp - p.hp);
+    p.hp = Math.min(p.maxHp, p.hp + it.healAmount);
+    var msgs = { coffee: "コーヒーを飲んだ！", bread: "パンを食べた！", bento: "お弁当を食べた！", ramen: "ラーメンを食べた！" };
+    var msg = msgs[itemId] || (it.name + "を使った！");
+    log("🍽️ " + msg + " HPが" + heal + "回復した！");
+    updateBattlePlayerStatus();
     updateStatusBar();
     setTimeout(enemyTurn, 600);
   }
@@ -1214,6 +1262,10 @@
     html += "<h3>所持アイテム</h3>";
     html += '<div class="shop-row"><span>やくそう</span><span>x' + p.potionCount + "</span></div>";
     html += '<div class="shop-row"><span>捕獲ロープ</span><span>x' + p.ropeCount + "</span></div>";
+    html += '<div class="shop-row"><span>☕ コーヒー</span><span>x' + p.coffeeCount + "</span></div>";
+    html += '<div class="shop-row"><span>🍞 パン</span><span>x' + p.breadCount + "</span></div>";
+    html += '<div class="shop-row"><span>🍱 お弁当</span><span>x' + p.bentoCount + "</span></div>";
+    html += '<div class="shop-row"><span>🍜 ラーメン</span><span>x' + p.ramenCount + "</span></div>";
     html += '<div class="shop-row"><span>せき止めシロップ</span><span>x' + p.coughsyrupCount + "</span></div>";
     html += '<div class="shop-row"><span>デオドラントスプレー</span><span>x' + p.deodorantCount + "</span></div>";
     html += "<h3>UMA</h3>";
@@ -1524,6 +1576,31 @@
   }
 
   // ---------------------------------------------------------
+  // ---------------------------------------------------------
+  // 21.4 実家モーダル(🏠 タイルに触れると開く。GAME_DESIGN.md §5.6)
+  // ---------------------------------------------------------
+  function openHomeModal() {
+    openModal("home-modal");
+  }
+
+  function doRest() {
+    var p = state.player;
+    var hadAilments = Object.keys(p.statusAilments).length > 0;
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    Object.keys(AILMENT_INFO).forEach(function (id) {
+      if (hasAilment(id)) clearAilment(id, true);
+    });
+    p.statusAilments = {};
+    closeModal("home-modal");
+    updateStatusBar();
+    saveGame();
+    var msg = "🏠 ぐっすり休んだ！ HPとMPが全回復した！";
+    if (hadAilments) msg += " 体調もよくなった！";
+    msg += " 💾 セーブしました。";
+    showToast(msg);
+  }
+
   // 21.5 設定モーダル(歩く速度)
   // ---------------------------------------------------------
   var WALK_SPEED_LABELS = { slow: "遅い", normal: "普通", fast: "速い" };
@@ -1583,6 +1660,8 @@
         weaponAtkBonus: p.weaponAtkBonus,
         hp: p.hp, mp: p.mp,
         gold: p.gold, potionCount: p.potionCount, ropeCount: p.ropeCount,
+        coffeeCount: p.coffeeCount, breadCount: p.breadCount,
+        bentoCount: p.bentoCount, ramenCount: p.ramenCount,
         coughsyrupCount: p.coughsyrupCount, deodorantCount: p.deodorantCount,
         spells: p.spells, jobId: p.job.id,
         dex: p.dex, umaInventory: p.umaInventory,
@@ -1612,6 +1691,8 @@
       p.baseAtk = data.baseAtk; p.baseDef = data.baseDef;
       p.weaponAtkBonus = data.weaponAtkBonus || 0;
       p.gold = data.gold; p.potionCount = data.potionCount; p.ropeCount = data.ropeCount || 0;
+      p.coffeeCount = data.coffeeCount || 0; p.breadCount = data.breadCount || 0;
+      p.bentoCount = data.bentoCount || 0; p.ramenCount = data.ramenCount || 0;
       p.coughsyrupCount = data.coughsyrupCount || 0; p.deodorantCount = data.deodorantCount || 0;
       p.spells = data.spells || [];
       p.dex = data.dex || {};
@@ -1771,6 +1852,12 @@
         openModal("goal-modal");
       }
       saveGame();
+    });
+
+    // 実家モーダル(§5.6)
+    document.getElementById("btn-home-rest").addEventListener("click", doRest);
+    document.getElementById("btn-home-cancel").addEventListener("click", function () {
+      closeModal("home-modal");
     });
   }
 
