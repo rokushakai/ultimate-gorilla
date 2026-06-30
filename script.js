@@ -91,12 +91,35 @@
   ];
 
   // --- UMA以外の敵(野生動物・盗賊など。図鑑/所持UMAの対象外) ---
+  // type: "monster"(通常モンスター) / "metal"(メタル系・経験値稼ぎ用)
+  // 特殊行動: inflicts(状態異常付与) / drainsMp(MP吸収) / stealsGold(所持金を盗む) /
+  //           ambush(戦闘開始時の不意打ち) / fleeRate(プレイヤーの逃走成功率。低いほど素早い)
   var NON_UMA_DATA = [
-    { id: "slime", name: "スライム", emoji: "🟢", isUMA: false, minLevel: 1, weight: 10, hp: 10, attack: 3, def: 1, captureRate: 0.60, exp: 5 },
-    { id: "bat", name: "コウモリ", emoji: "🦇", isUMA: false, minLevel: 1, weight: 10, hp: 9, attack: 4, def: 0, captureRate: 0.55, exp: 5 },
-    { id: "wilddog", name: "のらいぬ", emoji: "🐕", isUMA: false, minLevel: 1, weight: 8, hp: 13, attack: 5, def: 1, captureRate: 0.45, exp: 7 },
-    { id: "bandit", name: "山賊", emoji: "🥷", isUMA: false, minLevel: 3, weight: 6, hp: 22, attack: 8, def: 2, captureRate: 0.25, exp: 14, inflicts: { id: "smell", chance: 0.3, duration: 3 } }
+    { id: "slime", name: "スライム", emoji: "🟢", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 10, attack: 3, def: 1, captureRate: 0.60, exp: 5 },
+    { id: "bat", name: "コウモリ", emoji: "🦇", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 9, attack: 4, def: 0, captureRate: 0.55, exp: 5 },
+    { id: "mosquito", name: "蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 1, weight: 9, hp: 6, attack: 2, def: 0, captureRate: 0.65, exp: 3, inflicts: { id: "allergy", chance: 0.25, duration: 8 } },
+    { id: "snake", name: "蛇", emoji: "🐍", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 11, attack: 4, def: 1, captureRate: 0.50, exp: 6 },
+    { id: "wilddog", name: "のらいぬ", emoji: "🐕", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 13, attack: 5, def: 1, captureRate: 0.45, exp: 7 },
+    { id: "yabuka", name: "ヤブ蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 2, weight: 7, hp: 9, attack: 5, def: 0, captureRate: 0.45, exp: 7, inflicts: { id: "allergy", chance: 0.35, duration: 10 } },
+    { id: "wanderingman", name: "さまようおやじ", emoji: "🚶", type: "monster", isUMA: false, minLevel: 2, weight: 6, hp: 16, attack: 5, def: 1, captureRate: 0.40, exp: 8 },
+    { id: "powerpointguy", name: "パワポ野郎", emoji: "💻", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 17, attack: 5, def: 2, captureRate: 0.30, exp: 10, drainsMp: { chance: 0.3, amount: 3 } },
+    { id: "scammer", name: "詐欺師", emoji: "🕴️", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 18, attack: 6, def: 1, captureRate: 0.30, exp: 11, stealsGold: { chance: 0.3, amount: 5 } },
+    { id: "bandit", name: "山賊", emoji: "🥷", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 22, attack: 8, def: 2, captureRate: 0.25, exp: 14, inflicts: { id: "smell", chance: 0.3, duration: 3 } },
+    { id: "marathonman", name: "マラソンマン", emoji: "🏃", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 19, attack: 6, def: 2, captureRate: 0.32, exp: 12, fleeRate: 0.50 },
+    { id: "bumpman", name: "ぶつかりおじさん", emoji: "💢", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 20, attack: 7, def: 2, captureRate: 0.28, exp: 13, ambush: true },
+    { id: "oni", name: "鬼", emoji: "👺", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 30, attack: 10, def: 4, captureRate: 0.20, exp: 20 },
+    { id: "powerharassmentsenpai", name: "パワハラ先輩", emoji: "😤", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 24, attack: 13, def: 3, captureRate: 0.22, exp: 18 },
+    // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
+    { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 40 },
+    { id: "haguremetalgorilla", name: "はぐれメタルゴリラ", emoji: "🥇", type: "metal", isUMA: false, minLevel: 10, weight: 8, hp: 12, attack: 5, def: 40, captureRate: 0.04, exp: 120 },
+    { id: "fullmetalgorilla", name: "フルメタルゴリラ", emoji: "💎", type: "metal", isUMA: false, minLevel: 20, weight: 6, hp: 16, attack: 8, def: 60, captureRate: 0.03, exp: 300 }
   ];
+
+  // UMA_DATAは収集対象として一律 type:"uma" を付与する(配列の各行は変更しない)
+  UMA_DATA.forEach(function (m) { m.type = "uma"; });
+
+  // メタル系だけを抜き出した低確率エンカウント用プール
+  var METAL_DATA = NON_UMA_DATA.filter(function (m) { return m.type === "metal"; });
 
   // --- アイテムデータ(消耗品。商人で売買・フィールドで取得) ---
   // trackable: true のものだけ player.potionCount / ropeCount のような専用の
@@ -184,7 +207,10 @@
     { id: "highKick", name: "ハイキック", mpCost: 7, type: "attack", power: 15 },
     { id: "backdrop", name: "バックドロップ", mpCost: 9, type: "attack", power: 19 },
     { id: "kidoClutch", name: "キドクラッチ", mpCost: 11, type: "attack", power: 24 },
-    { id: "sleeperHold", name: "魔性のスリーパー", mpCost: 14, type: "attack", power: 30 }
+    { id: "sleeperHold", name: "魔性のスリーパー", mpCost: 14, type: "attack", power: 30 },
+    { id: "parsley", name: "パクチー", mpCost: 4, type: "attack", power: 8 },
+    { id: "gooPunch", name: "グーパンチ", mpCost: 6, type: "attack", power: 12 },
+    { id: "homerun", name: "ホームラン", mpCost: 10, type: "attack", power: 22 }
   ];
   var HEAL_SPELL_DATA = [
     { id: "poimi", name: "ポイミ", mpCost: 2, type: "heal", power: 6 },
@@ -228,7 +254,8 @@
   // ※ デバッグ/動作確認用メモ:
   // 究極ゴリラに早く遭遇したい場合は、RARE_ENCOUNTER_CHANCEを上げる、
   // または UMA_DATA の ultimategorilla の weight を増やすとすぐ確認できる。
-  var RARE_ENCOUNTER_CHANCE = 0.08; // エンカウント発生時、レアUMAになる確率
+  var RARE_ENCOUNTER_CHANCE = 0.08;  // エンカウント発生時、レアUMAになる確率
+  var METAL_ENCOUNTER_CHANCE = 0.04; // レア枠に外れた時、メタル系になる確率(§6.3)
   var ENCOUNTER_CHANCE = 0.25;      // 草原を1歩進むごとにエンカウントが起きる確率
   var MIN_STEPS_BEFORE_ENCOUNTER = 2; // 戦闘直後はこの歩数分エンカウントしない
 
@@ -243,6 +270,10 @@
   var ALLERGY_DURATION_STEPS = 12;
   var SMELL_DURATION_BATTLES = 3;
   var SMELL_CAPTURE_PENALTY = 0.15;
+
+  // 捕獲率のHP残量ボーナス係数(Version 0.4.2)。(1 - HP比率) に掛ける値。
+  var CAPTURE_HP_BONUS_NORMAL = 0.50; // 通常の敵
+  var CAPTURE_HP_BONUS_RARE = 0.25;   // レアUMA(例外的に難しくする)
 
   // ---------------------------------------------------------
   // 4. セーブデータ
@@ -582,13 +613,19 @@
   }
 
   function chooseEnemy() {
+    var lv = state.player.level;
     // レアUMA(究極ゴリラ含む)はレベルに関係なく低確率で出現
     if (Math.random() < RARE_ENCOUNTER_CHANCE) {
       var rarePool = UMA_DATA.filter(function (u) { return u.isRare; });
       return weightedPick(rarePool);
     }
-    var lv = state.player.level;
-    var pool = NON_UMA_DATA.concat(UMA_DATA.filter(function (u) { return !u.isRare; }))
+    // メタル系(経験値稼ぎ用)もレベルに応じて低確率で出現(§6.3)
+    if (Math.random() < METAL_ENCOUNTER_CHANCE) {
+      var metalPool = METAL_DATA.filter(function (m) { return m.minLevel <= lv; });
+      if (metalPool.length > 0) return weightedPick(metalPool);
+    }
+    var pool = NON_UMA_DATA.filter(function (m) { return m.type !== "metal"; })
+      .concat(UMA_DATA.filter(function (u) { return !u.isRare; }))
       .filter(function (m) { return m.minLevel <= lv; });
     if (pool.length === 0) pool = [NON_UMA_DATA[0]];
     return weightedPick(pool);
@@ -631,7 +668,10 @@
       captureRateBase: monster.captureRate,
       sellPrice: monster.sellPrice || 0,
       fleeRate: monster.fleeRate || 0.70,
-      inflicts: monster.inflicts || null // 攻撃時に状態異常を与える可能性(§13.5)
+      inflicts: monster.inflicts || null,   // 攻撃時に状態異常を与える可能性(§13.5)
+      drainsMp: monster.drainsMp || null,   // 攻撃時にMPを吸う可能性(§6.2)
+      stealsGold: monster.stealsGold || null, // 攻撃時に所持金を盗む可能性(§6.2)
+      ambush: !!monster.ambush              // 戦闘開始時に不意打ちしてくるか(§6.2)
     };
 
     // UMAなら図鑑に「発見済み」を記録する(捕獲済みなら上書きしない)
@@ -657,7 +697,13 @@
     if (isFirstDiscovery) {
       log("✨ " + state.enemy.name + "を見つけた！(UMA図鑑に登録された)");
     }
-    setBattleLocked(false);
+    if (state.enemy.ambush) {
+      // 不意打ち: プレイヤーが行動する前に1回だけ攻撃を受ける(§6.2)
+      log("😲 不意をつかれた！");
+      setTimeout(enemyTurn, 500);
+    } else {
+      setBattleLocked(false);
+    }
   }
 
   function renderEnemy() {
@@ -867,8 +913,11 @@
     var job = state.player.job;
     var hpRatio = e.hp / e.maxHp;
     var smellPenalty = hasAilment("smell") ? SMELL_CAPTURE_PENALTY : 0;
+    // HP残量が少ないほど捕まえやすい(Version 0.4.2で強化)。
+    // レアUMAはこのボーナスを半分に抑え、例外的に難しくする(究極ゴリラはさらに下で別途上限)。
+    var hpBonusMultiplier = e.rare ? CAPTURE_HP_BONUS_RARE : CAPTURE_HP_BONUS_NORMAL;
     var chance = clamp(
-      e.captureRateBase + (1 - hpRatio) * 0.30 + (job.captureMod || 0) + (bonusChance || 0) - smellPenalty,
+      e.captureRateBase + (1 - hpRatio) * hpBonusMultiplier + (job.captureMod || 0) + (bonusChance || 0) - smellPenalty,
       0.05, 0.95
     );
     // 究極ゴリラはHPが減っても捕獲率がほぼ上がらないようにする(ラスボス級)
@@ -918,10 +967,19 @@
     }
   }
 
+  // HPが0になっても「倒した」ではなく「逃げられた」扱いにする(GAME_DESIGN.md §13)。
+  // UMA収集RPGとして、敵を弱らせて捕まえる/取り逃がす、という方向性を強調するため。
   function winBattle() {
-    log("🎉 " + state.enemy.name + "をたおした！");
-    logExpGained(state.enemy.exp);
-    addExp(state.enemy.exp);
+    var e = state.enemy;
+    log("💨 " + e.name + "に逃げられた！");
+    logExpGained(e.exp);
+    addExp(e.exp);
+    var gold = Math.ceil(e.exp / 2);
+    if (gold > 0) {
+      state.player.gold += gold;
+      log("💰 " + gold + "Gを手に入れた！");
+      updateStatusBar();
+    }
     finishBattle();
   }
 
@@ -953,6 +1011,22 @@
     // 状態異常を与える敵の攻撃が当たった時、低確率で発症する(§13.5)
     if (e.inflicts && !hasAilment(e.inflicts.id) && Math.random() < e.inflicts.chance) {
       applyAilment(e.inflicts.id, e.inflicts.duration);
+    }
+
+    // MPを吸う敵(§6.2)
+    if (e.drainsMp && Math.random() < e.drainsMp.chance && p.mp > 0) {
+      var drained = Math.min(p.mp, e.drainsMp.amount);
+      p.mp -= drained;
+      log("🌀 " + e.name + "にMPを" + drained + "吸われた！");
+      updateBattlePlayerStatus();
+    }
+
+    // 所持金を盗む敵(§6.2)
+    if (e.stealsGold && Math.random() < e.stealsGold.chance && p.gold > 0) {
+      var stolen = Math.min(p.gold, e.stealsGold.amount);
+      p.gold -= stolen;
+      log("💸 " + e.name + "に" + stolen + "Gを盗まれた！");
+      updateStatusBar();
     }
 
     if (p.hp <= 0) {
