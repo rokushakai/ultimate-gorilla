@@ -246,19 +246,31 @@
     { id: "juritani",   name: "ジュリタニ", emoji: "💪",
       feature: "会心の一撃の確率が高い",
       effectDesc: "攻撃時に会心の一撃が出やすくなる(確率+20%)",
-      critBonus: 0.20 },
+      critBonus: 0.20,
+      joinRate: 0.70,
+      joinMsgs: ["ジュリタニは拳を鳴らした。", "面白そうだな。付き合ってやるよ。"],
+      failMsgs: ["ジュリタニは腕を組んだ。", "まだお前の実力を見せてもらってないな。"] },
     { id: "shurittani", name: "シュリタニ", emoji: "🪤",
       feature: "UMAを捕まえるのが得意",
       effectDesc: "捕獲率+0.10",
-      captureMod: 0.10 },
+      captureMod: 0.10,
+      joinRate: 0.65,
+      joinMsgs: ["シュリタニは捕獲ロープを確認した。", "UMA探しなら任せて。"],
+      failMsgs: ["シュリタニは地図を見つめている。", "今は準備が足りないみたい。"] },
     { id: "norio",      name: "ノリオ",     emoji: "💨",
       feature: "逃げるのがうまい",
       effectDesc: "逃走成功率+0.15",
-      fleeMod: 0.15 },
+      fleeMod: 0.15,
+      joinRate: 0.75,
+      joinMsgs: ["ノリオは出口の場所を確認した。", "危なくなったら俺についてこい。"],
+      failMsgs: ["ノリオはすでに逃げる準備をしている。", "今日はやめておこう。"] },
     { id: "harumi",     name: "ハルミ",     emoji: "✨",
       feature: "まほうが得意",
       effectDesc: "まほう効果+20%",
-      spellMod: 0.20 }
+      spellMod: 0.20,
+      joinRate: 0.60,
+      joinMsgs: ["ハルミは静かに呪文を唱えた。", "魔法で支えます。"],
+      failMsgs: ["ハルミは首をかしげた。", "魔力の流れがまだ合わないみたい。"] }
   ];
 
   // データ検索用のショートカット(参照頻度が高いものだけ用意)
@@ -1547,19 +1559,25 @@
   function renderTavernRecruit() {
     var body = document.getElementById("tavern-body");
     var p = state.player;
+    var partyFull = p.companions.length >= COMPANION_MAX;
     var html = "<p>仲間: " + p.companions.length + "/" + COMPANION_MAX + "人</p>";
+    if (partyFull) {
+      html += '<p class="small" style="color:#ff7b7b;margin:0 0 8px;">上限です。仲間を外してから来てください。</p>';
+    }
     COMPANION_DATA.forEach(function (c) {
       var inParty = hasCompanion(c.id);
-      var full = p.companions.length >= COMPANION_MAX && !inParty;
-      html += '<div class="shop-row">';
-      html += "<span>" + c.emoji + " <b>" + c.name + "</b><br>";
-      html += '<span class="small">' + c.feature + "</span></span>";
+      html += '<div class="shop-row" style="flex-direction:column;align-items:flex-start;">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:3px;">';
+      html += "<span>" + c.emoji + " <b>" + c.name + "</b></span>";
       if (inParty) {
-        html += "<button disabled>同行中</button>";
-      } else if (full) {
-        html += "<button disabled>上限</button>";
-      } else {
+        html += '<span style="color:#06d6a0;font-size:12px;font-weight:bold;">同行中 ✓</span>';
+      } else if (!partyFull) {
         html += '<button data-recruit="' + c.id + '">加入</button>';
+      }
+      html += "</div>";
+      html += '<span class="small">' + c.feature + "</span>";
+      if (!inParty) {
+        html += '<span class="small" style="color:#ffd166;margin-top:2px;">' + c.effectDesc + "</span>";
       }
       html += "</div>";
     });
@@ -1568,7 +1586,6 @@
     body.querySelectorAll("button[data-recruit]").forEach(function (btn) {
       btn.onclick = function () {
         recruitCompanion(btn.getAttribute("data-recruit"));
-        renderTavernRecruit();
       };
     });
     document.getElementById("t-back").onclick = renderTavernMain;
@@ -1623,13 +1640,35 @@
 
   function recruitCompanion(id) {
     var p = state.player;
-    if (hasCompanion(id)) { showToast("すでに仲間です！"); return; }
-    if (p.companions.length >= COMPANION_MAX) { showToast("これ以上仲間を増やせない！"); return; }
-    p.companions.push(id);
     var c = findById(COMPANION_DATA, id);
-    showToast(c.name + "が仲間になった！");
-    updateStatusBar();
-    saveGame();
+    var body = document.getElementById("tavern-body");
+    if (hasCompanion(id) || p.companions.length >= COMPANION_MAX) {
+      renderTavernRecruit();
+      return;
+    }
+    var success = Math.random() < c.joinRate;
+    var msgs = success ? c.joinMsgs : c.failMsgs;
+    var html = '<div style="padding:8px 2px;">';
+    html += '<p style="margin:0 0 10px;font-size:13px;font-weight:bold;">' + c.emoji + " " + c.name + "</p>";
+    msgs.forEach(function (msg) {
+      html += '<p style="margin:4px 0;font-size:13px;">' + msg + "</p>";
+    });
+    html += "</div>";
+    if (success) {
+      html += '<p style="color:#06d6a0;font-weight:bold;margin:10px 0 6px;">' + c.name + "が仲間になった！</p>";
+      html += '<button class="shop-back-btn" id="t-recruit-ok">OK</button>';
+    } else {
+      html += '<button class="shop-back-btn" id="t-recruit-back">戻る</button>';
+    }
+    body.innerHTML = html;
+    if (success) {
+      p.companions.push(id);
+      updateStatusBar();
+      saveGame();
+      document.getElementById("t-recruit-ok").onclick = renderTavernRecruit;
+    } else {
+      document.getElementById("t-recruit-back").onclick = renderTavernRecruit;
+    }
   }
 
   function dismissCompanion(id) {
