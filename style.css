@@ -8,6 +8,14 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* スマホ長押しのズーム・コンテキストメニューを抑制(§13.8)。
+   .dpad-btn の touch-action: none はより高い特異度で維持される。 */
+button {
+  touch-action: manipulation;
 }
 
 html, body {

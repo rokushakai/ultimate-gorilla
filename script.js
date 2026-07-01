@@ -771,6 +771,9 @@
     document.getElementById("item-menu").classList.add("hidden");
     document.getElementById("battle-menu").classList.remove("hidden");
 
+    // 戦闘開始直後の誤タップ防止: 全コマンドをロック(§13.7)
+    setBattleLocked(true);
+
     renderEnemy();
     updateBattlePlayerStatus();
     updateStatusBar();
@@ -781,11 +784,17 @@
       log("✨ " + state.enemy.name + "を見つけた！(UMA図鑑に登録された)");
     }
     if (state.enemy.ambush) {
-      // 不意打ち: プレイヤーが行動する前に1回だけ攻撃を受ける(§6.2)
+      // 不意打ち: enemyTurn()が処理後にsetBattleLocked(false)を呼ぶ
       log("😲 不意をつかれた！");
       setTimeout(enemyTurn, 500);
     } else {
-      setBattleLocked(false);
+      // 800ms後にコマンドを有効化(§13.7)
+      setTimeout(function () {
+        if (state.inBattle) {
+          setBattleLocked(false);
+          log("どうする？");
+        }
+      }, 800);
     }
   }
 
@@ -1138,7 +1147,7 @@
       captureUma(e);
       logExpGained(e.exp);
       addExp(e.exp);
-      finishBattle();
+      showBattleEnd();
       return true;
     }
     log("🪤 しかし捕まえられなかった！");
@@ -1171,7 +1180,7 @@
       var runExp = Math.max(1, Math.floor(e.exp * 0.2));
       logExpGained(runExp);
       addExp(runExp);
-      finishBattle();
+      showBattleEnd();
     } else {
       log("💨 しかし逃げられなかった！");
       setTimeout(enemyTurn, 600);
@@ -1191,7 +1200,7 @@
       log("💰 " + gold + "Gを手に入れた！");
       updateStatusBar();
     }
-    finishBattle();
+    showBattleEnd();
   }
 
   // ---------------------------------------------------------
@@ -1269,9 +1278,18 @@
     }, 200);
   }
 
+  // 戦闘終了時に結果を表示してOKボタンを出す(§13)。
+  // プレイヤーがOKを押すと finishBattle() を呼ぶ。
+  function showBattleEnd() {
+    setBattleLocked(true);
+    document.getElementById("btn-battle-ok").classList.remove("hidden");
+  }
+
   function finishBattle() {
     state.inBattle = false;
     state.enemy = null;
+    stopWalking(); // 残留walkTimerをリセット
+    document.getElementById("btn-battle-ok").classList.add("hidden");
     tickSmellOnBattleEnd();
     document.getElementById("battle-screen").classList.add("hidden");
     document.getElementById("field-screen").classList.remove("hidden");
@@ -1457,11 +1475,13 @@
     });
     html +=
       '<button class="shop-menu-btn" id="m-sell-item">📤 アイテムを売る</button>' +
-      '<button class="shop-menu-btn" id="m-sell-uma">🦍 UMAを売る</button>';
+      '<button class="shop-menu-btn" id="m-sell-uma">🦍 UMAを売る</button>' +
+      '<button class="shop-menu-btn" id="m-sell-equip">🔧 装備を売る</button>';
     body.innerHTML = html;
     document.getElementById("m-buy").onclick = renderMerchantBuy;
     document.getElementById("m-sell-item").onclick = renderMerchantSellItem;
     document.getElementById("m-sell-uma").onclick = renderMerchantSellUma;
+    document.getElementById("m-sell-equip").onclick = renderMerchantSellEquip;
     body.querySelectorAll("button[data-buy-equip-slot]").forEach(function (btn) {
       btn.onclick = function () {
         renderMerchantBuyEquip(findEquipSlot(btn.getAttribute("data-buy-equip-slot")));
@@ -1629,6 +1649,58 @@
     saveGame();
   }
 
+  function renderMerchantSellEquip() {
+    var body = document.getElementById("merchant-body");
+    var p = state.player;
+    var html = "<p>所持金: " + p.gold + " G</p>";
+    var hasAny = false;
+    EQUIP_SLOTS.forEach(function (slotInfo) {
+      var ownedItems = slotInfo.data().filter(function (item) {
+        return isEquipOwned(slotInfo, item.id);
+      });
+      if (ownedItems.length === 0) return;
+      html += "<h3>" + slotInfo.label + "</h3>";
+      ownedItems.forEach(function (item) {
+        hasAny = true;
+        var equipped = p.equipment[slotInfo.slot] === item.id;
+        var sellPrice = item.buyPrice ? Math.floor(item.buyPrice / 2) : 5;
+        html += '<div class="shop-row"><span>' + item.name + " (" + bonusText(item) + ")</span>" +
+          '<button data-sellequip="' + slotInfo.slot + ":" + item.id + '"' +
+          (equipped ? " disabled" : "") + ">" +
+          (equipped ? "装備中" : sellPrice + "Gで売る") + "</button></div>";
+      });
+    });
+    if (!hasAny) html += '<p class="small">売れる装備がない。</p>';
+    html += '<button class="shop-back-btn" id="shop-back">戻る</button>';
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-sellequip]").forEach(function (btn) {
+      btn.onclick = function () {
+        var parts = btn.getAttribute("data-sellequip").split(":");
+        sellEquip(parts[0], parts[1]);
+        renderMerchantSellEquip();
+      };
+    });
+    document.getElementById("shop-back").onclick = renderMerchantMain;
+  }
+
+  function sellEquip(slot, id) {
+    var slotInfo = findEquipSlot(slot);
+    if (!isEquipOwned(slotInfo, id)) return;
+    var p = state.player;
+    if (p.equipment[slot] === id) {
+      showToast("装備中なので売れない！");
+      return;
+    }
+    var item = findById(slotInfo.data(), id);
+    var sellPrice = item.buyPrice ? Math.floor(item.buyPrice / 2) : 5;
+    var idx = p[slotInfo.ownedKey].indexOf(id);
+    if (idx !== -1) p[slotInfo.ownedKey].splice(idx, 1);
+    p.gold += sellPrice;
+    showToast(item.name + "を売った！ +" + sellPrice + "G");
+    updateStatusBar();
+    saveGame();
+  }
+
   // ---------------------------------------------------------
   // 21. 転職モーダル(神様の社)
   // ---------------------------------------------------------
@@ -1785,6 +1857,8 @@
     html += '<button class="shop-menu-btn" id="btn-manual-save">💾 今すぐセーブ</button>';
     html += '<button class="shop-menu-btn" id="btn-show-goal">🎯 目的を見る</button>';
     html += '<button class="shop-menu-btn" id="btn-show-help">❓ ヘルプ</button>';
+    html += '<p class="small" style="color:#ff8c8c;margin-top:16px;">⚠️ 危険な操作:</p>';
+    html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
       btn.onclick = function () { changeWalkSpeed(btn.getAttribute("data-speed")); };
@@ -1800,6 +1874,12 @@
     document.getElementById("btn-show-help").onclick = function () {
       closeModal("settings-modal");
       openModal("help-modal");
+    };
+    document.getElementById("btn-new-game").onclick = function () {
+      if (confirm("本当に最初から始めますか？\n現在のセーブデータは削除されます。")) {
+        try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+        location.reload();
+      }
     };
   }
 
@@ -2029,6 +2109,14 @@
     document.getElementById("btn-field-item").addEventListener("click", openFieldItemModal);
     document.getElementById("btn-field-item-close").addEventListener("click", function () {
       closeModal("field-item-modal");
+    });
+
+    // 戦闘終了OKボタン(§13)
+    document.getElementById("btn-battle-ok").addEventListener("click", finishBattle);
+
+    // スマホ長押しのコンテキストメニューを抑制(§13.8)
+    document.getElementById("game").addEventListener("contextmenu", function (ev) {
+      ev.preventDefault();
     });
   }
 
