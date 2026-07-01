@@ -238,6 +238,29 @@
     { id: "magicwarrior", name: "魔法戦士", atkMod: 2, mpMod: 4, spellLearnMod: 0.15, desc: "まほうとこうげきのバランス型" }
   ];
 
+  // --- 仲間データ(§10。GAME_DESIGN.md §10 参照) ---
+  // critBonus: doFight()の会心確率加算  captureMod: attemptCapture()加算
+  // fleeMod: doRun()加算  spellMod: castSpell()の威力/回復倍率加算
+  var COMPANION_MAX = 2; // パーティー上限
+  var COMPANION_DATA = [
+    { id: "juritani",   name: "ジュリタニ", emoji: "💪",
+      feature: "会心の一撃の確率が高い",
+      effectDesc: "攻撃時に会心の一撃が出やすくなる(確率+20%)",
+      critBonus: 0.20 },
+    { id: "shurittani", name: "シュリタニ", emoji: "🪤",
+      feature: "UMAを捕まえるのが得意",
+      effectDesc: "捕獲率+0.10",
+      captureMod: 0.10 },
+    { id: "norio",      name: "ノリオ",     emoji: "💨",
+      feature: "逃げるのがうまい",
+      effectDesc: "逃走成功率+0.15",
+      fleeMod: 0.15 },
+    { id: "harumi",     name: "ハルミ",     emoji: "✨",
+      feature: "まほうが得意",
+      effectDesc: "まほう効果+20%",
+      spellMod: 0.20 }
+  ];
+
   // データ検索用のショートカット(参照頻度が高いものだけ用意)
   function findById(list, id) {
     for (var i = 0; i < list.length; i++) {
@@ -346,7 +369,8 @@
       ownedHelmets: ["hachimaki"],
       statusAilments: {}, // id -> 残りターン/歩数(0より大きい間だけ効果がある)
       seenOpening: false, // オープニングイベントを見たかどうか
-      seenGoal: false     // 目的説明画面を見たかどうか
+      seenGoal: false,    // 目的説明画面を見たかどうか
+      companions: []      // 現在のパーティー仲間のidリスト(§10)
     },
     stepsSinceEncounter: 0,
     inBattle: false,
@@ -434,7 +458,24 @@
   }
 
   // ---------------------------------------------------------
-  // 7.5 状態異常(GAME_DESIGN.md §13.5)
+  // 7.5 仲間補正ヘルパー(§10)
+  // ---------------------------------------------------------
+  // 現在パーティーにいる仲間の指定キーの補正値を合計して返す
+  function getCompanionBonus(key) {
+    var total = 0;
+    state.player.companions.forEach(function (id) {
+      var c = findById(COMPANION_DATA, id);
+      if (c) total += (c[key] || 0);
+    });
+    return total;
+  }
+
+  function hasCompanion(id) {
+    return state.player.companions.indexOf(id) !== -1;
+  }
+
+  // ---------------------------------------------------------
+  // 7.6 状態異常(GAME_DESIGN.md §13.5)
   // ---------------------------------------------------------
   function hasAilment(id) {
     return (state.player.statusAilments[id] || 0) > 0;
@@ -595,7 +636,7 @@
       return;
     }
     if (tile === "T") {
-      showToast("🍺 酒場(現在工事中) … 近日オープン予定");
+      openTavernModal();
       return;
     }
     if (tile === "B") {
@@ -833,8 +874,15 @@
     setBattleLocked(true);
     var p = state.player, e = state.enemy;
     var dmg = Math.max(1, p.atk + randInt(0, 3) - e.def);
+    var critChance = getCompanionBonus("critBonus");
+    var isCrit = critChance > 0 && Math.random() < critChance;
+    if (isCrit) {
+      dmg = Math.max(1, Math.floor(dmg * 1.5));
+      log("⚔ " + p.name + "の攻撃！ 💥 会心の一撃！ " + e.name + "に" + dmg + "のダメージ！");
+    } else {
+      log("⚔ " + p.name + "の攻撃！ " + e.name + "に" + dmg + "のダメージ！");
+    }
     e.hp = Math.max(0, e.hp - dmg);
-    log("⚔ " + p.name + "の攻撃！ " + e.name + "に" + dmg + "のダメージ！");
     renderEnemy();
 
     if (e.hp <= 0) {
@@ -883,16 +931,18 @@
     document.getElementById("battle-menu").classList.remove("hidden");
     p.mp -= sp.mpCost;
 
+    // ハルミの魔法補正(spellMod): 威力・回復量に (1+spellMod) を乗算する
+    var spellMultiplier = 1 + getCompanionBonus("spellMod");
     if (sp.type === "attack") {
       var e = state.enemy;
-      var dmg = Math.max(1, sp.power + randInt(0, 4) - e.def);
+      var dmg = Math.max(1, Math.floor((sp.power + randInt(0, 4)) * spellMultiplier) - e.def);
       e.hp = Math.max(0, e.hp - dmg);
       log("✨ " + sp.name + "！ " + e.name + "に" + dmg + "のダメージ！");
       renderEnemy();
       updateBattlePlayerStatus();
       if (e.hp <= 0) { winBattle(); return; }
     } else {
-      var heal = sp.power + randInt(0, 5);
+      var heal = Math.floor((sp.power + randInt(0, 5)) * spellMultiplier);
       p.hp = Math.min(p.maxHp, p.hp + heal);
       log("✨ " + sp.name + "！ HPが" + heal + "回復した！");
       updateBattlePlayerStatus();
@@ -1137,7 +1187,7 @@
     // レアUMAはこのボーナスを半分に抑え、例外的に難しくする(究極ゴリラはさらに下で別途上限)。
     var hpBonusMultiplier = e.rare ? CAPTURE_HP_BONUS_RARE : CAPTURE_HP_BONUS_NORMAL;
     var chance = clamp(
-      e.captureRateBase + (1 - hpRatio) * hpBonusMultiplier + (job.captureMod || 0) + (bonusChance || 0) - smellPenalty,
+      e.captureRateBase + (1 - hpRatio) * hpBonusMultiplier + (job.captureMod || 0) + getCompanionBonus("captureMod") + (bonusChance || 0) - smellPenalty,
       0.05, 0.95
     );
     // 究極ゴリラはHPが減っても捕獲率がほぼ上がらないようにする(ラスボス級)
@@ -1174,7 +1224,7 @@
     setBattleLocked(true);
     var e = state.enemy;
     var job = state.player.job;
-    var chance = clamp(e.fleeRate + (job.fleeMod || 0), 0.05, 0.97);
+    var chance = clamp(e.fleeRate + (job.fleeMod || 0) + getCompanionBonus("fleeMod"), 0.05, 0.97);
     if (Math.random() < chance) {
       log("💨 うまく逃げ切った！");
       var runExp = Math.max(1, Math.floor(e.exp * 0.2));
@@ -1366,6 +1416,11 @@
     document.getElementById("status-job").textContent = "(" + p.job.name + ")";
     document.getElementById("status-gold").textContent = "💰 " + p.gold + "G";
     document.getElementById("status-ailment").textContent = getAilmentStatusText();
+    var companionEl = document.getElementById("status-companions");
+    if (companionEl) {
+      companionEl.textContent = p.companions.length > 0
+        ? "🤝" + p.companions.length + "/" + COMPANION_MAX : "";
+    }
     var discovered = Object.keys(p.dex).length;
     document.getElementById("btn-dex").textContent =
       "📖図鑑(" + discovered + "/" + UMA_DATA.length + ")";
@@ -1452,8 +1507,140 @@
     html += "<h3>UMA</h3>";
     html += '<div class="shop-row"><span>所持UMA総数</span><span>' + capturedCount + "匹</span></div>";
     html += '<div class="shop-row"><span>図鑑進捗</span><span>' + dexDiscovered + "/" + UMA_DATA.length + "</span></div>";
+    html += "<h3>仲間</h3>";
+    if (p.companions.length === 0) {
+      html += '<p class="small">なし</p>';
+    } else {
+      p.companions.forEach(function (id) {
+        var c = findById(COMPANION_DATA, id);
+        if (!c) return;
+        html += '<div class="shop-row"><span>' + c.emoji + " " + c.name + "</span>" +
+          '<span class="small" style="color:#ffd166;">' + c.effectDesc + "</span></div>";
+      });
+    }
 
     document.getElementById("status-body").innerHTML = html;
+  }
+
+  // ---------------------------------------------------------
+  // 19.8 酒場モーダル(§9.5/§10)
+  // ---------------------------------------------------------
+  function openTavernModal() {
+    openModal("tavern-modal");
+    renderTavernMain();
+  }
+
+  function renderTavernMain() {
+    var body = document.getElementById("tavern-body");
+    var p = state.player;
+    var html = '<p>「ここは酒場だ。旅の仲間を探しますか？」</p>';
+    html += '<p class="small">仲間: ' + p.companions.length + "/" + COMPANION_MAX + "人</p>";
+    html += '<button class="shop-menu-btn" id="t-recruit">🤝 仲間を探す</button>';
+    html += '<button class="shop-menu-btn" id="t-view">👥 仲間を見る</button>';
+    html += '<button class="shop-menu-btn" id="t-leave">👋 仲間を外す</button>';
+    body.innerHTML = html;
+    document.getElementById("t-recruit").onclick = renderTavernRecruit;
+    document.getElementById("t-view").onclick = renderTavernViewParty;
+    document.getElementById("t-leave").onclick = renderTavernLeave;
+  }
+
+  function renderTavernRecruit() {
+    var body = document.getElementById("tavern-body");
+    var p = state.player;
+    var html = "<p>仲間: " + p.companions.length + "/" + COMPANION_MAX + "人</p>";
+    COMPANION_DATA.forEach(function (c) {
+      var inParty = hasCompanion(c.id);
+      var full = p.companions.length >= COMPANION_MAX && !inParty;
+      html += '<div class="shop-row">';
+      html += "<span>" + c.emoji + " <b>" + c.name + "</b><br>";
+      html += '<span class="small">' + c.feature + "</span></span>";
+      if (inParty) {
+        html += "<button disabled>同行中</button>";
+      } else if (full) {
+        html += "<button disabled>上限</button>";
+      } else {
+        html += '<button data-recruit="' + c.id + '">加入</button>';
+      }
+      html += "</div>";
+    });
+    html += '<button class="shop-back-btn" id="t-back">戻る</button>';
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-recruit]").forEach(function (btn) {
+      btn.onclick = function () {
+        recruitCompanion(btn.getAttribute("data-recruit"));
+        renderTavernRecruit();
+      };
+    });
+    document.getElementById("t-back").onclick = renderTavernMain;
+  }
+
+  function renderTavernViewParty() {
+    var body = document.getElementById("tavern-body");
+    var p = state.player;
+    var html = "";
+    if (p.companions.length === 0) {
+      html += '<p class="small">仲間はいない。</p>';
+    } else {
+      p.companions.forEach(function (id) {
+        var c = findById(COMPANION_DATA, id);
+        if (!c) return;
+        html += '<div class="shop-row" style="flex-direction:column;align-items:flex-start;">';
+        html += "<p style=\"margin:0 0 4px;\"><b>" + c.emoji + " " + c.name + "</b> <span class=\"small\" style=\"color:#06d6a0;\">同行中</span></p>";
+        html += '<p class="small" style="margin:0 0 2px;">' + c.feature + "</p>";
+        html += '<p class="small" style="margin:0;color:#ffd166;">' + c.effectDesc + "</p>";
+        html += "</div>";
+      });
+    }
+    html += '<button class="shop-back-btn" id="t-back">戻る</button>';
+    body.innerHTML = html;
+    document.getElementById("t-back").onclick = renderTavernMain;
+  }
+
+  function renderTavernLeave() {
+    var body = document.getElementById("tavern-body");
+    var p = state.player;
+    var html = "";
+    if (p.companions.length === 0) {
+      html += '<p class="small">外せる仲間がいない。</p>';
+    } else {
+      p.companions.forEach(function (id) {
+        var c = findById(COMPANION_DATA, id);
+        if (!c) return;
+        html += '<div class="shop-row"><span>' + c.emoji + " " + c.name + "</span>";
+        html += '<button data-leave="' + c.id + '">外す</button></div>';
+      });
+    }
+    html += '<button class="shop-back-btn" id="t-back">戻る</button>';
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-leave]").forEach(function (btn) {
+      btn.onclick = function () {
+        dismissCompanion(btn.getAttribute("data-leave"));
+        renderTavernLeave();
+      };
+    });
+    document.getElementById("t-back").onclick = renderTavernMain;
+  }
+
+  function recruitCompanion(id) {
+    var p = state.player;
+    if (hasCompanion(id)) { showToast("すでに仲間です！"); return; }
+    if (p.companions.length >= COMPANION_MAX) { showToast("これ以上仲間を増やせない！"); return; }
+    p.companions.push(id);
+    var c = findById(COMPANION_DATA, id);
+    showToast(c.name + "が仲間になった！");
+    updateStatusBar();
+    saveGame();
+  }
+
+  function dismissCompanion(id) {
+    var p = state.player;
+    var idx = p.companions.indexOf(id);
+    if (idx === -1) return;
+    p.companions.splice(idx, 1);
+    var c = findById(COMPANION_DATA, id);
+    showToast(c.name + "は酒場に戻った。");
+    updateStatusBar();
+    saveGame();
   }
 
   // ---------------------------------------------------------
@@ -1915,6 +2102,7 @@
         statusAilments: p.statusAilments,
         seenOpening: p.seenOpening,
         seenGoal: p.seenGoal,
+        companions: p.companions,
         discoveredFinal: state.discoveredFinal,
         openedChests: state.openedChests
       };
@@ -1959,6 +2147,7 @@
       p.statusAilments = data.statusAilments || {};
       p.seenOpening = !!data.seenOpening;
       p.seenGoal = !!data.seenGoal;
+      p.companions = Array.isArray(data.companions) ? data.companions : [];
       state.discoveredFinal = !!data.discoveredFinal;
       state.openedChests = data.openedChests || {};
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
@@ -2109,6 +2298,11 @@
     document.getElementById("btn-field-item").addEventListener("click", openFieldItemModal);
     document.getElementById("btn-field-item-close").addEventListener("click", function () {
       closeModal("field-item-modal");
+    });
+
+    // 酒場モーダル(§9.5)
+    document.getElementById("btn-tavern-close").addEventListener("click", function () {
+      closeModal("tavern-modal");
     });
 
     // 戦闘終了OKボタン(§13)

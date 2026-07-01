@@ -468,7 +468,7 @@ html, body {
   margin-top: 2px;
 }
 
-#merchant-body, #god-body, #equip-body, #status-body {
+#merchant-body, #god-body, #equip-body, #status-body, #tavern-body {
   max-height: 50vh;
   overflow-y: auto;
 }
