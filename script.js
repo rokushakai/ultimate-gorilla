@@ -27,18 +27,18 @@
     "#,,,,,,M,,,,#",
     "#,,,,,,,,G,,#",
     "#...........#",
-    "#...........#",
+    "#.......B...#",  // B=宝箱(8,5)
     "#...~~~.....#",
     "#...~~~.....#",
-    "#...........#",
+    "#.........B.#",  // B=宝箱(10,8)
     "#..W........#",
     "#....P......#",
     "#.....#.....#",
     "#......W....#",
-    "#....P......#",
+    "#....P..B...#",  // B=宝箱(8,13)
     "#...........#",
     "#..#.......##",
-    "#...........#",
+    "#..B........#",  // B=宝箱(3,16)
     "#############"
   ];
 
@@ -58,12 +58,13 @@
     "H": "🏠",
     "M": "🏪",
     "G": "⛩️",
-    "T": "🍺"
+    "T": "🍺",
+    "B": "🎁"   // 宝箱(§5.7。開封後は📦に変わる)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
-  // エンカウントが起きない安全地形(村・道・施設の上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true };
+  // エンカウントが起きない安全地形(村・道・施設・宝箱の上)
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -275,6 +276,30 @@
   var CAPTURE_HP_BONUS_NORMAL = 0.50; // 通常の敵
   var CAPTURE_HP_BONUS_RARE = 0.25;   // レアUMA(例外的に難しくする)
 
+  // 宝箱ドロップテーブル(§5.7)。weightedPick()で乱択する。
+  // equip は isEquipOwned で既所持チェックし、所持済みなら buyPrice/2 のゴールドに替える。
+  var CHEST_DROPS = [
+    { type: "gold", amount: 5,  weight: 20 },
+    { type: "gold", amount: 10, weight: 15 },
+    { type: "gold", amount: 20, weight: 8  },
+    { type: "gold", amount: 50, weight: 3  },
+    { type: "item", id: "coffee",    weight: 12 },
+    { type: "item", id: "bread",     weight: 10 },
+    { type: "item", id: "bento",     weight: 6  },
+    { type: "item", id: "coughsyrup",  weight: 8  },
+    { type: "item", id: "deodorant",   weight: 8  },
+    { type: "equip", slot: "weapon", id: "wirebrush",    weight: 6 },
+    { type: "equip", slot: "weapon", id: "saw",          weight: 5 },
+    { type: "equip", slot: "weapon", id: "survivalknife",weight: 4 },
+    { type: "equip", slot: "weapon", id: "ironrod",      weight: 3 },
+    { type: "equip", slot: "weapon", id: "woodbat",      weight: 2 },
+    { type: "equip", slot: "weapon", id: "tennisracket", weight: 2 },
+    { type: "equip", slot: "armor",  id: "rockt",        weight: 5 },
+    { type: "equip", slot: "armor",  id: "leatherjacket",weight: 3 },
+    { type: "equip", slot: "shield", id: "ironshield",   weight: 4 },
+    { type: "equip", slot: "helmet", id: "helmet",       weight: 5 }
+  ];
+
   // ---------------------------------------------------------
   // 4. セーブデータ
   // ---------------------------------------------------------
@@ -328,7 +353,8 @@
     enemy: null,
     locked: false,       // 戦闘コマンド入力をロック(連打防止)
     modalOpen: false,    // いずれかのモーダル表示中はフィールド操作を止める
-    discoveredFinal: false
+    discoveredFinal: false,
+    openedChests: {}     // "x,y" -> true: 開封済みの宝箱(§5.7)
   };
 
   // ---------------------------------------------------------
@@ -481,7 +507,14 @@
           var key = mapX + "," + mapY;
           if (state.items[key] === "weapon") emoji = "🗡️";
           else if (state.items[key] === "potion") emoji = "🧪";
-          else emoji = TERRAIN_EMOJI[state.terrain[mapY][mapX]] || "🟩";
+          else {
+            var tileChar = state.terrain[mapY][mapX];
+            if (tileChar === "B") {
+              emoji = state.openedChests[key] ? "📦" : "🎁";
+            } else {
+              emoji = TERRAIN_EMOJI[tileChar] || "🟩";
+            }
+          }
         }
         html += '<div class="tile">' + emoji + "</div>";
       }
@@ -565,6 +598,10 @@
       showToast("🍺 酒場(現在工事中) … 近日オープン予定");
       return;
     }
+    if (tile === "B") {
+      openChest(nx, ny);
+      return;
+    }
 
     // 安全地形でなければエンカウント判定
     if (!SAFE_TILE[tile]) {
@@ -586,6 +623,44 @@
       state.player.potionCount++;
       showToast("🧪 やくそうを拾った！ (所持数 " + state.player.potionCount + ")");
     }
+    updateStatusBar();
+    saveGame();
+  }
+
+  // ---------------------------------------------------------
+  // 10.5 宝箱(§5.7)
+  // ---------------------------------------------------------
+  function openChest(x, y) {
+    var key = x + "," + y;
+    if (state.openedChests[key]) {
+      showToast("📦 宝箱は空だった…");
+      return;
+    }
+    state.openedChests[key] = true;
+    renderField(); // 即座に📦に切り替える
+    var drop = weightedPick(CHEST_DROPS);
+    var msg;
+    if (drop.type === "gold") {
+      state.player.gold += drop.amount;
+      msg = "🎁 宝箱を開けた！ " + drop.amount + "Gを手に入れた！";
+    } else if (drop.type === "item") {
+      var it = findById(ITEM_DATA, drop.id);
+      addItemCount(drop.id, 1);
+      msg = "🎁 宝箱を開けた！ " + it.name + "を手に入れた！(所持数 " + getItemCount(drop.id) + ")";
+    } else if (drop.type === "equip") {
+      var slotInfo = findEquipSlot(drop.slot);
+      var equip = findById(slotInfo.data(), drop.id);
+      if (isEquipOwned(slotInfo, drop.id)) {
+        // すでに所持済みの場合はゴールドに換算する
+        var fallbackGold = equip.buyPrice ? Math.floor(equip.buyPrice / 2) : 10;
+        state.player.gold += fallbackGold;
+        msg = "🎁 宝箱を開けた！ " + equip.name + "はすでに持っていた！かわりに" + fallbackGold + "Gを手に入れた！";
+      } else {
+        state.player[slotInfo.ownedKey].push(equip.id);
+        msg = "🎁 宝箱を開けた！ " + equip.name + "を手に入れた！装備変更画面で装備できます";
+      }
+    }
+    showToast(msg);
     updateStatusBar();
     saveGame();
   }
@@ -949,6 +1024,94 @@
     updateBattlePlayerStatus();
     updateStatusBar();
     setTimeout(enemyTurn, 600);
+  }
+
+  // ---------------------------------------------------------
+  // 14.5 フィールド上でのアイテム使用(§5.8)
+  // ---------------------------------------------------------
+  function openFieldItemModal() {
+    if (state.inBattle) return;
+    openModal("field-item-modal");
+    renderFieldItemBody();
+  }
+
+  function renderFieldItemBody() {
+    var body = document.getElementById("field-item-body");
+    var p = state.player;
+    var ITEM_EMOJI = { potion: "🧪", coffee: "☕", bread: "🍞", bento: "🍱", ramen: "🍜" };
+    var CURE_EMOJI  = { coughsyrup: "🍯", deodorant: "🧴" };
+    var healItems = ITEM_DATA.filter(function (it) { return it.type === "heal" && it.trackable; });
+    var cureItems = ITEM_DATA.filter(function (it) { return it.type === "cure" && it.trackable; });
+
+    var html = "<h3>🩹 回復アイテム</h3>";
+    var anyHeal = false;
+    healItems.forEach(function (it) {
+      var count = getItemCount(it.id);
+      if (count <= 0) return;
+      anyHeal = true;
+      var em = ITEM_EMOJI[it.id] || "🧪";
+      var desc = it.healAmount >= 9999 ? "HP全回復" : ("HP+" + it.healAmount);
+      html += '<div class="shop-row"><span>' + em + " " + it.name + " x" + count + " (" + desc + ")</span>" +
+        '<button data-field-heal="' + it.id + '"' + (p.hp >= p.maxHp ? " disabled" : "") + ">使う</button></div>";
+    });
+    if (!anyHeal) html += '<p class="small">回復アイテムがない。</p>';
+
+    html += "<h3>💊 治療アイテム</h3>";
+    var anyCure = false;
+    cureItems.forEach(function (it) {
+      var count = getItemCount(it.id);
+      if (count <= 0) return;
+      anyCure = true;
+      var em = CURE_EMOJI[it.id] || "💊";
+      var ailInfo = AILMENT_INFO[it.cures];
+      var eff = ailInfo ? (ailInfo.name + "を治す") : it.name;
+      html += '<div class="shop-row"><span>' + em + " " + it.name + " x" + count + " (" + eff + ")</span>" +
+        '<button data-field-cure="' + it.id + '"' + (!hasAilment(it.cures) ? " disabled" : "") + ">使う</button></div>";
+    });
+    if (!anyCure) html += '<p class="small">治療アイテムがない。</p>';
+
+    body.innerHTML = html;
+    body.querySelectorAll("button[data-field-heal]").forEach(function (btn) {
+      btn.onclick = function () { useFieldHealItem(btn.getAttribute("data-field-heal")); };
+    });
+    body.querySelectorAll("button[data-field-cure]").forEach(function (btn) {
+      btn.onclick = function () { useFieldCureItem(btn.getAttribute("data-field-cure")); };
+    });
+  }
+
+  function useFieldHealItem(itemId) {
+    var p = state.player;
+    var it = findById(ITEM_DATA, itemId);
+    if (getItemCount(itemId) <= 0) return;
+    if (p.hp >= p.maxHp) {
+      showToast("🤔 今は使う必要がない。");
+      return;
+    }
+    addItemCount(itemId, -1);
+    var heal = Math.min(it.healAmount, p.maxHp - p.hp);
+    p.hp = Math.min(p.maxHp, p.hp + it.healAmount);
+    var MSGS = { potion: "やくそうを使った！", coffee: "コーヒーを飲んだ！", bread: "パンを食べた！", bento: "お弁当を食べた！", ramen: "ラーメンを食べた！" };
+    var msg = MSGS[itemId] || (it.name + "を使った！");
+    updateStatusBar();
+    saveGame();
+    showToast("🍽️ " + msg + " HPが" + heal + "回復した！");
+    renderFieldItemBody(); // 所持数・disabled状態を再描画
+  }
+
+  function useFieldCureItem(itemId) {
+    var it = findById(ITEM_DATA, itemId);
+    if (getItemCount(itemId) <= 0) return;
+    if (!hasAilment(it.cures)) {
+      showToast("🤔 今は使う必要がない。");
+      return;
+    }
+    addItemCount(itemId, -1);
+    var cureMsg = it.cures === "allergy" ? "アレルギーが治った！" : "においが消えた！";
+    clearAilment(it.cures, false);
+    updateStatusBar();
+    saveGame();
+    showToast("✨ " + it.name + "を使った！ " + cureMsg);
+    renderFieldItemBody(); // 所持数・disabled状態を再描画
   }
 
   // ---------------------------------------------------------
@@ -1672,7 +1835,8 @@
         statusAilments: p.statusAilments,
         seenOpening: p.seenOpening,
         seenGoal: p.seenGoal,
-        discoveredFinal: state.discoveredFinal
+        discoveredFinal: state.discoveredFinal,
+        openedChests: state.openedChests
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -1716,6 +1880,7 @@
       p.seenOpening = !!data.seenOpening;
       p.seenGoal = !!data.seenGoal;
       state.discoveredFinal = !!data.discoveredFinal;
+      state.openedChests = data.openedChests || {};
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -1858,6 +2023,12 @@
     document.getElementById("btn-home-rest").addEventListener("click", doRest);
     document.getElementById("btn-home-cancel").addEventListener("click", function () {
       closeModal("home-modal");
+    });
+
+    // フィールドアイテムモーダル(§5.8)
+    document.getElementById("btn-field-item").addEventListener("click", openFieldItemModal);
+    document.getElementById("btn-field-item-close").addEventListener("click", function () {
+      closeModal("field-item-modal");
     });
   }
 

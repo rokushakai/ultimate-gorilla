@@ -22,6 +22,7 @@
       <span id="status-gold">💰 0G</span>
       <button id="btn-dex" class="small-btn">📖図鑑(0/0)</button>
       <button id="btn-equip" class="small-btn">🎽装備</button>
+      <button id="btn-field-item" class="small-btn">🎒アイテム</button>
       <button id="btn-status" class="small-btn">📊ステータス</button>
       <button id="btn-settings" class="small-btn">⚙️設定</button>
     </div>
@@ -159,9 +160,18 @@
   <div id="equip-modal" class="modal hidden">
     <div class="modal-box">
       <h2>🎽 装備変更</h2>
-      <p class="small">武器・防具・盾・兜を選べます。入手手段は未実装のため、今は全項目を自由に選べます。</p>
+      <p class="small">所持している武器・防具・盾・兜を変更できます。商人での購入または宝箱で入手した装備だけ選択できます。</p>
       <div id="equip-body"></div>
       <button id="btn-equip-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+  <!-- ===== フィールドアイテムモーダル(🎒アイテムボタンから開く。GAME_DESIGN.md §5.8) ===== -->
+  <div id="field-item-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>🎒 アイテム</h2>
+      <div id="field-item-body"></div>
+      <button id="btn-field-item-close" class="modal-btn">とじる</button>
     </div>
   </div>
 
@@ -233,8 +243,14 @@
         <h3>🏠 実家について</h3>
         <p>スタート地点の 🏠 に戻ると「実家」イベントが発生します。「休む」を選ぶとHP・MP・状態異常が全回復し、自動セーブされます。冒険で危なくなったら実家に帰って休みましょう。</p>
 
+        <h3>🎁 宝箱について</h3>
+        <p>フィールドに 🎁 宝箱が4箇所あります。触れると中身(お金・回復アイテム・装備)をランダムで入手できます。一度開けると空(📦)になり、同じセーブデータでは再入手できません。装備はすでに持っている場合、代わりにゴールドを獲得します。</p>
+
         <h3>🍽️ 回復アイテムについて</h3>
-        <p>コーヒー(HP+10)・パン(HP+20)・お弁当(HP+40)・ラーメン(HP全回復)は商人で購入でき、戦闘中に「🧪アイテム」から使えます。HP満タンの時は消費されません。</p>
+        <p>コーヒー(HP+10)・パン(HP+20)・お弁当(HP+40)・ラーメン(HP全回復)は商人や宝箱で入手でき、戦闘中の「🧪アイテム」またはフィールド上の「🎒アイテム」から使えます。HP満タンの時は消費されません。</p>
+
+        <h3>🎒 フィールドでのアイテム使用</h3>
+        <p>画面上部の「🎒アイテム」ボタンを押すと、フィールド上でもアイテムを使えます。やくそう・コーヒー・パン・お弁当・ラーメンでHP回復、せき止めシロップ・デオドラントスプレーで状態異常を治療できます。回復不要・治療不要な時は消費されません。</p>
 
         <h3>🤧 状態異常について</h3>
         <p>一部の敵の攻撃で「アレルギー」(歩くたびにHPが減る)や「におい」(捕獲率が下がる)になることがあります。時間で自然に治るほか、せき止めシロップ/デオドラントスプレーで治療できます。</p>
