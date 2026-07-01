@@ -36,7 +36,7 @@
     "#.....#.....#",
     "#......W....#",
     "#....P..B...#",  // B=宝箱(8,13)
-    "#...........#",
+    "#........U..#",  // U=女神のウクレレ宝箱(9,14)
     "#..#.......##",
     "#..B........#",  // B=宝箱(3,16)
     "#############"
@@ -59,12 +59,13 @@
     "M": "🏪",
     "G": "⛩️",
     "T": "🍺",
-    "B": "🎁"   // 宝箱(§5.7。開封後は📦に変わる)
+    "B": "🎁",  // 宝箱(§5.7。開封後は📦に変わる)
+    "U": "🪗"   // 女神のウクレレ宝箱(§14.5。開封後は📦に変わる)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱の上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -382,7 +383,9 @@
       statusAilments: {}, // id -> 残りターン/歩数(0より大きい間だけ効果がある)
       seenOpening: false, // オープニングイベントを見たかどうか
       seenGoal: false,    // 目的説明画面を見たかどうか
-      companions: []      // 現在のパーティー仲間のidリスト(§10)
+      companions: [],     // 現在のパーティー仲間のidリスト(§10)
+      hasUkulele: false,  // 女神のウクレレを所持しているか(§14.5)
+      singBonusActive: 0  // うたうで発生する次回捕獲ボーナス(使い切りで0にリセット)
     },
     stepsSinceEncounter: 0,
     inBattle: false,
@@ -390,6 +393,8 @@
     locked: false,       // 戦闘コマンド入力をロック(連打防止)
     modalOpen: false,    // いずれかのモーダル表示中はフィールド操作を止める
     discoveredFinal: false,
+    gameCleared: false,  // 究極ゴリラ捕獲クリアフラグ(§14.5)
+    pendingClear: false, // 戦闘終了後にクリアモーダルを表示するフラグ
     openedChests: {}     // "x,y" -> true: 開封済みの宝箱(§5.7)
   };
 
@@ -564,6 +569,8 @@
             var tileChar = state.terrain[mapY][mapX];
             if (tileChar === "B") {
               emoji = state.openedChests[key] ? "📦" : "🎁";
+            } else if (tileChar === "U") {
+              emoji = state.openedChests[key] ? "📦" : "🪗";
             } else {
               emoji = TERRAIN_EMOJI[tileChar] || "🟩";
             }
@@ -655,6 +662,10 @@
       openChest(nx, ny);
       return;
     }
+    if (tile === "U") {
+      openUkuleleChest(nx, ny);
+      return;
+    }
 
     // 安全地形でなければエンカウント判定
     if (!SAFE_TILE[tile]) {
@@ -716,6 +727,26 @@
     showToast(msg);
     updateStatusBar();
     saveGame();
+  }
+
+  // 女神のウクレレ専用の特別な宝箱(§14.5)
+  function openUkuleleChest(x, y) {
+    var key = x + "," + y;
+    if (state.openedChests[key]) {
+      showToast("📦 宝箱は空だった…");
+      return;
+    }
+    state.openedChests[key] = true;
+    state.player.hasUkulele = true;
+    renderField();
+    updateStatusBar();
+    saveGame();
+    alert("まばゆい光を放つ宝箱を開けた！\n\n「女神のウクレレ」を手に入れた！\n\n究極ゴリラの心に届くといわれる伝説のウクレレ。");
+  }
+
+  // 暫定クリアモーダルを開く(finishBattle後に呼ばれる)
+  function openClearModal() {
+    openModal("clear-modal");
   }
 
   var toastTimer = null;
@@ -1192,18 +1223,26 @@
   // 成功した場合はtrueを返す(呼び出し側で敵の行動をスキップする)。
   function attemptCapture(bonusChance) {
     var e = state.enemy;
+    // 究極ゴリラは通常の捕獲コマンドでは捕まらない(§14.5)
+    if (e.final) {
+      log("究極ゴリラには普通の捕獲は通用しない！");
+      log("何か特別な方法が必要だ！");
+      return false;
+    }
     var job = state.player.job;
+    var p = state.player;
     var hpRatio = e.hp / e.maxHp;
     var smellPenalty = hasAilment("smell") ? SMELL_CAPTURE_PENALTY : 0;
+    // うたうコマンドによる次回捕獲ボーナスを適用して消費
+    var singBonus = p.singBonusActive || 0;
+    p.singBonusActive = 0;
     // HP残量が少ないほど捕まえやすい(Version 0.4.2で強化)。
-    // レアUMAはこのボーナスを半分に抑え、例外的に難しくする(究極ゴリラはさらに下で別途上限)。
+    // レアUMAはこのボーナスを半分に抑え、例外的に難しくする。
     var hpBonusMultiplier = e.rare ? CAPTURE_HP_BONUS_RARE : CAPTURE_HP_BONUS_NORMAL;
     var chance = clamp(
-      e.captureRateBase + (1 - hpRatio) * hpBonusMultiplier + (job.captureMod || 0) + getCompanionBonus("captureMod") + (bonusChance || 0) - smellPenalty,
+      e.captureRateBase + (1 - hpRatio) * hpBonusMultiplier + (job.captureMod || 0) + getCompanionBonus("captureMod") + (bonusChance || 0) + singBonus - smellPenalty,
       0.05, 0.95
     );
-    // 究極ゴリラはHPが減っても捕獲率がほぼ上がらないようにする(ラスボス級)
-    if (e.final) chance = Math.min(chance, 0.02);
     if (Math.random() < chance) {
       log("🪤 " + e.name + "を捕まえた！");
       captureUma(e);
@@ -1247,6 +1286,66 @@
       log("💨 しかし逃げられなかった！");
       setTimeout(enemyTurn, 600);
     }
+  }
+
+  // うたうコマンド(§12.5)
+  function doSing() {
+    if (state.locked) return;
+    setBattleLocked(true);
+    var e = state.enemy;
+    var p = state.player;
+    if (e.final) {
+      doSingUltimateGorilla();
+      return;
+    }
+    // 通常敵: 次の捕獲率に一時ボーナスを付与
+    var hasHarumi = hasCompanion("harumi");
+    var captureBonus = hasHarumi ? 0.08 : 0.05;
+    p.singBonusActive = captureBonus;
+    log("🎵 勇者の子孫は歌った！");
+    if (hasHarumi) {
+      log("✨ ハルミが音程を整えた！");
+    }
+    log("🎶 " + e.name + "は少しなごんだ！次の捕獲が成功しやすくなった！");
+    setTimeout(enemyTurn, 600);
+  }
+
+  // 究極ゴリラへのうたう — 条件判定 + 捕獲演出(§14.5)
+  function doSingUltimateGorilla() {
+    var e = state.enemy;
+    var p = state.player;
+    if (p.level < 99) {
+      log("🎵 歌声は森に響いた……");
+      log("しかし、まだ力が足りない。");
+      log("レベル99になれば届くかもしれない。");
+      setTimeout(enemyTurn, 800);
+      return;
+    }
+    if (!p.hasUkulele) {
+      log("🎵 歌おうとしたが、何かが足りない。");
+      log("伝説の楽器が必要なようだ。");
+      setTimeout(enemyTurn, 800);
+      return;
+    }
+    if (e.hp > 10) {
+      log("🎵 究極ゴリラはまだ荒ぶっている！");
+      log("もっと弱らせなければ歌は届かない。");
+      setTimeout(enemyTurn, 800);
+      return;
+    }
+    // 捕獲成功
+    log("🪗 勇者の子孫は女神のウクレレを奏でた。");
+    log("🎶 森にやさしいメロディが響きわたる。");
+    log("🦍 究極ゴリラの怒りが静まっていく……");
+    log("🦍 究極ゴリラは静かに目を閉じた。");
+    log("🎉 究極ゴリラを捕まえた！");
+    captureUma(e);
+    state.gameCleared = true;
+    state.pendingClear = true;
+    logExpGained(e.exp);
+    addExp(e.exp);
+    saveGame();
+    showBattleEnd();
   }
 
   // HPが0になっても「倒した」ではなく「逃げられた」扱いにする(GAME_DESIGN.md §13)。
@@ -1359,6 +1458,11 @@
     renderField();
     updateStatusBar();
     saveGame();
+    // 究極ゴリラ捕獲クリア後にモーダルを表示(§14.5)
+    if (state.pendingClear) {
+      state.pendingClear = false;
+      openClearModal();
+    }
   }
 
   // ---------------------------------------------------------
@@ -1519,6 +1623,13 @@
     html += "<h3>UMA</h3>";
     html += '<div class="shop-row"><span>所持UMA総数</span><span>' + capturedCount + "匹</span></div>";
     html += '<div class="shop-row"><span>図鑑進捗</span><span>' + dexDiscovered + "/" + UMA_DATA.length + "</span></div>";
+    html += "<h3>重要アイテム</h3>";
+    html += '<div class="shop-row"><span>🪗 女神のウクレレ</span><span>' +
+      (p.hasUkulele ? '<span style="color:#06d6a0;font-weight:bold;">所持</span>' : '<span style="color:#888;">未入手</span>') +
+      "</span></div>";
+    if (state.gameCleared) {
+      html += '<div class="shop-row"><span>🎉 究極ゴリラ捕獲</span><span style="color:#ffd166;font-weight:bold;">クリア済！</span></div>';
+    }
     html += "<h3>仲間</h3>";
     if (p.companions.length === 0) {
       html += '<p class="small">なし</p>';
@@ -2142,7 +2253,9 @@
         seenOpening: p.seenOpening,
         seenGoal: p.seenGoal,
         companions: p.companions,
+        hasUkulele: p.hasUkulele,
         discoveredFinal: state.discoveredFinal,
+        gameCleared: state.gameCleared,
         openedChests: state.openedChests
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -2187,7 +2300,9 @@
       p.seenOpening = !!data.seenOpening;
       p.seenGoal = !!data.seenGoal;
       p.companions = Array.isArray(data.companions) ? data.companions : [];
+      p.hasUkulele = !!data.hasUkulele;
       state.discoveredFinal = !!data.discoveredFinal;
+      state.gameCleared = !!data.gameCleared;
       state.openedChests = data.openedChests || {};
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
@@ -2262,7 +2377,13 @@
     document.getElementById("btn-magic").addEventListener("click", openMagicMenu);
     document.getElementById("btn-item").addEventListener("click", openItemMenu);
     document.getElementById("btn-catch").addEventListener("click", doCatch);
+    document.getElementById("btn-sing").addEventListener("click", doSing);
     document.getElementById("btn-run").addEventListener("click", doRun);
+
+    // 究極ゴリラ捕獲クリアモーダル(§14.5)
+    document.getElementById("btn-clear-close").addEventListener("click", function () {
+      closeModal("clear-modal");
+    });
 
     // 図鑑モーダル
     document.getElementById("btn-dex").addEventListener("click", openDexModal);

@@ -74,12 +74,13 @@
       <span id="b-mp-text">MP 6/6</span>
     </div>
 
-    <!-- 通常メニュー：たたかう/まほう/アイテム/つかまえる/にげる -->
+    <!-- 通常メニュー：たたかう/まほう/アイテム/つかまえる/うたう/にげる -->
     <div id="battle-menu">
       <button id="btn-fight">⚔ たたかう</button>
       <button id="btn-magic">✨ まほう</button>
       <button id="btn-item">🧪 アイテム</button>
       <button id="btn-catch">🪤 つかまえる</button>
+      <button id="btn-sing">🎵 うたう</button>
       <button id="btn-run">💨 にげる</button>
     </div>
 
@@ -275,8 +276,35 @@
         💨 ノリオ — 逃走成功率がアップする<br>
         ✨ ハルミ — まほうの効果がアップする</p>
         <p>仲間は最大2人まで連れていけます。酒場の「仲間を外す」でいつでも外せ、再度「仲間を探す」から再加入できます。</p>
+
+        <h3>🎵 うたうコマンドについて</h3>
+        <p>戦闘コマンド「🎵 うたう」は特別なコマンドです。通常の敵に使うと次の「つかまえる」の成功率が少し上がります。ハルミが仲間にいると効果アップ。</p>
+        <p>究極ゴリラには普通の「つかまえる」は通用しません。「うたう」だけが通じる特別な方法です。</p>
+
+        <h3>🦍 究極ゴリラの捕まえ方</h3>
+        <p>究極ゴリラを捕まえるには特別な条件がすべて必要です:<br>
+        ① レベル99に到達している<br>
+        ② 「女神のウクレレ」を所持している<br>
+        ③ 究極ゴリラのHPを1〜10まで削る<br>
+        ④ 「うたう」コマンドを使う</p>
+        <p>「女神のウクレレ」はフィールドのどこかにある特別な宝箱(🪗)に眠っています。弱らせすぎると逃げられるので注意！</p>
       </div>
       <button id="btn-help-close" class="modal-btn">とじる</button>
+    </div>
+  </div>
+
+  <!-- ===== 究極ゴリラ捕獲クリアモーダル(§14.5) ===== -->
+  <div id="clear-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="discovery-emoji">🦍</div>
+      <h2>暫定クリア！</h2>
+      <div id="clear-body">
+        <p>究極ゴリラを捕まえた！</p>
+        <p class="small">しかし、究極ゴリラは森へ帰ることを望んでいる。</p>
+        <p class="small">いつかまた、森の奥で会えるだろう。</p>
+        <p class="small" style="color:#ffd166;margin-top:10px;">続きを遊ぶことができます。</p>
+      </div>
+      <button id="btn-clear-close" class="modal-btn">OK</button>
     </div>
   </div>
 

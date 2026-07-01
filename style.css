@@ -308,7 +308,6 @@ html, body {
 }
 
 #btn-run {
-  grid-column: span 2;
   background: #533;
 }
 
