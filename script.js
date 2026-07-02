@@ -2241,6 +2241,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-lv99">📈 Lv.99にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-ukulele">🪗 女神のウクレレを入手</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-encounter">🦍 究極ゴリラ強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-encounter-hp5" style="border-color:#06d6a0;color:#06d6a0;">🦍 究極ゴリラHP5で強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-hp5">❤️ 敵HPを5にする(戦闘中のみ)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gold">💰 9999G追加</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset">🔄 クリア・ウクレレをリセット</button>';
@@ -2271,6 +2272,7 @@
       document.getElementById("btn-debug-lv99").onclick = debugSetLevel99;
       document.getElementById("btn-debug-ukulele").onclick = debugGetUkulele;
       document.getElementById("btn-debug-encounter").onclick = debugForceUltimateGorilla;
+      document.getElementById("btn-debug-encounter-hp5").onclick = debugForceUltimateGorillaHP5;
       document.getElementById("btn-debug-hp5").onclick = debugSetEnemyHP5;
       document.getElementById("btn-debug-gold").onclick = debugAddGold;
       document.getElementById("btn-debug-reset").onclick = debugResetClear;
@@ -2567,6 +2569,17 @@
     closeModal("settings-modal");
     var boss = findById(UMA_DATA, "ultimategorilla");
     startBattle(boss);
+  }
+
+  function debugForceUltimateGorillaHP5() {
+    if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+    closeModal("settings-modal");
+    var boss = findById(UMA_DATA, "ultimategorilla");
+    // 発見モーダルをスキップして直接戦闘開始し、同期的にHP5を設定する
+    actuallyStartBattle(boss);
+    state.enemy.hp = 5;
+    renderEnemy();
+    showToast("[DEBUG] 究極ゴリラHP5で開始！");
   }
 
   function debugSetEnemyHP5() {
