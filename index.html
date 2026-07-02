@@ -195,6 +195,7 @@
       <h2>実家</h2>
       <p>実家に帰ってきた。</p>
       <p class="small">少し休んでいきますか？<br>HP・MP・状態異常が全回復してセーブされます。</p>
+      <p id="home-hint" class="small" style="color:#adb5bd;font-style:italic;margin-top:6px;"></p>
       <button id="btn-home-rest" class="modal-btn">休む</button>
       <button id="btn-home-cancel" class="modal-btn" style="background:#415a77;color:#fff;margin-left:10px;">やめる</button>
     </div>
@@ -221,10 +222,15 @@
       <p class="small" style="text-align:left">
         ・フィールドを歩いてUMAを探す<br>
         ・UMAを弱らせて捕まえる、または逃げられることで経験値を得る<br>
-        ・レベルを上げる<br>
+        ・レベルを上げる（目標: レベル99！）<br>
         ・装備を集める<br>
         ・UMA図鑑を埋める<br>
+        ・「女神のウクレレ」🪗 をフィールドで見つける<br>
         ・最終的に究極ゴリラに挑む
+      </p>
+      <p class="small" style="text-align:left;color:#ffd166;">
+        ヒント: フィールドに特別な宝箱🪗がある。<br>
+        究極ゴリラには「🎵うたう」コマンドが鍵だ！
       </p>
       <button id="btn-goal-close" class="modal-btn">OK</button>
     </div>
@@ -300,9 +306,10 @@
       <h2>暫定クリア！</h2>
       <div id="clear-body">
         <p>究極ゴリラを捕まえた！</p>
-        <p class="small">しかし、究極ゴリラは森へ帰ることを望んでいる。</p>
-        <p class="small">いつかまた、森の奥で会えるだろう。</p>
-        <p class="small" style="color:#ffd166;margin-top:10px;">続きを遊ぶことができます。</p>
+        <p class="small">おめでとう！これにて暫定クリア達成！</p>
+        <p class="small">しかし、究極ゴリラは森へ帰ることを望んでいる。<br>いつかまた、森の奥で会えるだろう。</p>
+        <p class="small" style="color:#06d6a0;margin-top:8px;">この後も探索・図鑑集め・装備集めを続けられます。</p>
+        <p class="small" style="color:#ffd166;">正式エンディングは今後のアップデートで追加予定！</p>
       </div>
       <button id="btn-clear-close" class="modal-btn">OK</button>
     </div>

@@ -112,9 +112,10 @@
     { id: "oni", name: "鬼", emoji: "👺", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 30, attack: 10, def: 4, captureRate: 0.20, exp: 20 },
     { id: "powerharassmentsenpai", name: "パワハラ先輩", emoji: "😤", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 24, attack: 13, def: 3, captureRate: 0.22, exp: 18 },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
-    { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 40 },
-    { id: "haguremetalgorilla", name: "はぐれメタルゴリラ", emoji: "🥇", type: "metal", isUMA: false, minLevel: 10, weight: 8, hp: 12, attack: 5, def: 40, captureRate: 0.04, exp: 120 },
-    { id: "fullmetalgorilla", name: "フルメタルゴリラ", emoji: "💎", type: "metal", isUMA: false, minLevel: 20, weight: 6, hp: 16, attack: 8, def: 60, captureRate: 0.03, exp: 300 }
+    // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
+    { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120 },
+    { id: "haguremetalgorilla", name: "はぐれメタルゴリラ", emoji: "🥇", type: "metal", isUMA: false, minLevel: 10, weight: 8, hp: 12, attack: 5, def: 40, captureRate: 0.04, exp: 400 },
+    { id: "fullmetalgorilla", name: "フルメタルゴリラ", emoji: "💎", type: "metal", isUMA: false, minLevel: 20, weight: 6, hp: 16, attack: 8, def: 60, captureRate: 0.03, exp: 1000 }
   ];
 
   // UMA_DATAは収集対象として一律 type:"uma" を付与する(配列の各行は変更しない)
@@ -292,9 +293,14 @@
   // 究極ゴリラに早く遭遇したい場合は、RARE_ENCOUNTER_CHANCEを上げる、
   // または UMA_DATA の ultimategorilla の weight を増やすとすぐ確認できる。
   var RARE_ENCOUNTER_CHANCE = 0.08;  // エンカウント発生時、レアUMAになる確率
-  var METAL_ENCOUNTER_CHANCE = 0.04; // レア枠に外れた時、メタル系になる確率(§6.3)
+  var METAL_ENCOUNTER_CHANCE = 0.06; // レア枠に外れた時、メタル系になる確率(§6.3。v0.6.1で0.04→0.06に増量)
   var ENCOUNTER_CHANCE = 0.25;      // 草原を1歩進むごとにエンカウントが起きる確率
   var MIN_STEPS_BEFORE_ENCOUNTER = 2; // 戦闘直後はこの歩数分エンカウントしない
+
+  // デバッグモード(URLに ?debug=1 が付いている時のみ有効。設定画面に開発用テストボタンが追加される)
+  var DEBUG_MODE = (function () {
+    try { return window.location.search.indexOf("debug=1") !== -1; } catch (e) { return false; }
+  }());
 
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
@@ -864,6 +870,10 @@
     clearLog();
     var tag = state.enemy.final ? "【伝説のUMA】" : (state.enemy.rare ? "【激レアUMA】" : "");
     log(tag + state.enemy.name + "が現れた！");
+    if (monster.type === "metal") {
+      log("✨ " + monster.name + "がキラリと光った！");
+      log("経験値のチャンスだ！");
+    }
     if (isFirstDiscovery) {
       log("✨ " + state.enemy.name + "を見つけた！(UMA図鑑に登録された)");
     }
@@ -1485,7 +1495,7 @@
     var p = state.player;
     log("🎉 レベルが上がった！");
     p.level++;
-    p.nextExp = p.level * 15 + 20;
+    p.nextExp = p.level * 10 + 15; // v0.6.1: 旧式(level*15+20)より約33%緩くした
     p.baseMaxHp += 5 + randInt(0, 3);
     p.baseMaxMp += 2;
     p.baseAtk += 2;
@@ -1596,7 +1606,22 @@
     var capturedCount = Object.keys(p.umaInventory).reduce(function (sum, id) { return sum + p.umaInventory[id]; }, 0);
     var dexDiscovered = Object.keys(p.dex).length;
 
-    var html = "";
+    // 現在の目標(§3.6)
+    var html = "<h3>🎯 現在の目標</h3>";
+    if (state.gameCleared) {
+      html += '<p class="small" style="color:#ffd166;">🏆 暫定クリア達成！<br>図鑑や装備集めを続けよう。<br>次回アップデートをお楽しみに！</p>';
+    } else if (p.level >= 99 && p.hasUkulele) {
+      html += '<p class="small" style="color:#06d6a0;">Lv.99達成 & ウクレレ所持！<br>究極ゴリラのHPを1〜10まで削って<br>「🎵うたう」コマンドを使えばクリア！</p>';
+    } else if (p.level >= 99) {
+      html += '<p class="small">Lv.99達成！<br>次は女神のウクレレ🪗を探そう。<br>フィールドの特別な宝箱🪗に眠っている。</p>';
+    } else if (p.level >= 50) {
+      html += '<p class="small">目標: Lv.99まであと' + (99 - p.level) + 'レベル！<br>メタルゴリラ系を狙って効率よく稼ごう。<br>' +
+        (p.hasUkulele ? '🪗 女神のウクレレ：所持済！' : '女神のウクレレ🪗も探しておこう。') + '</p>';
+    } else if (p.level >= 20) {
+      html += '<p class="small">装備を集めよう！商人に寄ってみよう。<br>宝箱🎁を探してみよう。特別な宝箱🪗もある。<br>メタルゴリラ系に出会えれば経験値大チャンス！</p>';
+    } else {
+      html += '<p class="small">フィールドを探索しよう！<br>UMAを見つけて経験値を集めよう。<br>実家🏠で回復・酒場🍺で仲間を探そう。</p>';
+    }
     html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
     html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
     html += '<div class="shop-row"><span>レベル</span><span>Lv.' + p.level + "</span></div>";
@@ -2151,7 +2176,22 @@
   // ---------------------------------------------------------
   // 21.4 実家モーダル(🏠 タイルに触れると開く。GAME_DESIGN.md §5.6)
   // ---------------------------------------------------------
+  // 実家に帰るたびにランダムなヒントを表示する(§3.7)
+  var HOME_HINTS = [
+    "「女神のウクレレ」がフィールドのどこかに眠っているらしい……",
+    "メタルゴリラ系に出会えれば大きな経験値が手に入る！",
+    "究極ゴリラには特別な方法でしか捕まえられないという。",
+    "レベル99が最終決戦への鍵。地道に経験値を積もう！",
+    "酒場で仲間を見つけると冒険が有利になる。",
+    "伝説の楽器と歌声が、究極ゴリラとの決着の鍵になるという……",
+    "宝箱をすべて開けた？特別な宝箱🪗もあるらしい。",
+    "UMA図鑑を埋めてみよう。レアUMAも存在するぞ。",
+    "装備を整えれば生き残りやすくなる。商人に寄ってみよう。"
+  ];
+
   function openHomeModal() {
+    var hint = HOME_HINTS[Math.floor(Math.random() * HOME_HINTS.length)];
+    document.getElementById("home-hint").textContent = "💭 " + hint;
     openModal("home-modal");
   }
 
@@ -2196,6 +2236,15 @@
     html += '<button class="shop-menu-btn" id="btn-show-help">❓ ヘルプ</button>';
     html += '<p class="small" style="color:#ff8c8c;margin-top:16px;">⚠️ 危険な操作:</p>';
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
+    if (DEBUG_MODE) {
+      html += '<p class="small" style="color:#ffd166;margin-top:16px;">🛠️ 開発用テスト (debug=1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-lv99">📈 Lv.99にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-ukulele">🪗 女神のウクレレを入手</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-encounter">🦍 究極ゴリラ強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-hp5">❤️ 敵HPを5にする(戦闘中のみ)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gold">💰 9999G追加</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-reset">🔄 クリア・ウクレレをリセット</button>';
+    }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
       btn.onclick = function () { changeWalkSpeed(btn.getAttribute("data-speed")); };
@@ -2218,6 +2267,14 @@
         location.reload();
       }
     };
+    if (DEBUG_MODE) {
+      document.getElementById("btn-debug-lv99").onclick = debugSetLevel99;
+      document.getElementById("btn-debug-ukulele").onclick = debugGetUkulele;
+      document.getElementById("btn-debug-encounter").onclick = debugForceUltimateGorilla;
+      document.getElementById("btn-debug-hp5").onclick = debugSetEnemyHP5;
+      document.getElementById("btn-debug-gold").onclick = debugAddGold;
+      document.getElementById("btn-debug-reset").onclick = debugResetClear;
+    }
   }
 
   function changeWalkSpeed(speed) {
@@ -2472,6 +2529,70 @@
     document.getElementById("game").addEventListener("contextmenu", function (ev) {
       ev.preventDefault();
     });
+  }
+
+  // ---------------------------------------------------------
+  // 開発用テスト関数(DEBUG_MODE=trueの時のみ設定画面に表示される。§26)
+  // ---------------------------------------------------------
+  function debugSetLevel99() {
+    var p = state.player;
+    p.level = 99;
+    p.nextExp = 99 * 10 + 15;
+    p.exp = 0;
+    // レベルアップ分のベースステータスを一括計算(1→99の98回分)
+    p.baseMaxHp = 20 + (5 + 1) * 98; // 初期20 + 平均6×98回
+    p.baseMaxMp = 6 + 2 * 98;
+    p.baseAtk = 5 + 2 * 98;
+    p.baseDef = 2 + 1 * 98;
+    recomputeStats();
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv.99にした");
+    closeModal("settings-modal");
+  }
+
+  function debugGetUkulele() {
+    state.player.hasUkulele = true;
+    state.openedChests["9,14"] = true; // ウクレレ宝箱を開封済みにする
+    renderField();
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] 女神のウクレレを入手した");
+  }
+
+  function debugForceUltimateGorilla() {
+    if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+    closeModal("settings-modal");
+    var boss = findById(UMA_DATA, "ultimategorilla");
+    startBattle(boss);
+  }
+
+  function debugSetEnemyHP5() {
+    if (!state.inBattle || !state.enemy) { showToast("[DEBUG] 戦闘中のみ使用可能"); return; }
+    state.enemy.hp = 5;
+    renderEnemy();
+    showToast("[DEBUG] 敵HPを5にした");
+    closeModal("settings-modal");
+  }
+
+  function debugAddGold() {
+    state.player.gold += 9999;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] 9999G追加した");
+  }
+
+  function debugResetClear() {
+    state.gameCleared = false;
+    state.pendingClear = false;
+    state.player.hasUkulele = false;
+    delete state.openedChests["9,14"];
+    renderField();
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] クリア状態・ウクレレをリセットした");
   }
 
   // ---------------------------------------------------------
