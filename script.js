@@ -401,6 +401,7 @@
     discoveredFinal: false,
     gameCleared: false,  // 究極ゴリラ捕獲クリアフラグ(§14.5)
     pendingClear: false, // 戦闘終了後にクリアモーダルを表示するフラグ
+    endingPage: 0,       // エンディングモーダルの現在ページ(v0.7 §28)
     openedChests: {}     // "x,y" -> true: 開封済みの宝箱(§5.7)
   };
 
@@ -750,9 +751,41 @@
     alert("まばゆい光を放つ宝箱を開けた！\n\n「女神のウクレレ」を手に入れた！\n\n究極ゴリラの心に届くといわれる伝説のウクレレ。");
   }
 
-  // 暫定クリアモーダルを開く(finishBattle後に呼ばれる)
+  // エンディングモーダルを開く(finishBattle後 または 設定画面の再視聴から呼ばれる)(v0.7 §28)
   function openClearModal() {
+    openEndingModal();
+  }
+
+  function openEndingModal() {
+    state.endingPage = 0;
+    renderEndingPage();
     openModal("clear-modal");
+  }
+
+  function renderEndingPage() {
+    var page = ENDING_PAGES[state.endingPage];
+    var isLast = state.endingPage === ENDING_PAGES.length - 1;
+    document.getElementById("ending-emoji").textContent = page.emoji;
+    document.getElementById("ending-heading").textContent = page.heading;
+    var html = "";
+    if (page.isCredits) {
+      html += '<div style="margin:10px 0;">';
+      ENDING_CREDITS.forEach(function (c) {
+        html += '<p class="small" style="color:#adb5bd;margin:2px 0;">' + c.role + '</p>';
+        html += '<p style="font-size:1em;font-weight:bold;margin:0 0 10px;">' + c.name + '</p>';
+      });
+      html += '</div>';
+    } else if (page.isFinal) {
+      html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「森に歌を届けし者」</p>';
+      html += '<p class="small" style="color:#06d6a0;margin:4px 0;">この後も探索・図鑑集め・装備集めを続けられます。</p>';
+      html += '<p class="small" style="color:#adb5bd;margin:4px 0;">エンディングはいつでも設定画面から再視聴できます。</p>';
+    } else {
+      page.lines.forEach(function (line) {
+        html += '<p class="small" style="margin:6px 0;">' + line + '</p>';
+      });
+    }
+    document.getElementById("clear-body").innerHTML = html;
+    document.getElementById("btn-ending-next").textContent = isLast ? "冒険を続ける" : "つぎへ ▶";
   }
 
   var toastTimer = null;
@@ -1578,8 +1611,17 @@
       var emoji = st ? m.emoji : "❔";
       var label = st === "captured" ? (m.name + "(捕獲済)") :
         st === "seen" ? (m.name + "(発見済)") : "？？？";
-      html += '<div class="dex-item ' + cls + '">' + emoji +
-        '<span class="dex-item-name">' + label + "</span></div>";
+      // 究極ゴリラ捕獲済み時は特別表示(v0.7 §28)
+      if (m.id === "ultimategorilla" && st === "captured") {
+        html += '<div class="dex-item" style="border:1px solid #ffd166;">' + emoji +
+          '<span class="dex-item-name">' + m.name + '(捕獲済)</span>' +
+          '<span style="display:block;font-size:8px;color:#ffd166;margin-top:2px;">伝説のUMA</span>' +
+          '<span style="display:block;font-size:8px;color:#06d6a0;">森へ帰った</span>' +
+          '</div>';
+      } else {
+        html += '<div class="dex-item ' + cls + '">' + emoji +
+          '<span class="dex-item-name">' + label + "</span></div>";
+      }
     });
     document.getElementById("dex-list").innerHTML = html;
   }
@@ -1609,7 +1651,7 @@
     // 現在の目標(§3.6)
     var html = "<h3>🎯 現在の目標</h3>";
     if (state.gameCleared) {
-      html += '<p class="small" style="color:#ffd166;">🏆 暫定クリア達成！<br>図鑑や装備集めを続けよう。<br>次回アップデートをお楽しみに！</p>';
+      html += '<p class="small" style="color:#ffd166;">🏆 クリア済み！<br>称号：「森に歌を届けし者」<br>図鑑・装備集め・仲間集めを続けよう。</p>';
     } else if (p.level >= 99 && p.hasUkulele) {
       html += '<p class="small" style="color:#06d6a0;">Lv.99達成 & ウクレレ所持！<br>究極ゴリラのHPを1〜10まで削って<br>「🎵うたう」コマンドを使えばクリア！</p>';
     } else if (p.level >= 99) {
@@ -1622,6 +1664,8 @@
     } else {
       html += '<p class="small">フィールドを探索しよう！<br>UMAを見つけて経験値を集めよう。<br>実家🏠で回復・酒場🍺で仲間を探そう。</p>';
     }
+    var playerTitle = state.gameCleared ? "森に歌を届けし者" : "勇者の子孫";
+    html += '<div class="shop-row"><span>称号</span><span style="font-size:0.85em;">' + playerTitle + "</span></div>";
     html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
     html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
     html += '<div class="shop-row"><span>レベル</span><span>Lv.' + p.level + "</span></div>";
@@ -1654,6 +1698,7 @@
       "</span></div>";
     if (state.gameCleared) {
       html += '<div class="shop-row"><span>🎉 究極ゴリラ捕獲</span><span style="color:#ffd166;font-weight:bold;">クリア済！</span></div>';
+      html += '<button class="shop-menu-btn" id="btn-status-watch-ending" style="margin-top:6px;">🎬 エンディングを見る</button>';
     }
     html += "<h3>仲間</h3>";
     if (p.companions.length === 0) {
@@ -1668,6 +1713,12 @@
     }
 
     document.getElementById("status-body").innerHTML = html;
+    if (state.gameCleared) {
+      document.getElementById("btn-status-watch-ending").onclick = function () {
+        closeModal("status-modal");
+        openEndingModal();
+      };
+    }
   }
 
   // ---------------------------------------------------------
@@ -2189,6 +2240,57 @@
     "装備を整えれば生き残りやすくなる。商人に寄ってみよう。"
   ];
 
+  // エンディングモーダルのページデータ(v0.7 §28)
+  var ENDING_PAGES = [
+    {
+      emoji: "🎵",
+      heading: "女神のウクレレ",
+      lines: [
+        "勇者の子孫は、女神のウクレレを奏でた。",
+        "やさしい音色が森全体に響きわたる。",
+        "荒ぶっていた究極ゴリラの瞳に、静かな光が戻っていく。"
+      ]
+    },
+    {
+      emoji: "🦍",
+      heading: "究極ゴリラ、森へ帰る",
+      lines: [
+        "究極ゴリラは、ゆっくりと森の奥を見つめた。",
+        "どうやら、帰るべき場所を思い出したようだ。",
+        "究極ゴリラは、静かに森へ帰っていった。",
+        "伝説のUMAを追う旅は、ひとまず幕を閉じた。"
+      ]
+    },
+    {
+      emoji: "👑",
+      heading: "王様への報告",
+      lines: [
+        "王様は深くうなずいた。",
+        "「よくぞ、究極ゴリラの心を鎮めた。」",
+        "「捕まえることだけが勝利ではない。」",
+        "「帰るべき森へ帰すこともまた、勇者の務めなのじゃ。」"
+      ]
+    },
+    {
+      emoji: "🎬",
+      heading: "STAFF",
+      isCredits: true
+    },
+    {
+      emoji: "🏆",
+      heading: "クリアおめでとう！",
+      isFinal: true
+    }
+  ];
+
+  // スタッフロール(v0.7)。変更する場合はここを編集する。
+  var ENDING_CREDITS = [
+    { role: "企画", name: "あばれうまのりお" },
+    { role: "仕様整理", name: "Kai" },
+    { role: "実装", name: "Claude Code" },
+    { role: "Special Thanks", name: "プレイしてくれた皆さん" }
+  ];
+
   function openHomeModal() {
     var hint = HOME_HINTS[Math.floor(Math.random() * HOME_HINTS.length)];
     document.getElementById("home-hint").textContent = "💭 " + hint;
@@ -2234,6 +2336,9 @@
     html += '<button class="shop-menu-btn" id="btn-manual-save">💾 今すぐセーブ</button>';
     html += '<button class="shop-menu-btn" id="btn-show-goal">🎯 目的を見る</button>';
     html += '<button class="shop-menu-btn" id="btn-show-help">❓ ヘルプ</button>';
+    if (state.gameCleared) {
+      html += '<button class="shop-menu-btn" id="btn-watch-ending" style="border-color:#ffd166;color:#ffd166;">🎬 エンディングを見る</button>';
+    }
     html += '<p class="small" style="color:#ff8c8c;margin-top:16px;">⚠️ 危険な操作:</p>';
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
     if (DEBUG_MODE) {
@@ -2245,6 +2350,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-hp5">❤️ 敵HPを5にする(戦闘中のみ)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gold">💰 9999G追加</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset">🔄 クリア・ウクレレをリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-play-ending">🎬 エンディングを再生</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-cleared">🏆 クリア済みにする</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -2262,6 +2369,12 @@
       closeModal("settings-modal");
       openModal("help-modal");
     };
+    if (state.gameCleared) {
+      document.getElementById("btn-watch-ending").onclick = function () {
+        closeModal("settings-modal");
+        openEndingModal();
+      };
+    }
     document.getElementById("btn-new-game").onclick = function () {
       if (confirm("本当に最初から始めますか？\n現在のセーブデータは削除されます。")) {
         try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
@@ -2276,6 +2389,8 @@
       document.getElementById("btn-debug-hp5").onclick = debugSetEnemyHP5;
       document.getElementById("btn-debug-gold").onclick = debugAddGold;
       document.getElementById("btn-debug-reset").onclick = debugResetClear;
+      document.getElementById("btn-debug-play-ending").onclick = debugPlayEnding;
+      document.getElementById("btn-debug-set-cleared").onclick = debugSetCleared;
     }
   }
 
@@ -2439,9 +2554,14 @@
     document.getElementById("btn-sing").addEventListener("click", doSing);
     document.getElementById("btn-run").addEventListener("click", doRun);
 
-    // 究極ゴリラ捕獲クリアモーダル(§14.5)
-    document.getElementById("btn-clear-close").addEventListener("click", function () {
-      closeModal("clear-modal");
+    // エンディングモーダル: つぎへ / 冒険を続ける(v0.7 §28)
+    document.getElementById("btn-ending-next").addEventListener("click", function () {
+      if (state.endingPage < ENDING_PAGES.length - 1) {
+        state.endingPage += 1;
+        renderEndingPage();
+      } else {
+        closeModal("clear-modal");
+      }
     });
 
     // 図鑑モーダル
@@ -2606,6 +2726,18 @@
     updateStatusBar();
     saveGame();
     showToast("[DEBUG] クリア状態・ウクレレをリセットした");
+  }
+
+  function debugPlayEnding() {
+    closeModal("settings-modal");
+    openEndingModal();
+  }
+
+  function debugSetCleared() {
+    state.gameCleared = true;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] クリア済みにした");
   }
 
   // ---------------------------------------------------------
