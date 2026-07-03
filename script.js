@@ -387,11 +387,12 @@
       ownedShields: ["cardboard"],
       ownedHelmets: ["hachimaki"],
       statusAilments: {}, // id -> 残りターン/歩数(0より大きい間だけ効果がある)
-      seenOpening: false, // オープニングイベントを見たかどうか
-      seenGoal: false,    // 目的説明画面を見たかどうか
-      companions: [],     // 現在のパーティー仲間のidリスト(§10)
-      hasUkulele: false,  // 女神のウクレレを所持しているか(§14.5)
-      singBonusActive: 0  // うたうで発生する次回捕獲ボーナス(使い切りで0にリセット)
+      seenOpening: false,   // オープニングイベントを見たかどうか
+      seenGoal: false,      // 目的説明画面を見たかどうか
+      companions: [],       // 現在のパーティー仲間のidリスト(§10)
+      hasUkulele: false,    // 女神のウクレレを所持しているか(§14.5)
+      singBonusActive: 0,   // うたうで発生する次回捕獲ボーナス(使い切りで0にリセット)
+      level99Shown: false   // Lv99マイルストーン演出を初回表示したかどうか(§3.8 v0.7.1)
     },
     stepsSinceEncounter: 0,
     inBattle: false,
@@ -401,6 +402,7 @@
     discoveredFinal: false,
     gameCleared: false,  // 究極ゴリラ捕獲クリアフラグ(§14.5)
     pendingClear: false, // 戦闘終了後にクリアモーダルを表示するフラグ
+    pendingLv99: false,  // 戦闘終了後にLv99マイルストーンモーダルを表示するフラグ(§3.8 v0.7.1)
     endingPage: 0,       // エンディングモーダルの現在ページ(v0.7 §28)
     openedChests: {}     // "x,y" -> true: 開封済みの宝箱(§5.7)
   };
@@ -749,6 +751,22 @@
     updateStatusBar();
     saveGame();
     alert("まばゆい光を放つ宝箱を開けた！\n\n「女神のウクレレ」を手に入れた！\n\n究極ゴリラの心に届くといわれる伝説のウクレレ。");
+  }
+
+  // Lv99マイルストーンモーダルを開く(finishBattle後に呼ばれる)(v0.7.1 §3.8)
+  function openLv99Modal() {
+    var p = state.player;
+    var html = '<p style="font-size:1em;font-weight:bold;color:#06d6a0;margin:8px 0;">勇者の子孫の力は、限界まで高まった！</p>';
+    if (p.hasUkulele) {
+      html += '<p class="small" style="margin:6px 0;">女神のウクレレも所持済み！</p>';
+      html += '<p class="small" style="color:#06d6a0;">究極ゴリラのHPを1〜10まで削って<br>「🎵 うたう」を使えばクリアできる！</p>';
+    } else {
+      html += '<p class="small" style="margin:6px 0;">次は女神のウクレレ🪗を探そう。</p>';
+      html += '<p class="small" style="color:#ffd166;">フィールドの特別な宝箱🪗に眠っている。</p>';
+    }
+    html += '<p class="small" style="color:#adb5bd;margin-top:8px;">今なら、究極ゴリラに歌声が届くかもしれない……</p>';
+    document.getElementById("lv99-body").innerHTML = html;
+    openModal("lv99-modal");
   }
 
   // エンディングモーダルを開く(finishBattle後 または 設定画面の再視聴から呼ばれる)(v0.7 §28)
@@ -1501,10 +1519,14 @@
     renderField();
     updateStatusBar();
     saveGame();
-    // 究極ゴリラ捕獲クリア後にモーダルを表示(§14.5)
+    // 究極ゴリラ捕獲クリア後にモーダルを表示(§14.5)。クリアを優先し、Lv99演出は出さない。
     if (state.pendingClear) {
       state.pendingClear = false;
+      state.pendingLv99 = false;
       openClearModal();
+    } else if (state.pendingLv99) {
+      state.pendingLv99 = false;
+      openLv99Modal();
     }
   }
 
@@ -1529,6 +1551,12 @@
     log("🎉 レベルが上がった！");
     p.level++;
     p.nextExp = p.level * 10 + 15; // v0.6.1: 旧式(level*15+20)より約33%緩くした
+    // Lv99到達マイルストーン(§3.8 v0.7.1): 初回到達時のみ戦闘終了後に専用モーダルを表示
+    if (p.level === 99 && !p.level99Shown) {
+      p.level99Shown = true;
+      state.pendingLv99 = true;
+      log("⚡ ついにレベル99に到達した！");
+    }
     p.baseMaxHp += 5 + randInt(0, 3);
     p.baseMaxMp += 2;
     p.baseAtk += 2;
@@ -2352,6 +2380,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-reset">🔄 クリア・ウクレレをリセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-play-ending">🎬 エンディングを再生</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-cleared">🏆 クリア済みにする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-play-lv99">🎖 Lv99演出を再生</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -2391,6 +2420,7 @@
       document.getElementById("btn-debug-reset").onclick = debugResetClear;
       document.getElementById("btn-debug-play-ending").onclick = debugPlayEnding;
       document.getElementById("btn-debug-set-cleared").onclick = debugSetCleared;
+      document.getElementById("btn-debug-play-lv99").onclick = debugPlayLv99Event;
     }
   }
 
@@ -2428,6 +2458,7 @@
         seenGoal: p.seenGoal,
         companions: p.companions,
         hasUkulele: p.hasUkulele,
+        level99Shown: p.level99Shown,
         discoveredFinal: state.discoveredFinal,
         gameCleared: state.gameCleared,
         openedChests: state.openedChests
@@ -2475,6 +2506,7 @@
       p.seenGoal = !!data.seenGoal;
       p.companions = Array.isArray(data.companions) ? data.companions : [];
       p.hasUkulele = !!data.hasUkulele;
+      p.level99Shown = !!data.level99Shown;
       state.discoveredFinal = !!data.discoveredFinal;
       state.gameCleared = !!data.gameCleared;
       state.openedChests = data.openedChests || {};
@@ -2562,6 +2594,11 @@
       } else {
         closeModal("clear-modal");
       }
+    });
+
+    // Lv99マイルストーンモーダル(v0.7.1 §3.8)
+    document.getElementById("btn-lv99-close").addEventListener("click", function () {
+      closeModal("lv99-modal");
     });
 
     // 図鑑モーダル
@@ -2738,6 +2775,11 @@
     updateStatusBar();
     saveGame();
     showToast("[DEBUG] クリア済みにした");
+  }
+
+  function debugPlayLv99Event() {
+    closeModal("settings-modal");
+    openLv99Modal();
   }
 
   // ---------------------------------------------------------
