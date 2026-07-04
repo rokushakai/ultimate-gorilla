@@ -14,6 +14,20 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.3 — 伝説装備追加・NPCヒント連動イベント
+
+- 伝説装備2種を追加（GAME_DESIGN.md §33）
+  - キグナスのかぶと: フィールド ✨宝箱(X, 9,6)、Lv40以上 (防御+12 HP+5)
+  - ドラゴンのたて: 王様の使いNPCからクリア後に受け取り (防御+26 HP+8)
+- `cygnuskabuto` / `dragonshield` を isLegendary: true に変更・商人購入不可化・ステータス強化
+- 王様の使いNPC: gameCleared時に接触でドラゴンのたてを授与する専用イベント追加
+- NPC セリフ更新: 旅人(R)・鍛冶屋(K)・王様の使い(S)
+- `state.eventFlags` に `cygnusHelmetGot` / `dragonShieldGot` を追加
+- LEGEND_EQUIPS を 5種 → 7種に拡張（伝説装備進捗が自動更新）
+- debugGetAllLegendary / debugResetLegendary に新装備追加
+- GAME_DESIGN.md §33 追記
+- 明示的に未実装: BGM/SE・2周目・横スクロール実装本体
+
 ### Version 0.8.2 — NPC会話システム・ヒント導線強化
 
 - フィールドに固定NPC 5人を配置（GAME_DESIGN.md §32）

@@ -1446,3 +1446,60 @@ Row 9: #..W..E.....#   (E=ゴリラ研究家 x=6)
 - `script.js`: NPC_DATA オブジェクト・openNpcModal 関数・RAW_MAP・TERRAIN_EMOJI・SAFE_TILE・movePlayer
 - `index.html`: `npc-modal` モーダル追加
 - `style.css`: `.npc-speech` スタイル追加
+
+
+## §33. 伝説装備追加・NPCヒント連動イベント (Version 0.8.3)
+
+### 概要
+
+v0.8.2 のフィールド NPC と連動し、NPCから得たヒントを頼りに伝説装備を探索・入手できるシステムを追加する。
+
+### 追加伝説装備
+
+| 装備名 | 種別 | 能力 | 入手方法 | 条件 |
+|---|---|---|---|---|
+| キグナスのかぶと | 兜 | 防御+12 HP+5 | フィールド ✨宝箱(X) (9,6) | Lv40以上 |
+| ドラゴンのたて | 盾 | 防御+26 HP+8 | 王様の使い(S)NPC | gameCleared=true かつ未受取 |
+
+既存データの `cygnuskabuto` / `dragonshield` を強化してイベント限定化（`isLegendary: true` / `buyPrice` 削除）。
+
+### マップ変更
+
+```
+Row 6: #...~~~..X..#  (X=キグナスのかぶと伝説宝箱, x=9, y=6)
+```
+
+TERRAIN_EMOJI: `"X": "✨"`  
+SAFE_TILE: `"X": true`
+
+### 王様の使いのクリア後報酬
+
+移動処理（movePlayer）でタイル S を踏んだとき：
+- `state.gameCleared === true` かつ `!state.eventFlags.dragonShieldGot` → `giveKingReward()` を呼ぶ
+- それ以外 → 通常の `openNpcModal("S")`
+
+`giveKingReward()`: ドラゴンのたてを所持品に追加し `dragonShieldGot = true` をセット、alert で演出。
+
+### セーブデータ
+
+`state.eventFlags` に2フラグを追加:
+- `cygnusHelmetGot: false` — キグナスのかぶと入手フラグ
+- `dragonShieldGot: false` — ドラゴンのたて入手フラグ
+
+`loadGame()` は古いセーブに対して各フラグを `false` で補完する。
+
+### NPC セリフ更新
+
+| NPC | 更新内容 |
+|---|---|
+| 旅人 (R) | Lv40以上で ✨宝箱の存在をヒント |
+| 鍛冶屋 (K) | キグナスのかぶと・如意棒の場所ヒントを段階別に追加 |
+| 王様の使い (S) | dragonShieldGot 後は「見守っている」セリフ |
+
+### 伝説装備進捗
+
+LEGEND_EQUIPS: 5種 → 7種。ステータス画面・目標画面の表示を `LEGEND_EQUIPS.length` に自動連動。
+
+### デバッグ
+
+`debugGetAllLegendary()` / `debugResetLegendary()` に新フラグ・新装備を追加。

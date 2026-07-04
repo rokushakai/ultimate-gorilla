@@ -5,6 +5,31 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.3] - 2026-07-04 — 伝説装備追加・NPCヒント連動イベント
+
+### Added
+- **キグナスのかぶと** (§33): フィールド ✨宝箱 (X, 9,6)、Lv40以上で入手。防御+12 HP+5
+- **ドラゴンのたて** (§33): 王様の使いNPCとの接触、gameCleared後に授与。防御+26 HP+8
+- `openLegendaryChestX()`: キグナスのかぶと伝説宝箱ロジック
+- `giveKingReward()`: 王様の使い経由のドラゴンのたて授与ロジック
+- movePlayer: Xタイルハンドラ追加、Sタイルを王様報酬分岐に対応
+- `state.eventFlags` に `cygnusHelmetGot` / `dragonShieldGot` を追加
+- LEGEND_EQUIPS: 5種 → 7種に拡張
+
+### Changed
+- `cygnuskabuto`: `defBonus: 8, buyPrice: 70` → `defBonus: 12, hpBonus: 5, isLegendary: true`（商人購入不可・強化）
+- `dragonshield`: `defBonus: 12, buyPrice: 100` → `defBonus: 26, hpBonus: 8, isLegendary: true`（商人購入不可・強化）
+- 旅人(R) NPC: Lv40+ で✨宝箱のヒントを追加
+- 鍛冶屋(K) NPC: キグナスのかぶと・如意棒のヒントを段階別に更新
+- 王様の使い(S) NPC: dragonShieldGot 後は「見守っている」セリフに更新
+- ステータス画面・目標画面の伝説装備進捗: `/5` → `/LEGEND_EQUIPS.length` (動的)
+- `debugGetAllLegendary` / `debugResetLegendary`: 新装備2種を追加
+
+### Notes
+- GAME_DESIGN.md §33 追記
+
+---
+
 ## [0.8.2] - 2026-07-04 — NPC会話システム・ヒント導線強化
 
 ### Added

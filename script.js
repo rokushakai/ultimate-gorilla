@@ -28,7 +28,7 @@
     "#,,,,,,,,G,,#",
     "#..........A#",  // A=ペガサスのよろい伝説宝箱(11,4) Lv50+
     "#....R..B...#",  // R=旅人(5,5), B=宝箱(8,5)
-    "#...~~~.....#",
+    "#...~~~..X..#",  // X=キグナスのかぶと伝説宝箱(9,6) Lv40+
     "#...~~~.....#",
     "#.........B.#",  // B=宝箱(10,8)
     "#..W..E.....#",  // E=ゴリラ研究家(6,9)
@@ -68,12 +68,13 @@
     "R": "🧳",  // 旅人(§32 v0.8.2)
     "K": "🔨",  // 鍛冶屋(§32 v0.8.2)
     "E": "📚",  // ゴリラ研究家(§32 v0.8.2)
-    "S": "👑"   // 王様の使い(§32 v0.8.2)
+    "S": "👑",  // 王様の使い(§32 v0.8.2)
+    "X": "✨"   // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "D": true, "R": true, "K": true, "E": true, "S": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -207,7 +208,7 @@
   var SHIELD_DATA = [
     { id: "cardboard", name: "段ボールのたて", defBonus: 0 },
     { id: "ironshield", name: "鉄のたて", defBonus: 5, buyPrice: 22 },
-    { id: "dragonshield", name: "ドラゴンのたて", defBonus: 12, buyPrice: 100 },
+    { id: "dragonshield", name: "ドラゴンのたて", defBonus: 26, hpBonus: 8, isLegendary: true },  // v0.8.3 クリア後 王様の使いイベント
     { id: "sixfoldshield", name: "六連のたて", defBonus: 20, isLegendary: true }  // v0.8 Lv60+実家イベント
   ];
 
@@ -215,7 +216,7 @@
     { id: "hachimaki", name: "男塾ハチマキ", defBonus: 0 },
     { id: "helmet", name: "ヘルメット", defBonus: 2, buyPrice: 10 },
     { id: "steelkabuto", name: "鋼鉄のかぶと", defBonus: 5, buyPrice: 35 },
-    { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 8, buyPrice: 70 },
+    { id: "cygnuskabuto", name: "キグナスのかぶと", defBonus: 12, hpBonus: 5, isLegendary: true },  // v0.8.3 フィールド✨宝箱(X) Lv40+
     { id: "shingenkabuto", name: "信玄のかぶと", defBonus: 11 },
     { id: "cosmickabuto", name: "宇宙のかぶと", defBonus: 15, isLegendary: true }  // v0.8 ウクレレ所持宝箱
   ];
@@ -424,12 +425,14 @@
     pendingLv99: false,  // 戦闘終了後にLv99マイルストーンモーダルを表示するフラグ(§3.8 v0.7.1)
     endingPage: 0,       // エンディングモーダルの現在ページ(v0.7 §28)
     openedChests: {},    // "x,y" -> true: 開封済みの宝箱(§5.7)
-    eventFlags: {        // 伝説装備イベントの入手済みフラグ(v0.8 §30)
+    eventFlags: {        // 伝説装備イベントの入手済みフラグ(v0.8 §30, v0.8.3 §33)
       pegasusArmorGot: false,
       sixfoldShieldGot: false,
       cosmicHelmetGot: false,
       nyoiboGot: false,
-      andromedaGot: false
+      andromedaGot: false,
+      cygnusHelmetGot: false,  // v0.8.3 キグナスのかぶと
+      dragonShieldGot: false   // v0.8.3 ドラゴンのたて(王様の使い報酬)
     }
   };
 
@@ -612,6 +615,8 @@
               emoji = state.openedChests[key] ? "📦" : "⭐";
             } else if (tileChar === "J") {
               emoji = state.openedChests[key] ? "📦" : "🪄";
+            } else if (tileChar === "X") {
+              emoji = state.openedChests[key] ? "📦" : "✨";
             } else {
               emoji = TERRAIN_EMOJI[tileChar] || "🟩";
             }
@@ -719,8 +724,20 @@
       openLegendaryChestJ(nx, ny);
       return;
     }
-    if (tile === "D" || tile === "R" || tile === "K" || tile === "E" || tile === "S") {
+    if (tile === "X") {
+      openLegendaryChestX(nx, ny);
+      return;
+    }
+    if (tile === "D" || tile === "R" || tile === "K" || tile === "E") {
       openNpcModal(tile);
+      return;
+    }
+    if (tile === "S") {
+      if (state.gameCleared && !state.eventFlags.dragonShieldGot) {
+        giveKingReward();
+      } else {
+        openNpcModal("S");
+      }
       return;
     }
 
@@ -862,6 +879,36 @@
     updateStatusBar();
     saveGame();
     alert("ジュリタニが拳を鳴らした。\n「いけるぞ、引き抜いてみろ！」\n\n「如意棒」を手に入れた！\n（攻撃力+58）\n\n装備変更画面で装備できます。");
+  }
+
+  function openLegendaryChestX(x, y) {
+    var key = x + "," + y;
+    if (state.openedChests[key]) { showToast("📦 宝箱は空だった…"); return; }
+    if (state.player.level < 40) {
+      showToast("✨ 宝箱は輝いているが……まだ開けられない。(Lv40以上が必要)");
+      return;
+    }
+    state.openedChests[key] = true;
+    state.eventFlags.cygnusHelmetGot = true;
+    if (!isEquipOwned(findEquipSlot("helmet"), "cygnuskabuto")) {
+      state.player.ownedHelmets.push("cygnuskabuto");
+    }
+    renderField();
+    updateStatusBar();
+    saveGame();
+    alert("輝く宝箱の蓋が開いた！\n\n「キグナスのかぶと」を手に入れた！\n（防御力+12 HP+5）\n\n装備変更画面で装備できます。");
+  }
+
+  function giveKingReward() {
+    state.eventFlags.dragonShieldGot = true;
+    if (!isEquipOwned(findEquipSlot("shield"), "dragonshield")) {
+      state.player.ownedShields.push("dragonshield");
+    }
+    updateStatusBar();
+    saveGame();
+    setTimeout(function () {
+      alert("「王様より、そなたへの褒美を預かっております。」\n\n「これは、伝説の守り具『ドラゴンのたて』にございます。」\n（防御力+26 HP+8）\n\n「どうか、これからの冒険にもお役立てください。」\n\n装備変更画面で装備できます。");
+    }, 100);
   }
 
   // Lv99マイルストーンモーダルを開く(finishBattle後に呼ばれる)(v0.7.1 §3.8)
@@ -1926,7 +1973,7 @@
     var legendCount = LEGEND_EQUIPS.filter(function(le) { return state.eventFlags[le.flag]; }).length;
     var html = "<h3>🎯 現在の目標</h3>";
     if (state.gameCleared) {
-      html += '<p class="small" style="color:#ffd166;">🏆 クリア済み！<br>称号：「森に歌を届けし者」<br>伝説装備を集めよう！(' + legendCount + '/5入手済)</p>';
+      html += '<p class="small" style="color:#ffd166;">🏆 クリア済み！<br>称号：「森に歌を届けし者」<br>伝説装備を集めよう！(' + legendCount + '/' + LEGEND_EQUIPS.length + '入手済)</p>';
       if (!state.eventFlags.andromedaGot) {
         html += '<p class="small" style="color:#ef9a9a;">💡 実家で休むと王様の使者が……</p>';
       }
@@ -2001,7 +2048,7 @@
       html += '<div class="shop-row"><span>🎉 究極ゴリラ捕獲</span><span style="color:#ffd166;font-weight:bold;">クリア済！</span></div>';
       html += '<button class="shop-menu-btn" id="btn-status-watch-ending" style="margin-top:6px;">🎬 エンディングを見る</button>';
     }
-    html += "<h3>★ 伝説装備 (" + legendCount + "/5)</h3>";
+    html += "<h3>★ 伝説装備 (" + legendCount + "/" + LEGEND_EQUIPS.length + ")</h3>";
     LEGEND_EQUIPS.forEach(function(le) {
       var got = state.eventFlags[le.flag];
       html += '<div class="shop-row"><span>' + le.name + "</span>" +
@@ -2472,13 +2519,15 @@
     { slot: "helmet", label: "⛑ 兜", ownedKey: "ownedHelmets", data: function () { return HELMET_DATA; } }
   ];
 
-  // 伝説装備リスト(v0.8 §30) — ステータス画面の進捗表示に使用
+  // 伝説装備リスト(v0.8 §30, v0.8.3 §33) — ステータス画面の進捗表示に使用
   var LEGEND_EQUIPS = [
     { name: "ペガサスのよろい", flag: "pegasusArmorGot" },
     { name: "六連のたて", flag: "sixfoldShieldGot" },
     { name: "宇宙のかぶと", flag: "cosmicHelmetGot" },
     { name: "如意棒", flag: "nyoiboGot" },
-    { name: "アンドロメダの鎖", flag: "andromedaGot" }
+    { name: "アンドロメダの鎖", flag: "andromedaGot" },
+    { name: "キグナスのかぶと", flag: "cygnusHelmetGot" },   // v0.8.3
+    { name: "ドラゴンのたて", flag: "dragonShieldGot" }      // v0.8.3
   ];
 
   // ---------------------------------------------------------
@@ -2516,11 +2565,14 @@
           lines.push("女神の音色を手に入れたのか……星のように光る宝箱がそれに反応するらしいぞ。");
           lines.push("力ある者には、岩に刺さった棒も引き抜けるかもしれない。強い仲間を連れてみな。");
         } else if (p.level >= 50) {
-          lines.push("白く光る宝箱があるだろう？強き者にしか開かぬという噂だ。");
-          lines.push("フィールドの奥には、特別な宝箱がいくつかある。よく探してみな。");
+          lines.push("白く光る🌟宝箱があるだろう？強き者にしか開かぬという噂だ。");
+          lines.push("そういえば草原のどこかに✨輝く宝箱も見かけた。Lv40あれば開けられるかもしれんな。");
+        } else if (p.level >= 40) {
+          lines.push("草原を進んでいったら✨輝く宝箱を見かけた。普通の宝箱とは違う光だった。");
+          lines.push("試しに開けてみないか？お前ならもう十分強いと思うが。");
         } else {
-          lines.push("白く光る宝箱を見たことがあるが、今のお前さんにはまだ早いかもしれん。");
-          lines.push("もっと強くなれば、宝箱の謎が解けるかもしれないぞ。");
+          lines.push("草原には普通の宝箱🎁の他に、✨特別な光を放つ宝箱が眠っていることもあるらしい。");
+          lines.push("もっと強くなれば、特別な宝箱の謎が解けるかもしれないぞ。");
         }
         return lines;
       }
@@ -2533,20 +2585,29 @@
         var lines = [];
         var hasAnyLegend = state.eventFlags && (
           state.eventFlags.pegasusArmorGot || state.eventFlags.sixfoldShieldGot ||
-          state.eventFlags.cosmicHelmetGot || state.eventFlags.nyoiboGot || state.eventFlags.andromedaGot
+          state.eventFlags.cosmicHelmetGot || state.eventFlags.nyoiboGot || state.eventFlags.andromedaGot ||
+          state.eventFlags.cygnusHelmetGot || state.eventFlags.dragonShieldGot
         );
         lines.push("武器や防具は、持っているだけでは意味がない。ちゃんと装備するんだ。");
-        if (hasAnyLegend) {
-          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
-        } else {
-          lines.push("フィールドの奥には、商人では手に入らない伝説の装備があるらしい。");
-        }
-        if (hasCompanion("juritani")) {
-          lines.push("おお、ジュリタニが一緒か！ならば力を貸してくれる棒があるかもしれんぞ。");
+        if (state.eventFlags && state.eventFlags.nyoiboGot) {
+          lines.push("如意棒を手に入れたか！あれは最強の武器だ。しっかり装備しろよ。");
+        } else if (hasCompanion("juritani")) {
+          lines.push("おお、ジュリタニが一緒か！ならフィールドの奥に棒が刺さっている場所がある。引き抜いてみな。");
         } else if (p.level >= 70) {
-          lines.push("如意棒は一人では抜けない。気合いのある仲間が必要らしい。酒場で仲間を探せ。");
+          lines.push("如意棒は一人では抜けない。酒場でジュリタニという仲間を探してみろ。");
+        } else if (state.eventFlags && state.eventFlags.cygnusHelmetGot) {
+          lines.push("キグナスのかぶとも手に入れたか。なかなかやるじゃないか。");
+          lines.push("フィールドの奥にはまだまだ伝説の装備が眠っているぞ。");
+        } else if (p.level >= 40) {
+          lines.push("草原の奥に✨輝く宝箱がある。あそこに特別な兜が眠っているはずだ。");
+          lines.push("Lv40あればたぶん開けられる。行ってみな。");
         } else {
           lines.push("装備は「🎽装備」ボタンでいつでも変更できる。商人で強い装備を買ってみろ。");
+        }
+        if (hasAnyLegend) {
+          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
+        } else if (p.level >= 30) {
+          lines.push("フィールドには商人では買えない伝説の装備が眠っている。探してみな。");
         }
         return lines;
       }
@@ -2581,9 +2642,13 @@
       emoji: "👑",
       getLines: function () {
         var lines = [];
-        if (state.eventFlags && state.eventFlags.andromedaGot) {
-          lines.push("アンドロメダの鎖を授かったのだな。まことに見事なり。");
-          lines.push("王様もお喜びでございます。冒険者の誉れじゃ。");
+        if (state.eventFlags && state.eventFlags.dragonShieldGot) {
+          if (state.eventFlags.andromedaGot) {
+            lines.push("ドラゴンのたてもアンドロメダの鎖も手に入れたとは……まことに立派じゃ。");
+          } else {
+            lines.push("ドラゴンのたてはお役に立てているかな？");
+          }
+          lines.push("王様は、そなたのさらなる冒険を見守っておられます。");
         } else if (state.gameCleared) {
           lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
           lines.push("究極ゴリラを森へ帰した者への、王様からの感謝の品だとのことじゃ。");
@@ -2970,8 +3035,11 @@
       state.openedChests = data.openedChests || {};
       state.eventFlags = data.eventFlags || {
         pegasusArmorGot: false, sixfoldShieldGot: false,
-        cosmicHelmetGot: false, nyoiboGot: false, andromedaGot: false
+        cosmicHelmetGot: false, nyoiboGot: false, andromedaGot: false,
+        cygnusHelmetGot: false, dragonShieldGot: false
       };
+      if (state.eventFlags.cygnusHelmetGot === undefined) state.eventFlags.cygnusHelmetGot = false;
+      if (state.eventFlags.dragonShieldGot === undefined) state.eventFlags.dragonShieldGot = false;
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -3259,14 +3327,18 @@
     if (!isEquipOwned(findEquipSlot("helmet"), "cosmickabuto")) p.ownedHelmets.push("cosmickabuto");
     if (!isEquipOwned(findEquipSlot("weapon"), "nyoibo")) p.ownedWeapons.push("nyoibo");
     if (!isEquipOwned(findEquipSlot("weapon"), "andromedachain")) p.ownedWeapons.push("andromedachain");
+    if (!isEquipOwned(findEquipSlot("helmet"), "cygnuskabuto")) p.ownedHelmets.push("cygnuskabuto");
+    if (!isEquipOwned(findEquipSlot("shield"), "dragonshield")) p.ownedShields.push("dragonshield");
     state.eventFlags.pegasusArmorGot = true;
     state.eventFlags.sixfoldShieldGot = true;
     state.eventFlags.cosmicHelmetGot = true;
     state.eventFlags.nyoiboGot = true;
     state.eventFlags.andromedaGot = true;
+    state.eventFlags.cygnusHelmetGot = true;
+    state.eventFlags.dragonShieldGot = true;
     updateStatusBar();
     saveGame();
-    showToast("[DEBUG] 伝説装備を全入手した");
+    showToast("[DEBUG] 伝説装備を全入手した(7/7)");
     renderSettingsBody();
   }
 
@@ -3276,6 +3348,8 @@
     state.eventFlags.cosmicHelmetGot = false;
     state.eventFlags.nyoiboGot = false;
     state.eventFlags.andromedaGot = false;
+    state.eventFlags.cygnusHelmetGot = false;
+    state.eventFlags.dragonShieldGot = false;
     saveGame();
     showToast("[DEBUG] 伝説装備フラグをリセットした");
     renderSettingsBody();
