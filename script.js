@@ -331,8 +331,10 @@
   var bgmCurrentType = null;
   var bgmSchedulerId = null;
   var bgmStopFlag = false;
-  var bgmGeneration = 0;   // BGMループ世代管理：切り替え時に古いループを無効化(v0.8.6 §36)
-  var activeBgmNodes = []; // スケジュール済みOscillatorNode一覧：stopBGMで一括停止(v0.8.6 §36)
+  var bgmGeneration = 0;    // BGMループ世代管理：切り替え時に古いループを無効化(v0.8.6 §36)
+  var bgmSessionId = 0;     // BGMセッションID：startBGMごとに増加。古いループを無効化(v0.8.6.3 §39)
+  var activeBgmNodes = [];  // 追跡中ノード配列: [{osc, gain}]。stopBGMHardで一括停止(v0.8.6.3 §39)
+  var activeBgmTimers = []; // 追跡中BGMタイマーID配列。stopBGMHardで全clearTimeout(v0.8.6.3 §39)
   var bgmMasterGain = null; // 全BGMノードの共通出力先GainNode。stopBGMで切断→即消音(v0.8.6.2 §38)
 
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
@@ -2986,6 +2988,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-battle">🎵 [TEST] バトルBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-ending">🎵 [TEST] エンディングBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-stop">🔇 [TEST] BGM停止</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-hard-stop">🔇 BGM完全停止(stopBGMHard)</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -3092,6 +3095,10 @@
       document.getElementById("btn-debug-bgm-stop").onclick = function () {
         stopBGM();
         showToast("[DEBUG] BGM停止");
+      };
+      document.getElementById("btn-debug-bgm-hard-stop").onclick = function () {
+        stopBGMHard();
+        showToast("[DEBUG] BGM完全停止 (activeBgmNodes=" + activeBgmNodes.length + ")");
       };
     }
   }
@@ -3552,7 +3559,7 @@
     }
   };
 
-  // BGMセッションごとの共通出力先GainNode。stopBGMで切断→全ノード即消音(§38 v0.8.6.2)
+  // BGMセッションごとの共通出力先GainNode。stopBGMHardで切断→全ノード即消音(§38/§39)
   function getOrCreateBgmMasterGain() {
     if (!audioCtx) return null;
     if (!bgmMasterGain) {
@@ -3563,54 +3570,84 @@
     return bgmMasterGain;
   }
 
+  // BGM完全停止: セッションID更新・全タイマーキャンセル・全ノードをgain=0/disconnect(§39 v0.8.6.3)
+  // osc.stop(t+dur)で予約済みのため osc.stop() 二重呼び出しは行わない。
+  // gain.gain=0 + gain.disconnect() + masterGain.disconnect() の三重消音で即停止する。
+  function stopBGMHard() {
+    bgmSessionId++;
+    bgmGeneration++;
+    bgmStopFlag = true;
+    if (DEBUG_MODE) {
+      console.log('[BGM] stop hard session:', bgmSessionId,
+        'active nodes:', activeBgmNodes.length,
+        'active timers:', activeBgmTimers.length);
+    }
+    bgmCurrentType = null;
+    // 全タイマーキャンセル
+    for (var _ti = 0; _ti < activeBgmTimers.length; _ti++) {
+      clearTimeout(activeBgmTimers[_ti]);
+    }
+    activeBgmTimers = [];
+    bgmSchedulerId = null;
+    // 全ノードを消音・切断
+    var _now = audioCtx ? audioCtx.currentTime : 0;
+    for (var _ni = 0; _ni < activeBgmNodes.length; _ni++) {
+      var _n = activeBgmNodes[_ni];
+      try {
+        // gain=0で即消音(osc.stop()の二重呼び出し禁止のため gainで消音)
+        _n.gain.gain.cancelScheduledValues(_now);
+        _n.gain.gain.setValueAtTime(0, _now);
+        _n.gain.disconnect();
+      } catch (e) {}
+      try { _n.osc.disconnect(); } catch (e) {}
+    }
+    activeBgmNodes = [];
+    // マスターゲインも切断・破棄(二重消音)
+    if (bgmMasterGain) {
+      try {
+        bgmMasterGain.gain.cancelScheduledValues(_now);
+        bgmMasterGain.gain.setValueAtTime(0, _now);
+        bgmMasterGain.disconnect();
+      } catch (e) {}
+      bgmMasterGain = null;
+    }
+    if (DEBUG_MODE) console.log('[BGM] stop hard complete, active nodes after:', activeBgmNodes.length);
+  }
+
+  // 後方互換: 既存呼び出し箇所は stopBGM() のまま使用可
+  function stopBGM() {
+    stopBGMHard();
+  }
+
   function startBGM(type) {
     if (!soundEnabled || !bgmEnabled) return;
     if (!initAudioContext()) return;
     if (bgmCurrentType === type) return;
-    if (DEBUG_MODE) console.log('[BGM] immediate switch:', bgmCurrentType, '->', type);
-    stopBGM();
+    if (DEBUG_MODE) console.log('[BGM] play request:', type);
+    stopBGMHard();
     bgmCurrentType = type;
     bgmStopFlag = false;
+    var session = bgmSessionId;
     var gen = bgmGeneration;
-    _scheduleBGMLoop(type, audioCtx.currentTime, gen);
-    if (DEBUG_MODE) console.log('[BGM] play:', type);
-  }
-
-  function stopBGM() {
-    bgmGeneration++;
-    bgmStopFlag = true;
-    if (DEBUG_MODE && bgmCurrentType) console.log('[BGM] stop immediate:', bgmCurrentType);
-    bgmCurrentType = null;
-    if (bgmSchedulerId !== null) {
-      clearTimeout(bgmSchedulerId);
-      bgmSchedulerId = null;
-    }
-    // マスターゲインを切断→全BGMノードを即座に消音(§38 v0.8.6.2)
-    // osc.stop(t+dur)で予約済みノードにstop()を再度呼ぶとInvalidStateErrorが発生するため
-    // マスターゲインの接続切断で音声グラフから隔離して即消音する方式に変更
-    if (bgmMasterGain) {
-      try { bgmMasterGain.disconnect(); } catch (e) {}
-      bgmMasterGain = null;
-    }
-    // 個別ノードの停止も試みる(失敗はサイレント無視)
-    for (var _i = 0; _i < activeBgmNodes.length; _i++) {
-      try { activeBgmNodes[_i].stop(); } catch (e) {}
-      try { activeBgmNodes[_i].disconnect(); } catch (e) {}
-    }
-    activeBgmNodes = [];
+    if (DEBUG_MODE) console.log('[BGM] new session:', session, type);
+    _scheduleBGMLoop(type, audioCtx.currentTime, gen, session);
   }
 
   function updateBGM(type) {
     if (!soundEnabled || !bgmEnabled) {
-      if (bgmCurrentType !== null) stopBGM();
+      if (bgmCurrentType !== null) stopBGMHard();
       return;
     }
     if (bgmCurrentType === type) return;
     startBGM(type);
   }
 
-  function _scheduleBGMLoop(type, startTime, gen) {
-    if (gen !== bgmGeneration) return; // 世代不一致なら古いループは何もしない
+  function _scheduleBGMLoop(type, startTime, gen, session) {
+    if (session !== bgmSessionId) {
+      if (DEBUG_MODE) console.log('[BGM] schedule skipped old session:', session, bgmSessionId);
+      return;
+    }
+    if (gen !== bgmGeneration) return;
     if (bgmStopFlag || bgmCurrentType !== type || !audioCtx) return;
     var data = BGM_DATA[type];
     if (!data) return;
@@ -3626,16 +3663,16 @@
         var dur = note[1];
         if (freq > 0) {
           var osc = audioCtx.createOscillator();
-          var gain = audioCtx.createGain();
-          osc.connect(gain);
-          gain.connect(master); // マスターゲイン経由で出力(§38)
+          var noteGain = audioCtx.createGain();
+          osc.connect(noteGain);
+          noteGain.connect(master); // マスターゲイン経由(§38/§39)
           osc.type = waveType;
           osc.frequency.setValueAtTime(freq, t);
-          gain.gain.setValueAtTime(vol, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.85);
+          noteGain.gain.setValueAtTime(vol, t);
+          noteGain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.85);
           osc.start(t);
-          osc.stop(t + dur);
-          activeBgmNodes.push(osc);
+          osc.stop(t + dur); // 自然終了スケジュール(stopBGMHardではstop()再呼び出し禁止)
+          activeBgmNodes.push({ osc: osc, gain: noteGain }); // osc+gainを追跡
         }
         t += dur;
       }
@@ -3646,13 +3683,24 @@
     var loopDur = t - startTime;
     var delayMs = Math.max(100, (loopDur - 0.15) * 1000);
     var capturedGen = gen;
-    bgmSchedulerId = setTimeout(function () {
-      if (capturedGen !== bgmGeneration) return; // 世代チェック：別BGMが起動済みなら無視
+    var capturedSession = session;
+    var timerId = setTimeout(function () {
+      // タイマー追跡リストから削除
+      for (var k = 0; k < activeBgmTimers.length; k++) {
+        if (activeBgmTimers[k] === timerId) { activeBgmTimers.splice(k, 1); break; }
+      }
+      if (capturedSession !== bgmSessionId) {
+        if (DEBUG_MODE) console.log('[BGM] loop timer skipped old session:', capturedSession, bgmSessionId);
+        return;
+      }
+      if (capturedGen !== bgmGeneration) return;
       if (!bgmStopFlag && bgmCurrentType === type && audioCtx) {
         activeBgmNodes = []; // 終了済みノードをクリアして次ループへ
-        _scheduleBGMLoop(type, audioCtx.currentTime + 0.10, bgmGeneration);
+        _scheduleBGMLoop(type, audioCtx.currentTime + 0.10, bgmGeneration, bgmSessionId);
       }
     }, delayMs);
+    activeBgmTimers.push(timerId);
+    bgmSchedulerId = timerId;
   }
 
   // ---------------------------------------------------------

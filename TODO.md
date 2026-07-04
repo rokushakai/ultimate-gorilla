@@ -14,6 +14,23 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.6.3 — BGMノード完全停止・予約音キャンセル修正
+
+- **`stopBGMHard()` 新設** (§39):
+  - `bgmSessionId++` / `bgmGeneration++` でセッション世代を更新し古いコールバックをスキップ
+  - `activeBgmTimers` の全 `setTimeout` を `clearTimeout()` でキャンセル
+  - `activeBgmNodes` の各 `{osc, gain}` に対して `gain.gain=0` + `gain.disconnect()` で消音
+  - `bgmMasterGain` も `gain=0` + `disconnect()` + null化
+- **`stopBGM()` を `stopBGMHard()` のエイリアスに変更**（後方互換）
+- **`startBGM(type)`**: `stopBGMHard()` 後に `session = bgmSessionId` をキャプチャして渡す
+- **`_scheduleBGMLoop()` を `session` パラメータ対応に変更**:
+  - `{osc, gain}` ペアで `activeBgmNodes` に追跡
+  - タイマーIDを `activeBgmTimers` に push/splice で管理
+  - タイマーコールバックで `capturedSession !== bgmSessionId` チェック
+- デバッグボタン `btn-debug-bgm-hard-stop` 追加
+- GAME_DESIGN.md §38更新 + §39追記
+- 根本原因: `activeBgmNodes` に `osc` 単体のみ追跡 → `gain` のスケジュール済み音量変化をキャンセルできず。`activeBgmTimers` 未実装 → 旧セッションのループタイマーが発火して新BGMに二重ループ発生
+
 ### Version 0.8.6.2 — BGM即時切り替え修正
 
 - **BGM即時切り替え修正** (§38):

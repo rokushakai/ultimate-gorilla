@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.8.6.2** |
+| 現在バージョン | **v0.8.6.3** |
 | ブランチ | main |
 
 ---
@@ -63,11 +63,18 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.8.6.3] BGMノード完全停止・予約音キャンセル修正**（§39）
+  - 根本原因: `activeBgmNodes` に `osc` 単体保存 → `gain` スケジュール済み音量変化をキャンセル不能。`activeBgmTimers` 未実装 → 旧タイマーが発火して二重ループ発生（約5秒重複）
+  - `stopBGMHard()` 新設: ①セッションID更新 ②全タイマー clearTimeout ③gain=0+disconnect ④マスターゲイン破棄
+  - `bgmSessionId` 追加: 古いタイマーコールバックをセッション比較でスキップ
+  - `activeBgmNodes` を `{osc, gain}` ペアで追跡。`activeBgmTimers` を実装
+  - `stopBGM()` は `stopBGMHard()` の後方互換エイリアスに変更
+  - デバッグボタン「BGM完全停止(stopBGMHard)」追加
 - **[v0.8.6.2] BGM即時切り替え修正**（§38）
   - 根本原因: `osc.stop(t+dur)` 呼び済みノードへの `stop()` 再呼び出しが `InvalidStateError` → try-catch握りつぶしで旧BGMが止まらなかった
   - `bgmMasterGain` 変数追加: 全BGMノードの共通出力先 GainNode
   - `getOrCreateBgmMasterGain()`: セッションごとにマスターゲインを作成
-  - `stopBGM()`: `bgmMasterGain.disconnect()` → null化で即消音
+  - `stopBGM()`: v0.8.6.2時点では `bgmMasterGain.disconnect()` → null化で即消音（v0.8.6.3でエイリアスに変更）
   - `_scheduleBGMLoop()`: `gain.connect(master)` でマスターゲイン経由に変更
   - `DEBUG_MODE` 時: `[BGM] immediate switch/stop/play` のコンソールログ出力
 - **[v0.8.6] BGM重なり修正 + 攻略ペーパービュー屋**（§36, §37）
@@ -145,6 +152,7 @@
 
 | 機能 | 状態 |
 |---|---|
+| BGMノード完全停止・予約音キャンセル | ✅ v0.8.6.3 で修正済み（§39）|
 | BGM即時切り替え修正 | ✅ v0.8.6.2 で修正済み（§38）|
 | BGM重なり修正（世代管理） | ✅ v0.8.6 で修正済み（§36）|
 | 攻略ペーパービュー屋 | ✅ v0.8.6 で実装済み（§37）|

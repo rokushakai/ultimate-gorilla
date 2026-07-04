@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.6.3] - 2026-07-04 — BGMノード完全停止・予約音キャンセル修正
+
+### Fixed
+- **BGM重複再生（約5秒の重なり）根本修正** (§39): v0.8.6.2でも約5秒のBGM重複が残っていた問題を修正
+  - **根本原因1**: `activeBgmNodes` に `osc` 単体のみ保存していたため、`gain.gain` のスケジュール済み音量変化をキャンセルできず旧BGMの音が残り続けた
+  - **根本原因2**: `activeBgmTimers` 未実装で旧セッションの `setTimeout` がキャンセルされず、旧ループタイマーが発火して新BGMに `_scheduleBGMLoop` が二重実行されていた
+  - **修正**: `stopBGMHard()` 新設。4段階消音: ①セッションID更新 ②全タイマー `clearTimeout` ③全ノードの `gain=0` + `gain.disconnect()` ④マスターゲイン破棄
+  - `activeBgmNodes` を `{osc, gain}` ペアで追跡するよう変更
+  - `activeBgmTimers` 配列を実装。タイマー発火時に自身を配列から削除し、セッション比較でスキップ
+  - `bgmSessionId` を導入。`stopBGMHard()` で +1。古いタイマーコールバックが `capturedSession !== bgmSessionId` でスキップ
+  - `stopBGM()` は `stopBGMHard()` のエイリアスに変更（後方互換）
+  - デバッグボタン「BGM完全停止(stopBGMHard)」追加。トーストに `activeBgmNodes` 件数を表示
+
+### Notes
+- GAME_DESIGN.md §38更新 + §39追記
+- TODO.md v0.8.6.3エントリ追加
+
+---
+
 ## [0.8.6.2] - 2026-07-04 — BGM即時切り替え修正
 
 ### Fixed

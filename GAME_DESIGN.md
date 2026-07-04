@@ -1782,9 +1782,9 @@ v0.8.6 実装の `stopBGM()` にて、`_scheduleBGMLoop` で各ノートに `osc
 | 関数 | 説明 |
 |---|---|
 | `getOrCreateBgmMasterGain()` | `bgmMasterGain` がなければ作成して返す |
-| `stopBGM()` | `bgmMasterGain.disconnect()` → null化 → 個別ノード停止試行（失敗は無視） |
-| `startBGM(type)` | `stopBGM()` 後に `_scheduleBGMLoop` を呼ぶ。`DEBUG_MODE` 時にコンソールログ出力 |
-| `_scheduleBGMLoop()` | `gain.connect(master)` で `bgmMasterGain` 経由出力に変更 |
+| `stopBGM()` | `stopBGMHard()` の後方互換エイリアス（v0.8.6.3以降） |
+| `startBGM(type)` | `stopBGMHard()` 後に `bgmSessionId`/`bgmGeneration` をキャプチャし `_scheduleBGMLoop` を呼ぶ |
+| `_scheduleBGMLoop()` | `{osc, gain}` ペアを `activeBgmNodes` に追跡。タイマーIDを `activeBgmTimers` に追跡 |
 
 ### BGM切り替えの期待動作
 
@@ -1799,3 +1799,53 @@ v0.8.6 実装の `stopBGM()` にて、`_scheduleBGMLoop` で各ノートに `osc
 [BGM] stop immediate: field
 [BGM] play: battle
 ```
+
+---
+
+## §39. BGMノード完全停止・予約音キャンセル (Version 0.8.6.3)
+
+### 問題
+
+v0.8.6.2 の `stopBGM()` は `bgmMasterGain.disconnect()` で即消音していたが、`activeBgmNodes` に `osc` 単体のみ保存していたため `gain.gain` のスケジュール済み音量変化をキャンセルできなかった。また `activeBgmTimers` が未実装で古い `setTimeout` がキャンセルされず、旧セッションのループタイマーが発火して新BGMに `_scheduleBGMLoop` が二重実行され約5秒の重複が発生していた。
+
+### 解決策
+
+**`stopBGMHard()` を新設**し、次の4段階消音を行う。
+
+1. `bgmSessionId++` / `bgmGeneration++` でセッション世代を更新 → 古いコールバックは全てスキップ
+2. `activeBgmTimers` の全 setTimeout を `clearTimeout()` でキャンセル
+3. `activeBgmNodes` の各 `{osc, gain}` に対して `gain.gain.cancelScheduledValues()` + `gain.gain.setValueAtTime(0, now)` + `gain.disconnect()` で消音
+4. `bgmMasterGain` も `gain=0` + `disconnect()` + null化
+
+`stopBGM()` は `stopBGMHard()` のエイリアスに変更（既存呼び出し箇所はそのまま動作）。
+
+### 変数
+
+| 変数 | 型 | 役割 |
+|---|---|---|
+| `bgmSessionId` | `number` | BGMセッションID。`stopBGMHard()` で +1。古いタイマーコールバックが比較してスキップ |
+| `activeBgmNodes` | `Array<{osc, gain}>` | 実行中BGMノードペア。`stopBGMHard()` で一括消音 |
+| `activeBgmTimers` | `Array<number>` | 実行中BGMタイマーID。`stopBGMHard()` で全 `clearTimeout()` |
+
+### 関数
+
+| 関数 | 説明 |
+|---|---|
+| `stopBGMHard()` | 4段階消音。セッションID更新 + タイマー全キャンセル + ノード消音 + マスターゲイン破棄 |
+| `stopBGM()` | `stopBGMHard()` への後方互換エイリアス |
+| `startBGM(type)` | `stopBGMHard()` 後に `session = bgmSessionId` / `gen = bgmGeneration` をキャプチャして渡す |
+| `_scheduleBGMLoop(type, startTime, gen, session)` | `session`パラメータ追加。各ノートを `{osc, gain}` で追跡。タイマーIDを `activeBgmTimers` に push |
+
+### デバッグログ（`?debug=1` 時のみ）
+
+```
+[BGM] stop hard session: 2 active nodes: 12 active timers: 1
+[BGM] stop hard complete, active nodes after: 0
+[BGM] new session: 2 battle
+[BGM] schedule skipped old session: 1 2
+[BGM] loop timer skipped old session: 1 2
+```
+
+### デバッグボタン
+
+- `btn-debug-bgm-hard-stop`: `stopBGMHard()` を呼び出し。`activeBgmNodes` 件数をトーストに表示
