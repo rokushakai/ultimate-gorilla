@@ -5,6 +5,15 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.6.1] - 2026-07-04 — 状態異常ゴーストキー修正
+
+### Fixed
+- **`clearAilment` ゴーストキー問題**: アレルギー/においカウントが0になった時に `clearAilment` が `hasAilment`(value>0チェック) で空振りし `statusAilments` にvalue=0のキーが残留するバグを修正
+  - `clearAilment` の入口ガードを `!hasAilment(id)` → `!(id in state.player.statusAilments)` に変更。value=0でも正しくキーを削除しトーストを表示
+- **`doRest` の `hadAilments` 誤判定**: `Object.keys(p.statusAilments).length > 0` はゴーストキー(value=0)を有効な状態異常と誤判定し「体調もよくなった！」を表示していた。`hasAilment` ベースのチェックに変更
+
+---
+
 ## [0.8.6] - 2026-07-04 — BGM重なり修正 + 攻略ペーパービュー屋
 
 ### Fixed

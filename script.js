@@ -564,7 +564,7 @@
   }
 
   function clearAilment(id, silent) {
-    if (!hasAilment(id)) return;
+    if (!(id in state.player.statusAilments)) return;
     var info = AILMENT_INFO[id];
     delete state.player.statusAilments[id];
     if (!silent) showToast(info.icon + " " + info.name + "が治った！");
@@ -2911,7 +2911,7 @@
 
   function doRest() {
     var p = state.player;
-    var hadAilments = Object.keys(p.statusAilments).length > 0;
+    var hadAilments = Object.keys(AILMENT_INFO).some(function(id) { return hasAilment(id); });
     p.hp = p.maxHp;
     p.mp = p.maxMp;
     Object.keys(AILMENT_INFO).forEach(function (id) {
