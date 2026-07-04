@@ -14,6 +14,15 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.8.1 — 緊急バグ修正: ステータスメニュー復旧・攻略ペーパービュー屋修正
+
+- **ステータスメニュー非表示の修正** (§42): iOS セーフエリア対応
+  - `#game` に `padding-top: env(safe-area-inset-top, 0px)` 追加
+  - `#dpad` に `padding-bottom: env(safe-area-inset-bottom, 0px)` 追加
+- **攻略ペーパービュー屋 undefinedG 修正** (§42): `p.money` → `p.gold` に修正 (3箇所)
+- **攻略ペーパービュー屋の購入不可修正** (§42): 同上
+- **攻略ペーパービュー屋のラベル縦崩れ修正** (§42): `.shop-row .shop-menu-btn { width: auto }` 追加
+
 ### Version 0.8.8 — NPCセリフ拡充・攻略ヒント強化
 
 - **NPC_DATA 全5NPC のセリフ拡充** (§41):

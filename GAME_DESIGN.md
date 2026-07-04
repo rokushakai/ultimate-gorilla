@@ -1997,3 +1997,36 @@ NPC会話テスト用にレベル設定ボタンを追加:
 - `btn-debug-lv1`: Lv.1にする
 - `btn-debug-lv5`: Lv.5にする
 - `btn-debug-lv10`: Lv.10にする
+
+
+## §42. 緊急バグ修正: ステータスメニュー復旧・攻略ペーパービュー屋購入不可修正 (Version 0.8.8.1)
+
+### 背景
+
+v0.8.8 リリース後、スマホ実機テストで2件のバグを確認した。
+
+### バグ1: ステータスメニュー非表示 (iOS セーフエリア問題)
+
+**原因**: `<meta viewport-fit=cover>` を設定しているため、iOS Safari では
+viewport が Dynamic Island / ノッチの裏まで拡張される。
+`#game` に `padding-top: env(safe-area-inset-top)` がないため、
+status-bar コンテンツがノッチの裏に隠れて見えない。
+
+**修正**: `style.css` の `#game` に `padding-top: env(safe-area-inset-top, 0px)` を追加。
+`#dpad` に `padding-bottom: env(safe-area-inset-bottom, 0px)` も追加(iPhone ホームバー対策)。
+
+### バグ2: 攻略ペーパービュー屋の所持金 undefined・購入不可
+
+**原因**: `renderHintShopMenu()` と `buyHint()` が `p.money` を参照しているが、
+ゲーム内の所持金プロパティは `p.gold` (state.player.gold) である。
+`p.money` は undefined なので、表示が `undefinedG` になり、
+`undefined >= 10` が false になるため購入ボタンも disabled になる。
+
+**修正**: `renderHintShopMenu()` と `buyHint()` 内の `p.money` を全て `p.gold` に変更。
+
+### バグ3: 攻略ペーパービュー屋のラベル縦崩れ
+
+**原因**: `.shop-menu-btn` が `width: 100%` を持つため、`.shop-row` の flex コンテナ内で
+ボタンが全幅を占有し、ラベル `<span>` のスペースが 0 に近くなってテキストが縦方向に折り返される。
+
+**修正**: `style.css` に `.shop-row .shop-menu-btn { width: auto; flex: 0 0 auto; }` を追加。

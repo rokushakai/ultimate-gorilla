@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.8.8** |
+| 現在バージョン | **v0.8.8.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,10 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.8.8.1] 緊急バグ修正**（§42）
+  - iOS セーフエリア対応: `#game` に `padding-top: env(safe-area-inset-top)` 追加でノッチ裏隠れを解消
+  - 攻略ペーパービュー屋: `p.money` → `p.gold` 修正 (undefinedG・購入不可)
+  - `.shop-row .shop-menu-btn` に `width: auto` を追加しラベル縦崩れを修正
 - **[v0.8.8] NPCセリフ拡充・攻略ヒント強化**（§41）
   - NPC_DATA 全5NPC のセリフをレベル段階別に拡充（D/R/K/E/S）
   - UMA博士: UMA vs 通常モンスター説明、メタルゴリラヒント、lv<5/lv5-9/lv≥10 分岐

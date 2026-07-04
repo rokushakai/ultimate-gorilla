@@ -3901,7 +3901,7 @@
     var html = "";
     html += "<p class=\"small\" style=\"margin-bottom:4px;\">「今の君に必要な情報を売っているよ。</p>";
     html += "<p class=\"small\" style=\"margin-bottom:12px;\">情報にも価値がある。払える者だけが知れる。」</p>";
-    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:10px;\">所持金: 💰 " + p.money + "G</p>";
+    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:10px;\">所持金: 💰 " + p.gold + "G</p>";
     var tiers = [
       { tier: 1, cost: 10,  label: "ぼんやりヒント",  color: "#adb5bd" },
       { tier: 2, cost: 50,  label: "具体的ヒント",    color: "#74c0fc" },
@@ -3909,7 +3909,7 @@
     ];
     for (var i = 0; i < tiers.length; i++) {
       var t = tiers[i];
-      var canAfford = p.money >= t.cost;
+      var canAfford = p.gold >= t.cost;
       html += "<div class=\"shop-row\">";
       html += "<span style=\"color:" + t.color + ";\">" + t.label + "</span>";
       html += "<button class=\"shop-menu-btn\" id=\"btn-hint-buy-" + t.tier + "\"" +
@@ -3929,8 +3929,8 @@
 
   function buyHint(tier, cost) {
     var p = state.player;
-    if (p.money < cost) { showToast("お金が足りない！"); return; }
-    p.money -= cost;
+    if (p.gold < cost) { showToast("お金が足りない！"); return; }
+    p.gold -= cost;
     updateStatusBar();
     saveGame();
     playSE("itemGet");

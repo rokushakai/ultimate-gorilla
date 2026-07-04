@@ -5,6 +5,26 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.8.1] - 2026-07-05 — 緊急バグ修正: ステータスメニュー復旧・攻略ペーパービュー屋修正
+
+### Fixed
+- **ステータスメニュー非表示の修正** (§42):
+  - 原因: `viewport-fit=cover` + iOS Dynamic Island/ノッチの safe area 未対応
+  - `style.css` の `#game` に `padding-top: env(safe-area-inset-top, 0px)` 追加
+  - `#dpad` に `padding-bottom: env(safe-area-inset-bottom, 0px)` 追加 (iPhone ホームバー対策)
+- **攻略ペーパービュー屋 `undefinedG` 表示修正** (§42):
+  - 原因: `renderHintShopMenu()` / `buyHint()` が `p.money` を参照(存在しないプロパティ)
+  - `p.money` → `p.gold` に修正 (3箇所: 表示・disabled判定・購入処理)
+- **攻略ペーパービュー屋 購入不可修正** (§42): 同上(金額比較が `undefined >= cost` → 常に false)
+- **攻略ペーパービュー屋 ラベル縦崩れ修正** (§42):
+  - 原因: `.shop-menu-btn` の `width: 100%` が flex コンテナ内でボタン全幅を占有し span が潰れる
+  - `.shop-row .shop-menu-btn { width: auto; flex: 0 0 auto; }` 追加
+
+### Notes
+- GAME_DESIGN.md §42 追記
+- BGM制御・モンスター・装備・マップに変更なし
+
+
 ## [0.8.8] - 2026-07-05 — NPCセリフ拡充・攻略ヒント強化
 
 ### Added

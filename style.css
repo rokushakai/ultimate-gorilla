@@ -42,6 +42,8 @@ html, body {
   background: #0f0f1a;
   border-left: 1px solid #333;
   border-right: 1px solid #333;
+  /* iOS safe area: viewport-fit=cover でノッチ/Dynamic Island 裏に隠れないようにする */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* ===================== 上部ステータスバー ===================== */
@@ -196,6 +198,8 @@ html, body {
   height: 140px;
   background: #16213e;
   border-top: 2px solid #0f3460;
+  /* iOS home bar 対策 */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .dpad-btn {
@@ -464,6 +468,16 @@ html, body {
 }
 .shop-row button:disabled {
   opacity: 0.35;
+}
+
+/* shop-row内の shop-menu-btn は width:100% を上書きしてラベルが縦崩れしないようにする */
+.shop-row .shop-menu-btn {
+  width: auto;
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  margin: 0;
 }
 
 .shop-back-btn {
