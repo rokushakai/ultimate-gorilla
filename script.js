@@ -2651,8 +2651,18 @@
         } else if (p.level >= 99) {
           lines.push("素晴らしい成長じゃ。もはや君は、伝説に手を伸ばせる場所にいる。");
           lines.push("あとは女神のウクレレと歌声だけが必要だ。");
-        } else {
+        } else if (p.level >= 10) {
+          lines.push("最近は変わった者たちも草原に出るようじゃ。");
+          lines.push("パワポ野郎、忍者かぶれ、グルメ気取り……もはやUMAより説明が難しいのう。");
           lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+        } else if (p.level >= 5) {
+          lines.push("メタルゴリラ系を見つけたら大チャンスじゃ。");
+          lines.push("逃げられる前に攻撃できれば、経験値をたくさんもらえるぞ。");
+          lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+        } else {
+          lines.push("UMAと普通のモンスターは別物じゃ。");
+          lines.push("図鑑に残るUMAもいれば、旅の途中で出会うだけの相手もおる。");
+          lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！");
         }
         return lines;
       }
@@ -2669,14 +2679,22 @@
         } else if (p.level >= 50) {
           lines.push("白く光る🌟宝箱があるだろう？強き者にしか開かぬという噂だ。");
           lines.push("そういえば草原のどこかに✨輝く宝箱も見かけた。Lv40あれば開けられるかもしれんな。");
+          lines.push("レベルが上がると、前は怖かった敵にも勝てるようになる。それが冒険というものだ。");
         } else if (p.level >= 40) {
           lines.push("草原を進んでいったら✨輝く宝箱を見かけた。普通の宝箱とは違う光だった。");
           lines.push("試しに開けてみないか？お前ならもう十分強いと思うが。");
-        } else {
+          lines.push("宝箱を見つけたら忘れずに開けておくといい。装備やアイテムが、あとで命を救うこともある。");
+        } else if (p.level >= 15) {
           lines.push("草原には普通の宝箱🎁の他に、✨特別な光を放つ宝箱が眠っていることもあるらしい。");
           lines.push("もっと強くなれば、特別な宝箱の謎が解けるかもしれないぞ。");
+          lines.push("宝箱を見つけたら忘れずに開けておくといい。装備やアイテムが、あとで命を救うこともある。");
+        } else {
+          lines.push("最初から全部の敵に勝とうとしなくていい。危ないと思ったら、にげるのも立派な作戦だ。");
+          lines.push("草原には普通の宝箱🎁の他に、✨特別な光を放つ宝箱が眠っていることもあるらしい。");
           if (p.level < 10) {
             lines.push("のらいぬは序盤では意外と強い。危ないと思ったら「にげる」を使うのも立派な勇者の判断だぞ。");
+          } else {
+            lines.push("レベルが上がると、前は怖かった敵にも勝てるようになるぞ。");
           }
         }
         return lines;
@@ -2706,13 +2724,22 @@
         } else if (p.level >= 40) {
           lines.push("草原の奥に✨輝く宝箱がある。あそこに特別な兜が眠っているはずだ。");
           lines.push("Lv40あればたぶん開けられる。行ってみな。");
+        } else if (p.level >= 20) {
+          lines.push("装備は「🎽装備」ボタンでいつでも変更できる。商人で強い装備を買ってみろ。");
+          lines.push("強い敵に勝てない時は、レベルだけでなく装備も見直すんだ。");
+          lines.push("宝箱には、思わぬ装備が眠っていることもある。");
         } else {
           lines.push("装備は「🎽装備」ボタンでいつでも変更できる。商人で強い装備を買ってみろ。");
+          if (p.level < 10) {
+            lines.push("武器を替えれば攻撃が通りやすくなる。防具・盾・兜を整えれば、のらいぬの一撃にも耐えやすくなるぞ。");
+          }
         }
         if (hasAnyLegend) {
           lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
         } else if (p.level >= 30) {
           lines.push("フィールドには商人では買えない伝説の装備が眠っている。探してみな。");
+        } else {
+          lines.push("いつか伝説級の装備も出るかもしれないな。如意棒、ドラゴンのたて……名前だけでワクワクするだろう？");
         }
         return lines;
       }
@@ -2725,6 +2752,7 @@
         var lines = [];
         if (state.gameCleared) {
           lines.push("お前は究極ゴリラを森へ帰した者。もはや立派なゴリラ研究家だ！");
+          lines.push("究極ゴリラは森へ帰った。捕まえることだけが勝利ではない。見送ることもまた、勇者の役目だったのだ。");
           lines.push("伝説の装備をすべて集めたか？まだ見ぬ装備が残っているかもしれないぞ。");
         } else if (p.level >= 99 && p.hasUkulele) {
           lines.push("準備は万端だ！究極ゴリラのHPをギリギリまで減らし、「うたう」んだ！");
@@ -2735,7 +2763,13 @@
         } else if (p.level >= 50) {
           lines.push("究極ゴリラに歌を届けるには、相当な力が必要だろう。目標はレベル99だ。");
           lines.push("メタルゴリラ系を狙えば効率よくレベルが上がるぞ！");
+          lines.push("究極ゴリラの心を鎮めるには、HPをぎりぎりまで減らす必要があるらしい。普通の捕獲では通用しないぞ。");
+        } else if (p.level >= 10) {
+          lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
+          lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
+          lines.push("メタルゴリラ系は硬いが、経験値がとても多い。出会えたら逃げられる前に勝負だ。");
         } else {
+          lines.push("ゴリラにも色々いる。普通のゴリラ、メタルなゴリラ、そして伝説の究極ゴリラだ。");
           lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
           lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
         }
@@ -2746,6 +2780,7 @@
       name: "王様の使い",
       emoji: "👑",
       getLines: function () {
+        var p = state.player;
         var lines = [];
         if (state.eventFlags && state.eventFlags.dragonShieldGot) {
           if (state.eventFlags.andromedaGot) {
@@ -2755,11 +2790,17 @@
           }
           lines.push("王様は、そなたのさらなる冒険を見守っておられます。");
         } else if (state.gameCleared) {
+          lines.push("王様は大変お喜びです。");
+          lines.push("究極ゴリラを倒すのではなく、森へ帰した。その判断こそ、真の勇気だったのでしょう。");
           lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
-          lines.push("究極ゴリラを森へ帰した者への、王様からの感謝の品だとのことじゃ。");
+        } else if (p.level >= 50) {
+          lines.push("王様は、勇者の子孫の旅を見守っておられる。");
+          lines.push("まずは力をつけ、女神のウクレレを探すのです。");
+          lines.push("しっかり準備を整えてから究極ゴリラに挑むように、とのことじゃ。");
         } else {
           lines.push("王様は、究極ゴリラの報告を待っておられる。");
-          lines.push("しっかり準備を整えてから挑むように、とのことじゃ。");
+          lines.push("まずはレベルを上げ、装備を整えることです。");
+          lines.push("強敵に勝てない時は、逃げても恥ではありません。生きて戻ることも、勇者の務めです。");
         }
         return lines;
       }
@@ -2864,7 +2905,13 @@
     "白く光る宝箱には、強き者だけが触れられるらしい。",
     "星の宝箱は、女神の音色に反応するという。",
     "旅を終えた者には、王様から褒美があるそうだ。",
-    "実家には、昔から伝わる盾があるとかないとか……。"
+    "実家には、昔から伝わる盾があるとかないとか……。",
+    "のらいぬが怖い時は、無理に戦わず逃げてもいいよ。",
+    "昔は勝てなかった敵にも、レベルが上がると勝てるようになるよ。",
+    "装備を整えると、同じレベルでもずっと楽になるよ。",
+    "メタルゴリラを見つけたら経験値チャンスだよ。",
+    "敵が逃げていっても経験値が入るなら、勝ったも同然だよ。",
+    "宝箱を見つけたら忘れずに開けておこう。"
   ];
 
   // エンディングモーダルのページデータ(v0.7 §28)
@@ -3010,6 +3057,9 @@
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
     if (DEBUG_MODE) {
       html += '<p class="small" style="color:#ffd166;margin-top:16px;">🛠️ 開発用テスト (debug=1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-lv1">📉 Lv.1にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-lv5">📈 Lv.5にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-lv10">📈 Lv.10にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-lv99">📈 Lv.99にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-lv98">📉 Lv.98にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-lvup-exp">⬆️ 次の戦闘でLvUP(EXP設定)</button>';
@@ -3087,6 +3137,9 @@
       renderSettingsBody();
     };
     if (DEBUG_MODE) {
+      document.getElementById("btn-debug-lv1").onclick = debugSetLevel1;
+      document.getElementById("btn-debug-lv5").onclick = debugSetLevel5;
+      document.getElementById("btn-debug-lv10").onclick = debugSetLevel10;
       document.getElementById("btn-debug-lv99").onclick = debugSetLevel99;
       document.getElementById("btn-debug-lv98").onclick = debugSetLevel98;
       document.getElementById("btn-debug-set-lvup-exp").onclick = debugSetLvUpExp;
@@ -3900,6 +3953,60 @@
   // ---------------------------------------------------------
   // 開発用テスト関数(DEBUG_MODE=trueの時のみ設定画面に表示される。§26)
   // ---------------------------------------------------------
+  function debugSetLevel1() {
+    var p = state.player;
+    p.level = 1;
+    p.nextExp = 1 * 10 + 15;
+    p.exp = 0;
+    p.baseMaxHp = 20;
+    p.baseMaxMp = 6;
+    p.baseAtk = 5;
+    p.baseDef = 2;
+    recomputeStats();
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv.1にした");
+    renderSettingsBody();
+  }
+
+  function debugSetLevel5() {
+    var p = state.player;
+    p.level = 5;
+    p.nextExp = 5 * 10 + 15;
+    p.exp = 0;
+    p.baseMaxHp = 20 + 6 * 4;
+    p.baseMaxMp = 6 + 2 * 4;
+    p.baseAtk = 5 + 2 * 4;
+    p.baseDef = 2 + 1 * 4;
+    recomputeStats();
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv.5にした");
+    renderSettingsBody();
+  }
+
+  function debugSetLevel10() {
+    var p = state.player;
+    p.level = 10;
+    p.nextExp = 10 * 10 + 15;
+    p.exp = 0;
+    p.baseMaxHp = 20 + 6 * 9;
+    p.baseMaxMp = 6 + 2 * 9;
+    p.baseAtk = 5 + 2 * 9;
+    p.baseDef = 2 + 1 * 9;
+    recomputeStats();
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv.10にした");
+    renderSettingsBody();
+  }
+
   function debugSetLevel99() {
     var p = state.player;
     var firstTime = !p.level99Shown;
