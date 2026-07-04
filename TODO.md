@@ -14,6 +14,24 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.6 — BGM重なり修正 + 攻略ペーパービュー屋
+
+- **BGM重なり修正** (§36):
+  - `bgmGeneration` / `activeBgmNodes` 変数を追加
+  - `stopBGM()` でオシレーターノードを一括停止
+  - `_scheduleBGMLoop()` に世代チェックを追加
+  - `startBGM()` が世代番号をループに渡すよう変更
+  - デバッグBGMボタンの `bgmCurrentType = null` を `stopBGM()` に修正
+- **攻略ペーパービュー屋NPC追加** (§37):
+  - フィールド (4,3) に 📰NPC を配置（マップ文字 `N`）
+  - 10G / 50G / 100G の3段階ヒント購入メニュー
+  - `getHintPriority()` で現在進行状況を判定（優先度0〜8）
+  - `getProgressHint(tier)` で状況別ヒント文字列を生成
+  - 購入時に `playSE("itemGet")` + 所持金減算 + saveGame
+  - 購入後「もう一度買う」でメニューに戻れる
+  - `hint-shop-modal` を index.html に追加
+- GAME_DESIGN.md §36, §37 追記
+
 ### Version 0.8.5 — Lv99到達演出・成長達成感アップ
 
 - Lv99到達時に専用ファンファーレ SE（`level99`）を追加（GAME_DESIGN.md §35）

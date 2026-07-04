@@ -25,7 +25,7 @@
     "#############",
     "#,,,H,,,T,,S#",  // S=王様の使い(10,1)
     "#,D,,,,M,,K,#",  // D=UMA博士(2,2), K=鍛冶屋(10,2)
-    "#,,,,,,,,G,,#",
+    "#,,,N,,,,G,,#",  // N=攻略ペーパービュー屋(4,3) v0.8.6 §37
     "#..........A#",  // A=ペガサスのよろい伝説宝箱(11,4) Lv50+
     "#....R..B...#",  // R=旅人(5,5), B=宝箱(8,5)
     "#...~~~..X..#",  // X=キグナスのかぶと伝説宝箱(9,6) Lv40+
@@ -69,12 +69,13 @@
     "K": "🔨",  // 鍛冶屋(§32 v0.8.2)
     "E": "📚",  // ゴリラ研究家(§32 v0.8.2)
     "S": "👑",  // 王様の使い(§32 v0.8.2)
-    "X": "✨"   // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
+    "X": "✨",  // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
+    "N": "📰"   // 攻略ペーパービュー屋(§37 v0.8.6)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -330,6 +331,8 @@
   var bgmCurrentType = null;
   var bgmSchedulerId = null;
   var bgmStopFlag = false;
+  var bgmGeneration = 0;   // BGMループ世代管理：切り替え時に古いループを無効化(v0.8.6 §36)
+  var activeBgmNodes = []; // スケジュール済みOscillatorNode一覧：stopBGMで一括停止(v0.8.6 §36)
 
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
@@ -744,6 +747,10 @@
     }
     if (tile === "D" || tile === "R" || tile === "K" || tile === "E") {
       openNpcModal(tile);
+      return;
+    }
+    if (tile === "N") {
+      openHintShopModal();
       return;
     }
     if (tile === "S") {
@@ -3058,7 +3065,7 @@
         if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
         soundEnabled = true; bgmEnabled = true;
         saveSoundSettings();
-        bgmCurrentType = null;
+        stopBGM(); // ノードも含めて確実に停止してから再起動
         startBGM("field");
         showToast("[DEBUG] フィールドBGM再生");
         renderSettingsBody();
@@ -3067,7 +3074,7 @@
         if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
         soundEnabled = true; bgmEnabled = true;
         saveSoundSettings();
-        bgmCurrentType = null;
+        stopBGM();
         startBGM("battle");
         showToast("[DEBUG] バトルBGM再生");
         renderSettingsBody();
@@ -3076,7 +3083,7 @@
         if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
         soundEnabled = true; bgmEnabled = true;
         saveSoundSettings();
-        bgmCurrentType = null;
+        stopBGM();
         startBGM("ending");
         showToast("[DEBUG] エンディングBGM再生");
         renderSettingsBody();
@@ -3290,6 +3297,11 @@
     // NPC会話モーダル(§32 v0.8.2)
     document.getElementById("btn-npc-close").addEventListener("click", function () {
       closeModal("npc-modal");
+    });
+
+    // 攻略ペーパービュー屋モーダル(§37 v0.8.6)
+    document.getElementById("btn-hint-shop-close").addEventListener("click", function () {
+      closeModal("hint-shop-modal");
     });
 
     // レベルアップモーダル
@@ -3546,16 +3558,25 @@
     stopBGM();
     bgmCurrentType = type;
     bgmStopFlag = false;
-    _scheduleBGMLoop(type, audioCtx.currentTime);
+    var gen = bgmGeneration;
+    _scheduleBGMLoop(type, audioCtx.currentTime, gen);
   }
 
   function stopBGM() {
+    bgmGeneration++;
     bgmStopFlag = true;
     bgmCurrentType = null;
     if (bgmSchedulerId !== null) {
       clearTimeout(bgmSchedulerId);
       bgmSchedulerId = null;
     }
+    for (var _i = 0; _i < activeBgmNodes.length; _i++) {
+      try {
+        if (activeBgmNodes[_i].stop) activeBgmNodes[_i].stop();
+        if (activeBgmNodes[_i].disconnect) activeBgmNodes[_i].disconnect();
+      } catch (e) {}
+    }
+    activeBgmNodes = [];
   }
 
   function updateBGM(type) {
@@ -3567,7 +3588,8 @@
     startBGM(type);
   }
 
-  function _scheduleBGMLoop(type, startTime) {
+  function _scheduleBGMLoop(type, startTime, gen) {
+    if (gen !== bgmGeneration) return; // 世代不一致なら古いループは何もしない
     if (bgmStopFlag || bgmCurrentType !== type || !audioCtx) return;
     var data = BGM_DATA[type];
     if (!data) return;
@@ -3590,6 +3612,7 @@
           gain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.85);
           osc.start(t);
           osc.stop(t + dur);
+          activeBgmNodes.push(osc); // ノードを追跡リストに登録
         }
         t += dur;
       }
@@ -3599,11 +3622,161 @@
     }
     var loopDur = t - startTime;
     var delayMs = Math.max(100, (loopDur - 0.15) * 1000);
+    var capturedGen = gen;
     bgmSchedulerId = setTimeout(function () {
+      if (capturedGen !== bgmGeneration) return; // 世代チェック：別BGMが起動済みなら無視
       if (!bgmStopFlag && bgmCurrentType === type && audioCtx) {
-        _scheduleBGMLoop(type, audioCtx.currentTime + 0.10);
+        activeBgmNodes = []; // 終了済みノードをクリアして次ループへ
+        _scheduleBGMLoop(type, audioCtx.currentTime + 0.10, bgmGeneration);
       }
     }, delayMs);
+  }
+
+  // ---------------------------------------------------------
+  // 攻略ペーパービュー屋 (§37 v0.8.6)
+  // フィールド(4,3)のNPC。10G/50G/100Gで状況別ヒントを売る。
+  // ---------------------------------------------------------
+
+  // 現在の進行状況からヒント優先度(0〜8)を返す
+  function getHintPriority() {
+    var p = state.player;
+    var ef = state.eventFlags;
+    if (state.gameCleared) return 0;
+    if (p.level < 40) return 1;
+    if (!ef.cygnusHelmetGot) return 2;
+    if (!ef.pegasusArmorGot) return 3;
+    if (!p.hasUkulele) return 4;
+    if (p.level >= 70 && hasCompanion("juritani") && !ef.nyoiboGot) return 5;
+    if (p.level < 99) return 6;
+    if (p.level >= 99) return 7;
+    return 8;
+  }
+
+  // tier: 1=ぼんやり(10G) / 2=具体的(50G) / 3=ほぼ答え(100G)
+  function getProgressHint(tier) {
+    var p = state.player;
+    var priority = getHintPriority();
+    var h = [
+      // 0: クリア済み
+      [
+        "すでに伝説のUMAを鎮めた。旅の記録を続けよう。",
+        "図鑑を埋めるか、伝説の装備を揃えるか。まだやり残しがあるかもしれない。",
+        "図鑑の捕獲数と伝説装備（全7種）を確認してみよう。王様の使いからも褒美が貰えるかも。"
+      ],
+      // 1: Lv40未満
+      [
+        "まだ鍛える余地がある。焦らず強くなろう。",
+        "Lv40を目指して、フィールドでUMAを倒し続けよう。",
+        "フィールドの草原を歩いてUMAを倒そう。キラリと光るゴリラは大きな経験値を持つ。現在Lv" + p.level + "。"
+      ],
+      // 2: Lv40+・キグナスのかぶと未入手
+      [
+        "草原のどこかに、普通とは違う光があるらしい。",
+        "Lv40以上になると開けられる宝箱が草原にある。",
+        "Lv40以上で草原右上の✨光る宝箱が開く。キグナスのかぶとが眠っている。"
+      ],
+      // 3: ペガサスのよろい未入手
+      [
+        "強き者にしか開けられない宝箱が、どこかにある。",
+        "Lv50以上なら、草原の奥に眠る宝箱が開けられるらしい。",
+        "Lv50以上で草原右端の🌟白い宝箱が開く。ペガサスのよろいが手に入り、防御が大きく上がる。"
+      ],
+      // 4: ウクレレ未所持
+      [
+        "伝説のUMAには、力だけでは届かない。",
+        "フィールドのどこかに、特別な宝箱🪗が眠っている。",
+        "フィールド下部の🪗宝箱から女神のウクレレを入手しよう。これがないとゲームクリアはできない。"
+      ],
+      // 5: Lv70+・ジュリタニ同行・如意棒未入手
+      [
+        "仲間と共に進めば、届かなかった何かが手に入るかもしれない。",
+        "強い仲間と一緒にフィールドを歩くと、刺さった棒が引き抜けるかもしれない。",
+        "ジュリタニを連れてフィールド下部の🪄宝箱に触れよう。最強の武器・如意棒が手に入る。"
+      ],
+      // 6: Lv99未到達
+      [
+        "目指す頂はまだ遠い。地道に鍛えるほかない。",
+        "Lv99まで鍛えれば、究極ゴリラに歌声が届くかもしれない。",
+        "フィールドでUMAを倒して経験値を稼ごう。キラリと光るゴリラ系を狙うと効率が良い。現在Lv" + p.level + "、Lv99まであと" + (99 - p.level) + "レベル。"
+      ],
+      // 7: Lv99到達・未クリア
+      [
+        "力は頂に達した。あとは歌声を届けるだけだ。",
+        "Lv99 + 女神のウクレレ + 究極ゴリラのHP1〜10 + うたう。これが答えだ。",
+        "フィールドで究極ゴリラに出会い、HPを1〜10まで削ってから「🎵うたう」を使え。究極ゴリラはごく低確率で出現する。"
+      ],
+      // 8: その他
+      [
+        "旅人として、まだまだ伸びる余地はある。",
+        "仲間を集め、装備を整え、図鑑を埋めよう。",
+        "酒場で仲間を増やし、商人で装備を整え、宝箱を探し、NPCに話しかけよう。"
+      ]
+    ];
+    var arr = h[priority] || h[8];
+    return arr[tier - 1] || arr[0];
+  }
+
+  function openHintShopModal() {
+    document.getElementById("btn-hint-shop-close").onclick = function () {
+      closeModal("hint-shop-modal");
+    };
+    renderHintShopMenu();
+    openModal("hint-shop-modal");
+  }
+
+  function renderHintShopMenu() {
+    var p = state.player;
+    var body = document.getElementById("hint-shop-body");
+    var html = "";
+    html += "<p class=\"small\" style=\"margin-bottom:4px;\">「今の君に必要な情報を売っているよ。</p>";
+    html += "<p class=\"small\" style=\"margin-bottom:12px;\">情報にも価値がある。払える者だけが知れる。」</p>";
+    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:10px;\">所持金: 💰 " + p.money + "G</p>";
+    var tiers = [
+      { tier: 1, cost: 10,  label: "ぼんやりヒント",  color: "#adb5bd" },
+      { tier: 2, cost: 50,  label: "具体的ヒント",    color: "#74c0fc" },
+      { tier: 3, cost: 100, label: "ほぼ答え",        color: "#06d6a0" }
+    ];
+    for (var i = 0; i < tiers.length; i++) {
+      var t = tiers[i];
+      var canAfford = p.money >= t.cost;
+      html += "<div class=\"shop-row\">";
+      html += "<span style=\"color:" + t.color + ";\">" + t.label + "</span>";
+      html += "<button class=\"shop-menu-btn\" id=\"btn-hint-buy-" + t.tier + "\"" +
+        (canAfford ? "" : " disabled style=\"opacity:0.45;\"") + ">" + t.cost + "G</button>";
+      html += "</div>";
+    }
+    body.innerHTML = html;
+    for (var j = 0; j < tiers.length; j++) {
+      (function (tier, cost) {
+        var btn = document.getElementById("btn-hint-buy-" + tier);
+        if (btn && !btn.disabled) {
+          btn.onclick = function () { buyHint(tier, cost); };
+        }
+      })(tiers[j].tier, tiers[j].cost);
+    }
+  }
+
+  function buyHint(tier, cost) {
+    var p = state.player;
+    if (p.money < cost) { showToast("お金が足りない！"); return; }
+    p.money -= cost;
+    updateStatusBar();
+    saveGame();
+    playSE("itemGet");
+    renderHintResult(getProgressHint(tier), tier, cost);
+  }
+
+  function renderHintResult(hint, tier, cost) {
+    var tierLabels = ["", "ぼんやりヒント", "具体的ヒント", "ほぼ答え"];
+    var body = document.getElementById("hint-shop-body");
+    var html = "";
+    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:6px;\">📰 " + tierLabels[tier] + " (" + cost + "G)</p>";
+    html += "<p style=\"margin:8px 0;color:#e0e0e0;\">「" + hint + "」</p>";
+    html += "<div style=\"margin-top:12px;\">";
+    html += "<button class=\"shop-menu-btn\" id=\"btn-hint-again\">もう一度買う</button>";
+    html += "</div>";
+    body.innerHTML = html;
+    document.getElementById("btn-hint-again").onclick = renderHintShopMenu;
   }
 
   // ---------------------------------------------------------

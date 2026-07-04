@@ -5,6 +5,28 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.6] - 2026-07-04 — BGM重なり修正 + 攻略ペーパービュー屋
+
+### Fixed
+- **BGM重なり再生バグ** (§36): BGM切り替え時に旧BGMが停止せず重なる問題を修正
+  - `bgmGeneration` カウンタを導入。`stopBGM()` でインクリメントし、古いループの setTimeout コールバックが世代不一致で自動失効
+  - `activeBgmNodes[]` で全オシレーターを追跡。`stopBGM()` でノード全停止 + 切断
+  - `_scheduleBGMLoop()` に `gen` 引数を追加。先頭・setTimeout 内の2か所で世代チェック
+  - `startBGM()` が `stopBGM()` 後に現世代番号をキャプチャしてループに渡す
+  - デバッグBGMボタンの `bgmCurrentType = null` を `stopBGM()` に修正
+
+### Added
+- **攻略ペーパービュー屋NPC** (§37): フィールド (4,3) に 📰 NPC を配置（マップ文字 `N`）
+  - 10G / 50G / 100G の3段階ヒント購入メニュー (`hint-shop-modal`)
+  - `getHintPriority()`: 現在進行状況を優先度0〜8に分類
+  - `getProgressHint(tier)`: 優先度 × 3段階でヒント文字列を返す
+  - 購入時: `playSE("itemGet")` + 所持金減算 + `saveGame()`
+  - 「もう一度買う」でメニューに戻れる
+  - 所持金不足時はボタンを無効化
+
+### Notes
+- GAME_DESIGN.md §36, §37 追記
+
 ## [0.8.5] - 2026-07-04 — Lv99到達演出・成長達成感アップ
 
 ### Added
