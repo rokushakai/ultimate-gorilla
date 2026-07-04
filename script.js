@@ -23,15 +23,15 @@
   //   'P' 回復アイテム(初期配置・読み込み後は'.'に変換)
   var RAW_MAP = [
     "#############",
-    "#,,,H,,,T,,,#",
-    "#,,,,,,M,,,,#",
+    "#,,,H,,,T,,S#",  // S=王様の使い(10,1)
+    "#,D,,,,M,,K,#",  // D=UMA博士(2,2), K=鍛冶屋(10,2)
     "#,,,,,,,,G,,#",
     "#..........A#",  // A=ペガサスのよろい伝説宝箱(11,4) Lv50+
-    "#.......B...#",  // B=宝箱(8,5)
+    "#....R..B...#",  // R=旅人(5,5), B=宝箱(8,5)
     "#...~~~.....#",
     "#...~~~.....#",
     "#.........B.#",  // B=宝箱(10,8)
-    "#..W........#",
+    "#..W..E.....#",  // E=ゴリラ研究家(6,9)
     "#....P......#",
     "#.....#....C#",  // C=宇宙のかぶと伝説宝箱(11,11) ウクレレ所持
     "#......W....#",
@@ -63,12 +63,17 @@
     "U": "🪗",  // 女神のウクレレ宝箱(§14.5。開封後は📦に変わる)
     "A": "🌟",  // ペガサスのよろい伝説宝箱(v0.8。Lv50+で開封)
     "C": "⭐",  // 宇宙のかぶと伝説宝箱(v0.8。ウクレレ所持で開封)
-    "J": "🪄"   // 如意棒伝説宝箱(v0.8。Lv70+ジュリタニ同行で開封)
+    "J": "🪄",  // 如意棒伝説宝箱(v0.8。Lv70+ジュリタニ同行で開封)
+    "D": "🔎",  // UMA博士(§32 v0.8.2)
+    "R": "🧳",  // 旅人(§32 v0.8.2)
+    "K": "🔨",  // 鍛冶屋(§32 v0.8.2)
+    "E": "📚",  // ゴリラ研究家(§32 v0.8.2)
+    "S": "👑"   // 王様の使い(§32 v0.8.2)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
-  // エンカウントが起きない安全地形(村・道・施設・宝箱の上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true };
+  // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "D": true, "R": true, "K": true, "E": true, "S": true };
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -712,6 +717,10 @@
     }
     if (tile === "J") {
       openLegendaryChestJ(nx, ny);
+      return;
+    }
+    if (tile === "D" || tile === "R" || tile === "K" || tile === "E" || tile === "S") {
+      openNpcModal(tile);
       return;
     }
 
@@ -2472,6 +2481,136 @@
     { name: "アンドロメダの鎖", flag: "andromedaGot" }
   ];
 
+  // ---------------------------------------------------------
+  // NPC会話システム(§32 v0.8.2)
+  // ---------------------------------------------------------
+  var NPC_DATA = {
+    D: {
+      name: "UMA博士",
+      emoji: "🔎",
+      getLines: function () {
+        var p = state.player;
+        var capturedCount = UMA_DATA.filter(function (m) { return p.dex[m.id] === "captured"; }).length;
+        var lines = [];
+        if (capturedCount >= 8) {
+          lines.push("すばらしい！図鑑がほぼ完成しておるぞ！");
+          lines.push("究極ゴリラを捕まえたら、図鑑は完璧じゃ。");
+        } else if (capturedCount >= 4) {
+          lines.push("なかなか集まってきたな。図鑑を埋めるのも立派な冒険じゃ。");
+          lines.push("捕まえたUMAは、図鑑でタップすると詳しい能力を確認できるぞ。");
+        } else {
+          lines.push("UMAを見つけたら図鑑に記録される。捕まえると完全なデータになるぞ。");
+          lines.push("図鑑でタップすれば詳細なステータスが見られる。");
+        }
+        lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+        return lines;
+      }
+    },
+    R: {
+      name: "旅人",
+      emoji: "🧳",
+      getLines: function () {
+        var p = state.player;
+        var lines = [];
+        if (p.hasUkulele) {
+          lines.push("女神の音色を手に入れたのか……星のように光る宝箱がそれに反応するらしいぞ。");
+          lines.push("力ある者には、岩に刺さった棒も引き抜けるかもしれない。強い仲間を連れてみな。");
+        } else if (p.level >= 50) {
+          lines.push("白く光る宝箱があるだろう？強き者にしか開かぬという噂だ。");
+          lines.push("フィールドの奥には、特別な宝箱がいくつかある。よく探してみな。");
+        } else {
+          lines.push("白く光る宝箱を見たことがあるが、今のお前さんにはまだ早いかもしれん。");
+          lines.push("もっと強くなれば、宝箱の謎が解けるかもしれないぞ。");
+        }
+        return lines;
+      }
+    },
+    K: {
+      name: "鍛冶屋",
+      emoji: "🔨",
+      getLines: function () {
+        var p = state.player;
+        var lines = [];
+        var hasAnyLegend = state.eventFlags && (
+          state.eventFlags.pegasusArmorGot || state.eventFlags.sixfoldShieldGot ||
+          state.eventFlags.cosmicHelmetGot || state.eventFlags.nyoiboGot || state.eventFlags.andromedaGot
+        );
+        lines.push("武器や防具は、持っているだけでは意味がない。ちゃんと装備するんだ。");
+        if (hasAnyLegend) {
+          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
+        } else {
+          lines.push("フィールドの奥には、商人では手に入らない伝説の装備があるらしい。");
+        }
+        if (hasCompanion("juritani")) {
+          lines.push("おお、ジュリタニが一緒か！ならば力を貸してくれる棒があるかもしれんぞ。");
+        } else if (p.level >= 70) {
+          lines.push("如意棒は一人では抜けない。気合いのある仲間が必要らしい。酒場で仲間を探せ。");
+        } else {
+          lines.push("装備は「🎽装備」ボタンでいつでも変更できる。商人で強い装備を買ってみろ。");
+        }
+        return lines;
+      }
+    },
+    E: {
+      name: "ゴリラ研究家",
+      emoji: "📚",
+      getLines: function () {
+        var p = state.player;
+        var lines = [];
+        if (state.gameCleared) {
+          lines.push("お前は究極ゴリラを森へ帰した者。もはや立派なゴリラ研究家だ！");
+          lines.push("伝説の装備をすべて集めたか？まだ見ぬ装備が残っているかもしれないぞ。");
+        } else if (p.level >= 99 && p.hasUkulele) {
+          lines.push("準備は万端だ！究極ゴリラのHPをギリギリまで減らし、「うたう」んだ！");
+          lines.push("目安はHP1〜10。倒してしまっては意味がないぞ。");
+        } else if (p.level >= 99) {
+          lines.push("力は十分だ。あとは女神のウクレレの音色が必要だぞ。");
+          lines.push("フィールドの奥に🪗特別な宝箱がある。探してみろ。");
+        } else if (p.level >= 50) {
+          lines.push("究極ゴリラに歌を届けるには、相当な力が必要だろう。目標はレベル99だ。");
+          lines.push("メタルゴリラ系を狙えば効率よくレベルが上がるぞ！");
+        } else {
+          lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
+          lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
+        }
+        return lines;
+      }
+    },
+    S: {
+      name: "王様の使い",
+      emoji: "👑",
+      getLines: function () {
+        var lines = [];
+        if (state.eventFlags && state.eventFlags.andromedaGot) {
+          lines.push("アンドロメダの鎖を授かったのだな。まことに見事なり。");
+          lines.push("王様もお喜びでございます。冒険者の誉れじゃ。");
+        } else if (state.gameCleared) {
+          lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
+          lines.push("究極ゴリラを森へ帰した者への、王様からの感謝の品だとのことじゃ。");
+        } else {
+          lines.push("王様は、究極ゴリラの報告を待っておられる。");
+          lines.push("しっかり準備を整えてから挑むように、とのことじゃ。");
+        }
+        return lines;
+      }
+    }
+  };
+
+  function openNpcModal(tileChar) {
+    var npc = NPC_DATA[tileChar];
+    if (!npc) return;
+    var lines = npc.getLines();
+    var header = '<div style="font-size:40px;line-height:1.2;">' + npc.emoji + '</div>';
+    header += '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + npc.name + '</div>';
+    document.getElementById("npc-header").innerHTML = header;
+    var speechHtml = "";
+    for (var i = 0; i < lines.length; i++) {
+      speechHtml += "<p>「" + lines[i] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
   function isEquipOwned(slotInfo, id) {
     return state.player[slotInfo.ownedKey].indexOf(id) !== -1;
   }
@@ -2932,6 +3071,10 @@
     // UMA詳細モーダル(§31 v0.8.1)
     document.getElementById("btn-uma-detail-close").addEventListener("click", function () {
       closeModal("uma-detail-modal");
+    });
+    // NPC会話モーダル(§32 v0.8.2)
+    document.getElementById("btn-npc-close").addEventListener("click", function () {
+      closeModal("npc-modal");
     });
 
     // レベルアップモーダル

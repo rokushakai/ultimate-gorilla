@@ -407,6 +407,20 @@ html, body {
   transition: transform 0.08s;
 }
 
+/* NPC会話モーダル(§32 v0.8.2) */
+.npc-speech {
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.9em;
+  line-height: 1.7;
+  text-align: left;
+  margin: 8px 0;
+}
+.npc-speech p {
+  margin: 4px 0;
+}
+
 /* サブメニューの「戻る」ボタンは2列分の幅を使う */
 .submenu-back {
   grid-column: span 2;
