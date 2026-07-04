@@ -442,7 +442,8 @@
       nyoiboGot: false,
       andromedaGot: false,
       cygnusHelmetGot: false,  // v0.8.3 キグナスのかぶと
-      dragonShieldGot: false   // v0.8.3 ドラゴンのたて(王様の使い報酬)
+      dragonShieldGot: false,  // v0.8.3 ドラゴンのたて(王様の使い報酬)
+      level99Reached: false    // v0.8.5 Lv99到達フラグ(level99Shownと別管理でデバッグリセット可能)
     }
   };
 
@@ -934,15 +935,19 @@
   // Lv99マイルストーンモーダルを開く(finishBattle後に呼ばれる)(v0.7.1 §3.8)
   function openLv99Modal() {
     var p = state.player;
-    var html = '<p style="font-size:1em;font-weight:bold;color:#06d6a0;margin:8px 0;">勇者の子孫の力は、限界まで高まった！</p>';
+    var html = '';
+    html += '<p style="font-size:1em;font-weight:bold;color:#06d6a0;margin:8px 0;">ついに、勇者の子孫はLv.99に到達した！</p>';
+    html += '<p class="small" style="margin:6px 0;color:#e0e0e0;">長い旅路の果てに、肉体も精神も限界まで鍛え上げられた。</p>';
+    html += '<p class="small" style="margin:6px 0;color:#e0e0e0;">いまなら、伝説のUMA「究極ゴリラ」の心に届くかもしれない。</p>';
     if (p.hasUkulele) {
-      html += '<p class="small" style="margin:6px 0;">女神のウクレレも所持済み！</p>';
-      html += '<p class="small" style="color:#06d6a0;">究極ゴリラのHPを1〜10まで削って<br>「🎵 うたう」を使えばクリアできる！</p>';
+      html += '<p class="small" style="margin:8px 0;color:#ffd166;">🪗 女神のウクレレも所持済み！条件は整った！</p>';
+      html += '<p class="small" style="color:#06d6a0;">究極ゴリラのHPを1〜10まで削り、<br>「🎵 うたう」コマンドを使えばクリア！</p>';
     } else {
-      html += '<p class="small" style="margin:6px 0;">次は女神のウクレレ🪗を探そう。</p>';
-      html += '<p class="small" style="color:#ffd166;">フィールドの特別な宝箱🪗に眠っている。</p>';
+      html += '<p class="small" style="margin:8px 0;color:#adb5bd;">だが、力だけでは足りない。</p>';
+      html += '<p class="small" style="color:#ffd166;">女神のウクレレ🪗を手にし、<br>究極ゴリラのHPを1〜10まで削ってから「🎵うたう」のだ。</p>';
+      html += '<p class="small" style="color:#adb5bd;margin-top:4px;">フィールドの奥に特別な宝箱🪗が眠っている。</p>';
     }
-    html += '<p class="small" style="color:#adb5bd;margin-top:8px;">今なら、究極ゴリラに歌声が届くかもしれない……</p>';
+    html += '<p class="small" style="color:#74c0fc;margin-top:8px;">旅の終わりは、もうすぐそこだ。</p>';
     document.getElementById("lv99-body").innerHTML = html;
     openModal("lv99-modal");
   }
@@ -1735,15 +1740,18 @@
 
   function levelUp() {
     var p = state.player;
-    playSE("levelUp");
     log("🎉 レベルが上がった！");
     p.level++;
     p.nextExp = p.level * 10 + 15; // v0.6.1: 旧式(level*15+20)より約33%緩くした
-    // Lv99到達マイルストーン(§3.8 v0.7.1): 初回到達時のみ戦闘終了後に専用モーダルを表示
+    // Lv99到達マイルストーン(§3.8 v0.7.1, v0.8.5): 初回到達時のみ戦闘終了後に専用モーダルを表示
     if (p.level === 99 && !p.level99Shown) {
+      playSE("level99");
       p.level99Shown = true;
+      state.eventFlags.level99Reached = true;
       state.pendingLv99 = true;
       log("⚡ ついにレベル99に到達した！");
+    } else {
+      playSE("levelUp");
     }
     p.baseMaxHp += 5 + randInt(0, 3);
     p.baseMaxMp += 2;
@@ -2013,7 +2021,7 @@
         html += '<p class="small" style="color:#ffe082;">💡 ジュリタニを連れて光る棒を試そう。</p>';
       }
     } else if (p.level >= 99) {
-      html += '<p class="small">Lv.99達成！<br>次は女神のウクレレ🪗を探そう。<br>フィールドの特別な宝箱🪗に眠っている。</p>';
+      html += '<p class="small" style="color:#74c0fc;">🌟 Lv.99到達済み！<br>次は女神のウクレレ🪗を探そう。<br>フィールドの特別な宝箱🪗に眠っている。</p>';
     } else if (p.level >= 70) {
       html += '<p class="small">目標: Lv.99まであと' + (99 - p.level) + 'レベル！<br>' +
         (p.hasUkulele ? '🪗 女神のウクレレ：所持済！' : '女神のウクレレ🪗も探しておこう。') + '</p>';
@@ -2040,7 +2048,14 @@
     } else {
       html += '<p class="small">フィールドを探索しよう！<br>UMAを見つけて経験値を集めよう。<br>実家🏠で回復・酒場🍺で仲間を探そう。</p>';
     }
-    var playerTitle = state.gameCleared ? "森に歌を届けし者" : "勇者の子孫";
+    var playerTitle;
+    if (state.gameCleared) {
+      playerTitle = "森に歌を届けし者";
+    } else if (p.level >= 99 || p.level99Shown) {
+      playerTitle = "究極に近づきし者";
+    } else {
+      playerTitle = "勇者の子孫";
+    }
     html += '<div class="shop-row"><span>称号</span><span style="font-size:0.85em;">' + playerTitle + "</span></div>";
     html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
     html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
@@ -2581,7 +2596,14 @@
           lines.push("UMAを見つけたら図鑑に記録される。捕まえると完全なデータになるぞ。");
           lines.push("図鑑でタップすれば詳細なステータスが見られる。");
         }
-        lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+        if (state.gameCleared) {
+          lines.push("図鑑の完成まで目指してみないか。まだ捕まえていない伝説が残っているぞ。");
+        } else if (p.level >= 99) {
+          lines.push("素晴らしい成長じゃ。もはや君は、伝説に手を伸ばせる場所にいる。");
+          lines.push("あとは女神のウクレレと歌声だけが必要だ。");
+        } else {
+          lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+        }
         return lines;
       }
     },
@@ -2844,7 +2866,15 @@
   ];
 
   function openHomeModal() {
-    var hint = HOME_HINTS[Math.floor(Math.random() * HOME_HINTS.length)];
+    var p = state.player;
+    var hint;
+    if (!state.gameCleared && p.level >= 99 && p.hasUkulele) {
+      hint = "Lv99 & ウクレレ所持！究極ゴリラのHPを1〜10まで削って「🎵うたう」コマンドを使おう。";
+    } else if (!state.gameCleared && p.level >= 99) {
+      hint = "Lv99に到達した！あとは女神のウクレレ🪗を手に入れれば、究極ゴリラを鎮められる。";
+    } else {
+      hint = HOME_HINTS[Math.floor(Math.random() * HOME_HINTS.length)];
+    }
     document.getElementById("home-hint").textContent = "💭 " + hint;
     openModal("home-modal");
   }
@@ -2928,6 +2958,9 @@
     if (DEBUG_MODE) {
       html += '<p class="small" style="color:#ffd166;margin-top:16px;">🛠️ 開発用テスト (debug=1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-lv99">📈 Lv.99にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-lv98">📉 Lv.98にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-lvup-exp">⬆️ 次の戦闘でLvUP(EXP設定)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-reset-lv99">🔄 Lv99到達フラグをリセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-ukulele">🪗 女神のウクレレを入手</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-encounter">🦍 究極ゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-encounter-hp5" style="border-color:#06d6a0;color:#06d6a0;">🦍 究極ゴリラHP5で強制エンカウント</button>';
@@ -2999,6 +3032,9 @@
     };
     if (DEBUG_MODE) {
       document.getElementById("btn-debug-lv99").onclick = debugSetLevel99;
+      document.getElementById("btn-debug-lv98").onclick = debugSetLevel98;
+      document.getElementById("btn-debug-set-lvup-exp").onclick = debugSetLvUpExp;
+      document.getElementById("btn-debug-reset-lv99").onclick = debugResetLv99;
       document.getElementById("btn-debug-ukulele").onclick = debugGetUkulele;
       document.getElementById("btn-debug-encounter").onclick = debugForceUltimateGorilla;
       document.getElementById("btn-debug-encounter-hp5").onclick = debugForceUltimateGorillaHP5;
@@ -3146,6 +3182,9 @@
       };
       if (state.eventFlags.cygnusHelmetGot === undefined) state.eventFlags.cygnusHelmetGot = false;
       if (state.eventFlags.dragonShieldGot === undefined) state.eventFlags.dragonShieldGot = false;
+      if (state.eventFlags.level99Reached === undefined) {
+        state.eventFlags.level99Reached = (data.player && data.player.level >= 99);
+      }
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -3418,6 +3457,15 @@
       { freq: 659, dur: 0.15, vol: 0.07, type: "sine", start: 0.20 },
       { freq: 784, dur: 0.15, vol: 0.08, type: "sine", start: 0.40 },
       { freq: 1047, dur: 0.30, vol: 0.09, type: "sine", start: 0.60 }
+    ],
+    level99: [
+      { freq: 523, dur: 0.09, vol: 0.13, type: "square" },
+      { freq: 659, dur: 0.09, vol: 0.13, type: "square", start: 0.09 },
+      { freq: 784, dur: 0.09, vol: 0.13, type: "square", start: 0.18 },
+      { freq: 1047, dur: 0.09, vol: 0.14, type: "square", start: 0.27 },
+      { freq: 784, dur: 0.07, vol: 0.12, type: "square", start: 0.40 },
+      { freq: 1047, dur: 0.07, vol: 0.12, type: "square", start: 0.47 },
+      { freq: 1319, dur: 0.38, vol: 0.14, type: "square", start: 0.56 }
     ]
   };
 
@@ -3563,6 +3611,7 @@
   // ---------------------------------------------------------
   function debugSetLevel99() {
     var p = state.player;
+    var firstTime = !p.level99Shown;
     p.level = 99;
     p.nextExp = 99 * 10 + 15;
     p.exp = 0;
@@ -3574,10 +3623,54 @@
     recomputeStats();
     p.hp = p.maxHp;
     p.mp = p.maxMp;
+    p.level99Shown = true;
+    state.eventFlags.level99Reached = true;
     updateStatusBar();
     saveGame();
-    showToast("[DEBUG] Lv.99にした");
+    if (firstTime) {
+      playSE("level99");
+      closeModal("settings-modal");
+      openLv99Modal();
+    } else {
+      showToast("[DEBUG] Lv.99にした");
+      closeModal("settings-modal");
+    }
+  }
+
+  function debugSetLevel98() {
+    var p = state.player;
+    p.level = 98;
+    p.nextExp = 98 * 10 + 15;
+    p.exp = 0;
+    p.baseMaxHp = 20 + (5 + 1) * 97;
+    p.baseMaxMp = 6 + 2 * 97;
+    p.baseAtk = 5 + 2 * 97;
+    p.baseDef = 2 + 1 * 97;
+    recomputeStats();
+    p.hp = p.maxHp;
+    p.mp = p.maxMp;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv.98にした");
     closeModal("settings-modal");
+  }
+
+  function debugSetLvUpExp() {
+    var p = state.player;
+    p.exp = Math.max(0, p.nextExp - 1);
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] 次の戦闘でLvUP可能なEXPに設定 (残り1)");
+  }
+
+  function debugResetLv99() {
+    var p = state.player;
+    p.level99Shown = false;
+    state.eventFlags.level99Reached = false;
+    updateStatusBar();
+    saveGame();
+    showToast("[DEBUG] Lv99到達フラグをリセットした");
+    renderSettingsBody();
   }
 
   function debugGetUkulele() {
@@ -3646,6 +3739,7 @@
   }
 
   function debugPlayLv99Event() {
+    playSE("level99");
     closeModal("settings-modal");
     openLv99Modal();
   }

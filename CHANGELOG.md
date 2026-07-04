@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.5] - 2026-07-04 — Lv99到達演出・成長達成感アップ
+
+### Added
+- **`level99` SE** (§35): 7ノートの上昇ファンファーレ。`levelUp` SE より長く・大きい音
+- **`state.eventFlags.level99Reached`**: Lv99到達フラグ（`level99Shown` と独立管理）
+- **デバッグ機能** (`?debug=1`):
+  - 「📉 Lv.98にする」 (`debugSetLevel98()`)
+  - 「⬆️ 次の戦闘でLvUP(EXP設定)」 (`debugSetLvUpExp()`)
+  - 「🔄 Lv99到達フラグをリセット」 (`debugResetLv99()`)
+
+### Changed
+- **`openLv99Modal()`**: ドラマチックな内容に強化（長旅の結実・ウクレレ案内・締め言葉）
+- **`levelUp()`**: Lv99到達時は `levelUp` SE の代わりに `level99` SE を再生、`eventFlags.level99Reached = true` をセット
+- **ステータス称号**: Lv99到達（未クリア）時に「究極に近づきし者」を表示
+- **ゴール表示**: Lv99到達済み（ウクレレ未所持）のテキストに強調スタイルを適用
+- **実家ヒント** (`openHomeModal()`): Lv99到達後はランダムヒントの代わりに文脈ヒントを表示
+- **NPC・UMA博士 (D)**: Lv99到達後 / クリア後の専用セリフに分岐
+- **`debugSetLevel99()`**: 初回実行時は `level99` SE + Lv99モーダルを表示（再実行はトーストのみ）
+- **`debugPlayLv99Event()`**: `level99` SE を追加再生
+
+### Notes
+- GAME_DESIGN.md §35 追記
+
 ## [0.8.4] - 2026-07-04 — BGM/SE・サウンド設定
 
 ### Added
