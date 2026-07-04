@@ -388,6 +388,24 @@ html, body {
   margin-top: 4px;
   color: #ccc;
 }
+/* 図鑑進捗バー(v0.8.1) */
+.dex-progress {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 8px;
+  font-size: 0.85em;
+  color: #adb5bd;
+  grid-column: 1 / -1;
+}
+/* タップ可能な図鑑アイテム(v0.8.1) */
+.dex-item.dex-clickable {
+  cursor: pointer;
+}
+.dex-item.dex-clickable:active {
+  transform: scale(0.92);
+  opacity: 0.75;
+  transition: transform 0.08s;
+}
 
 /* サブメニューの「戻る」ボタンは2列分の幅を使う */
 .submenu-back {

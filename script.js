@@ -81,18 +81,26 @@
   // id / name / rarity / hp / attack / captureRate / exp / sellPrice / isRare
   // ※ def(ぼうぎょ力)とemoji(見た目)は実装上の補助データとして追加している。
   var UMA_DATA = [
-    { id: "kappa", name: "カッパ", emoji: "🐢", rarity: "コモン", isUMA: true, isRare: false, minLevel: 1, weight: 7, hp: 16, attack: 6, def: 2, captureRate: 0.40, exp: 10, sellPrice: 8 },
-    { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 18, attack: 7, def: 2, captureRate: 0.38, exp: 12, sellPrice: 10 },
-    { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 24, attack: 8, def: 3, captureRate: 0.30, exp: 16, sellPrice: 16 },
-    { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 22, attack: 9, def: 2, captureRate: 0.30, exp: 18, sellPrice: 18 },
-    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 40, attack: 11, def: 4, captureRate: 0.18, exp: 35, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 } },
-    { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 42, attack: 11, def: 5, captureRate: 0.16, exp: 38, sellPrice: 65, fleeRate: 0.80 },
-    { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 45, attack: 12, def: 5, captureRate: 0.15, exp: 42, sellPrice: 70, fleeRate: 0.80 },
-    { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 46, attack: 13, def: 4, captureRate: 0.14, exp: 44, sellPrice: 75, fleeRate: 0.80 },
+    { id: "kappa", name: "カッパ", emoji: "🐢", rarity: "コモン", isUMA: true, isRare: false, minLevel: 1, weight: 7, hp: 16, attack: 6, def: 2, captureRate: 0.40, exp: 10, sellPrice: 8,
+      desc: "水辺に現れるとされるUMA。甲羅が目印。きゅうりが好きかもしれない。" },
+    { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 18, attack: 7, def: 2, captureRate: 0.38, exp: 12, sellPrice: 10,
+      desc: "古くから目撃談のある太い胴体の蛇型UMA。意外とすばしっこい。" },
+    { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 24, attack: 8, def: 3, captureRate: 0.30, exp: 16, sellPrice: 16,
+      desc: "広島の山中で目撃された類人猿型UMA。ひとり行動を好む孤独な存在。" },
+    { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 22, attack: 9, def: 2, captureRate: 0.30, exp: 18, sellPrice: 18,
+      desc: "巨大な翼を持つ謎の飛行UMA。夜に目撃されることが多く、不吉の前兆ともいわれる。" },
+    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 40, attack: 11, def: 4, captureRate: 0.18, exp: 35, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 },
+      desc: "大きな足跡を残す巨大UMA。出会った者はたいてい驚く。体毛がアレルギーを引き起こすことがある。" },
+    { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 42, attack: 11, def: 5, captureRate: 0.16, exp: 38, sellPrice: 65, fleeRate: 0.80,
+      desc: "湖の深みに住むと噂される巨大UMA。水しぶきと共に颯爽と姿を現す。" },
+    { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 45, attack: 12, def: 5, captureRate: 0.15, exp: 42, sellPrice: 70, fleeRate: 0.80,
+      desc: "雪山に棲む雪男。体は大きいが動きは鈍い。寒さには強く、暑さには弱いらしい。" },
+    { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 46, attack: 13, def: 4, captureRate: 0.14, exp: 44, sellPrice: 75, fleeRate: 0.80,
+      desc: "ニュージャージーの森に棲む翼を持つ悪魔型UMA。遭遇した者はろくなことがないという。" },
     // 究極ゴリラはラスボス級。レベル99+最強装備クラスでないと基本的に倒せない
-    // ステータスにしている(攻撃力150・防御60で通常プレイでは数発で全滅する)。
     // 捕獲もattemptCapture()内で別途上限を掛けてほぼ不可能にしている。
-    { id: "ultimategorilla", name: "究極ゴリラ", emoji: "🦍", rarity: "伝説", isUMA: true, isRare: true, final: true, weight: 4, hp: 5000, attack: 150, def: 60, captureRate: 0.005, exp: 300, sellPrice: 99999, fleeRate: 0.95 }
+    { id: "ultimategorilla", name: "究極ゴリラ", emoji: "🦍", rarity: "伝説", isUMA: true, isRare: true, final: true, weight: 4, hp: 5000, attack: 150, def: 60, captureRate: 0.005, exp: 300, sellPrice: 99999, fleeRate: 0.95,
+      desc: "森の奥に現れる究極のUMA。通常の捕獲は一切通用しない。女神のウクレレの音色のみが、その心を鎮めるという。" }
   ];
 
   // --- UMA以外の敵(野生動物・盗賊など。図鑑/所持UMAの対象外) ---
@@ -116,9 +124,12 @@
     { id: "powerharassmentsenpai", name: "パワハラ先輩", emoji: "😤", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 24, attack: 13, def: 3, captureRate: 0.22, exp: 18 },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
-    { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120 },
-    { id: "haguremetalgorilla", name: "はぐれメタルゴリラ", emoji: "🥇", type: "metal", isUMA: false, minLevel: 10, weight: 8, hp: 12, attack: 5, def: 40, captureRate: 0.04, exp: 400 },
-    { id: "fullmetalgorilla", name: "フルメタルゴリラ", emoji: "💎", type: "metal", isUMA: false, minLevel: 20, weight: 6, hp: 16, attack: 8, def: 60, captureRate: 0.03, exp: 1000 }
+    { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
+      desc: "キラリと光る希少なゴリラ。防御力が高く攻撃はほぼ通らないが、倒すと大きな経験値が手に入る。" },
+    { id: "haguremetalgorilla", name: "はぐれメタルゴリラ", emoji: "🥇", type: "metal", isUMA: false, minLevel: 10, weight: 8, hp: 12, attack: 5, def: 40, captureRate: 0.04, exp: 400,
+      desc: "群れを外れたメタルゴリラ。さらに硬くなっており、出会えればレベルアップの大チャンス。" },
+    { id: "fullmetalgorilla", name: "フルメタルゴリラ", emoji: "💎", type: "metal", isUMA: false, minLevel: 20, weight: 6, hp: 16, attack: 8, def: 60, captureRate: 0.03, exp: 1000,
+      desc: "全身が金属に覆われた究極のメタル系。ほぼ傷つかないが、倒すと莫大な経験値を得られる。" }
   ];
 
   // UMA_DATAは収集対象として一律 type:"uma" を付与する(配列の各行は変更しない)
@@ -1719,30 +1730,165 @@
   }
 
   // ---------------------------------------------------------
-  // 19. UMA図鑑モーダル(未発見/発見済み/捕獲済み)
+  // 19. UMA図鑑モーダル(§31 v0.8.1 詳細タップ対応)
   // ---------------------------------------------------------
   function openDexModal() {
     openModal("dex-modal");
-    var html = "";
-    UMA_DATA.forEach(function (m) {
-      var st = state.player.dex[m.id]; // undefined / "seen" / "captured"
+    renderDexBody();
+  }
+
+  function renderDexBody() {
+    var p = state.player;
+    var totalUma = UMA_DATA.length;
+    var discoveredCount = UMA_DATA.filter(function(m) { return !!p.dex[m.id]; }).length;
+    var capturedDexCount = UMA_DATA.filter(function(m) { return p.dex[m.id] === "captured"; }).length;
+
+    var html = '<div class="dex-progress" style="grid-column:1/-1;">';
+    html += '<span>📖 発見: ' + discoveredCount + "/" + totalUma + '</span>';
+    html += '<span>✅ 捕獲: ' + capturedDexCount + "/" + totalUma + '</span>';
+    html += '</div>';
+
+    UMA_DATA.forEach(function(m) {
+      var st = p.dex[m.id];
+      var isClickable = !!st;
       var cls = st === "captured" ? "" : (st === "seen" ? "seen" : "unknown");
       var emoji = st ? m.emoji : "❔";
-      var label = st === "captured" ? (m.name + "(捕獲済)") :
-        st === "seen" ? (m.name + "(発見済)") : "？？？";
-      // 究極ゴリラ捕獲済み時は特別表示(v0.7 §28)
+      var nameText = st ? m.name : "？？？";
+      var statusText = st === "captured" ? "捕獲済" : (st === "seen" ? "発見済" : "未発見");
+      var clickAttr = isClickable ? (' data-umaid="' + m.id + '"') : "";
+      var borderStyle = (m.id === "ultimategorilla" && st === "captured")
+        ? ' style="border:1px solid #ffd166;"' : "";
+
+      html += '<div class="dex-item ' + cls + (isClickable ? " dex-clickable" : "") + '"' +
+        clickAttr + borderStyle + ">";
+      html += emoji;
+      html += '<span class="dex-item-name">' + nameText + "</span>";
+      html += '<span class="dex-item-name">' + statusText + "</span>";
       if (m.id === "ultimategorilla" && st === "captured") {
-        html += '<div class="dex-item" style="border:1px solid #ffd166;">' + emoji +
-          '<span class="dex-item-name">' + m.name + '(捕獲済)</span>' +
-          '<span style="display:block;font-size:8px;color:#ffd166;margin-top:2px;">伝説のUMA</span>' +
-          '<span style="display:block;font-size:8px;color:#06d6a0;">森へ帰った</span>' +
-          '</div>';
-      } else {
-        html += '<div class="dex-item ' + cls + '">' + emoji +
-          '<span class="dex-item-name">' + label + "</span></div>";
+        html += '<span style="display:block;font-size:7px;color:#ffd166;">伝説のUMA</span>';
+        html += '<span style="display:block;font-size:7px;color:#06d6a0;">森へ帰った</span>';
       }
+      html += "</div>";
     });
-    document.getElementById("dex-list").innerHTML = html;
+
+    // メタル系セクション(特殊エネミー。常時表示・タップで詳細)
+    html += '<p class="small" style="text-align:left;margin:10px 0 4px;color:#ffd166;grid-column:1/-1;">⚡ メタル系（特殊エネミー）</p>';
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;grid-column:1/-1;">';
+    METAL_DATA.forEach(function(m) {
+      html += '<div class="dex-item dex-clickable" data-metalid="' + m.id + '">' + m.emoji +
+        '<span class="dex-item-name">' + m.name + "</span>" +
+        '<span class="dex-item-name" style="color:#ffd166;">メタル系</span>' +
+        "</div>";
+    });
+    html += "</div>";
+
+    var container = document.getElementById("dex-list");
+    container.innerHTML = html;
+
+    Array.prototype.forEach.call(container.querySelectorAll("[data-umaid]"), function(el) {
+      el.addEventListener("click", function() {
+        openMonsterDetailModal(el.getAttribute("data-umaid"), "uma");
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll("[data-metalid]"), function(el) {
+      el.addEventListener("click", function() {
+        openMonsterDetailModal(el.getAttribute("data-metalid"), "metal");
+      });
+    });
+  }
+
+  // UMA/メタル系の詳細モーダル(§31 v0.8.1)
+  function openMonsterDetailModal(id, dataType) {
+    var monster = dataType === "metal" ? findById(METAL_DATA, id) : findById(UMA_DATA, id);
+    if (!monster) return;
+
+    var p = state.player;
+    var st = dataType === "uma" ? p.dex[id] : null;
+    var isCaptured = st === "captured";
+    var isFinal = !!monster.final;
+    var isMetal = dataType === "metal";
+
+    var umaIndex = 0;
+    if (!isMetal) {
+      for (var i = 0; i < UMA_DATA.length; i++) {
+        if (UMA_DATA[i].id === id) { umaIndex = i; break; }
+      }
+    }
+
+    var borderStyle = (isFinal && isCaptured) ? "border:2px solid #ffd166;border-radius:8px;padding:8px;" : "";
+    var html = '<div style="text-align:center;' + borderStyle + '">';
+    html += '<div style="font-size:48px;line-height:1.2;">' + monster.emoji + "</div>";
+    if (!isMetal) {
+      html += '<div style="font-size:9px;color:#888;margin:2px 0;">No.' +
+        ("00" + (umaIndex + 1)).slice(-3) + "</div>";
+    }
+    html += '<div style="font-size:18px;font-weight:bold;margin:4px 0;">' + monster.name + "</div>";
+    if (isFinal && isCaptured) {
+      html += '<div style="color:#ffd166;font-size:11px;margin:2px 0;">★ 伝説のUMA &nbsp;&#127807; 森へ帰った</div>';
+    } else if (isFinal) {
+      html += '<div style="color:#ffd166;font-size:11px;margin:2px 0;">★ 伝説のUMA</div>';
+    }
+    html += "</div>";
+
+    // 分類・レア度・状態
+    if (!isMetal) {
+      var typeLabel = isFinal ? "伝説UMA" : "UMA";
+      html += '<div class="shop-row"><span>レア度</span><span>' + monster.rarity + "</span></div>";
+      html += '<div class="shop-row"><span>分類</span><span>' + typeLabel + "</span></div>";
+      var stateHtml = isCaptured
+        ? '<span style="color:#06d6a0;">&#10003; 捕獲済み</span>'
+        : '<span style="color:#adb5bd;">× 未捕獲</span>';
+      html += '<div class="shop-row"><span>捕獲状態</span>' + stateHtml + "</div>";
+    } else {
+      html += '<div class="shop-row"><span>分類</span><span style="color:#ffd166;">メタル系</span></div>';
+      html += '<p class="small" style="text-align:left;color:#ffd166;margin:2px 0;">&#9889; レベル稼ぎ用の特殊エネミー</p>';
+    }
+
+    // ステータス
+    html += '<h3 style="margin:10px 0 4px;">ステータス</h3>';
+    html += '<div class="shop-row"><span>HP</span><span>' + monster.hp + "</span></div>";
+    html += '<div class="shop-row"><span>攻撃力</span><span>' + monster.attack + "</span></div>";
+    html += '<div class="shop-row"><span>防御力</span><span>' + monster.def + "</span></div>";
+    if (!isMetal) {
+      html += '<div class="shop-row"><span>捕獲率</span><span>' + Math.round(monster.captureRate * 100) + "%</span></div>";
+    }
+    html += '<div class="shop-row"><span>経験値</span><span>' + monster.exp + "</span></div>";
+    if (!isMetal && monster.sellPrice) {
+      html += '<div class="shop-row"><span>売却価格</span><span>' + monster.sellPrice + "G</span></div>";
+    }
+    if (monster.inflicts) {
+      var ailName = monster.inflicts.id === "allergy" ? "アレルギー" : "におい";
+      html += '<div class="shop-row"><span>特殊攻撃</span><span style="color:#ff8a80;">' + ailName + "付与</span></div>";
+    }
+
+    // メタル系特徴
+    if (isMetal) {
+      html += '<h3 style="margin:10px 0 4px;">特徴</h3>';
+      html += '<p class="small" style="text-align:left;">' +
+        "・低確率でフィールドに出現（遭遇時は「キラリと光った！」）<br>" +
+        "・防御力が非常に高く、攻撃がほぼ通らない<br>" +
+        "・倒すと大きな経験値が手に入る<br>" +
+        "・捕獲は非常に難しい</p>";
+    }
+
+    // 究極ゴリラ捕獲前の注意
+    if (isFinal && !isCaptured) {
+      html += '<h3 style="margin:10px 0 4px;color:#ffd166;">&#9888; 捕獲について</h3>';
+      html += '<p class="small" style="text-align:left;color:#ffe082;">' +
+        "普通の「つかまえる」は一切通用しない。<br>" +
+        "レベル99・女神のウクレレ所持・HPを1〜10まで削った上で<br>" +
+        "「うたう」コマンドを使うのが捕獲の鍵だ。</p>";
+    }
+
+    // 説明文
+    if (monster.desc) {
+      html += '<p class="small" style="text-align:left;color:#adb5bd;font-style:italic;' +
+        'margin-top:8px;border-top:1px solid #415a77;padding-top:8px;">' +
+        "「" + monster.desc + "」</p>";
+    }
+
+    document.getElementById("uma-detail-body").innerHTML = html;
+    openModal("uma-detail-modal");
   }
 
   // ---------------------------------------------------------
@@ -1833,9 +1979,11 @@
     html += '<div class="shop-row"><span>🍜 ラーメン</span><span>x' + p.ramenCount + "</span></div>";
     html += '<div class="shop-row"><span>せき止めシロップ</span><span>x' + p.coughsyrupCount + "</span></div>";
     html += '<div class="shop-row"><span>デオドラントスプレー</span><span>x' + p.deodorantCount + "</span></div>";
+    var capturedDexCount = UMA_DATA.filter(function(m) { return p.dex[m.id] === "captured"; }).length;
     html += "<h3>UMA</h3>";
     html += '<div class="shop-row"><span>所持UMA総数</span><span>' + capturedCount + "匹</span></div>";
-    html += '<div class="shop-row"><span>図鑑進捗</span><span>' + dexDiscovered + "/" + UMA_DATA.length + "</span></div>";
+    html += '<div class="shop-row"><span>図鑑発見</span><span>' + dexDiscovered + "/" + UMA_DATA.length + "</span></div>";
+    html += '<div class="shop-row"><span>図鑑捕獲</span><span>' + capturedDexCount + "/" + UMA_DATA.length + "</span></div>";
     html += "<h3>重要アイテム</h3>";
     html += '<div class="shop-row"><span>🪗 女神のウクレレ</span><span>' +
       (p.hasUkulele ? '<span style="color:#06d6a0;font-weight:bold;">所持</span>' : '<span style="color:#888;">未入手</span>') +
@@ -2780,6 +2928,10 @@
     document.getElementById("btn-dex").addEventListener("click", openDexModal);
     document.getElementById("btn-dex-close").addEventListener("click", function () {
       closeModal("dex-modal");
+    });
+    // UMA詳細モーダル(§31 v0.8.1)
+    document.getElementById("btn-uma-detail-close").addEventListener("click", function () {
+      closeModal("uma-detail-modal");
     });
 
     // レベルアップモーダル
