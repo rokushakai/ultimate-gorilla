@@ -14,6 +14,22 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.6.2 — BGM即時切り替え修正
+
+- **BGM即時切り替え修正** (§38):
+  - `bgmMasterGain` 変数を追加（全BGMノードの共通出力先GainNode）
+  - `getOrCreateBgmMasterGain()` ヘルパー関数を追加
+  - `stopBGM()`: `bgmMasterGain.disconnect()` で即消音 → null化。個別ノード停止は補助的に試行
+  - `_scheduleBGMLoop()`: `gain.connect(audioCtx.destination)` → `gain.connect(master)` に変更
+  - `startBGM()` / `stopBGM()`: `DEBUG_MODE` 時に `[BGM]` プレフィックスのコンソールログを出力
+  - 根本原因: `osc.stop(t+dur)` 呼び済みノードに再度 `stop()` すると `InvalidStateError` が発生、`try-catch` で握りつぶされ旧BGMが止まらなかった
+- GAME_DESIGN.md §38 追記
+
+### Version 0.8.6.1 — 状態異常ゴーストキー修正
+
+- `clearAilment` ゴーストキー問題: value=0 のキーが `statusAilments` に残留するバグを修正
+- `doRest` の `hadAilments` 誤判定: ゴーストキーで「体調もよくなった！」が誤表示される問題を修正
+
 ### Version 0.8.6 — BGM重なり修正 + 攻略ペーパービュー屋
 
 - **BGM重なり修正** (§36):

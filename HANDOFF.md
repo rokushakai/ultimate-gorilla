@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.8.6** |
+| 現在バージョン | **v0.8.6.2** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,13 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.8.6.2] BGM即時切り替え修正**（§38）
+  - 根本原因: `osc.stop(t+dur)` 呼び済みノードへの `stop()` 再呼び出しが `InvalidStateError` → try-catch握りつぶしで旧BGMが止まらなかった
+  - `bgmMasterGain` 変数追加: 全BGMノードの共通出力先 GainNode
+  - `getOrCreateBgmMasterGain()`: セッションごとにマスターゲインを作成
+  - `stopBGM()`: `bgmMasterGain.disconnect()` → null化で即消音
+  - `_scheduleBGMLoop()`: `gain.connect(master)` でマスターゲイン経由に変更
+  - `DEBUG_MODE` 時: `[BGM] immediate switch/stop/play` のコンソールログ出力
 - **[v0.8.6] BGM重なり修正 + 攻略ペーパービュー屋**（§36, §37）
   - BGM管理: `bgmGeneration`（世代番号）/ `activeBgmNodes[]`（ノード追跡）追加
   - `stopBGM()`: `bgmGeneration++` + オシレーターノード一括停止
@@ -138,7 +145,8 @@
 
 | 機能 | 状態 |
 |---|---|
-| BGM重なり修正 | ✅ v0.8.6 で修正済み（§36）|
+| BGM即時切り替え修正 | ✅ v0.8.6.2 で修正済み（§38）|
+| BGM重なり修正（世代管理） | ✅ v0.8.6 で修正済み（§36）|
 | 攻略ペーパービュー屋 | ✅ v0.8.6 で実装済み（§37）|
 | Lv99到達演出強化 | ✅ v0.8.5 で実装済み（§35）|
 | BGM/SE | ✅ v0.8.4 で実装済み（§34）|

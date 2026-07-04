@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.6.2] - 2026-07-04 — BGM即時切り替え修正
+
+### Fixed
+- **BGM重複再生（約2秒の重なり）根本修正** (§38): 戦闘開始/終了時に旧BGMが約2秒間鳴り続ける不具合を修正
+  - **根本原因**: `_scheduleBGMLoop` で `osc.stop(t+dur)` 呼び済みのノードに `stopBGM()` が再度 `stop()` を呼ぶと Web Audio API が `InvalidStateError` をスロー。これを `try-catch` で握りつぶしていたため旧BGMが止まらなかった
+  - **修正**: `bgmMasterGain`（全BGMノードの共通出力先 GainNode）を導入。`stopBGM()` で `bgmMasterGain.disconnect()` を実行し音声グラフから切断することで即消音
+  - `getOrCreateBgmMasterGain()` ヘルパー追加。BGMセッションごとに新規生成
+  - `_scheduleBGMLoop()`: 各ノートの `gain` を `audioCtx.destination` ではなく `bgmMasterGain` に接続するよう変更
+  - `startBGM()` / `stopBGM()`: `DEBUG_MODE` 時に `[BGM] immediate switch` / `stop immediate` / `play` のコンソールログを出力
+
+### Notes
+- GAME_DESIGN.md §34 BGM切り替え方針を更新、§38 追記
+
+---
+
 ## [0.8.6.1] - 2026-07-04 — 状態異常ゴーストキー修正
 
 ### Fixed

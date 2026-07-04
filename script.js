@@ -333,6 +333,7 @@
   var bgmStopFlag = false;
   var bgmGeneration = 0;   // BGMループ世代管理：切り替え時に古いループを無効化(v0.8.6 §36)
   var activeBgmNodes = []; // スケジュール済みOscillatorNode一覧：stopBGMで一括停止(v0.8.6 §36)
+  var bgmMasterGain = null; // 全BGMノードの共通出力先GainNode。stopBGMで切断→即消音(v0.8.6.2 §38)
 
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
@@ -3551,30 +3552,50 @@
     }
   };
 
+  // BGMセッションごとの共通出力先GainNode。stopBGMで切断→全ノード即消音(§38 v0.8.6.2)
+  function getOrCreateBgmMasterGain() {
+    if (!audioCtx) return null;
+    if (!bgmMasterGain) {
+      bgmMasterGain = audioCtx.createGain();
+      bgmMasterGain.gain.setValueAtTime(1, audioCtx.currentTime);
+      bgmMasterGain.connect(audioCtx.destination);
+    }
+    return bgmMasterGain;
+  }
+
   function startBGM(type) {
     if (!soundEnabled || !bgmEnabled) return;
     if (!initAudioContext()) return;
     if (bgmCurrentType === type) return;
+    if (DEBUG_MODE) console.log('[BGM] immediate switch:', bgmCurrentType, '->', type);
     stopBGM();
     bgmCurrentType = type;
     bgmStopFlag = false;
     var gen = bgmGeneration;
     _scheduleBGMLoop(type, audioCtx.currentTime, gen);
+    if (DEBUG_MODE) console.log('[BGM] play:', type);
   }
 
   function stopBGM() {
     bgmGeneration++;
     bgmStopFlag = true;
+    if (DEBUG_MODE && bgmCurrentType) console.log('[BGM] stop immediate:', bgmCurrentType);
     bgmCurrentType = null;
     if (bgmSchedulerId !== null) {
       clearTimeout(bgmSchedulerId);
       bgmSchedulerId = null;
     }
+    // マスターゲインを切断→全BGMノードを即座に消音(§38 v0.8.6.2)
+    // osc.stop(t+dur)で予約済みノードにstop()を再度呼ぶとInvalidStateErrorが発生するため
+    // マスターゲインの接続切断で音声グラフから隔離して即消音する方式に変更
+    if (bgmMasterGain) {
+      try { bgmMasterGain.disconnect(); } catch (e) {}
+      bgmMasterGain = null;
+    }
+    // 個別ノードの停止も試みる(失敗はサイレント無視)
     for (var _i = 0; _i < activeBgmNodes.length; _i++) {
-      try {
-        if (activeBgmNodes[_i].stop) activeBgmNodes[_i].stop();
-        if (activeBgmNodes[_i].disconnect) activeBgmNodes[_i].disconnect();
-      } catch (e) {}
+      try { activeBgmNodes[_i].stop(); } catch (e) {}
+      try { activeBgmNodes[_i].disconnect(); } catch (e) {}
     }
     activeBgmNodes = [];
   }
@@ -3593,6 +3614,8 @@
     if (bgmStopFlag || bgmCurrentType !== type || !audioCtx) return;
     var data = BGM_DATA[type];
     if (!data) return;
+    var master = getOrCreateBgmMasterGain();
+    if (!master) { bgmStopFlag = true; return; }
     var t = startTime;
     var vol = data.vol || 0.05;
     var waveType = data.waveType || "square";
@@ -3605,14 +3628,14 @@
           var osc = audioCtx.createOscillator();
           var gain = audioCtx.createGain();
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(master); // マスターゲイン経由で出力(§38)
           osc.type = waveType;
           osc.frequency.setValueAtTime(freq, t);
           gain.gain.setValueAtTime(vol, t);
           gain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.85);
           osc.start(t);
           osc.stop(t + dur);
-          activeBgmNodes.push(osc); // ノードを追跡リストに登録
+          activeBgmNodes.push(osc);
         }
         t += dur;
       }
