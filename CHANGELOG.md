@@ -5,6 +5,37 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.8.4] - 2026-07-04 — BGM/SE・サウンド設定
+
+### Added
+- **サウンドシステム** (§34): Web Audio API ベースの BGM/SE 基盤
+  - BGM 3種: `"field"` (フィールド) / `"battle"` (バトル) / `"ending"` (エンディング)
+  - SE 9種: `battleStart` / `attack` / `damage` / `captureOk` / `captureFail` / `levelUp` / `chestOpen` / `itemGet` / `endingStart`
+  - `startBGM(type)` / `stopBGM()` / `updateBGM(type)` / `playSE(type)` 関数
+  - `_scheduleBGMLoop()`: OscillatorNode を使った setTimeout ループ方式
+  - `initAudioContext()`: ユーザー操作時に AudioContext 初期化（iOS 自動再生制限対応）
+  - `loadSoundSettings()` / `saveSoundSettings()`: 別キー `"ultimateGorillaSoundV1"` で保存
+- 設定画面に 🔊/🎵/🔔 トグルボタンを追加
+- デバッグ: SE テスト・各 BGM テスト・BGM 停止ボタン（`?debug=1` 時のみ）
+- `SOUND_KEY` 定数: `"ultimateGorillaSoundV1"`
+
+### Changed
+- `actuallyStartBattle()`: バトル BGM 開始 + `battleStart` SE
+- `finishBattle()`: フィールド BGM に戻す
+- `openEndingModal()`: エンディング BGM 開始 + `endingStart` SE
+- エンディング終了（「冒険を続ける」): フィールド BGM に戻す
+- `bindDpadHold()` / キーボード入力: 最初の操作でフィールド BGM を開始
+- `doFight()`: `attack` SE
+- `enemyTurn()`: `damage` SE
+- `attemptCapture()`: `captureOk` / `captureFail` SE
+- `levelUp()`: `levelUp` SE
+- `openChest()` / `openUkuleleChest()` / `openLegendaryChest*()`: `chestOpen` SE
+- `giveKingReward()`: `itemGet` SE
+- `init()`: `loadSoundSettings()` を呼ぶ
+
+### Notes
+- GAME_DESIGN.md §34 追記
+
 ## [0.8.3] - 2026-07-04 — 伝説装備追加・NPCヒント連動イベント
 
 ### Added

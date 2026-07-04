@@ -1503,3 +1503,83 @@ LEGEND_EQUIPS: 5種 → 7種。ステータス画面・目標画面の表示を 
 ### デバッグ
 
 `debugGetAllLegendary()` / `debugResetLegendary()` に新フラグ・新装備を追加。
+
+
+## §34. BGM/SE・サウンド設定 (Version 0.8.4)
+
+### 概要
+
+Web Audio API を使った軽量 BGM/SE システムを追加する。外部音声ファイル不要。
+スマホの自動再生制限に対応し、ユーザーが操作した時のみ音を鳴らす。
+サウンド設定はニューゲームでリセットされない（別 localStorage キーで保存）。
+
+### サウンド設定
+
+- 設定キー: `"ultimateGorillaSoundV1"`（`SAVE_KEY` とは別）
+- 設定項目: `soundEnabled`（全体）、`bgmEnabled`（BGM）、`seEnabled`（SE）
+- デフォルト: すべて false（初回起動時は音なし）
+- ニューゲームでリセットしない（プレイヤー環境設定として扱う）
+
+### BGM 種別
+
+| 種別 | タイプ | 説明 |
+|---|---|---|
+| フィールドBGM | `"field"` | 明るいレトロRPG風ループ。Cメジャー 120BPM |
+| バトルBGM | `"battle"` | 緊張感のある速い曲。Aマイナー 150BPM |
+| エンディングBGM | `"ending"` | 穏やかなアルペジオ風。Fメジャー 80BPM |
+
+BGM遷移:
+- フィールド歩行（dpad/キー入力） → `updateBGM("field")`
+- 戦闘開始（actuallyStartBattle） → `updateBGM("battle")`
+- 戦闘終了（finishBattle） → `updateBGM("field")`
+- エンディング開始（openEndingModal） → `updateBGM("ending")`
+- エンディング終了 → `updateBGM("field")`
+
+### SE 種別
+
+| 種別 | タイプ | 発火タイミング |
+|---|---|---|
+| ボタン | `"btn"` | — |
+| バトル開始 | `"battleStart"` | `actuallyStartBattle()` |
+| 攻撃 | `"attack"` | `doFight()` |
+| ダメージ | `"damage"` | `enemyTurn()` |
+| 捕獲成功 | `"captureOk"` | `attemptCapture()` 成功時 |
+| 捕獲失敗 | `"captureFail"` | `attemptCapture()` 失敗時 |
+| レベルアップ | `"levelUp"` | `levelUp()` |
+| 宝箱を開ける | `"chestOpen"` | `openChest()` / `openLegendaryChest*()` / `openUkuleleChest()` |
+| アイテム入手 | `"itemGet"` | `giveKingReward()` |
+| エンディング開始 | `"endingStart"` | `openEndingModal()` |
+
+### 音量
+
+- BGM 全体: 0.05 〜 0.06（vol フィールド）
+- SE 全体: 0.08 〜 0.12（各ノートの vol フィールド）
+
+### 技術仕様
+
+- `AudioContext` / `webkitAudioContext` フォールバック
+- OscillatorNode + GainNode の組み合わせで発音
+- BGM は短いノート列を `setTimeout` で再スケジュールするループ方式
+- SE は単発の短い音バースト（複数ノートを時間差で重ねる）
+- `initAudioContext()` はユーザー操作イベントから呼ぶ（iOS自動再生制限対応）
+- すべての Audio 処理を try/catch でラップし、失敗時はサイレント無視
+- AudioContext が使えない環境でも graceful degradation
+
+### 設定画面 UI
+
+設定モーダルの `renderSettingsBody()` に以下を追加:
+
+```
+🔊 サウンド設定
+[🔊 サウンド: ON]  [🔇 サウンド: OFF]  ← トグルボタン（現在状態を表示）
+[🎵 BGM: ON]       ← soundEnabled=false の時は opacity:0.45
+[🔔 SE: ON]        ← soundEnabled=false の時は opacity:0.45
+```
+
+### デバッグ機能（`?debug=1`）
+
+- `[TEST] SEを鳴らす` — levelUp SE を再生テスト
+- `[TEST] フィールドBGM` — フィールドBGM を強制再生（soundEnabled/bgmEnabled を ON にする）
+- `[TEST] バトルBGM` — バトルBGM を強制再生
+- `[TEST] エンディングBGM` — エンディングBGM を強制再生
+- `[TEST] BGM停止` — BGM を停止

@@ -14,6 +14,18 @@
 
 ## ✅ 実装済み
 
+### Version 0.8.4 — BGM/SE・サウンド設定
+
+- Web Audio API ベースの軽量サウンドシステムを追加（GAME_DESIGN.md §34）
+  - BGM 3種: field（フィールド）/ battle（バトル）/ ending（エンディング）
+  - SE 9種: battleStart, attack, damage, captureOk, captureFail, levelUp, chestOpen, itemGet, endingStart
+  - 外部音声ファイル不要（OscillatorNode による手続き的サウンド生成）
+- サウンド設定を別キー (`"ultimateGorillaSoundV1"`) で保存（ニューゲームで消えない）
+- 設定画面に 🔊/🎵/🔔 トグルボタンを追加
+- スマホ自動再生制限に対応（初回ユーザー操作で AudioContext を初期化）
+- デバッグ: SE テスト・各 BGM テスト・BGM 停止ボタンを追加
+- 明示的に未実装: 2周目・横スクロール実装本体
+
 ### Version 0.8.3 — 伝説装備追加・NPCヒント連動イベント
 
 - 伝説装備2種を追加（GAME_DESIGN.md §33）

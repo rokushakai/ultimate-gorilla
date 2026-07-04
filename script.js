@@ -322,6 +322,15 @@
     try { return window.location.search.indexOf("debug=1") !== -1; } catch (e) { return false; }
   }());
 
+  // サウンド設定(v0.8.4 §34)
+  var soundEnabled = false;
+  var bgmEnabled = true;
+  var seEnabled = true;
+  var audioCtx = null;
+  var bgmCurrentType = null;
+  var bgmSchedulerId = null;
+  var bgmStopFlag = false;
+
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
 
@@ -366,6 +375,7 @@
   // 4. セーブデータ
   // ---------------------------------------------------------
   var SAVE_KEY = "ultimateGorillaSaveV2";
+  var SOUND_KEY = "ultimateGorillaSoundV1";
 
   // ---------------------------------------------------------
   // 5. ゲーム状態
@@ -469,6 +479,9 @@
 
     // セーブデータがあれば読み込む(無ければ何も起きない)
     var loaded = loadGame();
+
+    // サウンド設定を読み込む(セーブデータとは別キー)
+    loadSoundSettings();
 
     // CSS変数にビューポートの行列数を設定
     var viewport = document.getElementById("field-viewport");
@@ -775,6 +788,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     renderField(); // 即座に📦に切り替える
     var drop = weightedPick(CHEST_DROPS);
     var msg;
@@ -811,6 +825,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     state.player.hasUkulele = true;
     renderField();
     updateStatusBar();
@@ -830,6 +845,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     state.eventFlags.pegasusArmorGot = true;
     if (!isEquipOwned(findEquipSlot("armor"), "pegasusarmor")) {
       state.player.ownedArmors.push("pegasusarmor");
@@ -848,6 +864,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     state.eventFlags.cosmicHelmetGot = true;
     if (!isEquipOwned(findEquipSlot("helmet"), "cosmickabuto")) {
       state.player.ownedHelmets.push("cosmickabuto");
@@ -871,6 +888,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     state.eventFlags.nyoiboGot = true;
     if (!isEquipOwned(findEquipSlot("weapon"), "nyoibo")) {
       state.player.ownedWeapons.push("nyoibo");
@@ -889,6 +907,7 @@
       return;
     }
     state.openedChests[key] = true;
+    playSE("chestOpen");
     state.eventFlags.cygnusHelmetGot = true;
     if (!isEquipOwned(findEquipSlot("helmet"), "cygnuskabuto")) {
       state.player.ownedHelmets.push("cygnuskabuto");
@@ -900,6 +919,7 @@
   }
 
   function giveKingReward() {
+    playSE("itemGet");
     state.eventFlags.dragonShieldGot = true;
     if (!isEquipOwned(findEquipSlot("shield"), "dragonshield")) {
       state.player.ownedShields.push("dragonshield");
@@ -933,6 +953,8 @@
   }
 
   function openEndingModal() {
+    playSE("endingStart");
+    updateBGM("ending");
     state.endingPage = 0;
     renderEndingPage();
     openModal("clear-modal");
@@ -1034,6 +1056,8 @@
 
   function actuallyStartBattle(monster) {
     stopWalking(); // 戦闘開始時は押しっぱなし移動を止める
+    playSE("battleStart");
+    updateBGM("battle");
     state.inBattle = true;
     state.enemy = {
       id: monster.id,
@@ -1134,6 +1158,7 @@
   function doFight() {
     if (state.locked) return;
     setBattleLocked(true);
+    playSE("attack");
     var p = state.player, e = state.enemy;
     var dmg = Math.max(1, p.atk + randInt(0, 3) - e.def);
     var critChance = getCompanionBonus("critBonus");
@@ -1463,6 +1488,7 @@
       0.05, 0.95
     );
     if (Math.random() < chance) {
+      playSE("captureOk");
       log("🪤 " + e.name + "を捕まえた！");
       captureUma(e);
       logExpGained(e.exp);
@@ -1470,6 +1496,7 @@
       showBattleEnd();
       return true;
     }
+    playSE("captureFail");
     log("🪤 しかし捕まえられなかった！");
     return false;
   }
@@ -1604,6 +1631,7 @@
       dmg = Math.max(1, e.atk + randInt(0, 2) - p.def);
     }
     p.hp = Math.max(0, p.hp - dmg);
+    playSE("damage");
     log("💥 " + e.name + "の攻撃！ " + dmg + "のダメージを受けた！");
     updateBattlePlayerStatus();
     updateStatusBar();
@@ -1669,6 +1697,7 @@
     state.inBattle = false;
     state.enemy = null;
     stopWalking(); // 残留walkTimerをリセット
+    updateBGM("field");
     document.getElementById("btn-battle-ok").classList.add("hidden");
     tickSmellOnBattleEnd();
     document.getElementById("battle-screen").classList.add("hidden");
@@ -1706,6 +1735,7 @@
 
   function levelUp() {
     var p = state.player;
+    playSE("levelUp");
     log("🎉 レベルが上がった！");
     p.level++;
     p.nextExp = p.level * 10 + 15; // v0.6.1: 旧式(level*15+20)より約33%緩くした
@@ -2885,6 +2915,14 @@
     if (state.gameCleared) {
       html += '<button class="shop-menu-btn" id="btn-watch-ending" style="border-color:#ffd166;color:#ffd166;">🎬 エンディングを見る</button>';
     }
+    html += '<p class="small" style="margin-top:16px;">🔊 サウンド設定</p>';
+    html += '<button class="shop-menu-btn" id="btn-toggle-sound">' +
+      (soundEnabled ? "🔊 サウンド: ON" : "🔇 サウンド: OFF") + "</button>";
+    var dimStyle = soundEnabled ? "" : ' style="opacity:0.45;"';
+    html += '<button class="shop-menu-btn" id="btn-toggle-bgm"' + dimStyle + ">" +
+      (bgmEnabled ? "🎵 BGM: ON" : "🎵 BGM: OFF") + "</button>";
+    html += '<button class="shop-menu-btn" id="btn-toggle-se"' + dimStyle + ">" +
+      (seEnabled ? "🔔 SE: ON" : "🔔 SE: OFF") + "</button>";
     html += '<p class="small" style="color:#ff8c8c;margin-top:16px;">⚠️ 危険な操作:</p>';
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
     if (DEBUG_MODE) {
@@ -2901,6 +2939,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-play-lv99">🎖 Lv99演出を再生</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-all-legendary">⭐ 伝説装備を全入手</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset-legendary">🔄 伝説装備フラグをリセット</button>';
+      html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🔊 サウンドテスト</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-se-test">🔔 [TEST] SEを鳴らす</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-field">🎵 [TEST] フィールドBGM</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-battle">🎵 [TEST] バトルBGM</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-ending">🎵 [TEST] エンディングBGM</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-stop">🔇 [TEST] BGM停止</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -2930,6 +2974,29 @@
         location.reload();
       }
     };
+    document.getElementById("btn-toggle-sound").onclick = function () {
+      soundEnabled = !soundEnabled;
+      if (!soundEnabled) {
+        stopBGM();
+      } else {
+        if (bgmEnabled) updateBGM("field");
+      }
+      saveSoundSettings();
+      renderSettingsBody();
+    };
+    document.getElementById("btn-toggle-bgm").onclick = function () {
+      if (!soundEnabled) return;
+      bgmEnabled = !bgmEnabled;
+      if (!bgmEnabled) { stopBGM(); } else { updateBGM("field"); }
+      saveSoundSettings();
+      renderSettingsBody();
+    };
+    document.getElementById("btn-toggle-se").onclick = function () {
+      if (!soundEnabled) return;
+      seEnabled = !seEnabled;
+      saveSoundSettings();
+      renderSettingsBody();
+    };
     if (DEBUG_MODE) {
       document.getElementById("btn-debug-lv99").onclick = debugSetLevel99;
       document.getElementById("btn-debug-ukulele").onclick = debugGetUkulele;
@@ -2943,6 +3010,45 @@
       document.getElementById("btn-debug-play-lv99").onclick = debugPlayLv99Event;
       document.getElementById("btn-debug-all-legendary").onclick = debugGetAllLegendary;
       document.getElementById("btn-debug-reset-legendary").onclick = debugResetLegendary;
+      document.getElementById("btn-debug-se-test").onclick = function () {
+        if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
+        soundEnabled = true; seEnabled = true;
+        saveSoundSettings();
+        playSE("levelUp");
+        showToast("[DEBUG] SE(levelUp)再生");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-bgm-field").onclick = function () {
+        if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
+        soundEnabled = true; bgmEnabled = true;
+        saveSoundSettings();
+        bgmCurrentType = null;
+        startBGM("field");
+        showToast("[DEBUG] フィールドBGM再生");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-bgm-battle").onclick = function () {
+        if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
+        soundEnabled = true; bgmEnabled = true;
+        saveSoundSettings();
+        bgmCurrentType = null;
+        startBGM("battle");
+        showToast("[DEBUG] バトルBGM再生");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-bgm-ending").onclick = function () {
+        if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
+        soundEnabled = true; bgmEnabled = true;
+        saveSoundSettings();
+        bgmCurrentType = null;
+        startBGM("ending");
+        showToast("[DEBUG] エンディングBGM再生");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-bgm-stop").onclick = function () {
+        stopBGM();
+        showToast("[DEBUG] BGM停止");
+      };
     }
   }
 
@@ -3065,6 +3171,7 @@
     var btn = document.getElementById(buttonId);
     btn.addEventListener("pointerdown", function (ev) {
       ev.preventDefault();
+      updateBGM("field");
       startWalking(dx, dy);
     });
     btn.addEventListener("pointerup", stopWalking);
@@ -3080,10 +3187,10 @@
 
     // PCのキーボードでも動作確認できるようにする
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "ArrowUp") movePlayer(0, -1);
-      else if (ev.key === "ArrowDown") movePlayer(0, 1);
-      else if (ev.key === "ArrowLeft") movePlayer(-1, 0);
-      else if (ev.key === "ArrowRight") movePlayer(1, 0);
+      if (ev.key === "ArrowUp") { updateBGM("field"); movePlayer(0, -1); }
+      else if (ev.key === "ArrowDown") { updateBGM("field"); movePlayer(0, 1); }
+      else if (ev.key === "ArrowLeft") { updateBGM("field"); movePlayer(-1, 0); }
+      else if (ev.key === "ArrowRight") { updateBGM("field"); movePlayer(1, 0); }
     });
 
     // スワイプ操作
@@ -3122,6 +3229,7 @@
         state.endingPage += 1;
         renderEndingPage();
       } else {
+        updateBGM("field");
         closeModal("clear-modal");
       }
     });
@@ -3226,6 +3334,228 @@
     document.getElementById("game").addEventListener("contextmenu", function (ev) {
       ev.preventDefault();
     });
+  }
+
+  // ---------------------------------------------------------
+  // 25. サウンド(BGM/SE) — Web Audio API (v0.8.4 §34)
+  // ---------------------------------------------------------
+
+  function loadSoundSettings() {
+    try {
+      var raw = localStorage.getItem(SOUND_KEY);
+      if (!raw) return;
+      var s = JSON.parse(raw);
+      soundEnabled = !!s.soundEnabled;
+      bgmEnabled = (s.bgmEnabled !== false);
+      seEnabled = (s.seEnabled !== false);
+    } catch (e) {}
+  }
+
+  function saveSoundSettings() {
+    try {
+      localStorage.setItem(SOUND_KEY, JSON.stringify({
+        soundEnabled: soundEnabled,
+        bgmEnabled: bgmEnabled,
+        seEnabled: seEnabled
+      }));
+    } catch (e) {}
+  }
+
+  function initAudioContext() {
+    if (audioCtx) return true;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      audioCtx = new AC();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // SE定義: 音名 → [{freq, dur, vol?, type?, start?}, ...]
+  var SE_SPECS = {
+    btn: [
+      { freq: 880, dur: 0.06, vol: 0.08, type: "square" }
+    ],
+    battleStart: [
+      { freq: 220, dur: 0.12, vol: 0.10, type: "square" },
+      { freq: 330, dur: 0.12, vol: 0.10, type: "square", start: 0.12 },
+      { freq: 440, dur: 0.22, vol: 0.12, type: "square", start: 0.24 }
+    ],
+    attack: [
+      { freq: 440, dur: 0.06, vol: 0.10, type: "sawtooth" },
+      { freq: 220, dur: 0.10, vol: 0.08, type: "sawtooth", start: 0.05 }
+    ],
+    damage: [
+      { freq: 180, dur: 0.15, vol: 0.12, type: "sawtooth" }
+    ],
+    captureOk: [
+      { freq: 523, dur: 0.10, vol: 0.10, type: "square" },
+      { freq: 659, dur: 0.10, vol: 0.10, type: "square", start: 0.10 },
+      { freq: 784, dur: 0.18, vol: 0.12, type: "square", start: 0.20 }
+    ],
+    captureFail: [
+      { freq: 330, dur: 0.10, vol: 0.10, type: "sawtooth" },
+      { freq: 220, dur: 0.15, vol: 0.10, type: "sawtooth", start: 0.10 }
+    ],
+    levelUp: [
+      { freq: 523, dur: 0.08, vol: 0.12, type: "square" },
+      { freq: 659, dur: 0.08, vol: 0.12, type: "square", start: 0.08 },
+      { freq: 784, dur: 0.08, vol: 0.12, type: "square", start: 0.16 },
+      { freq: 1047, dur: 0.22, vol: 0.12, type: "square", start: 0.24 }
+    ],
+    chestOpen: [
+      { freq: 784, dur: 0.10, vol: 0.08, type: "sine" },
+      { freq: 988, dur: 0.14, vol: 0.10, type: "sine", start: 0.10 }
+    ],
+    itemGet: [
+      { freq: 660, dur: 0.08, vol: 0.09, type: "sine" },
+      { freq: 880, dur: 0.14, vol: 0.10, type: "sine", start: 0.08 }
+    ],
+    endingStart: [
+      { freq: 523, dur: 0.15, vol: 0.07, type: "sine" },
+      { freq: 659, dur: 0.15, vol: 0.07, type: "sine", start: 0.20 },
+      { freq: 784, dur: 0.15, vol: 0.08, type: "sine", start: 0.40 },
+      { freq: 1047, dur: 0.30, vol: 0.09, type: "sine", start: 0.60 }
+    ]
+  };
+
+  function playSE(type) {
+    if (!soundEnabled || !seEnabled) return;
+    if (!initAudioContext()) return;
+    var spec = SE_SPECS[type];
+    if (!spec) return;
+    try {
+      var now = audioCtx.currentTime;
+      for (var i = 0; i < spec.length; i++) {
+        var note = spec[i];
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = note.type || "square";
+        var t = now + (note.start || 0);
+        osc.frequency.setValueAtTime(note.freq, t);
+        gain.gain.setValueAtTime(note.vol || 0.10, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + note.dur);
+        osc.start(t);
+        osc.stop(t + note.dur + 0.01);
+      }
+    } catch (e) {}
+  }
+
+  // BGMパターン定義: notes = [[freq_Hz, dur_sec], ...], freq=0は休符
+  var BGM_DATA = {
+    field: {
+      waveType: "square", vol: 0.05,
+      // Cメジャー 120BPM 明るいレトロRPG風ループ(8秒)
+      notes: [
+        [330, 0.25], [392, 0.25], [523, 0.25], [494, 0.25],
+        [440, 0.25], [392, 0.25], [330, 0.50],
+        [349, 0.25], [440, 0.25], [523, 0.25], [494, 0.25],
+        [440, 0.25], [349, 0.25], [294, 0.50],
+        [330, 0.25], [440, 0.25], [392, 0.25], [330, 0.25],
+        [294, 0.25], [523, 0.25], [494, 0.50],
+        [392, 0.25], [440, 0.25], [494, 0.25], [523, 0.25],
+        [440, 0.25], [392, 0.25], [330, 0.50]
+      ]
+    },
+    battle: {
+      waveType: "square", vol: 0.06,
+      // Aマイナー 150BPM 緊張感ある速い曲(6.4秒)
+      notes: [
+        [440, 0.20], [523, 0.20], [659, 0.20], [784, 0.20],
+        [659, 0.20], [523, 0.20], [440, 0.20], [0, 0.20],
+        [587, 0.20], [523, 0.20], [494, 0.20], [523, 0.20],
+        [440, 0.40], [392, 0.40],
+        [440, 0.20], [392, 0.20], [440, 0.20], [523, 0.20],
+        [587, 0.20], [659, 0.20], [784, 0.20], [0, 0.20],
+        [523, 0.40], [440, 0.40],
+        [392, 0.20], [440, 0.20], [0, 0.40]
+      ]
+    },
+    ending: {
+      waveType: "sine", vol: 0.06,
+      // Fメジャー 80BPM 穏やかなアルペジオ風(12秒)
+      notes: [
+        [349, 0.375], [440, 0.375], [523, 0.375], [659, 0.375],
+        [523, 0.375], [440, 0.375], [349, 0.375], [0, 0.375],
+        [392, 0.375], [523, 0.375], [659, 0.375], [784, 0.375],
+        [659, 0.375], [523, 0.375], [392, 0.375], [0, 0.375],
+        [440, 0.375], [523, 0.375], [698, 0.375], [880, 0.375],
+        [698, 0.375], [523, 0.375], [440, 0.375], [0, 0.375],
+        [523, 0.75], [392, 0.375], [349, 0.375],
+        [523, 0.375], [392, 0.375], [0, 0.75]
+      ]
+    }
+  };
+
+  function startBGM(type) {
+    if (!soundEnabled || !bgmEnabled) return;
+    if (!initAudioContext()) return;
+    if (bgmCurrentType === type) return;
+    stopBGM();
+    bgmCurrentType = type;
+    bgmStopFlag = false;
+    _scheduleBGMLoop(type, audioCtx.currentTime);
+  }
+
+  function stopBGM() {
+    bgmStopFlag = true;
+    bgmCurrentType = null;
+    if (bgmSchedulerId !== null) {
+      clearTimeout(bgmSchedulerId);
+      bgmSchedulerId = null;
+    }
+  }
+
+  function updateBGM(type) {
+    if (!soundEnabled || !bgmEnabled) {
+      if (bgmCurrentType !== null) stopBGM();
+      return;
+    }
+    if (bgmCurrentType === type) return;
+    startBGM(type);
+  }
+
+  function _scheduleBGMLoop(type, startTime) {
+    if (bgmStopFlag || bgmCurrentType !== type || !audioCtx) return;
+    var data = BGM_DATA[type];
+    if (!data) return;
+    var t = startTime;
+    var vol = data.vol || 0.05;
+    var waveType = data.waveType || "square";
+    try {
+      for (var i = 0; i < data.notes.length; i++) {
+        var note = data.notes[i];
+        var freq = note[0];
+        var dur = note[1];
+        if (freq > 0) {
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = waveType;
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(vol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.85);
+          osc.start(t);
+          osc.stop(t + dur);
+        }
+        t += dur;
+      }
+    } catch (e) {
+      bgmStopFlag = true;
+      return;
+    }
+    var loopDur = t - startTime;
+    var delayMs = Math.max(100, (loopDur - 0.15) * 1000);
+    bgmSchedulerId = setTimeout(function () {
+      if (!bgmStopFlag && bgmCurrentType === type && audioCtx) {
+        _scheduleBGMLoop(type, audioCtx.currentTime + 0.10);
+      }
+    }, delayMs);
   }
 
   // ---------------------------------------------------------
