@@ -78,17 +78,18 @@
   var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true };
 
   // ---------------------------------------------------------
-  // 1.5  横スクロールマップデータ (§43 v0.9)
+  // 1.5  横スクロールマップデータ (§43 v0.9 / §44 v0.9.1)
   // ---------------------------------------------------------
   // タイル文字の意味:
   //   'g' 草原(エンカウントあり)  'f' 安全地帯(エンカウントなし)
   //   '#' 木・壁(進入不可)        '~' 水(進入不可)
   //   'c' 宝箱               'n' 旅の案内人NPC
-  //   'm' 商人               'e' 固定エンカウント(接触で即戦闘)
-  //   '.' 空・木上(視覚のみ)
+  //   'm' 商人               'e' 固定エンカウント(撃破後は草原に変化)
+  //   '.' 空・木上(視覚のみ)  'p' 旅人NPC(v0.9.1追加)
+  //   'G' ゴール(v0.9.1追加)
   //
-  // rows[0]=空(y=0)  rows[1]=地面(y=1)  rows[2]=水(y=2)  各40文字
-  // プロトタイプでは移動は y=1 (地面) のみ。
+  // rows[0]=高路(y=0)  rows[1]=メイン(y=1)  rows[2]=低路(y=2)  各40文字
+  // v0.9.1: y=0〜2 すべて移動可能。迂回路A(x=11-12)とB(x=27-28)でルート選択。
 
   var SIDE_MAP_WIDTH  = 40;
   var SIDE_MAP_HEIGHT = 3;
@@ -104,28 +105,37 @@
     "n": "🧭",
     "m": "🏪",
     "e": "⚡",
-    ".": "☁️"
+    ".": "☁️",
+    "p": "🧑",
+    "G": "🏁"
   };
 
   // 進入不可タイル
   var SIDE_BLOCKED = { "#": true, "~": true };
-  // ランダムエンカウントが起きないタイル(草原 'g' 以外)
-  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true };
+  // ランダムエンカウントが起きないタイル
+  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true, "p": true, "G": true };
 
-  // ステージ定義
-  // x=4:宝箱 x=7:NPC x=10:商人 x=14:固定戦闘 x=21:安全地帯 x=24:宝箱 x=31:固定戦闘
+  // ステージ定義 (§44 v0.9.1)
+  // row0(y=0) 高路: 安全。迂回路A(x=11-13)と迂回路B(x=27-29)を提供。x=19にNPC2。
+  // row1(y=1) メイン: x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
+  //           x=24宝箱 x=27-28ブロックB x=31固定敵 x=38ゴール
+  // row2(y=2) 低路: リスク高・報酬多。x=5宝箱 x=14固定敵 x=23宝箱 x=31宝箱
   var SIDE_STAGE_DATA = {
     1: {
       name: "はじまりの草原",
       rows: [
-        "#..#..#..#...#..##...#..#...#.#..#...#..",
-        "ggggcggnggmgggeggggggfggcggggggegggggggg",
-        "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+        "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
+        "ggggcggnggm##ggggfggpgggcgg##ggeggfgggGg",
+        "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
-      startY: 1
+      startY: 1,
+      goalX: 38
     }
   };
+
+  // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
+  var sideMapPendingFixedKey = "";
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -531,13 +541,15 @@
       dragonShieldGot: false,  // v0.8.3 ドラゴンのたて(王様の使い報酬)
       level99Reached: false    // v0.8.5 Lv99到達フラグ(level99Shownと別管理でデバッグリセット可能)
     },
-    // §43 v0.9: 横スクロールマップ
+    // §43 v0.9 / §44 v0.9.1: 横スクロールマップ
     mapMode: "normal",   // "normal" | "side"
     sideMap: {
       x: 1,
       y: 1,
       stage: 1,
-      openedChests: {}
+      openedChests: {},
+      defeatedEnemies: {},   // §44 v0.9.1: 撃破済み固定敵 { "31,1": true }
+      stageCleared: {}       // §44 v0.9.1: クリア済みステージ { "1": true }
     }
   };
 
@@ -784,14 +796,15 @@
           : "#";
 
         var emoji;
-        // プレイヤー表示
         if (mx === sm.x && my === sm.y) {
           emoji = "🦍";
         } else {
-          // 開封済み宝箱
           var key = mx + "," + my;
           if (tileChar === "c" && sm.openedChests[key]) {
             emoji = "📦";
+          } else if (tileChar === "e" && sm.defeatedEnemies[key]) {
+            // §44 v0.9.1: 撃破済み固定敵は草原に変化
+            emoji = SIDE_TILE_EMOJI["g"];
           } else {
             emoji = SIDE_TILE_EMOJI[tileChar] || "❓";
           }
@@ -801,11 +814,21 @@
     }
     viewport.innerHTML = html;
 
-    // ステージ名・進捗を情報バーに反映
+    // §44 v0.9.1: ステージ名・進捗 (ゴールまでの距離)
     var infoEl = document.getElementById("side-map-info");
     if (infoEl) {
       infoEl.style.display = "block";
-      infoEl.textContent = stageData.name + "  📍 " + sm.x + " / " + (SIDE_MAP_WIDTH - 1);
+      var goalX = stageData.goalX || (SIDE_MAP_WIDTH - 1);
+      var dist = goalX - sm.x;
+      var infoText;
+      if (sm.stageCleared[sm.stage]) {
+        infoText = stageData.name + "  ✅ クリア済み  📍" + sm.x;
+      } else if (dist <= 0) {
+        infoText = stageData.name + "  🏁 ゴール！";
+      } else {
+        infoText = stageData.name + "  📍" + sm.x + "/" + goalX + "  あと" + dist;
+      }
+      infoEl.textContent = infoText;
     }
   }
 
@@ -816,17 +839,20 @@
     if (!stageData) { return; }
 
     var nx = sm.x + dx;
-    // §43 プロトタイプ: 縦移動は無効。地面(y=1)のみ歩行可能。
-    if (dx === 0) { return; }
+    var ny = sm.y + dy;
 
+    // §44 v0.9.1: 縦移動を有効化。マップ境界チェック。
     if (nx < 0 || nx >= SIDE_MAP_WIDTH) { return; }
+    if (ny < 0 || ny >= SIDE_MAP_HEIGHT) { return; }
 
-    var ny = sm.y;
-    var tileChar = stageData.rows[ny].charAt(nx);
+    var row = stageData.rows[ny];
+    if (!row) { return; }
+    var tileChar = row.charAt(nx);
     if (SIDE_BLOCKED[tileChar]) { return; }
 
     sm.x = nx;
-    renderField();  // → renderSideField() に自動ルーティング
+    sm.y = ny;
+    renderField();
     saveGame();
 
     // タイルイベント判定
@@ -836,15 +862,22 @@
         openSideChest(nx, ny);
       }
     } else if (tileChar === "n") {
-      openSideNpcModal();
+      openSideNpcModal("n");
+    } else if (tileChar === "p") {
+      // §44 v0.9.1: 旅人NPC
+      openSideNpcModal("p");
     } else if (tileChar === "m") {
       openMerchantModal();
+    } else if (tileChar === "G") {
+      // §44 v0.9.1: ゴール
+      openSideGoalModal();
     } else if (tileChar === "e") {
-      // 固定エンカウントは毎回戦闘
+      // §44 v0.9.1: 撃破済みなら素通り
+      if (sm.defeatedEnemies[key]) { return; }
+      sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
       triggerEncounter();
     } else if (tileChar === "g") {
-      // 草原: ランダムエンカウント
       state.stepsSinceEncounter++;
       if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
           Math.random() < ENCOUNTER_CHANCE) {
@@ -860,29 +893,81 @@
     sm.openedChests[key] = true;
     renderField();
 
-    var gold = 30 + Math.floor(Math.random() * 8) * 10;
-    state.player.gold += gold;
+    // §44 v0.9.1: バリエーション報酬
+    var roll = Math.random();
+    var msg;
+    if (roll < 0.4) {
+      var gold = (3 + Math.floor(Math.random() * 7)) * 10;
+      state.player.gold += gold;
+      msg = "宝箱を開けた！ 💰 " + gold + "G 手に入れた！";
+    } else if (roll < 0.6) {
+      state.player.coffeeCount++;
+      msg = "宝箱を開けた！ ☕ コーヒー を手に入れた！";
+    } else if (roll < 0.8) {
+      state.player.breadCount++;
+      msg = "宝箱を開けた！ 🍞 パン を手に入れた！";
+    } else {
+      state.player.potionCount++;
+      msg = "宝箱を開けた！ 🧪 やくそう を手に入れた！";
+    }
     renderStatus();
-    showToast("宝箱を開けた！ 💰 " + gold + "G 手に入れた！");
+    showToast(msg);
     saveGame();
   }
 
-  function openSideNpcModal() {
+  function openSideNpcModal(npcType) {
+    // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
+    var icon, name, lines;
+    if (npcType === "p") {
+      icon = "🧑";
+      name = "旅人";
+      lines = [
+        "この草原、上の道は安全だが宝は少ない。",
+        "下の道は危険だが、宝箱がたくさんあるらしい。",
+        "木がジャマしてる場所では、上か下に回り込めるよ。",
+        "あのゴール🏁まで辿り着けば、褒美がもらえるはずだ。"
+      ];
+    } else {
+      icon = "🧭";
+      name = "旅の案内人";
+      lines = [
+        "ようこそ、はじまりの草原へ！",
+        "木が道を塞いでいたら、上か下に迂回してみよう。",
+        "低い道は危ないけど、宝箱がたくさん眠ってるよ。",
+        "右のゴール🏁を目指して進んでね！"
+      ];
+    }
     document.getElementById("npc-header").innerHTML =
-      '<div style="font-size:40px;line-height:1.2;">🧭</div>' +
-      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">旅の案内人</div>';
-    var lines = [
-      "ようこそ、はじまりの草原へ！",
-      "ここは横スクロールマップのプロトタイプ。",
-      "右に進めば宝箱や商人、強敵が待っているよ。",
-      "いずれはもっと広い世界へ続く道になるだろう。"
-    ];
+      '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + name + '</div>';
     var speechHtml = "";
     for (var i = 0; i < lines.length; i++) {
       speechHtml += "<p>「" + lines[i] + "」</p>";
     }
     document.getElementById("npc-speech").innerHTML = speechHtml;
     openModal("npc-modal");
+  }
+
+  function openSideGoalModal() {
+    // §44 v0.9.1: ステージクリアモーダル
+    var sm = state.sideMap;
+    var stageKey = String(sm.stage);
+    var alreadyCleared = sm.stageCleared[stageKey];
+    if (!alreadyCleared) {
+      sm.stageCleared[stageKey] = true;
+      state.player.gold += 50;
+      renderStatus();
+      saveGame();
+    }
+    var rewardText = alreadyCleared
+      ? '<p style="color:#a8d8a8;">（クリア済み：報酬は一度だけ）</p>'
+      : '<p style="color:#ffd166;">💰 50G もらった！</p>';
+    document.getElementById("modal-side-goal-body").innerHTML =
+      '<p style="font-size:2em;margin:0 0 8px;">🏁</p>' +
+      '<p style="font-weight:bold;font-size:1.1em;margin-bottom:4px;">はじまりの草原をクリア！</p>' +
+      rewardText +
+      '<p style="font-size:0.85em;color:#aaa;">このまま探索を続けるか、通常マップへ戻ろう。</p>';
+    openModal("modal-side-goal");
   }
 
   function switchToSideMap() {
@@ -1984,6 +2069,11 @@
     document.getElementById("battle-screen").classList.add("hidden");
     document.getElementById("field-screen").classList.remove("hidden");
     document.getElementById("dpad").classList.remove("hidden");
+    // §44 v0.9.1: 固定敵撃破フラグを確定してからセーブ
+    if (state.mapMode === "side" && sideMapPendingFixedKey !== "") {
+      state.sideMap.defeatedEnemies[sideMapPendingFixedKey] = true;
+      sideMapPendingFixedKey = "";
+    }
     renderField();
     updateStatusBar();
     saveGame();
@@ -3310,9 +3400,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-ending">🎵 [TEST] エンディングBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-stop">🔇 [TEST] BGM停止</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-hard-stop">🔇 BGM完全停止(stopBGMHard)</button>';
-      html += '<p class="small" style="color:#a8d8a8;margin-top:8px;">🗺️ 横スクロールマップ (§43 v0.9)</p>';
+      html += '<p class="small" style="color:#a8d8a8;margin-top:8px;">🗺️ 横スクロールマップ (§43-44 v0.9.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-map-enter" style="border-color:#a8d8a8;color:#a8d8a8;">⬇️ 横スクロールマップへ移動</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-map-exit" style="border-color:#a8d8a8;color:#a8d8a8;">⬆️ 通常マップへ戻る</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-start" style="border-color:#a8d8a8;color:#a8d8a8;">🔙 スタート地点へ (x=1,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-near-goal" style="border-color:#a8d8a8;color:#a8d8a8;">🏃 ゴール直前へ (x=35,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-reset-flags" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 横スクロール: クリア・撃破フラグをリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -3437,6 +3530,32 @@
         closeModal("settings-modal");
         switchToNormalMap();
       };
+      document.getElementById("btn-debug-side-start").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.x = 1;
+        state.sideMap.y = 1;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] スタート地点へ移動 (x=1,y=1)");
+      };
+      document.getElementById("btn-debug-side-near-goal").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.x = 35;
+        state.sideMap.y = 1;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] ゴール直前へ移動 (x=35,y=1)");
+      };
+      document.getElementById("btn-debug-side-reset-flags").onclick = function () {
+        state.sideMap.defeatedEnemies = {};
+        state.sideMap.stageCleared = {};
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 横スクロール: クリア・撃破フラグをリセット");
+      };
     }
   }
 
@@ -3479,12 +3598,14 @@
         gameCleared: state.gameCleared,
         openedChests: state.openedChests,
         eventFlags: state.eventFlags,
-        // §43 v0.9: 横スクロールマップ
+        // §43 v0.9 / §44 v0.9.1: 横スクロールマップ
         mapMode: state.mapMode,
         sideMapX: state.sideMap.x,
         sideMapY: state.sideMap.y,
         sideMapStage: state.sideMap.stage,
-        sideMapChests: state.sideMap.openedChests
+        sideMapChests: state.sideMap.openedChests,
+        sideMapDefeated: state.sideMap.defeatedEnemies,
+        sideMapCleared: state.sideMap.stageCleared
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -3543,12 +3664,14 @@
       if (state.eventFlags.level99Reached === undefined) {
         state.eventFlags.level99Reached = (data.player && data.player.level >= 99);
       }
-      // §43 v0.9: 横スクロールマップ (古いセーブはデフォルト値で補完)
+      // §43 v0.9 / §44 v0.9.1: 横スクロールマップ (古いセーブはデフォルト値で補完)
       state.mapMode = data.mapMode || "normal";
       state.sideMap.x = data.sideMapX != null ? data.sideMapX : 1;
       state.sideMap.y = data.sideMapY != null ? data.sideMapY : 1;
       state.sideMap.stage = data.sideMapStage || 1;
       state.sideMap.openedChests = data.sideMapChests || {};
+      state.sideMap.defeatedEnemies = data.sideMapDefeated || {};
+      state.sideMap.stageCleared = data.sideMapCleared || {};
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -3668,6 +3791,15 @@
     // NPC会話モーダル(§32 v0.8.2)
     document.getElementById("btn-npc-close").addEventListener("click", function () {
       closeModal("npc-modal");
+    });
+
+    // §44 v0.9.1: 横スクロールマップ ゴールモーダル
+    document.getElementById("btn-side-goal-return").addEventListener("click", function () {
+      closeModal("modal-side-goal");
+      switchToNormalMap();
+    });
+    document.getElementById("btn-side-goal-stay").addEventListener("click", function () {
+      closeModal("modal-side-goal");
     });
 
     // 攻略ペーパービュー屋モーダル(§37 v0.8.6)

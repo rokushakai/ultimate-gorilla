@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.9** |
+| 現在バージョン | **v0.9.1** |
 | ブランチ | main |
 
 ---
@@ -63,11 +63,19 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.9.1] 横スクロールマップ探索性アップデート**（§44）
+  - 縦移動を有効化(y=0〜2)。迂回路A(x=11-13)・迂回路B(x=27-29)
+  - 新タイル: `G`(🏁 ゴール), `p`(🧑 旅人NPC)
+  - 固定敵撃破追跡: `defeatedEnemies` + `finishBattle()` フック + `sideMapPendingFixedKey`
+  - ゴールモーダル(`#modal-side-goal`): 50G報酬・`stageCleared`・「通常マップへ戻る」
+  - マップ再設計: 高路/メイン/低路の3ルート、宝箱5個、固定敵2個
+  - saveGame/loadGame: `sideMapDefeated`, `sideMapCleared` 追加
+  - デバッグ追加: スタート/ゴール直前/クリアフラグリセット
 - **[v0.9] 横スクロールマップ試作**（§43）
   - `state.mapMode: "normal"|"side"` + `state.sideMap {x,y,stage,openedChests}`
   - ステージ1「はじまりの草原」(40×3 タイルマップ) — g/f/#/~/c/n/m/e/. タイル
   - `renderField()` がスマートディスパッチ: side時に --cols/--rows 更新 → `renderSideField()`
-  - `moveSidePlayer()`: 衝突/宝箱/NPC/���人/固定戦闘/ランダム戦闘
+  - `moveSidePlayer()`: 衝突/宝箱/NPC/商人/固定戦闘/ランダム戦闘
   - `switchToSideMap()` / `switchToNormalMap()` でモード切り替え
   - デバッグボタン2個: 「横スクロールマップへ移動」「通常マップへ戻る」
   - saveGame / loadGame: mapMode + sideMap 追加(古いセーブは デフォルト値で補完)
