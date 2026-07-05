@@ -226,7 +226,9 @@
     { id: "stranger", name: "異邦人", emoji: "🌍", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 80, attack: 12, def: 4, captureRate: 0.20, exp: 63 },
     { id: "visitor", name: "来訪者", emoji: "🚪", type: "monster", isUMA: false, minLevel: 11, weight: 3, hp: 85, attack: 13, def: 5, captureRate: 0.20, exp: 72 },
     // §45 v0.9.2: 中ボスゴリラ (横スクロールステージ1固定ボス、通常エンカウントには出ない)
+    // §46 v0.9.2.1: canCapture:false で captureRate:0 + clamp下限(0.05)の抜け穴を完全に封じる
     { id: "midboss_gorilla", name: "中ボスゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 150, attack: 20, def: 5, captureRate: 0, exp: 160, fleeRate: 0.30,
+      canCapture: false,
       customEscapeMsgs: ["はじまりの草原に静けさが戻った。", "中ボスゴリラは草むらの奥へ消えていった。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
@@ -933,26 +935,46 @@
   function openSideNpcModal(npcType) {
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
     var icon, name, lines;
+    // §46 v0.9.2.1: 中ボスゴリラ撃退後にセリフを変化させる
+    var midbossDefeated = !!(state.sideMap && state.sideMap.defeatedEnemies && state.sideMap.defeatedEnemies["36,1"]);
     if (npcType === "p") {
       icon = "🧑";
       name = "旅人";
-      lines = [
-        "この草原、上の道は安全だが宝は少ない。",
-        "下の道は危険だが、宝箱がたくさんあるらしい。",
-        "木がジャマしてる場所では、上か下に回り込めるよ。",
-        "ゴール🏁の手前に💢の印がある。強いゴリラが待ってるらしい……上から迂回すれば避けられるけど。",
-        "あのゴール🏁まで辿り着けば、褒美がもらえるはずだ。"
-      ];
+      if (midbossDefeated) {
+        lines = [
+          "中ボスゴリラを退かせたのか！はじまりの草原も、少し静かになったようだ。",
+          "この先のゴール🏁まで、もう大きな障害はないぞ。",
+          "中ボスゴリラはUMAではない。捕まえる相手じゃなかったでしょ？",
+          "次の道でも、きっと力が開けるだろう。頑張れよ！"
+        ];
+      } else {
+        lines = [
+          "この草原、上の道は安全だが宝は少ない。",
+          "下の道は危険だが、宝箱がたくさんあるらしい。",
+          "木がジャマしてる場所では、上か下に回り込めるよ。",
+          "ゴール🏁の手前に💢の印がある。強いゴリラが待ってるらしい……上から迂回すれば避けられるけど。",
+          "あのゴール🏁まで辿り着けば、褒美がもらえるはずだ。"
+        ];
+      }
     } else {
       icon = "🧭";
       name = "旅の案内人";
-      lines = [
-        "ようこそ、はじまりの草原へ！",
-        "木が道を塞いでいたら、上か下に迂回してみよう。",
-        "低い道は危ないけど、宝箱がたくさん眠ってるよ。",
-        "ゴール近くに💢の印がある場所がある。中ボスゴリラが待ち構えているぞ！高路を使えば回避もできる。",
-        "右のゴール🏁を目指して進んでね！"
-      ];
+      if (midbossDefeated) {
+        lines = [
+          "中ボスゴリラを退かせたのか！さすがだ。",
+          "はじまりの草原は今、静けさを取り戻している。",
+          "ゴール🏁までの道はもう開けているぞ。残りを探索して進んでみよう！",
+          "宝箱はまだ開けていないものが残っているかもしれないぞ。"
+        ];
+      } else {
+        lines = [
+          "ようこそ、はじまりの草原へ！",
+          "木が道を塞いでいたら、上か下に迂回してみよう。",
+          "低い道は危ないけど、宝箱がたくさん眠ってるよ。",
+          "ゴール近くに💢の印がある場所がある。中ボスゴリラが待ち構えているぞ！高路を使えば回避もできる。",
+          "右のゴール🏁を目指して進んでね！"
+        ];
+      }
     }
     document.getElementById("npc-header").innerHTML =
       '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
@@ -1458,7 +1480,8 @@
       drainsMp: monster.drainsMp || null,   // 攻撃時にMPを吸う可能性(§6.2)
       stealsGold: monster.stealsGold || null, // 攻撃時に所持金を盗む可能性(§6.2)
       ambush: !!monster.ambush,             // 戦闘開始時に不意打ちしてくるか(§6.2)
-      customEscapeMsgs: monster.customEscapeMsgs || null  // §45 v0.9.2: ボス専用逃走メッセージ
+      customEscapeMsgs: monster.customEscapeMsgs || null, // §45 v0.9.2: ボス専用逃走メッセージ
+      canCapture: monster.canCapture !== false  // §46 v0.9.2.1: false なら捕獲コマンド封鎖
     };
 
     // UMAなら図鑑に「発見済み」を記録する(捕獲済みなら上書きしない)
@@ -1851,6 +1874,12 @@
   // 成功した場合はtrueを返す(呼び出し側で敵の行動をスキップする)。
   function attemptCapture(bonusChance) {
     var e = state.enemy;
+    // §46 v0.9.2.1: canCapture:false のボス系は捕獲判定に進まない (clamp下限0.05の抜け穴も封鎖)
+    if (e.canCapture === false) {
+      log(e.name + "はUMAではない！");
+      log("捕まえる相手ではなく、道をふさぐ強敵だ！");
+      return false;
+    }
     // 究極ゴリラは通常の捕獲コマンドでは捕まらない(§14.5)
     if (e.final) {
       log("究極ゴリラには普通の捕獲は通用しない！");
@@ -2113,12 +2142,12 @@
   // ---------------------------------------------------------
   // 17. 経験値・レベルアップ
   // ---------------------------------------------------------
-  // §45 v0.9.2: のりお expMod 対応。EXP取得ログと multiplier 処理を一本化。
+  // §45 v0.9.2 / §46 v0.9.2.1: のりお expMod 対応。ログを改善して元EXP/倍率/最終EXPを明示。
   function gainExp(baseExp) {
     var expMult = getCompanionBonus("expMod");
     var finalExp = expMult > 0 ? Math.ceil(baseExp * expMult) : baseExp;
     if (expMult > 0) {
-      log("📈 ノリオ効果！ EXP " + expMult + "倍！");
+      log("📈 ノリオ効果！ EXP " + expMult + "倍！ (" + baseExp + " → " + finalExp + ")");
     }
     logExpGained(finalExp);
     return addExp(finalExp);
@@ -3120,7 +3149,14 @@
           lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
           lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
           lines.push("メタルゴリラ系は硬いが、経験値がとても多い。出会えたら逃げられる前に勝負だ。");
-          lines.push("横スクロールの草原の奥に💢の印がある場所がある。強いゴリラが待ち構えているらしいぞ。");
+          // §46 v0.9.2.1: 中ボスゴリラ撃退前後でヒントを変化
+          var sideDefeated = !!(state.sideMap && state.sideMap.defeatedEnemies && state.sideMap.defeatedEnemies["36,1"]);
+          if (sideDefeated) {
+            lines.push("草原の中ボスゴリラを退かせたか！あいつはUMAではなく、道をふさぐ番人のようなものだ。よくやった。");
+          } else {
+            lines.push("横スクロールの草原の奥に💢の印がある場所がある。強いゴリラが待ち構えているらしいぞ。");
+            lines.push("中ボスゴリラはUMAではない。捕まえようとしても無駄だ。退かせるしかない。");
+          }
         } else {
           lines.push("ゴリラにも色々いる。普通のゴリラ、メタルなゴリラ、そして伝説の究極ゴリラだ。");
           lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
@@ -3447,6 +3483,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-midboss-encounter" style="border-color:#ffd166;color:#ffd166;">🦍 中ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-norio" style="border-color:#74c0fc;color:#74c0fc;">📈 ノリオを仲間にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-reset-midboss" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 中ボスゴリラ撃退フラグをリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-reset-exp" style="border-color:#a8d8a8;color:#a8d8a8;">✨ EXPを0にする(ノリオ効果確認用)</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -3621,6 +3658,12 @@
         saveGame();
         renderField();
         showToast("[DEBUG] 中ボスゴリラ撃退フラグをリセット (36,1)");
+      };
+      document.getElementById("btn-debug-reset-exp").onclick = function () {
+        state.player.exp = 0;
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] EXPを0にした (次の戦闘でノリオ効果を確認しやすい)");
       };
     }
   }

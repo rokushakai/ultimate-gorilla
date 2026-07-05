@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.9.2** |
+| 現在バージョン | **v0.9.2.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,14 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.9.2.1] 中ボスゴリラ捕獲不可・実機確認補強**（§46）
+  - `canCapture: false` フラグ + `actuallyStartBattle()` コピー + `attemptCapture()` ブロック
+  - captureRate:0 + clamp下限0.05 の組み合わせによる5%捕獲チャンス問題を解消
+  - gainExp() ログ改善: "(元EXP → 最終EXP)" 表示でノリオ効果を明示
+  - 横スクロールNPC (案内人/旅人)が `defeatedEnemies["36,1"]` で撃退前後セリフ分岐
+  - ゴリラ研究家: 中ボスゴリラ撃退前後でヒント変化
+  - ヘルプ: 「💢 ボス系モンスター」セクション追加、ノリオ説明→「経験値2倍」に更新
+  - デバッグ追加: EXPを0にする (ノリオ効果確認用)
 - **[v0.9.2] のりお指令②: 中ボスゴリラ・敵再調整・のりお効果変更**（§45）
   - 新タイル: `b`(💢 中ボスゴリラ固定戦闘) — SIDE_STAGE_DATA row1 x=36 に配置
   - `triggerFixedEncounter(enemyId)`: 固定ID敵を起動する新関数
