@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.11.1** |
+| 現在バージョン | **v0.11.2** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,15 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.11.2] 横スクロールマップ入口ゲート・道案内改善**（§52）
+  - **🌀ゲートタイル**: 通常マップ(2,3)に`'V'`タイル追加。踏むとモーダルが開き横スクロールへ移動できる。
+  - **ゲートモーダル**: 初回は詳細説明付き、2回目以降は短い確認のみ（`gateExplained` フラグで制御）。
+  - **gateExplained フラグ**: `state.sideMap.gateExplained`。saveGame/loadGame/newGame 対応済み。
+  - **NPC台詞更新**: UMA博士・旅人・王様の使いにゲート場所ヒント追加。UMA博士にUMA捕獲ヒント追加。
+  - **ヒント屋 priority 13**: 横スクロール未訪問+Lv40未満でゲート案内ヒントを返す。
+  - **ヘルプ更新**: 「🌀 横スクロールマップへの行き方」セクション追加。
+  - **デバッグボタン追加**: 🌀 ゲートタイル付近へ移動 / 🔄 ゲート説明フラグリセット。
+  - **GAME_DESIGN.md §52**: ゲート仕様・将来の捕獲補助技デザインメモを追記。
 - **[v0.11.1] ステージ3安定化・デバッグ補強・ステージ4予告**（§51）
   - **固定敵ID確認済み**: powerharassmentsenpai / wanderingman / deathmatch はすべて NON_UMA_DATA に実在。
   - **triggerFixedEncounter 安全化**: 未定義IDに console.warn + triggerEncounter() フォールバックを追加。
@@ -336,6 +345,16 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 2. **NPC固有イベント深化** — 仲間加入フラグ別の追加セリフや連続クエスト的な展開。工数中。
 3. **BGMメロディ改善** — 現行メロディの音楽的改善や音量調整。工数小。
 4. **仲間システム拡張** — フィールド追従・固有イベント・3分岐加入。工数大。
+
+## v0.11.2 での「今回は実装しない」リスト
+
+- ステージ4本体
+- 大魔王ゴリラ実装
+- 低固定ダメージ技の実装（はずかし固め等）→ GAME_DESIGN.md §52 にメモのみ
+- 新BGM追加 / BGM制御の大改修
+- 仲間フィールド追従
+- 究極ゴリラ仕様変更
+- 通常マップの削除
 
 ---
 

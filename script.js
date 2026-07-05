@@ -25,7 +25,7 @@
     "#############",
     "#,,,H,,,T,,S#",  // S=王様の使い(10,1)
     "#,D,,,,M,,K,#",  // D=UMA博士(2,2), K=鍛冶屋(10,2)
-    "#,,,N,,,,G,,#",  // N=攻略ペーパービュー屋(4,3) v0.8.6 §37
+    "#,V,N,,,,G,,#",  // V=横スクロール入口ゲート(2,3) §52 v0.11.2, N=攻略ペーパービュー屋(4,3)
     "#..........A#",  // A=ペガサスのよろい伝説宝箱(11,4) Lv50+
     "#....R..B...#",  // R=旅人(5,5), B=宝箱(8,5)
     "#...~~~..X..#",  // X=キグナスのかぶと伝説宝箱(9,6) Lv40+
@@ -70,12 +70,13 @@
     "E": "📚",  // ゴリラ研究家(§32 v0.8.2)
     "S": "👑",  // 王様の使い(§32 v0.8.2)
     "X": "✨",  // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
-    "N": "📰"   // 攻略ペーパービュー屋(§37 v0.8.6)
+    "N": "📰",  // 攻略ペーパービュー屋(§37 v0.8.6)
+    "V": "🌀"   // 横スクロール入口ゲート(§52 v0.11.2)
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true, "V": true };
 
   // ---------------------------------------------------------
   // 1.5  横スクロールマップデータ (§43 v0.9 / §44 v0.9.1)
@@ -630,7 +631,8 @@
       stageCleared: {},      // §44 v0.9.1: クリア済みステージ { "1": true }
       stage1RewardLevel: 0,  // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
       stage2RewardLevel: 0,  // §48 v0.10: ステージ2報酬受取レベル (0=未, 1=50G, 2=全取得)
-      stage3RewardLevel: 0   // §50 v0.11: ステージ3報酬受取レベル (0=未, 1=80G, 2=全取得)
+      stage3RewardLevel: 0,  // §50 v0.11: ステージ3報酬受取レベル (0=未, 1=80G, 2=全取得)
+      gateExplained: false   // §52 v0.11.2: ゲートから初めて横スクロールへ入ったか
     }
   };
 
@@ -1505,6 +1507,25 @@
     showToast("⬆️ 通常マップへ戻った！");
   }
 
+  // §52 v0.11.2: 横スクロール入口ゲートモーダル
+  function openSideGateModal() {
+    var bodyEl = document.getElementById("modal-side-gate-body");
+    if (!bodyEl) return;
+    if (!state.sideMap.gateExplained) {
+      bodyEl.innerHTML =
+        "<div style=\"font-size:40px;line-height:1.2;\">🌀</div>" +
+        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">横スクロールマップへの入口</div>" +
+        "<p>ここは「はじまりの草原」へ続く不思議な渦だ。</p>" +
+        "<p>横スクロールマップでは草原・森・町はずれの3ステージを冒険できる。各ステージをクリアすると報酬がもらえるぞ。</p>" +
+        "<p>通常マップへ戻る時はゴール地点の「🏠 通常マップへ戻る」を使おう。</p>";
+    } else {
+      bodyEl.innerHTML =
+        "<div style=\"font-size:40px;line-height:1.2;\">🌀</div>" +
+        "<p>横スクロールマップへ進みますか？</p>";
+    }
+    openModal("modal-side-gate");
+  }
+
   // ---------------------------------------------------------
   // 9. モーダル共通ヘルパー
   // ---------------------------------------------------------
@@ -1613,6 +1634,10 @@
     }
     if (tile === "N") {
       openHintShopModal();
+      return;
+    }
+    if (tile === "V") {
+      openSideGateModal();
       return;
     }
     if (tile === "S") {
@@ -3593,6 +3618,18 @@
           lines.push("図鑑に残るUMAもいれば、旅の途中で出会うだけの相手もおる。");
           lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！");
         }
+        // §52 v0.11.2: UMA捕獲ヒント
+        if (capturedCount < 4) {
+          lines.push("UMAはHPが0になると逃げてしまう。少し弱らせてから捕まえるのじゃ！");
+        }
+        // §52 v0.11.2: 横スクロール未訪問時のゲート案内
+        var sideVisitedD = !!(state.sideMap && (
+          Object.keys(state.sideMap.openedChests || {}).length > 0 ||
+          Object.keys(state.sideMap.defeatedEnemies || {}).length > 0
+        ));
+        if (!sideVisitedD && p.level >= 5 && !state.gameCleared) {
+          lines.push("村の南に🌀渦巻くゲートがある。あそこから横スクロールの草原へ行けるぞ。");
+        }
         return lines;
       }
     },
@@ -3632,6 +3669,14 @@
         var s1Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["1"]);
         if (s1Cleared) {
           lines.push("横に長い草原を越えたらしいな。次は「あやしい森」が待っているという噂だ。");
+        }
+        // §52 v0.11.2: 横スクロール未訪問時のゲート案内
+        var sideVisitedR = !!(state.sideMap && (
+          Object.keys(state.sideMap.openedChests || {}).length > 0 ||
+          Object.keys(state.sideMap.defeatedEnemies || {}).length > 0
+        ));
+        if (!sideVisitedR && !s1Cleared) {
+          lines.push("そういえば、村の中に🌀渦巻く不思議なゲートを見かけたぞ。あそこから横スクロールの草原へ行けるらしい。");
         }
         return lines;
       }
@@ -3746,6 +3791,14 @@
           lines.push("王様は、究極ゴリラの報告を待っておられる。");
           lines.push("まずはレベルを上げ、装備を整えることです。");
           lines.push("強敵に勝てない時は、逃げても恥ではありません。生きて戻ることも、勇者の務めです。");
+          // §52 v0.11.2: 横スクロール未訪問時のゲート案内
+          var sideVisitedS = !!(state.sideMap && (
+            Object.keys(state.sideMap.openedChests || {}).length > 0 ||
+            Object.keys(state.sideMap.defeatedEnemies || {}).length > 0
+          ));
+          if (!sideVisitedS) {
+            lines.push("そうじゃ、村の近くに🌀渦のゲートがあるのを知っておるか？あそこから横スクロールの草原へ行けるのじゃ。");
+          }
         }
         return lines;
       }
@@ -4058,6 +4111,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-validate-encounters" style="border-color:#74c0fc;color:#74c0fc;">🧪 固定敵IDチェック</button>';
+      html += '<p class="small" style="color:#a9e34b;margin-top:8px;">🌀 ゲート (§52 v0.11.2)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gate-move" style="border-color:#a9e34b;color:#a9e34b;">🌀 ゲートタイル付近へ移動 (2,3)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gate-flag-reset" style="border-color:#a9e34b;color:#a9e34b;">🔄 ゲート説明フラグリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -4363,6 +4419,21 @@
       document.getElementById("btn-debug-validate-encounters").onclick = function () {
         validateSideFixedEncounters();
       };
+      // §52 v0.11.2: ゲートデバッグ
+      document.getElementById("btn-debug-gate-move").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "normal";
+        state.player.x = 2;
+        state.player.y = 3;
+        saveGame();
+        renderField();
+        showToast("🌀 ゲートタイル(2,3)付近へ移動した");
+      };
+      document.getElementById("btn-debug-gate-flag-reset").onclick = function () {
+        state.sideMap.gateExplained = false;
+        saveGame();
+        showToast("🔄 ゲート説明フラグをリセットした");
+      };
     }
   }
 
@@ -4415,7 +4486,8 @@
         sideMapCleared: state.sideMap.stageCleared,
         sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0,  // §47 v0.9.3
         sideMapStage2Reward: state.sideMap.stage2RewardLevel || 0,  // §48 v0.10
-        sideMapStage3Reward: state.sideMap.stage3RewardLevel || 0   // §50 v0.11
+        sideMapStage3Reward: state.sideMap.stage3RewardLevel || 0,  // §50 v0.11
+        sideMapGateExplained: !!state.sideMap.gateExplained         // §52 v0.11.2
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -4485,6 +4557,7 @@
       state.sideMap.stage1RewardLevel = data.sideMapStage1Reward || 0;  // §47 v0.9.3
       state.sideMap.stage2RewardLevel = data.sideMapStage2Reward || 0;  // §48 v0.10
       state.sideMap.stage3RewardLevel = data.sideMapStage3Reward || 0;  // §50 v0.11
+      state.sideMap.gateExplained = !!data.sideMapGateExplained;        // §52 v0.11.2
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
         state.sideMap.stage1RewardLevel = state.sideMap.defeatedEnemies["36,1"] ? 2 : 1;
@@ -4639,6 +4712,16 @@
       saveGame();
       renderField();
       showToast("🏚️ 古びた町はずれへ入った！");
+    });
+
+    // §52 v0.11.2: 横スクロール入口ゲートモーダル
+    document.getElementById("btn-side-gate-enter").addEventListener("click", function () {
+      state.sideMap.gateExplained = true;
+      closeModal("modal-side-gate");
+      switchToSideMap();
+    });
+    document.getElementById("btn-side-gate-cancel").addEventListener("click", function () {
+      closeModal("modal-side-gate");
     });
 
     // 攻略ペーパービュー屋モーダル(§37 v0.8.6)
@@ -5060,8 +5143,9 @@
       Object.keys(sm.defeatedEnemies || {}).length > 0
     ));
     if (sideVisited) return 11;
+    // §52 v0.11.2: 横スクロール未訪問+Lv40未満 → ゲート案内ヒント
+    if (p.level < 40) return 13;
     // 通常進行
-    if (p.level < 40) return 1;
     if (!ef.cygnusHelmetGot) return 2;
     if (!ef.pegasusArmorGot) return 3;
     if (!p.hasUkulele) return 4;
@@ -5115,6 +5199,12 @@
       }
       if (!midbossDefeated) return "中ボスゴリラはステージ1のゴール手前x=36にいる。撃退してからゴールすると100G+パンの報酬が増える。上ルートで先にゴールだけ目指す方法もある。";
       return "中ボスゴリラ撃退済み！ゴール(x=38)へ進もう。撃退済みでゴールすると100G+パンの報酬がある。";
+    }
+    // §52 v0.11.2: 横スクロール未訪問+Lv40未満 → ゲート案内ヒント
+    if (priority === 13) {
+      if (tier === 1) return "村の近くに横スクロールマップへの入口があるらしい。探してみよう。";
+      if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。";
+      return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し、宝箱を集め、ゴールを目指そう。";
     }
     var h = [
       // 0: クリア済み
