@@ -107,25 +107,26 @@
     "e": "⚡",
     ".": "☁️",
     "p": "🧑",
-    "G": "🏁"
+    "G": "🏁",
+    "b": "💢"   // §45 v0.9.2: 中ボスゴリラ固定戦闘タイル
   };
 
   // 進入不可タイル
   var SIDE_BLOCKED = { "#": true, "~": true };
   // ランダムエンカウントが起きないタイル
-  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true, "p": true, "G": true };
+  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true, "p": true, "G": true, "b": true };
 
-  // ステージ定義 (§44 v0.9.1)
-  // row0(y=0) 高路: 安全。迂回路A(x=11-13)と迂回路B(x=27-29)を提供。x=19にNPC2。
+  // ステージ定義 (§44 v0.9.1 / §45 v0.9.2)
+  // row0(y=0) 高路: 安全。迂回路A(x=11-13)と迂回路B(x=27-29)を提供。x=19にNPC2。中ボス回避可能。
   // row1(y=1) メイン: x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
-  //           x=24宝箱 x=27-28ブロックB x=31固定敵 x=38ゴール
-  // row2(y=2) 低路: リスク高・報酬多。x=5宝箱 x=14固定敵 x=23宝箱 x=31宝箱
+  //           x=24宝箱 x=27-28ブロックB x=31固定敵 x=36中ボス(b) x=38ゴール
+  // row2(y=2) 低路: リスク高・報酬多。x=5宝箱 x=14固定敵 x=23宝箱 x=31宝箱。x=36は水(中ボス回避不可)
   var SIDE_STAGE_DATA = {
     1: {
       name: "はじまりの草原",
       rows: [
         "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
-        "ggggcggnggm##ggggfggpgggcgg##ggeggfgggGg",
+        "ggggcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §45 v0.9.2: x=36 を 'b'(中ボスゴリラ)に変更
         "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
@@ -148,21 +149,22 @@
   // id / name / rarity / hp / attack / captureRate / exp / sellPrice / isRare
   // ※ def(ぼうぎょ力)とemoji(見た目)は実装上の補助データとして追加している。
   var UMA_DATA = [
-    { id: "kappa", name: "カッパ", emoji: "🐢", rarity: "コモン", isUMA: true, isRare: false, minLevel: 1, weight: 7, hp: 16, attack: 6, def: 2, captureRate: 0.40, exp: 10, sellPrice: 8,
+    // §45 v0.9.2: UMAはHP/EXPを微増 (×1.2)。究極ゴリラは変更なし(HP5000固定)。
+    { id: "kappa", name: "カッパ", emoji: "🐢", rarity: "コモン", isUMA: true, isRare: false, minLevel: 1, weight: 7, hp: 19, attack: 6, def: 2, captureRate: 0.40, exp: 12, sellPrice: 8,
       desc: "水辺に現れるとされるUMA。甲羅が目印。きゅうりが好きかもしれない。" },
-    { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 18, attack: 7, def: 2, captureRate: 0.38, exp: 12, sellPrice: 10,
+    { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 22, attack: 7, def: 2, captureRate: 0.38, exp: 14, sellPrice: 10,
       desc: "古くから目撃談のある太い胴体の蛇型UMA。意外とすばしっこい。" },
-    { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 24, attack: 8, def: 3, captureRate: 0.30, exp: 16, sellPrice: 16,
+    { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 29, attack: 8, def: 3, captureRate: 0.30, exp: 19, sellPrice: 16,
       desc: "広島の山中で目撃された類人猿型UMA。ひとり行動を好む孤独な存在。" },
-    { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 22, attack: 9, def: 2, captureRate: 0.30, exp: 18, sellPrice: 18,
+    { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 26, attack: 9, def: 2, captureRate: 0.30, exp: 22, sellPrice: 18,
       desc: "巨大な翼を持つ謎の飛行UMA。夜に目撃されることが多く、不吉の前兆ともいわれる。" },
-    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 40, attack: 11, def: 4, captureRate: 0.18, exp: 35, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 },
+    { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 48, attack: 11, def: 4, captureRate: 0.18, exp: 42, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 },
       desc: "大きな足跡を残す巨大UMA。出会った者はたいてい驚く。体毛がアレルギーを引き起こすことがある。" },
-    { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 42, attack: 11, def: 5, captureRate: 0.16, exp: 38, sellPrice: 65, fleeRate: 0.80,
+    { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 50, attack: 11, def: 5, captureRate: 0.16, exp: 46, sellPrice: 65, fleeRate: 0.80,
       desc: "湖の深みに住むと噂される巨大UMA。水しぶきと共に颯爽と姿を現す。" },
-    { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 45, attack: 12, def: 5, captureRate: 0.15, exp: 42, sellPrice: 70, fleeRate: 0.80,
+    { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 54, attack: 12, def: 5, captureRate: 0.15, exp: 50, sellPrice: 70, fleeRate: 0.80,
       desc: "雪山に棲む雪男。体は大きいが動きは鈍い。寒さには強く、暑さには弱いらしい。" },
-    { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 46, attack: 13, def: 4, captureRate: 0.14, exp: 44, sellPrice: 75, fleeRate: 0.80,
+    { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 55, attack: 13, def: 4, captureRate: 0.14, exp: 53, sellPrice: 75, fleeRate: 0.80,
       desc: "ニュージャージーの森に棲む翼を持つ悪魔型UMA。遭遇した者はろくなことがないという。" },
     // 究極ゴリラはラスボス級。レベル99+最強装備クラスでないと基本的に倒せない
     // 捕獲もattemptCapture()内で別途上限を掛けてほぼ不可能にしている。
@@ -175,50 +177,57 @@
   // 特殊行動: inflicts(状態異常付与) / drainsMp(MP吸収) / stealsGold(所持金を盗む) /
   //           ambush(戦闘開始時の不意打ち) / fleeRate(プレイヤーの逃走成功率。低いほど素早い)
   var NON_UMA_DATA = [
-    { id: "slime", name: "スライム", emoji: "🟢", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 10, attack: 3, def: 1, captureRate: 0.60, exp: 5 },
-    { id: "bat", name: "コウモリ", emoji: "🦇", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 9, attack: 4, def: 0, captureRate: 0.55, exp: 5 },
-    { id: "mosquito", name: "蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 1, weight: 9, hp: 6, attack: 2, def: 0, captureRate: 0.65, exp: 3, inflicts: { id: "allergy", chance: 0.25, duration: 8 } },
-    { id: "snake", name: "蛇", emoji: "🐍", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 11, attack: 4, def: 1, captureRate: 0.50, exp: 6 },
-    { id: "wilddog", name: "のらいぬ", emoji: "🐕", type: "monster", isUMA: false, minLevel: 1, weight: 5, hp: 18, attack: 8, def: 2, captureRate: 0.40, exp: 12,
+    // §45 v0.9.2: HP/EXPを全体底上げ。序盤×1.5〜1.6、中盤×1.7、後半×2.0〜2.1。メタル系は変更なし。
+    // 序盤 (minLevel1-2)
+    { id: "slime", name: "スライム", emoji: "🟢", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 16, attack: 3, def: 1, captureRate: 0.60, exp: 8 },
+    { id: "bat", name: "コウモリ", emoji: "🦇", type: "monster", isUMA: false, minLevel: 1, weight: 10, hp: 14, attack: 4, def: 0, captureRate: 0.55, exp: 8 },
+    { id: "mosquito", name: "蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 1, weight: 9, hp: 10, attack: 2, def: 0, captureRate: 0.65, exp: 5, inflicts: { id: "allergy", chance: 0.25, duration: 8 } },
+    { id: "snake", name: "蛇", emoji: "🐍", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 17, attack: 4, def: 1, captureRate: 0.50, exp: 10 },
+    { id: "wilddog", name: "のらいぬ", emoji: "🐕", type: "monster", isUMA: false, minLevel: 1, weight: 5, hp: 28, attack: 8, def: 2, captureRate: 0.40, exp: 19,
       startMsg: "のらいぬが低くうなっている……！ レベルが低いうちは逃げるのが賢明かもしれない。" },
-    { id: "yabuka", name: "ヤブ蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 2, weight: 7, hp: 9, attack: 5, def: 0, captureRate: 0.45, exp: 7, inflicts: { id: "allergy", chance: 0.35, duration: 10 } },
-    { id: "wanderingman", name: "さまようおやじ", emoji: "🚶", type: "monster", isUMA: false, minLevel: 2, weight: 6, hp: 16, attack: 5, def: 1, captureRate: 0.40, exp: 8 },
-    { id: "powerpointguy", name: "パワポ野郎", emoji: "💻", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 17, attack: 5, def: 2, captureRate: 0.30, exp: 10, drainsMp: { chance: 0.3, amount: 3 } },
-    { id: "scammer", name: "詐欺師", emoji: "🕴️", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 18, attack: 6, def: 1, captureRate: 0.30, exp: 11, stealsGold: { chance: 0.3, amount: 5 } },
-    { id: "bandit", name: "山賊", emoji: "🥷", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 22, attack: 8, def: 2, captureRate: 0.25, exp: 14, inflicts: { id: "smell", chance: 0.3, duration: 3 } },
-    { id: "marathonman", name: "マラソンマン", emoji: "🏃", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 19, attack: 6, def: 2, captureRate: 0.32, exp: 12, fleeRate: 0.50 },
-    { id: "bumpman", name: "ぶつかりおじさん", emoji: "💢", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 20, attack: 7, def: 2, captureRate: 0.28, exp: 13, ambush: true },
-    { id: "oni", name: "鬼", emoji: "👺", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 30, attack: 10, def: 4, captureRate: 0.20, exp: 20 },
-    { id: "powerharassmentsenpai", name: "パワハラ先輩", emoji: "😤", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 24, attack: 13, def: 3, captureRate: 0.22, exp: 18 },
-    // v0.8.7 §40 のりお指令: 序盤モンスター追加
-    { id: "campgirl", name: "キャンプ女子", emoji: "⛺", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 8, attack: 3, def: 0, captureRate: 0.55, exp: 5 },
-    { id: "xiaolongbao", name: "小籠包", emoji: "🥟", type: "monster", isUMA: false, minLevel: 1, weight: 7, hp: 7, attack: 2, def: 0, captureRate: 0.60, exp: 4 },
-    { id: "streetguitarist", name: "弾き語り女子", emoji: "🎤", type: "monster", isUMA: false, minLevel: 1, weight: 7, hp: 9, attack: 3, def: 0, captureRate: 0.55, exp: 6 },
-    { id: "rudeperson", name: "失礼な人", emoji: "🤬", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 10, attack: 4, def: 0, captureRate: 0.50, exp: 6 },
-    // v0.8.7 §40 のりお指令: 中盤モンスター追加
-    { id: "wannabeninja", name: "忍者かぶれ", emoji: "🎭", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 20, attack: 7, def: 3, captureRate: 0.32, exp: 12 },
-    { id: "strongarmcatcher", name: "強肩キャッチャー", emoji: "⚾", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 22, attack: 8, def: 2, captureRate: 0.28, exp: 13 },
-    { id: "hangure", name: "半グレ", emoji: "🧢", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 24, attack: 9, def: 2, captureRate: 0.25, exp: 15, inflicts: { id: "smell", chance: 0.25, duration: 3 } },
-    { id: "bangya", name: "バンギャ", emoji: "💀", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 18, attack: 6, def: 1, captureRate: 0.32, exp: 11 },
-    { id: "vintageguy", name: "古着屋兄さん", emoji: "👕", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 16, attack: 6, def: 2, captureRate: 0.35, exp: 10 },
-    { id: "teacher", name: "先生", emoji: "📏", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 20, attack: 7, def: 3, captureRate: 0.30, exp: 12 },
-    { id: "foodsnob", name: "グルメ気取り", emoji: "🍜", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 17, attack: 5, def: 2, captureRate: 0.35, exp: 10 },
-    { id: "chikan", name: "痴漢", emoji: "🚇", type: "monster", isUMA: false, minLevel: 3, weight: 4, hp: 15, attack: 6, def: 1, captureRate: 0.35, exp: 11, ambush: true },
-    // v0.8.7 §40 のりお指令: 後半モンスター追加
-    { id: "andre", name: "アンドレ", emoji: "💪", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 38, attack: 12, def: 5, captureRate: 0.22, exp: 28 },
-    { id: "deathmatch", name: "デスマッチレスラー", emoji: "🤼", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 45, attack: 14, def: 4, captureRate: 0.18, exp: 35 },
-    { id: "mitakadrunk", name: "三鷹のよっぱらい", emoji: "🍺", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 32, attack: 11, def: 3, captureRate: 0.22, exp: 25, ambush: true },
-    { id: "viceprincipal", name: "教頭", emoji: "👔", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 34, attack: 10, def: 5, captureRate: 0.22, exp: 26 },
-    { id: "principal", name: "校長", emoji: "🎓", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 38, attack: 11, def: 6, captureRate: 0.20, exp: 30 },
-    { id: "fakescriptwriter", name: "いんちき放送作家", emoji: "📺", type: "monster", isUMA: false, minLevel: 9, weight: 3, hp: 35, attack: 9, def: 4, captureRate: 0.22, exp: 27, stealsGold: { chance: 0.30, amount: 8 } },
-    { id: "pseudoscreenwriter", name: "エセ脚本家", emoji: "✍️", type: "monster", isUMA: false, minLevel: 9, weight: 4, hp: 30, attack: 8, def: 3, captureRate: 0.25, exp: 24, drainsMp: { chance: 0.30, amount: 4 } },
-    { id: "implantdentist", name: "インプラント歯医者", emoji: "🦷", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 36, attack: 10, def: 5, captureRate: 0.22, exp: 28, drainsMp: { chance: 0.25, amount: 5 } },
-    { id: "psychicdetective", name: "霊界探偵", emoji: "🔮", type: "monster", isUMA: false, minLevel: 9, weight: 4, hp: 33, attack: 9, def: 4, captureRate: 0.22, exp: 26, stealsGold: { chance: 0.25, amount: 10 } },
-    { id: "karatesisters", name: "空手姉妹", emoji: "🥋", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 40, attack: 13, def: 4, captureRate: 0.20, exp: 32 },
-    { id: "graviaidol", name: "グラビアアイドル", emoji: "📸", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 30, attack: 10, def: 3, captureRate: 0.25, exp: 24 },
-    { id: "alien", name: "宇宙人", emoji: "👽", type: "monster", isUMA: false, minLevel: 12, weight: 3, hp: 42, attack: 13, def: 5, captureRate: 0.20, exp: 38 },
-    { id: "stranger", name: "異邦人", emoji: "🌍", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 38, attack: 12, def: 4, captureRate: 0.20, exp: 30 },
-    { id: "visitor", name: "来訪者", emoji: "🚪", type: "monster", isUMA: false, minLevel: 11, weight: 3, hp: 40, attack: 13, def: 5, captureRate: 0.20, exp: 34 },
+    { id: "yabuka", name: "ヤブ蚊", emoji: "🦟", type: "monster", isUMA: false, minLevel: 2, weight: 7, hp: 14, attack: 5, def: 0, captureRate: 0.45, exp: 11, inflicts: { id: "allergy", chance: 0.35, duration: 10 } },
+    { id: "wanderingman", name: "さまようおやじ", emoji: "🚶", type: "monster", isUMA: false, minLevel: 2, weight: 6, hp: 25, attack: 5, def: 1, captureRate: 0.40, exp: 13 },
+    // 中盤 (minLevel3-7)
+    { id: "powerpointguy", name: "パワポ野郎", emoji: "💻", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 28, attack: 5, def: 2, captureRate: 0.30, exp: 17, drainsMp: { chance: 0.3, amount: 3 } },
+    { id: "scammer", name: "詐欺師", emoji: "🕴️", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 30, attack: 6, def: 1, captureRate: 0.30, exp: 18, stealsGold: { chance: 0.3, amount: 5 } },
+    { id: "bandit", name: "山賊", emoji: "🥷", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 37, attack: 8, def: 2, captureRate: 0.25, exp: 24, inflicts: { id: "smell", chance: 0.3, duration: 3 } },
+    { id: "marathonman", name: "マラソンマン", emoji: "🏃", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 32, attack: 6, def: 2, captureRate: 0.32, exp: 20, fleeRate: 0.50 },
+    { id: "bumpman", name: "ぶつかりおじさん", emoji: "💢", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 34, attack: 7, def: 2, captureRate: 0.28, exp: 22, ambush: true },
+    // 後半 (minLevel5+)
+    { id: "oni", name: "鬼", emoji: "👺", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 60, attack: 10, def: 4, captureRate: 0.20, exp: 40 },
+    { id: "powerharassmentsenpai", name: "パワハラ先輩", emoji: "😤", type: "monster", isUMA: false, minLevel: 5, weight: 4, hp: 48, attack: 13, def: 3, captureRate: 0.22, exp: 36 },
+    // v0.8.7 §40 のりお指令: 序盤モンスター追加 / §45 v0.9.2 HP/EXP底上げ
+    { id: "campgirl", name: "キャンプ女子", emoji: "⛺", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 13, attack: 3, def: 0, captureRate: 0.55, exp: 8 },
+    { id: "xiaolongbao", name: "小籠包", emoji: "🥟", type: "monster", isUMA: false, minLevel: 1, weight: 7, hp: 11, attack: 2, def: 0, captureRate: 0.60, exp: 6 },
+    { id: "streetguitarist", name: "弾き語り女子", emoji: "🎤", type: "monster", isUMA: false, minLevel: 1, weight: 7, hp: 14, attack: 3, def: 0, captureRate: 0.55, exp: 10 },
+    { id: "rudeperson", name: "失礼な人", emoji: "🤬", type: "monster", isUMA: false, minLevel: 1, weight: 8, hp: 16, attack: 4, def: 0, captureRate: 0.50, exp: 10 },
+    // v0.8.7 §40 のりお指令: 中盤モンスター追加 / §45 v0.9.2 HP/EXP底上げ
+    { id: "wannabeninja", name: "忍者かぶれ", emoji: "🎭", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 34, attack: 7, def: 3, captureRate: 0.32, exp: 20 },
+    { id: "strongarmcatcher", name: "強肩キャッチャー", emoji: "⚾", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 37, attack: 8, def: 2, captureRate: 0.28, exp: 22 },
+    { id: "hangure", name: "半グレ", emoji: "🧢", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 41, attack: 9, def: 2, captureRate: 0.25, exp: 26, inflicts: { id: "smell", chance: 0.25, duration: 3 } },
+    { id: "bangya", name: "バンギャ", emoji: "💀", type: "monster", isUMA: false, minLevel: 3, weight: 5, hp: 30, attack: 6, def: 1, captureRate: 0.32, exp: 18 },
+    { id: "vintageguy", name: "古着屋兄さん", emoji: "👕", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 27, attack: 6, def: 2, captureRate: 0.35, exp: 17 },
+    { id: "teacher", name: "先生", emoji: "📏", type: "monster", isUMA: false, minLevel: 4, weight: 5, hp: 34, attack: 7, def: 3, captureRate: 0.30, exp: 20 },
+    { id: "foodsnob", name: "グルメ気取り", emoji: "🍜", type: "monster", isUMA: false, minLevel: 3, weight: 6, hp: 28, attack: 5, def: 2, captureRate: 0.35, exp: 17 },
+    { id: "chikan", name: "痴漢", emoji: "🚇", type: "monster", isUMA: false, minLevel: 3, weight: 4, hp: 25, attack: 6, def: 1, captureRate: 0.35, exp: 18, ambush: true },
+    // v0.8.7 §40 のりお指令: 後半モンスター追加 / §45 v0.9.2 HP/EXP底上げ (×2.0〜2.1)
+    { id: "andre", name: "アンドレ", emoji: "💪", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 80, attack: 12, def: 5, captureRate: 0.22, exp: 58 },
+    { id: "deathmatch", name: "デスマッチレスラー", emoji: "🤼", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 95, attack: 14, def: 4, captureRate: 0.18, exp: 73 },
+    { id: "mitakadrunk", name: "三鷹のよっぱらい", emoji: "🍺", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 68, attack: 11, def: 3, captureRate: 0.22, exp: 52, ambush: true },
+    { id: "viceprincipal", name: "教頭", emoji: "👔", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 72, attack: 10, def: 5, captureRate: 0.22, exp: 54 },
+    { id: "principal", name: "校長", emoji: "🎓", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 80, attack: 11, def: 6, captureRate: 0.20, exp: 62 },
+    { id: "fakescriptwriter", name: "いんちき放送作家", emoji: "📺", type: "monster", isUMA: false, minLevel: 9, weight: 3, hp: 75, attack: 9, def: 4, captureRate: 0.22, exp: 55, stealsGold: { chance: 0.30, amount: 8 } },
+    { id: "pseudoscreenwriter", name: "エセ脚本家", emoji: "✍️", type: "monster", isUMA: false, minLevel: 9, weight: 4, hp: 63, attack: 8, def: 3, captureRate: 0.25, exp: 48, drainsMp: { chance: 0.30, amount: 4 } },
+    { id: "implantdentist", name: "インプラント歯医者", emoji: "🦷", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 76, attack: 10, def: 5, captureRate: 0.22, exp: 58, drainsMp: { chance: 0.25, amount: 5 } },
+    { id: "psychicdetective", name: "霊界探偵", emoji: "🔮", type: "monster", isUMA: false, minLevel: 9, weight: 4, hp: 70, attack: 9, def: 4, captureRate: 0.22, exp: 54, stealsGold: { chance: 0.25, amount: 10 } },
+    { id: "karatesisters", name: "空手姉妹", emoji: "🥋", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 85, attack: 13, def: 4, captureRate: 0.20, exp: 67 },
+    { id: "graviaidol", name: "グラビアアイドル", emoji: "📸", type: "monster", isUMA: false, minLevel: 8, weight: 4, hp: 63, attack: 10, def: 3, captureRate: 0.25, exp: 48 },
+    { id: "alien", name: "宇宙人", emoji: "👽", type: "monster", isUMA: false, minLevel: 12, weight: 3, hp: 90, attack: 13, def: 5, captureRate: 0.20, exp: 80 },
+    { id: "stranger", name: "異邦人", emoji: "🌍", type: "monster", isUMA: false, minLevel: 10, weight: 3, hp: 80, attack: 12, def: 4, captureRate: 0.20, exp: 63 },
+    { id: "visitor", name: "来訪者", emoji: "🚪", type: "monster", isUMA: false, minLevel: 11, weight: 3, hp: 85, attack: 13, def: 5, captureRate: 0.20, exp: 72 },
+    // §45 v0.9.2: 中ボスゴリラ (横スクロールステージ1固定ボス、通常エンカウントには出ない)
+    { id: "midboss_gorilla", name: "中ボスゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 150, attack: 20, def: 5, captureRate: 0, exp: 160, fleeRate: 0.30,
+      customEscapeMsgs: ["はじまりの草原に静けさが戻った。", "中ボスゴリラは草むらの奥へ消えていった。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
     { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
@@ -370,13 +379,13 @@
       joinRate: 0.65,
       joinMsgs: ["シュリタニは捕獲ロープを確認した。", "UMA探しなら任せて。"],
       failMsgs: ["シュリタニは地図を見つめている。", "今は準備が足りないみたい。"] },
-    { id: "norio",      name: "ノリオ",     emoji: "💨",
-      feature: "逃げるのがうまい",
-      effectDesc: "逃走成功率+0.15",
-      fleeMod: 0.15,
+    { id: "norio",      name: "ノリオ",     emoji: "📈",   // §45 v0.9.2: 逃走→経験値2倍に変更
+      feature: "経験値が2倍になる",
+      effectDesc: "獲得経験値×2",
+      expMod: 2,
       joinRate: 0.75,
-      joinMsgs: ["ノリオは出口の場所を確認した。", "危なくなったら俺についてこい。"],
-      failMsgs: ["ノリオはすでに逃げる準備をしている。", "今日はやめておこう。"] },
+      joinMsgs: ["ノリオはニヤリと笑った。", "俺と一緒にいれば、経験値がぐんぐん上がるぞ。"],
+      failMsgs: ["ノリオは考え込んでいる。", "まだタイミングじゃないな。"] },
     { id: "harumi",     name: "ハルミ",     emoji: "✨",
       feature: "まほうが得意",
       effectDesc: "まほう効果+20%",
@@ -877,6 +886,12 @@
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
       triggerEncounter();
+    } else if (tileChar === "b") {
+      // §45 v0.9.2: 中ボスゴリラ固定戦闘。撃破済みなら素通り。
+      if (sm.defeatedEnemies[key]) { return; }
+      sideMapPendingFixedKey = key;
+      state.stepsSinceEncounter = 0;
+      triggerFixedEncounter("midboss_gorilla");
     } else if (tileChar === "g") {
       state.stepsSinceEncounter++;
       if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
@@ -925,6 +940,7 @@
         "この草原、上の道は安全だが宝は少ない。",
         "下の道は危険だが、宝箱がたくさんあるらしい。",
         "木がジャマしてる場所では、上か下に回り込めるよ。",
+        "ゴール🏁の手前に💢の印がある。強いゴリラが待ってるらしい……上から迂回すれば避けられるけど。",
         "あのゴール🏁まで辿り着けば、褒美がもらえるはずだ。"
       ];
     } else {
@@ -934,6 +950,7 @@
         "ようこそ、はじまりの草原へ！",
         "木が道を塞いでいたら、上か下に迂回してみよう。",
         "低い道は危ないけど、宝箱がたくさん眠ってるよ。",
+        "ゴール近くに💢の印がある場所がある。中ボスゴリラが待ち構えているぞ！高路を使えば回避もできる。",
         "右のゴール🏁を目指して進んでね！"
       ];
     }
@@ -1361,6 +1378,13 @@
     startBattle(monster);
   }
 
+  // §45 v0.9.2: 固定IDの敵を強制起動 (中ボスゴリラなど)
+  function triggerFixedEncounter(enemyId) {
+    var monster = findById(NON_UMA_DATA, enemyId);
+    if (!monster) { return; }
+    startBattle(monster);
+  }
+
   function weightedPick(list) {
     var total = 0;
     for (var i = 0; i < list.length; i++) total += list[i].weight;
@@ -1433,7 +1457,8 @@
       inflicts: monster.inflicts || null,   // 攻撃時に状態異常を与える可能性(§13.5)
       drainsMp: monster.drainsMp || null,   // 攻撃時にMPを吸う可能性(§6.2)
       stealsGold: monster.stealsGold || null, // 攻撃時に所持金を盗む可能性(§6.2)
-      ambush: !!monster.ambush              // 戦闘開始時に不意打ちしてくるか(§6.2)
+      ambush: !!monster.ambush,             // 戦闘開始時に不意打ちしてくるか(§6.2)
+      customEscapeMsgs: monster.customEscapeMsgs || null  // §45 v0.9.2: ボス専用逃走メッセージ
     };
 
     // UMAなら図鑑に「発見済み」を記録する(捕獲済みなら上書きしない)
@@ -1850,8 +1875,7 @@
       playSE("captureOk");
       log("🪤 " + e.name + "を捕まえた！");
       captureUma(e);
-      logExpGained(e.exp);
-      addExp(e.exp);
+      gainExp(e.exp);
       showBattleEnd();
       return true;
     }
@@ -1884,8 +1908,7 @@
     if (Math.random() < chance) {
       log("💨 うまく逃げ切った！");
       var runExp = Math.max(1, Math.floor(e.exp * 0.2));
-      logExpGained(runExp);
-      addExp(runExp);
+      gainExp(runExp);
       showBattleEnd();
     } else {
       log("💨 しかし逃げられなかった！");
@@ -1947,8 +1970,7 @@
     captureUma(e);
     state.gameCleared = true;
     state.pendingClear = true;
-    logExpGained(e.exp);
-    addExp(e.exp);
+    gainExp(e.exp);
     saveGame();
     showBattleEnd();
   }
@@ -1958,15 +1980,15 @@
   // v0.8.7: 「に逃げられた」→「は逃げていった！！」にバリエーション付きで変更。
   function winBattle() {
     var e = state.enemy;
-    var _escapeMsgs = [
+    // §45 v0.9.2: ボスは customEscapeMsgs、通常敵は汎用バリエーションを使用
+    var _escapeMsgs = e.customEscapeMsgs || [
       e.name + "は逃げていった！！",
       e.name + "はあわてて逃げていった！！",
       e.name + "はフラフラしながら逃げていった！！",
       e.name + "は戦意を失って逃げていった！！"
     ];
     log("💨 " + _escapeMsgs[Math.floor(Math.random() * _escapeMsgs.length)]);
-    logExpGained(e.exp);
-    addExp(e.exp);
+    gainExp(e.exp);
     var gold = Math.ceil(e.exp / 2);
     if (gold > 0) {
       state.player.gold += gold;
@@ -2091,6 +2113,17 @@
   // ---------------------------------------------------------
   // 17. 経験値・レベルアップ
   // ---------------------------------------------------------
+  // §45 v0.9.2: のりお expMod 対応。EXP取得ログと multiplier 処理を一本化。
+  function gainExp(baseExp) {
+    var expMult = getCompanionBonus("expMod");
+    var finalExp = expMult > 0 ? Math.ceil(baseExp * expMult) : baseExp;
+    if (expMult > 0) {
+      log("📈 ノリオ効果！ EXP " + expMult + "倍！");
+    }
+    logExpGained(finalExp);
+    return addExp(finalExp);
+  }
+
   function addExp(amount) {
     var p = state.player;
     p.exp += amount;
@@ -2971,6 +3004,7 @@
           lines.push("最近は変わった者たちも草原に出るようじゃ。");
           lines.push("パワポ野郎、忍者かぶれ、グルメ気取り……もはやUMAより説明が難しいのう。");
           lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！見逃すなよ。");
+          lines.push("横スクロールの草原の奥に💢の気配がある。UMAではなく別のゴリラ……のようじゃ。");
         } else if (p.level >= 5) {
           lines.push("メタルゴリラ系を見つけたら大チャンスじゃ。");
           lines.push("逃げられる前に攻撃できれば、経験値をたくさんもらえるぞ。");
@@ -3009,8 +3043,10 @@
           lines.push("草原には普通の宝箱🎁の他に、✨特別な光を放つ宝箱が眠っていることもあるらしい。");
           if (p.level < 10) {
             lines.push("のらいぬは序盤では意外と強い。危ないと思ったら「にげる」を使うのも立派な勇者の判断だぞ。");
+            lines.push("酒場でノリオを仲間にすると、経験値が2倍になるらしい。序盤のレベル上げに重宝するぞ。");
           } else {
             lines.push("レベルが上がると、前は怖かった敵にも勝てるようになるぞ。");
+            lines.push("強い敵ほど大きな経験値を持っている。挑む価値はあるぞ。");
           }
         }
         return lines;
@@ -3084,10 +3120,12 @@
           lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
           lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
           lines.push("メタルゴリラ系は硬いが、経験値がとても多い。出会えたら逃げられる前に勝負だ。");
+          lines.push("横スクロールの草原の奥に💢の印がある場所がある。強いゴリラが待ち構えているらしいぞ。");
         } else {
           lines.push("ゴリラにも色々いる。普通のゴリラ、メタルなゴリラ、そして伝説の究極ゴリラだ。");
           lines.push("究極ゴリラは、普通に捕まえようとしても無理だ。特別な条件が必要になる。");
           lines.push("まずは力を蓄えろ。いつかその条件が分かる時が来る。");
+          lines.push("伝説によると……究極ゴリラの先に、もっと恐ろしい何かがいるという。チンパンジー、とも呼ばれているらしい。");
         }
         return lines;
       }
@@ -3406,6 +3444,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-start" style="border-color:#a8d8a8;color:#a8d8a8;">🔙 スタート地点へ (x=1,y=1)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-near-goal" style="border-color:#a8d8a8;color:#a8d8a8;">🏃 ゴール直前へ (x=35,y=1)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-reset-flags" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 横スクロール: クリア・撃破フラグをリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-midboss-encounter" style="border-color:#ffd166;color:#ffd166;">🦍 中ボスゴリラ強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-norio" style="border-color:#74c0fc;color:#74c0fc;">📈 ノリオを仲間にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-reset-midboss" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 中ボスゴリラ撃退フラグをリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -3541,12 +3582,12 @@
       };
       document.getElementById("btn-debug-side-near-goal").onclick = function () {
         state.mapMode = "side";
-        state.sideMap.x = 35;
+        state.sideMap.x = 34;
         state.sideMap.y = 1;
         saveGame();
         closeModal("settings-modal");
         renderField();
-        showToast("[DEBUG] ゴール直前へ移動 (x=35,y=1)");
+        showToast("[DEBUG] ゴール直前へ移動 (x=34,y=1) — 中ボスゴリラはx=36");
       };
       document.getElementById("btn-debug-side-reset-flags").onclick = function () {
         state.sideMap.defeatedEnemies = {};
@@ -3555,6 +3596,31 @@
         saveGame();
         renderField();
         showToast("[DEBUG] 横スクロール: クリア・撃破フラグをリセット");
+      };
+      document.getElementById("btn-debug-midboss-encounter").onclick = function () {
+        closeModal("settings-modal");
+        triggerFixedEncounter("midboss_gorilla");
+        showToast("[DEBUG] 中ボスゴリラ強制エンカウント");
+      };
+      document.getElementById("btn-debug-companion-norio").onclick = function () {
+        if (!hasCompanion("norio")) {
+          if (state.player.companions.length < COMPANION_MAX) {
+            state.player.companions.push("norio");
+            saveGame();
+            showToast("[DEBUG] ノリオを仲間にした");
+          } else {
+            showToast("[DEBUG] 仲間が上限です");
+          }
+        } else {
+          showToast("[DEBUG] ノリオはすでに同行中");
+        }
+      };
+      document.getElementById("btn-debug-side-reset-midboss").onclick = function () {
+        delete state.sideMap.defeatedEnemies["36,1"];
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 中ボスゴリラ撃退フラグをリセット (36,1)");
       };
     }
   }

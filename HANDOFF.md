@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.9.1** |
+| 現在バージョン | **v0.9.2** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,17 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.9.2] のりお指令②: 中ボスゴリラ・敵再調整・のりお効果変更**（§45）
+  - 新タイル: `b`(💢 中ボスゴリラ固定戦闘) — SIDE_STAGE_DATA row1 x=36 に配置
+  - `triggerFixedEncounter(enemyId)`: 固定ID敵を起動する新関数
+  - `gainExp(baseExp)`: EXP取得ヘルパー。のりお同行時に2倍処理+ログ
+  - のりお能力: fleeMod:0.15 → expMod:2 (逃走→経験値2倍) + emoji/セリフ変更
+  - 敵HP/EXP全体底上げ: 序盤×1.5〜1.6、中盤×1.7、後半×2.0〜2.1、UMA×1.2
+  - 中ボスゴリラ: HP150, ATK20, DEF5, EXP160, captureRate:0, 専用逃走メッセージ
+  - winBattle/doRun/attemptCapture/doSingUltimateGorilla → gainExp 統一
+  - actuallyStartBattle: `customEscapeMsgs` を state.enemy にコピー
+  - NPC会話: UMA博士・旅人・ゴリラ研究家・横スクロールNPC に中ボス/EXPヒント追加
+  - デバッグ追加: 中ボス強制ENC / ノリオ仲間化 / 中ボス撃退フラグリセット
 - **[v0.9.1] 横スクロールマップ探索性アップデート**（§44）
   - 縦移動を有効化(y=0〜2)。迂回路A(x=11-13)・迂回路B(x=27-29)
   - 新タイル: `G`(🏁 ゴール), `p`(🧑 旅人NPC)

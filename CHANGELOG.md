@@ -5,6 +5,27 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.9.2] - 2026-07-05 — のりお指令②: 中ボスゴリラ・敵再調整・のりお効果変更
+
+### Added
+- **中ボスゴリラ** (§45): 横スクロールステージ1 x=36 に 'b' タイルとして配置。HP150, ATK20, DEF5, EXP160。captureRate:0, fleeRate:0.30。専用逃走メッセージあり。
+- **新タイル 'b'** (💢): 中ボスゴリラ固定戦闘タイル。SIDE_TILE_EMOJI / SIDE_NO_ENCOUNTER に登録。
+- **`triggerFixedEncounter(enemyId)`**: 固定IDの敵を直接起動する関数。
+- **`gainExp(baseExp)`**: EXP取得共通ヘルパー。のりお同行時に "📈 ノリオ効果！ EXP 2倍！" ログ付きで2倍処理。
+- **デバッグ追加**: 中ボスゴリラ強制エンカウント・ノリオを仲間にする・中ボスゴリラ撃退フラグリセット
+
+### Changed
+- **のりお仲間能力**: 逃走成功率+0.15 (fleeMod) → 獲得経験値×2 (expMod:2)。emoji/feature/effectDesc/joinMsgs/failMsgs も更新。
+- **敵HP/EXP全体底上げ**: 序盤(minLv1-2)×1.5〜1.6、中盤(minLv3-7)×1.7、後半(minLv5+)×2.0〜2.1。UMA×1.2。メタル系・究極ゴリラは変更なし。
+- **winBattle()**: `customEscapeMsgs` に対応（ボス専用逃走メッセージ）。gainExp 使用に変更。
+- **doRun()**: gainExp 使用に変更。
+- **attemptCapture()**: gainExp 使用に変更。
+- **doSingUltimateGorilla()**: gainExp 使用に変更。
+- **actuallyStartBattle()**: `customEscapeMsgs` を state.enemy にコピー。
+- **SIDE_STAGE_DATA row1**: x=36 を 'g' → 'b' (中ボスゴリラ) に変更。
+- **NPC会話**: UMA博士・旅人・ゴリラ研究家・横スクロールNPC に中ボス/経験値ヒントを追加。
+- **デバッグ「ゴール直前」**: x=35→x=34 に変更（中ボスゴリラx=36の手前）。
+
 ## [0.9.1] - 2026-07-05 — 横スクロールマップ探索性アップデート
 
 ### Added
