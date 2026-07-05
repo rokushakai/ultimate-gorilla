@@ -152,14 +152,38 @@
     goalX: 38
   };
 
+  // §50 v0.11: ステージ3「古びた町はずれ」マップ (40×5)
+  // row0(y=0) 高路:  宝箱2個(x=18,x=35)。安全路。迂回路。
+  // row1(y=1) 上中:  旅人NPC(p, x=10)。
+  // row2(y=2) 中央:  商人(m, x=3), 老人NPC(n, x=5), 固定敵(e, x=15), 魔王ゴリラ(b, x=31), ゴール(G, x=38)
+  // row3(y=3) 下中:  固定敵(e, x=12)。
+  // row4(y=4) 下路:  宝箱(c, x=4, x=19), 固定敵(e, x=27)。危険な道。
+  SIDE_STAGE_DATA[3] = {
+    name: "古びた町はずれ",
+    rows: [
+      "fffff##fffffff#fffcfff###fffff##fffcffff",
+      "gggfgg##ggpggff##gggggg##ggggggggg###gfg",
+      "gggmgngggg##gggeggg##gggggg##ggbgg##ggGg",
+      "~~gggg##ggggegg##gggggg##ggggg##ggggg~~~",
+      "~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~"
+    ],
+    startX: 1,
+    startY: 2,
+    goalX: 38
+  };
+
   // §49 v0.10.1: ステージ別固定敵マップ (タイル'e'に接触した時に出す敵ID)
   // キーは getSideKey() 形式 (stage1は "x,y", stage2は "2:x,y")
   var SIDE_FIXED_ENCOUNTERS = {
-    "31,1":   "wilddog",       // stage1 メイン路 x=31,y=1: のらいぬ (草原の番犬)
-    "14,2":   "bumpman",       // stage1 下路 x=14,y=2: ぶつかりおじさん
-    "2:14,1": "wannabeninja",  // stage2 メイン路 x=14,y=1: 忍者かぶれ (森に潜む)
-    "2:12,2": "bandit",        // stage2 下路 x=12,y=2: 山賊 (森の追いはぎ)
-    "2:32,2": "oni"            // stage2 下路深部 x=32,y=2: 鬼 (森の奥の魔物)
+    "31,1":   "wilddog",                  // stage1 メイン路 x=31,y=1: のらいぬ
+    "14,2":   "bumpman",                  // stage1 下路 x=14,y=2: ぶつかりおじさん
+    "2:14,1": "wannabeninja",             // stage2 メイン路 x=14,y=1: 忍者かぶれ
+    "2:12,2": "bandit",                   // stage2 下路 x=12,y=2: 山賊
+    "2:32,2": "oni",                      // stage2 下路深部 x=32,y=2: 鬼
+    // §50 v0.11: ステージ3固定敵
+    "3:15,2": "powerharassmentsenpai",    // stage3 中央路 x=15,y=2: パワハラ先輩
+    "3:12,3": "wanderingman",             // stage3 下中路 x=12,y=3: さまようおやじ
+    "3:27,4": "deathmatch"               // stage3 下路 x=27,y=4: デスマッチレスラー
   };
 
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
@@ -268,6 +292,11 @@
     { id: "boss_gorilla", name: "ボスゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 250, attack: 26, def: 8, captureRate: 0, exp: 290, fleeRate: 0.20,
       canCapture: false,
       customEscapeMsgs: ["あやしい森に静けさが戻った。", "ボスゴリラは森の奥深くへ消えていった。"] },
+    // §50 v0.11: 魔王ゴリラ (横スクロールステージ3固定ボス、通常エンカウントには出ない)
+    { id: "maou_gorilla", name: "魔王ゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 400, attack: 34, def: 11, captureRate: 0, exp: 500, fleeRate: 0.15,
+      canCapture: false,
+      startMsg: "町はずれの奥から、重たい笑い声が響いた……\n魔王ゴリラが道をふさいだ！",
+      customEscapeMsgs: ["魔王ゴリラは古びた町の奥へ逃げていった！！", "町はずれに、少しだけ静けさが戻った。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
     { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
@@ -600,7 +629,8 @@
       defeatedEnemies: {},   // §44 v0.9.1: 撃破済み固定敵 { "31,1": true }
       stageCleared: {},      // §44 v0.9.1: クリア済みステージ { "1": true }
       stage1RewardLevel: 0,  // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
-      stage2RewardLevel: 0   // §48 v0.10: ステージ2報酬受取レベル (0=未, 1=50G, 2=全取得)
+      stage2RewardLevel: 0,  // §48 v0.10: ステージ2報酬受取レベル (0=未, 1=50G, 2=全取得)
+      stage3RewardLevel: 0   // §50 v0.11: ステージ3報酬受取レベル (0=未, 1=80G, 2=全取得)
     }
   };
 
@@ -760,7 +790,10 @@
     // §43 v0.9: 横スクロールマップモードならそちらへルーティング
     if (state.mapMode === "side") {
       viewport.style.setProperty("--cols", SIDE_VIEW_COLS);
-      viewport.style.setProperty("--rows", SIDE_VIEW_ROWS);
+      // §50 v0.11: ステージの行数に応じて--rowsを動的設定
+      var sideStageRows = SIDE_STAGE_DATA[state.sideMap.stage];
+      var sideRowCount = sideStageRows ? sideStageRows.rows.length : SIDE_VIEW_ROWS;
+      viewport.style.setProperty("--rows", sideRowCount);
       renderSideField();
       return;
     }
@@ -828,21 +861,24 @@
     var stageData = SIDE_STAGE_DATA[sm.stage];
     if (!stageData) { return; }
     var rows = stageData.rows;
+    // §50 v0.11: ステージ別マップサイズを動的計算
+    var mapWidth = (rows[0] ? rows[0].length : SIDE_MAP_WIDTH);
+    var mapHeight = rows.length;
 
     // カメラ左端: プレイヤーを中央付近に表示
     var halfCols = Math.floor(SIDE_VIEW_COLS / 2);
     var camLeft = sm.x - halfCols;
     if (camLeft < 0) { camLeft = 0; }
-    if (camLeft + SIDE_VIEW_COLS > SIDE_MAP_WIDTH) {
-      camLeft = SIDE_MAP_WIDTH - SIDE_VIEW_COLS;
+    if (camLeft + SIDE_VIEW_COLS > mapWidth) {
+      camLeft = mapWidth - SIDE_VIEW_COLS;
     }
 
     var html = "";
-    for (var ry = 0; ry < SIDE_VIEW_ROWS; ry++) {
+    for (var ry = 0; ry < mapHeight; ry++) {
       for (var rx = 0; rx < SIDE_VIEW_COLS; rx++) {
         var mx = camLeft + rx;
         var my = ry;
-        var tileChar = (mx >= 0 && mx < SIDE_MAP_WIDTH && rows[my])
+        var tileChar = (mx >= 0 && mx < mapWidth && rows[my])
           ? rows[my].charAt(mx)
           : "#";
 
@@ -892,9 +928,14 @@
     var nx = sm.x + dx;
     var ny = sm.y + dy;
 
+    // §50 v0.11: ステージ別マップサイズを動的計算 (縦移動・境界チェック)
+    var stageRows = stageData.rows;
+    var stageMapWidth = (stageRows[0] ? stageRows[0].length : SIDE_MAP_WIDTH);
+    var stageMapHeight = stageRows.length;
+
     // §44 v0.9.1: 縦移動を有効化。マップ境界チェック。
-    if (nx < 0 || nx >= SIDE_MAP_WIDTH) { return; }
-    if (ny < 0 || ny >= SIDE_MAP_HEIGHT) { return; }
+    if (nx < 0 || nx >= stageMapWidth) { return; }
+    if (ny < 0 || ny >= stageMapHeight) { return; }
 
     var row = stageData.rows[ny];
     if (!row) { return; }
@@ -935,11 +976,13 @@
         triggerEncounter();
       }
     } else if (tileChar === "b") {
-      // §45 v0.9.2: ボス固定戦闘。撃破済みなら素通り。§48 v0.10: ステージでボスを分岐。
+      // §45 v0.9.2: ボス固定戦闘。撃破済みなら素通り。§48 v0.10: ステージでボスを分岐。§50 v0.11: stage3追加
       if (sm.defeatedEnemies[key]) { return; }
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
-      if (sm.stage === 2) {
+      if (sm.stage === 3) {
+        triggerFixedEncounter("maou_gorilla");
+      } else if (sm.stage === 2) {
         triggerFixedEncounter("boss_gorilla");
       } else {
         triggerFixedEncounter("midboss_gorilla");
@@ -986,7 +1029,11 @@
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
     // §46 v0.9.2.1: 中ボス撃退でセリフ分岐
     // §47 v0.9.3: stage1Cleared × midbossDefeated の4パターン分岐
-    // §48 v0.10: ステージ2専用NPC
+    // §48 v0.10: ステージ2専用NPC / §50 v0.11: ステージ3専用NPC
+    if (state.sideMap && state.sideMap.stage === 3) {
+      openStage3NpcModal(state.sideMap.x, state.sideMap.y);
+      return;
+    }
     if (state.sideMap && state.sideMap.stage === 2) {
       openStage2NpcModal(state.sideMap.x, state.sideMap.y);
       return;
@@ -1119,6 +1166,11 @@
   }
 
   function openSideGoalModal() {
+    // §50 v0.11: ステージ3はopenStage3GoalModalへルーティング
+    if (state.sideMap.stage === 3) {
+      openStage3GoalModal();
+      return;
+    }
     // §48 v0.10: ステージ2はopenStage2GoalModalへルーティング
     if (state.sideMap.stage === 2) {
       openStage2GoalModal();
@@ -1296,6 +1348,143 @@
     // あやしい森ゴールモーダルでは「あやしい森へ進む」ボタンは不要
     var forestBtn = document.getElementById("btn-side-goal-forest");
     if (forestBtn) { forestBtn.classList.add("hidden"); }
+    // §50 v0.11: ステージ2クリア済みなら「古びた町はずれへ進む」ボタンを表示
+    var townBtn = document.getElementById("btn-side-goal-town");
+    if (townBtn) { townBtn.classList.remove("hidden"); }
+    openModal("modal-side-goal");
+  }
+
+  // §50 v0.11: ステージ3「古びた町はずれ」NPC会話
+  function openStage3NpcModal(nx, ny) {
+    var sm = state.sideMap;
+    var maouDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies["3:31,2"]);
+    var icon = "🧑";
+    var name, lines;
+    // NPC-老人: row2 x=5 (中央路の老人)
+    if (ny === 2) {
+      name = "町はずれの老人";
+      if (maouDefeated) {
+        lines = [
+          "魔王ゴリラを退かせたのか……。",
+          "この古びた町はずれにも、少しだけ静けさが戻ったようじゃ。"
+        ];
+      } else {
+        lines = [
+          "この町はずれには、昔から妙な気配がある。",
+          "森を抜けてきたなら分かるだろう。",
+          "ここから先は、ただの散歩では済まないぞ。"
+        ];
+      }
+    } else {
+      // NPC-怪しい旅人: row1 x=10
+      name = "怪しい旅人";
+      if (maouDefeated) {
+        lines = [
+          "あんた、魔王ゴリラを退かせたんだってな。",
+          "ただ者じゃないな。"
+        ];
+      } else {
+        lines = [
+          "下の道には宝箱がある。",
+          "だが、怪しい連中もうろついている。",
+          "命が惜しければ、上の道を使うんだな。"
+        ];
+      }
+    }
+    document.getElementById("npc-header").innerHTML =
+      '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + name + '</div>';
+    var speechHtml = "";
+    for (var i = 0; i < lines.length; i++) {
+      speechHtml += "<p>「" + lines[i] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
+  // §50 v0.11: ステージ3「古びた町はずれ」ゴール演出
+  function openStage3GoalModal() {
+    var sm = state.sideMap;
+    var maouKey = "3:31,2";
+    var maouDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies[maouKey]);
+    var rewardLevel = sm.stage3RewardLevel || 0;
+    sm.stageCleared["3"] = true;
+
+    var headerText, bodyLines, rewardLine, newRewardLevel;
+    newRewardLevel = rewardLevel;
+
+    if (rewardLevel === 0) {
+      if (maouDefeated) {
+        newRewardLevel = 2;
+        state.player.gold += 220;
+        state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+        headerText = "古びた町はずれを制覇した！";
+        bodyLines = [
+          "魔王ゴリラを退かせ、町はずれの出口へたどり着いた。",
+          "遠くに、険しい山道が見えてきた。"
+        ];
+        rewardLine = "💰 報酬：220G ＋ 🍜 ラーメン ×1";
+      } else {
+        newRewardLevel = 1;
+        state.player.gold += 80;
+        headerText = "古びた町はずれを抜けた！";
+        bodyLines = [
+          "君は魔王ゴリラを避けながら、町はずれの出口へたどり着いた。",
+          "危険を避けて進むことも、冒険者の知恵だ。"
+        ];
+        rewardLine = "💰 報酬：80G";
+      }
+    } else if (rewardLevel === 1 && maouDefeated) {
+      newRewardLevel = 2;
+      state.player.gold += 140;
+      state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+      headerText = "町はずれの真の制覇者よ！";
+      bodyLines = [
+        "魔王ゴリラも退かせたか！",
+        "古びた町はずれの覇者として認められた。追加の報酬を受け取れ。"
+      ];
+      rewardLine = "💰 追加報酬：140G ＋ 🍜 ラーメン ×1";
+    } else {
+      headerText = "古びた町はずれ";
+      if (maouDefeated) {
+        bodyLines = [
+          "町はずれに静けさが戻っている。",
+          "魔王ゴリラの影も見えない。"
+        ];
+      } else {
+        bodyLines = [
+          "魔王ゴリラはまだ町の奥に潜んでいる。",
+          "退かせてから再びゴールを目指すと、さらなる報酬があるぞ。"
+        ];
+      }
+      rewardLine = null;
+    }
+
+    sm.stage3RewardLevel = newRewardLevel;
+    renderStatus();
+    saveGame();
+
+    var html = '<p style="font-size:1.8em;margin:0 0 6px;">🏁</p>';
+    html += '<p style="font-weight:bold;font-size:1.1em;margin-bottom:8px;">' + headerText + '</p>';
+    for (var i = 0; i < bodyLines.length; i++) {
+      html += '<p style="font-size:0.88em;color:#d0e0ff;margin:2px 0;">' + bodyLines[i] + '</p>';
+    }
+    if (rewardLine) {
+      html += '<p style="color:#ffd166;font-weight:bold;margin:10px 0 4px;">' + rewardLine + '</p>';
+    } else {
+      html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
+    }
+    document.getElementById("modal-side-goal-body").innerHTML = html;
+
+    var stayBtn = document.getElementById("btn-side-goal-stay");
+    if (stayBtn) {
+      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度探索する" : "🔍 探索を続ける";
+    }
+    // ステージ3ゴールでは「あやしい森へ」「古びた町はずれへ」ボタンは不要
+    var forestBtn = document.getElementById("btn-side-goal-forest");
+    if (forestBtn) { forestBtn.classList.add("hidden"); }
+    var townBtn = document.getElementById("btn-side-goal-town");
+    if (townBtn) { townBtn.classList.add("hidden"); }
     openModal("modal-side-goal");
   }
 
@@ -2830,12 +3019,14 @@
       });
     }
 
-    // §47 v0.9.3 / §48 v0.10: 横スクロール進捗
+    // §47 v0.9.3 / §48 v0.10 / §50 v0.11: 横スクロール進捗
     var sm = state.sideMap;
     var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
     var s1BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
     var s2Cleared = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
     var s2BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
+    var s3Cleared = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
+    var s3BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["3:31,2"]);
     html += "<h3>横スクロール進捗</h3>";
     html += '<div class="shop-row"><span>はじまりの草原</span><span style="color:' +
       (s1Cleared ? "#06d6a0" : "#888") + ';">' +
@@ -2849,8 +3040,18 @@
     html += '<div class="shop-row"><span>ボスゴリラ</span><span style="color:' +
       (s2BossDefeated ? "#06d6a0" : "#888") + ';">' +
       (s2BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    html += '<div class="shop-row"><span>古びた町はずれ</span><span style="color:' +
+      (s3Cleared ? "#06d6a0" : "#888") + ';">' +
+      (s3Cleared ? "✅ クリア済み" : "未クリア") + "</span></div>";
+    html += '<div class="shop-row"><span>魔王ゴリラ</span><span style="color:' +
+      (s3BossDefeated ? "#06d6a0" : "#888") + ';">' +
+      (s3BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
     var sideTitle = null;
-    if (s2Cleared && s2BossDefeated) {
+    if (s3Cleared && s3BossDefeated) {
+      sideTitle = "町はずれの覇者";
+    } else if (s3Cleared) {
+      sideTitle = "町はずれを越えし者";
+    } else if (s2Cleared && s2BossDefeated) {
       sideTitle = "森の制覇者";
     } else if (s1Cleared && s1BossDefeated) {
       sideTitle = "中ボスゴリラを退かせし者";
@@ -3819,6 +4020,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-bossgori" style="border-color:#c3a4ff;color:#c3a4ff;">✅ ボスゴリラ撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-boss-gorilla-encounter" style="border-color:#c3a4ff;color:#c3a4ff;">🦍 ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset-exp" style="border-color:#a8d8a8;color:#a8d8a8;">✨ EXPを0にする(ノリオ効果確認用)</button>';
+      html += '<p class="small" style="color:#ffb347;margin-top:8px;">🏚️ ステージ3「古びた町はずれ」(§50 v0.11)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-enter" style="border-color:#ffb347;color:#ffb347;">🏚️ 古びた町はずれへ移動 (stage=3)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-near-goal" style="border-color:#ffb347;color:#ffb347;">🏃 町はずれゴール直前へ (x=30,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-clear-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ステージ3フラグリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-set-maougori" style="border-color:#ffb347;color:#ffb347;">✅ 魔王ゴリラ撃退済みにする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-maou-gorilla-encounter" style="border-color:#ffb347;color:#ffb347;">🦍 魔王ゴリラ強制エンカウント</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
     }
@@ -4057,6 +4264,48 @@
         updateStatusBar();
         showToast("[DEBUG] EXPを0にした (次の戦闘でノリオ効果を確認しやすい)");
       };
+      // §50 v0.11: ステージ3デバッグ
+      document.getElementById("btn-debug-side-stage3-enter").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 3;
+        var s3 = SIDE_STAGE_DATA[3];
+        state.sideMap.x = s3.startX;
+        state.sideMap.y = s3.startY;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] 古びた町はずれへ移動 (stage=3, x=1,y=2)");
+      };
+      document.getElementById("btn-debug-side-stage3-near-goal").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 3;
+        state.sideMap.x = 30;
+        state.sideMap.y = 2;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] 町はずれゴール直前へ移動 (x=30,y=2) — 魔王ゴリラはx=31");
+      };
+      document.getElementById("btn-debug-side-stage3-clear-reset").onclick = function () {
+        delete state.sideMap.stageCleared["3"];
+        delete state.sideMap.defeatedEnemies["3:31,2"];
+        state.sideMap.stage3RewardLevel = 0;
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ3フラグをリセット");
+      };
+      document.getElementById("btn-debug-side-set-maougori").onclick = function () {
+        state.sideMap.defeatedEnemies["3:31,2"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 魔王ゴリラ撃退済みにした (3:31,2)");
+      };
+      document.getElementById("btn-debug-maou-gorilla-encounter").onclick = function () {
+        closeModal("settings-modal");
+        triggerFixedEncounter("maou_gorilla");
+        showToast("[DEBUG] 魔王ゴリラ強制エンカウント");
+      };
       // §49 v0.10.1: ヒントショップを開く
       document.getElementById("btn-debug-open-hint-shop").onclick = function () {
         closeModal("settings-modal");
@@ -4113,7 +4362,8 @@
         sideMapDefeated: state.sideMap.defeatedEnemies,
         sideMapCleared: state.sideMap.stageCleared,
         sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0,  // §47 v0.9.3
-        sideMapStage2Reward: state.sideMap.stage2RewardLevel || 0   // §48 v0.10
+        sideMapStage2Reward: state.sideMap.stage2RewardLevel || 0,  // §48 v0.10
+        sideMapStage3Reward: state.sideMap.stage3RewardLevel || 0   // §50 v0.11
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -4182,6 +4432,7 @@
       state.sideMap.stageCleared = data.sideMapCleared || {};
       state.sideMap.stage1RewardLevel = data.sideMapStage1Reward || 0;  // §47 v0.9.3
       state.sideMap.stage2RewardLevel = data.sideMapStage2Reward || 0;  // §48 v0.10
+      state.sideMap.stage3RewardLevel = data.sideMapStage3Reward || 0;  // §50 v0.11
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
         state.sideMap.stage1RewardLevel = state.sideMap.defeatedEnemies["36,1"] ? 2 : 1;
@@ -4325,6 +4576,17 @@
       saveGame();
       renderField();
       showToast("🌲 あやしい森へ入った！");
+    });
+    // §50 v0.11: 古びた町はずれへ進むボタン
+    document.getElementById("btn-side-goal-town").addEventListener("click", function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 3;
+      var s3 = SIDE_STAGE_DATA[3];
+      state.sideMap.x = s3.startX;
+      state.sideMap.y = s3.startY;
+      saveGame();
+      renderField();
+      showToast("🏚️ 古びた町はずれへ入った！");
     });
 
     // 攻略ペーパービュー屋モーダル(§37 v0.8.6)
@@ -4728,17 +4990,19 @@
   // フィールド(4,3)のNPC。10G/50G/100Gで状況別ヒントを売る。
   // ---------------------------------------------------------
 
-  // 現在の進行状況からヒント優先度(0〜11)を返す
+  // 現在の進行状況からヒント優先度(0〜12)を返す
   function getHintPriority() {
     var p = state.player;
     var ef = state.eventFlags;
     var sm = state.sideMap;
     var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
     var s2Cleared = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
+    var s3Cleared = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
     if (state.gameCleared) return 0;
-    // §49 v0.10.1: 横スクロールステージ進捗ヒント
-    if (s1Cleared && s2Cleared) return 9;
-    if (s1Cleared) return 10;
+    // §50 v0.11: 横スクロールステージ進捗ヒント (s3追加)
+    if (s3Cleared) return 9;        // 全ステージクリア済み
+    if (s2Cleared) return 12;       // s2クリア・s3未クリア → ステージ3ガイド
+    if (s1Cleared) return 10;       // s1クリア・s2未クリア → ステージ2ガイド
     var sideVisited = !!(sm && (
       Object.keys(sm.openedChests || {}).length > 0 ||
       Object.keys(sm.defeatedEnemies || {}).length > 0
@@ -4763,11 +5027,22 @@
     // §49 v0.10.1: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
     if (priority === 9) {
       var h9 = [
-        "今行ける横スクロールステージはかなり進んでいる。次に待つのは、さらに危険な道だ。",
-        "はじまりの草原とあやしい森を越えた者は、もう初心者ではない。次のアップデートでさらに強いゴリラが待つかもしれない。",
-        "ステージ1と2を制覇した。次のステージは未実装だが、通常マップにはまだ究極ゴリラが待っている。"
+        "3つの横スクロールステージを制覇した。次のステージが来るまで、通常マップで究極ゴリラを目指そう。",
+        "草原、森、町はずれを越えた者は真の旅人だ。次のアップデートでは険しい山道が待つかもしれない。",
+        "ステージ1〜3をすべて制覇済み。次のステージ4「ゴリラ山道」は未実装だが、通常マップにはまだ究極ゴリラが待っている。"
       ];
       return h9[tier - 1] || h9[0];
+    }
+    // §50 v0.11: s2クリア・s3未クリア → ステージ3ガイド
+    if (priority === 12) {
+      var maouDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["3:31,2"]);
+      if (tier === 1) return "古びた町はずれでは、まっすぐ進むよりも道を選ぶことが大事だ。怪しい道ほど、宝箱も危険も多い。";
+      if (tier === 2) {
+        if (!maouDefeated) return "町はずれの奥には魔王ゴリラがいる。魔王ゴリラはUMAではないので捕獲できない。装備と回復アイテムを整えてから挑もう。";
+        return "魔王ゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)で大きな報酬が待っている。";
+      }
+      if (!maouDefeated) return "魔王ゴリラはステージ3のゴール手前x=31にいる。撃退してからゴールすると220G+ラーメンの報酬が手に入る。下の道(低路)には宝箱が2個ある。";
+      return "魔王ゴリラ撃退済み！ゴール(x=38)へ進もう。下路にはまだ宝箱が残っているかもしれない。";
     }
     if (priority === 10) {
       var bossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);

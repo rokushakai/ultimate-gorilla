@@ -2681,3 +2681,110 @@ var SIDE_FIXED_ENCOUNTERS = {
 
 - 攻略ペーパービュー屋の説明セクション追加
 - 横スクロール固定敵の説明を更新 (敵の種類についての補足)
+
+---
+
+## §50 横スクロールステージ3「古びた町はずれ」 (v0.11)
+
+### 概要
+
+ステージ2「あやしい森」クリア後に進める横スクロールステージ3。
+町の外れという不気味な雰囲気で、ステージ2より障害物が多く難易度が上がる。
+ボスは「魔王ゴリラ」(UMAではなく捕獲不可)。
+
+### マップ仕様
+
+- サイズ: 40×5 (5行で縦の迂回路が増加)
+- タイル:  `g`(草), `f`(安全路), `#`(壁・通行不可), `~`(水・通行不可), `c`(宝箱), `n`(NPC-老人), `p`(NPC-旅人), `m`(商人), `e`(固定敵), `b`(魔王ゴリラ), `G`(ゴール)
+- startX: 1, startY: 2, goalX: 38
+
+```
+row0(y=0) 高路:    fffff##fffffff#fffcfff###fffff##fffcffff
+row1(y=1) 上中路:  gggfgg##ggpggff##gggggg##ggggggggg###gfg
+row2(y=2) 中央路:  gggmgngggg##gggeggg##gggggg##ggbgg##ggGg
+row3(y=3) 下中路:  ~~gggg##ggggegg##gggggg##ggggg##ggggg~~~
+row4(y=4) 下路:    ~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~
+```
+
+タイル位置:
+- 商人(m): x=3, y=2
+- NPC-老人(n): x=5, y=2 (撃退前後でセリフ分岐)
+- NPC-怪しい旅人(p): x=10, y=1 (撃退前後でセリフ分岐)
+- 固定敵(e): x=15,y=2 / x=12,y=3 / x=27,y=4
+- 魔王ゴリラ(b): x=31, y=2 (bossKey="3:31,2")
+- ゴール(G): x=38, y=2
+- 宝箱(c): x=18,y=0 / x=35,y=0 / x=4,y=4 / x=19,y=4
+
+### 魔王ゴリラ
+
+```javascript
+{
+  id: "maou_gorilla",
+  name: "魔王ゴリラ",
+  emoji: "🦍",
+  type: "boss",
+  isUMA: false,
+  hp: 400,
+  attack: 34,
+  def: 11,
+  captureRate: 0,
+  exp: 500,
+  fleeRate: 0.15,
+  canCapture: false,
+  startMsg: "町はずれの奥から、重たい笑い声が響いた……\n魔王ゴリラが道をふさいだ！",
+  customEscapeMsgs: [
+    "魔王ゴリラは古びた町の奥へ逃げていった！！",
+    "町はずれに、少しだけ静けさが戻った。"
+  ]
+}
+```
+
+### SIDE_FIXED_ENCOUNTERS (追加分)
+
+```javascript
+"3:15,2": "powerharassmentsenpai",  // ステージ3 中央路
+"3:12,3": "wanderingman",           // ステージ3 下中路
+"3:27,4": "deathmatch"              // ステージ3 下路
+```
+
+### ステージ3ゴール演出
+
+報酬管理: `state.sideMap.stage3RewardLevel` (0/1/2)
+
+| rewardLevel | 魔王ゴリラ撃退 | 報酬 |
+|---|---|---|
+| 0 → 2 | 済み | 220G + ラーメン×1 |
+| 0 → 1 | 未撃退 | 80G |
+| 1 → 2 | 済み (後追加) | 140G + ラーメン×1 |
+| 2 | 受取済み | 表示のみ |
+
+### セーブキー追加
+
+- `sideMapStage3Reward`: state.sideMap.stage3RewardLevel
+
+### ヒント優先度拡張 (§50 v0.11)
+
+- 旧priority 9 (s1&s2クリア) → s3クリアで priority 9 (全クリア)
+- 新priority 12: s2クリア・s3未クリア → ステージ3ヒント (魔王ゴリラ撃退フラグで分岐)
+
+### ステータス称号 (横スクロール)
+
+| 条件 | 称号 |
+|---|---|
+| s3クリア + 魔王撃退 | 町はずれの覇者 |
+| s3クリア | 町はずれを越えし者 |
+| s2クリア + ボス撃退 | 森の制覇者 |
+| s1クリア + 中ボス撃退 | 中ボスゴリラを退かせし者 |
+| s1クリア | 草原を越えし者 |
+
+### 動的マップサイズ対応
+
+`SIDE_MAP_HEIGHT` / `SIDE_VIEW_ROWS` をハードコードから、ステージの `rows.length` で動的計算に変更。
+`SIDE_MAP_WIDTH` も `rows[0].length` を使用。renderField の `--rows` CSS変数も動的設定。
+
+### 今後のステージ4「ゴリラ山道」構想
+
+- 険しい山道をテーマにした次ステージ (未実装)
+- 大魔王ゴリラ (魔王ゴリラより強い) をボスとする予定
+- ステージ3クリア後に進める
+- 本仕様はv0.11以降で検討

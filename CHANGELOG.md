@@ -5,6 +5,37 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.11] - 2026-07-05 — 横スクロールステージ3「古びた町はずれ」実装
+
+### Added
+- **SIDE_STAGE_DATA[3]「古びた町はずれ」** (§50): 40×5マップ。廃墟・荒れ地・5路構成。
+  - row0 (最上段): 宝箱(x=18,x=35)
+  - row1 (上段): NPC-商人?(x=10)
+  - row2 (メイン): 老人NPC(x=3)、怪しい旅人NPC(x=5)、固定敵(x=15)、ボス魔王ゴリラ(x=31)、ゴール(x=38)
+  - row3 (下段): 固定敵(x=12)
+  - row4 (最下段): 宝箱(x=4,x=19)、固定敵(x=27)
+- **魔王ゴリラ** (§50): HP400/ATK34/DEF11/EXP500/canCapture:false。ステージ3専用固定ボス。
+- **openStage3GoalModal()**: 魔王ゴリラ撃退分岐 + 報酬二重取り防止 (stage3RewardLevel 0/1/2)。
+  - level0→2(魔王倒済): 220G + ラーメン×1
+  - level0→1(魔王未倒): 80G
+  - level1→2(魔王倒後): 140G + ラーメン×1
+- **openStage3NpcModal()**: 老人(y=2) / 怪しい旅人(y≠2)。魔王撃退前後でセリフ分岐。
+- **「🏚️ 古びた町はずれへ進む」ボタン**: ステージ2ゴールモーダル + index.html に追加。
+- **セーブ/ロード**: sideMapStage3Reward フラグ追加。
+- **SIDE_FIXED_ENCOUNTERS**: ステージ3固定敵3体を追加 (powerharassmentsenpai/wanderingman/deathmatch)。
+- **ヒント優先度12** (§50): ステージ2クリア・ステージ3未クリア時のステージ3ヒント。
+- **renderStatus()**: ステージ3進捗2行追加。称号に「町はずれの覇者」「町はずれを越えし者」追加。
+- **デバッグボタン5本追加**: stage3-enter / stage3-near-goal / stage3-clear-reset / set-maougori / maou-gorilla-encounter
+- **ヘルプ**: 🏚️ ステージ3「古びた町はずれ」セクション追加。
+
+### Changed
+- **openStage2GoalModal()**: btn-side-goal-town を show する処理を追加。
+- **moveSidePlayer() 'b' タイル**: stage===3 の場合 triggerFixedEncounter("maou_gorilla") を起動。
+- **renderSideField() / moveSidePlayer()**: SIDE_MAP_HEIGHT/SIDE_MAP_WIDTH を動的に rows.length / rows[0].length で計算（5行ステージ対応）。
+- **renderField()**: CSS `--rows` 変数をステージの行数に合わせて動的セット。
+- **getHintPriority()**: 優先度12を追加（s2クリア・s3未クリア）、優先度9を「全3ステージクリア」に更新。
+- **getProgressHint()**: priority 9/12 を更新・追加。
+
 ## [0.10.1] - 2026-07-05 — 攻略ペーパービュー屋ヒント拡張・ステージ別固定敵改善
 
 ### Added

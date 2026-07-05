@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.10.1** |
+| 現在バージョン | **v0.11** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.10.1時点）
+## 現在実装済みの主要機能（v0.11時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,20 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.11] 横スクロールステージ3「古びた町はずれ」実装**（§50）
+  - **魔王ゴリラ**: HP400/ATK34/DEF11/EXP500、canCapture:false。ステージ3専用固定ボス。
+  - **SIDE_STAGE_DATA[3]「古びた町はずれ」(40×5)**: 廃墟・荒れ地5路構成。宝箱4個、固定敵3体、NPC2人、ボス1体。
+  - **openStage3GoalModal()**: 魔王撃退有無でセリフ・報酬分岐（220G+ラーメン / 80G / 差分140G+ラーメン）
+  - **openStage3NpcModal()**: 老人(y=2) / 怪しい旅人(y≠2)。魔王撃退前後でセリフ分岐。
+  - **renderSideField() / moveSidePlayer()**: 動的マップサイズ対応（rows.length / rows[0].length で計算）。
+  - **renderField()**: CSS `--rows` をステージ行数に合わせて動的セット（5行ステージ対応）。
+  - **ゴールモーダル**: 「🏚️ 古びた町はずれへ進む」ボタン追加。ステージ2クリア後に表示。
+  - **getHintPriority()**: 優先度12追加（s2クリア・s3未クリア）。優先度9を全3ステージクリア時に更新。
+  - **renderStatus()**: ステージ3進捗2行追加。称号「町はずれの覇者」「町はずれを越えし者」追加。
+  - **セーブ/ロード**: sideMapStage3Reward キー追加。
+  - **SIDE_FIXED_ENCOUNTERS**: ステージ3固定敵3体追加（powerharassmentsenpai/wanderingman/deathmatch）。
+  - **デバッグ**: 5ボタン追加（stage3-enter/near-goal/clear-reset/set-maougori/maou-gorilla-encounter）。
+  - **ヘルプ**: 「🏚️ ステージ3「古びた町はずれ」」セクション追加。
 - **[v0.10.1] 攻略ペーパービュー屋ヒント拡張・ステージ別固定敵改善**（§49）
   - SIDE_FIXED_ENCOUNTERS マップ: ステージ1/2のタイル'e'に出す敵IDを固定指定
     - stage1: wilddog(31,1)、bumpman(14,2)  |  stage2: wannabeninja(2:14,1)、bandit(2:12,2)、oni(2:32,2)
@@ -309,7 +323,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **横スクロールステージ3（未定）** — ステージ2クリア後の次のステージ。GAME_DESIGN.md に仕様を書いてから着手。工数大。
+1. **横スクロールステージ4「ゴリラ山道」** — ステージ3クリア後の次のステージ。GAME_DESIGN.md に §51 として仕様を書いてから着手。工数大。
 2. **NPC固有イベント深化** — 仲間加入フラグ別の追加セリフや連続クエスト的な展開。工数中。
 3. **BGMメロディ改善** — 現行メロディの音楽的改善や音量調整。工数小。
 4. **仲間システム拡張** — フィールド追従・固有イベント・3分岐加入。工数大。
