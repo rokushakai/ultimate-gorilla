@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.11** |
+| 現在バージョン | **v0.11.1** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.11時点）
+## 現在実装済みの主要機能（v0.11.1時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,15 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.11.1] ステージ3安定化・デバッグ補強・ステージ4予告**（§51）
+  - **固定敵ID確認済み**: powerharassmentsenpai / wanderingman / deathmatch はすべて NON_UMA_DATA に実在。
+  - **triggerFixedEncounter 安全化**: 未定義IDに console.warn + triggerEncounter() フォールバックを追加。
+  - **validateSideFixedEncounters()**: SIDE_FIXED_ENCOUNTERS のID整合性チェック関数（debug=1専用）。
+  - **デバッグ2ボタン追加**: 🏚️ ステージ3宝箱・固定敵リセット / 🧪 固定敵IDチェック。
+  - **ステージ4「ゴリラ山道」予告**: openStage3GoalModal の全報酬受取後テキストに大魔王ゴリラへの予告を追加。
+  - **getProgressHint priority 9**: ステージ4・大魔王ゴリラへの言及を含む内容に更新。
+  - **CSS確認済み**: aspect-ratio: 9/5 が5行ステージで正しく機能（変更不要）。
+  - **GAME_DESIGN.md §51**: ステージ4構想・安定化項目の正式仕様を追記。
 - **[v0.11] 横スクロールステージ3「古びた町はずれ」実装**（§50）
   - **魔王ゴリラ**: HP400/ATK34/DEF11/EXP500、canCapture:false。ステージ3専用固定ボス。
   - **SIDE_STAGE_DATA[3]「古びた町はずれ」(40×5)**: 廃墟・荒れ地5路構成。宝箱4個、固定敵3体、NPC2人、ボス1体。
@@ -323,7 +332,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **横スクロールステージ4「ゴリラ山道」** — ステージ3クリア後の次のステージ。GAME_DESIGN.md に §51 として仕様を書いてから着手。工数大。
+1. **横スクロールステージ4「ゴリラ山道」** — ステージ3クリア後の次のステージ。GAME_DESIGN.md §51 に将来構想を記録済み。実装時は §51 を参照して本仕様を追記してから着手。工数大。
 2. **NPC固有イベント深化** — 仲間加入フラグ別の追加セリフや連続クエスト的な展開。工数中。
 3. **BGMメロディ改善** — 現行メロディの音楽的改善や音量調整。工数小。
 4. **仲間システム拡張** — フィールド追従・固有イベント・3分岐加入。工数大。

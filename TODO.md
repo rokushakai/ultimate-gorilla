@@ -14,6 +14,20 @@
 
 ## ✅ 実装済み
 
+### Version 0.11.1 — ステージ3安定化・デバッグ補強・ステージ4予告
+
+- **固定敵IDの実在確認** (§51): `powerharassmentsenpai` / `wanderingman` / `deathmatch` すべて NON_UMA_DATA に実在 ✅
+- **triggerFixedEncounter 安全化** (§51): 未定義IDに `console.warn` + `triggerEncounter()` フォールバックを追加
+- **validateSideFixedEncounters()** (§51): SIDE_FIXED_ENCOUNTERS のID整合性チェック関数を追加 (debug=1専用)
+- **デバッグボタン追加** (§51):
+  - `🏚️ ステージ3宝箱・固定敵リセット`: stage3キーの openedChests / defeatedEnemies を削除
+  - `🧪 固定敵IDチェック`: validateSideFixedEncounters() を実行
+- **ステージ4「ゴリラ山道」予告テキスト** (§51):
+  - openStage3GoalModal: 全報酬受取時に大魔王ゴリラ予告を追加
+  - getProgressHint priority 9: ステージ4・大魔王ゴリラへの言及を強化
+- **CSS確認**: aspect-ratio: 9/5 が5行ステージで正しく機能することを確認（変更不要）
+- **GAME_DESIGN.md §51**: ステージ4構想・安定化項目を追加
+
 ### Version 0.11 — 横スクロールステージ3「古びた町はずれ」実装
 
 - **SIDE_STAGE_DATA[3]** (§50): 40×5マップ「古びた町はずれ」追加

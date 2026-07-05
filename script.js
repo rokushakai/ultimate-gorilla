@@ -1421,7 +1421,7 @@
         headerText = "古びた町はずれを制覇した！";
         bodyLines = [
           "魔王ゴリラを退かせ、町はずれの出口へたどり着いた。",
-          "遠くに、険しい山道が見えてきた。"
+          "遠くに、険しいゴリラ山道が見えてきた。\nそこには魔王ゴリラよりさらに重い気配を放つ大魔王ゴリラが待つという噂がある……"
         ];
         rewardLine = "💰 報酬：220G ＋ 🍜 ラーメン ×1";
       } else {
@@ -1440,8 +1440,8 @@
       state.player.ramenCount = (state.player.ramenCount || 0) + 1;
       headerText = "町はずれの真の制覇者よ！";
       bodyLines = [
-        "魔王ゴリラも退かせたか！",
-        "古びた町はずれの覇者として認められた。追加の報酬を受け取れ。"
+        "魔王ゴリラも退かせたか！古びた町はずれの覇者として認められた。",
+        "追加の報酬を受け取れ。次なるゴリラ山道への道が待っている……"
       ];
       rewardLine = "💰 追加報酬：140G ＋ 🍜 ラーメン ×1";
     } else {
@@ -1880,10 +1880,37 @@
   }
 
   // §45 v0.9.2: 固定IDの敵を強制起動 (中ボスゴリラなど)
+  // §51 v0.11.1: 未定義IDへのフォールバック追加
   function triggerFixedEncounter(enemyId) {
     var monster = findById(NON_UMA_DATA, enemyId);
-    if (!monster) { return; }
+    if (!monster) {
+      if (typeof console !== "undefined") {
+        console.warn("[固定敵エラー] 未定義のID: " + enemyId + " → ランダムエンカウントにフォールバック");
+      }
+      triggerEncounter();
+      return;
+    }
     startBattle(monster);
+  }
+
+  // §51 v0.11.1: SIDE_FIXED_ENCOUNTERS の敵IDが NON_UMA_DATA に存在するか検証 (debug=1専用)
+  function validateSideFixedEncounters() {
+    var ok = 0, ng = 0, ngList = [];
+    for (var key in SIDE_FIXED_ENCOUNTERS) {
+      if (!SIDE_FIXED_ENCOUNTERS.hasOwnProperty(key)) continue;
+      var id = SIDE_FIXED_ENCOUNTERS[key];
+      if (findById(NON_UMA_DATA, id)) {
+        ok++;
+      } else {
+        ng++;
+        ngList.push(key + " → " + id);
+      }
+    }
+    var msg = "固定敵IDチェック完了\nOK: " + ok + "件\nNG: " + ng + "件";
+    if (ngList.length > 0) {
+      msg += "\n\n未定義ID:\n" + ngList.join("\n");
+    }
+    alert(msg);
   }
 
   function weightedPick(list) {
@@ -4026,8 +4053,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-clear-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ステージ3フラグリセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-maougori" style="border-color:#ffb347;color:#ffb347;">✅ 魔王ゴリラ撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-maou-gorilla-encounter" style="border-color:#ffb347;color:#ffb347;">🦍 魔王ゴリラ強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🏚️ ステージ3宝箱・固定敵リセット</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
+      html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-validate-encounters" style="border-color:#74c0fc;color:#74c0fc;">🧪 固定敵IDチェック</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -4306,10 +4336,32 @@
         triggerFixedEncounter("maou_gorilla");
         showToast("[DEBUG] 魔王ゴリラ強制エンカウント");
       };
+      // §51 v0.11.1: ステージ3宝箱・固定敵リセット
+      document.getElementById("btn-debug-side-stage3-items-reset").onclick = function () {
+        var sm = state.sideMap;
+        var toDelete = [];
+        for (var ck in sm.openedChests) {
+          if (sm.openedChests.hasOwnProperty(ck) && ck.indexOf("3:") === 0) toDelete.push(ck);
+        }
+        for (var ci = 0; ci < toDelete.length; ci++) delete sm.openedChests[toDelete[ci]];
+        var eToDelete = [];
+        for (var ek in sm.defeatedEnemies) {
+          if (sm.defeatedEnemies.hasOwnProperty(ek) && ek.indexOf("3:") === 0) eToDelete.push(ek);
+        }
+        for (var ei = 0; ei < eToDelete.length; ei++) delete sm.defeatedEnemies[eToDelete[ei]];
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ3宝箱・固定敵をリセット");
+      };
       // §49 v0.10.1: ヒントショップを開く
       document.getElementById("btn-debug-open-hint-shop").onclick = function () {
         closeModal("settings-modal");
         openHintShopModal();
+      };
+      // §51 v0.11.1: 固定敵IDチェック
+      document.getElementById("btn-debug-validate-encounters").onclick = function () {
+        validateSideFixedEncounters();
       };
     }
   }
@@ -5027,9 +5079,9 @@
     // §49 v0.10.1: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
     if (priority === 9) {
       var h9 = [
-        "3つの横スクロールステージを制覇した。次のステージが来るまで、通常マップで究極ゴリラを目指そう。",
-        "草原、森、町はずれを越えた者は真の旅人だ。次のアップデートでは険しい山道が待つかもしれない。",
-        "ステージ1〜3をすべて制覇済み。次のステージ4「ゴリラ山道」は未実装だが、通常マップにはまだ究極ゴリラが待っている。"
+        "3つの横スクロールステージを制覇した。次なるゴリラ山道への道が見えてきた。今は通常マップで究極ゴリラを目指そう。",
+        "草原、森、町はずれを越えた者は真の旅人だ。噂では次のステージ4「ゴリラ山道」に大魔王ゴリラが潜むという。実装をお楽しみに。",
+        "ステージ1〜3をすべて制覇済み。ステージ4「ゴリラ山道」と大魔王ゴリラは次のアップデートを待て。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
       ];
       return h9[tier - 1] || h9[0];
     }

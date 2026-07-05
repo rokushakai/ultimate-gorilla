@@ -5,6 +5,27 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.11.1] - 2026-07-05 — ステージ3安定化・デバッグ補強・ステージ4予告
+
+### Added
+- **`validateSideFixedEncounters()`** (§51): SIDE_FIXED_ENCOUNTERS の敵IDが NON_UMA_DATA に存在するか検証するdebug=1専用関数。
+- **デバッグボタン2本追加** (§51):
+  - `🏚️ ステージ3宝箱・固定敵リセット` (btn-debug-side-stage3-items-reset): stage3キーの openedChests/defeatedEnemies をすべて削除。
+  - `🧪 固定敵IDチェック` (btn-debug-validate-encounters): validateSideFixedEncounters() を実行。
+
+### Fixed
+- **`triggerFixedEncounter()` 安全化** (§51): 未定義の敵IDが渡された際に `console.warn` を出力し `triggerEncounter()` へフォールバックするよう変更。従来は `return;` のみでエラーも出ずゲームが止まっていた。
+
+### Changed
+- **`openStage3GoalModal()`**: 魔王ゴリラ撃退後の全報酬受取時に「ゴリラ山道」「大魔王ゴリラ」の予告テキストを追加。
+- **`getProgressHint()` priority 9**: 3ステージ制覇後のヒントをステージ4「ゴリラ山道」・大魔王ゴリラへの言及を含む内容に更新。
+- **GAME_DESIGN.md §51 追加**: ステージ4「ゴリラ山道」将来構想・安定化項目の正式仕様を記録。
+
+### Confirmed (変更なし)
+- **固定敵IDはすべて実在**: `powerharassmentsenpai` / `wanderingman` / `deathmatch` はすべて NON_UMA_DATA に存在することを確認。
+- **CSS表示問題なし**: `aspect-ratio: var(--cols)/var(--rows)` の実装により5行ステージも自動的に正しいサイズで表示される。変更不要。
+- **進行度表示**: `stageData.name + "  📍" + sm.x + "/" + goalX + "  あと" + dist` の形式でステージ3も正しく表示される。
+
 ## [0.11] - 2026-07-05 — 横スクロールステージ3「古びた町はずれ」実装
 
 ### Added
