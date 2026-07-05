@@ -135,8 +135,32 @@
     }
   };
 
+  // §48 v0.10: ステージ2「あやしい森」マップ (40×3)
+  // row0(y=0) 高路: 安全な上路。x=17に宝箱、x=20にNPC-A。迂回路はx=3-6,x=12-16,x=25-27,x=33-36。
+  // row1(y=1) メイン: x=4 NPC-B x=7 ブロックA x=14 固定敵1 x=17-18 ブロックB x=23-24 ブロックC
+  //           x=35 ボスゴリラ(b) x=38 ゴール(G)
+  // row2(y=2) 下路: x=4 宝箱 x=12 固定敵2 x=26 宝箱 x=32 固定敵3 (水(~)で進入制限あり)
+  SIDE_STAGE_DATA[2] = {
+    name: "あやしい森",
+    rows: [
+      "#ff#ff#fffffff#ffcffpfff#fff#fff#fff#ff#",
+      "ggggpgg#gggfggegg##gggg##ggggggggggbggGg",
+      "~~ggcgg~~~ggegg~gggg~~ggggcgg~~gegg~~gg~"
+    ],
+    startX: 1,
+    startY: 1,
+    goalX: 38
+  };
+
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
   var sideMapPendingFixedKey = "";
+
+  // §48 v0.10: ステージ別イベントキー生成 (openedChests / defeatedEnemies の衝突防止)
+  // ステージ1はそのまま "x,y"、ステージ2以降は "N:x,y" 形式
+  function getSideKey(nx, ny) {
+    if (state.sideMap.stage === 1) { return nx + "," + ny; }
+    return String(state.sideMap.stage) + ":" + nx + "," + ny;
+  }
 
   // ---------------------------------------------------------
   // 2. データ定義
@@ -230,6 +254,10 @@
     { id: "midboss_gorilla", name: "中ボスゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 150, attack: 20, def: 5, captureRate: 0, exp: 160, fleeRate: 0.30,
       canCapture: false,
       customEscapeMsgs: ["はじまりの草原に静けさが戻った。", "中ボスゴリラは草むらの奥へ消えていった。"] },
+    // §48 v0.10: ボスゴリラ (横スクロールステージ2固定ボス、通常エンカウントには出ない)
+    { id: "boss_gorilla", name: "ボスゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 250, attack: 26, def: 8, captureRate: 0, exp: 290, fleeRate: 0.20,
+      canCapture: false,
+      customEscapeMsgs: ["あやしい森に静けさが戻った。", "ボスゴリラは森の奥深くへ消えていった。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
     { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
@@ -561,7 +589,8 @@
       openedChests: {},
       defeatedEnemies: {},   // §44 v0.9.1: 撃破済み固定敵 { "31,1": true }
       stageCleared: {},      // §44 v0.9.1: クリア済みステージ { "1": true }
-      stage1RewardLevel: 0   // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
+      stage1RewardLevel: 0,  // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
+      stage2RewardLevel: 0   // §48 v0.10: ステージ2報酬受取レベル (0=未, 1=50G, 2=全取得)
     }
   };
 
@@ -811,10 +840,10 @@
         if (mx === sm.x && my === sm.y) {
           emoji = "🦍";
         } else {
-          var key = mx + "," + my;
+          var key = getSideKey(mx, my);  // §48 v0.10: ステージ別キー
           if (tileChar === "c" && sm.openedChests[key]) {
             emoji = "📦";
-          } else if (tileChar === "e" && sm.defeatedEnemies[key]) {
+          } else if ((tileChar === "e" || tileChar === "b") && sm.defeatedEnemies[key]) {
             // §44 v0.9.1: 撃破済み固定敵は草原に変化
             emoji = SIDE_TILE_EMOJI["g"];
           } else {
@@ -867,8 +896,8 @@
     renderField();
     saveGame();
 
-    // タイルイベント判定
-    var key = nx + "," + ny;
+    // タイルイベント判定 (§48 v0.10: getSideKey でステージ間衝突防止)
+    var key = getSideKey(nx, ny);
     if (tileChar === "c") {
       if (!sm.openedChests[key]) {
         openSideChest(nx, ny);
@@ -890,11 +919,15 @@
       state.stepsSinceEncounter = 0;
       triggerEncounter();
     } else if (tileChar === "b") {
-      // §45 v0.9.2: 中ボスゴリラ固定戦闘。撃破済みなら素通り。
+      // §45 v0.9.2: ボス固定戦闘。撃破済みなら素通り。§48 v0.10: ステージでボスを分岐。
       if (sm.defeatedEnemies[key]) { return; }
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
-      triggerFixedEncounter("midboss_gorilla");
+      if (sm.stage === 2) {
+        triggerFixedEncounter("boss_gorilla");
+      } else {
+        triggerFixedEncounter("midboss_gorilla");
+      }
     } else if (tileChar === "g") {
       state.stepsSinceEncounter++;
       if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
@@ -907,7 +940,7 @@
 
   function openSideChest(cx, cy) {
     var sm = state.sideMap;
-    var key = cx + "," + cy;
+    var key = getSideKey(cx, cy);  // §48 v0.10: ステージ別キー
     sm.openedChests[key] = true;
     renderField();
 
@@ -937,6 +970,11 @@
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
     // §46 v0.9.2.1: 中ボス撃退でセリフ分岐
     // §47 v0.9.3: stage1Cleared × midbossDefeated の4パターン分岐
+    // §48 v0.10: ステージ2専用NPC
+    if (state.sideMap && state.sideMap.stage === 2) {
+      openStage2NpcModal(state.sideMap.x, state.sideMap.y);
+      return;
+    }
     var icon, name, lines;
     var midbossDefeated = !!(state.sideMap && state.sideMap.defeatedEnemies && state.sideMap.defeatedEnemies["36,1"]);
     var stage1Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["1"]);
@@ -1018,7 +1056,58 @@
     openModal("npc-modal");
   }
 
+  // §48 v0.10: ステージ2 NPC会話 (位置で分岐)
+  function openStage2NpcModal(nx, ny) {
+    var sm = state.sideMap;
+    var bossDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
+    var icon = "🧑";
+    var name, lines;
+    // NPC-B: row1 x=4 (メイン路の旅人)
+    if (nx === 4 && ny === 1) {
+      name = "旅人";
+      if (bossDefeated) {
+        lines = [
+          "ボスゴリラが静かになった！ 君のおかげだ！",
+          "この先はもう安心して通れるよ。ありがとう！"
+        ];
+      } else {
+        lines = [
+          "この森、なんか怖いね…木の奥で何かが動いてた気がする。",
+          "右の奥に大きなゴリラがいるって噂だよ。気をつけて！"
+        ];
+      }
+    } else {
+      // NPC-A: row0 x=20 (高路の森の住人) または予備
+      name = "森の住人";
+      if (bossDefeated) {
+        lines = [
+          "あの大きなゴリラが出なくなった。平和になったね。",
+          "高い道は景色がいいだろ？ゆっくり行くといいさ。"
+        ];
+      } else {
+        lines = [
+          "この上の道は比較的安全だよ。下の道はゴリラが怖くてね。",
+          "でも下の道には宝箱が眠ってるとか……"
+        ];
+      }
+    }
+    document.getElementById("npc-header").innerHTML =
+      '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + name + '</div>';
+    var speechHtml = "";
+    for (var i = 0; i < lines.length; i++) {
+      speechHtml += "<p>「" + lines[i] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
   function openSideGoalModal() {
+    // §48 v0.10: ステージ2はopenStage2GoalModalへルーティング
+    if (state.sideMap.stage === 2) {
+      openStage2GoalModal();
+      return;
+    }
     // §47 v0.9.3: ゴール演出強化 — 中ボス撃退分岐 + 報酬二重受け取り防止
     var sm = state.sideMap;
     var stageKey = String(sm.stage);
@@ -1104,6 +1193,93 @@
     if (stayBtn) {
       stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度草原を探索する" : "🔍 探索を続ける";
     }
+    // §48 v0.10: あやしい森へ進むボタン (ステージ1クリア時に表示)
+    var forestBtn = document.getElementById("btn-side-goal-forest");
+    if (forestBtn) { forestBtn.classList.remove("hidden"); }
+    openModal("modal-side-goal");
+  }
+
+  // §48 v0.10: ステージ2「あやしい森」ゴール演出
+  function openStage2GoalModal() {
+    var sm = state.sideMap;
+    var bossKey = "2:35,1";
+    var bossDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies[bossKey]);
+    var rewardLevel = sm.stage2RewardLevel || 0;
+    sm.stageCleared["2"] = true;
+
+    var headerText, bodyLines, rewardLine, newRewardLevel;
+    newRewardLevel = rewardLevel;
+
+    if (rewardLevel === 0) {
+      if (bossDefeated) {
+        newRewardLevel = 2;
+        state.player.gold += 150;
+        state.player.bentoCount = (state.player.bentoCount || 0) + 1;
+        headerText = "あやしい森を制覇した！";
+        bodyLines = [
+          "ボスゴリラを退かせ、森の出口にたどり着いた。",
+          "あやしい森に、わずかな光が差し込んできた。"
+        ];
+        rewardLine = "💰 報酬：150G ＋ 🍱 お弁当 ×1";
+      } else {
+        newRewardLevel = 1;
+        state.player.gold += 50;
+        headerText = "あやしい森を抜けた！";
+        bodyLines = [
+          "木々の隙間を縫いながら、どうにか出口にたどり着いた。",
+          "ボスゴリラはまだ森の奥に潜んでいるかもしれない。"
+        ];
+        rewardLine = "💰 報酬：50G";
+      }
+    } else if (rewardLevel === 1 && bossDefeated) {
+      newRewardLevel = 2;
+      state.player.gold += 100;
+      state.player.bentoCount = (state.player.bentoCount || 0) + 1;
+      headerText = "森の真の制覇者よ！";
+      bodyLines = [
+        "ボスゴリラも退かせたか！",
+        "あやしい森の覇者として認められた。追加の報酬を受け取れ。"
+      ];
+      rewardLine = "💰 追加報酬：100G ＋ 🍱 お弁当 ×1";
+    } else {
+      headerText = "あやしい森";
+      if (bossDefeated) {
+        bodyLines = [
+          "森は静けさを取り戻している。",
+          "ボスゴリラの影も見えない。"
+        ];
+      } else {
+        bodyLines = [
+          "ボスゴリラはまだ森の奥に潜んでいる。",
+          "退かせてから再びゴールを目指すと、さらなる報酬があるぞ。"
+        ];
+      }
+      rewardLine = null;
+    }
+
+    sm.stage2RewardLevel = newRewardLevel;
+    renderStatus();
+    saveGame();
+
+    var html = '<p style="font-size:1.8em;margin:0 0 6px;">🏁</p>';
+    html += '<p style="font-weight:bold;font-size:1.1em;margin-bottom:8px;">' + headerText + '</p>';
+    for (var i = 0; i < bodyLines.length; i++) {
+      html += '<p style="font-size:0.88em;color:#d0e0ff;margin:2px 0;">' + bodyLines[i] + '</p>';
+    }
+    if (rewardLine) {
+      html += '<p style="color:#ffd166;font-weight:bold;margin:10px 0 4px;">' + rewardLine + '</p>';
+    } else {
+      html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
+    }
+    document.getElementById("modal-side-goal-body").innerHTML = html;
+
+    var stayBtn = document.getElementById("btn-side-goal-stay");
+    if (stayBtn) {
+      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度森を探索する" : "🔍 探索を続ける";
+    }
+    // あやしい森ゴールモーダルでは「あやしい森へ進む」ボタンは不要
+    var forestBtn = document.getElementById("btn-side-goal-forest");
+    if (forestBtn) { forestBtn.classList.add("hidden"); }
     openModal("modal-side-goal");
   }
 
@@ -2638,10 +2814,12 @@
       });
     }
 
-    // §47 v0.9.3: 横スクロール進捗
+    // §47 v0.9.3 / §48 v0.10: 横スクロール進捗
     var sm = state.sideMap;
     var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
     var s1BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
+    var s2Cleared = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
+    var s2BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
     html += "<h3>横スクロール進捗</h3>";
     html += '<div class="shop-row"><span>はじまりの草原</span><span style="color:' +
       (s1Cleared ? "#06d6a0" : "#888") + ';">' +
@@ -2649,8 +2827,16 @@
     html += '<div class="shop-row"><span>中ボスゴリラ</span><span style="color:' +
       (s1BossDefeated ? "#06d6a0" : "#888") + ';">' +
       (s1BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    html += '<div class="shop-row"><span>あやしい森</span><span style="color:' +
+      (s2Cleared ? "#06d6a0" : "#888") + ';">' +
+      (s2Cleared ? "✅ クリア済み" : "未クリア") + "</span></div>";
+    html += '<div class="shop-row"><span>ボスゴリラ</span><span style="color:' +
+      (s2BossDefeated ? "#06d6a0" : "#888") + ';">' +
+      (s2BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
     var sideTitle = null;
-    if (s1Cleared && s1BossDefeated) {
+    if (s2Cleared && s2BossDefeated) {
+      sideTitle = "森の制覇者";
+    } else if (s1Cleared && s1BossDefeated) {
       sideTitle = "中ボスゴリラを退かせし者";
     } else if (s1Cleared) {
       sideTitle = "草原を越えし者";
@@ -3610,6 +3796,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-midboss-encounter" style="border-color:#ffd166;color:#ffd166;">🦍 中ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-norio" style="border-color:#74c0fc;color:#74c0fc;">📈 ノリオを仲間にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-reset-midboss" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 中ボスゴリラ撃退フラグをリセット</button>';
+      html += '<p class="small" style="color:#c3a4ff;margin-top:8px;">🌲 ステージ2「あやしい森」(§48 v0.10)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage2-enter" style="border-color:#c3a4ff;color:#c3a4ff;">🌲 あやしい森へ移動 (stage=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage2-near-goal" style="border-color:#c3a4ff;color:#c3a4ff;">🏃 森ゴール直前へ (x=34,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage2-clear-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ステージ2フラグリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-set-bossgori" style="border-color:#c3a4ff;color:#c3a4ff;">✅ ボスゴリラ撃退済みにする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-boss-gorilla-encounter" style="border-color:#c3a4ff;color:#c3a4ff;">🦍 ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset-exp" style="border-color:#a8d8a8;color:#a8d8a8;">✨ EXPを0にする(ノリオ効果確認用)</button>';
     }
     body.innerHTML = html;
@@ -3799,6 +3991,48 @@
         renderField();
         showToast("[DEBUG] 中ボスゴリラ撃退フラグをリセット (36,1)");
       };
+      // §48 v0.10: ステージ2デバッグ
+      document.getElementById("btn-debug-side-stage2-enter").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 2;
+        var s2 = SIDE_STAGE_DATA[2];
+        state.sideMap.x = s2.startX;
+        state.sideMap.y = s2.startY;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] あやしい森へ移動 (stage=2, x=1,y=1)");
+      };
+      document.getElementById("btn-debug-side-stage2-near-goal").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 2;
+        state.sideMap.x = 34;
+        state.sideMap.y = 1;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] 森ゴール直前へ移動 (x=34,y=1) — ボスゴリラはx=35");
+      };
+      document.getElementById("btn-debug-side-stage2-clear-reset").onclick = function () {
+        delete state.sideMap.stageCleared["2"];
+        delete state.sideMap.defeatedEnemies["2:35,1"];
+        state.sideMap.stage2RewardLevel = 0;
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ2フラグをリセット");
+      };
+      document.getElementById("btn-debug-side-set-bossgori").onclick = function () {
+        state.sideMap.defeatedEnemies["2:35,1"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ボスゴリラ撃退済みにした (2:35,1)");
+      };
+      document.getElementById("btn-debug-boss-gorilla-encounter").onclick = function () {
+        closeModal("settings-modal");
+        triggerFixedEncounter("boss_gorilla");
+        showToast("[DEBUG] ボスゴリラ強制エンカウント");
+      };
       document.getElementById("btn-debug-reset-exp").onclick = function () {
         state.player.exp = 0;
         saveGame();
@@ -3855,7 +4089,8 @@
         sideMapChests: state.sideMap.openedChests,
         sideMapDefeated: state.sideMap.defeatedEnemies,
         sideMapCleared: state.sideMap.stageCleared,
-        sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0  // §47 v0.9.3
+        sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0,  // §47 v0.9.3
+        sideMapStage2Reward: state.sideMap.stage2RewardLevel || 0   // §48 v0.10
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -3923,6 +4158,11 @@
       state.sideMap.defeatedEnemies = data.sideMapDefeated || {};
       state.sideMap.stageCleared = data.sideMapCleared || {};
       state.sideMap.stage1RewardLevel = data.sideMapStage1Reward || 0;  // §47 v0.9.3
+      state.sideMap.stage2RewardLevel = data.sideMapStage2Reward || 0;  // §48 v0.10
+      // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
+      if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
+        state.sideMap.stage1RewardLevel = state.sideMap.defeatedEnemies["36,1"] ? 2 : 1;
+      }
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -4051,6 +4291,17 @@
     });
     document.getElementById("btn-side-goal-stay").addEventListener("click", function () {
       closeModal("modal-side-goal");
+    });
+    // §48 v0.10: あやしい森へ進むボタン
+    document.getElementById("btn-side-goal-forest").addEventListener("click", function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 2;
+      var s2 = SIDE_STAGE_DATA[2];
+      state.sideMap.x = s2.startX;
+      state.sideMap.y = s2.startY;
+      saveGame();
+      renderField();
+      showToast("🌲 あやしい森へ入った！");
     });
 
     // 攻略ペーパービュー屋モーダル(§37 v0.8.6)

@@ -5,6 +5,36 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.10] - 2026-07-05 — 横スクロールステージ2「あやしい森」実装
+
+### Added
+- **ボスゴリラ** (§48): HP250/ATK26/DEF8/EXP290/canCapture:false。ステージ2専用固定ボス。
+- **SIDE_STAGE_DATA[2]「あやしい森」** (§48): 40×3マップ。上路/中路/下路の3ルート。
+  - row0 (高路): 宝箱(x=17)、NPC-A(x=20)
+  - row1 (メイン): NPC-B(x=4)、固定敵(x=14)、ボスゴリラ(x=35)、ゴール(x=38)
+  - row2 (下路): 宝箱(x=4,x=26)、固定敵(x=12,x=32)
+- **「🌲 あやしい森へ進む」ボタン**: ステージ1ゴールモーダルにボタン追加。クリア時に表示。
+- **getSideKey() ヘルパー**: ステージ別イベントキー生成でステージ間の衝突防止。
+- **openStage2GoalModal()**: ボスゴリラ撃退分岐 + 報酬二重取り防止 (stage2RewardLevel 0/1/2)。
+  - 撃退済み初回ゴール: 150G + 🍱お弁当×1
+  - 未撃退初回ゴール: 50G
+  - 差分報酬: 追加100G + 🍱お弁当×1
+- **openStage2NpcModal()**: ボスゴリラ撃退フラグでNPC2人のセリフ分岐。
+- **ステータス画面**: ステージ2クリア/ボスゴリラ撃退/称号「森の制覇者」追加。
+- **ヘルプ**: 「🌲 ステージ2「あやしい森」」セクション追加。
+- **デバッグボタン**: あやしい森へ移動 / 森ゴール直前 / ステージ2フラグリセット / ボスゴリラ撃退済み / ボスゴリラ強制ENC
+
+### Changed
+- **moveSidePlayer()**: getSideKey() 使用、ボスタイル('b')でステージによりmidboss/boss切り替え。
+- **renderSideField()**: getSideKey() 使用、'b'タイルの撃破済み表示に対応。
+- **openSideNpcModal()**: ステージ2ではopenStage2NpcModal()へルーティング。
+
+### Fixed
+- **v0.9.1互換補正**: stageCleared["1"]=true かつ sideMapStage1Reward=0 の古いセーブを読込時に補正（1 or 2 に自動設定）。
+
+### Saved
+- `sideMapStage2Reward` (number 0/1/2): state.sideMap.stage2RewardLevel
+
 ## [0.9.3] - 2026-07-05 — 横スクロールステージ1クリア体験強化
 
 ### Added
