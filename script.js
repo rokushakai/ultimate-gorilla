@@ -152,6 +152,16 @@
     goalX: 38
   };
 
+  // §49 v0.10.1: ステージ別固定敵マップ (タイル'e'に接触した時に出す敵ID)
+  // キーは getSideKey() 形式 (stage1は "x,y", stage2は "2:x,y")
+  var SIDE_FIXED_ENCOUNTERS = {
+    "31,1":   "wilddog",       // stage1 メイン路 x=31,y=1: のらいぬ (草原の番犬)
+    "14,2":   "bumpman",       // stage1 下路 x=14,y=2: ぶつかりおじさん
+    "2:14,1": "wannabeninja",  // stage2 メイン路 x=14,y=1: 忍者かぶれ (森に潜む)
+    "2:12,2": "bandit",        // stage2 下路 x=12,y=2: 山賊 (森の追いはぎ)
+    "2:32,2": "oni"            // stage2 下路深部 x=32,y=2: 鬼 (森の奥の魔物)
+  };
+
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
   var sideMapPendingFixedKey = "";
 
@@ -917,7 +927,13 @@
       if (sm.defeatedEnemies[key]) { return; }
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
-      triggerEncounter();
+      // §49 v0.10.1: SIDE_FIXED_ENCOUNTERS でステージ別固定敵を起動
+      var fixedEnemyId = SIDE_FIXED_ENCOUNTERS[key];
+      if (fixedEnemyId) {
+        triggerFixedEncounter(fixedEnemyId);
+      } else {
+        triggerEncounter();
+      }
     } else if (tileChar === "b") {
       // §45 v0.9.2: ボス固定戦闘。撃破済みなら素通り。§48 v0.10: ステージでボスを分岐。
       if (sm.defeatedEnemies[key]) { return; }
@@ -3803,6 +3819,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-bossgori" style="border-color:#c3a4ff;color:#c3a4ff;">✅ ボスゴリラ撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-boss-gorilla-encounter" style="border-color:#c3a4ff;color:#c3a4ff;">🦍 ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-reset-exp" style="border-color:#a8d8a8;color:#a8d8a8;">✨ EXPを0にする(ノリオ効果確認用)</button>';
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -4038,6 +4056,11 @@
         saveGame();
         updateStatusBar();
         showToast("[DEBUG] EXPを0にした (次の戦闘でノリオ効果を確認しやすい)");
+      };
+      // §49 v0.10.1: ヒントショップを開く
+      document.getElementById("btn-debug-open-hint-shop").onclick = function () {
+        closeModal("settings-modal");
+        openHintShopModal();
       };
     }
   }
@@ -4705,11 +4728,23 @@
   // フィールド(4,3)のNPC。10G/50G/100Gで状況別ヒントを売る。
   // ---------------------------------------------------------
 
-  // 現在の進行状況からヒント優先度(0〜8)を返す
+  // 現在の進行状況からヒント優先度(0〜11)を返す
   function getHintPriority() {
     var p = state.player;
     var ef = state.eventFlags;
+    var sm = state.sideMap;
+    var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
+    var s2Cleared = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
     if (state.gameCleared) return 0;
+    // §49 v0.10.1: 横スクロールステージ進捗ヒント
+    if (s1Cleared && s2Cleared) return 9;
+    if (s1Cleared) return 10;
+    var sideVisited = !!(sm && (
+      Object.keys(sm.openedChests || {}).length > 0 ||
+      Object.keys(sm.defeatedEnemies || {}).length > 0
+    ));
+    if (sideVisited) return 11;
+    // 通常進行
     if (p.level < 40) return 1;
     if (!ef.cygnusHelmetGot) return 2;
     if (!ef.pegasusArmorGot) return 3;
@@ -4723,7 +4758,37 @@
   // tier: 1=ぼんやり(10G) / 2=具体的(50G) / 3=ほぼ答え(100G)
   function getProgressHint(tier) {
     var p = state.player;
+    var sm = state.sideMap;
     var priority = getHintPriority();
+    // §49 v0.10.1: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
+    if (priority === 9) {
+      var h9 = [
+        "今行ける横スクロールステージはかなり進んでいる。次に待つのは、さらに危険な道だ。",
+        "はじまりの草原とあやしい森を越えた者は、もう初心者ではない。次のアップデートでさらに強いゴリラが待つかもしれない。",
+        "ステージ1と2を制覇した。次のステージは未実装だが、通常マップにはまだ究極ゴリラが待っている。"
+      ];
+      return h9[tier - 1] || h9[0];
+    }
+    if (priority === 10) {
+      var bossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
+      if (tier === 1) return "あやしい森では、木や水で道がふさがれている。上下の道をよく見れば、進める道がある。";
+      if (tier === 2) {
+        if (!bossDefeated) return "あやしい森の奥にはボスゴリラがいる。ボスゴリラはUMAではないので捕獲できない。装備と回復アイテムを整えてから挑もう。";
+        return "ボスゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)で大きな報酬が待っている。";
+      }
+      if (!bossDefeated) return "ボスゴリラはステージ2のゴール手前x=35にいる。撃退してからゴールすると150G+お弁当の報酬が手に入る。下の道(低路)には宝箱も3個ある。";
+      return "ボスゴリラ撃退済み！ゴール(x=38)へ進もう。下路にはまだ宝箱が残っているかもしれない。";
+    }
+    if (priority === 11) {
+      var midbossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
+      if (tier === 1) return "横に長い草原では、まっすぐ右へ進むだけが正解とは限らない。上や下の道も見てみよう。";
+      if (tier === 2) {
+        if (!midbossDefeated) return "はじまりの草原には、中ボスゴリラが道をふさいでいる場所がある。倒せない時は、上の道から迂回できる。";
+        return "中ボスゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)に着くと報酬が手に入る。";
+      }
+      if (!midbossDefeated) return "中ボスゴリラはステージ1のゴール手前x=36にいる。撃退してからゴールすると100G+パンの報酬が増える。上ルートで先にゴールだけ目指す方法もある。";
+      return "中ボスゴリラ撃退済み！ゴール(x=38)へ進もう。撃退済みでゴールすると100G+パンの報酬がある。";
+    }
     var h = [
       // 0: クリア済み
       [
@@ -4838,8 +4903,8 @@
     var tierLabels = ["", "ぼんやりヒント", "具体的ヒント", "ほぼ答え"];
     var body = document.getElementById("hint-shop-body");
     var html = "";
-    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:6px;\">📰 " + tierLabels[tier] + " (" + cost + "G)</p>";
-    html += "<p style=\"margin:8px 0;color:#e0e0e0;\">「" + hint + "」</p>";
+    html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:6px;\">📄 " + tierLabels[tier] + "を購入した！ (" + cost + "G)</p>";
+    html += "<p style=\"margin:8px 0;color:#e0e0e0;\">" + hint + "</p>";
     html += "<div style=\"margin-top:12px;\">";
     html += "<button class=\"shop-menu-btn\" id=\"btn-hint-again\">もう一度買う</button>";
     html += "</div>";
