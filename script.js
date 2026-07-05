@@ -109,17 +109,18 @@
     ".": "☁️",
     "p": "🧑",
     "G": "🏁",
-    "b": "💢"   // §45 v0.9.2: 中ボスゴリラ固定戦闘タイル
+    "b": "💢",  // §45 v0.9.2: 中ボスゴリラ固定戦闘タイル
+    "H": "🏠"   // §53 v0.11.3: 帰還ゲート（各ステージスタート付近）
   };
 
   // 進入不可タイル
   var SIDE_BLOCKED = { "#": true, "~": true };
   // ランダムエンカウントが起きないタイル
-  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true, "p": true, "G": true, "b": true };
+  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true, "p": true, "G": true, "b": true, "H": true };
 
   // ステージ定義 (§44 v0.9.1 / §45 v0.9.2)
   // row0(y=0) 高路: 安全。迂回路A(x=11-13)と迂回路B(x=27-29)を提供。x=19にNPC2。中ボス回避可能。
-  // row1(y=1) メイン: x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
+  // row1(y=1) メイン: x=0帰還ゲート(H) x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
   //           x=24宝箱 x=27-28ブロックB x=31固定敵 x=36中ボス(b) x=38ゴール
   // row2(y=2) 低路: リスク高・報酬多。x=5宝箱 x=14固定敵 x=23宝箱 x=31宝箱。x=36は水(中ボス回避不可)
   var SIDE_STAGE_DATA = {
@@ -127,7 +128,7 @@
       name: "はじまりの草原",
       rows: [
         "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
-        "ggggcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §45 v0.9.2: x=36 を 'b'(中ボスゴリラ)に変更
+        "Hgggcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加; §45: x=36 中ボス(b)
         "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
@@ -138,14 +139,14 @@
 
   // §48 v0.10: ステージ2「あやしい森」マップ (40×3)
   // row0(y=0) 高路: 安全な上路。x=17に宝箱、x=20にNPC-A。迂回路はx=3-6,x=12-16,x=25-27,x=33-36。
-  // row1(y=1) メイン: x=4 NPC-B x=7 ブロックA x=14 固定敵1 x=17-18 ブロックB x=23-24 ブロックC
-  //           x=35 ボスゴリラ(b) x=38 ゴール(G)
+  // row1(y=1) メイン: x=0帰還ゲート(H) x=4 NPC-B x=7 ブロックA x=14 固定敵1 x=17-18 ブロックB
+  //           x=23-24 ブロックC x=35 ボスゴリラ(b) x=38 ゴール(G)
   // row2(y=2) 下路: x=4 宝箱 x=12 固定敵2 x=26 宝箱 x=32 固定敵3 (水(~)で進入制限あり)
   SIDE_STAGE_DATA[2] = {
     name: "あやしい森",
     rows: [
       "#ff#ff#fffffff#ffcffpfff#fff#fff#fff#ff#",
-      "ggggpgg#gggfggegg##gggg##ggggggggggbggGg",
+      "Hgggpgg#gggfggegg##gggg##ggggggggggbggGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加
       "~~ggcgg~~~ggegg~gggg~~ggggcgg~~gegg~~gg~"
     ],
     startX: 1,
@@ -156,7 +157,7 @@
   // §50 v0.11: ステージ3「古びた町はずれ」マップ (40×5)
   // row0(y=0) 高路:  宝箱2個(x=18,x=35)。安全路。迂回路。
   // row1(y=1) 上中:  旅人NPC(p, x=10)。
-  // row2(y=2) 中央:  商人(m, x=3), 老人NPC(n, x=5), 固定敵(e, x=15), 魔王ゴリラ(b, x=31), ゴール(G, x=38)
+  // row2(y=2) 中央:  x=0帰還ゲート(H), 商人(m, x=3), 老人NPC(n, x=5), 固定敵(e, x=15), 魔王ゴリラ(b, x=31), ゴール(G, x=38)
   // row3(y=3) 下中:  固定敵(e, x=12)。
   // row4(y=4) 下路:  宝箱(c, x=4, x=19), 固定敵(e, x=27)。危険な道。
   SIDE_STAGE_DATA[3] = {
@@ -164,7 +165,7 @@
     rows: [
       "fffff##fffffff#fffcfff###fffff##fffcffff",
       "gggfgg##ggpggff##gggggg##ggggggggg###gfg",
-      "gggmgngggg##gggeggg##gggggg##ggbgg##ggGg",
+      "Hggmgngggg##gggeggg##gggggg##ggbgg##ggGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加
       "~~gggg##ggggegg##gggggg##ggggg##ggggg~~~",
       "~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~"
     ],
@@ -962,6 +963,9 @@
       openSideNpcModal("p");
     } else if (tileChar === "m") {
       openMerchantModal();
+    } else if (tileChar === "H") {
+      // §53 v0.11.3: 帰還ゲート
+      openSideReturnGateModal();
     } else if (tileChar === "G") {
       // §44 v0.9.1: ゴール
       openSideGoalModal();
@@ -1259,13 +1263,16 @@
     }
     document.getElementById("modal-side-goal-body").innerHTML = html;
 
+    // §53 v0.11.3: ボタン表示を明示的に設定
+    var returnBtn = document.getElementById("btn-side-goal-return");
+    if (returnBtn) { returnBtn.classList.remove("hidden"); }
     var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) {
-      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度草原を探索する" : "🔍 探索を続ける";
-    }
+    if (stayBtn) { stayBtn.textContent = "↩ この草原に残る"; }
     // §48 v0.10: あやしい森へ進むボタン (ステージ1クリア時に表示)
     var forestBtn = document.getElementById("btn-side-goal-forest");
     if (forestBtn) { forestBtn.classList.remove("hidden"); }
+    var townBtn = document.getElementById("btn-side-goal-town");
+    if (townBtn) { townBtn.classList.add("hidden"); }
     openModal("modal-side-goal");
   }
 
@@ -1343,10 +1350,11 @@
     }
     document.getElementById("modal-side-goal-body").innerHTML = html;
 
+    // §53 v0.11.3: ボタン表示を明示的に設定
+    var returnBtn2 = document.getElementById("btn-side-goal-return");
+    if (returnBtn2) { returnBtn2.classList.remove("hidden"); }
     var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) {
-      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度森を探索する" : "🔍 探索を続ける";
-    }
+    if (stayBtn) { stayBtn.textContent = "↩ この森に残る"; }
     // あやしい森ゴールモーダルでは「あやしい森へ進む」ボタンは不要
     var forestBtn = document.getElementById("btn-side-goal-forest");
     if (forestBtn) { forestBtn.classList.add("hidden"); }
@@ -1478,11 +1486,12 @@
     }
     document.getElementById("modal-side-goal-body").innerHTML = html;
 
+    // §53 v0.11.3: ボタン表示を明示的に設定
+    var returnBtn3 = document.getElementById("btn-side-goal-return");
+    if (returnBtn3) { returnBtn3.classList.remove("hidden"); }
     var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) {
-      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度探索する" : "🔍 探索を続ける";
-    }
-    // ステージ3ゴールでは「あやしい森へ」「古びた町はずれへ」ボタンは不要
+    if (stayBtn) { stayBtn.textContent = "↩ この町はずれに残る"; }
+    // ステージ3ゴールでは「あやしい森へ」「古びた町はずれへ」ボタンは不要（ステージ4未実装）
     var forestBtn = document.getElementById("btn-side-goal-forest");
     if (forestBtn) { forestBtn.classList.add("hidden"); }
     var townBtn = document.getElementById("btn-side-goal-town");
@@ -1502,9 +1511,24 @@
 
   function switchToNormalMap() {
     state.mapMode = "normal";
+    // §53 v0.11.3: 🌀ゲート(2,3)の1マス下(2,4)へ戻す → 戻った直後の再接触ループを防止
+    state.player.x = 2;
+    state.player.y = 4;
     saveGame();
     renderField();
-    showToast("⬆️ 通常マップへ戻った！");
+    showToast("🏠 通常マップへ戻った！");
+  }
+
+  // §53 v0.11.3: 横スクロール内帰還ゲートモーダル
+  function openSideReturnGateModal() {
+    var bodyEl = document.getElementById("modal-side-return-gate-body");
+    if (!bodyEl) return;
+    bodyEl.innerHTML =
+      "<div style=\"font-size:40px;line-height:1.2;\">🏠</div>" +
+      "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">帰還ゲート</div>" +
+      "<p>通常マップへ戻りますか？</p>" +
+      "<p style=\"font-size:0.85em;color:#a8d8a8;\">横スクロールの進捗は保存されます。</p>";
+    openModal("modal-side-return-gate");
   }
 
   // §52 v0.11.2: 横スクロール入口ゲートモーダル
@@ -3630,6 +3654,10 @@
         if (!sideVisitedD && p.level >= 5 && !state.gameCleared) {
           lines.push("村の南に🌀渦巻くゲートがある。あそこから横スクロールの草原へ行けるぞ。");
         }
+        // §53 v0.11.3: 訪問済みの場合は帰還ゲートの説明を追加
+        if (sideVisitedD && !state.gameCleared) {
+          lines.push("横スクロールの世界で身動きが取れなくなったら、スタート付近の🏠帰還ゲートを使うのじゃ。ゴール画面からも戻れるぞ。");
+        }
         return lines;
       }
     },
@@ -4114,6 +4142,11 @@
       html += '<p class="small" style="color:#a9e34b;margin-top:8px;">🌀 ゲート (§52 v0.11.2)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-gate-move" style="border-color:#a9e34b;color:#a9e34b;">🌀 ゲートタイル付近へ移動 (2,3)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gate-flag-reset" style="border-color:#a9e34b;color:#a9e34b;">🔄 ゲート説明フラグリセット</button>';
+      html += '<p class="small" style="color:#f4a261;margin-top:8px;">🏠 帰還ゲート (§53 v0.11.3)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s1" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ1帰還ゲートへ移動 (x=0,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s2" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ2帰還ゲートへ移動 (x=0,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3帰還ゲートへ移動 (x=0,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-force-normal-map" style="border-color:#f4a261;color:#f4a261;">🏠 通常マップへ強制帰還</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -4434,6 +4467,41 @@
         saveGame();
         showToast("🔄 ゲート説明フラグをリセットした");
       };
+      // §53 v0.11.3: 帰還ゲートデバッグ
+      document.getElementById("btn-debug-return-gate-s1").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 1;
+        state.sideMap.x = 0;
+        state.sideMap.y = 1;
+        saveGame();
+        renderField();
+        showToast("🏠 ステージ1帰還ゲート(0,1)へ移動した");
+      };
+      document.getElementById("btn-debug-return-gate-s2").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 2;
+        state.sideMap.x = 0;
+        state.sideMap.y = 1;
+        saveGame();
+        renderField();
+        showToast("🏠 ステージ2帰還ゲート(0,1)へ移動した");
+      };
+      document.getElementById("btn-debug-return-gate-s3").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 3;
+        state.sideMap.x = 0;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("🏠 ステージ3帰還ゲート(0,2)へ移動した");
+      };
+      document.getElementById("btn-debug-force-normal-map").onclick = function () {
+        closeModal("settings-modal");
+        switchToNormalMap();
+      };
     }
   }
 
@@ -4722,6 +4790,15 @@
     });
     document.getElementById("btn-side-gate-cancel").addEventListener("click", function () {
       closeModal("modal-side-gate");
+    });
+
+    // §53 v0.11.3: 横スクロール内帰還ゲートモーダル
+    document.getElementById("btn-side-return-gate-go").addEventListener("click", function () {
+      closeModal("modal-side-return-gate");
+      switchToNormalMap();
+    });
+    document.getElementById("btn-side-return-gate-cancel").addEventListener("click", function () {
+      closeModal("modal-side-return-gate");
     });
 
     // 攻略ペーパービュー屋モーダル(§37 v0.8.6)
@@ -5192,19 +5269,19 @@
     }
     if (priority === 11) {
       var midbossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
-      if (tier === 1) return "横に長い草原では、まっすぐ右へ進むだけが正解とは限らない。上や下の道も見てみよう。";
+      if (tier === 1) return "横に長い草原では、まっすぐ右へ進むだけが正解とは限らない。上や下の道も見てみよう。戻りたい時はスタート付近の🏠帰還ゲートを使おう。";
       if (tier === 2) {
-        if (!midbossDefeated) return "はじまりの草原には、中ボスゴリラが道をふさいでいる場所がある。倒せない時は、上の道から迂回できる。";
-        return "中ボスゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)に着くと報酬が手に入る。";
+        if (!midbossDefeated) return "はじまりの草原には、中ボスゴリラが道をふさいでいる場所がある。倒せない時は、上の道から迂回できる。途中で戻りたい時はスタート付近の🏠帰還ゲートかゴール画面から戻れる。";
+        return "中ボスゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)に着くと報酬が手に入る。ゴール画面から通常マップへ戻れる。";
       }
       if (!midbossDefeated) return "中ボスゴリラはステージ1のゴール手前x=36にいる。撃退してからゴールすると100G+パンの報酬が増える。上ルートで先にゴールだけ目指す方法もある。";
-      return "中ボスゴリラ撃退済み！ゴール(x=38)へ進もう。撃退済みでゴールすると100G+パンの報酬がある。";
+      return "中ボスゴリラ撃退済み！ゴール(x=38)へ進もう。ゴール画面の「🏠通常マップへ戻る」で元の世界へ戻れる。";
     }
     // §52 v0.11.2: 横スクロール未訪問+Lv40未満 → ゲート案内ヒント
     if (priority === 13) {
       if (tier === 1) return "村の近くに横スクロールマップへの入口があるらしい。探してみよう。";
-      if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。";
-      return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し、宝箱を集め、ゴールを目指そう。";
+      if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。戻りたい時はゴール画面か🏠帰還ゲートを使えばいつでも戻れる。";
+      return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し宝箱を集めゴールを目指そう。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
     }
     var h = [
       // 0: クリア済み

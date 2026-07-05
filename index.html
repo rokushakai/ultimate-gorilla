@@ -362,7 +362,12 @@
 
         <h3>🌀 横スクロールマップへの行き方</h3>
         <p>通常マップの村エリアに<strong>🌀渦巻くゲート</strong>があります。そのタイルを踏むと横スクロールマップへ移動できます。</p>
-        <p>横スクロールから通常マップへ戻る時は、ステージ内のゴール地点(🏁)に到達するか、ゴールモーダルの「🏠 通常マップへ戻る」を使いましょう。</p>
+
+        <h3>🏠 横スクロールマップから戻る方法</h3>
+        <p>以下の2つの方法で通常マップへいつでも戻れます。</p>
+        <p>① 各ステージのゴール地点(🏁)に到達すると「🏠 通常マップへ戻る」ボタンが出ます。<br>
+        ② ステージ開始地点付近にある<strong>🏠帰還ゲート</strong>を踏むと確認モーダルが出て、いつでも戻れます。</p>
+        <p>横スクロールの宝箱・固定敵・ステージ進捗は戻っても保存されます。</p>
 
         <h3>🗺️ 横スクロールマップについて</h3>
         <p>「はじまりの草原」は3ルートに分かれた横スクロールマップです。</p>
@@ -391,6 +396,15 @@
       <button id="btn-side-goal-town" class="modal-btn hidden" style="margin-bottom:8px;">🏚️ 古びた町はずれへ進む</button>
       <button id="btn-side-goal-return" class="modal-btn" style="margin-bottom:8px;">🏠 通常マップへ戻る</button>
       <button id="btn-side-goal-stay" class="modal-btn">🔍 探索を続ける</button>
+    </div>
+  </div>
+
+  <!-- ===== 横スクロール内帰還ゲートモーダル (§53 v0.11.3) ===== -->
+  <div id="modal-side-return-gate" class="modal hidden">
+    <div class="modal-box" style="text-align:center;">
+      <div id="modal-side-return-gate-body"></div>
+      <button id="btn-side-return-gate-go" class="modal-btn" style="margin-bottom:8px;">🏠 通常マップへ戻る</button>
+      <button id="btn-side-return-gate-cancel" class="modal-btn">↩ やめる</button>
     </div>
   </div>
 
