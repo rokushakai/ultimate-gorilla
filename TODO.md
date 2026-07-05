@@ -14,6 +14,23 @@
 
 ## ✅ 実装済み
 
+### Version 0.9 — 横スクロールマップ試作
+
+- **横スクロールマップモード追加** (§43):
+  - `state.mapMode: "normal"|"side"` + `state.sideMap {x,y,stage,openedChests}` 追加
+  - `SIDE_STAGE_DATA` ステージ1「はじまりの草原」(40×3 タイルマップ)追加
+  - `renderField()` をスマートディスパッチ化 — side モード時に `renderSideField()` へルーティング
+  - `renderSideField()` 追加: 横スクロールカメラ・タイル描画・プレイヤー(🦍)表示
+  - `moveSidePlayer(dx, dy)` 追加: 衝突判定・タイルイベント(宝箱/NPC/商人/固定戦闘/ランダム戦闘)
+  - `openSideChest(x, y)` 追加: 開封済み管理・ゴールド報酬
+  - `openSideNpcModal()` 追加: 旅の案内人NPC — 既存 npc-modal を流用
+  - `switchToSideMap()` / `switchToNormalMap()` 追加
+  - `startWalking()` / キーボード / スワイプ: mapMode に応じて分岐
+  - デバッグボタン「⬇️ 横スクロールマップへ移動」「⬆️ 通常マップへ戻る」追加
+  - `saveGame()` / `loadGame()`: `mapMode`・`sideMapX/Y/Stage/Chests` を追加(後方互換あり)
+  - `#field-viewport` の `--cols`/`--rows` を切り替え時に自動更新
+  - `#side-map-info` 情報バー: ステージ名と進捗表示
+
 ### Version 0.8.8.1 — 緊急バグ修正: ステータスメニュー復旧・攻略ペーパービュー屋修正
 
 - **ステータスメニュー非表示の修正** (§42): iOS セーフエリア対応

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.8.8.1** |
+| 現在バージョン | **v0.9** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,14 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.9] 横スクロールマップ試作**（§43）
+  - `state.mapMode: "normal"|"side"` + `state.sideMap {x,y,stage,openedChests}`
+  - ステージ1「はじまりの草原」(40×3 タイルマップ) — g/f/#/~/c/n/m/e/. タイル
+  - `renderField()` がスマートディスパッチ: side時に --cols/--rows 更新 → `renderSideField()`
+  - `moveSidePlayer()`: 衝突/宝箱/NPC/���人/固定戦闘/ランダム戦闘
+  - `switchToSideMap()` / `switchToNormalMap()` でモード切り替え
+  - デバッグボタン2個: 「横スクロールマップへ移動」「通常マップへ戻る」
+  - saveGame / loadGame: mapMode + sideMap 追加(古いセーブは デフォルト値で補完)
 - **[v0.8.8.1] 緊急バグ修正**（§42）
   - iOS セーフエリア対応: `#game` に `padding-top: env(safe-area-inset-top)` 追加でノッチ裏隠れを解消
   - 攻略ペーパービュー屋: `p.money` → `p.gold` 修正 (undefinedG・購入不可)

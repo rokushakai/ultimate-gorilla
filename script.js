@@ -78,6 +78,56 @@
   var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true };
 
   // ---------------------------------------------------------
+  // 1.5  横スクロールマップデータ (§43 v0.9)
+  // ---------------------------------------------------------
+  // タイル文字の意味:
+  //   'g' 草原(エンカウントあり)  'f' 安全地帯(エンカウントなし)
+  //   '#' 木・壁(進入不可)        '~' 水(進入不可)
+  //   'c' 宝箱               'n' 旅の案内人NPC
+  //   'm' 商人               'e' 固定エンカウント(接触で即戦闘)
+  //   '.' 空・木上(視覚のみ)
+  //
+  // rows[0]=空(y=0)  rows[1]=地面(y=1)  rows[2]=水(y=2)  各40文字
+  // プロトタイプでは移動は y=1 (地面) のみ。
+
+  var SIDE_MAP_WIDTH  = 40;
+  var SIDE_MAP_HEIGHT = 3;
+  var SIDE_VIEW_COLS  = 9;
+  var SIDE_VIEW_ROWS  = 3;
+
+  var SIDE_TILE_EMOJI = {
+    "g": "🟩",
+    "f": "🟫",
+    "#": "🌳",
+    "~": "🟦",
+    "c": "🎁",
+    "n": "🧭",
+    "m": "🏪",
+    "e": "⚡",
+    ".": "☁️"
+  };
+
+  // 進入不可タイル
+  var SIDE_BLOCKED = { "#": true, "~": true };
+  // ランダムエンカウントが起きないタイル(草原 'g' 以外)
+  var SIDE_NO_ENCOUNTER = { "f": true, "c": true, "n": true, "m": true, "e": true, ".": true };
+
+  // ステージ定義
+  // x=4:宝箱 x=7:NPC x=10:商人 x=14:固定戦闘 x=21:安全地帯 x=24:宝箱 x=31:固定戦闘
+  var SIDE_STAGE_DATA = {
+    1: {
+      name: "はじまりの草原",
+      rows: [
+        "#..#..#..#...#..##...#..#...#.#..#...#..",
+        "ggggcggnggmgggeggggggfggcggggggegggggggg",
+        "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+      ],
+      startX: 1,
+      startY: 1
+    }
+  };
+
+  // ---------------------------------------------------------
   // 2. データ定義
   // ここに敵(UMA/モンスター)・アイテム・武器・まほう・職業の
   // データをまとめている。今後ネタを追加するときは基本的に
@@ -480,6 +530,14 @@
       cygnusHelmetGot: false,  // v0.8.3 キグナスのかぶと
       dragonShieldGot: false,  // v0.8.3 ドラゴンのたて(王様の使い報酬)
       level99Reached: false    // v0.8.5 Lv99到達フラグ(level99Shownと別管理でデバッグリセット可能)
+    },
+    // §43 v0.9: 横スクロールマップ
+    mapMode: "normal",   // "normal" | "side"
+    sideMap: {
+      x: 1,
+      y: 1,
+      stage: 1,
+      openedChests: {}
     }
   };
 
@@ -635,6 +693,19 @@
   // ---------------------------------------------------------
   function renderField() {
     var viewport = document.getElementById("field-viewport");
+
+    // §43 v0.9: 横スクロールマップモードならそちらへルーティング
+    if (state.mapMode === "side") {
+      viewport.style.setProperty("--cols", SIDE_VIEW_COLS);
+      viewport.style.setProperty("--rows", SIDE_VIEW_ROWS);
+      renderSideField();
+      return;
+    }
+
+    // 通常マップ: CSS変数を必ず正しい値にリセット
+    viewport.style.setProperty("--cols", VIEW_COLS);
+    viewport.style.setProperty("--rows", VIEW_ROWS);
+
     var p = state.player;
 
     // プレイヤーが画面中央に来るようにカメラ位置を計算し、マップ端でクランプする
@@ -676,10 +747,159 @@
       }
     }
     viewport.innerHTML = html;
+    // 通常マップでは側面マップ情報バーを非表示
+    var infoEl2 = document.getElementById("side-map-info");
+    if (infoEl2) { infoEl2.style.display = "none"; }
   }
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
+  }
+
+  // ---------------------------------------------------------
+  // 8.5  横スクロールマップ描画・移動 (§43 v0.9)
+  // ---------------------------------------------------------
+  function renderSideField() {
+    var viewport = document.getElementById("field-viewport");
+    var sm = state.sideMap;
+    var stageData = SIDE_STAGE_DATA[sm.stage];
+    if (!stageData) { return; }
+    var rows = stageData.rows;
+
+    // カメラ左端: プレイヤーを中央付近に表示
+    var halfCols = Math.floor(SIDE_VIEW_COLS / 2);
+    var camLeft = sm.x - halfCols;
+    if (camLeft < 0) { camLeft = 0; }
+    if (camLeft + SIDE_VIEW_COLS > SIDE_MAP_WIDTH) {
+      camLeft = SIDE_MAP_WIDTH - SIDE_VIEW_COLS;
+    }
+
+    var html = "";
+    for (var ry = 0; ry < SIDE_VIEW_ROWS; ry++) {
+      for (var rx = 0; rx < SIDE_VIEW_COLS; rx++) {
+        var mx = camLeft + rx;
+        var my = ry;
+        var tileChar = (mx >= 0 && mx < SIDE_MAP_WIDTH && rows[my])
+          ? rows[my].charAt(mx)
+          : "#";
+
+        var emoji;
+        // プレイヤー表示
+        if (mx === sm.x && my === sm.y) {
+          emoji = "🦍";
+        } else {
+          // 開封済み宝箱
+          var key = mx + "," + my;
+          if (tileChar === "c" && sm.openedChests[key]) {
+            emoji = "📦";
+          } else {
+            emoji = SIDE_TILE_EMOJI[tileChar] || "❓";
+          }
+        }
+        html += '<div class="tile">' + emoji + "</div>";
+      }
+    }
+    viewport.innerHTML = html;
+
+    // ステージ名・進捗を情報バーに反映
+    var infoEl = document.getElementById("side-map-info");
+    if (infoEl) {
+      infoEl.style.display = "block";
+      infoEl.textContent = stageData.name + "  📍 " + sm.x + " / " + (SIDE_MAP_WIDTH - 1);
+    }
+  }
+
+  function moveSidePlayer(dx, dy) {
+    if (state.inBattle || state.modalOpen) return;
+    var sm = state.sideMap;
+    var stageData = SIDE_STAGE_DATA[sm.stage];
+    if (!stageData) { return; }
+
+    var nx = sm.x + dx;
+    // §43 プロトタイプ: 縦移動は無効。地面(y=1)のみ歩行可能。
+    if (dx === 0) { return; }
+
+    if (nx < 0 || nx >= SIDE_MAP_WIDTH) { return; }
+
+    var ny = sm.y;
+    var tileChar = stageData.rows[ny].charAt(nx);
+    if (SIDE_BLOCKED[tileChar]) { return; }
+
+    sm.x = nx;
+    renderField();  // → renderSideField() に自動ルーティング
+    saveGame();
+
+    // タイルイベント判定
+    var key = nx + "," + ny;
+    if (tileChar === "c") {
+      if (!sm.openedChests[key]) {
+        openSideChest(nx, ny);
+      }
+    } else if (tileChar === "n") {
+      openSideNpcModal();
+    } else if (tileChar === "m") {
+      openMerchantModal();
+    } else if (tileChar === "e") {
+      // 固定エンカウントは毎回戦闘
+      state.stepsSinceEncounter = 0;
+      triggerEncounter();
+    } else if (tileChar === "g") {
+      // 草原: ランダムエンカウント
+      state.stepsSinceEncounter++;
+      if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
+          Math.random() < ENCOUNTER_CHANCE) {
+        state.stepsSinceEncounter = 0;
+        triggerEncounter();
+      }
+    }
+  }
+
+  function openSideChest(cx, cy) {
+    var sm = state.sideMap;
+    var key = cx + "," + cy;
+    sm.openedChests[key] = true;
+    renderField();
+
+    var gold = 30 + Math.floor(Math.random() * 8) * 10;
+    state.player.gold += gold;
+    renderStatus();
+    showToast("宝箱を開けた！ 💰 " + gold + "G 手に入れた！");
+    saveGame();
+  }
+
+  function openSideNpcModal() {
+    document.getElementById("npc-header").innerHTML =
+      '<div style="font-size:40px;line-height:1.2;">🧭</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">旅の案内人</div>';
+    var lines = [
+      "ようこそ、はじまりの草原へ！",
+      "ここは横スクロールマップのプロトタイプ。",
+      "右に進めば宝箱や商人、強敵が待っているよ。",
+      "いずれはもっと広い世界へ続く道になるだろう。"
+    ];
+    var speechHtml = "";
+    for (var i = 0; i < lines.length; i++) {
+      speechHtml += "<p>「" + lines[i] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
+  function switchToSideMap() {
+    state.mapMode = "side";
+    var stageData = SIDE_STAGE_DATA[state.sideMap.stage] || SIDE_STAGE_DATA[1];
+    state.sideMap.x = stageData.startX;
+    state.sideMap.y = stageData.startY;
+    saveGame();
+    renderField();
+    showToast("⬇️ 横スクロールマップへ移動！");
+  }
+
+  function switchToNormalMap() {
+    state.mapMode = "normal";
+    saveGame();
+    renderField();
+    showToast("⬆️ 通常マップへ戻った！");
   }
 
   // ---------------------------------------------------------
@@ -703,6 +923,12 @@
   var walkTimer = null;
   function startWalking(dx, dy) {
     stopWalking();
+    if (state.mapMode === "side") {
+      moveSidePlayer(dx, dy);
+      var ms2 = WALK_SPEED_MS[state.player.walkSpeed] || WALK_SPEED_MS.normal;
+      walkTimer = setInterval(function () { moveSidePlayer(dx, dy); }, ms2);
+      return;
+    }
     movePlayer(dx, dy);
     var ms = WALK_SPEED_MS[state.player.walkSpeed] || WALK_SPEED_MS.normal;
     walkTimer = setInterval(function () { movePlayer(dx, dy); }, ms);
@@ -3084,6 +3310,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-ending">🎵 [TEST] エンディングBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-stop">🔇 [TEST] BGM停止</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-hard-stop">🔇 BGM完全停止(stopBGMHard)</button>';
+      html += '<p class="small" style="color:#a8d8a8;margin-top:8px;">🗺️ 横スクロールマップ (§43 v0.9)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-map-enter" style="border-color:#a8d8a8;color:#a8d8a8;">⬇️ 横スクロールマップへ移動</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-map-exit" style="border-color:#a8d8a8;color:#a8d8a8;">⬆️ 通常マップへ戻る</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -3200,6 +3429,14 @@
         stopBGMHard();
         showToast("[DEBUG] BGM完全停止 (activeBgmNodes=" + activeBgmNodes.length + ")");
       };
+      document.getElementById("btn-debug-side-map-enter").onclick = function () {
+        closeModal("settings-modal");
+        switchToSideMap();
+      };
+      document.getElementById("btn-debug-side-map-exit").onclick = function () {
+        closeModal("settings-modal");
+        switchToNormalMap();
+      };
     }
   }
 
@@ -3241,7 +3478,13 @@
         discoveredFinal: state.discoveredFinal,
         gameCleared: state.gameCleared,
         openedChests: state.openedChests,
-        eventFlags: state.eventFlags
+        eventFlags: state.eventFlags,
+        // §43 v0.9: 横スクロールマップ
+        mapMode: state.mapMode,
+        sideMapX: state.sideMap.x,
+        sideMapY: state.sideMap.y,
+        sideMapStage: state.sideMap.stage,
+        sideMapChests: state.sideMap.openedChests
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -3300,6 +3543,12 @@
       if (state.eventFlags.level99Reached === undefined) {
         state.eventFlags.level99Reached = (data.player && data.player.level >= 99);
       }
+      // §43 v0.9: 横スクロールマップ (古いセーブはデフォルト値で補完)
+      state.mapMode = data.mapMode || "normal";
+      state.sideMap.x = data.sideMapX != null ? data.sideMapX : 1;
+      state.sideMap.y = data.sideMapY != null ? data.sideMapY : 1;
+      state.sideMap.stage = data.sideMapStage || 1;
+      state.sideMap.openedChests = data.sideMapChests || {};
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
@@ -3341,10 +3590,19 @@
 
     // PCのキーボードでも動作確認できるようにする
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "ArrowUp") { updateBGM("field"); movePlayer(0, -1); }
-      else if (ev.key === "ArrowDown") { updateBGM("field"); movePlayer(0, 1); }
-      else if (ev.key === "ArrowLeft") { updateBGM("field"); movePlayer(-1, 0); }
-      else if (ev.key === "ArrowRight") { updateBGM("field"); movePlayer(1, 0); }
+      if (ev.key === "ArrowUp") {
+        updateBGM("field");
+        if (state.mapMode === "side") { moveSidePlayer(0, -1); } else { movePlayer(0, -1); }
+      } else if (ev.key === "ArrowDown") {
+        updateBGM("field");
+        if (state.mapMode === "side") { moveSidePlayer(0, 1); } else { movePlayer(0, 1); }
+      } else if (ev.key === "ArrowLeft") {
+        updateBGM("field");
+        if (state.mapMode === "side") { moveSidePlayer(-1, 0); } else { movePlayer(-1, 0); }
+      } else if (ev.key === "ArrowRight") {
+        updateBGM("field");
+        if (state.mapMode === "side") { moveSidePlayer(1, 0); } else { movePlayer(1, 0); }
+      }
     });
 
     // スワイプ操作
@@ -3362,10 +3620,15 @@
       var dy = t.clientY - startY;
       var SWIPE_THRESHOLD = 24;
       if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        movePlayer(dx > 0 ? 1 : -1, 0);
+      if (state.mapMode === "side") {
+        if (Math.abs(dx) > Math.abs(dy)) { moveSidePlayer(dx > 0 ? 1 : -1, 0); }
+        // 縦スワイプはサイドマップでは無視
       } else {
-        movePlayer(0, dy > 0 ? 1 : -1);
+        if (Math.abs(dx) > Math.abs(dy)) {
+          movePlayer(dx > 0 ? 1 : -1, 0);
+        } else {
+          movePlayer(0, dy > 0 ? 1 : -1);
+        }
       }
     }, { passive: true });
 

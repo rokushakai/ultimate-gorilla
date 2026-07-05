@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.9] - 2026-07-05 — 横スクロールマップ試作
+
+### Added
+- **横スクロールマップモード** (§43):
+  - `state.mapMode: "normal"|"side"` + `state.sideMap {x,y,stage,openedChests}` 追加
+  - `SIDE_STAGE_DATA` ステージ1「はじまりの草原」(40×3 タイルマップ): g/f/#/~/c/n/m/e/. タイル
+  - `SIDE_MAP_WIDTH=40`, `SIDE_MAP_HEIGHT=3`, `SIDE_VIEW_COLS=9`, `SIDE_VIEW_ROWS=3`
+  - `renderField()` スマートディスパッチ: side モード時に --cols/--rows 更新後 `renderSideField()` へ
+  - `renderSideField()`: 横スクロールカメラ・タイル描画・プレイヤー🦍・📦開封済み宝箱
+  - `moveSidePlayer(dx, dy)`: 衝突判定・タイルイベント(宝箱/NPC/商人/固定戦闘/ランダム戦闘)
+  - `openSideChest(x, y)`: 開封済み管理・30〜100G 報酬
+  - `openSideNpcModal()`: 旅の案内人 — 既存 `npc-modal` を流用
+  - `switchToSideMap()` / `switchToNormalMap()`
+  - `startWalking()` / キーボードハンドラ / スワイプハンドラ: mapMode 分岐追加
+  - デバッグ: 「⬇️ 横スクロールマップへ移動」「⬆️ 通常マップへ戻る」ボタン
+  - `saveGame()` / `loadGame()`: mapMode・sideMapX/Y/Stage/Chests 追加 (古いセーブは || デフォルト値)
+  - `index.html` に `#side-map-info` 情報バー追加(通常マップでは非表示)
+
+### Notes
+- 既存通常マップ・戦闘・NPC会話・BGM制御・セーブデータ構造に変更なし
+- 今回実装しないもの: 横スクロール専用BGM / 複数ステージ移動 / 縦移動
+
+
 ## [0.8.8.1] - 2026-07-05 — 緊急バグ修正: ステータスメニュー復旧・攻略ペーパービュー屋修正
 
 ### Fixed
