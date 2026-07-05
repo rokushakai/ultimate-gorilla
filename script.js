@@ -560,7 +560,8 @@
       stage: 1,
       openedChests: {},
       defeatedEnemies: {},   // §44 v0.9.1: 撃破済み固定敵 { "31,1": true }
-      stageCleared: {}       // §44 v0.9.1: クリア済みステージ { "1": true }
+      stageCleared: {},      // §44 v0.9.1: クリア済みステージ { "1": true }
+      stage1RewardLevel: 0   // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
     }
   };
 
@@ -934,13 +935,29 @@
 
   function openSideNpcModal(npcType) {
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
+    // §46 v0.9.2.1: 中ボス撃退でセリフ分岐
+    // §47 v0.9.3: stage1Cleared × midbossDefeated の4パターン分岐
     var icon, name, lines;
-    // §46 v0.9.2.1: 中ボスゴリラ撃退後にセリフを変化させる
     var midbossDefeated = !!(state.sideMap && state.sideMap.defeatedEnemies && state.sideMap.defeatedEnemies["36,1"]);
+    var stage1Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["1"]);
     if (npcType === "p") {
       icon = "🧑";
       name = "旅人";
-      if (midbossDefeated) {
+      if (stage1Cleared && midbossDefeated) {
+        lines = [
+          "中ボスゴリラを退かせたのか！はじまりの草原も、少し静かになったようだ。",
+          "ゴール🏁も越えたのか。本物の旅人だな。",
+          "この先には「あやしい森」が待っているらしい。中ボスゴリラより強い「ボスゴリラ」が潜むとか……",
+          "次の道でも、きっと力が開けるだろう。頑張れよ！"
+        ];
+      } else if (stage1Cleared) {
+        lines = [
+          "草原のゴールまで辿り着いたか。上手く中ボスゴリラを避けたんだな。",
+          "逃げること、避けること。それも立派な判断だぞ。",
+          "でも、中ボスゴリラを倒せばもう少し大きな報酬があったらしい。",
+          "まだ草むらに潜んでいる。挑んでみるか？"
+        ];
+      } else if (midbossDefeated) {
         lines = [
           "中ボスゴリラを退かせたのか！はじまりの草原も、少し静かになったようだ。",
           "この先のゴール🏁まで、もう大きな障害はないぞ。",
@@ -959,7 +976,21 @@
     } else {
       icon = "🧭";
       name = "旅の案内人";
-      if (midbossDefeated) {
+      if (stage1Cleared && midbossDefeated) {
+        lines = [
+          "中ボスゴリラまで退かせたとはな。さすがだ。",
+          "はじまりの草原は今、静けさを取り戻している。",
+          "この先には「あやしい森」が広がっているらしい。そこには「ボスゴリラ」が待つという噂がある。",
+          "次の道でも、その経験がきっと役に立つ。"
+        ];
+      } else if (stage1Cleared) {
+        lines = [
+          "はじまりの草原を抜けたんだな。",
+          "この先には、もっと深い森があるらしい。",
+          "まだ中ボスゴリラが草むらに潜んでいる。倒せばさらなる報酬があるぞ。",
+          "宝箱はまだ開けていないものが残っているかもしれないぞ。"
+        ];
+      } else if (midbossDefeated) {
         lines = [
           "中ボスゴリラを退かせたのか！さすがだ。",
           "はじまりの草原は今、静けさを取り戻している。",
@@ -988,24 +1019,91 @@
   }
 
   function openSideGoalModal() {
-    // §44 v0.9.1: ステージクリアモーダル
+    // §47 v0.9.3: ゴール演出強化 — 中ボス撃退分岐 + 報酬二重受け取り防止
     var sm = state.sideMap;
     var stageKey = String(sm.stage);
-    var alreadyCleared = sm.stageCleared[stageKey];
-    if (!alreadyCleared) {
-      sm.stageCleared[stageKey] = true;
-      state.player.gold += 50;
-      renderStatus();
-      saveGame();
+    var midbossDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
+    var rewardLevel = sm.stage1RewardLevel || 0;
+    sm.stageCleared[stageKey] = true;
+
+    var headerText, bodyLines, rewardLine, newRewardLevel;
+    newRewardLevel = rewardLevel;
+
+    if (rewardLevel === 0) {
+      if (midbossDefeated) {
+        newRewardLevel = 2;
+        state.player.gold += 100;
+        state.player.breadCount = (state.player.breadCount || 0) + 1;
+        headerText = "はじまりの草原を制覇した！";
+        bodyLines = [
+          "中ボスゴリラを退かせ、草原の道を切り開いた。",
+          "はじまりの草原に、少しだけ平和が戻った。"
+        ];
+        rewardLine = "💰 報酬：100G ＋ 🍞 パン ×1";
+      } else {
+        newRewardLevel = 1;
+        state.player.gold += 30;
+        headerText = "はじまりの草原を抜けた！";
+        bodyLines = [
+          "君は中ボスゴリラを避けながら、草原の出口へたどり着いた。",
+          "逃げること、避けること、進むこと。",
+          "それもまた勇者の判断だ。"
+        ];
+        rewardLine = "💰 報酬：30G";
+      }
+    } else if (rewardLevel === 1 && midbossDefeated) {
+      newRewardLevel = 2;
+      state.player.gold += 70;
+      state.player.breadCount = (state.player.breadCount || 0) + 1;
+      headerText = "草原の真の制覇者よ！";
+      bodyLines = [
+        "中ボスゴリラも退かせたか！",
+        "草原の覇者として認められた。追加の報酬を受け取れ。"
+      ];
+      rewardLine = "💰 追加報酬：70G ＋ 🍞 パン ×1";
+    } else {
+      headerText = "はじまりの草原";
+      if (midbossDefeated) {
+        bodyLines = [
+          "草原は静けさを取り戻している。",
+          "次なる冒険への足場にしよう。"
+        ];
+      } else {
+        bodyLines = [
+          "草原の出口は再び開いている。",
+          "中ボスゴリラはまだ草むらに潜んでいるかもしれない。",
+          "退かせてから再びゴールを目指すと、さらなる報酬があるぞ。"
+        ];
+      }
+      rewardLine = null;
     }
-    var rewardText = alreadyCleared
-      ? '<p style="color:#a8d8a8;">（クリア済み：報酬は一度だけ）</p>'
-      : '<p style="color:#ffd166;">💰 50G もらった！</p>';
-    document.getElementById("modal-side-goal-body").innerHTML =
-      '<p style="font-size:2em;margin:0 0 8px;">🏁</p>' +
-      '<p style="font-weight:bold;font-size:1.1em;margin-bottom:4px;">はじまりの草原をクリア！</p>' +
-      rewardText +
-      '<p style="font-size:0.85em;color:#aaa;">このまま探索を続けるか、通常マップへ戻ろう。</p>';
+
+    sm.stage1RewardLevel = newRewardLevel;
+    renderStatus();
+    saveGame();
+
+    var html = '<p style="font-size:1.8em;margin:0 0 6px;">🏁</p>';
+    html += '<p style="font-weight:bold;font-size:1.1em;margin-bottom:8px;">' + headerText + '</p>';
+    for (var i = 0; i < bodyLines.length; i++) {
+      html += '<p style="font-size:0.88em;color:#d0e0ff;margin:2px 0;">' + bodyLines[i] + '</p>';
+    }
+    if (rewardLine) {
+      html += '<p style="color:#ffd166;font-weight:bold;margin:10px 0 4px;">' + rewardLine + '</p>';
+    } else {
+      html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
+    }
+    if (newRewardLevel >= 2) {
+      html += '<p style="color:#888;font-size:0.80em;border-top:1px solid #444;padding-top:6px;margin-top:8px;">' +
+        'この先には「あやしい森」が広がっているらしい。<br>' +
+        '中ボスゴリラよりも手ごわい「ボスゴリラ」が待つという噂がある。' +
+        '</p>';
+    }
+    document.getElementById("modal-side-goal-body").innerHTML = html;
+
+    var stayBtn = document.getElementById("btn-side-goal-stay");
+    if (stayBtn) {
+      stayBtn.textContent = (rewardLevel > 0) ? "🔍 もう一度草原を探索する" : "🔍 探索を続ける";
+    }
     openModal("modal-side-goal");
   }
 
@@ -2540,6 +2638,28 @@
       });
     }
 
+    // §47 v0.9.3: 横スクロール進捗
+    var sm = state.sideMap;
+    var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
+    var s1BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
+    html += "<h3>横スクロール進捗</h3>";
+    html += '<div class="shop-row"><span>はじまりの草原</span><span style="color:' +
+      (s1Cleared ? "#06d6a0" : "#888") + ';">' +
+      (s1Cleared ? "✅ クリア済み" : "未クリア") + "</span></div>";
+    html += '<div class="shop-row"><span>中ボスゴリラ</span><span style="color:' +
+      (s1BossDefeated ? "#06d6a0" : "#888") + ';">' +
+      (s1BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    var sideTitle = null;
+    if (s1Cleared && s1BossDefeated) {
+      sideTitle = "中ボスゴリラを退かせし者";
+    } else if (s1Cleared) {
+      sideTitle = "草原を越えし者";
+    }
+    if (sideTitle) {
+      html += '<div class="shop-row"><span>横スクロール称号</span>' +
+        '<span style="color:#ffd166;font-size:0.85em;">' + sideTitle + "</span></div>";
+    }
+
     document.getElementById("status-body").innerHTML = html;
     if (state.gameCleared) {
       document.getElementById("btn-status-watch-ending").onclick = function () {
@@ -3078,6 +3198,11 @@
             lines.push("強い敵ほど大きな経験値を持っている。挑む価値はあるぞ。");
           }
         }
+        // §47 v0.9.3: ステージ1クリア後にステージ2予告を追加
+        var s1Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["1"]);
+        if (s1Cleared) {
+          lines.push("横に長い草原を越えたらしいな。次は「あやしい森」が待っているという噂だ。");
+        }
         return lines;
       }
     },
@@ -3480,6 +3605,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-start" style="border-color:#a8d8a8;color:#a8d8a8;">🔙 スタート地点へ (x=1,y=1)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-near-goal" style="border-color:#a8d8a8;color:#a8d8a8;">🏃 ゴール直前へ (x=35,y=1)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-reset-flags" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 横スクロール: クリア・撃破フラグをリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage1-clear" style="border-color:#a8d8a8;color:#a8d8a8;">✅ ステージ1クリアフラグON</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-set-midboss" style="border-color:#ffd166;color:#ffd166;">✅ 中ボス撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-midboss-encounter" style="border-color:#ffd166;color:#ffd166;">🦍 中ボスゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-norio" style="border-color:#74c0fc;color:#74c0fc;">📈 ノリオを仲間にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-reset-midboss" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 中ボスゴリラ撃退フラグをリセット</button>';
@@ -3629,10 +3756,23 @@
       document.getElementById("btn-debug-side-reset-flags").onclick = function () {
         state.sideMap.defeatedEnemies = {};
         state.sideMap.stageCleared = {};
+        state.sideMap.stage1RewardLevel = 0;  // §47 v0.9.3
         sideMapPendingFixedKey = "";
         saveGame();
         renderField();
-        showToast("[DEBUG] 横スクロール: クリア・撃破フラグをリセット");
+        showToast("[DEBUG] 横スクロール: クリア・撃破・報酬フラグをリセット");
+      };
+      document.getElementById("btn-debug-side-stage1-clear").onclick = function () {
+        state.sideMap.stageCleared["1"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ1クリアフラグをONにした");
+      };
+      document.getElementById("btn-debug-side-set-midboss").onclick = function () {
+        state.sideMap.defeatedEnemies["36,1"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 中ボスゴリラ撃退済みにした (36,1)");
       };
       document.getElementById("btn-debug-midboss-encounter").onclick = function () {
         closeModal("settings-modal");
@@ -3714,7 +3854,8 @@
         sideMapStage: state.sideMap.stage,
         sideMapChests: state.sideMap.openedChests,
         sideMapDefeated: state.sideMap.defeatedEnemies,
-        sideMapCleared: state.sideMap.stageCleared
+        sideMapCleared: state.sideMap.stageCleared,
+        sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0  // §47 v0.9.3
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -3781,6 +3922,7 @@
       state.sideMap.openedChests = data.sideMapChests || {};
       state.sideMap.defeatedEnemies = data.sideMapDefeated || {};
       state.sideMap.stageCleared = data.sideMapCleared || {};
+      state.sideMap.stage1RewardLevel = data.sideMapStage1Reward || 0;  // §47 v0.9.3
       p.job = findById(JOB_DATA, data.jobId) || findById(JOB_DATA, "soccer");
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
