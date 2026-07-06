@@ -174,6 +174,28 @@
     goalX: 38
   };
 
+  // §55 v0.12: ステージ4「ゴリラ山道」マップ (40×5)
+  // row0(y=0) 高路:  岩場の安全ルート。宝箱2個(x=8, x=28)。##迂回あり。
+  // row1(y=1) 上中:  旅人NPC(p, x=12)。固定敵(e, x=31:校長)。
+  // row2(y=2) 中央:  x=2帰還ゲート(H), 老人NPC(n, x=5), ##@x=8-9,
+  //                   固定敵(e, x=15:空手姉妹), 商人(m, x=20), ##@x=25-26,
+  //                   大魔王ゴリラ(b, x=33), ゴール(G, x=38)
+  // row3(y=3) 下中:  宝箱(c, x=22), 固定敵(e, x=25:デスマッチレスラー)。##で進入制限あり。
+  // row4(y=4) 下路:  宝箱(c, x=4)。水路(~)で進入制限あり。
+  SIDE_STAGE_DATA[4] = {
+    name: "ゴリラ山道",
+    rows: [
+      "ffffffffcf##ffffffff##ffffffcff##fffffff",  // row0: c@x=8, c@x=28
+      "ggggggggggggpggg##ggggggggggggeggggggfg",   // row1: p@x=12, ##@x=16-17, e@x=31
+      "ggHggngg##gggggeggggmgggg##ggggggbggggGg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=15, m@x=20, ##@x=25-26, b@x=33, G@x=38
+      "~~gggg##gggggggg##ggggcggegggg##gggggg~~",  // row3: ##@x=6-7, ##@x=16-17, c@x=22, e@x=25, ##@x=30-31
+      "~~~~cggg##ggggggggggggg##gggggggggggg~~~"   // row4: c@x=4, ##@x=8-9, ##@x=23-24
+    ],
+    startX: 1,
+    startY: 2,
+    goalX: 38
+  };
+
   // §49 v0.10.1: ステージ別固定敵マップ (タイル'e'に接触した時に出す敵ID)
   // キーは getSideKey() 形式 (stage1は "x,y", stage2は "2:x,y")
   var SIDE_FIXED_ENCOUNTERS = {
@@ -185,7 +207,11 @@
     // §50 v0.11: ステージ3固定敵
     "3:15,2": "powerharassmentsenpai",    // stage3 中央路 x=15,y=2: パワハラ先輩
     "3:12,3": "wanderingman",             // stage3 下中路 x=12,y=3: さまようおやじ
-    "3:27,4": "deathmatch"               // stage3 下路 x=27,y=4: デスマッチレスラー
+    "3:27,4": "deathmatch",              // stage3 下路 x=27,y=4: デスマッチレスラー
+    // §55 v0.12: ステージ4固定敵
+    "4:15,2": "karatesisters",           // stage4 中央路 x=15,y=2: 空手姉妹
+    "4:31,1": "principal",               // stage4 上中路 x=31,y=1: 校長
+    "4:25,3": "deathmatch"               // stage4 下中路 x=25,y=3: デスマッチレスラー
   };
 
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
@@ -299,6 +325,11 @@
       canCapture: false,
       startMsg: "町はずれの奥から、重たい笑い声が響いた……\n魔王ゴリラが道をふさいだ！",
       customEscapeMsgs: ["魔王ゴリラは古びた町の奥へ逃げていった！！", "町はずれに、少しだけ静けさが戻った。"] },
+    // §55 v0.12: 大魔王ゴリラ (横スクロールステージ4固定ボス、通常エンカウントには出ない)
+    { id: "daimaou_gorilla", name: "大魔王ゴリラ", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 700, attack: 46, def: 16, captureRate: 0, exp: 850, fleeRate: 0.10,
+      canCapture: false,
+      startMsg: "山道の奥から、地響きのような足音が近づいてくる……\n大魔王ゴリラが道をふさいだ！",
+      customEscapeMsgs: ["大魔王ゴリラは山の奥へ逃げていった！！", "ゴリラ山道に、冷たい風が吹き抜けた。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
     { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
@@ -633,6 +664,7 @@
       stage1RewardLevel: 0,  // §47 v0.9.3: ステージ1報酬受取レベル (0=未, 1=30G, 2=全取得)
       stage2RewardLevel: 0,  // §48 v0.10: ステージ2報酬受取レベル (0=未, 1=50G, 2=全取得)
       stage3RewardLevel: 0,  // §50 v0.11: ステージ3報酬受取レベル (0=未, 1=80G, 2=全取得)
+      stage4RewardLevel: 0,  // §55 v0.12: ステージ4報酬受取レベル (0=未, 1=120G, 2=全取得)
       gateExplained: false   // §52 v0.11.2: ゲートから初めて横スクロールへ入ったか
     }
   };
@@ -988,7 +1020,9 @@
       if (sm.defeatedEnemies[key]) { return; }
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
-      if (sm.stage === 3) {
+      if (sm.stage === 4) {
+        triggerFixedEncounter("daimaou_gorilla");  // §55 v0.12
+      } else if (sm.stage === 3) {
         triggerFixedEncounter("maou_gorilla");
       } else if (sm.stage === 2) {
         triggerFixedEncounter("boss_gorilla");
@@ -1011,10 +1045,25 @@
     sm.openedChests[key] = true;
     renderField();
 
-    // §44 v0.9.1: バリエーション報酬
+    // §44 v0.9.1: バリエーション報酬 / §55 v0.12: ステージ4専用高報酬テーブル
     var roll = Math.random();
     var msg;
-    if (roll < 0.4) {
+    if (sm.stage === 4) {
+      if (roll < 0.4) {
+        var gold4 = (4 + Math.floor(Math.random() * 7)) * 10;
+        state.player.gold += gold4;
+        msg = "宝箱を開けた！ 💰 " + gold4 + "G 手に入れた！";
+      } else if (roll < 0.6) {
+        state.player.deodorantCount = (state.player.deodorantCount || 0) + 1;
+        msg = "宝箱を開けた！ 🧴 デオドラントスプレー を手に入れた！";
+      } else if (roll < 0.8) {
+        state.player.bentoCount = (state.player.bentoCount || 0) + 1;
+        msg = "宝箱を開けた！ 🍱 お弁当 を手に入れた！";
+      } else {
+        state.player.potionCount++;
+        msg = "宝箱を開けた！ 🧪 やくそう を手に入れた！";
+      }
+    } else if (roll < 0.4) {
       var gold = (3 + Math.floor(Math.random() * 7)) * 10;
       state.player.gold += gold;
       msg = "宝箱を開けた！ 💰 " + gold + "G 手に入れた！";
@@ -1037,7 +1086,11 @@
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
     // §46 v0.9.2.1: 中ボス撃退でセリフ分岐
     // §47 v0.9.3: stage1Cleared × midbossDefeated の4パターン分岐
-    // §48 v0.10: ステージ2専用NPC / §50 v0.11: ステージ3専用NPC
+    // §48 v0.10: ステージ2専用NPC / §50 v0.11: ステージ3専用NPC / §55 v0.12: ステージ4専用NPC
+    if (state.sideMap && state.sideMap.stage === 4) {
+      openStage4NpcModal(state.sideMap.x, state.sideMap.y);
+      return;
+    }
     if (state.sideMap && state.sideMap.stage === 3) {
       openStage3NpcModal(state.sideMap.x, state.sideMap.y);
       return;
@@ -1173,7 +1226,61 @@
     openModal("npc-modal");
   }
 
+  // §55 v0.12: ステージ4「ゴリラ山道」NPC会話
+  function openStage4NpcModal(nx, ny) {
+    var sm = state.sideMap;
+    var daimaouDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies["4:33,2"]);
+    var icon = "🧑";
+    var name, lines;
+    // n タイル (x=5, y=2): 山を知る老人
+    if (ny === 2) {
+      name = "山を知る老人";
+      if (daimaouDefeated) {
+        lines = [
+          "大魔王ゴリラを退かせたとは……わしも長く山に住んでいるが、初めて見たわ。",
+          "この山道に、ようやく静けさが戻ってきた。ありがとう。"
+        ];
+      } else {
+        lines = [
+          "この山道は険しい。若者が気軽に踏み込んでいいところじゃない。",
+          "奥には大魔王ゴリラが控えておる。魔王ゴリラより格段に手強い。",
+          "ただ、高路(上ルート)と下中路を上手く使えば、うまく補給もできるぞ。",
+          "帰りたくなったら、スタート付近の🏠帰還ゲートを使うんじゃ。"
+        ];
+      }
+    } else {
+      // p タイル (x=12, y=1): 逃げ腰の旅人
+      name = "逃げ腰の旅人";
+      if (daimaouDefeated) {
+        lines = [
+          "大魔王ゴリラが静かになった！ 怖くて全力逃げしてたのに……",
+          "あんたは本物だ。ゴールはもうすぐそこだよ。"
+        ];
+      } else {
+        lines = [
+          "この山道、ヤバいよ！奥に信じられないくらいデカいゴリラがいた！",
+          "ぼ、僕はちょっと高い道から様子見てるだけ……",
+          "宝箱は下の道にもあるらしいけど、危なすぎてとても行けないよ。"
+        ];
+      }
+    }
+    document.getElementById("npc-header").innerHTML =
+      '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + name + '</div>';
+    var speechHtml = "";
+    for (var i = 0; i < lines.length; i++) {
+      speechHtml += "<p>「" + lines[i] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
   function openSideGoalModal() {
+    // §55 v0.12: ステージ4はopenStage4GoalModalへルーティング
+    if (state.sideMap.stage === 4) {
+      openStage4GoalModal();
+      return;
+    }
     // §50 v0.11: ステージ3はopenStage3GoalModalへルーティング
     if (state.sideMap.stage === 3) {
       openStage3GoalModal();
@@ -1525,7 +1632,22 @@
     goalBodyEl3.innerHTML = html;
 
     // §54 v0.11.3.2: JSでボタンを直接生成（静的ボタンのhidden依存廃止）
-    // ステージ3はステージ4未実装なので「次へ」ボタンなし
+    // §55 v0.12: ゴリラ山道へ進むボタン追加
+    var mountainBtn = document.createElement("button");
+    mountainBtn.className = "modal-btn";
+    mountainBtn.style.marginBottom = "8px";
+    mountainBtn.textContent = "⛰️ ゴリラ山道へ進む";
+    mountainBtn.onclick = function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 4;
+      var s4 = SIDE_STAGE_DATA[4];
+      state.sideMap.x = s4.startX;
+      state.sideMap.y = s4.startY;
+      saveGame();
+      renderField();
+      showToast("⛰️ ゴリラ山道へ入った！");
+    };
+    goalBodyEl3.appendChild(mountainBtn);
     var retBtn3 = document.createElement("button");
     retBtn3.className = "modal-btn";
     retBtn3.style.marginBottom = "8px";
@@ -1537,6 +1659,96 @@
     stayBtn3.textContent = "↩ この町はずれに残る";
     stayBtn3.onclick = function () { closeModal("modal-side-goal"); };
     goalBodyEl3.appendChild(stayBtn3);
+    openModal("modal-side-goal");
+  }
+
+  // §55 v0.12: ステージ4「ゴリラ山道」ゴール演出
+  function openStage4GoalModal() {
+    var sm = state.sideMap;
+    var daimaouKey = "4:33,2";
+    var daimaouDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies[daimaouKey]);
+    var rewardLevel = sm.stage4RewardLevel || 0;
+    sm.stageCleared["4"] = true;
+
+    var headerText, bodyLines, rewardLine, newRewardLevel;
+    newRewardLevel = rewardLevel;
+
+    if (rewardLevel === 0) {
+      if (daimaouDefeated) {
+        newRewardLevel = 2;
+        state.player.gold += 350;
+        state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+        headerText = "ゴリラ山道を制覇した！";
+        bodyLines = [
+          "大魔王ゴリラを退かせ、山道の出口へたどり着いた。",
+          "険しい山道に、清々しい風が吹き抜けた。"
+        ];
+        rewardLine = "💰 報酬：350G ＋ 🍜 ラーメン ×1";
+      } else {
+        newRewardLevel = 1;
+        state.player.gold += 120;
+        headerText = "ゴリラ山道を抜けた！";
+        bodyLines = [
+          "険しい山道を、どうにかくぐり抜けた。",
+          "大魔王ゴリラはまだ山の奥に潜んでいるかもしれない。"
+        ];
+        rewardLine = "💰 報酬：120G";
+      }
+    } else if (rewardLevel === 1 && daimaouDefeated) {
+      newRewardLevel = 2;
+      state.player.gold += 230;
+      state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+      headerText = "山道の真の制覇者よ！";
+      bodyLines = [
+        "大魔王ゴリラも退かせたか！",
+        "ゴリラ山道の覇者として認められた。追加の報酬を受け取れ。"
+      ];
+      rewardLine = "💰 追加報酬：230G ＋ 🍜 ラーメン ×1";
+    } else {
+      headerText = "ゴリラ山道";
+      if (daimaouDefeated) {
+        bodyLines = [
+          "山道に静けさが戻っている。",
+          "大魔王ゴリラの影も見えない。"
+        ];
+      } else {
+        bodyLines = [
+          "大魔王ゴリラはまだ山の奥に潜んでいる。",
+          "退かせてから再びゴールを目指すと、さらなる報酬があるぞ。"
+        ];
+      }
+      rewardLine = null;
+    }
+
+    sm.stage4RewardLevel = newRewardLevel;
+    renderStatus();
+    saveGame();
+
+    var html = '<p style="font-size:1.8em;margin:0 0 6px;">🏁</p>';
+    html += '<p style="font-weight:bold;font-size:1.1em;margin-bottom:8px;">' + headerText + '</p>';
+    for (var i = 0; i < bodyLines.length; i++) {
+      html += '<p style="font-size:0.88em;color:#d0e0ff;margin:2px 0;">' + bodyLines[i] + '</p>';
+    }
+    if (rewardLine) {
+      html += '<p style="color:#ffd166;font-weight:bold;margin:10px 0 4px;">' + rewardLine + '</p>';
+    } else {
+      html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
+    }
+    var goalBodyEl4 = document.getElementById("modal-side-goal-body");
+    goalBodyEl4.innerHTML = html;
+
+    // §55 v0.12: ステージ5なし。通常マップへ戻る / この山道に残る のみ。
+    var retBtn4 = document.createElement("button");
+    retBtn4.className = "modal-btn";
+    retBtn4.style.marginBottom = "8px";
+    retBtn4.textContent = "🏠 通常マップへ戻る";
+    retBtn4.onclick = function () { returnToNormalMapFromSide(); };
+    goalBodyEl4.appendChild(retBtn4);
+    var stayBtn4 = document.createElement("button");
+    stayBtn4.className = "modal-btn";
+    stayBtn4.textContent = "↩ この山道に残る";
+    stayBtn4.onclick = function () { closeModal("modal-side-goal"); };
+    goalBodyEl4.appendChild(stayBtn4);
     openModal("modal-side-goal");
   }
 
@@ -1588,7 +1800,7 @@
         "<div style=\"font-size:40px;line-height:1.2;\">🌀</div>" +
         "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">横スクロールマップへの入口</div>" +
         "<p>ここは「はじまりの草原」へ続く不思議な渦だ。</p>" +
-        "<p>横スクロールマップでは草原・森・町はずれの3ステージを冒険できる。各ステージをクリアすると報酬がもらえるぞ。</p>" +
+        "<p>横スクロールマップでは草原・森・町はずれ・山道の4ステージを冒険できる。各ステージをクリアすると報酬がもらえるぞ。</p>" +
         "<p>通常マップへ戻る時はゴール地点の「🏠 通常マップへ戻る」を使おう。</p>";
     } else {
       bodyEl.innerHTML =
@@ -3143,7 +3355,7 @@
       });
     }
 
-    // §47 v0.9.3 / §48 v0.10 / §50 v0.11: 横スクロール進捗
+    // §47 v0.9.3 / §48 v0.10 / §50 v0.11 / §55 v0.12: 横スクロール進捗
     var sm = state.sideMap;
     var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
     var s1BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
@@ -3151,6 +3363,8 @@
     var s2BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
     var s3Cleared = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
     var s3BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["3:31,2"]);
+    var s4Cleared = !!(sm && sm.stageCleared && sm.stageCleared["4"]);
+    var s4BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["4:33,2"]);
     html += "<h3>横スクロール進捗</h3>";
     html += '<div class="shop-row"><span>はじまりの草原</span><span style="color:' +
       (s1Cleared ? "#06d6a0" : "#888") + ';">' +
@@ -3170,8 +3384,18 @@
     html += '<div class="shop-row"><span>魔王ゴリラ</span><span style="color:' +
       (s3BossDefeated ? "#06d6a0" : "#888") + ';">' +
       (s3BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    html += '<div class="shop-row"><span>ゴリラ山道</span><span style="color:' +
+      (s4Cleared ? "#06d6a0" : "#888") + ';">' +
+      (s4Cleared ? "✅ クリア済み" : "未クリア") + "</span></div>";
+    html += '<div class="shop-row"><span>大魔王ゴリラ</span><span style="color:' +
+      (s4BossDefeated ? "#06d6a0" : "#888") + ';">' +
+      (s4BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
     var sideTitle = null;
-    if (s3Cleared && s3BossDefeated) {
+    if (s4Cleared && s4BossDefeated) {
+      sideTitle = "ゴリラ山道の覇者";
+    } else if (s4Cleared) {
+      sideTitle = "山道を越えし者";
+    } else if (s3Cleared && s3BossDefeated) {
       sideTitle = "町はずれの覇者";
     } else if (s3Cleared) {
       sideTitle = "町はずれを越えし者";
@@ -4183,6 +4407,13 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-maougori" style="border-color:#ffb347;color:#ffb347;">✅ 魔王ゴリラ撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-maou-gorilla-encounter" style="border-color:#ffb347;color:#ffb347;">🦍 魔王ゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-stage3-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🏚️ ステージ3宝箱・固定敵リセット</button>';
+      html += '<p class="small" style="color:#87ceeb;margin-top:8px;">⛰️ ステージ4「ゴリラ山道」(§55 v0.12)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage4-enter" style="border-color:#87ceeb;color:#87ceeb;">⛰️ ゴリラ山道へ移動 (stage=4)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage4-near-goal" style="border-color:#87ceeb;color:#87ceeb;">🏃 山道ゴール直前へ (x=32,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage4-clear-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ステージ4フラグリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-set-daimaougori" style="border-color:#87ceeb;color:#87ceeb;">✅ 大魔王ゴリラ撃退済みにする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-daimaou-gorilla-encounter" style="border-color:#87ceeb;color:#87ceeb;">🦍 大魔王ゴリラ強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage4-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">⛰️ ステージ4宝箱・固定敵リセット</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -4199,6 +4430,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s1" style="border-color:#e64980;color:#e64980;">🧪 ステージ1ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s2" style="border-color:#e64980;color:#e64980;">🧪 ステージ2ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s3" style="border-color:#e64980;color:#e64980;">🧪 ステージ3ゴールモーダル表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s4" style="border-color:#e64980;color:#e64980;">🧪 ステージ4ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-return-gate" style="border-color:#e64980;color:#e64980;">🧪 帰還ゲートモーダル表示</button>';
     }
     body.innerHTML = html;
@@ -4496,6 +4728,65 @@
         renderField();
         showToast("[DEBUG] ステージ3宝箱・固定敵をリセット");
       };
+      // §55 v0.12: ステージ4デバッグ
+      document.getElementById("btn-debug-side-stage4-enter").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 4;
+        var s4 = SIDE_STAGE_DATA[4];
+        state.sideMap.x = s4.startX;
+        state.sideMap.y = s4.startY;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] ゴリラ山道へ移動 (stage=4, x=1,y=2)");
+      };
+      document.getElementById("btn-debug-side-stage4-near-goal").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 4;
+        state.sideMap.x = 32;
+        state.sideMap.y = 2;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] 山道ゴール直前へ移動 (x=32,y=2) — 大魔王ゴリラはx=33");
+      };
+      document.getElementById("btn-debug-side-stage4-clear-reset").onclick = function () {
+        delete state.sideMap.stageCleared["4"];
+        delete state.sideMap.defeatedEnemies["4:33,2"];
+        state.sideMap.stage4RewardLevel = 0;
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ4フラグをリセット");
+      };
+      document.getElementById("btn-debug-side-set-daimaougori").onclick = function () {
+        state.sideMap.defeatedEnemies["4:33,2"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 大魔王ゴリラ撃退済みにした (4:33,2)");
+      };
+      document.getElementById("btn-debug-daimaou-gorilla-encounter").onclick = function () {
+        closeModal("settings-modal");
+        triggerFixedEncounter("daimaou_gorilla");
+        showToast("[DEBUG] 大魔王ゴリラ強制エンカウント");
+      };
+      document.getElementById("btn-debug-side-stage4-items-reset").onclick = function () {
+        var sm4 = state.sideMap;
+        var cToDelete4 = [];
+        for (var ck4 in sm4.openedChests) {
+          if (sm4.openedChests.hasOwnProperty(ck4) && ck4.indexOf("4:") === 0) cToDelete4.push(ck4);
+        }
+        for (var ci4 = 0; ci4 < cToDelete4.length; ci4++) delete sm4.openedChests[cToDelete4[ci4]];
+        var eToDelete4 = [];
+        for (var ek4 in sm4.defeatedEnemies) {
+          if (sm4.defeatedEnemies.hasOwnProperty(ek4) && ek4.indexOf("4:") === 0) eToDelete4.push(ek4);
+        }
+        for (var ei4 = 0; ei4 < eToDelete4.length; ei4++) delete sm4.defeatedEnemies[eToDelete4[ei4]];
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ4宝箱・固定敵をリセット");
+      };
       // §49 v0.10.1: ヒントショップを開く
       document.getElementById("btn-debug-open-hint-shop").onclick = function () {
         closeModal("settings-modal");
@@ -4571,6 +4862,11 @@
         state.sideMap.stage = 3;
         openSideGoalModal();
       };
+      document.getElementById("btn-debug-modal-goal-s4").onclick = function () {
+        closeModal("settings-modal");
+        state.sideMap.stage = 4;
+        openSideGoalModal();
+      };
       document.getElementById("btn-debug-modal-return-gate").onclick = function () {
         closeModal("settings-modal");
         openSideReturnGateModal();
@@ -4628,6 +4924,7 @@
         sideMapStage1Reward: state.sideMap.stage1RewardLevel || 0,  // §47 v0.9.3
         sideMapStage2Reward: state.sideMap.stage2RewardLevel || 0,  // §48 v0.10
         sideMapStage3Reward: state.sideMap.stage3RewardLevel || 0,  // §50 v0.11
+        sideMapStage4Reward: state.sideMap.stage4RewardLevel || 0,  // §55 v0.12
         sideMapGateExplained: !!state.sideMap.gateExplained         // §52 v0.11.2
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -4698,6 +4995,7 @@
       state.sideMap.stage1RewardLevel = data.sideMapStage1Reward || 0;  // §47 v0.9.3
       state.sideMap.stage2RewardLevel = data.sideMapStage2Reward || 0;  // §48 v0.10
       state.sideMap.stage3RewardLevel = data.sideMapStage3Reward || 0;  // §50 v0.11
+      state.sideMap.stage4RewardLevel = data.sideMapStage4Reward || 0;  // §55 v0.12
       state.sideMap.gateExplained = !!data.sideMapGateExplained;        // §52 v0.11.2
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
@@ -5246,7 +5544,7 @@
   // フィールド(4,3)のNPC。10G/50G/100Gで状況別ヒントを売る。
   // ---------------------------------------------------------
 
-  // 現在の進行状況からヒント優先度(0〜12)を返す
+  // 現在の進行状況からヒント優先度(0〜14)を返す
   function getHintPriority() {
     var p = state.player;
     var ef = state.eventFlags;
@@ -5254,9 +5552,11 @@
     var s1Cleared = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
     var s2Cleared = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
     var s3Cleared = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
+    var s4Cleared = !!(sm && sm.stageCleared && sm.stageCleared["4"]);
     if (state.gameCleared) return 0;
-    // §50 v0.11: 横スクロールステージ進捗ヒント (s3追加)
-    if (s3Cleared) return 9;        // 全ステージクリア済み
+    // §55 v0.12: 横スクロールステージ進捗ヒント (s4追加)
+    if (s4Cleared) return 9;        // 全4ステージクリア済み
+    if (s3Cleared) return 14;       // s3クリア・s4未クリア → ステージ4ガイド
     if (s2Cleared) return 12;       // s2クリア・s3未クリア → ステージ3ガイド
     if (s1Cleared) return 10;       // s1クリア・s2未クリア → ステージ2ガイド
     var sideVisited = !!(sm && (
@@ -5281,14 +5581,25 @@
     var p = state.player;
     var sm = state.sideMap;
     var priority = getHintPriority();
-    // §49 v0.10.1: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
+    // §55 v0.12: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
     if (priority === 9) {
       var h9 = [
-        "3つの横スクロールステージを制覇した。次なるゴリラ山道への道が見えてきた。今は通常マップで究極ゴリラを目指そう。",
-        "草原、森、町はずれを越えた者は真の旅人だ。噂では次のステージ4「ゴリラ山道」に大魔王ゴリラが潜むという。実装をお楽しみに。",
-        "ステージ1〜3をすべて制覇済み。ステージ4「ゴリラ山道」と大魔王ゴリラは次のアップデートを待て。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
+        "4つの横スクロールステージをすべて制覇した。今は通常マップで究極ゴリラを目指そう。",
+        "草原、森、町はずれ、山道をすべて越えた。究極ゴリラ捕獲（Lv99＋ウクレレ＋うたう）が最終目標だ。",
+        "ステージ1〜4をすべて制覇済み。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
       ];
       return h9[tier - 1] || h9[0];
+    }
+    // §55 v0.12: s3クリア・s4未クリア → ステージ4ガイド
+    if (priority === 14) {
+      var daimaouDefeated14 = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["4:33,2"]);
+      if (tier === 1) return "ゴリラ山道では、岩場の上下の道をよく見て進もう。焦らず道を選ぶことが大事だ。";
+      if (tier === 2) {
+        if (!daimaouDefeated14) return "山道の奥には大魔王ゴリラがいる。大魔王ゴリラはUMAではないので捕獲できない。回復アイテムを整えてから挑もう。";
+        return "大魔王ゴリラを退かせた！ゴールへの道は開けているぞ。ゴール(x=38)で大きな報酬が待っている。";
+      }
+      if (!daimaouDefeated14) return "大魔王ゴリラはゴール手前x=33にいる。撃退してからゴールすると350G+ラーメンの報酬が手に入る。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
+      return "大魔王ゴリラ撃退済み！ゴール(x=38)へ進もう。高路や下中路には宝箱も4個ある。";
     }
     // §50 v0.11: s2クリア・s3未クリア → ステージ3ガイド
     if (priority === 12) {

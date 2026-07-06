@@ -14,6 +14,25 @@
 
 ## ✅ 実装済み
 
+### Version 0.12 — 横スクロールステージ4「ゴリラ山道」(§55)
+
+- **SIDE_STAGE_DATA[4]** (§55): 40×5マップ追加 (ゴリラ山道) ✅
+- **daimaou_gorilla** (§55): NON_UMA_DATAに大魔王ゴリラ追加 (HP700/ATK46/DEF16/EXP850/canCapture:false) ✅
+- **SIDE_FIXED_ENCOUNTERS stage4** (§55): 空手姉妹(4:15,2)/校長(4:31,1)/デスマッチレスラー(4:25,3)追加 ✅
+- **state.sideMap.stage4RewardLevel** (§55): 初期値0追加 ✅
+- **moveSidePlayer() 'b'タイル** (§55): stage4→大魔王ゴリラ分岐追加 ✅
+- **openSideChest() stage4報酬** (§55): 高報酬テーブル追加 ✅
+- **openSideNpcModal() stage4ルーティング** (§55): stage=4→openStage4NpcModal ✅
+- **openStage4NpcModal()** (§55): 老人/旅人分岐NPC会話追加 ✅
+- **openStage4GoalModal()** (§55): ゴール演出・報酬分岐・JSボタン生成追加 ✅
+- **openStage3GoalModal()** (§55): 「⛰️ ゴリラ山道へ進む」ボタン追加 ✅
+- **openSideGoalModal() stage4ルーティング** (§55): stage=4→openStage4GoalModal ✅
+- **renderStatusBody() stage4進捗** (§55): ゴリラ山道クリア/大魔王ゴリラ撃退/称号追加 ✅
+- **getHintPriority() / getProgressHint()** (§55): s4Cleared対応・priority14新設 ✅
+- **saveGame() / loadGame()** (§55): sideMapStage4Reward追加 ✅
+- **デバッグ機能** (§55): stage4移動/ゴール直前/フラグリセット/モーダル表示ボタン追加 ✅
+- **index.html ヘルプ** (§55): ステージ4説明セクション追加 ✅
+
 ### Version 0.11.3.2 — ゴールモーダルJS生成ボタン方式 + 帰還ゲート位置修正 (§54)
 
 - **`returnToNormalMapFromSide()`** (§54): 両モーダルを閉じてから `switchToNormalMap()` を呼ぶ共通関数 ✅

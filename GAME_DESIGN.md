@@ -3040,3 +3040,115 @@ function returnToNormalMapFromSide() {
 - 🧪 ステージ2ゴールモーダル表示
 - 🧪 ステージ3ゴールモーダル表示
 - 🧪 帰還ゲートモーダル表示
+
+---
+
+## §55 — 横スクロールステージ4「ゴリラ山道」(v0.12)
+
+### ステージ概要
+
+険しい岩場と崖が続く横スクロールステージ。ステージ3「古びた町はずれ」のゴールモーダルから進める。5路構成(40×5)、固定敵3体、大魔王ゴリラ(ボス)。
+
+### マップ設計 (40×5)
+
+```
+row0(y=0) 高路:  安全な岩場。宝箱2個(x=8, x=28)。##で迂回路あり。
+row1(y=1) 上中:  旅人NPC(p, x=12)。固定敵(e, x=31:校長)。
+row2(y=2) 中央:  x=2帰還ゲート(H), 老人NPC(n, x=5), ##@x=8-9,
+                  固定敵(e, x=15:空手姉妹), 商人(m, x=20), ##@x=25-26,
+                  大魔王ゴリラ(b, x=33), ゴール(G, x=38)
+row3(y=3) 下中:  固定敵(e, x=25:デスマッチレスラー)。宝箱(c, x=22)。
+row4(y=4) 下路:  宝箱(c, x=4)。危険な水路あり。
+```
+
+```
+rows[0]: "ffffffffcf##ffffffff##ffffffcff##fffffff"
+rows[1]: "ggggggggggggpggg##ggggggggggggeggggggfg"
+rows[2]: "ggHggngg##gggggeggggmgggg##ggggggbggggGg"
+rows[3]: "~~gggg##gggggggg##ggggcggegggg##gggggg~~"
+rows[4]: "~~~~cggg##ggggggggggggg##gggggggggggg~~~"
+startX: 1, startY: 2, goalX: 38
+```
+
+タイル凡例: g=通路🟩, f=岩場🟫, #=木🌳(通行不可), ~=水🟦(通行不可), c=宝箱🎁, n=NPC🧭, m=商人🏪, p=旅人🧑, e=固定敵⚡, b=ボス💢, G=ゴール🏁, H=帰還ゲート🏠
+
+### 大魔王ゴリラ (NON_UMA_DATA追加)
+
+```
+id: "daimaou_gorilla", name: "大魔王ゴリラ", emoji: "🦍", type: "boss"
+hp: 700, attack: 46, def: 16, exp: 850, fleeRate: 0.10
+canCapture: false (捕獲不可)
+位置: row2 x=33 (b タイル)、キー: "4:33,2"
+```
+
+### 固定敵 (SIDE_FIXED_ENCOUNTERS追加)
+
+| キー | 敵ID | 場所 |
+|---|---|---|
+| `"4:15,2"` | `karatesisters` (空手姉妹) | 中央路 x=15 |
+| `"4:31,1"` | `principal` (校長) | 上中路 x=31 |
+| `"4:25,3"` | `deathmatch` (デスマッチレスラー) | 下中路 x=25 |
+
+### NPC
+
+- **n タイル (x=5, y=2)**: 「山を知る老人」。大魔王ゴリラ撃退前後でセリフ分岐。
+- **p タイル (x=12, y=1)**: 「逃げ腰の旅人」。撃退前後でセリフ分岐。
+
+### 宝箱報酬 (openSideChest stage4分岐)
+
+ステージ4の宝箱は stage3 より高い報酬テーブルを使用:
+- 40%: 40〜100G (step10)
+- 20%: デオドラントスプレー
+- 20%: お弁当
+- 20%: やくそう (フォールバック)
+
+### ゴール演出 (openStage4GoalModal)
+
+大魔王ゴリラ撃退キー: `"4:33,2"`
+
+| 条件 | 報酬 | newRewardLevel |
+|---|---|---|
+| rewardLevel=0 + 撃退済み | 350G + ラーメン×1 | 2 |
+| rewardLevel=0 + 未撃退 | 120G | 1 |
+| rewardLevel=1 + 撃退済み | 230G + ラーメン×1 (追加) | 2 |
+| それ以外 | 報酬なし | 変更なし |
+
+ゴール後ボタン（ステージ5なし）:
+1. 🏠 通常マップへ戻る → `returnToNormalMapFromSide()`
+2. ↩ この山道に残る
+
+### ステージ3 → ステージ4 遷移
+
+`openStage3GoalModal()` のボタン先頭に追加:
+- ⛰️ ゴリラ山道へ進む → stage=4, startX/Y へ移動
+
+### セーブデータ追加
+
+```javascript
+// state.sideMap
+stage4RewardLevel: 0   // 0=未, 1=120G, 2=全取得済み
+
+// saveGame()
+sideMapStage4Reward: state.sideMap.stage4RewardLevel || 0
+
+// loadGame()
+state.sideMap.stage4RewardLevel = data.sideMapStage4Reward || 0;
+```
+
+### ステータス画面追加 (renderStatusBody)
+
+横スクロール進捗に追加:
+- ゴリラ山道: クリア済み / 未クリア
+- 大魔王ゴリラ: 撃退済み / 未撃退
+- 称号:「山道を越えし者」(s4Cleared)、「ゴリラ山道の覇者」(s4Cleared && daimaouDefeated)
+
+### 攻略ペーパービュー屋 (getHintPriority / getProgressHint)
+
+- s4Cleared → priority 9 (全4ステージクリア済み)
+- s3Cleared && !s4Cleared → priority 14 (ゴリラ山道ガイド、新規)
+- priority 9 テキスト: 4ステージすべて制覇済みメッセージに更新
+
+### 将来の改善候補（今回実装しない）
+
+- ゴール付近帰還ゲート: 現在は各ステージのゴール地点に🏠帰還ゲートがない。将来的にゴール付近(x=35-37)にもHタイルを追加すると取りこぼし防止になる。
+- ステージ5以降: v0.13以降で検討。

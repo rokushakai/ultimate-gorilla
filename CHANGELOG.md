@@ -5,6 +5,32 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.12] - 2026-07-06 — 横スクロールステージ4「ゴリラ山道」追加
+
+### Added
+- **SIDE_STAGE_DATA[4]「ゴリラ山道」** (§55): 40×5マップ。startX=1, startY=2, goalX=38
+  - 高路(row0): 岩場の安全ルート。宝箱2個(x=8, x=28)
+  - 上中路(row1): 旅人NPC(x=12)、校長(固定敵 x=31)
+  - 中央路(row2): H帰還ゲート(x=2)、老人NPC(x=5)、空手姉妹(固定敵 x=15)、商人(x=20)、大魔王ゴリラ(x=33)、ゴール(x=38)
+  - 下中路(row3): 宝箱(x=22)、デスマッチレスラー(固定敵 x=25)
+  - 下路(row4): 宝箱(x=4)、水路あり
+- **大魔王ゴリラ** (§55): NON_UMA_DATAに追加。HP700/ATK46/DEF16/EXP850/canCapture:false
+- **SIDE_FIXED_ENCOUNTERS** (§55): ステージ4固定敵3体追加（空手姉妹/校長/デスマッチレスラー）
+- **`openStage4GoalModal()`** (§55): ゴール演出・報酬分岐。未撃退120G / 撃退済み350G+ラーメン
+- **`openStage4NpcModal()`** (§55): 老人(ny=2) / 旅人(ny=1) 分岐NPC会話
+- **openStage3GoalModal() に「⛰️ ゴリラ山道へ進む」ボタン追加** (§55)
+- **openSideGoalModal() / openSideNpcModal() にstage4ルーティング追加** (§55)
+- **openSideChest() stage4専用報酬テーブル** (§55): 40〜100G / デオドラント / お弁当 / やくそう
+- **state.sideMap.stage4RewardLevel** (§55): 報酬受取フラグ(0/1/2)
+- **saveGame() / loadGame()** (§55): `sideMapStage4Reward` 追加
+- **renderStatusBody() stage4進捗** (§55): ゴリラ山道クリア・大魔王ゴリラ撃退状況・称号「山道を越えし者」「ゴリラ山道の覇者」
+- **getHintPriority() priority 14** (§55): s3クリア・s4未クリア → ゴリラ山道ガイド
+- **getProgressHint() priority 9 更新 / priority 14 追加** (§55): 4ステージ対応ヒント
+- **デバッグ機能** (§55): ステージ4移動/ゴール直前/フラグリセット/アイテムリセット/大魔王ゴリラ撃退/強制エンカウント/ゴールモーダル表示
+- **index.html ヘルプ** (§55): ステージ4説明セクション追加
+- **openSideGateModal()** (§55): ゲート説明文を「4ステージ」に更新
+
+
 ## [0.11.3.2] - 2026-07-06 — ゴールモーダルJS生成ボタン方式 + 帰還ゲート位置修正
 
 ### Fixed
