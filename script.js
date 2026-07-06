@@ -128,7 +128,7 @@
       name: "はじまりの草原",
       rows: [
         "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
-        "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動; §45: x=36 中ボス(b)
+        "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §45: x=36 中ボス(b); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
         "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
@@ -146,7 +146,7 @@
     name: "あやしい森",
     rows: [
       "#ff#ff#fffffff#ffcffpfff#fff#fff#fff#ff#",
-      "ggHgpgg#gggfggegg##gggg##ggggggggggbggGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動
+      "ggHgpgg#gggfggegg##gggg##ggggggggggbgHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
       "~~ggcgg~~~ggegg~gggg~~ggggcgg~~gegg~~gg~"
     ],
     startX: 1,
@@ -165,7 +165,7 @@
     rows: [
       "fffff##fffffff#fffcfff###fffff##fffcffff",
       "gggfgg##ggpggff##gggggg##ggggggggg###gfg",
-      "ggHmgngggg##gggeggg##gggggg##ggbgg##ggGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動
+      "ggHmgngggg##gggeggg##gggggg##ggbgg##gHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
       "~~gggg##ggggegg##gggggg##ggggg##ggggg~~~",
       "~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~"
     ],
@@ -187,7 +187,7 @@
     rows: [
       "ffffffffcf##ffffffff##ffffffcff##fffffff",  // row0: c@x=8, c@x=28
       "ggggggggggggpggg##ggggggggggggeggggggfg",   // row1: p@x=12, ##@x=16-17, e@x=31
-      "ggHggngg##gggggeggggmgggg##ggggggbggggGg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=15, m@x=20, ##@x=25-26, b@x=33, G@x=38
+      "ggHggngg##gggggeggggmgggg##ggggggbgggHGg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=15, m@x=20, ##@x=25-26, b@x=33, H@x=37(§56), G@x=38
       "~~gggg##gggggggg##ggggcggegggg##gggggg~~",  // row3: ##@x=6-7, ##@x=16-17, c@x=22, e@x=25, ##@x=30-31
       "~~~~cggg##ggggggggggggg##gggggggggggg~~~"   // row4: c@x=4, ##@x=8-9, ##@x=23-24
     ],
@@ -4422,10 +4422,16 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gate-move" style="border-color:#a9e34b;color:#a9e34b;">🌀 ゲートタイル付近へ移動 (2,3)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gate-flag-reset" style="border-color:#a9e34b;color:#a9e34b;">🔄 ゲート説明フラグリセット</button>';
       html += '<p class="small" style="color:#f4a261;margin-top:8px;">🏠 帰還ゲート (§53 v0.11.3 / §54 v0.11.3.2)</p>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s1" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ1帰還ゲートへ移動 (x=2,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s2" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ2帰還ゲートへ移動 (x=2,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3帰還ゲートへ移動 (x=2,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s1" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ1スタート側Hへ移動 (x=2,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s2" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ2スタート側Hへ移動 (x=2,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3スタート側Hへ移動 (x=2,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s4" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ4スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-force-normal-map" style="border-color:#f4a261;color:#f4a261;">🏠 通常マップへ強制帰還</button>';
+      html += '<p class="small" style="color:#ffa94d;margin-top:8px;">🏠 ゴール側帰還ゲート (§56 v0.12.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s1" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ1ゴール側H付近へ (x=36,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s2" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ2ゴール側H付近へ (x=36,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s3" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ3ゴール側H付近へ (x=36,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s4" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ4ゴール側H付近へ (x=36,y=2)</button>';
       html += '<p class="small" style="color:#e64980;margin-top:8px;">🧪 モーダル直接表示 (§54 v0.11.3.2)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s1" style="border-color:#e64980;color:#e64980;">🧪 ステージ1ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s2" style="border-color:#e64980;color:#e64980;">🧪 ステージ2ゴールモーダル表示</button>';
@@ -4840,7 +4846,17 @@
         state.sideMap.y = 2;
         saveGame();
         renderField();
-        showToast("🏠 ステージ3帰還ゲート(2,2)へ移動した");
+        showToast("🏠 ステージ3スタート側Hゲート(2,2)へ移動した");
+      };
+      document.getElementById("btn-debug-return-gate-s4").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 4;
+        state.sideMap.x = 2;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("🏠 ステージ4スタート側Hゲート(2,2)へ移動した");
       };
       document.getElementById("btn-debug-force-normal-map").onclick = function () {
         closeModal("settings-modal");
@@ -4870,6 +4886,51 @@
       document.getElementById("btn-debug-modal-return-gate").onclick = function () {
         closeModal("settings-modal");
         openSideReturnGateModal();
+      };
+      // §56 v0.12.1: ゴール側帰還ゲートデバッグ (x=37 に配置、x=36に移動してボス撃退済み)
+      document.getElementById("btn-debug-goal-gate-s1").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 1;
+        state.sideMap.defeatedEnemies["36,1"] = true;
+        state.sideMap.x = 36;
+        state.sideMap.y = 1;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ1ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+      };
+      document.getElementById("btn-debug-goal-gate-s2").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 2;
+        state.sideMap.defeatedEnemies["2:35,1"] = true;
+        state.sideMap.x = 36;
+        state.sideMap.y = 1;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ2ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+      };
+      document.getElementById("btn-debug-goal-gate-s3").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 3;
+        state.sideMap.defeatedEnemies["3:31,2"] = true;
+        state.sideMap.x = 36;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ3ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+      };
+      document.getElementById("btn-debug-goal-gate-s4").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 4;
+        state.sideMap.defeatedEnemies["4:33,2"] = true;
+        state.sideMap.x = 36;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ4ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
       };
     }
   }

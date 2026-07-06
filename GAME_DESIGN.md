@@ -3150,5 +3150,60 @@ state.sideMap.stage4RewardLevel = data.sideMapStage4Reward || 0;
 
 ### 将来の改善候補（今回実装しない）
 
-- ゴール付近帰還ゲート: 現在は各ステージのゴール地点に🏠帰還ゲートがない。将来的にゴール付近(x=35-37)にもHタイルを追加すると取りこぼし防止になる。
 - ステージ5以降: v0.13以降で検討。
+
+
+## §56 — ゴール側帰還ゲート追加 (v0.12.1)
+
+### 目的
+
+各横スクロールステージのゴール直前 (x=37) にも🏠帰還ゲートを追加し、ボス撃破後にいつでも通常マップへ戻れる導線を作る。スタート付近のゲート(x=2)は維持する。
+
+### 設計方針
+
+- **スタート側 H** (x=2): ステージ序盤・準備不足の場合に早期離脱できる。
+- **ゴール側 H** (x=37): ボス撃破直後・ゴール前に通常マップへ戻れる。
+- **タイル 'H'** の挙動は既存と同一: `moveSidePlayer` 内の `'H'` 処理→`openSideReturnGateModal()` を呼ぶ。
+
+### 各ステージのHゲート位置
+
+| ステージ | スタート側H | ゴール側H | ボス位置 | ゴール |
+|---|---|---|---|---|
+| 1 はじまりの草原 | (x=2, y=1) | (x=37, y=1) | b@x=36 | G@x=38 |
+| 2 あやしい森     | (x=2, y=1) | (x=37, y=1) | b@x=35 | G@x=38 |
+| 3 古びた町はずれ | (x=2, y=2) | (x=37, y=2) | b@x=31 | G@x=38 |
+| 4 ゴリラ山道     | (x=2, y=2) | (x=37, y=2) | b@x=33 | G@x=38 |
+
+### マップ文字列変更 (x=37 を 'g' → 'H' に置換)
+
+```
+Stage 1 row1(y=1):
+  旧: "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbgGg"
+  新: "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbHGg"
+
+Stage 2 row1(y=1):
+  旧: "ggHgpgg#gggfggegg##gggg##ggggggggggbggGg"
+  新: "ggHgpgg#gggfggegg##gggg##ggggggggggbgHGg"
+
+Stage 3 row2(y=2):
+  旧: "ggHmgngggg##gggeggg##gggggg##ggbgg##ggGg"
+  新: "ggHmgngggg##gggeggg##gggggg##ggbgg##gHGg"
+
+Stage 4 row2(y=2):
+  旧: "ggHggngg##gggggeggggmgggg##ggggggbggggGg"
+  新: "ggHggngg##gggggeggggmgggg##ggggggbgggHGg"
+```
+
+### デバッグボタン追加 (debug=1)
+
+各ステージに「ゴール側帰還ゲートへ移動」ボタンを追加:
+- ステージ1: x=36, y=1 に移動（ゴール側Hの1マス手前）
+- ステージ2: x=36, y=1 に移動
+- ステージ3: x=36, y=2 に移動
+- ステージ4: x=36, y=2 に移動
+
+### 実装場所
+
+- `SIDE_STAGE_DATA[1/2/3/4]` の該当行のみ1文字変更。
+- `moveSidePlayer()` の 'H' 処理は変更不要（共通ロジック）。
+- `renderSettingsBody()` の debug=1 セクションにボタン追加。
