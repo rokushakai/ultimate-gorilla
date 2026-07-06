@@ -120,7 +120,7 @@
 
   // ステージ定義 (§44 v0.9.1 / §45 v0.9.2)
   // row0(y=0) 高路: 安全。迂回路A(x=11-13)と迂回路B(x=27-29)を提供。x=19にNPC2。中ボス回避可能。
-  // row1(y=1) メイン: x=0帰還ゲート(H) x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
+  // row1(y=1) メイン: x=2帰還ゲート(H) x=4宝箱 x=7NPC x=10商人 x=11-12ブロックA x=20NPC2
   //           x=24宝箱 x=27-28ブロックB x=31固定敵 x=36中ボス(b) x=38ゴール
   // row2(y=2) 低路: リスク高・報酬多。x=5宝箱 x=14固定敵 x=23宝箱 x=31宝箱。x=36は水(中ボス回避不可)
   var SIDE_STAGE_DATA = {
@@ -128,7 +128,7 @@
       name: "はじまりの草原",
       rows: [
         "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
-        "Hgggcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加; §45: x=36 中ボス(b)
+        "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbgGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動; §45: x=36 中ボス(b)
         "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
@@ -139,14 +139,14 @@
 
   // §48 v0.10: ステージ2「あやしい森」マップ (40×3)
   // row0(y=0) 高路: 安全な上路。x=17に宝箱、x=20にNPC-A。迂回路はx=3-6,x=12-16,x=25-27,x=33-36。
-  // row1(y=1) メイン: x=0帰還ゲート(H) x=4 NPC-B x=7 ブロックA x=14 固定敵1 x=17-18 ブロックB
+  // row1(y=1) メイン: x=2帰還ゲート(H) x=4 NPC-B x=7 ブロックA x=14 固定敵1 x=17-18 ブロックB
   //           x=23-24 ブロックC x=35 ボスゴリラ(b) x=38 ゴール(G)
   // row2(y=2) 下路: x=4 宝箱 x=12 固定敵2 x=26 宝箱 x=32 固定敵3 (水(~)で進入制限あり)
   SIDE_STAGE_DATA[2] = {
     name: "あやしい森",
     rows: [
       "#ff#ff#fffffff#ffcffpfff#fff#fff#fff#ff#",
-      "Hgggpgg#gggfggegg##gggg##ggggggggggbggGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加
+      "ggHgpgg#gggfggegg##gggg##ggggggggggbggGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動
       "~~ggcgg~~~ggegg~gggg~~ggggcgg~~gegg~~gg~"
     ],
     startX: 1,
@@ -157,7 +157,7 @@
   // §50 v0.11: ステージ3「古びた町はずれ」マップ (40×5)
   // row0(y=0) 高路:  宝箱2個(x=18,x=35)。安全路。迂回路。
   // row1(y=1) 上中:  旅人NPC(p, x=10)。
-  // row2(y=2) 中央:  x=0帰還ゲート(H), 商人(m, x=3), 老人NPC(n, x=5), 固定敵(e, x=15), 魔王ゴリラ(b, x=31), ゴール(G, x=38)
+  // row2(y=2) 中央:  x=2帰還ゲート(H), 商人(m, x=3), 老人NPC(n, x=5), 固定敵(e, x=15), 魔王ゴリラ(b, x=31), ゴール(G, x=38)
   // row3(y=3) 下中:  固定敵(e, x=12)。
   // row4(y=4) 下路:  宝箱(c, x=4, x=19), 固定敵(e, x=27)。危険な道。
   SIDE_STAGE_DATA[3] = {
@@ -165,7 +165,7 @@
     rows: [
       "fffff##fffffff#fffcfff###fffff##fffcffff",
       "gggfgg##ggpggff##gggggg##ggggggggg###gfg",
-      "Hggmgngggg##gggeggg##gggggg##ggbgg##ggGg",  // §53 v0.11.3: x=0 帰還ゲート(H) 追加
+      "ggHmgngggg##gggeggg##gggggg##ggbgg##ggGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H) ←x=0から移動
       "~~gggg##ggggegg##gggggg##ggggg##ggggg~~~",
       "~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~"
     ],
@@ -965,9 +965,11 @@
       openMerchantModal();
     } else if (tileChar === "H") {
       // §53 v0.11.3: 帰還ゲート
+      if (DEBUG_MODE) { console.log("[DEBUG] sideMap H(帰還ゲート) hit: stage=" + state.sideMap.stage + " x=" + nx + " y=" + ny); }
       openSideReturnGateModal();
     } else if (tileChar === "G") {
       // §44 v0.9.1: ゴール
+      if (DEBUG_MODE) { console.log("[DEBUG] sideMap G(ゴール) hit: stage=" + state.sideMap.stage + " x=" + nx + " y=" + ny); }
       openSideGoalModal();
     } else if (tileChar === "e") {
       // §44 v0.9.1: 撃破済みなら素通り
@@ -1261,18 +1263,36 @@
         '中ボスゴリラよりも手ごわい「ボスゴリラ」が待つという噂がある。' +
         '</p>';
     }
-    document.getElementById("modal-side-goal-body").innerHTML = html;
+    var goalBodyEl = document.getElementById("modal-side-goal-body");
+    goalBodyEl.innerHTML = html;
 
-    // §53 v0.11.3: ボタン表示を明示的に設定
-    var returnBtn = document.getElementById("btn-side-goal-return");
-    if (returnBtn) { returnBtn.classList.remove("hidden"); }
-    var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) { stayBtn.textContent = "↩ この草原に残る"; }
-    // §48 v0.10: あやしい森へ進むボタン (ステージ1クリア時に表示)
-    var forestBtn = document.getElementById("btn-side-goal-forest");
-    if (forestBtn) { forestBtn.classList.remove("hidden"); }
-    var townBtn = document.getElementById("btn-side-goal-town");
-    if (townBtn) { townBtn.classList.add("hidden"); }
+    // §54 v0.11.3.2: JSでボタンを直接生成（静的ボタンのhidden依存廃止）
+    var forestBtn = document.createElement("button");
+    forestBtn.className = "modal-btn";
+    forestBtn.style.marginBottom = "8px";
+    forestBtn.textContent = "🌲 あやしい森へ進む";
+    forestBtn.onclick = function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 2;
+      var s2 = SIDE_STAGE_DATA[2];
+      state.sideMap.x = s2.startX;
+      state.sideMap.y = s2.startY;
+      saveGame();
+      renderField();
+      showToast("🌲 あやしい森へ入った！");
+    };
+    goalBodyEl.appendChild(forestBtn);
+    var retBtn = document.createElement("button");
+    retBtn.className = "modal-btn";
+    retBtn.style.marginBottom = "8px";
+    retBtn.textContent = "🏠 通常マップへ戻る";
+    retBtn.onclick = function () { returnToNormalMapFromSide(); };
+    goalBodyEl.appendChild(retBtn);
+    var stayBtn = document.createElement("button");
+    stayBtn.className = "modal-btn";
+    stayBtn.textContent = "↩ この草原に残る";
+    stayBtn.onclick = function () { closeModal("modal-side-goal"); };
+    goalBodyEl.appendChild(stayBtn);
     openModal("modal-side-goal");
   }
 
@@ -1348,19 +1368,36 @@
     } else {
       html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
     }
-    document.getElementById("modal-side-goal-body").innerHTML = html;
+    var goalBodyEl2 = document.getElementById("modal-side-goal-body");
+    goalBodyEl2.innerHTML = html;
 
-    // §53 v0.11.3: ボタン表示を明示的に設定
-    var returnBtn2 = document.getElementById("btn-side-goal-return");
-    if (returnBtn2) { returnBtn2.classList.remove("hidden"); }
-    var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) { stayBtn.textContent = "↩ この森に残る"; }
-    // あやしい森ゴールモーダルでは「あやしい森へ進む」ボタンは不要
-    var forestBtn = document.getElementById("btn-side-goal-forest");
-    if (forestBtn) { forestBtn.classList.add("hidden"); }
-    // §50 v0.11: ステージ2クリア済みなら「古びた町はずれへ進む」ボタンを表示
-    var townBtn = document.getElementById("btn-side-goal-town");
-    if (townBtn) { townBtn.classList.remove("hidden"); }
+    // §54 v0.11.3.2: JSでボタンを直接生成（静的ボタンのhidden依存廃止）
+    var townBtn = document.createElement("button");
+    townBtn.className = "modal-btn";
+    townBtn.style.marginBottom = "8px";
+    townBtn.textContent = "🏚️ 古びた町はずれへ進む";
+    townBtn.onclick = function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 3;
+      var s3 = SIDE_STAGE_DATA[3];
+      state.sideMap.x = s3.startX;
+      state.sideMap.y = s3.startY;
+      saveGame();
+      renderField();
+      showToast("🏚️ 古びた町はずれへ入った！");
+    };
+    goalBodyEl2.appendChild(townBtn);
+    var retBtn2 = document.createElement("button");
+    retBtn2.className = "modal-btn";
+    retBtn2.style.marginBottom = "8px";
+    retBtn2.textContent = "🏠 通常マップへ戻る";
+    retBtn2.onclick = function () { returnToNormalMapFromSide(); };
+    goalBodyEl2.appendChild(retBtn2);
+    var stayBtn2 = document.createElement("button");
+    stayBtn2.className = "modal-btn";
+    stayBtn2.textContent = "↩ この森に残る";
+    stayBtn2.onclick = function () { closeModal("modal-side-goal"); };
+    goalBodyEl2.appendChild(stayBtn2);
     openModal("modal-side-goal");
   }
 
@@ -1484,18 +1521,22 @@
     } else {
       html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
     }
-    document.getElementById("modal-side-goal-body").innerHTML = html;
+    var goalBodyEl3 = document.getElementById("modal-side-goal-body");
+    goalBodyEl3.innerHTML = html;
 
-    // §53 v0.11.3: ボタン表示を明示的に設定
-    var returnBtn3 = document.getElementById("btn-side-goal-return");
-    if (returnBtn3) { returnBtn3.classList.remove("hidden"); }
-    var stayBtn = document.getElementById("btn-side-goal-stay");
-    if (stayBtn) { stayBtn.textContent = "↩ この町はずれに残る"; }
-    // ステージ3ゴールでは「あやしい森へ」「古びた町はずれへ」ボタンは不要（ステージ4未実装）
-    var forestBtn = document.getElementById("btn-side-goal-forest");
-    if (forestBtn) { forestBtn.classList.add("hidden"); }
-    var townBtn = document.getElementById("btn-side-goal-town");
-    if (townBtn) { townBtn.classList.add("hidden"); }
+    // §54 v0.11.3.2: JSでボタンを直接生成（静的ボタンのhidden依存廃止）
+    // ステージ3はステージ4未実装なので「次へ」ボタンなし
+    var retBtn3 = document.createElement("button");
+    retBtn3.className = "modal-btn";
+    retBtn3.style.marginBottom = "8px";
+    retBtn3.textContent = "🏠 通常マップへ戻る";
+    retBtn3.onclick = function () { returnToNormalMapFromSide(); };
+    goalBodyEl3.appendChild(retBtn3);
+    var stayBtn3 = document.createElement("button");
+    stayBtn3.className = "modal-btn";
+    stayBtn3.textContent = "↩ この町はずれに残る";
+    stayBtn3.onclick = function () { closeModal("modal-side-goal"); };
+    goalBodyEl3.appendChild(stayBtn3);
     openModal("modal-side-goal");
   }
 
@@ -1507,6 +1548,13 @@
     saveGame();
     renderField();
     showToast("⬇️ 横スクロールマップへ移動！");
+  }
+
+  // §54 v0.11.3.2: ゴールモーダル/帰還ゲートモーダルを両方閉じてから通常マップへ戻す共通関数
+  function returnToNormalMapFromSide() {
+    closeModal("modal-side-goal");
+    closeModal("modal-side-return-gate");
+    switchToNormalMap();
   }
 
   function switchToNormalMap() {
@@ -4142,11 +4190,16 @@
       html += '<p class="small" style="color:#a9e34b;margin-top:8px;">🌀 ゲート (§52 v0.11.2)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-gate-move" style="border-color:#a9e34b;color:#a9e34b;">🌀 ゲートタイル付近へ移動 (2,3)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gate-flag-reset" style="border-color:#a9e34b;color:#a9e34b;">🔄 ゲート説明フラグリセット</button>';
-      html += '<p class="small" style="color:#f4a261;margin-top:8px;">🏠 帰還ゲート (§53 v0.11.3)</p>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s1" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ1帰還ゲートへ移動 (x=0,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s2" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ2帰還ゲートへ移動 (x=0,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3帰還ゲートへ移動 (x=0,y=2)</button>';
+      html += '<p class="small" style="color:#f4a261;margin-top:8px;">🏠 帰還ゲート (§53 v0.11.3 / §54 v0.11.3.2)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s1" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ1帰還ゲートへ移動 (x=2,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s2" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ2帰還ゲートへ移動 (x=2,y=1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3帰還ゲートへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-force-normal-map" style="border-color:#f4a261;color:#f4a261;">🏠 通常マップへ強制帰還</button>';
+      html += '<p class="small" style="color:#e64980;margin-top:8px;">🧪 モーダル直接表示 (§54 v0.11.3.2)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s1" style="border-color:#e64980;color:#e64980;">🧪 ステージ1ゴールモーダル表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s2" style="border-color:#e64980;color:#e64980;">🧪 ステージ2ゴールモーダル表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s3" style="border-color:#e64980;color:#e64980;">🧪 ステージ3ゴールモーダル表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-return-gate" style="border-color:#e64980;color:#e64980;">🧪 帰還ゲートモーダル表示</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -4467,40 +4520,60 @@
         saveGame();
         showToast("🔄 ゲート説明フラグをリセットした");
       };
-      // §53 v0.11.3: 帰還ゲートデバッグ
+      // §54 v0.11.3.2: 帰還ゲートデバッグ（x=2に更新）
       document.getElementById("btn-debug-return-gate-s1").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
         state.sideMap.stage = 1;
-        state.sideMap.x = 0;
+        state.sideMap.x = 2;
         state.sideMap.y = 1;
         saveGame();
         renderField();
-        showToast("🏠 ステージ1帰還ゲート(0,1)へ移動した");
+        showToast("🏠 ステージ1帰還ゲート(2,1)へ移動した");
       };
       document.getElementById("btn-debug-return-gate-s2").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
         state.sideMap.stage = 2;
-        state.sideMap.x = 0;
+        state.sideMap.x = 2;
         state.sideMap.y = 1;
         saveGame();
         renderField();
-        showToast("🏠 ステージ2帰還ゲート(0,1)へ移動した");
+        showToast("🏠 ステージ2帰還ゲート(2,1)へ移動した");
       };
       document.getElementById("btn-debug-return-gate-s3").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
         state.sideMap.stage = 3;
-        state.sideMap.x = 0;
+        state.sideMap.x = 2;
         state.sideMap.y = 2;
         saveGame();
         renderField();
-        showToast("🏠 ステージ3帰還ゲート(0,2)へ移動した");
+        showToast("🏠 ステージ3帰還ゲート(2,2)へ移動した");
       };
       document.getElementById("btn-debug-force-normal-map").onclick = function () {
         closeModal("settings-modal");
         switchToNormalMap();
+      };
+      // §54 v0.11.3.2: モーダル直接表示デバッグ
+      document.getElementById("btn-debug-modal-goal-s1").onclick = function () {
+        closeModal("settings-modal");
+        state.sideMap.stage = 1;
+        openSideGoalModal();
+      };
+      document.getElementById("btn-debug-modal-goal-s2").onclick = function () {
+        closeModal("settings-modal");
+        state.sideMap.stage = 2;
+        openSideGoalModal();
+      };
+      document.getElementById("btn-debug-modal-goal-s3").onclick = function () {
+        closeModal("settings-modal");
+        state.sideMap.stage = 3;
+        openSideGoalModal();
+      };
+      document.getElementById("btn-debug-modal-return-gate").onclick = function () {
+        closeModal("settings-modal");
+        openSideReturnGateModal();
       };
     }
   }
@@ -4751,36 +4824,7 @@
       closeModal("npc-modal");
     });
 
-    // §44 v0.9.1: 横スクロールマップ ゴールモーダル
-    document.getElementById("btn-side-goal-return").addEventListener("click", function () {
-      closeModal("modal-side-goal");
-      switchToNormalMap();
-    });
-    document.getElementById("btn-side-goal-stay").addEventListener("click", function () {
-      closeModal("modal-side-goal");
-    });
-    // §48 v0.10: あやしい森へ進むボタン
-    document.getElementById("btn-side-goal-forest").addEventListener("click", function () {
-      closeModal("modal-side-goal");
-      state.sideMap.stage = 2;
-      var s2 = SIDE_STAGE_DATA[2];
-      state.sideMap.x = s2.startX;
-      state.sideMap.y = s2.startY;
-      saveGame();
-      renderField();
-      showToast("🌲 あやしい森へ入った！");
-    });
-    // §50 v0.11: 古びた町はずれへ進むボタン
-    document.getElementById("btn-side-goal-town").addEventListener("click", function () {
-      closeModal("modal-side-goal");
-      state.sideMap.stage = 3;
-      var s3 = SIDE_STAGE_DATA[3];
-      state.sideMap.x = s3.startX;
-      state.sideMap.y = s3.startY;
-      saveGame();
-      renderField();
-      showToast("🏚️ 古びた町はずれへ入った！");
-    });
+    // §54 v0.11.3.2: ゴールモーダルのボタンはJS生成方式に変更したため静的リスナー不要
 
     // §52 v0.11.2: 横スクロール入口ゲートモーダル
     document.getElementById("btn-side-gate-enter").addEventListener("click", function () {

@@ -5,6 +5,38 @@
 
 ---
 
+## v0.11.3.2 (2026-07-06)
+
+### 問題
+
+**v0.11.3 の帰還導線が実機で動作しない**
+
+- ゴールモーダルのボタンが押せない・表示されないとの報告。
+- 帰還ゲート 🏠 が見つからないとの報告。
+
+### 原因
+
+1. **静的ボタンの `hidden` 付け外し方式の不安定さ**: `btn-side-goal-forest/town/return/stay` の4ボタンは HTML に静的に存在し、各ゴール関数で `classList.remove("hidden")` / `classList.add("hidden")` で表示を制御していた。何らかの理由（レンダリングタイミング・モバイルブラウザ）で制御が機能しないケースがあった。
+
+2. **帰還ゲート H が x=0 でプレイヤーに見えなかった**: スタートは x=1 で、プレイヤーは右方向（x増加方向）に進む。x=0 は左側でカメラには映るが、プレイヤーが自然に踏む動線上にない。
+
+### 対処
+
+1. **JS 生成ボタン方式へ移行**: `modal-side-goal` から静的ボタン4つを削除。`openSideGoalModal()` / `openStage2GoalModal()` / `openStage3GoalModal()` 内で `document.createElement("button")` を使い、`onclick` ハンドラを直接アタッチ。`hidden` クラス操作を完全に廃止。
+
+2. **`returnToNormalMapFromSide()` 共通関数**: `closeModal("modal-side-goal")` + `closeModal("modal-side-return-gate")` + `switchToNormalMap()` をまとめた共通関数。
+
+3. **帰還ゲート H を x=2 へ移動**: ステージ1(x=2,y=1)、ステージ2(x=2,y=1)、ステージ3(x=2,y=2)。スタート(x=1)から右へ1歩で踏める。
+
+### 注意
+
+- `init()` から削除した4つのリスナー（`btn-side-goal-return/stay/forest/town`）の参照が他コードに残っていないことを確認済み。
+- ES5 制約のため `onclick` プロパティを使用（クロージャでの多重登録リスクを回避）。
+
+---
+
+---
+
 ## v0.11.3 (2026-07-05)
 
 ### 問題
