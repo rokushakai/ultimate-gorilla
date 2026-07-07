@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.12.1** |
+| 現在バージョン | **v0.13** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.11.1時点）
+## 現在実装済みの主要機能（v0.13時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,18 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.13] 横スクロールステージ5「黒い城」実装**（§57）
+  - **ラスボス級ゴリラ**: HP1000/ATK58/DEF22/EXP1400、canCapture:false。位置: 中央路 x=33(キー: "5:33,2")。
+  - **SIDE_STAGE_DATA[5]「黒い城」(40×5)**: 城壁5路構成。宝箱5個、固定敵3体、NPC2人、ラスボス級ゴリラ。
+  - **ステージ4ゴールモーダル**: 「🏰 黒い城へ進む」ボタン追加。
+  - **openStage5GoalModal()**: 撃退500G+ラーメン / 未撃退200G / 差分300G+ラーメン。
+  - **openStage5NpcModal()**: 城門前の兵士(y=2) / 逃げ腰の旅人(y=1)。撃退前後セリフ分岐。
+  - **renderStatusBody()**: stage5進捗2行 + 称号「黒い城を越えし者」「黒い城の覇者」追加。
+  - **getHintPriority()/getProgressHint()**: priority15新設(s4クリア・s5未クリア)、priority9を5ステージ版に更新。
+  - **saveGame/loadGame**: `sideMapStage5Reward` 追加。
+  - **ゴールモーダル予告テキスト**: 「チンパンジーの聖域」への言及のみ(ステージ6未実装)。
+  - **デバッグ**: stage5-enter/near-goal/clear-reset/set-lastbossgori/強制ENC/items-reset/return-H/goal-H/ゴールモーダル表示追加。
+  - **index.html ヘルプ**: 「🏰 ステージ5「黒い城」」セクション追加。ゲート説明を「5ステージ」に更新。
 - **[v0.12.1] ゴール側帰還ゲート追加**（§56）
   - **全4ステージのゴール直前(x=37)に🏠帰還ゲート追加**: SIDE_STAGE_DATA[1/2/3/4]の各メインrow x=37 を 'g' → 'H' に変更。
   - **Hゲート位置テーブル**: 各ステージにスタート側H(x=2)とゴール側H(x=37)の2か所。ボス撃退後にゴール前で通常マップへ戻れる。

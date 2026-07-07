@@ -5,6 +5,41 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.13] - 2026-07-07 — 横スクロールステージ5「黒い城」(§57)
+
+### Added
+- **lastboss_gorilla** (§57): NON_UMA_DATA にラスボス級ゴリラ追加 (HP1000/ATK58/DEF22/EXP1400/canCapture:false)
+- **SIDE_STAGE_DATA[5]** (§57): ステージ5「黒い城」40×5マップ追加 (startX=1, startY=2, goalX=38)
+- **SIDE_FIXED_ENCOUNTERS stage5** (§57): 宇宙人(5:14,2)・来訪者(5:27,1)・異邦人(5:23,3) 追加
+- **stage5RewardLevel** (§57): 状態初期化・saveGame・loadGame に追加
+- **moveSidePlayer 'b' tile** (§57): ステージ5 → lastboss_gorilla 分岐追加
+- **openSideGoalModal** (§57): ステージ5ルーティング追加
+- **openSideNpcModal** (§57): ステージ5ルーティング追加
+- **openStage4GoalModal** (§57): 「🏰 黒い城へ進む」ボタン追加
+- **openStage5GoalModal** (§57): ステージ5ゴール演出関数追加（JS生成ボタン方式）
+- **openStage5NpcModal** (§57): ステージ5NPC会話関数追加（城門前の兵士/逃げ腰の旅人）
+- **openSideChest** (§57): ステージ5高報酬テーブル追加（60〜130G/ラーメン/弁当/デオドラント）
+- **renderStatusBody** (§57): 黒い城・ラスボス級ゴリラ進捗行追加 + 「黒い城の覇者」「黒い城を越えし者」称号追加
+- **getHintPriority** (§57): s5Cleared→9(全5ステージ)、s4Cleared→15(ステージ5ガイド)に更新
+- **getProgressHint** (§57): priority=15(ステージ5ガイド)追加、priority=9を5ステージ版に更新
+- **openSideGateModal** (§57): 説明文を「5ステージ」に更新
+- **debug=1** (§57): ステージ5デバッグボタン8個・ハンドラ追加
+- **index.html ヘルプ** (§57): 「🏰 ステージ5「黒い城」」セクション追加
+
+### ステージ5「黒い城」仕様
+
+| 項目 | 内容 |
+|------|------|
+| マップ | 40×5 (castleテーマ) |
+| ボス | ラスボス級ゴリラ b@(33,2) |
+| 帰還ゲート | スタート側 H@(2,2)、ゴール側 H@(37,2) |
+| 固定敵 | 宇宙人@(14,2)、来訪者@(27,1)、異邦人@(23,3) |
+| NPC | 城門前の兵士@(5,2)、逃げ腰の旅人@(12,1) |
+| 商人 | m@(21,2) |
+| 宝箱 | 4個 (row0×2, row3, row4×2) |
+| 報酬 | ボス撃退:500G+ラーメン / 未撃退:200G / 差額:300G+ラーメン |
+| ステージ6 | 「チンパンジーの聖域」は未実装 — ゴールモーダルに予告テキストのみ |
+
 ## [0.12.1] - 2026-07-06 — ゴール側帰還ゲート追加 (§56)
 
 ### Added

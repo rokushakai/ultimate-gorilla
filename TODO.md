@@ -14,6 +14,27 @@
 
 ## ✅ 実装済み
 
+### Version 0.13 — 横スクロールステージ5「黒い城」(§57)
+
+- **lastboss_gorilla** (§57): NON_UMA_DATAにラスボス級ゴリラ追加 (HP1000/ATK58/DEF22/EXP1400/canCapture:false) ✅
+- **SIDE_STAGE_DATA[5]** (§57): 40×5マップ追加 (黒い城) ✅
+- **SIDE_FIXED_ENCOUNTERS stage5** (§57): 宇宙人(5:14,2)/来訪者(5:27,1)/異邦人(5:23,3)追加 ✅
+- **stage5RewardLevel** (§57): 状態・セーブ・ロードに追加 ✅
+- **moveSidePlayer 'b' tile** (§57): ステージ5→lastboss_gorilla 分岐追加 ✅
+- **openSideGoalModal** (§57): ステージ5ルーティング追加 ✅
+- **openSideNpcModal** (§57): ステージ5ルーティング追加 ✅
+- **openStage4GoalModal** (§57): 「🏰 黒い城へ進む」ボタン追加 ✅
+- **openStage5GoalModal** (§57): ステージ5ゴール演出関数追加 ✅
+- **openStage5NpcModal** (§57): ステージ5NPC会話関数追加 ✅
+- **openSideChest** (§57): ステージ5高報酬テーブル追加 ✅
+- **renderStatusBody** (§57): ステージ5進捗行+称号追加 ✅
+- **getHintPriority** (§57): s5Cleared(9)、s4Cleared(15)に更新 ✅
+- **getProgressHint** (§57): priority=15(ステージ5ガイド)追加、priority=9更新 ✅
+- **openSideGateModal** (§57): 説明文を「5ステージ」に更新 ✅
+- **debug=1 HTMLボタン** (§57): ステージ5デバッグボタン追加 ✅
+- **debug=1 ハンドラ** (§57): ステージ5デバッグハンドラ追加 ✅
+- **index.html ヘルプ** (§57): ステージ5セクション追加 ✅
+
 ### Version 0.12.1 — ゴール側帰還ゲート追加 (§56)
 
 - **SIDE_STAGE_DATA[1] row1 x=37** (§56): 'g' → 'H' (ゴール側帰還ゲート) ✅
