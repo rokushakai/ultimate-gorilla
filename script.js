@@ -128,7 +128,7 @@
       name: "はじまりの草原",
       rows: [
         "#f#ff#ff#fffffff#ffpff#fffffffff#ff#ff#f",
-        "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §45: x=36 中ボス(b); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
+        "ggHgcggnggm##ggggfggpgggcgg##ggeggfgbGHg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §45: x=36 中ボス(b); §58 v0.13.1: G@x=37(ゴール), H@x=38(ゴール側帰還ゲート)
         "~~~ggcg~~~ggggegg~~~gfgcgggggggc~~g~~~gg"
       ],
       startX: 1,
@@ -146,7 +146,7 @@
     name: "あやしい森",
     rows: [
       "#ff#ff#fffffff#ffcffpfff#fff#fff#fff#ff#",
-      "ggHgpgg#gggfggegg##gggg##ggggggggggbgHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
+      "ggHgpgg#gggfggegg##gggg##ggggggggggbgGHg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §58 v0.13.1: G@x=37(ゴール), H@x=38(ゴール側帰還ゲート)
       "~~ggcgg~~~ggegg~gggg~~ggggcgg~~gegg~~gg~"
     ],
     startX: 1,
@@ -165,7 +165,7 @@
     rows: [
       "fffff##fffffff#fffcfff###fffff##fffcffff",
       "gggfgg##ggpggff##gggggg##ggggggggg###gfg",
-      "ggHmgngggg##gggeggg##gggggg##ggbgg##gHGg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §56 v0.12.1: x=37 ゴール側帰還ゲート(H)
+      "ggHmgngggg##gggeggg##gggggg##ggbgg##gGHg",  // §54 v0.11.3.2: x=2 帰還ゲート(H); §58 v0.13.1: G@x=37(ゴール), H@x=38(ゴール側帰還ゲート)
       "~~gggg##ggggegg##gggggg##ggggg##ggggg~~~",
       "~~~~cggg##ggggg##ggcgg##gggegg##ggggg~~~"
     ],
@@ -179,7 +179,7 @@
   // row1(y=1) 上中:  旅人NPC(p, x=12)。固定敵(e, x=31:校長)。
   // row2(y=2) 中央:  x=2帰還ゲート(H), 老人NPC(n, x=5), ##@x=8-9,
   //                   固定敵(e, x=15:空手姉妹), 商人(m, x=20), ##@x=25-26,
-  //                   大魔王ゴリラ(b, x=33), ゴール(G, x=38)
+  //                   大魔王ゴリラ(b, x=33), ゴール(G, x=37), ゴール側帰還ゲート(H, x=38)
   // row3(y=3) 下中:  宝箱(c, x=22), 固定敵(e, x=25:デスマッチレスラー)。##で進入制限あり。
   // row4(y=4) 下路:  宝箱(c, x=4)。水路(~)で進入制限あり。
   SIDE_STAGE_DATA[4] = {
@@ -187,7 +187,7 @@
     rows: [
       "ffffffffcf##ffffffff##ffffffcff##fffffff",  // row0: c@x=8, c@x=28
       "ggggggggggggpggg##ggggggggggggeggggggfg",   // row1: p@x=12, ##@x=16-17, e@x=31
-      "ggHggngg##gggggeggggmgggg##ggggggbgggHGg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=15, m@x=20, ##@x=25-26, b@x=33, H@x=37(§56), G@x=38
+      "ggHggngg##gggggeggggmgggg##ggggggbgggGHg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=15, m@x=20, ##@x=25-26, b@x=33, G@x=37(ゴール), H@x=38(§58 v0.13.1)
       "~~gggg##gggggggg##ggggcggegggg##gggggg~~",  // row3: ##@x=6-7, ##@x=16-17, c@x=22, e@x=25, ##@x=30-31
       "~~~~cggg##ggggggggggggg##gggggggggggg~~~"   // row4: c@x=4, ##@x=8-9, ##@x=23-24
     ],
@@ -201,7 +201,7 @@
   // row1(y=1) 上中:  逃げ腰の旅人NPC(p, x=12)。固定敵(e, x=27:来訪者)。
   // row2(y=2) 中央:  x=2帰還ゲート(H), 兵士NPC(n, x=5), ##@x=8-9,
   //                   固定敵(e, x=14:宇宙人), 商人(m, x=20), ##@x=26-27,
-  //                   ラスボス級ゴリラ(b, x=33), ゴール側H(x=37), ゴール(G, x=38)
+  //                   ラスボス級ゴリラ(b, x=33), ゴール(G, x=37), ゴール側帰還ゲート(H, x=38)
   // row3(y=3) 下中:  宝箱(c, x=16), 固定敵(e, x=23:異邦人)。##@x=6-7, ##@x=26-27
   // row4(y=4) 下路:  宝箱(c, x=4, x=17)。水路(~)。##@x=8-9, ##@x=28-29
   SIDE_STAGE_DATA[5] = {
@@ -209,7 +209,7 @@
     rows: [
       "##ffffffcf##ffffffff##ffffffffcff##fffff",  // row0: c@x=8, c@x=30
       "gggfggggggggpgg##gggggg##ggeggggggfggggg",  // row1: p@x=12, ##@x=15-16, ##@x=23-24, e@x=27
-      "ggHggngg##ggggeggggggmgggg##gggggbgggHGg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=14, m@x=21, ##@x=26-27, b@x=33, H@x=37, G@x=38
+      "ggHggngg##ggggeggggggmgggg##gggggbgggGHg",  // row2: H@x=2, n@x=5, ##@x=8-9, e@x=14, m@x=21, ##@x=26-27, b@x=33, G@x=37(ゴール), H@x=38(§58 v0.13.1)
       "~~gggg##ggggggggcggggggegg##ggggggggggg~",  // row3: ##@x=6-7, c@x=16, e@x=23, ##@x=26-27
       "~~~~cggg##gggggggcgggggggggg##ggggggggg~"   // row4: c@x=4, ##@x=8-9, c@x=17, ##@x=28-29
     ],
@@ -4659,12 +4659,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s4" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ4スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s5" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ5スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-force-normal-map" style="border-color:#f4a261;color:#f4a261;">🏠 通常マップへ強制帰還</button>';
-      html += '<p class="small" style="color:#ffa94d;margin-top:8px;">🏠 ゴール側帰還ゲート (§56 v0.12.1)</p>';
-      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s1" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ1ゴール側H付近へ (x=36,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s2" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ2ゴール側H付近へ (x=36,y=1)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s3" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ3ゴール側H付近へ (x=36,y=2)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s4" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ4ゴール側H付近へ (x=36,y=2)</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s5" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ5ゴール側H付近へ (x=36,y=2)</button>';
+      html += '<p class="small" style="color:#ffa94d;margin-top:8px;">🏠 ゴール側G/H (§58 v0.13.1: G@37→H@38)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s1" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ1ゴール直前へ (x=36,y=1) G@37/H@38</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s2" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ2ゴール直前へ (x=36,y=1) G@37/H@38</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s3" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ3ゴール直前へ (x=36,y=2) G@37/H@38</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s4" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ4ゴール直前へ (x=36,y=2) G@37/H@38</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s5" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ5ゴール直前へ (x=36,y=2) G@37/H@38</button>';
       html += '<p class="small" style="color:#e64980;margin-top:8px;">🧪 モーダル直接表示 (§54 v0.11.3.2)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s1" style="border-color:#e64980;color:#e64980;">🧪 ステージ1ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s2" style="border-color:#e64980;color:#e64980;">🧪 ステージ2ゴールモーダル表示</button>';
@@ -5121,7 +5121,7 @@
         closeModal("settings-modal");
         openSideReturnGateModal();
       };
-      // §56 v0.12.1: ゴール側帰還ゲートデバッグ (x=37 に配置、x=36に移動してボス撃退済み)
+      // §58 v0.13.1: ゴール側G/H (G@x=37、H@x=38に変更、x=36に移動してボス撃退済み)
       document.getElementById("btn-debug-goal-gate-s1").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
@@ -5131,7 +5131,7 @@
         state.sideMap.y = 1;
         saveGame();
         renderField();
-        showToast("[DEBUG] ステージ1ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+        showToast("[DEBUG] ステージ1ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
       };
       document.getElementById("btn-debug-goal-gate-s2").onclick = function () {
         closeModal("settings-modal");
@@ -5142,7 +5142,7 @@
         state.sideMap.y = 1;
         saveGame();
         renderField();
-        showToast("[DEBUG] ステージ2ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+        showToast("[DEBUG] ステージ2ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
       };
       document.getElementById("btn-debug-goal-gate-s3").onclick = function () {
         closeModal("settings-modal");
@@ -5153,7 +5153,7 @@
         state.sideMap.y = 2;
         saveGame();
         renderField();
-        showToast("[DEBUG] ステージ3ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+        showToast("[DEBUG] ステージ3ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
       };
       document.getElementById("btn-debug-goal-gate-s4").onclick = function () {
         closeModal("settings-modal");
@@ -5164,7 +5164,7 @@
         state.sideMap.y = 2;
         saveGame();
         renderField();
-        showToast("[DEBUG] ステージ4ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+        showToast("[DEBUG] ステージ4ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
       };
       // §57 v0.13: ステージ5デバッグ
       document.getElementById("btn-debug-side-stage5-enter").onclick = function () {
@@ -5244,7 +5244,7 @@
         state.sideMap.y = 2;
         saveGame();
         renderField();
-        showToast("[DEBUG] ステージ5ゴール側H(x=37)付近へ移動 — ボス撃退済みにした");
+        showToast("[DEBUG] ステージ5ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
       };
       document.getElementById("btn-debug-modal-goal-s5").onclick = function () {
         closeModal("settings-modal");

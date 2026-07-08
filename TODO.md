@@ -14,6 +14,16 @@
 
 ## ✅ 実装済み
 
+### Version 0.13.1 — ゴール側G/H配置変更「ボス→G→H」(§58)
+
+- **SIDE_STAGE_DATA[1] row1** (§58): x=37→G, x=38→H (HG→GH入れ替え) ✅
+- **SIDE_STAGE_DATA[2] row1** (§58): x=37→G, x=38→H ✅
+- **SIDE_STAGE_DATA[3] row2** (§58): x=37→G, x=38→H ✅
+- **SIDE_STAGE_DATA[4] row2** (§58): x=37→G, x=38→H ✅
+- **SIDE_STAGE_DATA[5] row2** (§58): x=37→G, x=38→H ✅
+- **debug=1 ゴール側ボタン** (§58): toastメッセージをG@37/H@38に更新 ✅
+- **index.html ヘルプ** (§58): 帰還ゲート位置説明を更新 ✅
+
 ### Version 0.13 — 横スクロールステージ5「黒い城」(§57)
 
 - **lastboss_gorilla** (§57): NON_UMA_DATAにラスボス級ゴリラ追加 (HP1000/ATK58/DEF22/EXP1400/canCapture:false) ✅
