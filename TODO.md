@@ -14,6 +14,18 @@
 
 ## ✅ 実装済み
 
+### Version 0.15.1 — わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化 (§62)
+
+- **WAZA_DATA** (§62): `hazukashigatame` 表示名を「はずかし固め・小」に変更（まほうとの区別。ID変更なし） ✅
+- **actuallyStartBattle()** (§62): 戦闘開始時に `#waza-menu` も hidden に追加（バグ修正） ✅
+- **openWazaMenu()** (§62): メニュー先頭に説明テキスト追加 ✅
+- **checkUltimateGorillaHpHint(e)** (§62): 究極ゴリラHP1〜10時に「うたう」チャンスを表示するヘルパー追加 ✅
+- **useWaza()** (§62): 残りHP表示ログ追加 + `checkUltimateGorillaHpHint()` 追加 ✅
+- **doFight()** (§62): `checkUltimateGorillaHpHint()` 追加 ✅
+- **デバッグ §62** (§62): 究極ゴリラ HP12/10/1 戦闘開始ボタン3本追加 ✅
+- **getProgressHint priority17 tier3** (§62): 「はずかし固め・小」の名前を明記 ✅
+- **index.html ヘルプ** (§62): わざ技名を「はずかし固め・小」に更新、まほうとの違い注記 ✅
+
 ### Version 0.15 — わざシステム（捕獲支援・低固定ダメージ技）(§61)
 
 - **WAZA_DATA** (§61): 配列新設（はずかし固め/キドクラッチ/カリツォー/グーパンチ。固定1〜4ダメージ） ✅

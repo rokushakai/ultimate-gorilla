@@ -3556,3 +3556,32 @@ HPを1〜10の範囲に収めるのが難しい。
 | HOME_HINTS | わざで HP 調整できる旨のヒント追加 |
 | getProgressHint priority 17 | tier3 にわざ言及追加 |
 | index.html ヘルプ | 「🥊 わざコマンドについて」セクション追加 |
+
+---
+
+## §62 v0.15.1 — わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化
+
+### 概要
+
+v0.15 で追加したわざコマンドのUX改善と捕獲テスト強化。
+
+### 変更内容
+
+| 箇所 | 内容 |
+|---|---|
+| `WAZA_DATA` | `hazukashigatame` の表示名を「はずかし固め」→「**はずかし固め・小**」に変更（内部IDは変更なし。まほうの同名技と区別） |
+| `actuallyStartBattle()` | 戦闘開始時に `#waza-menu` も `hidden` に追加（バグ修正: magic-menu/item-menu と同様の処理を追加） |
+| `openWazaMenu()` | メニュー先頭に説明テキスト「UMAを弱らせるための固定ダメージ技です。削りすぎに注意！」を追加 |
+| `checkUltimateGorillaHpHint(e)` | 新規ヘルパー関数。究極ゴリラのHPが1〜10の時に「うたう」チャンスをログに表示 |
+| `useWaza()` | ダメージログの次行に「残りHP: X / MaxHP」表示追加。`checkUltimateGorillaHpHint()` 呼び出し追加 |
+| `doFight()` | winBattle チェック後に `checkUltimateGorillaHpHint()` 呼び出し追加 |
+| デバッグ §62 | 「🦍 究極ゴリラ捕獲テスト」セクション追加: HP12/10/1 で戦闘開始ボタン3本 |
+| `debugForceUltimateGorillaHP12/10/1()` | HP指定で究極ゴリラ戦闘を直接開始する関数3種追加 |
+| `getProgressHint priority17 tier3` | 「はずかし固め・小」の名前を明記 |
+| index.html ヘルプ | わざ技名を「はずかし固め・小」に更新。まほうの同名技との違いをノートとして追記 |
+
+### 設計メモ
+
+- `hazukashigatame` の内部IDはセーブデータに影響しないため変更なし（`state.player.spells` に格納されるのはSPELL_DATAのIDのみ）。
+- `actuallyStartBattle()` の waza-menu hidden 漏れ: バトル終了後に finishBattle() が battle-screen 全体を hidden にするため視覚的には問題なかったが、次の戦闘開始時に waza-menu が表示状態のまま残るバグがあった。
+- `checkUltimateGorillaHpHint(e)` は doFight / useWaza 双方から呼ぶ共有関数として `doFight()` の直前に配置。

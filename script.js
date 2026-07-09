@@ -512,7 +512,7 @@
   // --- わざデータ（§61 v0.15: 捕獲支援用・低固定ダメージ技）---
   // fixedDmg: 防御無視・固定ダメージ / MPコスト不要
   var WAZA_DATA = [
-    { id: "hazukashigatame", name: "はずかし固め", fixedDmg: 1, emoji: "😳" },
+    { id: "hazukashigatame", name: "はずかし固め・小", fixedDmg: 1, emoji: "😳" },
     { id: "kidoclutch",      name: "キドクラッチ",  fixedDmg: 2, emoji: "🤼" },
     { id: "karitsuo",        name: "カリツォー",    fixedDmg: 3, emoji: "🦵" },
     { id: "gupanchi",        name: "グーパンチ",    fixedDmg: 4, emoji: "✊" }
@@ -2746,6 +2746,7 @@
     document.getElementById("battle-screen").classList.remove("hidden");
     document.getElementById("magic-menu").classList.add("hidden");
     document.getElementById("item-menu").classList.add("hidden");
+    document.getElementById("waza-menu").classList.add("hidden");
     document.getElementById("battle-menu").classList.remove("hidden");
 
     // 戦闘開始直後の誤タップ防止: 全コマンドをロック(§13.7)
@@ -2812,6 +2813,13 @@
   // ---------------------------------------------------------
   // 13. 戦闘コマンド: たたかう / まほう
   // ---------------------------------------------------------
+  function checkUltimateGorillaHpHint(e) {
+    if (!e || e.id !== "ultimategorilla") return;
+    if (e.hp >= 1 && e.hp <= 10) {
+      log("🎵 「うたう」チャンス！ 残りHP" + e.hp + "！ Lv99とウクレレがあれば今すぐ捕獲できる！");
+    }
+  }
+
   function doFight() {
     if (state.locked) return;
     setBattleLocked(true);
@@ -2833,6 +2841,7 @@
       winBattle();
       return;
     }
+    checkUltimateGorillaHpHint(e);
     setTimeout(enemyTurn, 600);
   }
 
@@ -2949,7 +2958,7 @@
   function openWazaMenu() {
     if (state.locked) return;
     var menu = document.getElementById("waza-menu");
-    var html = "";
+    var html = '<p class="small" style="margin:4px 0 6px;color:#aaffcc;">UMAを弱らせるための固定ダメージ技です。削りすぎに注意！</p>';
     WAZA_DATA.forEach(function (w) {
       html += '<button data-waza="' + w.id + '">' +
         w.emoji + " " + w.name + "（" + w.fixedDmg + "ダメージ固定）</button>";
@@ -2979,12 +2988,14 @@
     var dmg = waza.fixedDmg;
     e.hp = Math.max(0, e.hp - dmg);
     log(waza.emoji + " " + waza.name + "！ " + e.name + "に" + dmg + "ダメージ！（固定）");
+    log("（残りHP: " + e.hp + " / " + e.maxHp + "）");
     renderEnemy();
 
     if (e.hp <= 0) {
       winBattle();
       return;
     }
+    checkUltimateGorillaHpHint(e);
     setTimeout(enemyTurn, 600);
   }
 
@@ -4979,6 +4990,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-story-complete" style="border-color:#a8d8ff;color:#a8d8ff;">🏆 横スクロール編制覇状態にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-capture-ready" style="border-color:#a8d8ff;color:#a8d8ff;">🦍 究極ゴリラ捕獲条件セット (Lv99+ウクレレ)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-clear-gameclear" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 究極ゴリラ未捕獲状態に戻す</button>';
+      html += '<p class="small" style="color:#ffb347;margin-top:8px;">🦍 究極ゴリラ捕獲テスト (§62 v0.15.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp12" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP12 で開始（わざ3回で捕獲圏内）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp10" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP10 で開始（捕獲圏内・境界）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp1" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP1 で開始（わざで即死に注意）</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5631,6 +5646,9 @@
         renderStatus();
         showToast("[DEBUG] 究極ゴリラ未捕獲状態に戻した");
       };
+      document.getElementById("btn-debug-gorilla-hp12").onclick = function () { debugForceUltimateGorillaHP12(); };
+      document.getElementById("btn-debug-gorilla-hp10").onclick = function () { debugForceUltimateGorillaHP10(); };
+      document.getElementById("btn-debug-gorilla-hp1").onclick = function () { debugForceUltimateGorillaHP1(); };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
@@ -6438,7 +6456,7 @@
     if (priority === 17) {
       if (tier === 1) return "横に長い冒険は一区切りついた。だが、伝説のUMAはまだ森のどこかにいる。";
       if (tier === 2) return "究極ゴリラは、ただ弱らせるだけでは捕まえられない。特別なアイテムと、特別な行動が必要らしい。";
-      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。HPを1〜10に調整するには戦闘の「🥊 わざ」コマンドが便利だぞ！";
+      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。HPを1〜10に調整するには戦闘の「🥊 わざ」コマンドが便利だぞ！「はずかし固め・小」なら1ダメージだけ与えられる。";
     }
     // §59 v0.14: s6クリア済みだがチンパンジー未撃退 → チンパンジー撃退へ誘導
     if (priority === 9) {
@@ -6783,11 +6801,41 @@
     if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
     closeModal("settings-modal");
     var boss = findById(UMA_DATA, "ultimategorilla");
-    // 発見モーダルをスキップして直接戦闘開始し、同期的にHP5を設定する
+    // 発見モーダルをスキップして直接戦闘開始し、同期的にHPを設定する
     actuallyStartBattle(boss);
     state.enemy.hp = 5;
     renderEnemy();
     showToast("[DEBUG] 究極ゴリラHP5で開始！");
+  }
+
+  function debugForceUltimateGorillaHP12() {
+    if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+    closeModal("settings-modal");
+    var boss = findById(UMA_DATA, "ultimategorilla");
+    actuallyStartBattle(boss);
+    state.enemy.hp = 12;
+    renderEnemy();
+    showToast("[DEBUG] 究極ゴリラHP12で開始！");
+  }
+
+  function debugForceUltimateGorillaHP10() {
+    if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+    closeModal("settings-modal");
+    var boss = findById(UMA_DATA, "ultimategorilla");
+    actuallyStartBattle(boss);
+    state.enemy.hp = 10;
+    renderEnemy();
+    showToast("[DEBUG] 究極ゴリラHP10で開始！");
+  }
+
+  function debugForceUltimateGorillaHP1() {
+    if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+    closeModal("settings-modal");
+    var boss = findById(UMA_DATA, "ultimategorilla");
+    actuallyStartBattle(boss);
+    state.enemy.hp = 1;
+    renderEnemy();
+    showToast("[DEBUG] 究極ゴリラHP1で開始！");
   }
 
   function debugForceWilddog() {

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.15** |
+| 現在バージョン | **v0.15.1** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.15時点）
+## 現在実装済みの主要機能（v0.15.1時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,8 +63,18 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.15.1] わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化**（§62）
+  - **WAZA_DATA**: `hazukashigatame` 表示名を「はずかし固め・小」に変更（まほうの「はずかし固め」と区別。内部ID変更なし）。
+  - **actuallyStartBattle()**: 戦闘開始時に `#waza-menu` も `hidden` に追加するバグ修正。
+  - **openWazaMenu()**: メニュー先頭に「削りすぎに注意！」説明テキスト追加。
+  - **checkUltimateGorillaHpHint(e)**: 究極ゴリラHP1〜10時に「うたう」チャンスをログ表示するヘルパー関数（doFight/useWaza 共用）。
+  - **useWaza()**: 残りHP表示ログ追加 + `checkUltimateGorillaHpHint()` 呼び出し。
+  - **doFight()**: winBattle チェック後に `checkUltimateGorillaHpHint()` 呼び出し追加。
+  - **デバッグ §62**: 究極ゴリラ HP12/10/1 で直接戦闘開始できるボタン3本追加。
+  - **getProgressHint priority17 tier3**: 「はずかし固め・小」の名前を明記。
+  - **index.html ヘルプ**: 技名を「はずかし固め・小」に更新、まほうとの違いを注記。
 - **[v0.15] わざシステム（捕獲支援・低固定ダメージ技）**（§61）
-  - **WAZA_DATA**: はずかし固め(1)/キドクラッチ(2)/カリツォー(3)/グーパンチ(4)。MPなし・防御無視・固定ダメージ。
+  - **WAZA_DATA**: はずかし固め・小(1)/キドクラッチ(2)/カリツォー(3)/グーパンチ(4)。MPなし・防御無視・固定ダメージ。
   - **openWazaMenu() / useWaza(id)**: サブメニュー生成・固定ダメージ付与・敵ターン移行。openMagicMenu と同パターン。
   - **#btn-waza**: `#battle-menu` 最後にフル幅ボタン（grid-column:span 2、緑背景）。
   - **#waza-menu**: サブメニューdiv追加（class="hidden submenu"）。setBattleLocked は `.submenu button` を対象にしているため自動で無効化される。

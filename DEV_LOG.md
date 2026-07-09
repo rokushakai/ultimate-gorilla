@@ -5,6 +5,28 @@
 
 ---
 
+## v0.15.1 (2026-07-10)
+
+### 修正・追加
+
+- **actuallyStartBattle() バグ修正**: 戦闘開始時に magic-menu/item-menu は hidden にしていたが waza-menu が漏れていた。`document.getElementById("waza-menu").classList.add("hidden")` を追加。
+- **WAZA_DATA 表示名変更**: `hazukashigatame` の `name` を「はずかし固め」→「はずかし固め・小」に変更。まほうコマンドの「はずかし固め」（MP3消費・可変6ダメージ）と見た目上区別するため。内部IDは変更なし（セーブデータ互換を維持）。
+- **openWazaMenu() 説明テキスト追加**: メニュー先頭に「UMAを弱らせるための固定ダメージ技です。削りすぎに注意！」を追加。
+- **checkUltimateGorillaHpHint(e) 追加**: doFight() の直前に配置した共有ヘルパー関数。究極ゴリラ(id="ultimategorilla")のHPが1〜10の時に「🎵 「うたう」チャンス！」をログに表示する。doFight / useWaza 双方から呼ぶ。
+- **useWaza() 改善**: ダメージログの次行に「残りHP: X / MaxHP」を追加。winBattle チェック後に `checkUltimateGorillaHpHint()` 追加。
+- **doFight() 改善**: winBattle チェック後に `checkUltimateGorillaHpHint()` 追加。
+- **デバッグ §62**: 究極ゴリラ捕獲テスト用ボタン3本（HP12/10/1で戦闘開始）を `btn-debug-clear-gameclear` の下に追加。`debugForceUltimateGorillaHP12/10/1()` の3関数を `debugForceUltimateGorillaHP5()` の直後に追加。
+- **getProgressHint priority17 tier3**: 「はずかし固め・小」の名前を明記。
+- **index.html ヘルプ**: わざ技名を「はずかし固め・小」に更新。まほうとの違いを `<p class="small">` で注記。
+
+### 設計メモ
+
+- WAZA_DATA の `id` は内部参照のみに使用（`useWaza(id)` / `findById(WAZA_DATA, id)`）。`state.player.spells` に格納されるのは SPELL_DATA の ID のみであるため、同名 ID が SPELL_DATA にあっても相互汚染しない。
+- `checkUltimateGorillaHpHint()` の配置位置: `doFight()` の直前。函数宣言の巻き上げがあるためどこでも呼び出せるが、意味的に隣接する場所にまとめた。
+- `node --check` → exit 0（構文エラーなし）。
+
+---
+
 ## v0.15 (2026-07-10)
 
 ### 追加

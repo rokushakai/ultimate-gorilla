@@ -5,6 +5,24 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.15.1] - 2026-07-10 — わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化 (§62)
+
+### Fixed
+- **actuallyStartBattle()** (§62): 戦闘開始時に `#waza-menu` を `hidden` にするよう修正（magic-menu/item-menu は対象だったが waza-menu が漏れていた）
+
+### Changed
+- **WAZA_DATA** (§62): `hazukashigatame` 表示名を「はずかし固め」→「**はずかし固め・小**」に変更（まほうの「はずかし固め」と区別。内部IDは変更なし）
+- **getProgressHint priority17 tier3** (§62): 「はずかし固め・小」の名前を明記
+- **index.html ヘルプ** (§62): わざ技名を「はずかし固め・小」に更新。まほうとの違いを注記追加
+
+### Added
+- **openWazaMenu()** (§62): メニュー先頭に説明テキスト「UMAを弱らせるための固定ダメージ技です。削りすぎに注意！」追加
+- **checkUltimateGorillaHpHint(e)** (§62): 究極ゴリラHP1〜10時に「うたう」チャンスをログ表示するヘルパー関数追加
+- **useWaza()** (§62): 残りHP表示ログ追加（「残りHP: X / MaxHP」）、`checkUltimateGorillaHpHint()` 呼び出し追加
+- **doFight()** (§62): `checkUltimateGorillaHpHint()` 呼び出し追加（winBattle チェック後）
+- **デバッグ §62**: 「🦍 究極ゴリラ捕獲テスト」セクション追加。HP12/10/1 で直接戦闘開始できるボタン3本追加
+- **debugForceUltimateGorillaHP12/10/1()** (§62): HP指定で究極ゴリラ戦闘開始する関数3種追加
+
 ## [0.15] - 2026-07-10 — わざシステム（捕獲支援・低固定ダメージ技）(§61)
 
 ### Added
