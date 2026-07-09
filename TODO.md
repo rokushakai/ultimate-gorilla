@@ -14,6 +14,27 @@
 
 ## ✅ 実装済み
 
+### Version 0.14 — 横スクロールステージ6「チンパンジーの聖域」(§59)
+
+- **ultimate_chimpanzee** (§59): NON_UMA_DATAに究極チンパンジー追加 (HP1500/ATK72/DEF32/EXP3000/canCapture:false) ✅
+- **SIDE_STAGE_DATA[6]** (§59): 40×5マップ追加 (チンパンジーの聖域) ✅
+- **SIDE_FIXED_ENCOUNTERS stage6** (§59): 異邦人(6:13,2)/さまようおやじ(6:27,1)/デスマッチ(6:23,3) 追加 ✅
+- **stage6RewardLevel** (§59): 状態・saveGame・loadGame に追加 ✅
+- **moveSidePlayer 'b' tile** (§59): ステージ6 → ultimate_chimpanzee 分岐追加 ✅
+- **openSideGoalModal** (§59): ステージ6ルーティング追加 ✅
+- **openSideNpcModal** (§59): ステージ6ルーティング追加 ✅
+- **openStage5GoalModal** (§59): 「🌿 チンパンジーの聖域へ進む」ボタン追加、予告テキスト削除 ✅
+- **openStage6GoalModal** (§59): ステージ6ゴール演出関数追加（JS生成ボタン方式）✅
+- **openStage6NpcModal** (§59): ステージ6NPC会話関数追加（聖域の守護者/迷い込んだ修行者）✅
+- **openSideChest** (§59): ステージ6高報酬テーブル追加（80〜180G/ラーメン/お弁当/デオドラント）✅
+- **renderStatusBody** (§59): チンパンジーの聖域・究極チンパンジー進捗行追加 + 称号追加 ✅
+- **getHintPriority** (§59): s6Cleared→9(全6ステージ)、s5Cleared→16(ステージ6ガイド)に更新 ✅
+- **getProgressHint** (§59): priority=16追加、priority=9を6ステージ版に更新 ✅
+- **openSideGateModal** (§59): 説明文を「6ステージ」に更新 ✅
+- **debug=1 HTMLボタン** (§59): ステージ6デバッグボタン追加 ✅
+- **debug=1 ハンドラ** (§59): ステージ6デバッグハンドラ追加 ✅
+- **index.html ヘルプ** (§59): ステージ6セクション追加 ✅
+
 ### Version 0.13.1 — ゴール側G/H配置変更「ボス→G→H」(§58)
 
 - **SIDE_STAGE_DATA[1] row1** (§58): x=37→G, x=38→H (HG→GH入れ替え) ✅

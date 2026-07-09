@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.13.1** |
+| 現在バージョン | **v0.14** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,18 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.14] 横スクロールステージ6「チンパンジーの聖域」実装**（§59）
+  - **究極チンパンジー**: HP1500/ATK72/DEF32/EXP3000、canCapture:false。位置: 中央路 x=34(キー: "6:34,2")。
+  - **SIDE_STAGE_DATA[6]「チンパンジーの聖域」(40×5)**: 木立5路構成。宝箱4個、固定敵3体、NPC2人、究極チンパンジー。
+  - **ステージ5ゴールモーダル**: 予告テキスト削除→「🌿 チンパンジーの聖域へ進む」ボタン追加。
+  - **openStage6GoalModal()**: 撃退800G+ラーメン / 未撃退300G / 差分500G+ラーメン。
+  - **openStage6NpcModal()**: 聖域の守護者(y=2) / 迷い込んだ修行者(y=1)。撃退前後セリフ分岐。
+  - **renderStatusBody()**: stage6進捗2行 + 称号「聖域を越えし者」「チンパンジーの聖域の覇者」追加。
+  - **getHintPriority()/getProgressHint()**: priority16新設(s5クリア・s6未クリア)、priority9を6ステージ版に更新。
+  - **saveGame/loadGame**: `sideMapStage6Reward` 追加。
+  - **openSideGateModal**: 「5ステージ」→「6ステージ」に更新。
+  - **デバッグ**: stage6-enter/near-goal/clear-reset/set-ultimatechimgori/強制ENC/items-reset/return-H/goal-H/ゴールモーダル表示追加。
+  - **index.html ヘルプ**: 「🌿 ステージ6「チンパンジーの聖域」」セクション追加。
 - **[v0.13] 横スクロールステージ5「黒い城」実装**（§57）
   - **ラスボス級ゴリラ**: HP1000/ATK58/DEF22/EXP1400、canCapture:false。位置: 中央路 x=33(キー: "5:33,2")。
   - **SIDE_STAGE_DATA[5]「黒い城」(40×5)**: 城壁5路構成。宝箱5個、固定敵3体、NPC2人、ラスボス級ゴリラ。

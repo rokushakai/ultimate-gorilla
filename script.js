@@ -218,6 +218,28 @@
     goalX: 38
   };
 
+  // §59 v0.14: ステージ6「チンパンジーの聖域」マップ (40×5)
+  // row0(y=0) 高路:  宝箱2個(c@x=8, c@x=29)。##木立あり。
+  // row1(y=1) 上中:  迷い込んだ修行者NPC(p, x=11)。固定敵(e, x=27)。##@x=15-16, ##@x=23-24。
+  // row2(y=2) 中央:  x=2帰還ゲート(H), 聖域の守護者NPC(n, x=5), ##@x=8-9,
+  //                   固定敵(e, x=13), 商人(m, x=21), ##@x=27-28,
+  //                   究極チンパンジー(b, x=34), ゴール(G, x=37), ゴール側帰還ゲート(H, x=38)
+  // row3(y=3) 下中:  宝箱(c, x=16), 固定敵(e, x=23)。##@x=6-7, ##@x=26-27
+  // row4(y=4) 下路:  宝箱(c, x=4)。水路(~)@x=0-3, x=36-39。##@x=8-9, ##@x=23-24
+  SIDE_STAGE_DATA[6] = {
+    name: "チンパンジーの聖域",
+    rows: [
+      "ffff##ffcff##ffffffff##ffffffcff##ffffff",
+      "gggggggggggpggg##gggggg##ggeggggggggggfg",
+      "ggHggngg##gggegggggggmggggg##gggggbggGHg",
+      "~~gggg##ggggggggcggggggegg##ggggggggggg~",
+      "~~~~cggg##ggggggggggggg##ggggggggggg~~~~"
+    ],
+    startX: 1,
+    startY: 2,
+    goalX: 38
+  };
+
   // §49 v0.10.1: ステージ別固定敵マップ (タイル'e'に接触した時に出す敵ID)
   // キーは getSideKey() 形式 (stage1は "x,y", stage2は "2:x,y")
   var SIDE_FIXED_ENCOUNTERS = {
@@ -237,7 +259,11 @@
     // §57 v0.13: ステージ5固定敵
     "5:14,2": "alien",                   // stage5 中央路 x=14,y=2: 宇宙人
     "5:27,1": "visitor",                 // stage5 上中路 x=27,y=1: 来訪者
-    "5:23,3": "stranger"                 // stage5 下中路 x=23,y=3: 異邦人
+    "5:23,3": "stranger",                // stage5 下中路 x=23,y=3: 異邦人
+    // §59 v0.14: ステージ6固定敵
+    "6:13,2": "stranger",               // stage6 中央路 x=13,y=2: 異邦人
+    "6:27,1": "wanderingman",           // stage6 上中路 x=27,y=1: さまようおやじ
+    "6:23,3": "deathmatch"              // stage6 下中路 x=23,y=3: デスマッチレスラー
   };
 
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
@@ -361,6 +387,11 @@
       canCapture: false,
       startMsg: "黒い城の奥から、重すぎる気配が迫ってくる……\nラスボス級ゴリラが道をふさいだ！",
       customEscapeMsgs: ["ラスボス級ゴリラは黒い城の奥へ逃げていった！！", "城の闇が、少しだけ薄れた。"] },
+    // §59 v0.14: 究極チンパンジー (横スクロールステージ6固定ボス)
+    { id: "ultimate_chimpanzee", name: "究極チンパンジー", emoji: "🦍", type: "boss", isUMA: false, minLevel: 1, weight: 0, hp: 1500, attack: 72, def: 32, captureRate: 0, exp: 3000, fleeRate: 0.05,
+      canCapture: false,
+      startMsg: "チンパンジーの聖域の奥深くから、神々しい雄叫びが響き渡った……\n究極チンパンジーが降り立った！",
+      customEscapeMsgs: ["究極チンパンジーは深い霧の中へ消えていった！！", "聖域の静寂が、また戻ってきた。"] },
     // メタル系: 経験値稼ぎ用のボーナス敵。高防御・低HP・低確率出現(METAL_ENCOUNTER_CHANCE)。
     // v0.6.1でEXPを大幅増量(稼ぎ甲斐を出すため)
     { id: "metalgorilla", name: "メタルゴリラ", emoji: "🥈", type: "metal", isUMA: false, minLevel: 1, weight: 10, hp: 8, attack: 3, def: 25, captureRate: 0.05, exp: 120,
@@ -697,6 +728,7 @@
       stage3RewardLevel: 0,  // §50 v0.11: ステージ3報酬受取レベル (0=未, 1=80G, 2=全取得)
       stage4RewardLevel: 0,  // §55 v0.12: ステージ4報酬受取レベル (0=未, 1=120G, 2=全取得)
       stage5RewardLevel: 0,  // §57 v0.13: ステージ5報酬受取レベル (0=未, 1=200G, 2=全取得)
+      stage6RewardLevel: 0,  // §59 v0.14: ステージ6報酬受取レベル (0=未, 1=300G, 2=全取得)
       gateExplained: false   // §52 v0.11.2: ゲートから初めて横スクロールへ入ったか
     }
   };
@@ -1052,7 +1084,9 @@
       if (sm.defeatedEnemies[key]) { return; }
       sideMapPendingFixedKey = key;
       state.stepsSinceEncounter = 0;
-      if (sm.stage === 5) {
+      if (sm.stage === 6) {
+        triggerFixedEncounter("ultimate_chimpanzee");  // §59 v0.14
+      } else if (sm.stage === 5) {
         triggerFixedEncounter("lastboss_gorilla");  // §57 v0.13
       } else if (sm.stage === 4) {
         triggerFixedEncounter("daimaou_gorilla");  // §55 v0.12
@@ -1082,7 +1116,22 @@
     // §44 v0.9.1: バリエーション報酬 / §55 v0.12: ステージ4専用高報酬テーブル
     var roll = Math.random();
     var msg;
-    if (sm.stage === 5) {
+    if (sm.stage === 6) {
+      if (roll < 0.4) {
+        var gold6 = (8 + Math.floor(Math.random() * 11)) * 10;
+        state.player.gold += gold6;
+        msg = "宝箱を開けた！ 💰 " + gold6 + "G 手に入れた！";
+      } else if (roll < 0.6) {
+        state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+        msg = "宝箱を開けた！ 🍜 ラーメン を手に入れた！";
+      } else if (roll < 0.8) {
+        state.player.bentoCount = (state.player.bentoCount || 0) + 1;
+        msg = "宝箱を開けた！ 🍱 お弁当 を手に入れた！";
+      } else {
+        state.player.deodorantCount = (state.player.deodorantCount || 0) + 1;
+        msg = "宝箱を開けた！ 🧴 デオドラントスプレー を手に入れた！";
+      }
+    } else if (sm.stage === 5) {
       if (roll < 0.4) {
         var gold5 = (6 + Math.floor(Math.random() * 8)) * 10;
         state.player.gold += gold5;
@@ -1135,7 +1184,10 @@
     // §44 v0.9.1: npcType = "n"(案内人) | "p"(旅人)
     // §46 v0.9.2.1: 中ボス撃退でセリフ分岐
     // §47 v0.9.3: stage1Cleared × midbossDefeated の4パターン分岐
-    // §48 v0.10: ステージ2専用NPC / §50 v0.11: ステージ3専用NPC / §55 v0.12: ステージ4専用NPC / §57 v0.13: ステージ5専用NPC
+    // §48 v0.10: ステージ2専用NPC / §50 v0.11: ステージ3専用NPC / §55 v0.12: ステージ4専用NPC / §57 v0.13: ステージ5専用NPC / §59 v0.14: ステージ6専用NPC
+    if (state.sideMap && state.sideMap.stage === 6) {
+      openStage6NpcModal(state.sideMap.x, state.sideMap.y); return;
+    }
     if (state.sideMap && state.sideMap.stage === 5) {
       openStage5NpcModal(state.sideMap.x, state.sideMap.y);
       return;
@@ -1329,6 +1381,11 @@
   }
 
   function openSideGoalModal() {
+    // §59 v0.14: ステージ6はopenStage6GoalModalへルーティング
+    if (state.sideMap.stage === 6) {
+      openStage6GoalModal();
+      return;
+    }
     // §57 v0.13: ステージ5はopenStage5GoalModalへルーティング
     if (state.sideMap.stage === 5) {
       openStage5GoalModal();
@@ -1897,9 +1954,23 @@
     } else {
       html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
     }
-    html += '<p style="color:#888;font-size:0.78em;margin:10px 0 4px;">（この先に「チンパンジーの聖域」があるという噂があるが……）</p>';
     var goalBodyEl5 = document.getElementById("modal-side-goal-body");
     goalBodyEl5.innerHTML = html;
+
+    // §59 v0.14: 「🌿 チンパンジーの聖域へ進む」ボタン追加
+    var sanctuaryBtn = document.createElement("button");
+    sanctuaryBtn.className = "modal-btn";
+    sanctuaryBtn.style.marginBottom = "8px";
+    sanctuaryBtn.textContent = "🌿 チンパンジーの聖域へ進む";
+    sanctuaryBtn.onclick = function () {
+      closeModal("modal-side-goal");
+      state.sideMap.stage = 6;
+      var s6 = SIDE_STAGE_DATA[6];
+      state.sideMap.x = s6.startX;
+      state.sideMap.y = s6.startY;
+      saveGame(); renderField(); showToast("🌿 チンパンジーの聖域へ入った！");
+    };
+    goalBodyEl5.appendChild(sanctuaryBtn);
 
     var retBtn5 = document.createElement("button");
     retBtn5.className = "modal-btn";
@@ -1964,6 +2035,141 @@
     openModal("npc-modal");
   }
 
+  // §59 v0.14: ステージ6「チンパンジーの聖域」ゴール演出
+  function openStage6GoalModal() {
+    var sm = state.sideMap;
+    var ultimateChimpKey = "6:34,2";
+    var ultimateChimpDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies[ultimateChimpKey]);
+    var rewardLevel = sm.stage6RewardLevel || 0;
+    sm.stageCleared["6"] = true;
+
+    var headerText, bodyLines, rewardLine, newRewardLevel;
+    newRewardLevel = rewardLevel;
+
+    if (rewardLevel === 0) {
+      if (ultimateChimpDefeated) {
+        newRewardLevel = 2;
+        state.player.gold += 800;
+        state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+        headerText = "チンパンジーの聖域を制覇した！";
+        bodyLines = [
+          "究極チンパンジーを退かせ、聖域の出口へたどり着いた。",
+          "聖域に、静かな朝の光が差し込んできた。"
+        ];
+        rewardLine = "💰 報酬：800G ＋ 🍜 ラーメン ×1";
+      } else {
+        newRewardLevel = 1;
+        state.player.gold += 300;
+        headerText = "チンパンジーの聖域を抜けた！";
+        bodyLines = [
+          "神秘的な聖域を、どうにかくぐり抜けた。",
+          "究極チンパンジーはまだ聖域の奥深くに棲んでいるかもしれない。"
+        ];
+        rewardLine = "💰 報酬：300G";
+      }
+    } else if (rewardLevel === 1 && ultimateChimpDefeated) {
+      newRewardLevel = 2;
+      state.player.gold += 500;
+      state.player.ramenCount = (state.player.ramenCount || 0) + 1;
+      headerText = "聖域の真の征服者よ！";
+      bodyLines = [
+        "究極チンパンジーも退かせたか！",
+        "聖域の覇者として認められた。追加の報酬を受け取れ。"
+      ];
+      rewardLine = "💰 追加報酬：500G ＋ 🍜 ラーメン ×1";
+    } else {
+      headerText = "チンパンジーの聖域";
+      if (ultimateChimpDefeated) {
+        bodyLines = [
+          "聖域は静まり返っている。",
+          "究極チンパンジーの影も見えない。"
+        ];
+      } else {
+        bodyLines = [
+          "究極チンパンジーはまだ聖域の奥に棲んでいる。",
+          "退かせてから再びゴールを目指すと、さらなる報酬があるぞ。"
+        ];
+      }
+      rewardLine = null;
+    }
+
+    sm.stage6RewardLevel = newRewardLevel;
+    renderStatus();
+    saveGame();
+
+    var html = '<p style="font-size:1.8em;margin:0 0 6px;">🏁</p>';
+    html += '<p style="font-weight:bold;font-size:1.1em;margin-bottom:8px;">' + headerText + '</p>';
+    for (var i = 0; i < bodyLines.length; i++) {
+      html += '<p style="font-size:0.88em;color:#d0e0ff;margin:2px 0;">' + bodyLines[i] + '</p>';
+    }
+    if (rewardLine) {
+      html += '<p style="color:#ffd166;font-weight:bold;margin:10px 0 4px;">' + rewardLine + '</p>';
+    } else {
+      html += '<p style="color:#a8d8a8;font-size:0.82em;margin:8px 0;">(報酬は受け取り済み)</p>';
+    }
+    var goalBodyEl6 = document.getElementById("modal-side-goal-body");
+    goalBodyEl6.innerHTML = html;
+
+    var retBtn6 = document.createElement("button");
+    retBtn6.className = "modal-btn";
+    retBtn6.style.marginBottom = "8px";
+    retBtn6.textContent = "🏠 通常マップへ戻る";
+    retBtn6.onclick = function () { returnToNormalMapFromSide(); };
+    goalBodyEl6.appendChild(retBtn6);
+    var stayBtn6 = document.createElement("button");
+    stayBtn6.className = "modal-btn";
+    stayBtn6.textContent = "↩ このチンパンジーの聖域に残る";
+    stayBtn6.onclick = function () { closeModal("modal-side-goal"); };
+    goalBodyEl6.appendChild(stayBtn6);
+    openModal("modal-side-goal");
+  }
+
+  // §59 v0.14: ステージ6「チンパンジーの聖域」NPC会話
+  function openStage6NpcModal(nx, ny) {
+    var sm = state.sideMap;
+    var ultimateChimpDefeated = !!(sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+    var icon = "🧑";
+    var name, lines;
+    if (ny === 2) {
+      name = "聖域の守護者";
+      if (ultimateChimpDefeated) {
+        lines = [
+          "究極チンパンジーが……あなたによって退かされたとは。",
+          "聖域に、清らかな静寂が戻った。感謝する。"
+        ];
+      } else {
+        lines = [
+          "ここはチンパンジーの聖域。人間が踏み入れていい場所ではない。",
+          "聖域の奥には究極チンパンジーが棲んでいる。我々は近づくことすら叶わない。",
+          "上の道や下の道には宝箱が眠っているらしい。急がずに探してみるのも良いかもしれない。",
+          "スタート付近の🏠帰還ゲートからいつでも戻れるぞ。"
+        ];
+      }
+    } else {
+      name = "迷い込んだ修行者";
+      if (ultimateChimpDefeated) {
+        lines = [
+          "究極チンパンジーが倒された？！あなたはただ者じゃないな。",
+          "修行を続ける気になれた。ありがとう！"
+        ];
+      } else {
+        lines = [
+          "修行のためにここに来たのに……こんな恐ろしい場所だとは知らなかった。",
+          "聖域の奥から、時々すごい気配がする。絶対に近づきたくないよ……"
+        ];
+      }
+    }
+    document.getElementById("npc-header").innerHTML =
+      '<div style="font-size:40px;line-height:1.2;">' + icon + '</div>' +
+      '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">' + name + '</div>';
+    var speechHtml = "";
+    for (var j = 0; j < lines.length; j++) {
+      speechHtml += "<p>「" + lines[j] + "」</p>";
+    }
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    openModal("npc-modal");
+  }
+
   function switchToSideMap() {
     state.mapMode = "side";
     var stageData = SIDE_STAGE_DATA[state.sideMap.stage] || SIDE_STAGE_DATA[1];
@@ -2012,7 +2218,7 @@
         "<div style=\"font-size:40px;line-height:1.2;\">🌀</div>" +
         "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">横スクロールマップへの入口</div>" +
         "<p>ここは「はじまりの草原」へ続く不思議な渦だ。</p>" +
-        "<p>横スクロールマップでは草原・森・町はずれ・山道・黒い城の5ステージを冒険できる。各ステージをクリアすると報酬がもらえるぞ。</p>" +
+        "<p>横スクロールマップでは草原・森・町はずれ・山道・黒い城・チンパンジーの聖域の6ステージを冒険できる。各ステージをクリアすると報酬がもらえるぞ。</p>" +
         "<p>通常マップへ戻る時はゴール地点の「🏠 通常マップへ戻る」を使おう。</p>";
     } else {
       bodyEl.innerHTML =
@@ -3610,8 +3816,20 @@
     html += '<div class="shop-row"><span>ラスボス級ゴリラ</span><span style="color:' +
       (s5BossDefeated ? "#06d6a0" : "#888") + ';">' +
       (s5BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    var s6Cleared = !!(sm && sm.stageCleared && sm.stageCleared["6"]);
+    var s6BossDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+    html += '<div class="shop-row"><span>チンパンジーの聖域</span><span style="color:' +
+      (s6Cleared ? "#06d6a0" : "#888") + ';">' +
+      (s6Cleared ? "✅ クリア済み" : "未クリア") + "</span></div>";
+    html += '<div class="shop-row"><span>究極チンパンジー</span><span style="color:' +
+      (s6BossDefeated ? "#06d6a0" : "#888") + ';">' +
+      (s6BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
     var sideTitle = null;
-    if (s5Cleared && s5BossDefeated) {
+    if (s6Cleared && s6BossDefeated) {
+      sideTitle = "チンパンジーの聖域の覇者";
+    } else if (s6Cleared) {
+      sideTitle = "聖域を越えし者";
+    } else if (s5Cleared && s5BossDefeated) {
       sideTitle = "黒い城の覇者";
     } else if (s5Cleared) {
       sideTitle = "黒い城を越えし者";
@@ -4645,6 +4863,13 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-lastbossgori" style="border-color:#c77dff;color:#c77dff;">✅ ラスボス級ゴリラ撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-lastboss-gorilla-encounter" style="border-color:#c77dff;color:#c77dff;">🦍 ラスボス級ゴリラ強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-stage5-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🏰 ステージ5宝箱・固定敵リセット</button>';
+      html += '<p class="small" style="color:#98d8c8;margin-top:8px;">🌿 ステージ6「チンパンジーの聖域」(§59 v0.14)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage6-enter" style="border-color:#98d8c8;color:#98d8c8;">🌿 チンパンジーの聖域へ移動 (stage=6)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage6-near-goal" style="border-color:#98d8c8;color:#98d8c8;">🏃 聖域ゴール直前へ (x=33,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage6-clear-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ステージ6フラグリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-set-ultimatechimgori" style="border-color:#98d8c8;color:#98d8c8;">✅ 究極チンパンジー撃退済みにする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-ultimate-chimp-encounter" style="border-color:#98d8c8;color:#98d8c8;">🦍 究極チンパンジー強制エンカウント</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-stage6-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🌿 ステージ6宝箱・固定敵リセット</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -4658,6 +4883,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s3" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ3スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s4" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ4スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s5" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ5スタート側Hへ移動 (x=2,y=2)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-return-gate-s6" style="border-color:#f4a261;color:#f4a261;">🏠 ステージ6スタート側Hへ移動 (x=2,y=2)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-force-normal-map" style="border-color:#f4a261;color:#f4a261;">🏠 通常マップへ強制帰還</button>';
       html += '<p class="small" style="color:#ffa94d;margin-top:8px;">🏠 ゴール側G/H (§58 v0.13.1: G@37→H@38)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s1" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ1ゴール直前へ (x=36,y=1) G@37/H@38</button>';
@@ -4665,12 +4891,14 @@
       html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s3" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ3ゴール直前へ (x=36,y=2) G@37/H@38</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s4" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ4ゴール直前へ (x=36,y=2) G@37/H@38</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s5" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ5ゴール直前へ (x=36,y=2) G@37/H@38</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-goal-gate-s6" style="border-color:#ffa94d;color:#ffa94d;">🏠 ステージ6ゴール直前へ (x=36,y=2) G@37/H@38</button>';
       html += '<p class="small" style="color:#e64980;margin-top:8px;">🧪 モーダル直接表示 (§54 v0.11.3.2)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s1" style="border-color:#e64980;color:#e64980;">🧪 ステージ1ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s2" style="border-color:#e64980;color:#e64980;">🧪 ステージ2ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s3" style="border-color:#e64980;color:#e64980;">🧪 ステージ3ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s4" style="border-color:#e64980;color:#e64980;">🧪 ステージ4ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s5" style="border-color:#e64980;color:#e64980;">🧪 ステージ5ゴールモーダル表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s6" style="border-color:#e64980;color:#e64980;">🧪 ステージ6ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-return-gate" style="border-color:#e64980;color:#e64980;">🧪 帰還ゲートモーダル表示</button>';
     }
     body.innerHTML = html;
@@ -5251,6 +5479,91 @@
         state.sideMap.stage = 5;
         openSideGoalModal();
       };
+      document.getElementById("btn-debug-modal-goal-s6").onclick = function () {
+        closeModal("settings-modal");
+        state.sideMap.stage = 6;
+        openSideGoalModal();
+      };
+      document.getElementById("btn-debug-return-gate-s6").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 6;
+        state.sideMap.x = 2;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("🏠 ステージ6スタート側Hゲート(2,2)へ移動した");
+      };
+      document.getElementById("btn-debug-goal-gate-s6").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 6;
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        state.sideMap.x = 36;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ6ゴール直前(x=36)へ移動 — G@37/H@38、ボス撃退済みにした");
+      };
+      document.getElementById("btn-debug-side-stage6-enter").onclick = function () {
+        state.mapMode = "side";
+        state.sideMap.stage = 6;
+        var s6 = SIDE_STAGE_DATA[6];
+        state.sideMap.x = s6.startX;
+        state.sideMap.y = s6.startY;
+        saveGame();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] ステージ6チンパンジーの聖域へ移動");
+      };
+      document.getElementById("btn-debug-side-stage6-near-goal").onclick = function () {
+        closeModal("settings-modal");
+        state.mapMode = "side";
+        state.sideMap.stage = 6;
+        state.sideMap.x = 33;
+        state.sideMap.y = 2;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ6ゴール直前(x=33,y=2)へ移動");
+      };
+      document.getElementById("btn-debug-side-stage6-clear-reset").onclick = function () {
+        var sm6 = state.sideMap;
+        delete sm6.stageCleared["6"];
+        delete sm6.defeatedEnemies["6:34,2"];
+        sm6.stage6RewardLevel = 0;
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ6フラグをリセット");
+      };
+      document.getElementById("btn-debug-side-set-ultimatechimgori").onclick = function () {
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        saveGame();
+        renderField();
+        showToast("[DEBUG] 究極チンパンジー撃退済みにした (6:34,2)");
+      };
+      document.getElementById("btn-debug-ultimate-chimp-encounter").onclick = function () {
+        closeModal("settings-modal");
+        triggerFixedEncounter("ultimate_chimpanzee");
+        showToast("[DEBUG] 究極チンパンジー強制エンカウント");
+      };
+      document.getElementById("btn-debug-side-stage6-items-reset").onclick = function () {
+        var sm6r = state.sideMap;
+        var cToDelete6 = [];
+        for (var ck6 in sm6r.openedChests) {
+          if (sm6r.openedChests.hasOwnProperty(ck6) && ck6.indexOf("6:") === 0) cToDelete6.push(ck6);
+        }
+        for (var ci6 = 0; ci6 < cToDelete6.length; ci6++) delete sm6r.openedChests[cToDelete6[ci6]];
+        var eToDelete6 = [];
+        for (var ek6 in sm6r.defeatedEnemies) {
+          if (sm6r.defeatedEnemies.hasOwnProperty(ek6) && ek6.indexOf("6:") === 0) eToDelete6.push(ek6);
+        }
+        for (var ei6 = 0; ei6 < eToDelete6.length; ei6++) delete sm6r.defeatedEnemies[eToDelete6[ei6]];
+        sideMapPendingFixedKey = "";
+        saveGame();
+        renderField();
+        showToast("[DEBUG] ステージ6宝箱・固定敵をリセット");
+      };
     }
   }
 
@@ -5306,6 +5619,7 @@
         sideMapStage3Reward: state.sideMap.stage3RewardLevel || 0,  // §50 v0.11
         sideMapStage4Reward: state.sideMap.stage4RewardLevel || 0,  // §55 v0.12
         sideMapStage5Reward: state.sideMap.stage5RewardLevel || 0,  // §57 v0.13
+        sideMapStage6Reward: state.sideMap.stage6RewardLevel || 0,  // §59 v0.14
         sideMapGateExplained: !!state.sideMap.gateExplained         // §52 v0.11.2
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -5378,6 +5692,7 @@
       state.sideMap.stage3RewardLevel = data.sideMapStage3Reward || 0;  // §50 v0.11
       state.sideMap.stage4RewardLevel = data.sideMapStage4Reward || 0;  // §55 v0.12
       state.sideMap.stage5RewardLevel = data.sideMapStage5Reward || 0;  // §57 v0.13
+      state.sideMap.stage6RewardLevel = data.sideMapStage6Reward || 0;  // §59 v0.14
       state.sideMap.gateExplained = !!data.sideMapGateExplained;        // §52 v0.11.2
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
@@ -5936,9 +6251,11 @@
     var s3Cleared = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
     var s4Cleared = !!(sm && sm.stageCleared && sm.stageCleared["4"]);
     var s5Cleared = !!(sm && sm.stageCleared && sm.stageCleared["5"]);
+    var s6Cleared = !!(sm && sm.stageCleared && sm.stageCleared["6"]);
     if (state.gameCleared) return 0;
-    // §57 v0.13: 横スクロールステージ進捗ヒント (s5追加)
-    if (s5Cleared) return 9;        // 全5ステージクリア済み
+    // §59 v0.14: 横スクロールステージ進捗ヒント (s6追加)
+    if (s6Cleared) return 9;        // 全6ステージクリア済み
+    if (s5Cleared) return 16;       // s5クリア・s6未クリア → ステージ6ガイド
     if (s4Cleared) return 15;       // s4クリア・s5未クリア → ステージ5ガイド
     if (s3Cleared) return 14;       // s3クリア・s4未クリア → ステージ4ガイド
     if (s2Cleared) return 12;       // s2クリア・s3未クリア → ステージ3ガイド
@@ -5968,11 +6285,22 @@
     // §55 v0.12: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
     if (priority === 9) {
       var h9 = [
-        "5つの横スクロールステージをすべて制覇した。今は通常マップで究極ゴリラを目指そう。",
-        "草原、森、町はずれ、山道、黒い城をすべて越えた。究極ゴリラ捕獲（Lv99＋ウクレレ＋うたう）が最終目標だ。",
-        "ステージ1〜5をすべて制覇済み。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
+        "6つの横スクロールステージをすべて制覇した。今は通常マップで究極ゴリラを目指そう。",
+        "草原、森、町はずれ、山道、黒い城、チンパンジーの聖域をすべて越えた。究極ゴリラ捕獲（Lv99＋ウクレレ＋うたう）が最終目標だ。",
+        "ステージ1〜6をすべて制覇済み。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
       ];
       return h9[tier - 1] || h9[0];
+    }
+    // §59 v0.14: s5クリア・s6未クリア → ステージ6ガイド
+    if (priority === 16) {
+      var ultimateChimpDefeated16 = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+      if (tier === 1) return "チンパンジーの聖域では、木立に阻まれる場面が多い。上下の道を使いこなすことが重要だ。";
+      if (tier === 2) {
+        if (!ultimateChimpDefeated16) return "聖域の奥には究極チンパンジーがいる。ラスボス級ゴリラより格段に手強い。回復アイテムを万全にしてから挑もう。";
+        return "究極チンパンジーを退かせた！ゴールへの道は開けているぞ。ゴール(G@x=37)で大きな報酬が待っている。";
+      }
+      if (!ultimateChimpDefeated16) return "究極チンパンジーはゴール手前x=34にいる。撃退してからゴールすると800G+ラーメンの報酬が手に入る。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
+      return "究極チンパンジー撃退済み！ゴール(G@x=37)へ進もう。高路や下中路には宝箱も4個ある。";
     }
     // §57 v0.13: s4クリア・s5未クリア → ステージ5ガイド
     if (priority === 15) {

@@ -5,6 +5,30 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.14] - 2026-07-09 — 横スクロールステージ6「チンパンジーの聖域」(§59)
+
+### Added
+- **ultimate_chimpanzee** (§59): NON_UMA_DATA に究極チンパンジー追加 (HP1500/ATK72/DEF32/EXP3000/canCapture:false)
+- **SIDE_STAGE_DATA[6]** (§59): ステージ6「チンパンジーの聖域」40×5マップ追加 (startX=1, startY=2, goalX=38)
+  - row2中央: H@x=2(帰還), n@x=5(守護者), e@x=13(固定敵), m@x=21(商人), b@x=34(究極チンパンジー), G@x=37, H@x=38
+  - 宝箱4個(row0:x=8/x=29, row3:x=16, row4:x=4), 固定敵3体, NPC2人
+- **SIDE_FIXED_ENCOUNTERS stage6** (§59): 異邦人(6:13,2)・さまようおやじ(6:27,1)・デスマッチレスラー(6:23,3) 追加
+- **stage6RewardLevel** (§59): 状態初期化・saveGame・loadGame に追加
+- **moveSidePlayer 'b' tile** (§59): ステージ6 → ultimate_chimpanzee 分岐追加
+- **openSideGoalModal** (§59): ステージ6ルーティング追加
+- **openSideNpcModal** (§59): ステージ6ルーティング追加
+- **openSideChest** (§59): ステージ6専用報酬テーブル追加 (80-180G / ラーメン / お弁当 / デオドラント)
+- **openStage5GoalModal** (§59): 予告テキスト削除、「🌿 チンパンジーの聖域へ進む」ボタン追加
+- **openStage6GoalModal()** (§59): ステージ6ゴール演出関数追加（JS生成ボタン方式）
+  - 撃退800G+ラーメン / 未撃退300G / 差分500G+ラーメン
+- **openStage6NpcModal()** (§59): ステージ6NPC会話関数追加（聖域の守護者/迷い込んだ修行者）
+- **openSideGateModal** (§59): 説明文を「5ステージ」→「6ステージ」に更新
+- **renderStatusBody()** (§59): stage6進捗2行 + 称号「聖域を越えし者」「チンパンジーの聖域の覇者」追加
+- **getHintPriority()/getProgressHint()** (§59): priority16新設(s5クリア・s6未クリア)、priority9を6ステージ版に更新
+- **saveGame/loadGame** (§59): `sideMapStage6Reward` 追加
+- **デバッグ** (§59): stage6-enter/near-goal/clear-reset/set-ultimatechimgori/強制ENC/items-reset + return-H/goal-H/ゴールモーダル表示追加
+- **index.html ヘルプ** (§59): 「🌿 ステージ6「チンパンジーの聖域」」セクション追加
+
 ## [0.13.1] - 2026-07-09 — ゴール側G/H配置変更「ボス→G→H」(§58)
 
 ### Fixed
