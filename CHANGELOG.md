@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.15] - 2026-07-10 — わざシステム（捕獲支援・低固定ダメージ技）(§61)
+
+### Added
+- **WAZA_DATA** (§61): 低固定ダメージ技4種の配列新設 (はずかし固め1/キドクラッチ2/カリツォー3/グーパンチ4、MPなし・防御無視固定ダメージ)
+- **openWazaMenu()** (§61): わざサブメニュー生成関数追加 (openMagicMenu と同パターン)
+- **useWaza(id)** (§61): 固定ダメージ付与・renderEnemy・winBattle チェック・敵ターン移行
+- **#btn-waza** (§61): `#battle-menu` 最後にフル幅ボタン追加（grid-column:span 2、緑背景 #1e4d2b）
+- **#waza-menu** (§61): `#item-menu` の後にサブメニュー div 追加 (class="hidden submenu")
+- **init()** (§61): `btn-waza` → `openWazaMenu` クリックリスナー追加
+- **NPC_DATA UMA博士** (§61): 捕獲数<4 時にわざコマンドヒント追加、Lv50+未クリア時にHP調整ヒント追加
+- **HOME_HINTS** (§61): わざコマンドを紹介するヒント2件追加
+- **getProgressHint priority 17 tier3** (§61): 究極ゴリラ捕獲条件の説明にわざ活用法を追記
+- **index.html ヘルプ** (§61): 「🥊 わざコマンドについて」セクション追加（うたうセクションの直前）
+
 ## [0.14.1] - 2026-07-09 — 横スクロール編クリア後導線・究極ゴリラ捕獲誘導 (§60)
 
 ### Added

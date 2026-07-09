@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.14.1** |
+| 現在バージョン | **v0.15** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.14.1時点）
+## 現在実装済みの主要機能（v0.15時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,14 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.15] わざシステム（捕獲支援・低固定ダメージ技）**（§61）
+  - **WAZA_DATA**: はずかし固め(1)/キドクラッチ(2)/カリツォー(3)/グーパンチ(4)。MPなし・防御無視・固定ダメージ。
+  - **openWazaMenu() / useWaza(id)**: サブメニュー生成・固定ダメージ付与・敵ターン移行。openMagicMenu と同パターン。
+  - **#btn-waza**: `#battle-menu` 最後にフル幅ボタン（grid-column:span 2、緑背景）。
+  - **#waza-menu**: サブメニューdiv追加（class="hidden submenu"）。setBattleLocked は `.submenu button` を対象にしているため自動で無効化される。
+  - **NPC_DATA UMA博士**: 捕獲数<4 時にわざヒント追加。Lv50+でHP調整ヒント追加。
+  - **HOME_HINTS / getProgressHint priority17 tier3**: わざコマンド活用法を追記。
+  - **index.html ヘルプ**: 「🥊 わざコマンドについて」セクション追加（技一覧・使用目的を明示）。
 - **[v0.14.1] 横スクロール編クリア後導線・究極ゴリラ捕獲誘導**（§60）
   - **isSideStoryCleared()**: `sm.stageCleared["6"] && sm.defeatedEnemies["6:34,2"]` で横スクロール編制覇判定。
   - **renderStatusBody()**: 「横スクロール編 ✅ 制覇済み / 進行中」行追加。称号を「チンパンジーの聖域の覇者」→「ゴリラの世界の外側を見た者」に格上げ。

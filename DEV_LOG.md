@@ -5,6 +5,27 @@
 
 ---
 
+## v0.15 (2026-07-10)
+
+### 追加
+
+- 戦闘コマンドに「🥊 わざ（捕獲支援）」ボタン追加（フル幅、緑背景）。
+- WAZA_DATA: 低固定ダメージ技4種（はずかし固め1/キドクラッチ2/カリツォー3/グーパンチ4）。
+- openWazaMenu() / useWaza(id): サブメニュー・固定ダメージ付与ロジック追加。
+- #waza-menu: `.submenu` クラスで既存の setBattleLocked(.submenu button) に自動包含。
+- UMA博士 NPC: 捕獲数<4 時にわざコマンドヒント、Lv50+でHP調整ヒント追加。
+- HOME_HINTS: わざ系ヒント2件追加。
+- getProgressHint priority17 tier3: わざ活用法を追記。
+- index.html ヘルプ: 「わざコマンドについて」セクション追加。
+
+### 設計メモ
+
+- WAZA_DATA は SPELL_DATA と完全に別配列。同名 ID(hazukashigatame 等)が両方に存在するが、findById の参照先配列が別なので衝突なし。
+- useWaza はダメージ計算なし（固定値）。防御・攻撃力・ハルミ補正は一切乗らない。
+- `node --check` → exit 0 (構文エラーなし)。
+
+---
+
 ## v0.14.1 (2026-07-09)
 
 ### 追加

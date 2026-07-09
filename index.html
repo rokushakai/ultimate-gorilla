@@ -76,7 +76,7 @@
       <span id="b-mp-text">MP 6/6</span>
     </div>
 
-    <!-- 通常メニュー：たたかう/まほう/アイテム/つかまえる/うたう/にげる -->
+    <!-- 通常メニュー：たたかう/まほう/アイテム/つかまえる/うたう/にげる/わざ -->
     <div id="battle-menu">
       <button id="btn-fight">⚔ たたかう</button>
       <button id="btn-magic">✨ まほう</button>
@@ -84,12 +84,15 @@
       <button id="btn-catch">🪤 つかまえる</button>
       <button id="btn-sing">🎵 うたう</button>
       <button id="btn-run">💨 にげる</button>
+      <button id="btn-waza" style="grid-column:span 2;background:#1e4d2b;">🥊 わざ（捕獲支援）</button>
     </div>
 
     <!-- まほう選択サブメニュー（動的に生成） -->
     <div id="magic-menu" class="hidden submenu"></div>
     <!-- アイテム選択サブメニュー（やくそう/捕獲ロープ。動的に生成） -->
     <div id="item-menu" class="hidden submenu"></div>
+    <!-- わざ選択サブメニュー（§61 v0.15: 捕獲支援・低固定ダメージ技。動的に生成） -->
+    <div id="waza-menu" class="hidden submenu"></div>
     <!-- 戦闘終了時に表示するOKボタン(§13) -->
     <button id="btn-battle-ok" class="modal-btn hidden" style="align-self:center;margin-top:8px;">OK</button>
   </div>
@@ -386,6 +389,18 @@
         📈 ノリオ — 戦闘後の獲得経験値が2倍になる。レベル上げをしたい時に頼れる仲間<br>
         ✨ ハルミ — まほうの効果がアップする</p>
         <p>仲間は最大2人まで連れていけます。酒場の「仲間を外す」でいつでも外せ、再度「仲間を探す」から再加入できます。</p>
+
+        <h3>🥊 わざコマンドについて</h3>
+        <p>戦闘コマンド「🥊 わざ（捕獲支援）」はUMAを捕まえる直前のHP調整に使える技集です。<br>
+        MPは消費せず、プレイヤーの攻撃力や敵の防御力に関係なく<strong>固定ダメージ</strong>を与えます。</p>
+        <p>利用可能な技：</p>
+        <ul style="margin:4px 0 4px 16px;padding:0;">
+          <li>😳 <strong>はずかし固め</strong> — 1ダメージ固定</li>
+          <li>🤼 <strong>キドクラッチ</strong> — 2ダメージ固定</li>
+          <li>🦵 <strong>カリツォー</strong> — 3ダメージ固定</li>
+          <li>✊ <strong>グーパンチ</strong> — 4ダメージ固定</li>
+        </ul>
+        <p>UMAのHPを1〜10に調整したいときにとても役立ちます。究極ゴリラの捕獲直前にも活用しましょう。</p>
 
         <h3>🎵 うたうコマンドについて</h3>
         <p>戦闘コマンド「🎵 うたう」は特別なコマンドです。通常の敵に使うと次の「つかまえる」の成功率が少し上がります。ハルミが仲間にいると効果アップ。</p>

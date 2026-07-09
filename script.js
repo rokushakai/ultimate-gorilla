@@ -509,6 +509,15 @@
   ];
   var SPELL_DATA = ATTACK_SPELL_DATA.concat(HEAL_SPELL_DATA);
 
+  // --- わざデータ（§61 v0.15: 捕獲支援用・低固定ダメージ技）---
+  // fixedDmg: 防御無視・固定ダメージ / MPコスト不要
+  var WAZA_DATA = [
+    { id: "hazukashigatame", name: "はずかし固め", fixedDmg: 1, emoji: "😳" },
+    { id: "kidoclutch",      name: "キドクラッチ",  fixedDmg: 2, emoji: "🤼" },
+    { id: "karitsuo",        name: "カリツォー",    fixedDmg: 3, emoji: "🦵" },
+    { id: "gupanchi",        name: "グーパンチ",    fixedDmg: 4, emoji: "✊" }
+  ];
+
   // --- 職業(部活)データ ---
   // hpMod/mpMod/atkMod/defMod: ステータス補正  fleeMod: 逃走成功率補正
   // captureMod: 捕獲成功率補正  spellLearnMod: レベルアップ時に追加でまほうを覚える確率
@@ -2934,6 +2943,51 @@
     document.getElementById("battle-menu").classList.remove("hidden");
   }
 
+  // ---------------------------------------------------------
+  // §61 v0.15: 戦闘コマンド: わざ（捕獲支援・低固定ダメージ技）
+  // ---------------------------------------------------------
+  function openWazaMenu() {
+    if (state.locked) return;
+    var menu = document.getElementById("waza-menu");
+    var html = "";
+    WAZA_DATA.forEach(function (w) {
+      html += '<button data-waza="' + w.id + '">' +
+        w.emoji + " " + w.name + "（" + w.fixedDmg + "ダメージ固定）</button>";
+    });
+    html += '<button class="submenu-back" id="btn-waza-back">戻る</button>';
+    menu.innerHTML = html;
+    menu.classList.remove("hidden");
+    document.getElementById("battle-menu").classList.add("hidden");
+
+    menu.querySelectorAll("button[data-waza]").forEach(function (btn) {
+      btn.onclick = function () { useWaza(btn.getAttribute("data-waza")); };
+    });
+    document.getElementById("btn-waza-back").onclick = function () {
+      menu.classList.add("hidden");
+      document.getElementById("battle-menu").classList.remove("hidden");
+    };
+  }
+
+  function useWaza(id) {
+    if (state.locked) return;
+    var waza = findById(WAZA_DATA, id);
+    setBattleLocked(true);
+    document.getElementById("waza-menu").classList.add("hidden");
+    document.getElementById("battle-menu").classList.remove("hidden");
+
+    var e = state.enemy;
+    var dmg = waza.fixedDmg;
+    e.hp = Math.max(0, e.hp - dmg);
+    log(waza.emoji + " " + waza.name + "！ " + e.name + "に" + dmg + "ダメージ！（固定）");
+    renderEnemy();
+
+    if (e.hp <= 0) {
+      winBattle();
+      return;
+    }
+    setTimeout(enemyTurn, 600);
+  }
+
   function usePotion() {
     if (state.locked) return;
     var p = state.player;
@@ -4377,9 +4431,13 @@
           lines.push("図鑑に残るUMAもいれば、旅の途中で出会うだけの相手もおる。");
           lines.push("キラリと光るゴリラに出会ったら、経験値のチャンスじゃ！");
         }
-        // §52 v0.11.2: UMA捕獲ヒント
+        // §52 v0.11.2: UMA捕獲ヒント / §61 v0.15: わざコマンドも案内
         if (capturedCount < 4) {
           lines.push("UMAはHPが0になると逃げてしまう。少し弱らせてから捕まえるのじゃ！");
+          lines.push("戦闘の「🥊 わざ」コマンドを使えば、1〜4の固定ダメージで繊細にHPを削れるぞ。");
+        } else if (!state.gameCleared && p.level >= 50) {
+          // §61 v0.15: Lv50以上で究極ゴリラのHP調整ヒント
+          lines.push("究極ゴリラのHP調整には「わざ」が役立つ。固定ダメージで1ずつ削れるぞ！");
         }
         // §52 v0.11.2: 横スクロール未訪問時のゲート案内
         var sideVisitedD = !!(state.sideMap && (
@@ -4692,7 +4750,10 @@
     "宝箱を見つけたら忘れずに開けておこう。",
     // §60 v0.14.1: 横スクロール編制覇後ヒント
     "チンパンジーまで退かせたなら、次は伝説のUMAを追う番かもしれないね。究極ゴリラは歌とウクレレが大事らしいよ。",
-    "横スクロールの冒険は一区切りついた。だが、究極ゴリラはまだ森のどこかで待っているよ。"
+    "横スクロールの冒険は一区切りついた。だが、究極ゴリラはまだ森のどこかで待っているよ。",
+    // §61 v0.15: わざコマンドのヒント
+    "戦闘コマンド「🥊 わざ」を使うと、固定ダメージでHPを少しずつ削れるよ。捕獲前の調整に便利！",
+    "UMAをギリギリまで弱らせたいなら「わざ」が役立つ。はずかし固めなら1ダメージだけ与えられるぞ。"
   ];
 
   // エンディングモーダルのページデータ(v0.7 §28)
@@ -5871,6 +5932,7 @@
     document.getElementById("btn-fight").addEventListener("click", doFight);
     document.getElementById("btn-magic").addEventListener("click", openMagicMenu);
     document.getElementById("btn-item").addEventListener("click", openItemMenu);
+    document.getElementById("btn-waza").addEventListener("click", openWazaMenu);
     document.getElementById("btn-catch").addEventListener("click", doCatch);
     document.getElementById("btn-sing").addEventListener("click", doSing);
     document.getElementById("btn-run").addEventListener("click", doRun);
@@ -6376,7 +6438,7 @@
     if (priority === 17) {
       if (tier === 1) return "横に長い冒険は一区切りついた。だが、伝説のUMAはまだ森のどこかにいる。";
       if (tier === 2) return "究極ゴリラは、ただ弱らせるだけでは捕まえられない。特別なアイテムと、特別な行動が必要らしい。";
-      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。";
+      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。HPを1〜10に調整するには戦闘の「🥊 わざ」コマンドが便利だぞ！";
     }
     // §59 v0.14: s6クリア済みだがチンパンジー未撃退 → チンパンジー撃退へ誘導
     if (priority === 9) {
