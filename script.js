@@ -829,6 +829,13 @@
     return state.player.companions.indexOf(id) !== -1;
   }
 
+  // §60 v0.14.1: 横スクロール編制覇判定 (s6クリア済み + 究極チンパンジー撃退済み)
+  function isSideStoryCleared() {
+    var sm = state.sideMap;
+    return !!(sm && sm.stageCleared && sm.stageCleared["6"] &&
+              sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+  }
+
   // ---------------------------------------------------------
   // 7.6 状態異常(GAME_DESIGN.md §13.5)
   // ---------------------------------------------------------
@@ -2082,7 +2089,8 @@
       if (ultimateChimpDefeated) {
         bodyLines = [
           "聖域は静まり返っている。",
-          "究極チンパンジーの影も見えない。"
+          "究極チンパンジーの影も見えない。",
+          "だが、伝説のUMAである究極ゴリラは、今も森のどこかで君の歌を待っている。"
         ];
       } else {
         bodyLines = [
@@ -3824,9 +3832,15 @@
     html += '<div class="shop-row"><span>究極チンパンジー</span><span style="color:' +
       (s6BossDefeated ? "#06d6a0" : "#888") + ';">' +
       (s6BossDefeated ? "✅ 撃退済み" : "未撃退") + "</span></div>";
+    // §60 v0.14.1: 横スクロール編総合判定行
+    var sideStoryMastered = s6Cleared && s6BossDefeated;
+    html += '<div class="shop-row"><span>横スクロール編</span><span style="color:' +
+      (sideStoryMastered ? "#ffd166" : "#888") + ';font-weight:' +
+      (sideStoryMastered ? "bold" : "normal") + ';">' +
+      (sideStoryMastered ? "✅ 制覇済み" : "進行中") + "</span></div>";
     var sideTitle = null;
     if (s6Cleared && s6BossDefeated) {
-      sideTitle = "チンパンジーの聖域の覇者";
+      sideTitle = "ゴリラの世界の外側を見た者";  // §60 v0.14.1
     } else if (s6Cleared) {
       sideTitle = "聖域を越えし者";
     } else if (s5Cleared && s5BossDefeated) {
@@ -4337,6 +4351,13 @@
           lines.push("UMAを見つけたら図鑑に記録される。捕まえると完全なデータになるぞ。");
           lines.push("図鑑でタップすれば詳細なステータスが見られる。");
         }
+        // §60 v0.14.1: 横スクロール編制覇後 → 究極ゴリラ捕獲へ誘導
+        if (!state.gameCleared && isSideStoryCleared()) {
+          lines.push("チンパンジーを退かせたのか……！あれはUMAではない。伝説のゴリラでもない。");
+          lines.push("だが、おぬしはゴリラの世界の外側に触れたのじゃ。");
+          lines.push("しかし忘れるでない。本当の目的は、究極ゴリラを捕まえることじゃ。");
+          return lines;
+        }
         if (state.gameCleared) {
           lines.push("図鑑の完成まで目指してみないか。まだ捕まえていない伝説が残っているぞ。");
         } else if (p.level >= 99) {
@@ -4406,6 +4427,12 @@
             lines.push("レベルが上がると、前は怖かった敵にも勝てるようになるぞ。");
             lines.push("強い敵ほど大きな経験値を持っている。挑む価値はあるぞ。");
           }
+        }
+        // §60 v0.14.1: 横スクロール編制覇後の反応
+        if (!state.gameCleared && isSideStoryCleared()) {
+          lines.push("黒い城の奥にまで行って帰ってきたのか？あんた、本当にただ者じゃないな。");
+          lines.push("でも、森にはまだ歌を待っているゴリラがいるらしいぜ。");
+          return lines;
         }
         // §47 v0.9.3: ステージ1クリア後にステージ2予告を追加
         var s1Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["1"]);
@@ -4477,6 +4504,12 @@
           lines.push("お前は究極ゴリラを森へ帰した者。もはや立派なゴリラ研究家だ！");
           lines.push("究極ゴリラは森へ帰った。捕まえることだけが勝利ではない。見送ることもまた、勇者の役目だったのだ。");
           lines.push("伝説の装備をすべて集めたか？まだ見ぬ装備が残っているかもしれないぞ。");
+        } else if (isSideStoryCleared()) {
+          // §60 v0.14.1: 横スクロール編制覇後 → 究極ゴリラとチンパンジーの役割の違いを説明
+          lines.push("究極ゴリラとチンパンジーは、まったく別の存在だ。");
+          lines.push("究極ゴリラは伝説のUMA。チンパンジーは戦闘力だけなら最強クラスの試練だった。");
+          lines.push("捕まえるべきは究極ゴリラ。退かせるべきだったのがチンパンジーだ。");
+          lines.push("Lv99に到達して、女神のウクレレを手に入れ、HPを1〜10まで削って「うたう」んだ！");
         } else if (p.level >= 99 && p.hasUkulele) {
           lines.push("準備は万端だ！究極ゴリラのHPをギリギリまで減らし、「うたう」んだ！");
           lines.push("目安はHP1〜10。倒してしまっては意味がないぞ。");
@@ -4521,6 +4554,11 @@
             lines.push("ドラゴンのたてはお役に立てているかな？");
           }
           lines.push("王様は、そなたのさらなる冒険を見守っておられます。");
+        } else if (!state.gameCleared && isSideStoryCleared()) {
+          // §60 v0.14.1: 横スクロール編制覇後 → 究極ゴリラ捕獲へ誘導
+          lines.push("チンパンジーの聖域を越えたと聞いたぞ。");
+          lines.push("だが、王が待っている報告はまだ別にある。究極ゴリラを捕まえた時こそ、真の報告に来るのだ。");
+          lines.push("力をつけ、女神のウクレレを探し、準備を整えてから挑むのじゃ。");
         } else if (state.gameCleared) {
           lines.push("王様は大変お喜びです。");
           lines.push("究極ゴリラを倒すのではなく、森へ帰した。その判断こそ、真の勇気だったのでしょう。");
@@ -4651,7 +4689,10 @@
     "装備を整えると、同じレベルでもずっと楽になるよ。",
     "メタルゴリラを見つけたら経験値チャンスだよ。",
     "敵が逃げていっても経験値が入るなら、勝ったも同然だよ。",
-    "宝箱を見つけたら忘れずに開けておこう。"
+    "宝箱を見つけたら忘れずに開けておこう。",
+    // §60 v0.14.1: 横スクロール編制覇後ヒント
+    "チンパンジーまで退かせたなら、次は伝説のUMAを追う番かもしれないね。究極ゴリラは歌とウクレレが大事らしいよ。",
+    "横スクロールの冒険は一区切りついた。だが、究極ゴリラはまだ森のどこかで待っているよ。"
   ];
 
   // エンディングモーダルのページデータ(v0.7 §28)
@@ -4712,6 +4753,9 @@
       hint = "Lv99 & ウクレレ所持！究極ゴリラのHPを1〜10まで削って「🎵うたう」コマンドを使おう。";
     } else if (!state.gameCleared && p.level >= 99) {
       hint = "Lv99に到達した！あとは女神のウクレレ🪗を手に入れれば、究極ゴリラを鎮められる。";
+    } else if (!state.gameCleared && isSideStoryCleared()) {
+      // §60 v0.14.1: 横スクロール編制覇後 → 究極ゴリラへ誘導
+      hint = "チンパンジーまで退かせたなら、次は伝説のUMAを追う番だ。究極ゴリラはLv99と女神のウクレレと「うたう」が鍵だよ。";
     } else {
       hint = HOME_HINTS[Math.floor(Math.random() * HOME_HINTS.length)];
     }
@@ -4870,6 +4914,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-side-set-ultimatechimgori" style="border-color:#98d8c8;color:#98d8c8;">✅ 究極チンパンジー撃退済みにする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-ultimate-chimp-encounter" style="border-color:#98d8c8;color:#98d8c8;">🦍 究極チンパンジー強制エンカウント</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-side-stage6-items-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🌿 ステージ6宝箱・固定敵リセット</button>';
+      html += '<p class="small" style="color:#a8d8ff;margin-top:8px;">🏆 横スクロール編制覇・究極ゴリラ準備 (§60 v0.14.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-side-story-complete" style="border-color:#a8d8ff;color:#a8d8ff;">🏆 横スクロール編制覇状態にする</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-capture-ready" style="border-color:#a8d8ff;color:#a8d8ff;">🦍 究極ゴリラ捕獲条件セット (Lv99+ウクレレ)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-clear-gameclear" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 究極ゴリラ未捕獲状態に戻す</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5483,6 +5531,44 @@
         closeModal("settings-modal");
         state.sideMap.stage = 6;
         openSideGoalModal();
+      };
+      document.getElementById("btn-debug-side-story-complete").onclick = function () {
+        var sm = state.sideMap;
+        sm.stageCleared["6"] = true;
+        sm.defeatedEnemies["6:34,2"] = true;
+        sm.stage6RewardLevel = 2;
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] 横スクロール編制覇状態にした");
+      };
+      document.getElementById("btn-debug-set-capture-ready").onclick = function () {
+        var p = state.player;
+        // Lv99セット (debugSetLevel99 と同じ処理)
+        p.level = 99;
+        p.nextExp = 99 * 10 + 15;
+        p.exp = 0;
+        p.baseMaxHp = 20 + 6 * 98;
+        p.baseMaxMp = 6 + 2 * 98;
+        p.baseAtk = 5 + 2 * 98;
+        p.baseDef = 2 + 1 * 98;
+        recomputeStats();
+        p.hp = p.maxHp;
+        p.mp = p.maxMp;
+        p.level99Shown = true;
+        state.eventFlags.level99Reached = true;
+        // ウクレレ所持
+        p.hasUkulele = true;
+        updateStatusBar();
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] 究極ゴリラ捕獲条件セット完了（Lv99+ウクレレ）");
+      };
+      document.getElementById("btn-debug-clear-gameclear").onclick = function () {
+        state.gameCleared = false;
+        state.pendingClear = false;
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] 究極ゴリラ未捕獲状態に戻した");
       };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");
@@ -6252,9 +6338,12 @@
     var s4Cleared = !!(sm && sm.stageCleared && sm.stageCleared["4"]);
     var s5Cleared = !!(sm && sm.stageCleared && sm.stageCleared["5"]);
     var s6Cleared = !!(sm && sm.stageCleared && sm.stageCleared["6"]);
+    var s6BossDefeatedH = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
     if (state.gameCleared) return 0;
+    // §60 v0.14.1: 横スクロール編制覇済み → 究極ゴリラ捕獲誘導
+    if (s6Cleared && s6BossDefeatedH) return 17;  // 横スクロール編制覇済み・究極ゴリラ未捕獲
     // §59 v0.14: 横スクロールステージ進捗ヒント (s6追加)
-    if (s6Cleared) return 9;        // 全6ステージクリア済み
+    if (s6Cleared) return 9;        // s6クリア済みだがチンパンジー未撃退
     if (s5Cleared) return 16;       // s5クリア・s6未クリア → ステージ6ガイド
     if (s4Cleared) return 15;       // s4クリア・s5未クリア → ステージ5ガイド
     if (s3Cleared) return 14;       // s3クリア・s4未クリア → ステージ4ガイド
@@ -6283,11 +6372,18 @@
     var sm = state.sideMap;
     var priority = getHintPriority();
     // §55 v0.12: 横スクロール専用ヒント（ボス/中ボス状態で分岐）
+    // §60 v0.14.1: 横スクロール編制覇済み → 究極ゴリラ捕獲誘導
+    if (priority === 17) {
+      if (tier === 1) return "横に長い冒険は一区切りついた。だが、伝説のUMAはまだ森のどこかにいる。";
+      if (tier === 2) return "究極ゴリラは、ただ弱らせるだけでは捕まえられない。特別なアイテムと、特別な行動が必要らしい。";
+      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。";
+    }
+    // §59 v0.14: s6クリア済みだがチンパンジー未撃退 → チンパンジー撃退へ誘導
     if (priority === 9) {
       var h9 = [
-        "6つの横スクロールステージをすべて制覇した。今は通常マップで究極ゴリラを目指そう。",
-        "草原、森、町はずれ、山道、黒い城、チンパンジーの聖域をすべて越えた。究極ゴリラ捕獲（Lv99＋ウクレレ＋うたう）が最終目標だ。",
-        "ステージ1〜6をすべて制覇済み。今は通常マップで究極ゴリラ（Lv99＋ウクレレ＋うたう）を目指すのが次の目標だ。"
+        "チンパンジーの聖域をクリアしたが、究極チンパンジーはまだ奥に棲んでいる。退かせると大きな報酬と称号が得られるぞ。",
+        "究極チンパンジーは x=34 にいる。撃退してからゴールすると800G+ラーメンの報酬が手に入る。準備して再挑戦だ。",
+        "究極チンパンジー(HP1500/ATK72/DEF32)はラスボス級ゴリラより格段に手強い。Lv99と最強装備で挑もう。回復アイテムも万全に。"
       ];
       return h9[tier - 1] || h9[0];
     }

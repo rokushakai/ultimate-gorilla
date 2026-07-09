@@ -14,6 +14,29 @@
 
 ## ✅ 実装済み
 
+### Version 0.14.1 — 横スクロール編クリア後導線・究極ゴリラ捕獲誘導 (§60)
+
+- **isSideStoryCleared()** (§60): 横スクロール編制覇判定ヘルパー関数追加 ✅
+- **getHintPriority** (§60): priority17追加(isSideStoryCleared + !gameCleared → 究極ゴリラ誘導)、priority9を「チンパンジー未撃退」限定に ✅
+- **getProgressHint** (§60): priority17追加(3段階で究極ゴリラ捕獲条件を誘導) ✅
+- **NPC_DATA UMA博士** (§60): isSideStoryCleared時のセリフ追加 ✅
+- **NPC_DATA ゴリラ研究家** (§60): isSideStoryCleared時のセリフ追加（究極ゴリラとチンパンジーの違い） ✅
+- **NPC_DATA 王様の使い** (§60): isSideStoryCleared時のセリフ追加 ✅
+- **NPC_DATA 旅人** (§60): isSideStoryCleared時のセリフ追加 ✅
+- **HOME_HINTS** (§60): 横スクロール編制覇後ヒント2件追加 ✅
+- **openHomeModal** (§60): isSideStoryCleared + !gameCleared 時の固定ヒント追加 ✅
+- **renderStatusBody** (§60): 称号「チンパンジーの聖域の覇者」→「ゴリラの世界の外側を見た者」に変更 + 横スクロール編総合行追加 ✅
+- **openStage6GoalModal** (§60): 全取得完了ルートに究極ゴリラへの導線テキスト追加 ✅
+- **debug=1 HTMLボタン** (§60): 横スクロール編制覇/究極ゴリラ準備ボタン追加 ✅
+- **debug=1 ハンドラ** (§60): 上記ボタンのハンドラ追加 ✅
+- **index.html ヘルプ** (§60): 「横スクロール編と本編目的」セクション追加 ✅
+
+### 今後の TODO
+
+- UMA捕獲支援用の低固定ダメージ技（横スクロール編クリア後イベントなど）
+- 横スクロール編クリア後イベント深化（特別なNPC出現など）
+- 究極ゴリラ捕獲直前の演出強化（HP警告・捕獲チャンス告知など）
+
 ### Version 0.14 — 横スクロールステージ6「チンパンジーの聖域」(§59)
 
 - **ultimate_chimpanzee** (§59): NON_UMA_DATAに究極チンパンジー追加 (HP1500/ATK72/DEF32/EXP3000/canCapture:false) ✅

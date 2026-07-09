@@ -5,6 +5,29 @@
 
 ---
 
+## v0.14.1 (2026-07-09)
+
+### 追加
+
+- 横スクロール編制覇後の究極ゴリラ捕獲誘導システム実装。
+- isSideStoryCleared() ヘルパー: `sm.stageCleared["6"] && sm.defeatedEnemies["6:34,2"]`。
+- ステータス画面に「横スクロール編 ✅ 制覇済み / 進行中」行追加。
+- 最上位称号を「チンパンジーの聖域の覇者」→「ゴリラの世界の外側を見た者」に格上げ。
+- NPC 4体（UMA博士/旅人/ゴリラ研究家/王様の使い）に横スクロール編制覇後セリフ追加。
+- getHintPriority に priority17 追加。getProgressHint priority17 の3段階ヒント。
+- priority9 テキストを「s6クリア済みだがチンパンジー未撃退」向けに変更。
+- デバッグ3ボタン: 横スクロール編制覇/Lv99+ウクレレセット/ゲームクリアリセット。
+- index.html ヘルプに「🌿 横スクロール編と本編目的」セクション追加。
+
+### 設計メモ
+
+- btn-debug-set-capture-ready ハンドラのバグ修正: `while + gainExp(0)` → `debugSetLevel99` パターン（p.level=99 + recomputeStats() + p.hasUkulele=true）に置き換え。
+- priority17 は gameCleared チェックを getHintPriority の先頭で行うため「横スクロール編制覇 + 究極ゴリラ未捕獲」専用になる。
+- isSideStoryCleared() はNPC・HOME_HINTS・openHomeModal・getHintPriority・renderStatusBody など複数箇所から参照。
+- `node --check` → exit 0 (構文エラーなし)。
+
+---
+
 ## v0.14 (2026-07-09)
 
 ### 追加
