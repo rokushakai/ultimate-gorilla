@@ -3585,3 +3585,71 @@ v0.15 で追加したわざコマンドのUX改善と捕獲テスト強化。
 - `hazukashigatame` の内部IDはセーブデータに影響しないため変更なし（`state.player.spells` に格納されるのはSPELL_DATAのIDのみ）。
 - `actuallyStartBattle()` の waza-menu hidden 漏れ: バトル終了後に finishBattle() が battle-screen 全体を hidden にするため視覚的には問題なかったが、次の戦闘開始時に waza-menu が表示状態のまま残るバグがあった。
 - `checkUltimateGorillaHpHint(e)` は doFight / useWaza 双方から呼ぶ共有関数として `doFight()` の直前に配置。
+
+---
+
+## §63 v0.16 — 捕獲支援技「ここはひとつガマン」
+
+### 概要
+
+その戦闘中だけ通常攻撃ダメージを大幅に下げる補助技。プレイヤーの永続ステータスは変更しない。
+
+### WAZA_DATA 追加エントリ
+
+```
+{ id: "gaman", name: "ここはひとつガマン", type: "weakenAttack", emoji: "😤" }
+```
+
+`fixedDmg` はなく、`type: "weakenAttack"` で固定ダメージ技と区別する。
+
+### 効果仕様
+
+- **対象**: 通常攻撃（doFight）のみ
+- **効果範囲外**: わざ固定ダメージ / まほう / アイテム / 捕獲 / うたう / 敵の攻撃
+- **ダメージ計算**: 通常攻撃ダメージ（会心込み）を最後に 1/4 にする。最低1ダメージ保証
+- **会心との関係**: 会心ダメージ計算後にガマン補正をかける（会心でも削りすぎを防ぎやすい）
+- **状態フラグ**: `state.gamanActive: boolean`（state 最上位）
+- **永続ステータス変更なし**: `state.player.atk` などは一切触らない
+
+### 効果の開始・解除
+
+| タイミング | 処理 |
+|---|---|
+| わざ「ここはひとつガマン」使用 | `state.gamanActive = true` |
+| 再使用（すでにガマン中） | フラグ変更なし（1ターン消費、メッセージ表示） |
+| 戦闘終了すべて（勝利/捕獲/逃走/敗北） | `finishBattle()` で `state.gamanActive = false` |
+
+**解除ポイント（すべて `finishBattle()` 経由）:**
+- `winBattle()` → `showBattleEnd()` → OKボタン → `finishBattle()`
+- 捕獲成功 → `showBattleEnd()` → `finishBattle()`
+- 逃走成功 → `showBattleEnd()` → `finishBattle()`
+- 敗北 → `handlePlayerDown()` → `finishBattle()` (直接呼び出し)
+- 究極ゴリラうたう成功 → `showBattleEnd()` → `finishBattle()`
+
+### ログメッセージ
+
+- 初回使用: 「😤 勇者の子孫は「ここはひとつガマン」した！肩の力が抜けて、通常攻撃の威力が大きく下がった！UMAを削りすぎにくくなった！」
+- 再使用: 「😤 すでにガマン中だ！通常攻撃の威力は下がったままだ。」
+- ガマン中の通常攻撃ログ: 「⚔ (名前)の攻撃！（ガマン中） (敵)にXのダメージ！」
+- ガマン中の会心: 「⚔ (名前)の攻撃！ 💥 会心（ガマン中）！ (敵)にXのダメージ！」
+
+### わざメニュー表示
+
+- ガマン未使用: `😤 ここはひとつガマン（通常攻撃を弱める）`
+- ガマン中: `😤 ここはひとつガマン（効果中）`
+- メニュー説明文: 「UMA捕獲を助ける技です。固定ダメージで削ったり、ガマンで通常攻撃を弱めたりできます。⚡ガマン中」（ガマン中のみステータス付記）
+
+### 変更箇所
+
+| 箇所 | 内容 |
+|---|---|
+| `state.gamanActive` | 初期値 `false` で state に追加 |
+| `WAZA_DATA` | `gaman` エントリ追加（type: "weakenAttack"） |
+| `openWazaMenu()` | 説明文更新 + ガマン技を type で分岐レンダリング |
+| `useWaza()` | `type === "weakenAttack"` の場合は固定ダメージなしでフラグ操作 |
+| `doFight()` | 会心計算後に `gamanActive` なら 1/4（最低1）、ログ分岐 |
+| `finishBattle()` | `state.gamanActive = false` 追加 |
+| NPC UMA博士 | capturedCount<4 / Lv50+ のヒントにガマン言及を追加 |
+| `getProgressHint priority17 tier3` | 「ここはひとつガマン」を追記 |
+| index.html ヘルプ | 補助技セクションに「ここはひとつガマン」説明を追加 |
+| デバッグ §63 | ガマン状態での戦闘開始ボタン2本 + 解除ボタン1本追加 |

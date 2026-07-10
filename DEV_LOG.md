@@ -5,6 +5,30 @@
 
 ---
 
+## v0.16 (2026-07-10)
+
+### 追加・変更
+
+- **`state.gamanActive: false` 追加**: state 最上位に一時フラグ追加。`inBattle` の下、`enemy` の上に配置。
+- **WAZA_DATA「gaman」追加**: `{ id: "gaman", name: "ここはひとつガマン", type: "weakenAttack", emoji: "😤" }`。fixedDmg を持たず type:"weakenAttack" で他の技と区別。
+- **useWaza() 分岐実装**: `waza.type === "weakenAttack"` の場合に早期 return でガマン処理。初回は `state.gamanActive = true` + 3行ログ。再使用は2行メッセージのみ（効果は変わらず、1ターン消費）。固定ダメージ処理は else ではなく return 後の流れで維持。
+- **doFight() ガマン補正**: 会心計算後（`if(isCrit){ dmg = ... }`）の直後に `if(state.gamanActive){ dmg = Math.max(1, Math.floor(dmg/4)); }` を追加。log は isCrit × gamanActive の2×2の条件で分岐。
+- **finishBattle() 解除**: `state.inBattle = false` の直後に `state.gamanActive = false` を追加。handlePlayerDown → finishBattle() / showBattleEnd → OKボタン → finishBattle() いずれも経由する。
+- **openWazaMenu() 更新**: 説明文を「固定ダメージで削ったり、ガマンで通常攻撃を弱めたりできます」に更新。ガマン中は「⚡ガマン中」付記。ガマン技は「効果中」/「通常攻撃を弱める」で表示分岐。
+- **UMA博士セリフ更新**: capturedCount<4 と Lv50+ 両方に「はずかし固め・小」「ここはひとつガマン」の言及追加。
+- **getProgressHint priority17 tier3**: 「ここはひとつガマン」追記。
+- **index.html ヘルプ**: 「補助技：」セクション追加。「ここはひとつガマン」説明（効果・解除タイミング）を記載。
+- **デバッグ §63**: 「😤 ガマン状態でのらいぬ戦闘」「😤 ガマン状態で究極ゴリラHP12」「🔄 ガマン状態解除」の3ボタン追加。インラインハンドラで実装。
+
+### 設計メモ
+
+- 永続ステータス変更なし。`state.player.atk` は一切触らない。
+- 解除漏れリスク: すべての戦闘終了が `finishBattle()` を経由するため、`finishBattle()` の1箇所にのみ解除処理を追加すれば十分。`handlePlayerDown()` も `finishBattle()` を直接呼ぶ。
+- `state.gamanActive` は `loadGame()` / `saveGame()` には含めない（揮発性の戦闘フラグ）。ゲームロード時は state 初期値 `false` が使われる。
+- `node --check` → exit 0（構文エラーなし）。
+
+---
+
 ## v0.15.1 (2026-07-10)
 
 ### 修正・追加

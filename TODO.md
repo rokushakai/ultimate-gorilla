@@ -14,6 +14,24 @@
 
 ## ✅ 実装済み
 
+### Version 0.16 — 捕獲支援技「ここはひとつガマン」 (§63)
+
+- **WAZA_DATA「gaman」** (§63): type:"weakenAttack" の新技エントリ追加 ✅
+- **state.gamanActive** (§63): 初期値 false でフラグ追加 ✅
+- **useWaza() ガマン分岐** (§63): type===weakenAttack で gamanActive 操作・再使用メッセージ ✅
+- **doFight() ガマン補正** (§63): 会心後 1/4 (最低1)・ログ分岐 ✅
+- **finishBattle() ガマン解除** (§63): state.gamanActive = false 追加 ✅
+- **openWazaMenu() 更新** (§63): 説明文更新・ガマン状態表示・type分岐レンダリング ✅
+- **UMA博士 NPC** (§63): ガマン言及を追加 ✅
+- **getProgressHint priority17 tier3** (§63): 「ここはひとつガマン」追記 ✅
+- **index.html ヘルプ** (§63): 補助技セクション追加（ガマン説明） ✅
+- **デバッグ §63** (§63): ガマン状態戦闘2本 + 解除ボタン追加 ✅
+
+### 今後の TODO
+
+- 究極ゴリラ捕獲直前の演出強化（HP警告・捕獲チャンス告知など）
+- わざの「戦闘コマンドの順番・配置」見直し（ユーザーフィードバック次第）
+
 ### Version 0.15.1 — わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化 (§62)
 
 - **WAZA_DATA** (§62): `hazukashigatame` 表示名を「はずかし固め・小」に変更（まほうとの区別。ID変更なし） ✅

@@ -509,13 +509,14 @@
   ];
   var SPELL_DATA = ATTACK_SPELL_DATA.concat(HEAL_SPELL_DATA);
 
-  // --- わざデータ（§61 v0.15: 捕獲支援用・低固定ダメージ技）---
-  // fixedDmg: 防御無視・固定ダメージ / MPコスト不要
+  // --- わざデータ（§61 v0.15 / §63 v0.16: 捕獲支援用技）---
+  // fixedDmg: 防御無視・固定ダメージ / type:"weakenAttack": 通常攻撃弱体化
   var WAZA_DATA = [
     { id: "hazukashigatame", name: "はずかし固め・小", fixedDmg: 1, emoji: "😳" },
     { id: "kidoclutch",      name: "キドクラッチ",  fixedDmg: 2, emoji: "🤼" },
     { id: "karitsuo",        name: "カリツォー",    fixedDmg: 3, emoji: "🦵" },
-    { id: "gupanchi",        name: "グーパンチ",    fixedDmg: 4, emoji: "✊" }
+    { id: "gupanchi",        name: "グーパンチ",    fixedDmg: 4, emoji: "✊" },
+    { id: "gaman", name: "ここはひとつガマン", type: "weakenAttack", emoji: "😤" }
   ];
 
   // --- 職業(部活)データ ---
@@ -704,6 +705,7 @@
     },
     stepsSinceEncounter: 0,
     inBattle: false,
+    gamanActive: false,  // §63 v0.16: ここはひとつガマン中フラグ（戦闘中のみ有効）
     enemy: null,
     locked: false,       // 戦闘コマンド入力をロック(連打防止)
     modalOpen: false,    // いずれかのモーダル表示中はフィールド操作を止める
@@ -2830,6 +2832,16 @@
     var isCrit = critChance > 0 && Math.random() < critChance;
     if (isCrit) {
       dmg = Math.max(1, Math.floor(dmg * 1.5));
+    }
+    // §63 v0.16: ここはひとつガマン中は通常攻撃ダメージを1/4に（最低1）
+    if (state.gamanActive) {
+      dmg = Math.max(1, Math.floor(dmg / 4));
+      if (isCrit) {
+        log("⚔ " + p.name + "の攻撃！ 💥 会心（ガマン中）！ " + e.name + "に" + dmg + "のダメージ！");
+      } else {
+        log("⚔ " + p.name + "の攻撃！（ガマン中） " + e.name + "に" + dmg + "のダメージ！");
+      }
+    } else if (isCrit) {
       log("⚔ " + p.name + "の攻撃！ 💥 会心の一撃！ " + e.name + "に" + dmg + "のダメージ！");
     } else {
       log("⚔ " + p.name + "の攻撃！ " + e.name + "に" + dmg + "のダメージ！");
@@ -2958,10 +2970,16 @@
   function openWazaMenu() {
     if (state.locked) return;
     var menu = document.getElementById("waza-menu");
-    var html = '<p class="small" style="margin:4px 0 6px;color:#aaffcc;">UMAを弱らせるための固定ダメージ技です。削りすぎに注意！</p>';
+    var gamanStatus = state.gamanActive ? " ⚡ガマン中" : "";
+    var html = '<p class="small" style="margin:4px 0 6px;color:#aaffcc;">UMA捕獲を助ける技です。固定ダメージで削ったり、ガマンで通常攻撃を弱めたりできます。' + gamanStatus + "</p>";
     WAZA_DATA.forEach(function (w) {
-      html += '<button data-waza="' + w.id + '">' +
-        w.emoji + " " + w.name + "（" + w.fixedDmg + "ダメージ固定）</button>";
+      if (w.type === "weakenAttack") {
+        var gamanLabel = state.gamanActive ? "（効果中）" : "（通常攻撃を弱める）";
+        html += '<button data-waza="' + w.id + '">' + w.emoji + " " + w.name + gamanLabel + "</button>";
+      } else {
+        html += '<button data-waza="' + w.id + '">' +
+          w.emoji + " " + w.name + "（" + w.fixedDmg + "ダメージ固定）</button>";
+      }
     });
     html += '<button class="submenu-back" id="btn-waza-back">戻る</button>';
     menu.innerHTML = html;
@@ -2984,6 +3002,22 @@
     document.getElementById("waza-menu").classList.add("hidden");
     document.getElementById("battle-menu").classList.remove("hidden");
 
+    // §63 v0.16: ここはひとつガマン（通常攻撃弱体化フラグを立てる）
+    if (waza.type === "weakenAttack") {
+      if (state.gamanActive) {
+        log(waza.emoji + " すでにガマン中だ！");
+        log("通常攻撃の威力は下がったままだ。");
+      } else {
+        state.gamanActive = true;
+        log(waza.emoji + " " + state.player.name + "は「ここはひとつガマン」した！");
+        log("肩の力が抜けて、通常攻撃の威力が大きく下がった！");
+        log("UMAを削りすぎにくくなった！");
+      }
+      setTimeout(enemyTurn, 600);
+      return;
+    }
+
+    // 固定ダメージ技
     var e = state.enemy;
     var dmg = waza.fixedDmg;
     e.hp = Math.max(0, e.hp - dmg);
@@ -3418,6 +3452,7 @@
 
   function finishBattle() {
     state.inBattle = false;
+    state.gamanActive = false;  // §63 v0.16: ガマン効果を解除
     state.enemy = null;
     stopWalking(); // 残留walkTimerをリセット
     updateBGM("field");
@@ -4445,10 +4480,10 @@
         // §52 v0.11.2: UMA捕獲ヒント / §61 v0.15: わざコマンドも案内
         if (capturedCount < 4) {
           lines.push("UMAはHPが0になると逃げてしまう。少し弱らせてから捕まえるのじゃ！");
-          lines.push("戦闘の「🥊 わざ」コマンドを使えば、1〜4の固定ダメージで繊細にHPを削れるぞ。");
+          lines.push("削りすぎが怖い時は「わざ」を使うのじゃ。「はずかし固め・小」は1ダメージ固定。「ここはひとつガマン」は通常攻撃を弱めるぞ。");
         } else if (!state.gameCleared && p.level >= 50) {
-          // §61 v0.15: Lv50以上で究極ゴリラのHP調整ヒント
-          lines.push("究極ゴリラのHP調整には「わざ」が役立つ。固定ダメージで1ずつ削れるぞ！");
+          // §63 v0.16: Lv50以上で究極ゴリラのHP調整ヒント（ガマンも紹介）
+          lines.push("究極ゴリラのHP調整には「わざ」が役立つ。「はずかし固め・小」で1ずつ削るか、「ここはひとつガマン」で通常攻撃を弱めるのじゃ！");
         }
         // §52 v0.11.2: 横スクロール未訪問時のゲート案内
         var sideVisitedD = !!(state.sideMap && (
@@ -4994,6 +5029,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp12" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP12 で開始（わざ3回で捕獲圏内）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp10" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP10 で開始（捕獲圏内・境界）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-hp1" style="border-color:#ffb347;color:#ffb347;">🦍 究極ゴリラ HP1 で開始（わざで即死に注意）</button>';
+      html += '<p class="small" style="color:#a9e34b;margin-top:8px;">😤 ガマン確認 (§63 v0.16)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gaman-wilddog" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン状態でのらいぬ戦闘</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gaman-gorilla-hp12" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン状態で究極ゴリラHP12</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gaman-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ガマン状態解除</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5649,6 +5688,30 @@
       document.getElementById("btn-debug-gorilla-hp12").onclick = function () { debugForceUltimateGorillaHP12(); };
       document.getElementById("btn-debug-gorilla-hp10").onclick = function () { debugForceUltimateGorillaHP10(); };
       document.getElementById("btn-debug-gorilla-hp1").onclick = function () { debugForceUltimateGorillaHP1(); };
+      document.getElementById("btn-debug-gaman-wilddog").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        state.gamanActive = true;
+        showToast("[DEBUG] ガマン状態でのらいぬ戦闘開始！");
+      };
+      document.getElementById("btn-debug-gaman-gorilla-hp12").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        closeModal("settings-modal");
+        var boss = findById(UMA_DATA, "ultimategorilla");
+        actuallyStartBattle(boss);
+        state.enemy.hp = 12;
+        state.gamanActive = true;
+        renderEnemy();
+        showToast("[DEBUG] ガマン状態で究極ゴリラHP12開始！");
+      };
+      document.getElementById("btn-debug-gaman-reset").onclick = function () {
+        state.gamanActive = false;
+        showToast("[DEBUG] ガマン状態を解除した");
+        closeModal("settings-modal");
+      };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
@@ -6456,7 +6519,7 @@
     if (priority === 17) {
       if (tier === 1) return "横に長い冒険は一区切りついた。だが、伝説のUMAはまだ森のどこかにいる。";
       if (tier === 2) return "究極ゴリラは、ただ弱らせるだけでは捕まえられない。特別なアイテムと、特別な行動が必要らしい。";
-      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。HPを1〜10に調整するには戦闘の「🥊 わざ」コマンドが便利だぞ！「はずかし固め・小」なら1ダメージだけ与えられる。";
+      return "究極ゴリラを捕まえるには、Lv99以上、女神のウクレレ、HP1〜10まで弱らせることが必要だ。最後は「つかまえる」ではなく、「うたう」。HP1〜10に調整する時は「はずかし固め・小」や「ここはひとつガマン」が役に立つ。最後は「うたう」だ！";
     }
     // §59 v0.14: s6クリア済みだがチンパンジー未撃退 → チンパンジー撃退へ誘導
     if (priority === 9) {

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.15.1** |
+| 現在バージョン | **v0.16** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.15.1時点）
+## 現在実装済みの主要機能（v0.16時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,14 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.16] 捕獲支援技「ここはひとつガマン」**（§63）
+  - **`state.gamanActive`**: 戦闘中一時フラグ。`finishBattle()` で必ず `false` にリセット。永続ステータスは変更しない。
+  - **WAZA_DATA「gaman」**: `type: "weakenAttack"`。fixedDmg なし。
+  - **doFight()**: 会心計算後に `gamanActive` なら 1/4（最低1）。ガマン中ログ分岐（通常/会心で別メッセージ）。
+  - **useWaza()**: `type === "weakenAttack"` で固定ダメージ処理をスキップしフラグ操作。再使用は1ターン消費でメッセージ表示。
+  - **finishBattle()**: `state.gamanActive = false` 追加。勝利/捕獲/逃走/敗北すべてで解除。
+  - **openWazaMenu()**: 説明文更新・ガマン状態表示・type分岐レンダリング。
+  - **デバッグ §63**: ガマン状態での戦闘開始2本 + 解除ボタン。
 - **[v0.15.1] わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化**（§62）
   - **WAZA_DATA**: `hazukashigatame` 表示名を「はずかし固め・小」に変更（まほうの「はずかし固め」と区別。内部ID変更なし）。
   - **actuallyStartBattle()**: 戦闘開始時に `#waza-menu` も `hidden` に追加するバグ修正。
