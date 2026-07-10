@@ -5,6 +5,24 @@
 
 ---
 
+## v0.16.1 (2026-07-11)
+
+### 追加・変更
+
+- **`#battle-gaman-status` div 追加** (index.html): `#battle-player-status` 直後に配置。`updateBattlePlayerStatus()` の最後でガマン状態を反映（`hidden` クラスの付け外し）。`useWaza()` のガマン分岐でも即時呼び出し。
+- **`.btn-chance` CSS 追加** (style.css): `#btn-sing` に付与する金色点滅アニメーション。`!important` で `#battle-menu button` の通常スタイルに上書き。
+- **`updateSingButtonChance(active)` 新関数**: `#btn-sing` に `.btn-chance` を付与/除去するのみの小関数。`actuallyStartBattle()`・`finishBattle()` で `false` 呼び出しによりリセット。
+- **`checkUltimateGorillaHpHint()` 拡張**: HP1〜10に入ったとき、Lv99 × ウクレレ有無の4条件分岐でメッセージを切り替え。チャンス条件達成時のみ `updateSingButtonChance(true)` を呼び出す。
+- **デバッグ §64**: 3本追加（チャンス表示 / Lv不足 / ウクレレなし）。いずれも `actuallyStartBattle` → `enemy.hp = 10` → `renderEnemy` → `checkUltimateGorillaHpHint` の順で即時ヒント確認が可能。
+
+### 設計メモ
+
+- `updateSingButtonChance(false)` を `actuallyStartBattle` と `finishBattle` の両方で呼ぶ理由: 同じ戦闘画面を連続利用するとき（戦闘→フィールド→戦闘）にボタン状態が持ち越されないため。
+- ガマンインジケーターを `updateBattlePlayerStatus()` で制御した理由: 既存の呼び出し箇所（actuallyStartBattle / enemyTurn / handlePlayerDown / useWaza 内）にすでに組み込まれており、独立関数不要。
+- `node --check` → exit 0（構文エラーなし）。
+
+---
+
 ## v0.16 (2026-07-10)
 
 ### 追加・変更

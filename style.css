@@ -542,6 +542,17 @@ html, body {
   text-align: left;
 }
 
+/* §64 v0.16.1: うたうボタン捕獲チャンス演出 */
+.btn-chance {
+  animation: pulse-chance 1s ease-in-out infinite alternate;
+  border-color: #ffd700 !important;
+  color: #ffd700 !important;
+}
+@keyframes pulse-chance {
+  from { box-shadow: 0 0 4px #ffd700; }
+  to   { box-shadow: 0 0 14px #ffd700; }
+}
+
 .hidden {
   display: none !important;
 }

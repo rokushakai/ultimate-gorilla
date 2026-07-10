@@ -2750,6 +2750,7 @@
     document.getElementById("item-menu").classList.add("hidden");
     document.getElementById("waza-menu").classList.add("hidden");
     document.getElementById("battle-menu").classList.remove("hidden");
+    updateSingButtonChance(false);  // §64 v0.16.1: うたうボタンをリセット
 
     // 戦闘開始直後の誤タップ防止: 全コマンドをロック(§13.7)
     setBattleLocked(true);
@@ -2815,10 +2816,26 @@
   // ---------------------------------------------------------
   // 13. 戦闘コマンド: たたかう / まほう
   // ---------------------------------------------------------
+  // §64 v0.16.1: 条件別メッセージ + うたうボタン強調
   function checkUltimateGorillaHpHint(e) {
     if (!e || e.id !== "ultimategorilla") return;
-    if (e.hp >= 1 && e.hp <= 10) {
-      log("🎵 「うたう」チャンス！ 残りHP" + e.hp + "！ Lv99とウクレレがあれば今すぐ捕獲できる！");
+    if (e.hp < 1 || e.hp > 10) return;
+    var p = state.player;
+    var hasLv = p.level >= 99;
+    var hasUk = p.hasUkulele;
+    if (hasLv && hasUk) {
+      log("🎵 究極ゴリラが歌を待っている！");
+      log("HPは捕獲条件の範囲内だ！ 今こそ「うたう」チャンス！");
+      updateSingButtonChance(true);
+    } else if (!hasLv && !hasUk) {
+      log("究極ゴリラはかなり弱っている。");
+      log("しかし、まだ条件が足りない。もっと成長し、歌を届けるための楽器を探そう。");
+    } else if (!hasLv) {
+      log("究極ゴリラはかなり弱っている。");
+      log("だが、まだ勇者としての格が足りない気がする……Lv99以上になれば、何かが起きるかもしれない。");
+    } else {
+      log("究極ゴリラはかなり弱っている。");
+      log("だが、歌を届けるための大切な楽器が足りない気がする……");
     }
   }
 
@@ -3013,6 +3030,7 @@
         log("肩の力が抜けて、通常攻撃の威力が大きく下がった！");
         log("UMAを削りすぎにくくなった！");
       }
+      updateBattlePlayerStatus();  // §64 v0.16.1: ガマンインジケーターを即更新
       setTimeout(enemyTurn, 600);
       return;
     }
@@ -3453,6 +3471,7 @@
   function finishBattle() {
     state.inBattle = false;
     state.gamanActive = false;  // §63 v0.16: ガマン効果を解除
+    updateSingButtonChance(false);  // §64 v0.16.1: うたうボタンをリセット
     state.enemy = null;
     stopWalking(); // 残留walkTimerをリセット
     updateBGM("field");
@@ -3585,6 +3604,26 @@
     var p = state.player;
     document.getElementById("b-hp-text").textContent = "HP " + p.hp + "/" + p.maxHp;
     document.getElementById("b-mp-text").textContent = "MP " + p.mp + "/" + p.maxMp;
+    // §64 v0.16.1: ガマン中インジケーター
+    var gamanEl = document.getElementById("battle-gaman-status");
+    if (gamanEl) {
+      if (state.gamanActive) {
+        gamanEl.classList.remove("hidden");
+      } else {
+        gamanEl.classList.add("hidden");
+      }
+    }
+  }
+
+  // §64 v0.16.1: うたうボタンの捕獲チャンス演出
+  function updateSingButtonChance(active) {
+    var btn = document.getElementById("btn-sing");
+    if (!btn) return;
+    if (active) {
+      btn.classList.add("btn-chance");
+    } else {
+      btn.classList.remove("btn-chance");
+    }
   }
 
   function setBar(barId, textId, val, max) {
@@ -5033,6 +5072,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gaman-wilddog" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン状態でのらいぬ戦闘</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gaman-gorilla-hp12" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン状態で究極ゴリラHP12</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gaman-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ガマン状態解除</button>';
+      html += '<p class="small" style="color:#c77dff;margin-top:8px;">🎵 捕獲チャンス演出テスト (§64 v0.16.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-chance-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv99+ウクレレ+HP10（チャンス表示確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-nolv-ukulele-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv50+ウクレレ+HP10（Lv不足メッセージ確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gorilla-lv99-noukulele-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv99+ウクレレなし+HP10（ウクレレ不足確認）</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5711,6 +5754,73 @@
         state.gamanActive = false;
         showToast("[DEBUG] ガマン状態を解除した");
         closeModal("settings-modal");
+      };
+      document.getElementById("btn-debug-gorilla-chance-hp10").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var p = state.player;
+        p.level = 99;
+        p.nextExp = 99 * 10 + 15;
+        p.exp = 0;
+        p.baseMaxHp = 20 + 6 * 98;
+        p.baseMaxMp = 6 + 2 * 98;
+        p.baseAtk = 5 + 2 * 98;
+        p.baseDef = 2 + 1 * 98;
+        recomputeStats();
+        p.hp = p.maxHp; p.mp = p.maxMp;
+        p.level99Shown = true;
+        state.eventFlags.level99Reached = true;
+        p.hasUkulele = true;
+        closeModal("settings-modal");
+        var boss = findById(UMA_DATA, "ultimategorilla");
+        actuallyStartBattle(boss);
+        state.enemy.hp = 10;
+        renderEnemy();
+        checkUltimateGorillaHpHint(state.enemy);
+        showToast("[DEBUG] Lv99+ウクレレ+HP10 チャンス演出確認！");
+      };
+      document.getElementById("btn-debug-gorilla-nolv-ukulele-hp10").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var p = state.player;
+        p.level = 50;
+        p.nextExp = 50 * 10 + 15;
+        p.exp = 0;
+        p.baseMaxHp = 20 + 6 * 49;
+        p.baseMaxMp = 6 + 2 * 49;
+        p.baseAtk = 5 + 2 * 49;
+        p.baseDef = 2 + 1 * 49;
+        recomputeStats();
+        p.hp = p.maxHp; p.mp = p.maxMp;
+        p.hasUkulele = true;
+        closeModal("settings-modal");
+        var boss = findById(UMA_DATA, "ultimategorilla");
+        actuallyStartBattle(boss);
+        state.enemy.hp = 10;
+        renderEnemy();
+        checkUltimateGorillaHpHint(state.enemy);
+        showToast("[DEBUG] Lv50+ウクレレ+HP10 Lv不足メッセージ確認！");
+      };
+      document.getElementById("btn-debug-gorilla-lv99-noukulele-hp10").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var p = state.player;
+        p.level = 99;
+        p.nextExp = 99 * 10 + 15;
+        p.exp = 0;
+        p.baseMaxHp = 20 + 6 * 98;
+        p.baseMaxMp = 6 + 2 * 98;
+        p.baseAtk = 5 + 2 * 98;
+        p.baseDef = 2 + 1 * 98;
+        recomputeStats();
+        p.hp = p.maxHp; p.mp = p.maxMp;
+        p.level99Shown = true;
+        state.eventFlags.level99Reached = true;
+        p.hasUkulele = false;
+        closeModal("settings-modal");
+        var boss = findById(UMA_DATA, "ultimategorilla");
+        actuallyStartBattle(boss);
+        state.enemy.hp = 10;
+        renderEnemy();
+        checkUltimateGorillaHpHint(state.enemy);
+        showToast("[DEBUG] Lv99+ウクレレなし+HP10 ウクレレ不足確認！");
       };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");

@@ -14,6 +14,17 @@
 
 ## ✅ 実装済み
 
+### Version 0.16.1 — 究極ゴリラ捕獲チャンス演出・ガマン状態表示 (§64)
+
+- **`#battle-gaman-status`** (§64): 戦闘画面にガマン中インジケーター追加（index.html + updateBattlePlayerStatus） ✅
+- **`.btn-chance`** (§64): うたうボタン用の金色点滅アニメーション CSS 追加 ✅
+- **`updateSingButtonChance(active)`** (§64): うたうボタンのチャンス演出を切替える新関数 ✅
+- **`checkUltimateGorillaHpHint()` 4分岐** (§64): Lv99+ウクレレ / Lv不足 / ウクレレなし / 両方なし の条件別メッセージ + チャンス時うたうボタン強調 ✅
+- **`useWaza()` ガマン分岐** (§64): `updateBattlePlayerStatus()` 即時呼び出し追加 ✅
+- **`actuallyStartBattle()`** (§64): `updateSingButtonChance(false)` リセット追加 ✅
+- **`finishBattle()`** (§64): `updateSingButtonChance(false)` リセット追加 ✅
+- **デバッグ §64** (§64): 条件別テスト3ボタン追加（チャンス表示 / Lv不足 / ウクレレなし） ✅
+
 ### Version 0.16 — 捕獲支援技「ここはひとつガマン」 (§63)
 
 - **WAZA_DATA「gaman」** (§63): type:"weakenAttack" の新技エントリ追加 ✅
@@ -29,7 +40,6 @@
 
 ### 今後の TODO
 
-- 究極ゴリラ捕獲直前の演出強化（HP警告・捕獲チャンス告知など）
 - わざの「戦闘コマンドの順番・配置」見直し（ユーザーフィードバック次第）
 
 ### Version 0.15.1 — わざコマンド安定化・表示整理・究極ゴリラ捕獲テスト強化 (§62)

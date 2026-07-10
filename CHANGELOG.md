@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.16.1] - 2026-07-11 — 究極ゴリラ捕獲チャンス演出・ガマン状態表示 (§64)
+
+### Added
+- **`#battle-gaman-status`** (§64): 戦闘画面のプレイヤーステータス欄の下にガマン中インジケーター追加。`state.gamanActive` に連動して表示/非表示。`updateBattlePlayerStatus()` で制御。
+- **`.btn-chance` + `@keyframes pulse-chance`** (§64): うたうボタンが捕獲チャンス時に金色に点滅するアニメーション CSS 追加。
+- **`updateSingButtonChance(active)`** (§64): `#btn-sing` に `.btn-chance` クラスを付与/除去する新関数。
+
+### Changed
+- **`checkUltimateGorillaHpHint()`** (§64): 単一メッセージから条件別4分岐に拡張。Lv99+ウクレレ両方あり→チャンスメッセージ+うたうボタン強調、Lv不足→専用メッセージ、ウクレレなし→専用メッセージ、両方なし→両方不足メッセージ。
+- **`useWaza()` ガマン分岐** (§64): ガマン状態変更直後に `updateBattlePlayerStatus()` を呼び出し、インジケーターを即時反映。
+- **`actuallyStartBattle()`** (§64): 戦闘開始時に `updateSingButtonChance(false)` を呼び出しうたうボタンをリセット。
+- **`finishBattle()`** (§64): 戦闘終了時に `updateSingButtonChance(false)` を呼び出しうたうボタンをリセット。
+- **デバッグ §64** (§64): 「Lv99+ウクレレ+HP10（チャンス表示確認）」「Lv50+ウクレレ+HP10（Lv不足確認）」「Lv99+ウクレレなし+HP10（ウクレレ不足確認）」3ボタン追加。
+
 ## [0.16] - 2026-07-10 — 捕獲支援技「ここはひとつガマン」 (§63)
 
 ### Added

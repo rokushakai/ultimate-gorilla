@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.16** |
+| 現在バージョン | **v0.16.1** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.16時点）
+## 現在実装済みの主要機能（v0.16.1時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.16.1] 究極ゴリラ捕獲チャンス演出・ガマン状態表示**（§64）
+  - **`#battle-gaman-status`**: 戦闘画面にガマン中インジケーター（緑色テキスト）。`updateBattlePlayerStatus()` + `useWaza()` ガマン分岐で制御。
+  - **`.btn-chance`**: うたうボタンの金色点滅アニメーション CSS。チャンス条件達成時のみ付与。
+  - **`updateSingButtonChance(active)`**: `#btn-sing` に `.btn-chance` を付与/除去。`actuallyStartBattle` / `finishBattle` でリセット。
+  - **`checkUltimateGorillaHpHint()`**: HP1〜10時に Lv99+ウクレレ / Lv不足 / ウクレレなし / 両方なし の4分岐メッセージ。チャンス時うたうボタン強調。
 - **[v0.16] 捕獲支援技「ここはひとつガマン」**（§63）
   - **`state.gamanActive`**: 戦闘中一時フラグ。`finishBattle()` で必ず `false` にリセット。永続ステータスは変更しない。
   - **WAZA_DATA「gaman」**: `type: "weakenAttack"`。fixedDmg なし。

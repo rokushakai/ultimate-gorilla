@@ -3653,3 +3653,81 @@ v0.15 で追加したわざコマンドのUX改善と捕獲テスト強化。
 | `getProgressHint priority17 tier3` | 「ここはひとつガマン」を追記 |
 | index.html ヘルプ | 補助技セクションに「ここはひとつガマン」説明を追加 |
 | デバッグ §63 | ガマン状態での戦闘開始ボタン2本 + 解除ボタン1本追加 |
+
+## §64 v0.16.1 — 究極ゴリラ捕獲チャンス演出・ガマン状態表示
+
+### 概要
+
+究極ゴリラのHPが1〜10になったとき、条件充足状況に応じたメッセージを表示し、
+捕獲チャンス時は「🎵 うたう」ボタンを視覚的に強調する。
+またガマン中インジケーターを戦闘画面に常時表示する。
+
+### 実装内容
+
+#### ① `#battle-gaman-status` — ガマン中インジケーター（index.html）
+
+`#battle-player-status` の直後に追加。`state.gamanActive` に連動して表示/非表示。
+
+```html
+<div id="battle-gaman-status" class="hidden" style="font-size:0.75em;color:#a9e34b;text-align:center;padding:2px 0;">😤 ガマン中：通常攻撃↓</div>
+```
+
+`updateBattlePlayerStatus()` でガマン状態を反映。`useWaza()` のガマン分岐でも即時呼び出し。
+
+#### ② `.btn-chance` — うたうボタン演出（style.css）
+
+```css
+.btn-chance {
+  animation: pulse-chance 1s ease-in-out infinite alternate;
+  border-color: #ffd700 !important;
+  color: #ffd700 !important;
+}
+@keyframes pulse-chance {
+  from { box-shadow: 0 0 4px #ffd700; }
+  to   { box-shadow: 0 0 14px #ffd700; }
+}
+```
+
+#### ③ `checkUltimateGorillaHpHint(e)` — 条件別4分岐
+
+| 条件 | メッセージ | うたうボタン |
+|---|---|---|
+| Lv99+ ＆ ウクレレあり | 「🎵 究極ゴリラが歌を待っている！HPは捕獲条件の範囲内だ！今こそ「うたう」チャンス！」 | `btn-chance` クラス付与（金色点滅） |
+| Lv不足 ＆ ウクレレなし | 「まだ条件が足りない。もっと成長し、歌を届けるための楽器を探そう。」 | 変化なし |
+| Lv不足のみ | 「まだ勇者としての格が足りない気がする……Lv99以上になれば、何かが起きるかもしれない。」 | 変化なし |
+| ウクレレなしのみ | 「歌を届けるための大切な楽器が足りない気がする……」 | 変化なし |
+
+#### ④ `updateSingButtonChance(active)` — 新関数
+
+```javascript
+function updateSingButtonChance(active) {
+  var btn = document.getElementById("btn-sing");
+  if (!btn) return;
+  if (active) { btn.classList.add("btn-chance"); }
+  else        { btn.classList.remove("btn-chance"); }
+}
+```
+
+呼び出し元: `checkUltimateGorillaHpHint`（チャンス時）、`actuallyStartBattle`（リセット）、`finishBattle`（リセット）。
+
+### デバッグ §64（条件別テスト3本）
+
+| ボタンID | 内容 |
+|---|---|
+| `btn-debug-gorilla-chance-hp10` | Lv99+ウクレレ+HP10（チャンス表示確認） |
+| `btn-debug-gorilla-nolv-ukulele-hp10` | Lv50+ウクレレ+HP10（Lv不足メッセージ確認） |
+| `btn-debug-gorilla-lv99-noukulele-hp10` | Lv99+ウクレレなし+HP10（ウクレレ不足確認） |
+
+### 変更箇所一覧
+
+| 箇所 | 内容 |
+|---|---|
+| `index.html` | `#battle-gaman-status` div 追加 |
+| `style.css` | `.btn-chance` + `@keyframes pulse-chance` 追加 |
+| `checkUltimateGorillaHpHint()` | 4分岐 + `updateSingButtonChance` 呼び出し |
+| `updateSingButtonChance()` | 新関数追加 |
+| `updateBattlePlayerStatus()` | `#battle-gaman-status` 表示切替を追加 |
+| `useWaza()` | ガマン分岐に `updateBattlePlayerStatus()` 呼び出し追加 |
+| `actuallyStartBattle()` | `updateSingButtonChance(false)` リセット追加 |
+| `finishBattle()` | `updateSingButtonChance(false)` リセット追加 |
+| デバッグ §64 | 3ボタン追加（HTML + ハンドラ） |
