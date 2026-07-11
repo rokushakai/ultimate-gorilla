@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.24** |
+| 現在バージョン | **v0.24.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,12 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.24.1] 仲間セリフ安定化・横スクロール制覇のみ反応追加**（§76）
+  - **`getCompanionQuote(c)` null ガード**: `if (!c) return null` 追加。undefined フィールドも `&&` で安全。
+  - **priority 3**: `isLegendaryEquipmentComplete() && !isFullyCompleted()` → `legendaryLine` 橙 `#ffb347`
+  - **priority 7**: `isSideStoryCleared() && !state.gameCleared` → `sideClearLine` 薄紫 `#c8b4ff`
+  - **デバッグ §76**: 通常 / 横スクロール制覇のみ / 伝説装備コンプのみ の3ボタン追加（計8状態テスト可能）
+  - **保護**: BGM・仲間能力・加入処理・パーティ上限は変更なし。
 - **[v0.24] 仲間4人の会話バリエーション追加**（§75）
   - **`getCompanionQuote(c)` ヘルパー**: 5段階状態判定（legendary > fullClear > dex > sideClear > clear）で `{text, color}` を返す。
   - **`COMPANION_DATA` 拡張**: 全4仲間に `sideClearLine`（薄紫）/ `dexLine`（水色）/ `legendaryLine`（明金）を追加。既存 `clearLine` / `fullClearLine` は維持。

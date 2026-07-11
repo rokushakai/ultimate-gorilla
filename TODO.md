@@ -14,6 +14,13 @@
 
 ## ✅ 実装済み
 
+### Version 0.24.1 — 仲間セリフ安定化・横スクロール制覇のみ反応追加 (§76)
+
+- **`getCompanionQuote(c)` null ガード追加** (§76): `if (!c) return null` で安全化 ✅
+- **横スクロール制覇のみ（未クリア）対応** (§76): `isSideStoryCleared() && !state.gameCleared` → `sideClearLine` 薄紫 ✅
+- **伝説装備コンプリートのみ対応** (§76): `isLegendaryEquipmentComplete() && !isFullyCompleted()` → `legendaryLine` 橙 ✅
+- **デバッグ §76**: 通常状態・横スクロール制覇のみ・伝説装備コンプのみ のテストボタン3本追加 ✅
+
 ### Version 0.24 — 仲間4人の会話バリエーション追加 (§75)
 
 - **`getCompanionQuote(c)` ヘルパー追加** (§75): 5段階状態判定で適切なセリフと色を返す ✅

@@ -3986,6 +3986,23 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 
 冒険の記録「次の目標」最終メッセージ: 「酒場で仲間たちの言葉を聞いてみるのもよいでしょう。」を含める。
 
+### v0.24.1 getCompanionQuote 安定化・優先順位拡張 [実装済み]
+
+`getCompanionQuote(c)` の完全な優先順位（§76）:
+
+| 優先 | 条件 | フィールド | 色 |
+|---|---|---|---|
+| 1 | `isFullyCompleted() && isLegendaryEquipmentComplete()` | `legendaryLine` | `#ffd700` 明金 |
+| 2 | `isFullyCompleted()` | `fullClearLine` | `#ffd166` 金 |
+| 3 | `isLegendaryEquipmentComplete()` (未完全達成) | `legendaryLine` | `#ffb347` 橙 |
+| 4 | `state.gameCleared && isUmaDexComplete()` | `dexLine` | `#74c0fc` 水色 |
+| 5 | `state.gameCleared && isSideStoryCleared()` | `sideClearLine` | `#c8b4ff` 薄紫 |
+| 6 | `state.gameCleared` | `clearLine` | `#a9e34b` 緑 |
+| 7 | `isSideStoryCleared()` (未クリア) | `sideClearLine` | `#c8b4ff` 薄紫 |
+| - | 上記以外 | null（セリフなし） | — |
+
+安全化: `if (!c) return null` ガード追加。`c.legendaryLine` 等は undefined でも `&&` で安全。
+
 ### 実家ヒント優先度 (openHomeModal)
 
 1. `isFullyCompleted()` → 余韻ヒント（最高優先）

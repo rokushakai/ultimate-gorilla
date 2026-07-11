@@ -5,6 +5,19 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.24.1] - 2026-07-11 — 仲間セリフ安定化・横スクロール制覇のみ反応追加 (§76)
+
+### Changed
+- **`getCompanionQuote(c)` 安定化** (§76): `if (!c) return null` null ガード追加。優先順位に2状態を追加。
+  - **priority 3 追加**: `isLegendaryEquipmentComplete() && !isFullyCompleted()` → `legendaryLine` 橙 `#ffb347`（完全達成前でも伝説装備コンプで反応）
+  - **priority 7 追加**: `isSideStoryCleared() && !state.gameCleared` → `sideClearLine` 薄紫 `#c8b4ff`（横スクロール制覇のみ・未クリアでも反応）
+
+### Added
+- **デバッグ §76**: 3ボタン追加
+  - `btn-debug-companions-normal` → 通常状態（未クリア・未制覇）でセリフなし確認
+  - `btn-debug-companions-side-only` → 横スクロール制覇のみ（未クリア）→ 薄紫セリフ確認
+  - `btn-debug-companions-legendary-only` → 伝説装備コンプリートのみ（未完全達成）→ 橙セリフ確認
+
 ## [0.24] - 2026-07-11 — 仲間4人の会話バリエーション追加 (§75)
 
 ### Added

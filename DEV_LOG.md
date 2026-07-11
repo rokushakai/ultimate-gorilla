@@ -5,6 +5,21 @@
 
 ---
 
+## v0.24.1 (2026-07-11)
+
+### 追加・変更
+
+- **`getCompanionQuote(c)` 安全化 (§76)**: `if (!c) return null` ガードを先頭に追加。undefined な仲間データでも落ちない。
+- **priority 3 — 伝説装備コンプリートのみ**: `isLegendaryEquipmentComplete()` だが `isFullyCompleted()` でない場合、`legendaryLine` を `#ffb347`（橙）で表示。priority 2 の fullClear チェックより後に配置するため `!isFullyCompleted()` の明示判定は不要（先に return 済み）。
+- **priority 7 — 横スクロール制覇のみ（未クリア）**: `isSideStoryCleared()` だが `state.gameCleared` でない場合、`sideClearLine` を `#c8b4ff`（薄紫）で表示。先行の `state.gameCleared && isSideStoryCleared()` チェック（priority 5）で return 済みのため `!state.gameCleared` 判定不要。
+- **デバッグ §76**: `btn-debug-companions-normal` / `btn-debug-companions-side-only` / `btn-debug-companions-legendary-only` の3ボタン追加。v0.24 の5ボタンと合わせて計8状態テスト可能。
+
+### 注意点
+
+- `getCompanionQuote(c)` の全7 branch は短絡評価（先行 return）で動作するため、`!isFullyCompleted()` / `!state.gameCleared` の否定条件を明示しなくても正しく動く。
+- `legendaryLine` が伝説装備コンプのみ（橙）と完全達成+伝説装備（明金）の両方で使われる。どちらも「伝説装備全部揃えたのか」という内容で自然。
+- `sideClearLine` もクリア+制覇（priority 5）と制覇のみ（priority 7）の両方で使われる。どちらも横スクロール達成の喜びを表すセリフで自然。
+
 ## v0.23 (2026-07-11)
 
 ### 追加・変更
