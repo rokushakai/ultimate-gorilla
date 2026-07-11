@@ -5,6 +5,17 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.24] - 2026-07-11 — 仲間4人の会話バリエーション追加 (§75)
+
+### Added
+- **`getCompanionQuote(c)` ヘルパー** (§75): 5段階状態を判定して `{text, color}` を返す。優先順: legendary > fullClear > dex > sideClear > clear。BGM / 仲間能力値 / 加入処理は変更なし。
+- **`COMPANION_DATA` に3フィールド追加** (§75): 全4仲間に `sideClearLine`（クリア+横スクロール制覇・薄紫 `#c8b4ff`）/ `dexLine`（クリア+図鑑コンプ・水色 `#74c0fc`）/ `legendaryLine`（完全達成+伝説装備コンプ・明金 `#ffd700`）を追加。既存の `clearLine` / `fullClearLine` は維持。
+- **デバッグ §75**: `btn-debug-companions-postclear`（クリアのみ）・`btn-debug-companions-side-cleared`（+横スクロール）・`btn-debug-companions-dex-complete`（+図鑑）・`btn-debug-companions-full-clear`（完全達成）・`btn-debug-companions-legendary`（+伝説装備）の5ボタン追加。各ボタンで該当状態を即設定し酒場を開く。
+
+### Changed
+- **`renderTavernRecruit()` / `renderTavernViewParty()`** (§75): 2状態ハードコードから `getCompanionQuote(c)` 呼び出しに置き換え。
+- **冒険の記録「次の目標」** (§75): 全達成時メッセージを「酒場で仲間たちの言葉を聞いてみるのもよいでしょう。」を含む文に更新。
+
 ## [0.23] - 2026-07-11 — クリア後フィールドBGM軽量メロディ調整 (§74)
 
 ### Added

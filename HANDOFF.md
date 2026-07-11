@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.23** |
+| 現在バージョン | **v0.24** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,13 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.24] 仲間4人の会話バリエーション追加**（§75）
+  - **`getCompanionQuote(c)` ヘルパー**: 5段階状態判定（legendary > fullClear > dex > sideClear > clear）で `{text, color}` を返す。
+  - **`COMPANION_DATA` 拡張**: 全4仲間に `sideClearLine`（薄紫）/ `dexLine`（水色）/ `legendaryLine`（明金）を追加。既存 `clearLine` / `fullClearLine` は維持。
+  - **酒場「仲間を探す」「仲間を見る」**: `getCompanionQuote()` ベースの多段階セリフ表示に更新。
+  - **冒険の記録「次の目標」**: 全達成時に酒場の仲間を促すメッセージへ更新。
+  - **デバッグ §75**: 5状態テストボタン追加（クリアのみ/+横スクロール/+図鑑/完全達成/+伝説装備）。
+  - **保護対象**: BGM制御・仲間能力値・加入処理・パーティ上限 は一切変更なし。
 - **[v0.23] クリア後フィールドBGM軽量メロディ調整**（§74）
   - **`BGM_DATA.fieldClear`**: クリア後専用フィールドBGMエントリを追加。triangle音色・Cメジャー・約7.75秒ループ。穏やか余韻メロディ。BGM制御コードは一切変更なし。
   - **`getFieldBgmType()`**: `state.gameCleared` に応じて `"field"` / `"fieldClear"` を返すヘルパー。

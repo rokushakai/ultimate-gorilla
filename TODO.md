@@ -14,6 +14,15 @@
 
 ## ✅ 実装済み
 
+### Version 0.24 — 仲間4人の会話バリエーション追加 (§75)
+
+- **`getCompanionQuote(c)` ヘルパー追加** (§75): 5段階状態判定で適切なセリフと色を返す ✅
+- **`COMPANION_DATA` に3フィールド追加** (§75): `sideClearLine` / `dexLine` / `legendaryLine` ✅
+- **`renderTavernRecruit()` 更新** (§75): 2状態 → `getCompanionQuote()` 使用 ✅
+- **`renderTavernViewParty()` 更新** (§75): 2状態 → `getCompanionQuote()` 使用 ✅
+- **冒険の記録「次の目標」更新** (§75): 全達成時に酒場の仲間を促すメッセージ追加 ✅
+- **デバッグ §75**: 仲間セリフ状態テストボタン追加 ✅
+
 ### Version 0.23 — クリア後フィールドBGM軽量メロディ調整 (§74)
 
 - **`BGM_DATA.fieldClear` 追加** (§74): triangle音色・Cメジャー・穏やか余韻ループ ✅

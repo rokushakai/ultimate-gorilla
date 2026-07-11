@@ -556,7 +556,10 @@
       joinMsgs: ["ジュリタニは拳を鳴らした。", "面白そうだな。付き合ってやるよ。"],
       failMsgs: ["ジュリタニは腕を組んだ。", "まだお前の実力を見せてもらってないな。"],
       clearLine: "歌で究極ゴリラを止めるなんて、最後まで派手だったな。でも、あの一撃じゃなくて一曲で決めたのが、あんたらしいよ。",
-      fullClearLine: "ここまで全部やりきるとはな。会心の一撃でも届かない場所に、あんたは歌で届いたんだな。" },
+      fullClearLine: "ここまで全部やりきるとはな。会心の一撃でも届かない場所に、あんたは歌で届いたんだな。",
+      sideClearLine: "チンパンジーまで退かせるなんて、ずいぶん遠くまで来たな。横に長い旅も、なかなか悪くなかったぜ。",
+      dexLine: "UMAを全部記録したのか。会心の一撃だけじゃなく、根気も必要だったな。",
+      legendaryLine: "伝説装備まで全部そろえたのか。見た目も中身も、もう完全に勇者だな。" },
     { id: "shurittani", name: "シュリタニ", emoji: "🪤",
       feature: "UMAを捕まえるのが得意",
       effectDesc: "捕獲率+0.10",
@@ -565,7 +568,10 @@
       joinMsgs: ["シュリタニは捕獲ロープを確認した。", "UMA探しなら任せて。"],
       failMsgs: ["シュリタニは地図を見つめている。", "今は準備が足りないみたい。"],
       clearLine: "究極ゴリラまで捕まえるなんて、さすがだね。捕獲の極意、ちゃんと身についたみたい。",
-      fullClearLine: "図鑑まで全部埋まったんだね。一匹ずつ向き合ってきた証だよ。" },
+      fullClearLine: "図鑑まで全部埋まったんだね。一匹ずつ向き合ってきた証だよ。",
+      sideClearLine: "強い相手を倒すだけじゃなくて、ちゃんと向き合って進んできたんだね。",
+      dexLine: "図鑑が全部埋まったんだね。一匹ずつ見つけて、弱らせて、向き合ってきた証だよ。",
+      legendaryLine: "伝説装備も全部そろったんだね。道具も、仲間も、思い出も、ちゃんと積み重なってる。" },
     { id: "norio",      name: "ノリオ",     emoji: "📈",   // §45 v0.9.2: 逃走→経験値2倍に変更
       feature: "経験値が2倍になる",
       effectDesc: "獲得経験値×2",
@@ -574,7 +580,10 @@
       joinMsgs: ["ノリオはニヤリと笑った。", "俺と一緒にいれば、経験値がぐんぐん上がるぞ。"],
       failMsgs: ["ノリオは考え込んでいる。", "まだタイミングじゃないな。"],
       clearLine: "経験値だけじゃ測れない冒険だったな。でもまあ、ここまで来たならEXPもだいぶ稼いだだろ？",
-      fullClearLine: "完全達成か。もう経験値2倍でも足りないくらい、濃い旅だったな。" },
+      fullClearLine: "完全達成か。もう経験値2倍でも足りないくらい、濃い旅だったな。",
+      sideClearLine: "横スクロール編、経験値的にもだいぶおいしかったな。いや、もちろん思い出もだけどな。",
+      dexLine: "図鑑コンプリートか。経験値には出ないけど、こういう達成感も悪くないな。",
+      legendaryLine: "伝説装備まで全部そろえたのか。もう装備欄だけで経験値がにじみ出てるぞ。" },
     { id: "harumi",     name: "ハルミ",     emoji: "✨",
       feature: "まほうが得意",
       effectDesc: "まほう効果+20%",
@@ -583,8 +592,31 @@
       joinMsgs: ["ハルミは静かに呪文を唱えた。", "魔法で支えます。"],
       failMsgs: ["ハルミは首をかしげた。", "魔力の流れがまだ合わないみたい。"],
       clearLine: "最後は魔法じゃなくて歌だったのね。でも、そういう力も私は好きよ。",
-      fullClearLine: "森も聖域も図鑑も、全部つながったのね。この旅、ちゃんと物語になったわ。" }
+      fullClearLine: "森も聖域も図鑑も、全部つながったのね。この旅、ちゃんと物語になったわ。",
+      sideClearLine: "聖域まで越えたのね。森の外側にも、ちゃんと物語があったんだわ。",
+      dexLine: "図鑑が完成したのね。名前を記録するって、その存在を忘れないってことなのかもしれない。",
+      legendaryLine: "伝説装備が全部そろったのね。武器や防具も、旅の記憶をまとっているみたい。" }
   ];
+
+  // §75 v0.24: 仲間セリフ状態判定ヘルパー。優先度: legendary > fullClear > dex > side > clear
+  function getCompanionQuote(c) {
+    if (isFullyCompleted() && isLegendaryEquipmentComplete() && c.legendaryLine) {
+      return { text: c.legendaryLine, color: "#ffd700" };
+    }
+    if (isFullyCompleted() && c.fullClearLine) {
+      return { text: c.fullClearLine, color: "#ffd166" };
+    }
+    if (state.gameCleared && isUmaDexComplete() && c.dexLine) {
+      return { text: c.dexLine, color: "#74c0fc" };
+    }
+    if (state.gameCleared && isSideStoryCleared() && c.sideClearLine) {
+      return { text: c.sideClearLine, color: "#c8b4ff" };
+    }
+    if (state.gameCleared && c.clearLine) {
+      return { text: c.clearLine, color: "#a9e34b" };
+    }
+    return null;
+  }
 
   // データ検索用のショートカット(参照頻度が高いものだけ用意)
   function findById(list, id) {
@@ -3897,7 +3929,7 @@
     } else if (!legendComplete) {
       nextGoal = "伝説装備を全7種集めよう。装備画面や冒険の記録で進捗を確認できます。";
     } else {
-      nextGoal = "すべての大きな目標を達成済み！仲間のセリフを見たり、森を散歩したり、余韻を楽しもう。";
+      nextGoal = "すべての大きな目標を達成済み！酒場で仲間たちの言葉を聞いてみるのもよいでしょう。森を散歩したり、余韻をゆっくり楽しもう。";
     }
     html += '<p style="font-size:0.85em;color:#e0e0e0;margin:3px 0;">' + nextGoal + '</p>';
     html += '</div>';
@@ -4432,11 +4464,10 @@
       if (!inParty) {
         html += '<span class="small" style="color:#ffd166;margin-top:2px;">' + c.effectDesc + "</span>";
       }
-      // §66 v0.17.1 / §69 v0.19: クリア後仲間セリフ（完全達成は専用セリフ優先）
-      if (isFullyCompleted() && c.fullClearLine) {
-        html += '<p class="small" style="margin:4px 0 0;color:#ffd166;font-style:italic;">「' + c.fullClearLine + '」</p>';
-      } else if (state.gameCleared && c.clearLine) {
-        html += '<p class="small" style="margin:4px 0 0;color:#a9e34b;font-style:italic;">「' + c.clearLine + '」</p>';
+      // §75 v0.24: クリア後仲間セリフ多段階表示
+      var _rq = getCompanionQuote(c);
+      if (_rq) {
+        html += '<p class="small" style="margin:4px 0 0;color:' + _rq.color + ';font-style:italic;">「' + _rq.text + '」</p>';
       }
       html += "</div>";
     });
@@ -4464,11 +4495,10 @@
         html += "<p style=\"margin:0 0 4px;\"><b>" + c.emoji + " " + c.name + "</b> <span class=\"small\" style=\"color:#06d6a0;\">同行中</span></p>";
         html += '<p class="small" style="margin:0 0 2px;">' + c.feature + "</p>";
         html += '<p class="small" style="margin:0;color:#ffd166;">' + c.effectDesc + "</p>";
-        // §66 v0.17.1 / §69 v0.19: クリア後仲間セリフ（完全達成は専用セリフ優先）
-        if (isFullyCompleted() && c.fullClearLine) {
-          html += '<p class="small" style="margin:4px 0 0;color:#ffd166;font-style:italic;">「' + c.fullClearLine + '」</p>';
-        } else if (state.gameCleared && c.clearLine) {
-          html += '<p class="small" style="margin:4px 0 0;color:#a9e34b;font-style:italic;">「' + c.clearLine + '」</p>';
+        // §75 v0.24: クリア後仲間セリフ多段階表示
+        var _vq = getCompanionQuote(c);
+        if (_vq) {
+          html += '<p class="small" style="margin:4px 0 0;color:' + _vq.color + ';font-style:italic;">「' + _vq.text + '」</p>';
         }
         html += "</div>";
       });
@@ -5610,7 +5640,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-dex-one-seen" style="border-color:#74c0fc;color:#74c0fc;">📖 最初のUMAだけ「発見済み」（他は未発見）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑を全リセット（初期状態）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間クリア後セリフ確認（クリア状態+仲間全員）</button>';
+      html += '<p class="small" style="color:#a9e34b;margin-top:8px;">👥 仲間セリフバリエーション (§75 v0.24)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間セリフ: クリアのみ（緑）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-side-cleared" style="border-color:#c8b4ff;color:#c8b4ff;">👥 仲間セリフ: クリア+横スクロール制覇（薄紫）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-dex-complete" style="border-color:#74c0fc;color:#74c0fc;">👥 仲間セリフ: クリア+図鑑コンプ（水色）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-full-clear" style="border-color:#ffd166;color:#ffd166;">👥 仲間セリフ: 完全達成（金）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-legendary" style="border-color:#ffd700;color:#ffd700;">👥 仲間セリフ: 完全達成+伝説装備コンプ（明金）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -6511,14 +6546,77 @@
         renderStatus();
         showToast("[DEBUG] 完全達成状態！称号「究極とUMA図鑑を極めし者」を確認しよう");
       };
+      // §75 v0.24: 仲間セリフバリエーションテスト
       document.getElementById("btn-debug-companions-postclear").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
         state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj75a = 1; _sj75a <= 6; _sj75a++) { state.sideMap.stageCleared[String(_sj75a)] = false; }
+        state.sideMap.defeatedEnemies["6:34,2"] = false;
+        UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
         state.player.companions = ["juritani", "shurittani"];
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
-        showToast("[DEBUG] クリア済み+ジュリタニ・シュリタニ同行。「仲間を見る」でセリフ確認");
+        showToast("[DEBUG] クリアのみ（緑セリフ）。「仲間を見る」で確認");
+      };
+      document.getElementById("btn-debug-companions-side-cleared").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj75b = 1; _sj75b <= 6; _sj75b++) { state.sideMap.stageCleared[String(_sj75b)] = true; }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
+        state.player.companions = ["juritani", "shurittani"];
+        saveGame();
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG] クリア+横スクロール制覇（薄紫セリフ）。「仲間を見る」で確認");
+      };
+      document.getElementById("btn-debug-companions-dex-complete").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj75c = 1; _sj75c <= 6; _sj75c++) { state.sideMap.stageCleared[String(_sj75c)] = false; }
+        state.sideMap.defeatedEnemies["6:34,2"] = false;
+        UMA_DATA.forEach(function(m) { state.player.dex[m.id] = "captured"; });
+        state.dexCompleteRewardClaimed = true;
+        state.player.companions = ["juritani", "shurittani"];
+        saveGame();
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG] クリア+図鑑コンプ（水色セリフ）。「仲間を見る」で確認");
+      };
+      document.getElementById("btn-debug-companions-full-clear").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj75d = 1; _sj75d <= 6; _sj75d++) { state.sideMap.stageCleared[String(_sj75d)] = true; }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        UMA_DATA.forEach(function(m) { state.player.dex[m.id] = "captured"; });
+        state.dexCompleteRewardClaimed = true;
+        LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = false; });
+        state.player.companions = ["juritani", "shurittani"];
+        saveGame();
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG] 完全達成（金セリフ）。「仲間を見る」で確認");
+      };
+      document.getElementById("btn-debug-companions-legendary").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj75e = 1; _sj75e <= 6; _sj75e++) { state.sideMap.stageCleared[String(_sj75e)] = true; }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        UMA_DATA.forEach(function(m) { state.player.dex[m.id] = "captured"; });
+        state.dexCompleteRewardClaimed = true;
+        LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = true; });
+        state.legendaryRewardClaimed = true;
+        state.player.companions = ["juritani", "shurittani"];
+        saveGame();
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG] 完全達成+伝説装備コンプ（明金セリフ）。「仲間を見る」で確認");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {
