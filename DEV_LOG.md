@@ -5,6 +5,27 @@
 
 ---
 
+## v0.19 (2026-07-11)
+
+### 追加・変更
+
+- **`isFullyCompleted()`**: `state.gameCleared && isSideStoryCleared() && isUmaDexComplete()` の3条件すべてを確認する関数。`isUltimateGorillaCaptured()` は `state.gameCleared` の別名エイリアス（将来の分離拡張に備えた形式）。
+- **NPC 完全達成分岐**: D/R/E/S 全4NPC の `if (state.gameCleared)` ブロック内に `if (isFullyCompleted())` チェックを最高優先として追加。各NPC固有のセリフで一貫した余韻を演出。
+- **UMA博士 中間誘導強化**: `!gameCleared && isSideStoryCleared()` ブロックに「あとは歌を届けるだけじゃ」を追加。スペックの「横スクロール制覇済み・究極ゴリラ未捕獲」向け中間メッセージ。
+- **COMPANION_DATA `clearLine` 改定**: 4仲間すべてのクリア後セリフをより具体的な内容に更新。旧セリフは廃止（破壊的変更だが、ゲーム体験向上のため採用）。
+- **COMPANION_DATA `fullClearLine` 追加**: 完全達成時専用の新プロパティ。酒場で `isFullyCompleted()` の場合に金色(`#ffd166`)斜体で表示。通常クリアは `clearLine` で緑色(`#a9e34b`)のまま。
+- **`openHomeModal` 優先度更新**: `isFullyCompleted()` を最高優先に追加。`gameCleared && isSideStoryCleared()` の中間分岐も追加。
+- **`getProgressHint` priority=0 整理**: 完全達成を最高優先に昇格。横スクロール未制覇の誘導テキストを仕様書テキストに更新。
+- **デバッグ §69**: NPC会話テスト3ボタン追加。各ボタンは状態をセットしてUMA博士(D)を直接開く形式。
+
+### 注意点
+
+- `isUltimateGorillaCaptured()` は `state.gameCleared` と同義。ゲーム内では究極ゴリラ捕獲がクリア条件なので分離しても同じ値になる。
+- 完全達成の `isFullyCompleted()` チェックはNPC_DATAの各getLines内で毎回評価される（状態変化に自動追従）。
+- `fullClearLine` を持たない仲間を追加した場合は `if (c.fullClearLine)` チェックがあるので表示されない（安全）。
+
+---
+
 ## v0.18 (2026-07-11)
 
 ### 追加・変更

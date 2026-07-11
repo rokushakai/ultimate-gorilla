@@ -3920,3 +3920,73 @@ function getPlayerTitle() {
 - 総合達成率セクション（金色ヘッダー）を記録モーダル最上部に配置
 - 本編/横スクロール/UMA図鑑 の各セクションにカテゴリ別バーを追加
 - 「次の目標」セクションに `.record-section-goal` で金色強調ボーダー
+
+## §69 v0.19: NPC固有イベント深化・クリア後世界の会話強化
+
+### 完全達成条件
+
+```
+state.gameCleared === true
+isSideStoryCleared() === true  (横スクロール全6ステージ制覇+チンパンジー撃退)
+isUmaDexComplete() === true    (全9種UMA捕獲済み)
+```
+
+### 追加ヘルパー関数
+
+| 関数 | 判定内容 |
+|---|---|
+| `isUltimateGorillaCaptured()` | `state.gameCleared` と同義（捕獲=クリア） |
+| `isFullyCompleted()` | 上記3条件すべて true |
+
+### NPC会話分岐 (優先度順)
+
+| NPC | 最高優先 | 次の優先 | 通常 |
+|---|---|---|---|
+| UMA博士 D | `isFullyCompleted()` → 「ついにやり遂げた」 | `isUmaDexComplete()` → 既存 | クリア後+横スクロール誘導または図鑑誘導 |
+| 旅人 R | `isFullyCompleted()` → 「案内する道は残ってない」 | クリア後 + !side → 横スクロール言及 | 既存 |
+| ゴリラ研究家 E | `isFullyCompleted()` → 「伝説そのものだ」 | クリア後 + !side → 横スクロール誘導 | 既存 |
+| 王様の使い S | `isFullyCompleted()` → 「真の英雄だ」 | クリア後 + !side → 横スクロール言及 | 既存 |
+
+### 中間達成時の誘導セリフ追加
+
+- **横スクロール制覇済み・究極ゴリラ未捕獲** (UMA博士 D): 「チンパンジーの聖域を越えた力があるなら、あとは歌を届けるだけじゃ」
+- **クリア済み・横スクロール未制覇** (全4NPC): 横スクロール方面への誘導セリフ追加
+
+### 仲間セリフ仕様
+
+| 仲間 | `clearLine`（クリア後・緑色） | `fullClearLine`（完全達成後・金色） |
+|---|---|---|
+| ジュリタニ | 「歌で究極ゴリラを止めるなんて、一曲で決めたのが、あんたらしいよ」 | 「会心の一撃でも届かない場所に、歌で届いたんだな」 |
+| シュリタニ | 「究極ゴリラまで捕まえるなんて、捕獲の極意が身についたみたい」 | 「図鑑まで全部埋まったんだね。一匹ずつ向き合ってきた証だよ」 |
+| ノリオ | 「経験値だけじゃ測れない冒険だったな。EXPもだいぶ稼いだだろ？」 | 「完全達成か。経験値2倍でも足りないくらい、濃い旅だったな」 |
+| ハルミ | 「最後は魔法じゃなくて歌だったのね。そういう力も私は好きよ」 | 「森も聖域も図鑑も、全部つながったのね。ちゃんと物語になったわ」 |
+
+表示: `isFullyCompleted() && c.fullClearLine` → 金色斜体 / `state.gameCleared && c.clearLine` → 緑色斜体
+
+### 実家ヒント優先度 (openHomeModal)
+
+1. `isFullyCompleted()` → 余韻ヒント（最高優先）
+2. `gameCleared && isUmaDexComplete()` → 既存 postDexHints
+3. `gameCleared && isSideStoryCleared()` → 横スクロール制覇後ヒント（新規）
+4. `gameCleared` → postClearHints（「森の空気」ヒント追加）
+5. `!gameCleared && Lv99 && hasUkulele` → 既存
+6. `!gameCleared && Lv99` → 既存
+7. `!gameCleared && isSideStoryCleared()` → 既存
+8. else → HOME_HINTS ランダム
+
+### 攻略ペーパー priority=0 分岐 (getProgressHint)
+
+| ケース | tier1 | tier2 | tier3 |
+|---|---|---|---|
+| `isFullyCompleted()` | 「余韻の時間だ」 | 「伝説の冒険は完結した」 | 「伝説装備はすべて揃えたか？」 |
+| `isUmaDexComplete()` | 既存 | 既存 | 既存 |
+| `isSideStoryCleared()` | 「図鑑に空きがあるなら探そう」 | 「称号のために図鑑を」 | 「UMA博士・研究家にも言葉がある」 |
+| else (横スクロール未制覇) | 「横スクロールへ進もう」 | 「新しい称号が得られる」 | 「称号詳細と図鑑案内」 |
+
+### デバッグ §69
+
+| ボタンID | 動作 |
+|---|---|
+| `btn-debug-npc-full-complete` | 完全達成状態にしてUMA博士を開く |
+| `btn-debug-npc-cleared-only` | クリアのみ(横スクロール未制覇)にしてUMA博士を開く |
+| `btn-debug-npc-side-cleared` | 横スクロール制覇済み・未クリアにしてUMA博士を開く |
