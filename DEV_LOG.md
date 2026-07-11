@@ -5,6 +5,20 @@
 
 ---
 
+## v0.25 (2026-07-11)
+
+### 追加・変更
+
+- **仲間カード CSS (§77)**: `style.css` の `.shop-back-btn` ブロック直後に `.companion-card` 系クラス群を追加。`companion-quote` の `border-left: 3px solid currentColor` は、インラインで設定する `color` 値を自動参照するため JS 側で別途ボーダー色を指定する必要がない。
+- **`renderTavernRecruit()` 刷新 (§77)**: `shop-row` + インラインスタイルの複合構造 → `companion-card` 形式に統一。全4仲間を常にカード表示し、状態（パーティ中/待機中）を右端ラベルで示す。
+- **`renderTavernViewParty()` 刷新 (§77)**: 同じく `companion-card` 形式。仲間がいない時は案内メッセージ。
+- **`renderTavernLeave()` 改善 (§77)**: `shop-row` → `companion-card` 形式。外すボタンは `.leave-btn` クラスで赤ボーダー。
+
+### 注意点
+
+- `companion-quote` の `border-left: 3px solid currentColor` はCSS標準。inline の `style="color:#..."` で色が変わると左ボーダーも追従する。IE非対応だが、このゲームはモダンブラウザ前提なので問題なし。
+- 仲間加入/離脱処理 (`recruitCompanion` / `dismissCompanion`) は一切変更せず、既存のイベントハンドラーをそのまま流用。
+
 ## v0.24.1 (2026-07-11)
 
 ### 追加・変更

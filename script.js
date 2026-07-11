@@ -4453,29 +4453,29 @@
     var body = document.getElementById("tavern-body");
     var p = state.player;
     var partyFull = p.companions.length >= COMPANION_MAX;
-    var html = "<p>仲間: " + p.companions.length + "/" + COMPANION_MAX + "人</p>";
+    // §77 v0.25: 仲間カードUI
+    var html = '<p style="margin:0 0 4px;">仲間: <b>' + p.companions.length + "/" + COMPANION_MAX + "</b>人</p>";
     if (partyFull) {
-      html += '<p class="small" style="color:#ff7b7b;margin:0 0 8px;">上限です。仲間を外してから来てください。</p>';
+      html += '<p class="small" style="color:#ff7b7b;margin:0 0 8px;">仲間が上限です。先に外してください。</p>';
     }
     COMPANION_DATA.forEach(function (c) {
       var inParty = hasCompanion(c.id);
-      html += '<div class="shop-row" style="flex-direction:column;align-items:flex-start;">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:3px;">';
-      html += "<span>" + c.emoji + " <b>" + c.name + "</b></span>";
+      var _rq = getCompanionQuote(c);
+      html += '<div class="companion-card">';
+      html += '<div class="companion-card-header">';
+      html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
       if (inParty) {
-        html += '<span style="color:#06d6a0;font-size:12px;font-weight:bold;">同行中 ✓</span>';
-      } else if (!partyFull) {
-        html += '<button data-recruit="' + c.id + '">加入</button>';
+        html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
+      } else {
+        html += '<span class="companion-status" style="color:#adb5bd;">待機中</span>';
       }
       html += "</div>";
-      html += '<span class="small">' + c.feature + "</span>";
-      if (!inParty) {
-        html += '<span class="small" style="color:#ffd166;margin-top:2px;">' + c.effectDesc + "</span>";
-      }
-      // §75 v0.24: クリア後仲間セリフ多段階表示
-      var _rq = getCompanionQuote(c);
+      html += '<div class="companion-ability">' + c.effectDesc + "</div>";
       if (_rq) {
-        html += '<p class="small" style="margin:4px 0 0;color:' + _rq.color + ';font-style:italic;">「' + _rq.text + '」</p>';
+        html += '<div class="companion-quote" style="color:' + _rq.color + ';">「' + _rq.text + "」</div>";
+      }
+      if (!inParty && !partyFull) {
+        html += '<div class="companion-action"><button data-recruit="' + c.id + '">🤝 仲間にする</button></div>';
       }
       html += "</div>";
     });
@@ -4492,21 +4492,23 @@
   function renderTavernViewParty() {
     var body = document.getElementById("tavern-body");
     var p = state.player;
+    // §77 v0.25: 仲間カードUI
     var html = "";
     if (p.companions.length === 0) {
-      html += '<p class="small">仲間はいない。</p>';
+      html += '<p class="small">現在、仲間はいない。酒場で仲間を探してみよう。</p>';
     } else {
       p.companions.forEach(function (id) {
         var c = findById(COMPANION_DATA, id);
         if (!c) return;
-        html += '<div class="shop-row" style="flex-direction:column;align-items:flex-start;">';
-        html += "<p style=\"margin:0 0 4px;\"><b>" + c.emoji + " " + c.name + "</b> <span class=\"small\" style=\"color:#06d6a0;\">同行中</span></p>";
-        html += '<p class="small" style="margin:0 0 2px;">' + c.feature + "</p>";
-        html += '<p class="small" style="margin:0;color:#ffd166;">' + c.effectDesc + "</p>";
-        // §75 v0.24: クリア後仲間セリフ多段階表示
         var _vq = getCompanionQuote(c);
+        html += '<div class="companion-card">';
+        html += '<div class="companion-card-header">';
+        html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
+        html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
+        html += "</div>";
+        html += '<div class="companion-ability">' + c.effectDesc + "</div>";
         if (_vq) {
-          html += '<p class="small" style="margin:4px 0 0;color:' + _vq.color + ';font-style:italic;">「' + _vq.text + '」</p>';
+          html += '<div class="companion-quote" style="color:' + _vq.color + ';">「' + _vq.text + "」</div>";
         }
         html += "</div>";
       });
@@ -4519,6 +4521,7 @@
   function renderTavernLeave() {
     var body = document.getElementById("tavern-body");
     var p = state.player;
+    // §77 v0.25: 仲間カードUI
     var html = "";
     if (p.companions.length === 0) {
       html += '<p class="small">外せる仲間がいない。</p>';
@@ -4526,8 +4529,14 @@
       p.companions.forEach(function (id) {
         var c = findById(COMPANION_DATA, id);
         if (!c) return;
-        html += '<div class="shop-row"><span>' + c.emoji + " " + c.name + "</span>";
-        html += '<button data-leave="' + c.id + '">外す</button></div>';
+        html += '<div class="companion-card">';
+        html += '<div class="companion-card-header">';
+        html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
+        html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
+        html += "</div>";
+        html += '<div class="companion-ability">' + c.effectDesc + "</div>";
+        html += '<div class="companion-action"><button class="leave-btn" data-leave="' + c.id + '">👋 外す</button></div>';
+        html += "</div>";
       });
     }
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
@@ -5648,7 +5657,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-dex-one-seen" style="border-color:#74c0fc;color:#74c0fc;">📖 最初のUMAだけ「発見済み」（他は未発見）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑を全リセット（初期状態）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
-      html += '<p class="small" style="color:#a9e34b;margin-top:8px;">👥 仲間セリフバリエーション (§75 v0.24 / §76 v0.24.1)</p>';
+      html += '<p class="small" style="color:#a9e34b;margin-top:8px;">👥 仲間カードUI確認 (§75-77 v0.24〜v0.25)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-normal" style="border-color:#adb5bd;color:#adb5bd;">👥 仲間セリフ: 通常（未クリア・未制覇）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間セリフ: クリアのみ（緑）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-side-only" style="border-color:#c8b4ff;color:#c8b4ff;">👥 仲間セリフ: 横スクロール制覇のみ・未クリア（薄紫）</button>';

@@ -14,6 +14,14 @@
 
 ## ✅ 実装済み
 
+### Version 0.25 — 酒場UI改善・仲間カード整理 (§77)
+
+- **`.companion-card` CSS追加** (§77): 角丸ボーダー・半透明カード。`companion-card-header` / `companion-name` / `companion-ability` / `companion-status` / `companion-quote` / `companion-action` クラス群 ✅
+- **`renderTavernRecruit()` 更新** (§77): `shop-row` → `companion-card` 形式。全仲間をカード表示。加入可能なら「🤝 仲間にする」フルwidthボタン ✅
+- **`renderTavernViewParty()` 更新** (§77): `shop-row` → `companion-card` 形式。能力+セリフ表示 ✅
+- **`renderTavernLeave()` 更新** (§77): `shop-row` → `companion-card` 形式。「👋 外す」ボタン（赤ボーダー）✅
+- **デバッグセクションヘッダー更新** (§77): §75-77 v0.24〜v0.25 に整理 ✅
+
 ### Version 0.24.1 — 仲間セリフ安定化・横スクロール制覇のみ反応追加 (§76)
 
 - **`getCompanionQuote(c)` null ガード追加** (§76): `if (!c) return null` で安全化 ✅

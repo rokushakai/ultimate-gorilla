@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.24.1** |
+| 現在バージョン | **v0.25** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,12 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.25] 酒場UI改善・仲間カード整理**（§77）
+  - **仲間カード CSS**: `.companion-card` 系クラス群を `style.css` に追加。角丸ボーダー・半透明背景・左ボーダーセリフ枠。
+  - **酒場3画面をカード化**: `renderTavernRecruit` / `renderTavernViewParty` / `renderTavernLeave` が `companion-card` 形式に統一。
+  - **セリフ枠**: `companion-quote` で `currentColor` 左ボーダー + 薄背景 + 斜体。`getCompanionQuote()` の色がボーダーにも自動反映。
+  - **状態ラベル**: 各カードに「✓ パーティ中」(緑) / 「待機中」(グレー) を右端表示。
+  - **保護**: `getCompanionQuote()` / `recruitCompanion()` / `dismissCompanion()` / 仲間能力 は変更なし。
 - **[v0.24.1] 仲間セリフ安定化・横スクロール制覇のみ反応追加**（§76）
   - **`getCompanionQuote(c)` null ガード**: `if (!c) return null` 追加。undefined フィールドも `&&` で安全。
   - **priority 3**: `isLegendaryEquipmentComplete() && !isFullyCompleted()` → `legendaryLine` 橙 `#ffb347`

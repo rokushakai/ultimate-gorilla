@@ -5,6 +5,22 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.25] - 2026-07-11 — 酒場UI改善・仲間カード整理 (§77)
+
+### Added
+- **仲間カード CSS** (§77): `style.css` に `.companion-card` / `.companion-card-header` / `.companion-name` / `.companion-ability` / `.companion-status` / `.companion-quote` / `.companion-action` / `.leave-btn` を追加。
+
+### Changed
+- **`renderTavernRecruit()`** (§77): `shop-row` + インラインスタイル → `companion-card` 形式に刷新。全4仲間をカード表示。パーティ中は「✓ パーティ中」(緑)、待機中は「待機中」(グレー)。加入可能時は「🤝 仲間にする」フルwidth ボタン。
+- **`renderTavernViewParty()`** (§77): 同じく `companion-card` 形式。能力 + `getCompanionQuote()` セリフを表示。仲間なしの場合は「仲間を探してみよう」メッセージ。
+- **`renderTavernLeave()`** (§77): `shop-row` → `companion-card` 形式。「👋 外す」ボタンは赤ボーダー (`.leave-btn`)。
+- **デバッグセクションラベル** (§77): `§75 v0.24 / §76 v0.24.1` → `§75-77 v0.24〜v0.25` に更新。
+
+### Notes
+- `getCompanionQuote(c)` のロジック・優先順位・セリフ内容は変更なし。
+- 仲間能力・加入処理・`dismissCompanion()` / `recruitCompanion()` は変更なし。
+- `.companion-quote` は `border-left: 3px solid currentColor` で `getCompanionQuote()` の `color` が左ボーダーにも自動適用。
+
 ## [0.24.1] - 2026-07-11 — 仲間セリフ安定化・横スクロール制覇のみ反応追加 (§76)
 
 ### Changed

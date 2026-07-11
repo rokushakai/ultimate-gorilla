@@ -3986,6 +3986,24 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 
 冒険の記録「次の目標」最終メッセージ: 「酒場で仲間たちの言葉を聞いてみるのもよいでしょう。」を含める。
 
+### v0.25 酒場UI改善・仲間カード整理 [実装済み]
+
+酒場の3画面（仲間を探す / 仲間を見る / 仲間を外す）をカード形式に統一。
+
+**CSS クラス（style.css §77）**:
+- `.companion-card`: 角丸ボーダー・半透明背景のカードコンテナ
+- `.companion-card-header`: 名前と状態を両端配置
+- `.companion-name`: 太字 1.0em
+- `.companion-ability`: 黄色 (#ffd166) 0.82em — `effectDesc` 表示
+- `.companion-status`: 右端の小ラベル（パーティ中 `#06d6a0` / 待機中 `#adb5bd`）
+- `.companion-quote`: 左ボーダー + 薄背景 + 斜体。`color` は `getCompanionQuote()` の返り値 (`currentColor` で左ボーダーも同色)
+- `.companion-action` / `.companion-action button`: フルwidth ボタン
+- `.companion-action .leave-btn`: 「外す」ボタン用 赤ボーダー
+
+**仲間を探す (renderTavernRecruit)**: カード表示。パーティ中は ✓ パーティ中。待機中でパーティ空きあれば「🤝 仲間にする」ボタン。
+**仲間を見る (renderTavernViewParty)**: カード表示。能力 + セリフのみ（アクションボタンなし）。
+**仲間を外す (renderTavernLeave)**: カード表示。「👋 外す」ボタン（赤ボーダー）。
+
 ### v0.24.1 getCompanionQuote 安定化・優先順位拡張 [実装済み]
 
 `getCompanionQuote(c)` の完全な優先順位（§76）:
