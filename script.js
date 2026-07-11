@@ -545,28 +545,32 @@
       critBonus: 0.20,
       joinRate: 0.70,
       joinMsgs: ["ジュリタニは拳を鳴らした。", "面白そうだな。付き合ってやるよ。"],
-      failMsgs: ["ジュリタニは腕を組んだ。", "まだお前の実力を見せてもらってないな。"] },
+      failMsgs: ["ジュリタニは腕を組んだ。", "まだお前の実力を見せてもらってないな。"],
+      clearLine: "究極ゴリラを捕まえたんだって？…でも、いざという時の会心も忘れないでね。" },
     { id: "shurittani", name: "シュリタニ", emoji: "🪤",
       feature: "UMAを捕まえるのが得意",
       effectDesc: "捕獲率+0.10",
       captureMod: 0.10,
       joinRate: 0.65,
       joinMsgs: ["シュリタニは捕獲ロープを確認した。", "UMA探しなら任せて。"],
-      failMsgs: ["シュリタニは地図を見つめている。", "今は準備が足りないみたい。"] },
+      failMsgs: ["シュリタニは地図を見つめている。", "今は準備が足りないみたい。"],
+      clearLine: "捕獲って、やっぱり力まかせじゃないんだね。" },
     { id: "norio",      name: "ノリオ",     emoji: "📈",   // §45 v0.9.2: 逃走→経験値2倍に変更
       feature: "経験値が2倍になる",
       effectDesc: "獲得経験値×2",
       expMod: 2,
       joinRate: 0.75,
       joinMsgs: ["ノリオはニヤリと笑った。", "俺と一緒にいれば、経験値がぐんぐん上がるぞ。"],
-      failMsgs: ["ノリオは考え込んでいる。", "まだタイミングじゃないな。"] },
+      failMsgs: ["ノリオは考え込んでいる。", "まだタイミングじゃないな。"],
+      clearLine: "最後は経験値じゃなくて歌だったか。でもまあ、積み重ねの勝利だよ。" },
     { id: "harumi",     name: "ハルミ",     emoji: "✨",
       feature: "まほうが得意",
       effectDesc: "まほう効果+20%",
       spellMod: 0.20,
       joinRate: 0.60,
       joinMsgs: ["ハルミは静かに呪文を唱えた。", "魔法で支えます。"],
-      failMsgs: ["ハルミは首をかしげた。", "魔力の流れがまだ合わないみたい。"] }
+      failMsgs: ["ハルミは首をかしげた。", "魔力の流れがまだ合わないみたい。"],
+      clearLine: "心を込めた音が届いた。とても美しい結末だと思います。" }
   ];
 
   // データ検索用のショートカット(参照頻度が高いものだけ用意)
@@ -711,6 +715,7 @@
     modalOpen: false,    // いずれかのモーダル表示中はフィールド操作を止める
     discoveredFinal: false,
     gameCleared: false,  // 究極ゴリラ捕獲クリアフラグ(§14.5)
+    dexCompleteRewardClaimed: false, // §66 v0.17.1: 図鑑コンプリート報酬受取済みフラグ
     pendingClear: false, // 戦闘終了後にクリアモーダルを表示するフラグ
     pendingLv99: false,  // 戦闘終了後にLv99マイルストーンモーダルを表示するフラグ(§3.8 v0.7.1)
     endingPage: 0,       // エンディングモーダルの現在ページ(v0.7 §28)
@@ -845,6 +850,15 @@
     var sm = state.sideMap;
     return !!(sm && sm.stageCleared && sm.stageCleared["6"] &&
               sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+  }
+
+  // §66 v0.17.1: UMA図鑑コンプリート判定 (UMA_DATA全種を捕獲済み)
+  function isUmaDexComplete() {
+    var p = state.player;
+    for (var _i = 0; _i < UMA_DATA.length; _i++) {
+      if (p.dex[UMA_DATA[_i].id] !== "captured") return false;
+    }
+    return true;
   }
 
   // ---------------------------------------------------------
@@ -2610,8 +2624,17 @@
       });
       html += '</div>';
     } else if (page.isFinal) {
-      // §65 v0.17: 横スクロール編制覇済みなら総合称号を表示
-      var finalTitle = (isSideStoryCleared() ? "究極を歌い、聖域を越えし者" : "森に歌を届けし者");
+      // §66 v0.17.1: 図鑑コンプリート含む称号優先順位
+      var finalTitle;
+      if (isSideStoryCleared() && isUmaDexComplete()) {
+        finalTitle = "究極とUMA図鑑を極めし者";
+      } else if (isSideStoryCleared()) {
+        finalTitle = "究極を歌い、聖域を越えし者";
+      } else if (isUmaDexComplete()) {
+        finalTitle = "究極とUMA図鑑を極めし者";
+      } else {
+        finalTitle = "森に歌を届けし者";
+      }
       html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「' + finalTitle + '」</p>';
       html += '<p class="small" style="color:#06d6a0;margin:4px 0;">この後も探索・図鑑集め・装備集めを続けられます。</p>';
       html += '<p class="small" style="color:#adb5bd;margin:4px 0;">エンディングはいつでも設定画面から再視聴できます。</p>';
@@ -3653,8 +3676,33 @@
   // 19. UMA図鑑モーダル(§31 v0.8.1 詳細タップ対応)
   // ---------------------------------------------------------
   function openDexModal() {
+    // §66 v0.17.1: 図鑑コンプリート報酬チェック（未受取なら先にモーダル）
+    if (isUmaDexComplete() && !state.dexCompleteRewardClaimed) {
+      openDexCompleteModal();
+      return;
+    }
     openModal("dex-modal");
     renderDexBody();
+  }
+
+  // §66 v0.17.1: 図鑑コンプリート報酬モーダル
+  function openDexCompleteModal() {
+    state.player.gold += 3000;
+    state.player.ramenCount += 3;
+    state.dexCompleteRewardClaimed = true;
+    saveGame();
+    updateStatusBar();
+    document.getElementById("btn-dex-complete-next").onclick = function () {
+      closeModal("dex-complete-modal");
+      openModal("dex-modal");
+      renderDexBody();
+    };
+    var html = "";
+    html += '<p style="margin:8px 0;color:#ffd166;font-weight:bold;">称号「UMA図鑑を極めし者」を獲得！</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">全てのUMAを捕まえた。これほどの図鑑は、UMA博士も見たことがないそうだ。</p>';
+    html += '<p style="margin:8px 0;color:#06d6a0;">報酬：3000G ＋ ラーメン×3</p>';
+    document.getElementById("dex-complete-body").innerHTML = html;
+    openModal("dex-complete-modal");
   }
 
   function renderDexBody() {
@@ -3662,10 +3710,15 @@
     var totalUma = UMA_DATA.length;
     var discoveredCount = UMA_DATA.filter(function(m) { return !!p.dex[m.id]; }).length;
     var capturedDexCount = UMA_DATA.filter(function(m) { return p.dex[m.id] === "captured"; }).length;
+    var isComplete = capturedDexCount === totalUma;
 
     var html = '<div class="dex-progress" style="grid-column:1/-1;">';
-    html += '<span>📖 発見: ' + discoveredCount + "/" + totalUma + '</span>';
-    html += '<span>✅ 捕獲: ' + capturedDexCount + "/" + totalUma + '</span>';
+    if (isComplete) {
+      html += '<span style="color:#ffd166;font-weight:bold;">🎉 UMA図鑑コンプリート！</span>';
+    } else {
+      html += '<span>📖 発見: ' + discoveredCount + "/" + totalUma + '</span>';
+      html += '<span>✅ 捕獲: ' + capturedDexCount + "/" + totalUma + '</span>';
+    }
     html += '</div>';
 
     UMA_DATA.forEach(function(m) {
@@ -3875,9 +3928,15 @@
       html += '<p class="small">フィールドを探索しよう！<br>UMAを見つけて経験値を集めよう。<br>実家🏠で回復・酒場🍺で仲間を探そう。</p>';
     }
     var playerTitle;
-    if (state.gameCleared) {
-      // §65 v0.17: 横スクロール編制覇済みなら総合称号
-      playerTitle = (isSideStoryCleared() ? "究極を歌い、聖域を越えし者" : "森に歌を届けし者");
+    // §66 v0.17.1: 称号優先順位 (完全制覇>図鑑完全>横スクロール>クリア>Lv99>デフォルト)
+    if (state.gameCleared && isSideStoryCleared() && isUmaDexComplete()) {
+      playerTitle = "究極とUMA図鑑を極めし者";
+    } else if (state.gameCleared && isSideStoryCleared()) {
+      playerTitle = "究極を歌い、聖域を越えし者";
+    } else if (isUmaDexComplete()) {
+      playerTitle = "UMA図鑑を極めし者";
+    } else if (state.gameCleared) {
+      playerTitle = "森に歌を届けし者";
     } else if (p.level >= 99 || p.level99Shown) {
       playerTitle = "究極に近づきし者";
     } else {
@@ -4079,6 +4138,10 @@
       if (!inParty) {
         html += '<span class="small" style="color:#ffd166;margin-top:2px;">' + c.effectDesc + "</span>";
       }
+      // §66 v0.17.1: クリア後仲間セリフ
+      if (state.gameCleared && c.clearLine) {
+        html += '<p class="small" style="margin:4px 0 0;color:#a9e34b;font-style:italic;">「' + c.clearLine + '」</p>';
+      }
       html += "</div>";
     });
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
@@ -4105,6 +4168,10 @@
         html += "<p style=\"margin:0 0 4px;\"><b>" + c.emoji + " " + c.name + "</b> <span class=\"small\" style=\"color:#06d6a0;\">同行中</span></p>";
         html += '<p class="small" style="margin:0 0 2px;">' + c.feature + "</p>";
         html += '<p class="small" style="margin:0;color:#ffd166;">' + c.effectDesc + "</p>";
+        // §66 v0.17.1: クリア後仲間セリフ
+        if (state.gameCleared && c.clearLine) {
+          html += '<p class="small" style="margin:4px 0 0;color:#a9e34b;font-style:italic;">「' + c.clearLine + '」</p>';
+        }
         html += "</div>";
       });
     }
@@ -4517,6 +4584,13 @@
           return lines;
         }
         if (state.gameCleared) {
+          // §66 v0.17.1: 図鑑コンプリート反応
+          if (isUmaDexComplete()) {
+            lines.push("図鑑が……完成しておる！！");
+            lines.push("わしは長年UMAを研究してきたが、全種を捕まえた者には会ったことがなかった。");
+            lines.push("おぬしこそ、真の伝説のUMAハンターじゃ。称号「UMA図鑑を極めし者」をその名に刻め！");
+            return lines;
+          }
           // §65 v0.17: クリア後NPC反応
           lines.push("ついに究極ゴリラを捕まえたのじゃな……！");
           lines.push("力でねじ伏せるのではなく、歌を届けたからこそ、あやつは心を開いたのじゃ。");
@@ -4928,8 +5002,16 @@
   function openHomeModal() {
     var p = state.player;
     var hint;
+    // §66 v0.17.1: クリア後ヒント（図鑑コンプリートなら専用ヒント優先）
+    if (state.gameCleared && isUmaDexComplete()) {
+      var postDexHints = [
+        "図鑑コンプリートおめでとう！これほどのUMAハンターは、きっと伝説に名を残すよ。",
+        "全部のUMAと向き合って、それぞれの物語を図鑑に刻んだんだね。",
+        "称号「UMA図鑑を極めし者」か、すごい！横スクロールも全部制覇したら最高の称号が待ってるよ。"
+      ];
+      hint = postDexHints[Math.floor(Math.random() * postDexHints.length)];
     // §65 v0.17: クリア後の専用ヒント
-    if (state.gameCleared) {
+    } else if (state.gameCleared) {
       var postClearHints = [
         "究極ゴリラを捕まえても、冒険の思い出は消えないよ。図鑑を見たり、横スクロールの世界を歩いたり、まだまだ森には楽しみが残っているみたい。",
         "力だけじゃなく、歌で届くものもあるんだね。",
@@ -5122,6 +5204,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-show-capture-modal" style="border-color:#f9c74f;color:#f9c74f;">🌟 捕獲成功モーダルを見る</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-full" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済み+横スクロール制覇状態にする（総合称号確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-only" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済みのみにする（横スクロール未制覇）</button>';
+      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">📖 図鑑コンプリート報酬テスト (§66 v0.17.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-complete-all" style="border-color:#98d8ff;color:#98d8ff;">📖 UMA図鑑コンプリート状態にする（全UMA捕獲済み）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑コンプリート報酬を未受取に戻す</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-modal" style="border-color:#98d8ff;color:#98d8ff;">📖 図鑑コンプリート報酬モーダルを見る</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間クリア後セリフ確認（クリア状態+仲間全員）</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5897,6 +5985,47 @@
         renderStatus();
         showToast("[DEBUG] クリア済み（横スクロール未制覇）状態にした");
       };
+      // §66 v0.17.1: 図鑑コンプリートテスト
+      document.getElementById("btn-debug-dex-complete-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        UMA_DATA.forEach(function (u) { state.player.dex[u.id] = "captured"; });
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] 全UMA捕獲済みにした。図鑑を開くと報酬モーダルが出る（未受取の場合）");
+      };
+      document.getElementById("btn-debug-dex-reward-reset").onclick = function () {
+        state.dexCompleteRewardClaimed = false;
+        saveGame();
+        showToast("[DEBUG] 図鑑コンプリート報酬を未受取に戻した");
+      };
+      document.getElementById("btn-debug-dex-reward-modal").onclick = function () {
+        closeModal("settings-modal");
+        openDexCompleteModal();
+        showToast("[DEBUG] 図鑑コンプリート報酬モーダルを表示（報酬は付与されます）");
+      };
+      document.getElementById("btn-debug-set-all-complete").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        for (var _sj = 1; _sj <= 6; _sj++) {
+          state.sideMap.stageCleared[String(_sj)] = true;
+        }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        UMA_DATA.forEach(function (u) { state.player.dex[u.id] = "captured"; });
+        state.dexCompleteRewardClaimed = true;
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] 完全達成状態！称号「究極とUMA図鑑を極めし者」を確認しよう");
+      };
+      document.getElementById("btn-debug-companions-postclear").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.player.companions = ["juritani", "shurittani"];
+        saveGame();
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG] クリア済み+ジュリタニ・シュリタニ同行。「仲間を見る」でセリフ確認");
+      };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");
         state.mapMode = "side";
@@ -6017,6 +6146,7 @@
         level99Shown: p.level99Shown,
         discoveredFinal: state.discoveredFinal,
         gameCleared: state.gameCleared,
+        dexCompleteRewardClaimed: state.dexCompleteRewardClaimed, // §66 v0.17.1
         openedChests: state.openedChests,
         eventFlags: state.eventFlags,
         // §43 v0.9 / §44 v0.9.1: 横スクロールマップ
@@ -6081,6 +6211,7 @@
       p.level99Shown = !!data.level99Shown;
       state.discoveredFinal = !!data.discoveredFinal;
       state.gameCleared = !!data.gameCleared;
+      state.dexCompleteRewardClaimed = !!data.dexCompleteRewardClaimed; // §66 v0.17.1
       state.openedChests = data.openedChests || {};
       state.eventFlags = data.eventFlags || {
         pegasusArmorGot: false, sixfoldShieldGot: false,
@@ -6785,11 +6916,21 @@
       if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。戻りたい時はゴール画面か🏠帰還ゲートを使えばいつでも戻れる。";
       return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し宝箱を集めゴールを目指そう。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
     }
-    // §65 v0.17: クリア後ヒントを進行状況で分岐
+    // §66 v0.17.1: クリア後ヒントを進行状況で分岐（図鑑コンプリートが最高優先）
     if (priority === 0) {
+      if (isUmaDexComplete() && isSideStoryCleared()) {
+        if (tier === 1) return "究極ゴリラ捕獲・横スクロール制覇・図鑑コンプリート。完全制覇達成おめでとう！";
+        if (tier === 2) return "称号「究極とUMA図鑑を極めし者」を手にした者よ。伝説装備（全7種）はすべて揃えたか？";
+        return "完全制覇おめでとう！称号「究極とUMA図鑑を極めし者」を誇りに、伝説装備コレクションも目指してみよう。";
+      }
+      if (isUmaDexComplete()) {
+        if (tier === 1) return "UMA図鑑をコンプリートした！称号「UMA図鑑を極めし者」を獲得。";
+        if (tier === 2) return "横スクロールステージを全制覇すると、さらに総合称号「究極とUMA図鑑を極めし者」が得られる。";
+        return "UMA図鑑コンプリート達成！横スクロール6ステージを制覇してチンパンジーを退かせると最高称号が手に入る。";
+      }
       if (isSideStoryCleared()) {
         if (tier === 1) return "究極ゴリラを捕まえ、横スクロールの世界も踏破した。伝説の冒険は新たな章へ。";
-        if (tier === 2) return "図鑑をすべて埋めるか、伝説装備（全7種）を揃えるか。称号「究極を歌い、聖域を越えし者」を誇りに旅を続けよう。";
+        if (tier === 2) return "図鑑をすべて埋めると称号「究極とUMA図鑑を極めし者」が得られる。まだ捕まえていないUMAはいるか？";
         return "図鑑の捕獲数と伝説装備（全7種）を確認してみよう。UMA博士・ゴリラ研究家にもクリア後の言葉があるぞ。";
       }
       if (tier === 1) return "究極ゴリラを捕まえた。だが、横スクロールの世界にはまだ見ぬ強敵がいるかもしれない。";

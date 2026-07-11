@@ -5,6 +5,27 @@
 
 ---
 
+## v0.17.1 (2026-07-11)
+
+### 追加・変更
+
+- **`isUmaDexComplete()`**: `UMA_DATA` の全エントリが `state.player.dex[id] === "captured"` かをループで確認。究極ゴリラも含む（うたうで捕獲可能なため）。
+- **`state.dexCompleteRewardClaimed`**: 初期値 `false`。saveGame/loadGame に追加済み（`!!data.dexCompleteRewardClaimed` で古いセーブ互換）。
+- **`#dex-complete-modal`**: index.html に `#capture-modal` の前に追加。ボタン id は `btn-dex-complete-next`。
+- **`openDexCompleteModal()`**: 呼ばれるたびに3000G+ラーメン×3を付与してフラグをセットする。デバッグボタンから直接呼ぶ設計なので毎回報酬が出る（デバッグ用にリセットボタン併設）。
+- **`openDexModal()` の先頭チェック**: `isUmaDexComplete() && !state.dexCompleteRewardClaimed` なら `openDexCompleteModal()` を呼んで早期 return。
+- **称号6段階**: `renderStatus()` と `renderEndingPage()` の両方で `isUmaDexComplete()` を参照する優先順位チェーンに更新。
+- **COMPANION_DATA `clearLine`**: 各仲間に文字列プロパティを追加。酒場の「仲間を見る」「仲間を探す」で `state.gameCleared && c.clearLine` 時に斜体テキストで表示。
+- **UMA博士**: `if (state.gameCleared)` ブロックの先頭に `isUmaDexComplete()` チェックを追加して早期 return する。
+- **デバッグ §66**: 「全UMA捕獲済み」「報酬リセット」「報酬モーダル直表示」「完全達成状態」「仲間セリフ確認」の5ボタン。
+
+### 注意点
+
+- `openDexCompleteModal()` は毎回報酬付与するが、`dexCompleteRewardClaimed = true` になると `openDexModal()` から自動呼び出しされなくなるため、通常プレイでは1回限りになる。
+- エンディングの finalTitle は `isSideStoryCleared() && isUmaDexComplete()` が両方必要で「究極とUMA図鑑を極めし者」になる。
+
+---
+
 ## v0.17 (2026-07-11)
 
 ### 追加・変更
