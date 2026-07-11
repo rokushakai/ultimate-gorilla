@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.28] - 2026-07-12 — 仲間ごとの戦闘コマンド選択・第一段階 (§82)
+
+### Added
+- **`runSingleCompanionAction(cid)`** (§82): 仲間1人の行動を実行する共通関数。返値 true=敵HP0。`runCompanionAutoActions()` と仲間コマンド選択の両方から呼ばれる。
+- **`startCompanionCommands()`** (§82): `scheduleAfterPlayerAttack()` から呼ばれる。コマンドキューを初期化し `showCompanionCommandForIdx(0)` へ進む。`e.final` 時は見守りログ→敵ターン。仲間なし時は直接敵ターン。
+- **`showCompanionCommandForIdx(idx)`** (§82): 仲間コマンドメニューを表示（innerHTML で動的生成）。メニューに「⚔️ たたかう」「🤝 まかせる」の2ボタン。ロック中でもボタンを有効化（`disabled = false`）。
+- **`executeCompanionCommand(cid, mode)`** (§82): コマンドボタン押下時の処理。ダブルクリック防止 → `runSingleCompanionAction()` 実行 → インデックス更新 → 次の仲間コマンドまたは `winBattle()`/`enemyTurn()`。
+- **HTML: `companion-command-menu`** (§82): `index.html` に `class="hidden submenu"` の div を追加（`waza-menu` の直後）。
+
+### Changed
+- **`scheduleAfterPlayerAttack()`** (§82): 600ms後に `runCompanionAutoActions()` を直接呼ぶ→ `startCompanionCommands()` 呼び出しに変更。コマンド選択フローへ委譲。
+- **`runCompanionAutoActions()`** (§82): 内部ロジックを `runSingleCompanionAction()` に委譲。API として維持（呼び出し元なし、将来用）。
+- **`finishBattle()`** (§82): `state.companionCommandQueue = []` / `state.companionCommandIndex = 0` / `companion-command-menu.classList.add("hidden")` を追加。
+
+### Not Changed
+- `winBattle()` / `gainExp()` / `enemyTurn()` / BGM制御 は一切変更なし
+- `e.final` 究極ゴリラ保護は維持（コマンド選択出さず見守りログのみ）
+- たたかう / まかせる は v0.28 では同じ行動（将来の固有コマンド拡張に備えた区別）
+
 ## [0.27.1] - 2026-07-12 — 仲間自動戦闘安定化 (§81)
 
 ### Changed

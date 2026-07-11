@@ -5,6 +5,26 @@
 
 ---
 
+## v0.28 (2026-07-12)
+
+### 追加・変更
+
+- **`runSingleCompanionAction(cid)` 新設 (§82)**: 仲間1人分の行動を実行する共通関数。`runCompanionAutoActions()` のループ内ロジックを抽出し、仲間コマンド選択とも共用。返値 true=敵HP0。
+- **`startCompanionCommands()` 新設 (§82)**: `scheduleAfterPlayerAttack()` が呼ぶエントリポイント。`e.final` → 見守りログ→400ms→敵ターン。仲間なし → 400ms→敵ターン。仲間あり → キュー初期化 → `showCompanionCommandForIdx(0)`。
+- **`showCompanionCommandForIdx(idx)` 新設 (§82)**: innerHTML で「ジュリタニの行動は？」＋2ボタンを動的生成。`disabled=false` でボタン有効化（`setBattleLocked(true)` 中でも操作可能にするため）。
+- **`executeCompanionCommand(cid, mode)` 新設 (§82)**: ダブルクリック防止（即 disabled）→ メニュー非表示 → `runSingleCompanionAction()` → インデックス++ → 次メニューまたは `winBattle()`/`enemyTurn()`。
+- **`scheduleAfterPlayerAttack()` 変更 (§82)**: 600ms後に `runCompanionAutoActions()` を直呼び → `startCompanionCommands()` 呼び出しに変更。
+- **`runCompanionAutoActions()` 変更 (§82)**: 内部ロジックを `runSingleCompanionAction()` に委譲。API として維持。
+- **`finishBattle()` 変更 (§82)**: コマンドキュークリア + `companion-command-menu` 非表示を追加（最小変更）。
+- **HTML: `companion-command-menu` 追加 (§82)**: `waza-menu` の直後に `class="hidden submenu"` の div。innerHTML で動的生成するので空の div として定義。
+
+### 設計判断
+
+- **`setBattleLocked` との共存**: `companion-command-menu` は class `submenu` を持つため `setBattleLocked(true)` でボタンが disabled になる。`showCompanionCommandForIdx()` で明示的に `disabled=false` で上書きすることで共存。
+- **`たたかう` と `まかせる` を同一の行動にした理由**: 第一段階では UI の区別だけ作り、将来の固有コマンド拡張に備える。v0.28.1 以降で差別化予定。
+- **`battle-menu` の表示タイミング**: 仲間コマンドメニュー表示中は `battle-menu` を hidden。仲間全員行動後（または全仲間スキップ後）に `classList.remove("hidden")` して 400ms→敵ターン。その後 `setBattleLocked(false)` で通常に戻る。
+- **`finishBattle()` の最小変更方針**: ユーザーが「壊さないでください」と指定している関数なので、4行のクリーンアップのみ追加し他の行動は変更しない。
+
 ## v0.27.1 (2026-07-12)
 
 ### 追加・変更

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.27.1** |
+| 現在バージョン | **v0.28** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.27時点）
+## 現在実装済みの主要機能（v0.28時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,14 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.28] 仲間ごとの戦闘コマンド選択・第一段階**（§82）
+  - **`runSingleCompanionAction(cid)`**: 仲間1人分の行動共通関数。返値 true=敵HP0。
+  - **`startCompanionCommands()`**: コマンドキュー初期化。`e.final` → 見守りログ→敵ターン。仲間なし → 敵ターン。
+  - **`showCompanionCommandForIdx(idx)`**: 「⚔️ たたかう」「🤝 まかせる」2択メニューを表示。ロック中でもボタン有効化。
+  - **`executeCompanionCommand(cid, mode)`**: ダブルクリック防止→行動実行→次の仲間 or 勝利/敵ターン。
+  - **`finishBattle()` クリーンアップ**: コマンドキューリセット + メニュー非表示。
+  - **HTML**: `companion-command-menu` div を `index.html` に追加（`waza-menu` 直後）。
+  - **保護**: `winBattle()` / `enemyTurn()` / `finishBattle()` / BGM は変更なし。
 - **[v0.27.1] 仲間自動戦闘安定化**（§81）
   - **`runCompanionAutoActions()` 返値**: `true` = 仲間が敵を倒した、`false` = 生存 or スキップ。
   - **即ブレーク**: 各仲間の攻撃後に `if (e.hp <= 0) { break; }` を追加。次の仲間が不要に行動しない。
