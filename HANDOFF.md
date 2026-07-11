@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.26** |
+| 現在バージョン | **v0.26.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,12 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.26.1] フィールド仲間追従安定化**（§79）
+  - **`resetPartyTrail()`**: `state.partyTrail = []` を一本化した共通関数。ES5関数宣言でホイスト済み。
+  - **仲間変更時リセット**: `recruitCompanion()` / `dismissCompanion()` で加入/離脱直後にリセット。
+  - **debug全ボタン対応**: companion UIデバッグ8本 + party-follow-on / trail-reset / 新設 clear-trail で `resetPartyTrail()` 統一。
+  - **nullセーフ化**: `renderField()` で `state.partyTrail || []`、`movePlayer()` で `if (!state.partyTrail)` ガード。
+  - **保護**: 仲間能力・加入/離脱処理・パーティ上限・戦闘・BGM は変更なし。
 - **[v0.26] フィールド仲間追従表示**（§78）
   - **`state.partyTrail`**: 状態オブジェクトに追加（最大2エントリ `{x, y}`）。ロード時・マップ切り替え時にリセット。
   - **`movePlayer()`**: 有効な移動前に現在位置を `partyTrail.unshift()` でトップへ追加。2件を超えたら末尾を削除。

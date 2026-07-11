@@ -1027,7 +1027,7 @@
 
     // §78 v0.26: 仲間追従表示用の軌跡→絵文字マップを構築（companion 0 優先）
     var trailMap = {};
-    var trail = state.partyTrail;
+    var trail = state.partyTrail || [];
     var companions = p.companions;
     for (var ti = companions.length - 1; ti >= 0; ti--) {
       if (ti >= trail.length) continue;
@@ -2303,7 +2303,7 @@
   }
 
   function switchToSideMap() {
-    state.partyTrail = []; // §78 v0.26
+    resetPartyTrail(); // §79 v0.26.1
     state.mapMode = "side";
     var stageData = SIDE_STAGE_DATA[state.sideMap.stage] || SIDE_STAGE_DATA[1];
     state.sideMap.x = stageData.startX;
@@ -2325,10 +2325,15 @@
     // §53 v0.11.3: 🌀ゲート(2,3)の1マス下(2,4)へ戻す → 戻った直後の再接触ループを防止
     state.player.x = 2;
     state.player.y = 4;
-    state.partyTrail = []; // §78 v0.26
+    resetPartyTrail(); // §79 v0.26.1
     saveGame();
     renderField();
     showToast("🏠 通常マップへ戻った！");
+  }
+
+  // §79 v0.26.1: 仲間追従軌跡リセット共通関数
+  function resetPartyTrail() {
+    state.partyTrail = [];
   }
 
   // §53 v0.11.3: 横スクロール内帰還ゲートモーダル
@@ -2408,7 +2413,8 @@
     if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) return;
     if (BLOCKED[state.terrain[ny][nx]]) return;
 
-    // §78 v0.26: 移動前の位置を仲間追従軌跡に追加（最大2エントリ）
+    // §78 v0.26 / §79 v0.26.1: 移動前の位置を仲間追従軌跡に追加（最大2エントリ）
+    if (!state.partyTrail) { state.partyTrail = []; }
     state.partyTrail.unshift({ x: p.x, y: p.y });
     if (state.partyTrail.length > 2) { state.partyTrail.pop(); }
     p.x = nx;
@@ -4594,6 +4600,7 @@
     body.innerHTML = html;
     if (success) {
       p.companions.push(id);
+      resetPartyTrail(); // §79 v0.26.1
       updateStatusBar();
       saveGame();
       document.getElementById("t-recruit-ok").onclick = renderTavernRecruit;
@@ -4607,6 +4614,7 @@
     var idx = p.companions.indexOf(id);
     if (idx === -1) return;
     p.companions.splice(idx, 1);
+    resetPartyTrail(); // §79 v0.26.1
     var c = findById(COMPANION_DATA, id);
     showToast(c.name + "は酒場に戻った。");
     updateStatusBar();
@@ -5688,6 +5696,7 @@
       html += '<p class="small" style="color:#98d8ff;margin-top:8px;">🚶 フィールド仲間追従 (§78 v0.26)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-follow-on" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間2人をパーティに追加（歩いて追従確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-trail-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 仲間軌跡リセット（trail = []）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-party-clear-trail" style="border-color:#adb5bd;color:#adb5bd;">👥 パーティ解除 + 軌跡リセット</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -6598,6 +6607,7 @@
         UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
         LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = false; });
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6612,6 +6622,7 @@
         UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
         LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = false; });
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6625,6 +6636,7 @@
         state.sideMap.defeatedEnemies["6:34,2"] = false;
         UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6638,6 +6650,7 @@
         state.sideMap.defeatedEnemies["6:34,2"] = true;
         UMA_DATA.forEach(function(m) { state.player.dex[m.id] = null; });
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6652,6 +6665,7 @@
         UMA_DATA.forEach(function(m) { state.player.dex[m.id] = "captured"; });
         state.dexCompleteRewardClaimed = true;
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6667,6 +6681,7 @@
         state.dexCompleteRewardClaimed = true;
         LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = false; });
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6683,6 +6698,7 @@
         LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = true; });
         state.legendaryRewardClaimed = true;
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6698,6 +6714,7 @@
         LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = true; });
         state.legendaryRewardClaimed = true;
         state.player.companions = ["juritani", "shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
         saveGame();
         closeModal("settings-modal");
         openTavernModal();
@@ -6707,15 +6724,22 @@
       document.getElementById("btn-debug-party-follow-on").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
         state.player.companions = ["juritani", "harumi"];
-        state.partyTrail = [];
+        resetPartyTrail(); // §79 v0.26.1
         closeModal("settings-modal");
         renderField();
         showToast("[DEBUG] ジュリタニ+ハルミをパーティに追加。歩いて追従を確認！");
       };
       document.getElementById("btn-debug-party-trail-reset").onclick = function () {
-        state.partyTrail = [];
+        resetPartyTrail(); // §79 v0.26.1
         renderField();
         showToast("[DEBUG] 仲間軌跡をリセット（次の移動から追従開始）");
+      };
+      document.getElementById("btn-debug-party-clear-trail").onclick = function () {
+        state.player.companions = [];
+        resetPartyTrail(); // §79 v0.26.1
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] パーティ解除 + 軌跡リセット完了");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {
@@ -6976,7 +7000,7 @@
       state.sideMap.stage5RewardLevel = data.sideMapStage5Reward || 0;  // §57 v0.13
       state.sideMap.stage6RewardLevel = data.sideMapStage6Reward || 0;  // §59 v0.14
       state.sideMap.gateExplained = !!data.sideMapGateExplained;        // §52 v0.11.2
-      state.partyTrail = [];  // §78 v0.26: 軌跡はロード時にリセット
+      resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
         state.sideMap.stage1RewardLevel = state.sideMap.defeatedEnemies["36,1"] ? 2 : 1;

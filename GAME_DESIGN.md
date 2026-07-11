@@ -4293,9 +4293,13 @@ E  G  A  G  E  D  C（解決）
 - タイル描画優先順: プレイヤー → 仲間追従 → アイテム → 地形
 - 仲間がプレイヤーと同座標になる場合は表示しない（`tp.x === p.x && tp.y === p.y` ガード）
 
+**リセット関数** (§79 v0.26.1):
+- `resetPartyTrail()` — `state.partyTrail = []` を一本化した共通関数。ES5関数宣言でホイスト済み。
+
 **リセット条件**:
 - `switchToSideMap()` — サイドマップ入場時
 - `switchToNormalMap()` — 通常マップ帰還時
+- `recruitCompanion()` / `dismissCompanion()` — 仲間加入・離脱時（§79 v0.26.1）
 - `loadGame()` — セーブロード時
 
 **保護対象（変更なし）**: 仲間能力・加入/離脱処理・パーティ上限・戦闘・BGM・横スクロールマップ描画

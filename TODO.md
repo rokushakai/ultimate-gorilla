@@ -34,6 +34,14 @@
 
 ## ✅ 実装済み
 
+### Version 0.26.1 — フィールド仲間追従安定化 (§79)
+
+- **`resetPartyTrail()` 共通化**: `state.partyTrail = []` を1か所に集約。全14箇所で統一使用 ✅
+- **仲間加入/離脱時リセット**: `recruitCompanion()` / `dismissCompanion()` で呼び出し追加 ✅
+- **nullセーフ化**: `renderField()` `|| []` ガード / `movePlayer()` `if (!state.partyTrail)` ガード ✅
+- **debug全ボタン対応**: companion UIデバッグ8本 + 追従テスト3本に `resetPartyTrail()` 統一 ✅
+- **新debugボタン**: 「👥 パーティ解除 + 軌跡リセット」追加 ✅
+
 ### Version 0.26 — フィールド仲間追従表示 (§78)
 
 - **`state.partyTrail: []`** 追加: 状態オブジェクトに最大2エントリの軌跡配列 ✅

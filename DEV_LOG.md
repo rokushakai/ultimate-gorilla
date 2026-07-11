@@ -5,6 +5,22 @@
 
 ---
 
+## v0.26.1 (2026-07-12)
+
+### 追加・変更
+
+- **`resetPartyTrail()` 共通関数化 (§79)**: `state.partyTrail = []` が複数箇所に散在していたのを1つの関数に集約。ES5関数宣言なので `loadGame()` や他の関数から先行参照しても問題なし（ホイスティング）。
+- **`recruitCompanion()` でリセット (§79)**: `p.companions.push(id)` 直後に `resetPartyTrail()` を追加。新しく加入した仲間が古い軌跡の座標に突然現れるのを防ぐ。
+- **`dismissCompanion()` でリセット (§79)**: `p.companions.splice(idx, 1)` 直後に `resetPartyTrail()`。離脱した仲間の座標が残った仲間のインデックスにズレて割り当てられるのを防ぐ。
+- **companion デバッグボタン8本に `resetPartyTrail()` 追加 (§79)**: `state.player.companions = [...]` 直後に一括で追加（`replace_all: true` で実施）。酒場UIテスト後にフィールドへ戻った時に軌跡が正しく初期化されている。
+- **nullセーフ化 (§79)**: `renderField()` の `var trail = state.partyTrail || []` で undefined 時もループが安全。`movePlayer()` の `if (!state.partyTrail) { state.partyTrail = []; }` で強制初期化。
+- **新debugボタン「👥 パーティ解除 + 軌跡リセット」 (§79)**: フィールドテスト時に追従なし状態をすぐ作れる。
+
+### 設計判断
+
+- `recruitCompanion()` / `dismissCompanion()` だけでなく、デバッグボタン経由の直接 `companions =` 変更にも対応するため、デバッグハンドラー全8本にも追加した。debug=1 環境でのテストフローで軌跡が乱れない。
+- `state.partyTrail` を `state.player.partyTrail` にしなかった理由: プレイヤー個人のデータではなくフィールド描画上の揮発データなので state トップレベルが適切。saveGame に含めないポリシーも維持。
+
 ## v0.26 (2026-07-12)
 
 ### 追加・変更

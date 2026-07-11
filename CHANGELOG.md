@@ -5,6 +5,27 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.26.1] - 2026-07-12 — フィールド仲間追従安定化 (§79)
+
+### Added
+- **`resetPartyTrail()`** (§79): `state.partyTrail = []` を一本化した共通リセット関数。
+
+### Changed
+- **`switchToSideMap()` / `switchToNormalMap()`** (§79): インライン `state.partyTrail = []` → `resetPartyTrail()` に統一。
+- **`recruitCompanion()`** (§79): `p.companions.push(id)` の直後に `resetPartyTrail()` を追加。仲間加入直後に軌跡クリア。
+- **`dismissCompanion()`** (§79): `p.companions.splice(idx, 1)` の直後に `resetPartyTrail()` 追加。仲間離脱直後にクリア。
+- **`loadGame()`** (§79): インライン `state.partyTrail = []` → `resetPartyTrail()` に統一。
+- **`renderField()` trailMap 構築** (§79): `state.partyTrail` → `state.partyTrail || []` でnullセーフ化。
+- **`movePlayer()`** (§79): `if (!state.partyTrail) { state.partyTrail = []; }` ガード追加。
+- **デバッグ companion ボタン 8本** (§79): `state.player.companions = [...]` 後に `resetPartyTrail()` 追加。
+- **デバッグ `btn-debug-party-follow-on`** (§79): インライン `state.partyTrail = []` → `resetPartyTrail()`。
+- **デバッグ `btn-debug-party-trail-reset`** (§79): インライン `state.partyTrail = []` → `resetPartyTrail()`。
+- **デバッグ 新ボタン `btn-debug-party-clear-trail`**: 「👥 パーティ解除 + 軌跡リセット」追加。companions=[] + resetPartyTrail() + renderField()。
+
+### Notes
+- `resetPartyTrail()` は ES5 関数宣言なので定義位置より前のコード（`loadGame` など）からも呼び出し可能（ホイスティング）。
+- `partyTrail` はセーブデータに含めない方針は変わらず。ロード後は空軌跡から1〜2歩で自然に埋まる。
+
 ## [0.26] - 2026-07-12 — フィールド仲間追従表示 (§78)
 
 ### Added
