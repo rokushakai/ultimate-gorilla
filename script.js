@@ -720,6 +720,7 @@
     discoveredFinal: false,
     gameCleared: false,  // 究極ゴリラ捕獲クリアフラグ(§14.5)
     dexCompleteRewardClaimed: false, // §66 v0.17.1: 図鑑コンプリート報酬受取済みフラグ
+    legendaryRewardClaimed: false,   // §70 v0.20: 伝説装備コンプリート報酬受取済みフラグ
     pendingClear: false, // 戦闘終了後にクリアモーダルを表示するフラグ
     pendingLv99: false,  // 戦闘終了後にLv99マイルストーンモーダルを表示するフラグ(§3.8 v0.7.1)
     endingPage: 0,       // エンディングモーダルの現在ページ(v0.7 §28)
@@ -868,6 +869,8 @@
   // §67 v0.18: 称号判定を一元化 (renderStatus / renderEndingPage / renderRecordBody で共用)
   function getPlayerTitle() {
     var p = state.player;
+    // §70 v0.20: 伝説装備コンプリートが最上位称号
+    if (isFullyCompleted() && isLegendaryEquipmentComplete()) return "すべての伝説を集めし者";
     if (state.gameCleared && isSideStoryCleared() && isUmaDexComplete()) return "究極とUMA図鑑を極めし者";
     if (state.gameCleared && isSideStoryCleared()) return "究極を歌い、聖域を越えし者";
     if (isUmaDexComplete()) return "UMA図鑑を極めし者";
@@ -882,6 +885,11 @@
   }
   function isFullyCompleted() {
     return state.gameCleared && isSideStoryCleared() && isUmaDexComplete();
+  }
+
+  // §70 v0.20: 伝説装備コンプリート判定ヘルパー
+  function isLegendaryEquipmentComplete() {
+    return LEGEND_EQUIPS.every(function(le) { return !!state.eventFlags[le.flag]; });
   }
 
   // ---------------------------------------------------------
@@ -3722,15 +3730,18 @@
       { n: "6 聖域",           c: s6c, b: s6b, boss: "究極チンパンジー" }
     ];
 
-    // §68 v0.18.1: スコア計算 (本編1 + 横スクロール12 + UMA図鑑12 = max25)
+    // §68 v0.18.1 / §70 v0.20: スコア計算 (本編1 + 横スクロール12 + UMA図鑑12 + 伝説装備7 = max32)
     var mainPts = state.gameCleared ? 1 : 0;
     var sidePts = [s1c, s1b, s2c, s2b, s3c, s3b, s4c, s4b, s5c, s5b, s6c, s6b].filter(Boolean).length;
     var stagesCleared = stages.filter(function(s) { return s.c; }).length;
     var bossesDefeated = stages.filter(function(s) { return s.b; }).length;
     var dexPts = totalUma > 0 ? capturedDexCount / totalUma * 12 : 0;
-    var overallPct = Math.min(100, Math.round((mainPts + sidePts + dexPts) / 25 * 100));
+    var legendCount = LEGEND_EQUIPS.filter(function(le) { return state.eventFlags[le.flag]; }).length;
+    var legendPts = legendCount;
+    var overallPct = Math.min(100, Math.round((mainPts + sidePts + dexPts + legendPts) / 32 * 100));
     var dexPct = totalUma > 0 ? Math.round(capturedDexCount / totalUma * 100) : 0;
     var sidePct = Math.round(sidePts / 12 * 100);
+    var legendPct = Math.round(legendPts / 7 * 100);
 
     function chk(val) { return val ? '<span class="record-done">✅ ' : '<span class="record-pending">'; }
     function pbar(pct, grad) {
@@ -3746,10 +3757,11 @@
     html += '<span style="font-size:1.1em;font-weight:bold;color:#ffd166;">' + overallPct + '%</span>';
     html += '</div>';
     html += pbar(overallPct);
-    html += '<div style="display:flex;justify-content:space-between;font-size:0.75em;color:#888;margin-top:5px;">';
+    html += '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;font-size:0.75em;color:#888;margin-top:5px;gap:2px;">';
     html += '<span>本編 ' + mainPts + '/1</span>';
     html += '<span>横スクロール ' + sidePts + '/12</span>';
     html += '<span>UMA図鑑 ' + capturedDexCount + '/' + totalUma + '</span>';
+    html += '<span>伝説装備 ' + legendCount + '/7</span>';
     html += '</div>';
     html += '</div>';
 
@@ -3824,6 +3836,37 @@
     }
     html += '</div>';
 
+    // --- §70 v0.20: 伝説装備 ---
+    var legendComplete = isLegendaryEquipmentComplete();
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">⚔️ 伝説装備</h4>';
+    html += '<span style="font-size:0.82em;color:' + (legendComplete ? "#ffd166" : "#adb5bd") + ';">' + legendCount + ' / 7</span>';
+    html += '</div>';
+    html += pbar(legendPct, "linear-gradient(90deg,#ffd166,#ffb347)");
+    if (legendComplete) {
+      html += '<div style="font-size:0.8em;color:#ffd166;margin-top:4px;">✅ コンプリート！</div>';
+    } else {
+      html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">あと' + (7 - legendCount) + '種類</div>';
+    }
+    LEGEND_EQUIPS.forEach(function(le) {
+      var got = !!state.eventFlags[le.flag];
+      html += '<div class="record-row"><span>' + le.name + '</span>' + chk(got) + (got ? "入手済み" : "未入手") + '</span></div>';
+    });
+    html += '</div>';
+
+    // --- §70 v0.20: 伝説装備コンプリート報酬 ---
+    html += '<div class="record-section">';
+    html += '<h4>✨ 伝説装備コンプリート報酬</h4>';
+    if (state.legendaryRewardClaimed) {
+      html += '<div class="record-row"><span></span><span class="record-done">✅ 受取済み</span></div>';
+    } else if (legendComplete) {
+      html += '<div class="record-row"><span></span><span style="color:#ffd166;">未受取（装備画面を開くと受け取れます）</span></div>';
+    } else {
+      html += '<div class="record-row"><span></span><span class="record-pending">伝説装備7種入手後に解放</span></div>';
+    }
+    html += '</div>';
+
     // --- 次の目標（強調） ---
     html += '<div class="record-section record-section-goal">';
     html += '<h4 style="color:#ffd166;">🎯 次の目標</h4>';
@@ -3834,8 +3877,10 @@
       nextGoal = "横スクロール編を進めよう。通常マップの🌀ゲートから横スクロール世界へ行けます。";
     } else if (!isComplete) {
       nextGoal = "UMA図鑑を埋めよう。未捕獲のUMAを弱らせてから捕まえよう（📖図鑑で確認）。";
+    } else if (!legendComplete) {
+      nextGoal = "伝説装備を全7種集めよう。装備画面や冒険の記録で進捗を確認できます。";
     } else {
-      nextGoal = "すべての大きな目標を達成済み！図鑑を眺めたり、仲間のセリフを見たり、森を散歩しよう。";
+      nextGoal = "すべての大きな目標を達成済み！仲間のセリフを見たり、森を散歩したり、余韻を楽しもう。";
     }
     html += '<p style="font-size:0.85em;color:#e0e0e0;margin:3px 0;">' + nextGoal + '</p>';
     html += '</div>';
@@ -3844,6 +3889,7 @@
     html += '<div class="record-section">';
     html += '<h4>🏆 称号条件一覧</h4>';
     var titles = [
+      { name: "すべての伝説を集めし者", cond: "究極ゴリラ捕獲 ＋ 横スクロール制覇 ＋ UMA図鑑コンプリート ＋ 伝説装備7種入手" },
       { name: "究極とUMA図鑑を極めし者", cond: "究極ゴリラ捕獲 ＋ 横スクロール制覇 ＋ UMA図鑑コンプリート" },
       { name: "究極を歌い、聖域を越えし者", cond: "究極ゴリラ捕獲 ＋ 横スクロール制覇" },
       { name: "UMA図鑑を極めし者", cond: "UMA図鑑コンプリート" },
@@ -3896,6 +3942,30 @@
     html += '<p style="margin:8px 0;color:#06d6a0;">報酬：3000G ＋ ラーメン×3</p>';
     document.getElementById("dex-complete-body").innerHTML = html;
     openModal("dex-complete-modal");
+  }
+
+  // §70 v0.20: 伝説装備コンプリート報酬モーダル
+  function openLegendaryCompleteModal() {
+    state.player.gold += 2000;
+    state.player.ramenCount += 2;
+    state.legendaryRewardClaimed = true;
+    saveGame();
+    updateStatusBar();
+    document.getElementById("btn-legendary-complete-next").onclick = function () {
+      closeModal("legendary-complete-modal");
+      openModal("equip-modal");
+      renderEquipBody();
+    };
+    var html = "";
+    html += '<p style="margin:8px 0;color:#ffd166;font-weight:bold;">すべての伝説装備がそろった！</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">森に眠っていた力が、君の冒険に応えている。</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">伝説は、持つ者ではなく、<br>歩み続けた者に宿る。</p>';
+    html += '<p style="margin:8px 0;color:#06d6a0;">報酬：2000G ＋ ラーメン×2</p>';
+    if (isFullyCompleted()) {
+      html += '<p style="margin:8px 0;color:#ffd166;font-size:0.9em;">称号「すべての伝説を集めし者」を獲得！</p>';
+    }
+    document.getElementById("legendary-complete-body").innerHTML = html;
+    openModal("legendary-complete-modal");
   }
 
   function renderDexBody() {
@@ -4940,8 +5010,12 @@
             lines.push("武器を替えれば攻撃が通りやすくなる。防具・盾・兜を整えれば、のらいぬの一撃にも耐えやすくなるぞ。");
           }
         }
-        if (hasAnyLegend) {
-          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
+        // §70 v0.20: 伝説装備コンプリート反応
+        if (isLegendaryEquipmentComplete()) {
+          lines.push("すべての伝説装備をそろえたのか……。武具に選ばれたというより、お前の旅が武具を目覚めさせたんだな。");
+        } else if (hasAnyLegend) {
+          var remaining = LEGEND_EQUIPS.filter(function(le) { return !state.eventFlags[le.flag]; }).length;
+          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。まだ" + remaining + "種類残っているぞ。");
         } else if (p.level >= 30) {
           lines.push("フィールドには商人では買えない伝説の装備が眠っている。探してみな。");
         } else {
@@ -5097,6 +5171,11 @@
   }
 
   function openEquipModal() {
+    // §70 v0.20: 伝説装備コンプリート報酬チェック（未受取なら先にモーダル）
+    if (isLegendaryEquipmentComplete() && !state.legendaryRewardClaimed) {
+      openLegendaryCompleteModal();
+      return;
+    }
     openModal("equip-modal");
     renderEquipBody();
   }
@@ -5264,7 +5343,8 @@
         "究極ゴリラを捕まえたあとも、森の空気は変わらずそこにあるね。少し肩の力を抜いて、歩いてみるのもいいかもしれないよ。",
         "力だけじゃなく、歌で届くものもあるんだね。",
         "図鑑をすべて埋めると、何か良いことがあるかもしれないよ。",
-        "横スクロールの世界を全部制覇したかな？チンパンジーもいるよ。"
+        "横スクロールの世界を全部制覇したかな？チンパンジーもいるよ。",
+        "伝説装備を全7種集めると、新しい称号と報酬があるよ。装備画面で進捗を確認してみて。"  // §70 v0.20
       ];
       hint = postClearHints[Math.floor(Math.random() * postClearHints.length)];
     } else if (!state.gameCleared && p.level >= 99 && p.hasUkulele) {
@@ -5460,6 +5540,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-modal" style="border-color:#98d8ff;color:#98d8ff;">📖 図鑑コンプリート報酬モーダルを見る</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間クリア後セリフ確認（クリア状態+仲間全員）</button>';
+      html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-modal" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備コンプリート報酬モーダルを見る</button>';
       html += '<p class="small" style="color:#ff9f7f;margin-top:8px;">💬 NPC会話テスト (§69 v0.19)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-npc-full-complete" style="border-color:#ff9f7f;color:#ff9f7f;">💬 NPC反応：完全達成状態でUMA博士を開く</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-npc-cleared-only" style="border-color:#ff9f7f;color:#ff9f7f;">💬 NPC反応：究極ゴリラ捕獲済み・横スクロール未制覇</button>';
@@ -6263,6 +6347,26 @@
         openDexCompleteModal();
         showToast("[DEBUG] 図鑑コンプリート報酬モーダルを表示（報酬は付与されます）");
       };
+      // §70 v0.20: 伝説装備デバッグ
+      document.getElementById("btn-debug-legend-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = true; });
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] 伝説装備7種を全入手した。装備画面を開くと報酬モーダルが出る（未受取の場合）");
+      };
+      document.getElementById("btn-debug-legend-reward-reset").onclick = function () {
+        state.legendaryRewardClaimed = false;
+        saveGame();
+        showToast("[DEBUG] 伝説装備コンプリート報酬を未受取に戻した");
+      };
+      document.getElementById("btn-debug-legend-reward-modal").onclick = function () {
+        closeModal("settings-modal");
+        LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = true; });
+        state.legendaryRewardClaimed = false;
+        openLegendaryCompleteModal();
+        showToast("[DEBUG] 伝説装備コンプリート報酬モーダルを表示（報酬は付与されます）");
+      };
       document.getElementById("btn-debug-set-all-complete").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
         state.gameCleared = true;
@@ -6452,6 +6556,7 @@
         discoveredFinal: state.discoveredFinal,
         gameCleared: state.gameCleared,
         dexCompleteRewardClaimed: state.dexCompleteRewardClaimed, // §66 v0.17.1
+        legendaryRewardClaimed: state.legendaryRewardClaimed,    // §70 v0.20
         openedChests: state.openedChests,
         eventFlags: state.eventFlags,
         // §43 v0.9 / §44 v0.9.1: 横スクロールマップ
@@ -6517,6 +6622,7 @@
       state.discoveredFinal = !!data.discoveredFinal;
       state.gameCleared = !!data.gameCleared;
       state.dexCompleteRewardClaimed = !!data.dexCompleteRewardClaimed; // §66 v0.17.1
+      state.legendaryRewardClaimed = !!data.legendaryRewardClaimed;    // §70 v0.20
       state.openedChests = data.openedChests || {};
       state.eventFlags = data.eventFlags || {
         pegasusArmorGot: false, sixfoldShieldGot: false,
@@ -7227,13 +7333,19 @@
       if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。戻りたい時はゴール画面か🏠帰還ゲートを使えばいつでも戻れる。";
       return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し宝箱を集めゴールを目指そう。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
     }
-    // §66 v0.17.1 / §69 v0.19: クリア後ヒントを進行状況で分岐
+    // §66 v0.17.1 / §69 v0.19 / §70 v0.20: クリア後ヒントを進行状況で分岐
     if (priority === 0) {
-      // §69 v0.19: 完全達成 → 余韻メッセージ
-      if (isFullyCompleted()) {
+      // §70 v0.20: 伝説装備コンプリート → 完全制覇余韻
+      if (isFullyCompleted() && isLegendaryEquipmentComplete()) {
         if (tier === 1) return "もう攻略ペーパーに書くことはない。ここから先は、攻略ではなく余韻の時間だ。";
-        if (tier === 2) return "究極ゴリラに歌を届け、チンパンジーの聖域を越え、UMA図鑑まで完成させた。伝説の冒険は完結した。";
-        return "完全制覇おめでとう！称号「究極とUMA図鑑を極めし者」を誇りに。伝説装備（全7種）はすべて揃えたか？まだなら、最後のコレクションとして目指してみよう。";
+        if (tier === 2) return "究極ゴリラに歌を届け、チンパンジーの聖域を越え、UMA図鑑も伝説装備もすべて揃えた。これ以上ない冒険の記録だ。";
+        return "完全制覇達成！称号「すべての伝説を集めし者」は最高の証だ。あとは仲間のセリフや図鑑を眺めながら、余韻を楽しもう。";
+      }
+      // §69 v0.19: 完全達成（伝説未コンプ）→ 伝説装備へ誘導
+      if (isFullyCompleted()) {
+        if (tier === 1) return "大きな目標は達成した。最後に伝説装備が残っているかもしれない。";
+        if (tier === 2) return "伝説装備は全7種。「⚔️装備」画面を開くと進捗が確認できる。集めると新たな称号と報酬が得られる。";
+        return "伝説装備（全7種）はすべて揃えたか？まだなら装備画面で確認しよう。コンプリート報酬は2000G＋ラーメン×2、そして称号「すべての伝説を集めし者」だ。";
       }
       if (isUmaDexComplete()) {
         if (tier === 1) return "UMA図鑑をコンプリートした！称号「UMA図鑑を極めし者」を獲得。";

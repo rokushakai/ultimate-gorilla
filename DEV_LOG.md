@@ -5,6 +5,26 @@
 
 ---
 
+## v0.20 (2026-07-11)
+
+### 追加・変更
+
+- **`isLegendaryEquipmentComplete()`**: `LEGEND_EQUIPS.every(function(le) { return !!state.eventFlags[le.flag]; })` で7種すべてを確認。`LEGEND_EQUIPS` は既存配列（ペガサスのよろい/六連のたて/宇宙のかぶと/如意棒/アンドロメダの鎖/キグナスのかぶと/ドラゴンのたて）。
+- **称号最高位更新**: `getPlayerTitle()` に `isFullyCompleted() && isLegendaryEquipmentComplete()` を最高優先として追加。旧最高位「究極とUMA図鑑を極めし者」は2番目へ降格。
+- **`openEquipModal()` チェック**: 装備画面を開く前に `!state.legendaryRewardClaimed` かつ `isLegendaryEquipmentComplete()` の場合に `openLegendaryCompleteModal()` を先出し。`dexCompleteRewardClaimed` パターンと同じ実装。
+- **`openLegendaryCompleteModal()`**: 報酬付与→フラグ立て→saveGame→updateStatusBar→ボタンハンドラ設定→HTML生成→openModal の順。称号取得時は追加メッセージ（`isFullyCompleted()` チェック）。
+- **`renderRecordBody()` スコア**: 分母を25→32に変更。`legendCount`/`legendPts`/`legendPct` を追加。伝説装備セクションと報酬セクションを追加。次の目標・称号条件一覧も更新。
+- **NPC K 鍛冶屋**: `isLegendaryEquipmentComplete()` 時に専用セリフ。`hasAnyLegend` 時は `LEGEND_EQUIPS.filter()` で残数を計算してセリフに含める。
+- **デバッグ §70**: `btn-debug-legend-all`（全7種 `eventFlags` を true に）/ `btn-debug-legend-reward-reset`（`legendaryRewardClaimed = false`）/ `btn-debug-legend-reward-modal`（全7種入手後 `legendaryRewardClaimed = false` にしてモーダル表示）。
+
+### 注意点
+
+- `LEGEND_EQUIPS` は v0.8.3 時点から7種確定。新たな伝説装備を追加する場合は `LEGEND_EQUIPS` 配列への追加だけで `isLegendaryEquipmentComplete()` / `renderRecordBody()` の7件表示・スコア計算すべてに自動反映される（ただしスコア上限32の分母 `/32` と表示上の `7` は手動更新が必要）。
+- `isFullyCompleted()` は変更なし（`state.gameCleared && isSideStoryCleared() && isUmaDexComplete()`）。伝説装備コンプリートは別条件として `isLegendaryEquipmentComplete()` で独立管理。
+- `legendPct` は `renderRecordBody()` 内の伝説装備プログレスバーで使用（`pbar(legendPct, ...)` 呼び出し）。
+
+---
+
 ## v0.19 (2026-07-11)
 
 ### 追加・変更

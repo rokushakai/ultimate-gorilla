@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.20] - 2026-07-11 — 伝説装備コンプリート報酬 (§70)
+
+### Added
+- **`isLegendaryEquipmentComplete()`** (§70): 伝説装備7種すべての取得フラグを確認するヘルパー関数を追加。
+- **`state.legendaryRewardClaimed`** (§70): 報酬受取済みフラグ。`saveGame()` / `loadGame()` / 初期 state に追加。
+- **`#legendary-complete-modal`** (§70): 伝説装備コンプリート報酬モーダルを index.html に追加（⚔️絵文字タイトル）。
+- **`openLegendaryCompleteModal()`** (§70): 報酬付与（2000G + ラーメン×2）+ 称号取得アナウンス + ボタンで装備画面へ遷移。
+- **称号「すべての伝説を集めし者」** (§70): `isFullyCompleted() && isLegendaryEquipmentComplete()` を最高位称号として `getPlayerTitle()` に追加。
+- **`openEquipModal()` 報酬チェック** (§70): 装備画面を開く前に未受取報酬がある場合は先に `openLegendaryCompleteModal()` を呼ぶ。
+- **冒険の記録 `⚔️ 伝説装備` セクション** (§70): 各装備の入手状況・進捗バー・N/7表示・コンプリート/残数を `renderRecordBody()` に追加。
+- **冒険の記録 `✨ 伝説装備コンプリート報酬` セクション** (§70): 受取済み/未受取/未解放の3状態を `renderRecordBody()` に追加。
+- **総合達成率スコア更新** (§70): 最大25pt → **最大32pt**（本編1 + 横スクロール12 + UMA図鑑12 + 伝説装備7）。
+- **称号条件一覧** (§70): 「すべての伝説を集めし者」を最上位に `renderRecordBody()` の称号条件表へ追加。
+- **次の目標** (§70): 伝説装備未コンプリート時に「伝説装備を全7種集めよう」ヒントを追加。
+- **NPC K（鍛冶屋）伝説コンプリート反応** (§70): コンプリート時に専用セリフ、未コンプリートで一部入手済みの場合は残数ヒント。
+- **`openHomeModal` 伝説ヒント** (§70): `postClearHints` に伝説装備コンプリート誘導ヒントを追加。
+- **`getProgressHint` priority=0 更新** (§70): 伝説コンプリートを最高優先に昇格、`isFullyCompleted()` 時に伝説誘導ヒントを追加。
+- **デバッグ §70**: `btn-debug-legend-all`（全7種入手）/ `btn-debug-legend-reward-reset`（未受取に戻す）/ `btn-debug-legend-reward-modal`（モーダル表示）を追加。
+
+### Changed
+- **`getPlayerTitle()`** (§70): 新最高位称号「すべての伝説を集めし者」を先頭に追加（旧最高位「究極とUMA図鑑を極めし者」は2番目へ）。
+- **`renderRecordBody()` スコア計算** (§70): 分母を25→32に変更。`legendCount`/`legendPts`/`legendPct` 変数追加。
+
 ## [0.19] - 2026-07-11 — NPC固有イベント深化・クリア後世界の会話強化 (§69)
 
 ### Added

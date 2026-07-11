@@ -3990,3 +3990,79 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 | `btn-debug-npc-full-complete` | 完全達成状態にしてUMA博士を開く |
 | `btn-debug-npc-cleared-only` | クリアのみ(横スクロール未制覇)にしてUMA博士を開く |
 | `btn-debug-npc-side-cleared` | 横スクロール制覇済み・未クリアにしてUMA博士を開く |
+
+---
+
+## §70 v0.20 — 伝説装備コンプリート報酬
+
+**[実装済み]**
+
+### 概要
+
+伝説装備7種（`LEGEND_EQUIPS`）をすべて入手した際に報酬を付与し、最高位称号「すべての伝説を集めし者」を解放するシステム。
+
+### 伝説装備一覧（LEGEND_EQUIPS 7種）
+
+| 装備名 | フラグ |
+|---|---|
+| ペガサスのよろい | `pegasusArmorGot` |
+| 六連のたて | `sixfoldShieldGot` |
+| 宇宙のかぶと | `cosmicHelmetGot` |
+| 如意棒 | `nyoiboGot` |
+| アンドロメダの鎖 | `andromedaGot` |
+| キグナスのかぶと | `cygnusHelmetGot` |
+| ドラゴンのたて | `dragonShieldGot` |
+
+### 判定ヘルパー
+
+| 関数 | 判定内容 |
+|---|---|
+| `isLegendaryEquipmentComplete()` | `LEGEND_EQUIPS.every(le => !!state.eventFlags[le.flag])` |
+
+### セーブデータ
+
+| フラグ | 初期値 | 説明 |
+|---|---|---|
+| `state.legendaryRewardClaimed` | `false` | 報酬受取済みフラグ。`saveGame/loadGame` に追加。 |
+
+### 報酬モーダル（`#legendary-complete-modal`）
+
+- トリガー: `openEquipModal()` で `isLegendaryEquipmentComplete() && !state.legendaryRewardClaimed`
+- 報酬: 2000G ＋ ラーメン×2
+- 称号取得時（`isFullyCompleted()` も true の場合）: 称号メッセージ追加表示
+- ボタン「装備を確認する」→ `closeModal` → `openModal("equip-modal")` + `renderEquipBody()`
+
+### 称号（`getPlayerTitle()` 優先順）
+
+| 優先 | 称号 | 条件 |
+|---|---|---|
+| 1 | すべての伝説を集めし者 | `isFullyCompleted() && isLegendaryEquipmentComplete()` |
+| 2 | 究極とUMA図鑑を極めし者 | `isFullyCompleted()` |
+| 3 | 究極を歌い、聖域を越えし者 | `gameCleared && isSideStoryCleared()` |
+| 4 | UMA図鑑を極めし者 | `isUmaDexComplete()` |
+| 5 | 森に歌を届けし者 | `gameCleared` |
+| 6 | 究極に近づきし者 | `level >= 99 or level99Shown` |
+| 7 | 勇者の子孫 | （初期） |
+
+### 冒険の記録（`renderRecordBody()`）
+
+- `⚔️ 伝説装備` セクション: N/7進捗バー・各装備入手状況リスト
+- `✨ 伝説装備コンプリート報酬` セクション: 受取済み/未受取/未解放
+- 総合達成率スコア: 最大32pt（本編1 + 横スクロール12 + UMA図鑑12 + 伝説装備7）
+- 称号条件一覧: 最上位に「すべての伝説を集めし者」を追加
+
+### NPC K（鍛冶屋）分岐
+
+| 状態 | セリフ |
+|---|---|
+| コンプリート済み | 「すべての伝説装備をそろえたのか……。武具に選ばれたというより、お前の旅が武具を目覚めさせたんだな。」 |
+| 一部入手済み | 「★伝説の装備は、商人には売れんぞ。大切にな。まだN種類残っているぞ。」（残数はフィルタで計算） |
+| 未入手（Lv30+） | 「フィールドには商人では買えない伝説の装備が眠っている。探してみな。」 |
+
+### デバッグ §70
+
+| ボタンID | 動作 |
+|---|---|
+| `btn-debug-legend-all` | 伝説装備7種の全フラグを true に |
+| `btn-debug-legend-reward-reset` | `legendaryRewardClaimed = false` |
+| `btn-debug-legend-reward-modal` | 全7種入手+未受取にしてモーダル表示 |
