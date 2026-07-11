@@ -887,9 +887,14 @@
     return state.gameCleared && isSideStoryCleared() && isUmaDexComplete();
   }
 
-  // §70 v0.20: 伝説装備コンプリート判定ヘルパー
+  // §70 v0.20 / §71 v0.20.1: 伝説装備コンプリート判定ヘルパー
+  // フラグ優先。旧セーブ互換のため所持確認も行う（フラグがなくても装備中/所持中なら入手済み扱い）
   function isLegendaryEquipmentComplete() {
-    return LEGEND_EQUIPS.every(function(le) { return !!state.eventFlags[le.flag]; });
+    return LEGEND_EQUIPS.every(function(le) {
+      if (!!state.eventFlags[le.flag]) return true;
+      var slotInfo = findEquipSlot(le.slot);
+      return slotInfo ? isEquipOwned(slotInfo, le.itemId) : false;
+    });
   }
 
   // ---------------------------------------------------------
@@ -3851,7 +3856,8 @@
     }
     LEGEND_EQUIPS.forEach(function(le) {
       var got = !!state.eventFlags[le.flag];
-      html += '<div class="record-row"><span>' + le.name + '</span>' + chk(got) + (got ? "入手済み" : "未入手") + '</span></div>';
+      // §71 v0.20.1: 未入手は「・」プレフィックスで視覚的に区別
+      html += '<div class="record-row"><span>' + (got ? "✅ " : "・") + le.name + '</span>' + chk(got) + (got ? "入手済み" : "未入手") + '</span></div>';
     });
     html += '</div>';
 
@@ -4798,15 +4804,15 @@
     { slot: "helmet", label: "⛑ 兜", ownedKey: "ownedHelmets", data: function () { return HELMET_DATA; } }
   ];
 
-  // 伝説装備リスト(v0.8 §30, v0.8.3 §33) — ステータス画面の進捗表示に使用
+  // 伝説装備リスト(v0.8 §30, v0.8.3 §33, v0.20.1 §71: slot/itemId追加) — ステータス画面の進捗表示・コンプリート判定に使用
   var LEGEND_EQUIPS = [
-    { name: "ペガサスのよろい", flag: "pegasusArmorGot" },
-    { name: "六連のたて", flag: "sixfoldShieldGot" },
-    { name: "宇宙のかぶと", flag: "cosmicHelmetGot" },
-    { name: "如意棒", flag: "nyoiboGot" },
-    { name: "アンドロメダの鎖", flag: "andromedaGot" },
-    { name: "キグナスのかぶと", flag: "cygnusHelmetGot" },   // v0.8.3
-    { name: "ドラゴンのたて", flag: "dragonShieldGot" }      // v0.8.3
+    { name: "ペガサスのよろい", flag: "pegasusArmorGot",  slot: "armor",  itemId: "pegasusarmor"   },
+    { name: "六連のたて",       flag: "sixfoldShieldGot", slot: "shield", itemId: "sixfoldshield"  },
+    { name: "宇宙のかぶと",     flag: "cosmicHelmetGot",  slot: "helmet", itemId: "cosmickabuto"   },
+    { name: "如意棒",           flag: "nyoiboGot",        slot: "weapon", itemId: "nyoibo"         },
+    { name: "アンドロメダの鎖", flag: "andromedaGot",     slot: "weapon", itemId: "andromedachain" },
+    { name: "キグナスのかぶと", flag: "cygnusHelmetGot",  slot: "helmet", itemId: "cygnuskabuto"   }, // v0.8.3
+    { name: "ドラゴンのたて",   flag: "dragonShieldGot",  slot: "shield", itemId: "dragonshield"   }  // v0.8.3
   ];
 
   // ---------------------------------------------------------
@@ -5010,14 +5016,17 @@
             lines.push("武器を替えれば攻撃が通りやすくなる。防具・盾・兜を整えれば、のらいぬの一撃にも耐えやすくなるぞ。");
           }
         }
-        // §70 v0.20: 伝説装備コンプリート反応
+        // §70 v0.20 / §71 v0.20.1: 伝説装備コンプリート反応
         if (isLegendaryEquipmentComplete()) {
-          lines.push("すべての伝説装備をそろえたのか……。武具に選ばれたというより、お前の旅が武具を目覚めさせたんだな。");
+          lines.push("すべての伝説装備をそろえたのか……。");
+          lines.push("武具に選ばれたというより、お前の旅が武具を目覚めさせたんだな。");
         } else if (hasAnyLegend) {
           var remaining = LEGEND_EQUIPS.filter(function(le) { return !state.eventFlags[le.flag]; }).length;
-          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。まだ" + remaining + "種類残っているぞ。");
+          lines.push("★伝説の装備は、商人には売れんぞ。大切にな。");
+          lines.push("あと" + remaining + "種類で、伝説装備がすべてそろうぞ。");
         } else if (p.level >= 30) {
-          lines.push("フィールドには商人では買えない伝説の装備が眠っている。探してみな。");
+          lines.push("伝説装備は、ただ強いだけじゃない。");
+          lines.push("すべてそろえた時、お前の旅そのものが、ひとつの伝説になるんだ。");
         } else {
           lines.push("いつか伝説級の装備も出るかもしれないな。如意棒、ドラゴンのたて……名前だけでワクワクするだろう？");
         }
@@ -5544,6 +5553,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-modal" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備コンプリート報酬モーダルを見る</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-legend-only-incomplete" style="border-color:#adb5bd;color:#adb5bd;">🔄 伝説装備だけ未達成にする（他は維持）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-open-record-legendary" style="border-color:#c8b4ff;color:#c8b4ff;">📜 冒険の記録（伝説装備確認）</button>';
       html += '<p class="small" style="color:#ff9f7f;margin-top:8px;">💬 NPC会話テスト (§69 v0.19)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-npc-full-complete" style="border-color:#ff9f7f;color:#ff9f7f;">💬 NPC反応：完全達成状態でUMA博士を開く</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-npc-cleared-only" style="border-color:#ff9f7f;color:#ff9f7f;">💬 NPC反応：究極ゴリラ捕獲済み・横スクロール未制覇</button>';
@@ -6366,6 +6377,19 @@
         state.legendaryRewardClaimed = false;
         openLegendaryCompleteModal();
         showToast("[DEBUG] 伝説装備コンプリート報酬モーダルを表示（報酬は付与されます）");
+      };
+      // §71 v0.20.1: 伝説装備だけ未達成にするボタン
+      document.getElementById("btn-debug-legend-only-incomplete").onclick = function () {
+        LEGEND_EQUIPS.forEach(function(le) { state.eventFlags[le.flag] = false; });
+        state.legendaryRewardClaimed = false;
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] 伝説装備7種を未入手・報酬未受取に戻した（他の達成状況は維持）");
+      };
+      document.getElementById("btn-debug-open-record-legendary").onclick = function () {
+        closeModal("settings-modal");
+        openRecordModal();
+        showToast("[DEBUG] 冒険の記録を開いた（伝説装備セクションを確認）");
       };
       document.getElementById("btn-debug-set-all-complete").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }

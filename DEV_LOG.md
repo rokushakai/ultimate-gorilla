@@ -5,6 +5,26 @@
 
 ---
 
+## v0.20.1 (2026-07-11)
+
+### 確認・修正・整備
+
+- **装備中アイテムの判定**: 伝説装備フラグは取得時点で `= true` になりセーブされる。装備スロットへの移動はフラグに影響しない。旧セーブ互換のため `isLegendaryEquipmentComplete()` に `isEquipOwned()` の二段チェックを追加（フラグが落ちていても所持中/装備中なら入手済み扱い）。
+- **LEGEND_EQUIPS 拡張**: `slot`（"armor"/"shield"/"helmet"/"weapon"）と `itemId`（実際のアイテムID文字列）を各エントリに追加。これにより `findEquipSlot()` + `isEquipOwned()` による所持確認が可能になった。
+- **報酬二重受取防止**: `legendaryRewardClaimed` フラグが `saveGame()` / `loadGame()` に追加済みであることを確認。`openEquipModal()` のチェックと `openLegendaryCompleteModal()` 内でのフラグ設定により二重受取不可。
+- **冒険の記録 表示**: `✅ ` / `・` プレフィックスを各伝説装備名に追加し、視覚的に入手/未入手が一目で分かるように改善。
+- **鍛冶屋 NPC K**: コンプリート時を2行・残数ヒントを2行・Lv30+未入手を2行 `lines.push()` に分割。自然な会話テンポに整備。
+- **デバッグ追加**: `btn-debug-legend-only-incomplete`（他の達成状況を維持したまま伝説装備フラグと `legendaryRewardClaimed` をリセット） / `btn-debug-open-record-legendary`（冒険の記録を開いて伝説装備セクションを直接確認）。
+
+### 判定仕様まとめ（v0.20.1確定）
+
+- **入手済み判定**: `state.eventFlags[le.flag] === true` または `isEquipOwned(findEquipSlot(le.slot), le.itemId)`
+- **コンプリート判定**: 上記を7種すべてについて確認
+- **報酬トリガー**: `openEquipModal()` で `isLegendaryEquipmentComplete() && !state.legendaryRewardClaimed`
+- **総合スコア**: 本編1 + 横スクロール12 + UMA図鑑12 + 伝説装備7 = max32pt
+
+---
+
 ## v0.20 (2026-07-11)
 
 ### 追加・変更

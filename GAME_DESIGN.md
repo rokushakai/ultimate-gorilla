@@ -4001,23 +4001,23 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 
 伝説装備7種（`LEGEND_EQUIPS`）をすべて入手した際に報酬を付与し、最高位称号「すべての伝説を集めし者」を解放するシステム。
 
-### 伝説装備一覧（LEGEND_EQUIPS 7種）
+### 伝説装備一覧（LEGEND_EQUIPS 7種）— §71 v0.20.1 で slot/itemId 追加
 
-| 装備名 | フラグ |
-|---|---|
-| ペガサスのよろい | `pegasusArmorGot` |
-| 六連のたて | `sixfoldShieldGot` |
-| 宇宙のかぶと | `cosmicHelmetGot` |
-| 如意棒 | `nyoiboGot` |
-| アンドロメダの鎖 | `andromedaGot` |
-| キグナスのかぶと | `cygnusHelmetGot` |
-| ドラゴンのたて | `dragonShieldGot` |
+| 装備名 | フラグ | slot | itemId |
+|---|---|---|---|
+| ペガサスのよろい | `pegasusArmorGot`  | armor  | pegasusarmor   |
+| 六連のたて       | `sixfoldShieldGot` | shield | sixfoldshield  |
+| 宇宙のかぶと     | `cosmicHelmetGot`  | helmet | cosmickabuto   |
+| 如意棒           | `nyoiboGot`        | weapon | nyoibo         |
+| アンドロメダの鎖 | `andromedaGot`     | weapon | andromedachain |
+| キグナスのかぶと | `cygnusHelmetGot`  | helmet | cygnuskabuto   |
+| ドラゴンのたて   | `dragonShieldGot`  | shield | dragonshield   |
 
-### 判定ヘルパー
+### 判定ヘルパー（§71 v0.20.1 更新）
 
 | 関数 | 判定内容 |
 |---|---|
-| `isLegendaryEquipmentComplete()` | `LEGEND_EQUIPS.every(le => !!state.eventFlags[le.flag])` |
+| `isLegendaryEquipmentComplete()` | フラグ確認 + `isEquipOwned()` 二段構成。旧セーブ互換のため装備中/所持中でも入手済み扱い。 |
 
 ### セーブデータ
 
