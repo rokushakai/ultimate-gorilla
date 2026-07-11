@@ -5,6 +5,29 @@
 
 ---
 
+## v0.17 (2026-07-11)
+
+### 追加・変更
+
+- **`doSingUltimateGorilla()` 演出刷新**: 5行クライマックスログに変更。「静かにかき鳴らした→歌が広がる→耳をすませる→近づいてきた→捕まえた！」の流れ。
+- **`openCaptureModal()` 新関数 + `#capture-modal` HTML**: `openClearModal()` が `openCaptureModal()` → `openEndingModal()` の順で呼ぶように変更。モーダルは `onclick` を `openCaptureModal()` 内で設定（毎回上書きなので問題なし）。
+- **総合称号**: `renderEndingPage()` isFinal ページと `renderStatus()` playerTitle の両方で `isSideStoryCleared()` を呼び、横スクロール制覇済みなら「究極を歌い、聖域を越えし者」を返す。
+- **NPC 全4名のクリア後反応**: UMA博士は `return lines` 追加で早期終了。旅人は関数先頭で `if (state.gameCleared)` を追加して早期 return。ゴリラ研究家・王様の使いはセリフを差し替え。
+- **実家ヒント**: `openHomeModal()` の先頭で `if (state.gameCleared)` チェックを追加。postClearHints 配列からランダム選択。
+- **攻略ペーパー**: `getProgressHint()` の `h` 配列の直前に `if (priority === 0)` 専用ブランチを追加。横スクロール制覇の有無で 2 パターン × 3 tier = 6 メッセージ。
+- **ヘルプ**: index.html の攻略ペーパー説明の後に「🌟 クリア後の遊び方」セクションを追加。
+- **デバッグ §65**: 捕獲モーダル直表示・クリア後Full（全ステージ+チンパンジー撃退）・クリア後Only（横スクロールリセット）の3ボタン。
+
+### 設計メモ
+
+- `openCaptureModal()` の `onclick` は毎回 `openCaptureModal()` が呼ばれるたびに上書きされる。エンディング再視聴時は `openEndingModal()` を直接呼ぶので問題なし。
+- 総合称号は `isSideStoryCleared()` を使用（s6クリア AND チンパンジー撃退）。これは `isSideStoryCleared()` 既存の判定と同じ。
+- `btn-debug-set-postclear-full` ハンドラでは `state.sideMap.stageCleared` ループに `String(_si)` でキーを作成。既存の `stageCleared` キー形式と一致させた。
+- IDE の「var の代わりに let/const を使え」警告は ES5 意図的制約のため無視。実行時エラーではない。
+- `node --check` → exit 0（構文エラーなし）。
+
+---
+
 ## v0.16.1 (2026-07-11)
 
 ### 追加・変更

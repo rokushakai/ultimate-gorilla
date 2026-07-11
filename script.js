@@ -2569,7 +2569,23 @@
 
   // エンディングモーダルを開く(finishBattle後 または 設定画面の再視聴から呼ばれる)(v0.7 §28)
   function openClearModal() {
-    openEndingModal();
+    openCaptureModal();  // §65 v0.17: 捕獲成功モーダル → エンディングへ
+  }
+
+  // §65 v0.17: 究極ゴリラ捕獲成功モーダル
+  function openCaptureModal() {
+    document.getElementById("btn-capture-modal-next").onclick = function () {
+      closeModal("capture-modal");
+      openEndingModal();
+    };
+    document.getElementById("capture-modal-emoji").textContent = "🎵";
+    document.getElementById("capture-modal-heading").textContent = "歌が届いた";
+    var html = "";
+    html += '<p style="margin:8px 0;color:#e0e0e0;">究極ゴリラは、君の歌を聞いている。</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">力ではなく、歌によって心が届いた。</p>';
+    html += '<p style="margin:8px 0;color:#ffd166;font-weight:bold;">伝説のUMAは、ついに君の仲間となった。</p>';
+    document.getElementById("capture-modal-body").innerHTML = html;
+    openModal("capture-modal");
   }
 
   function openEndingModal() {
@@ -2594,7 +2610,9 @@
       });
       html += '</div>';
     } else if (page.isFinal) {
-      html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「森に歌を届けし者」</p>';
+      // §65 v0.17: 横スクロール編制覇済みなら総合称号を表示
+      var finalTitle = (isSideStoryCleared() ? "究極を歌い、聖域を越えし者" : "森に歌を届けし者");
+      html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「' + finalTitle + '」</p>';
       html += '<p class="small" style="color:#06d6a0;margin:4px 0;">この後も探索・図鑑集め・装備集めを続けられます。</p>';
       html += '<p class="small" style="color:#adb5bd;margin:4px 0;">エンディングはいつでも設定画面から再視聴できます。</p>';
     } else {
@@ -3348,11 +3366,11 @@
       setTimeout(enemyTurn, 800);
       return;
     }
-    // 捕獲成功
-    log("🪗 勇者の子孫は女神のウクレレを奏でた。");
-    log("🎶 森にやさしいメロディが響きわたる。");
-    log("🦍 究極ゴリラの怒りが静まっていく……");
-    log("🦍 究極ゴリラは静かに目を閉じた。");
+    // 捕獲成功 — §65 v0.17: クライマックス演出
+    log("🪗 勇者の子孫は、女神のウクレレを静かにかき鳴らした。");
+    log("🎶 森に、やさしい歌が広がっていく。");
+    log("🦍 究極ゴリラは暴れるのをやめ、じっとその歌に耳をすませている……");
+    log("🦍 やがて究極ゴリラは、ゆっくりと近づいてきた。");
     log("🎉 究極ゴリラを捕まえた！");
     captureUma(e);
     state.gameCleared = true;
@@ -3858,7 +3876,8 @@
     }
     var playerTitle;
     if (state.gameCleared) {
-      playerTitle = "森に歌を届けし者";
+      // §65 v0.17: 横スクロール編制覇済みなら総合称号
+      playerTitle = (isSideStoryCleared() ? "究極を歌い、聖域を越えし者" : "森に歌を届けし者");
     } else if (p.level >= 99 || p.level99Shown) {
       playerTitle = "究極に近づきし者";
     } else {
@@ -4498,7 +4517,12 @@
           return lines;
         }
         if (state.gameCleared) {
+          // §65 v0.17: クリア後NPC反応
+          lines.push("ついに究極ゴリラを捕まえたのじゃな……！");
+          lines.push("力でねじ伏せるのではなく、歌を届けたからこそ、あやつは心を開いたのじゃ。");
+          lines.push("おぬしは本物のUMAハンターじゃ。");
           lines.push("図鑑の完成まで目指してみないか。まだ捕まえていない伝説が残っているぞ。");
+          return lines;
         } else if (p.level >= 99) {
           lines.push("素晴らしい成長じゃ。もはや君は、伝説に手を伸ばせる場所にいる。");
           lines.push("あとは女神のウクレレと歌声だけが必要だ。");
@@ -4545,6 +4569,12 @@
       getLines: function () {
         var p = state.player;
         var lines = [];
+        // §65 v0.17: クリア後NPC反応
+        if (state.gameCleared) {
+          lines.push("おいおい、本当に究極ゴリラを捕まえたのか？");
+          lines.push("最初に会った時から、ただ者じゃないとは思ってたけどな。まさかここまでやるとはな。");
+          return lines;
+        }
         if (p.hasUkulele) {
           lines.push("女神の音色を手に入れたのか……星のように光る宝箱がそれに反応するらしいぞ。");
           lines.push("力ある者には、岩に刺さった棒も引き抜けるかもしれない。強い仲間を連れてみな。");
@@ -4644,9 +4674,11 @@
         var p = state.player;
         var lines = [];
         if (state.gameCleared) {
-          lines.push("お前は究極ゴリラを森へ帰した者。もはや立派なゴリラ研究家だ！");
-          lines.push("究極ゴリラは森へ帰った。捕まえることだけが勝利ではない。見送ることもまた、勇者の役目だったのだ。");
+          // §65 v0.17: クリア後NPC反応
+          lines.push("究極ゴリラを捕まえた記録は、歴史に残る。");
+          lines.push("チンパンジーを退かせた強さ。究極ゴリラに歌を届けたやさしさ。どちらも、君の冒険の証だ。");
           lines.push("伝説の装備をすべて集めたか？まだ見ぬ装備が残っているかもしれないぞ。");
+          return lines;
         } else if (isSideStoryCleared()) {
           // §60 v0.14.1: 横スクロール編制覇後 → 究極ゴリラとチンパンジーの役割の違いを説明
           lines.push("究極ゴリラとチンパンジーは、まったく別の存在だ。");
@@ -4703,8 +4735,9 @@
           lines.push("だが、王が待っている報告はまだ別にある。究極ゴリラを捕まえた時こそ、真の報告に来るのだ。");
           lines.push("力をつけ、女神のウクレレを探し、準備を整えてから挑むのじゃ。");
         } else if (state.gameCleared) {
-          lines.push("王様は大変お喜びです。");
-          lines.push("究極ゴリラを倒すのではなく、森へ帰した。その判断こそ、真の勇気だったのでしょう。");
+          // §65 v0.17: クリア後NPC反応
+          lines.push("王はすでに報告を受けている。");
+          lines.push("究極ゴリラを捕まえた者として、おぬしの名は森の歴史に刻まれるだろう。");
           lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
         } else if (p.level >= 50) {
           lines.push("王様は、勇者の子孫の旅を見守っておられる。");
@@ -4895,7 +4928,16 @@
   function openHomeModal() {
     var p = state.player;
     var hint;
-    if (!state.gameCleared && p.level >= 99 && p.hasUkulele) {
+    // §65 v0.17: クリア後の専用ヒント
+    if (state.gameCleared) {
+      var postClearHints = [
+        "究極ゴリラを捕まえても、冒険の思い出は消えないよ。図鑑を見たり、横スクロールの世界を歩いたり、まだまだ森には楽しみが残っているみたい。",
+        "力だけじゃなく、歌で届くものもあるんだね。",
+        "図鑑をすべて埋めると、何か良いことがあるかもしれないよ。",
+        "横スクロールの世界を全部制覇したかな？チンパンジーもいるよ。"
+      ];
+      hint = postClearHints[Math.floor(Math.random() * postClearHints.length)];
+    } else if (!state.gameCleared && p.level >= 99 && p.hasUkulele) {
       hint = "Lv99 & ウクレレ所持！究極ゴリラのHPを1〜10まで削って「🎵うたう」コマンドを使おう。";
     } else if (!state.gameCleared && p.level >= 99) {
       hint = "Lv99に到達した！あとは女神のウクレレ🪗を手に入れれば、究極ゴリラを鎮められる。";
@@ -5076,6 +5118,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-chance-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv99+ウクレレ+HP10（チャンス表示確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-nolv-ukulele-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv50+ウクレレ+HP10（Lv不足メッセージ確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gorilla-lv99-noukulele-hp10" style="border-color:#c77dff;color:#c77dff;">🦍 Lv99+ウクレレなし+HP10（ウクレレ不足確認）</button>';
+      html += '<p class="small" style="color:#f9c74f;margin-top:8px;">🌟 クリア後演出テスト (§65 v0.17)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-show-capture-modal" style="border-color:#f9c74f;color:#f9c74f;">🌟 捕獲成功モーダルを見る</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-full" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済み+横スクロール制覇状態にする（総合称号確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-only" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済みのみにする（横スクロール未制覇）</button>';
       html += '<p class="small" style="color:#ffd166;margin-top:8px;">📰 攻略ペーパービュー屋 (§49 v0.10.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-hint-shop" style="border-color:#ffd166;color:#ffd166;">📰 ヒントショップを開く</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧪 デバッグ検証 (§51 v0.11.1)</p>';
@@ -5821,6 +5867,35 @@
         renderEnemy();
         checkUltimateGorillaHpHint(state.enemy);
         showToast("[DEBUG] Lv99+ウクレレなし+HP10 ウクレレ不足確認！");
+      };
+      document.getElementById("btn-debug-show-capture-modal").onclick = function () {
+        closeModal("settings-modal");
+        openCaptureModal();
+        showToast("[DEBUG] 捕獲成功モーダルを表示！");
+      };
+      document.getElementById("btn-debug-set-postclear-full").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        // 横スクロール全ステージクリア
+        for (var _si = 1; _si <= 6; _si++) {
+          state.sideMap.stageCleared[String(_si)] = true;
+        }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] クリア済み+横スクロール制覇完了！総合称号を確認しよう");
+      };
+      document.getElementById("btn-debug-set-postclear-only").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.gameCleared = true;
+        state.pendingClear = false;
+        // 横スクロールステージをリセット
+        state.sideMap.stageCleared = {};
+        state.sideMap.defeatedEnemies = {};
+        saveGame();
+        renderStatus();
+        showToast("[DEBUG] クリア済み（横スクロール未制覇）状態にした");
       };
       document.getElementById("btn-debug-return-gate-s6").onclick = function () {
         closeModal("settings-modal");
@@ -6710,8 +6785,19 @@
       if (tier === 2) return "村の中をよく見渡すと🌀渦巻くゲートがあるはずだ。そこから横スクロールの草原へ行ける。戻りたい時はゴール画面か🏠帰還ゲートを使えばいつでも戻れる。";
       return "通常マップの村エリアに🌀渦巻くゲートがある。踏むと横スクロールマップへ移動できる。はじまりの草原ではUMAを倒し宝箱を集めゴールを目指そう。スタート付近の🏠帰還ゲートかゴール画面からいつでも戻れる。";
     }
+    // §65 v0.17: クリア後ヒントを進行状況で分岐
+    if (priority === 0) {
+      if (isSideStoryCleared()) {
+        if (tier === 1) return "究極ゴリラを捕まえ、横スクロールの世界も踏破した。伝説の冒険は新たな章へ。";
+        if (tier === 2) return "図鑑をすべて埋めるか、伝説装備（全7種）を揃えるか。称号「究極を歌い、聖域を越えし者」を誇りに旅を続けよう。";
+        return "図鑑の捕獲数と伝説装備（全7種）を確認してみよう。UMA博士・ゴリラ研究家にもクリア後の言葉があるぞ。";
+      }
+      if (tier === 1) return "究極ゴリラを捕まえた。だが、横スクロールの世界にはまだ見ぬ強敵がいるかもしれない。";
+      if (tier === 2) return "横スクロールを制覇してチンパンジーを退かせると、新しい称号が得られる。まだ踏んでいないステージはあるか？";
+      return "横スクロールステージ1〜6を制覇し、チンパンジーを退かせると称号「究極を歌い、聖域を越えし者」が得られる。図鑑コンプリートも目指せ。";
+    }
     var h = [
-      // 0: クリア済み
+      // 0: クリア済み（priority===0の新分岐で処理済み。念のため残す）
       [
         "すでに伝説のUMAを鎮めた。旅の記録を続けよう。",
         "図鑑を埋めるか、伝説の装備を揃えるか。まだやり残しがあるかもしれない。",
