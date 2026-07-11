@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.25** |
+| 現在バージョン | **v0.26** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,13 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.26] フィールド仲間追従表示**（§78）
+  - **`state.partyTrail`**: 状態オブジェクトに追加（最大2エントリ `{x, y}`）。ロード時・マップ切り替え時にリセット。
+  - **`movePlayer()`**: 有効な移動前に現在位置を `partyTrail.unshift()` でトップへ追加。2件を超えたら末尾を削除。
+  - **`renderField()`**: ループ前に `trailMap` を構築。仲間0優先（逆順ループで上書き）。タイル描画でプレイヤー→仲間追従→地形の順で判定。
+  - **リセット箇所**: `switchToSideMap()` / `switchToNormalMap()` / `loadGame()` で `state.partyTrail = []`。
+  - **デバッグ §78**: 仲間2人追加ボタン + 軌跡リセットボタン。
+  - **保護**: 仲間能力・加入/離脱処理・パーティ上限・戦闘・BGM・横スクロールマップは一切変更なし。
 - **[v0.25] 酒場UI改善・仲間カード整理**（§77）
   - **仲間カード CSS**: `.companion-card` 系クラス群を `style.css` に追加。角丸ボーダー・半透明背景・左ボーダーセリフ枠。
   - **酒場3画面をカード化**: `renderTavernRecruit` / `renderTavernViewParty` / `renderTavernLeave` が `companion-card` 形式に統一。
