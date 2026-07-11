@@ -5,6 +5,17 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.22] - 2026-07-11 — 図鑑未捕獲UMAヒント強化 (§73)
+
+### Added
+- **UMA_DATA 全9種にヒントフィールド追加** (§73): `hintArea`（出現エリア）/ `hintText`（発見ヒント）/ `hintCatch`（捕獲ヒント）を全UMAに追加。究極ゴリラは Lv99+ウクレレ+HP1〜10+うたう の専用ヒントを設定。
+- **図鑑モーダル（renderDexBody）のヒント表示** (§73): 未発見UMAカードに `📍hintArea`、発見済み未捕獲カードに `💡hintText` を表示。
+- **図鑑詳細モーダル（openMonsterDetailModal）の捕獲ヒント** (§73): 通常UMAが発見済み未捕獲の場合に `💡 捕獲ヒント` セクションとして `hintCatch` を追加表示。究極ゴリラは従来の専用表示を維持。
+- **UMA博士 未捕獲ヒント** (§73): 図鑑未コンプ時に最初の未捕獲UMAの名前と hintArea/hintText を参照したセリフを追加。捕獲数4以上・8以上で分岐。
+- **攻略ペーパービュー屋 getProgressHint() 強化** (§73): クリア後・横スクロール制覇・図鑑未コンプ時に最初の未捕獲UMAの名前/hintText/hintCatch を tier 1/2/3 で段階的に表示。
+- **冒険の記録 図鑑セクション「図鑑でヒントを確認」** (§73): 未コンプ時に `📖 図鑑でヒントを確認` ボタンを追加。クリックで記録モーダルを閉じ図鑑モーダルへ遷移。
+- **デバッグ §73**: `btn-debug-dex-one-uncaptured`（最初のUMAだけ未捕獲）/ `btn-debug-dex-one-seen`（最初のUMAだけ発見済み）/ `btn-debug-dex-reset`（図鑑全リセット）の3ボタン追加。
+
 ## [0.21] - 2026-07-11 — UMA図鑑コンプリート演出強化 (§72)
 
 ### Changed

@@ -5,6 +5,24 @@
 
 ---
 
+## v0.22 (2026-07-11)
+
+### 追加・変更
+
+- **UMA_DATA ヒントフィールド追加**: 全9種（カッパ〜究極ゴリラ）に `hintArea` / `hintText` / `hintCatch` を追加。究極ゴリラはLv99+ウクレレ+HP1〜10+うたう の専用ヒント文。
+- **renderDexBody() ヒント表示**: 未発見カードに `📍hintArea`、発見済み未捕獲カードに `💡hintText` を各カード下部に表示。
+- **openMonsterDetailModal() 捕獲ヒント追加**: `!isMetal && !isFinal && !isCaptured && st === "seen"` 条件で `hintCatch` を「💡 捕獲ヒント」セクションとして表示。究極ゴリラの既存「⚠️ 捕獲について」は変更なし。
+- **NPC D（UMA博士） 未捕獲ヒント**: `firstUncaptured` を UMA_DATA から取得し、capturedCount >= 8 の場合は名前 + hintText、capturedCount >= 4 の場合は名前 + hintArea を含むセリフ追加。
+- **getProgressHint() priority=0 図鑑未コンプ分岐強化**: `isSideStoryCleared()` 後の 3 tier を `firstUnc`（最初の未捕獲UMA）の名前/hintText/hintCatch で具体的に表示するよう変更。
+- **renderRecordBody() 「図鑑でヒントを確認」ボタン**: 未コンプ時に `btn-record-open-dex` ボタン追加。クリックで `closeModal("record-modal")` → `openDexModal()` へ遷移。
+- **デバッグ §73**: 3ボタン追加（最初のUMAだけ未捕獲 / 発見済み / 図鑑全リセット）。
+
+### 注意点
+
+- `openMonsterDetailModal` 内で `st` は関数スコープの変数。メタル(dataType==="metal")時は `null` なので `!isMetal` 条件を必ず守ること。
+- `btn-debug-dex-reset` は `state.player.dex = {}` で図鑑を完全初期化する。dexCompleteRewardClaimed は変更しない（別途リセットボタンが既存）。
+- 究極ゴリラの `hintCatch` も追加されているが、図鑑詳細での表示は `isFinal` 条件で弾かれ、従来の「⚠️ 捕獲について」が優先される。
+
 ## v0.21 (2026-07-11)
 
 ### 追加・変更

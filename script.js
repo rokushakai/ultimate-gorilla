@@ -289,25 +289,34 @@
   var UMA_DATA = [
     // §45 v0.9.2: UMAはHP/EXPを微増 (×1.2)。究極ゴリラは変更なし(HP5000固定)。
     { id: "kappa", name: "カッパ", emoji: "🐢", rarity: "コモン", isUMA: true, isRare: false, minLevel: 1, weight: 7, hp: 19, attack: 6, def: 2, captureRate: 0.40, exp: 12, sellPrice: 8,
-      desc: "水辺に現れるとされるUMA。甲羅が目印。きゅうりが好きかもしれない。" },
+      desc: "水辺に現れるとされるUMA。甲羅が目印。きゅうりが好きかもしれない。",
+      hintArea: "水辺・草むら", hintText: "序盤のフィールドに現れるコモンUMA。レベル1から出会える。", hintCatch: "捕獲率は高め。「つかまえる」コマンドで挑もう。" },
     { id: "tsuchinoko", name: "ツチノコ", emoji: "🐍", rarity: "コモン", isUMA: true, isRare: false, minLevel: 2, weight: 6, hp: 22, attack: 7, def: 2, captureRate: 0.38, exp: 14, sellPrice: 10,
-      desc: "古くから目撃談のある太い胴体の蛇型UMA。意外とすばしっこい。" },
+      desc: "古くから目撃談のある太い胴体の蛇型UMA。意外とすばしっこい。",
+      hintArea: "草むら", hintText: "太い胴体の蛇型UMA。序盤のフィールドに出現する。", hintCatch: "カッパと同程度の捕獲率。焦らず「つかまえる」を試そう。" },
     { id: "hibagon", name: "ヒバゴン", emoji: "🦧", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 3, weight: 5, hp: 29, attack: 8, def: 3, captureRate: 0.30, exp: 19, sellPrice: 16,
-      desc: "広島の山中で目撃された類人猿型UMA。ひとり行動を好む孤独な存在。" },
+      desc: "広島の山中で目撃された類人猿型UMA。ひとり行動を好む孤独な存在。",
+      hintArea: "森の中", hintText: "類人猿型アンコモンUMA。レベル3以上のエリアで出やすくなる。", hintCatch: "捕獲率30%。序盤UMAよりやや難しい。根気よく挑もう。" },
     { id: "mothman", name: "モスマン", emoji: "🦋", rarity: "アンコモン", isUMA: true, isRare: false, minLevel: 4, weight: 5, hp: 26, attack: 9, def: 2, captureRate: 0.30, exp: 22, sellPrice: 18,
-      desc: "巨大な翼を持つ謎の飛行UMA。夜に目撃されることが多く、不吉の前兆ともいわれる。" },
+      desc: "巨大な翼を持つ謎の飛行UMA。夜に目撃されることが多く、不吉の前兆ともいわれる。",
+      hintArea: "夜の森", hintText: "翼を持つ飛行型アンコモンUMA。レベル4以上のエリアに出現する。", hintCatch: "ヒバゴンと同程度の捕獲率。HP削ってから「つかまえる」を試そう。" },
     { id: "bigfoot", name: "ビッグフット", emoji: "🦶", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 48, attack: 11, def: 4, captureRate: 0.18, exp: 42, sellPrice: 60, fleeRate: 0.80, inflicts: { id: "allergy", chance: 0.3, duration: 12 },
-      desc: "大きな足跡を残す巨大UMA。出会った者はたいてい驚く。体毛がアレルギーを引き起こすことがある。" },
+      desc: "大きな足跡を残す巨大UMA。出会った者はたいてい驚く。体毛がアレルギーを引き起こすことがある。",
+      hintArea: "フィールド全域", hintText: "逃げ足が速いレアUMA。遭遇したらすぐ「つかまえる」を使え。アレルギーに注意。", hintCatch: "捕獲率18%。逃げやすいので最初のターンに捕獲コマンドを狙おう。" },
     { id: "nessie", name: "ネッシー", emoji: "🐉", rarity: "レア", isUMA: true, isRare: true, weight: 10, hp: 50, attack: 11, def: 5, captureRate: 0.16, exp: 46, sellPrice: 65, fleeRate: 0.80,
-      desc: "湖の深みに住むと噂される巨大UMA。水しぶきと共に颯爽と姿を現す。" },
+      desc: "湖の深みに住むと噂される巨大UMA。水しぶきと共に颯爽と姿を現す。",
+      hintArea: "フィールド全域", hintText: "幻のレアUMA。フィールドを歩き続ければ稀に現れる。", hintCatch: "捕獲率16%・逃げ足も速い。見つけたら「つかまえる」を即座に使おう。" },
     { id: "yeti", name: "イエティ", emoji: "☃️", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 54, attack: 12, def: 5, captureRate: 0.15, exp: 50, sellPrice: 70, fleeRate: 0.80,
-      desc: "雪山に棲む雪男。体は大きいが動きは鈍い。寒さには強く、暑さには弱いらしい。" },
+      desc: "雪山に棲む雪男。体は大きいが動きは鈍い。寒さには強く、暑さには弱いらしい。",
+      hintArea: "フィールド全域", hintText: "希少なレアUMA。フィールドを歩き回ると稀に現れる。", hintCatch: "捕獲率15%。ネッシーより更に難しい。根気よく探そう。" },
     { id: "jerseydevil", name: "ジャージーデビル", emoji: "👹", rarity: "レア", isUMA: true, isRare: true, weight: 8, hp: 55, attack: 13, def: 4, captureRate: 0.14, exp: 53, sellPrice: 75, fleeRate: 0.80,
-      desc: "ニュージャージーの森に棲む翼を持つ悪魔型UMA。遭遇した者はろくなことがないという。" },
-    // 究極ゴリラはラスボス級。レベル99+最強装備クラスでないと基本的に倒せない
+      desc: "ニュージャージーの森に棲む翼を持つ悪魔型UMA。遭遇した者はろくなことがないという。",
+      hintArea: "フィールド全域", hintText: "悪魔型の希少UMA。遭遇自体がまれ。フィールドを歩き回れ。", hintCatch: "捕獲率14%。レアUMAの中でも最難関のひとつ。粘り強く。" },
+    // §73 v0.22: 究極ゴリラは専用ヒント(Lv99+ウクレレ+HP1〜10+うたう)
     // 捕獲もattemptCapture()内で別途上限を掛けてほぼ不可能にしている。
     { id: "ultimategorilla", name: "究極ゴリラ", emoji: "🦍", rarity: "伝説", isUMA: true, isRare: true, final: true, weight: 4, hp: 5000, attack: 150, def: 60, captureRate: 0.005, exp: 300, sellPrice: 99999, fleeRate: 0.95,
-      desc: "森の奥に現れる究極のUMA。通常の捕獲は一切通用しない。女神のウクレレの音色のみが、その心を鎮めるという。" }
+      desc: "森の奥に現れる究極のUMA。通常の捕獲は一切通用しない。女神のウクレレの音色のみが、その心を鎮めるという。",
+      hintArea: "森の最深部", hintText: "Lv99以上・女神のウクレレ装備でなければ捕獲できない。通常の「つかまえる」は無効。", hintCatch: "HPを1〜10まで削り、「うたう」で捕獲できる。HP調整に「はずかし固め・小」や「ここはひとつガマン」が役立つ。" }
   ];
 
   // --- UMA以外の敵(野生動物・盗賊など。図鑑/所持UMAの対象外) ---
@@ -3826,6 +3835,8 @@
       html += '<div style="font-size:0.8em;color:#ffd166;margin-top:4px;">✅ コンプリート！すべてのUMAが図鑑に記録された。</div>';
     } else {
       html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">あと' + (totalUma - capturedDexCount) + '種類 — 未捕獲のUMAを探してみよう。</div>';
+      // §73 v0.22: 図鑑でヒント確認リンク
+      html += '<div style="font-size:0.8em;margin-top:4px;"><button class="modal-btn" style="padding:4px 12px;font-size:0.85em;" id="btn-record-open-dex">📖 図鑑でヒントを確認</button></div>';
     }
     html += '</div>';
 
@@ -3916,6 +3927,15 @@
     html += '</div>';
 
     document.getElementById("record-body").innerHTML = html;
+
+    // §73 v0.22: 「図鑑でヒントを確認」ボタンのリスナー
+    var btnRecordDex = document.getElementById("btn-record-open-dex");
+    if (btnRecordDex) {
+      btnRecordDex.addEventListener("click", function() {
+        closeModal("record-modal");
+        openDexModal();
+      });
+    }
   }
 
   // 19. UMA図鑑モーダル(§31 v0.8.1 詳細タップ対応)
@@ -4012,6 +4032,12 @@
       html += emoji;
       html += '<span class="dex-item-name">' + nameText + "</span>";
       html += '<span class="dex-item-name">' + statusText + "</span>";
+      // §73 v0.22: 未捕獲UMAのヒント表示
+      if (!st && m.hintArea) {
+        html += '<span style="display:block;font-size:0.6em;color:#888;line-height:1.3;margin-top:2px;">📍' + m.hintArea + '</span>';
+      } else if (st === "seen" && m.hintText) {
+        html += '<span style="display:block;font-size:0.6em;color:#74c0fc;line-height:1.3;margin-top:2px;">💡' + m.hintText + '</span>';
+      }
       if (m.id === "ultimategorilla" && st === "captured") {
         html += '<span style="display:block;font-size:7px;color:#ffd166;">伝説のUMA</span>';
         html += '<span style="display:block;font-size:7px;color:#06d6a0;">森へ帰った</span>';
@@ -4117,6 +4143,12 @@
         "・防御力が非常に高く、攻撃がほぼ通らない<br>" +
         "・倒すと大きな経験値が手に入る<br>" +
         "・捕獲は非常に難しい</p>";
+    }
+
+    // §73 v0.22: 通常UMA 発見済み未捕獲のヒント
+    if (!isMetal && !isFinal && !isCaptured && st === "seen" && monster.hintCatch) {
+      html += '<h3 style="margin:10px 0 4px;color:#74c0fc;">&#128161; 捕獲ヒント</h3>';
+      html += '<p class="small" style="text-align:left;color:#cce4ff;">' + monster.hintCatch + "</p>";
     }
 
     // 究極ゴリラ捕獲前の注意
@@ -4839,12 +4871,23 @@
           lines.push("最後は、歌が必要になるはずじゃ。");
           return lines;
         }
+        // §73 v0.22: 未捕獲UMAのヒントを最初の1体から示す
+        var firstUncaptured = null;
+        for (var _ui = 0; _ui < UMA_DATA.length; _ui++) {
+          if (p.dex[UMA_DATA[_ui].id] !== "captured") { firstUncaptured = UMA_DATA[_ui]; break; }
+        }
         if (capturedCount >= 8) {
           lines.push("すばらしい！図鑑がほぼ完成しておるぞ！");
-          lines.push("究極ゴリラを捕まえたら、図鑑は完璧じゃ。");
+          if (firstUncaptured) {
+            lines.push(firstUncaptured.name + "はまだ捕まえていないようじゃ。" + (firstUncaptured.hintText || ""));
+          }
         } else if (capturedCount >= 4) {
           lines.push("なかなか集まってきたな。図鑑を埋めるのも立派な冒険じゃ。");
-          lines.push("捕まえたUMAは、図鑑でタップすると詳しい能力を確認できるぞ。");
+          if (firstUncaptured && firstUncaptured.hintArea) {
+            lines.push(firstUncaptured.name + "はまだ記録されていない。" + firstUncaptured.hintArea + "を探してみるとよいぞ。");
+          } else {
+            lines.push("捕まえたUMAは、図鑑でタップすると詳しい能力を確認できるぞ。");
+          }
         } else {
           lines.push("UMAを見つけたら図鑑に記録される。捕まえると完全なデータになるぞ。");
           lines.push("図鑑でタップすれば詳細なステータスが見られる。");
@@ -5561,6 +5604,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑コンプリート報酬を未受取に戻す</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-modal" style="border-color:#98d8ff;color:#98d8ff;">📖 図鑑コンプリート報酬モーダルを見る</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-record-dex" style="border-color:#c8b4ff;color:#c8b4ff;">📜 冒険の記録で図鑑セクション確認</button>';
+      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">📖 図鑑ヒント表示テスト (§73 v0.22)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-one-uncaptured" style="border-color:#98d8ff;color:#98d8ff;">📖 最初のUMAだけ未捕獲（他は捕獲済み）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-one-seen" style="border-color:#74c0fc;color:#74c0fc;">📖 最初のUMAだけ「発見済み」（他は未発見）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-dex-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑を全リセット（初期状態）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間クリア後セリフ確認（クリア状態+仲間全員）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
@@ -6377,6 +6424,34 @@
         closeModal("settings-modal");
         openRecordModal();
         showToast("[DEBUG] 冒険の記録を開いた（UMA図鑑セクションを確認）");
+      };
+      // §73 v0.22: 図鑑ヒント表示テスト
+      document.getElementById("btn-debug-dex-one-uncaptured").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        UMA_DATA.forEach(function (u, idx) {
+          state.player.dex[u.id] = idx === 0 ? undefined : "captured";
+          if (idx === 0) { delete state.player.dex[u.id]; }
+        });
+        saveGame(); updateStatusBar();
+        closeModal("settings-modal"); openDexModal();
+        showToast("[DEBUG] " + UMA_DATA[0].name + "だけ未捕獲にした。図鑑のヒント表示を確認");
+      };
+      document.getElementById("btn-debug-dex-one-seen").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        UMA_DATA.forEach(function (u, idx) {
+          if (idx === 0) { state.player.dex[u.id] = "seen"; }
+          else { delete state.player.dex[u.id]; }
+        });
+        saveGame(); updateStatusBar();
+        closeModal("settings-modal"); openDexModal();
+        showToast("[DEBUG] " + UMA_DATA[0].name + "だけ発見済み（未捕獲）にした。ヒント表示を確認");
+      };
+      document.getElementById("btn-debug-dex-reset").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.dex = {};
+        saveGame(); updateStatusBar();
+        closeModal("settings-modal"); openDexModal();
+        showToast("[DEBUG] 図鑑を全リセットした（初期状態：全UMA未発見）");
       };
       // §70 v0.20: 伝説装備デバッグ
       document.getElementById("btn-debug-legend-all").onclick = function () {
@@ -7396,10 +7471,21 @@
         if (tier === 2) return "横スクロールステージを全制覇すると、さらに総合称号「究極とUMA図鑑を極めし者」が得られる。";
         return "UMA図鑑コンプリート達成！横スクロール6ステージを制覇してチンパンジーを退かせると最高称号が手に入る。";
       }
-      // §69 v0.19: 究極ゴリラ捕獲済み+横スクロール制覇済み・図鑑未コンプ → 図鑑方面へ
+      // §69 v0.19 / §73 v0.22: 究極ゴリラ捕獲済み+横スクロール制覇済み・図鑑未コンプ → 図鑑方面へ
       if (isSideStoryCleared()) {
-        if (tier === 1) return "物語は大きな区切りを迎えた。まだ図鑑に空きがあるなら、森を歩いて未捕獲のUMAを探してみるといい。";
-        if (tier === 2) return "図鑑をすべて埋めると称号「究極とUMA図鑑を極めし者」が得られる。まだ捕まえていないUMAはいるか？";
+        var firstUnc = null;
+        for (var _fui = 0; _fui < UMA_DATA.length; _fui++) {
+          if (p.dex[UMA_DATA[_fui].id] !== "captured") { firstUnc = UMA_DATA[_fui]; break; }
+        }
+        if (tier === 1) {
+          if (firstUnc) return "図鑑にまだ空きがある。" + firstUnc.name + "はまだ捕まえていないぞ。";
+          return "物語は大きな区切りを迎えた。まだ図鑑に空きがあるなら、森を歩いて未捕獲のUMAを探してみるといい。";
+        }
+        if (tier === 2) {
+          if (firstUnc && firstUnc.hintText) return firstUnc.name + " — " + firstUnc.hintText;
+          return "図鑑をすべて埋めると称号「究極とUMA図鑑を極めし者」が得られる。まだ捕まえていないUMAはいるか？";
+        }
+        if (firstUnc && firstUnc.hintCatch) return firstUnc.name + "の捕獲方法：" + firstUnc.hintCatch + "　図鑑を開いてヒントを確認しよう。";
         return "図鑑の捕獲数と伝説装備（全7種）を確認してみよう。UMA博士・ゴリラ研究家にもクリア後の言葉があるぞ。";
       }
       // §69 v0.19: 究極ゴリラ捕獲済み・横スクロール未制覇 → 横スクロールへ
