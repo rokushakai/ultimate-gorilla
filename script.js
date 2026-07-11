@@ -3823,9 +3823,9 @@
     html += '</div>';
     html += pbar(dexPct, "linear-gradient(90deg,#74c0fc,#ffd54a)");
     if (isComplete) {
-      html += '<div style="font-size:0.8em;color:#ffd166;margin-top:4px;">✅ コンプリート！</div>';
+      html += '<div style="font-size:0.8em;color:#ffd166;margin-top:4px;">✅ コンプリート！すべてのUMAが図鑑に記録された。</div>';
     } else {
-      html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">あと' + (totalUma - capturedDexCount) + '種類</div>';
+      html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">あと' + (totalUma - capturedDexCount) + '種類 — 未捕獲のUMAを探してみよう。</div>';
     }
     html += '</div>';
 
@@ -3930,7 +3930,7 @@
     renderDexBody();
   }
 
-  // §66 v0.17.1: 図鑑コンプリート報酬モーダル
+  // §66 v0.17.1 / §72 v0.21: 図鑑コンプリート報酬モーダル（演出強化）
   function openDexCompleteModal() {
     state.player.gold += 3000;
     state.player.ramenCount += 3;
@@ -3943,9 +3943,15 @@
       renderDexBody();
     };
     var html = "";
-    html += '<p style="margin:8px 0;color:#ffd166;font-weight:bold;">称号「UMA図鑑を極めし者」を獲得！</p>';
-    html += '<p style="margin:8px 0;color:#e0e0e0;">全てのUMAを捕まえた。これほどの図鑑は、UMA博士も見たことがないそうだ。</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">すべてのUMAが図鑑に記録された！</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">スカイフィッシュも、ツチノコも、<br>そして究極ゴリラも。</p>';
+    html += '<p style="margin:8px 0;color:#e0e0e0;">一匹ずつ向き合い、積み重ねてきた記録は、<br>力だけではたどり着けない冒険の証だ。</p>';
     html += '<p style="margin:8px 0;color:#06d6a0;">報酬：3000G ＋ ラーメン×3</p>';
+    if (state.gameCleared && isSideStoryCleared()) {
+      html += '<p style="margin:8px 0;color:#ffd166;font-size:0.9em;">称号「究極とUMA図鑑を極めし者」を獲得！</p>';
+    } else {
+      html += '<p style="margin:8px 0;color:#ffd166;font-size:0.9em;">称号「UMA図鑑を極めし者」を獲得！</p>';
+    }
     document.getElementById("dex-complete-body").innerHTML = html;
     openModal("dex-complete-modal");
   }
@@ -4826,6 +4832,13 @@
         var p = state.player;
         var capturedCount = UMA_DATA.filter(function (m) { return p.dex[m.id] === "captured"; }).length;
         var lines = [];
+        // §72 v0.21: 図鑑コンプリート + 未クリア → 図鑑達成セリフ + 究極ゴリラへ誘導
+        if (!state.gameCleared && isUmaDexComplete()) {
+          lines.push("UMA図鑑をここまで埋めたのか……見事じゃ。");
+          lines.push("だが、伝説の中心にいる究極ゴリラには、ただ捕まえるだけでは届かぬ。");
+          lines.push("最後は、歌が必要になるはずじゃ。");
+          return lines;
+        }
         if (capturedCount >= 8) {
           lines.push("すばらしい！図鑑がほぼ完成しておるぞ！");
           lines.push("究極ゴリラを捕まえたら、図鑑は完璧じゃ。");
@@ -4853,11 +4866,11 @@
             lines.push("わしが長年追い続けた夢を、おぬしは本当に形にしてしまったのじゃ。");
             return lines;
           }
-          // §66 v0.17.1: 図鑑コンプリート反応
+          // §66 v0.17.1 / §72 v0.21: 図鑑コンプリート反応（クリア済み）
           if (isUmaDexComplete()) {
-            lines.push("図鑑が……完成しておる！！");
-            lines.push("わしは長年UMAを研究してきたが、全種を捕まえた者には会ったことがなかった。");
-            lines.push("おぬしこそ、真の伝説のUMAハンターじゃ。称号「UMA図鑑を極めし者」をその名に刻め！");
+            lines.push("すべてのUMAを記録し、究極ゴリラに歌を届けたのじゃな。");
+            lines.push("おぬしはもう、立派なUMAハンターじゃ。");
+            lines.push("わしが長年追いかけてきた夢を、おぬしは本当に形にしてしまった。");
             return lines;
           }
           // §65 v0.17: クリア後NPC反応
@@ -5543,10 +5556,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-only" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済みのみにする（横スクロール未制覇）</button>';
       html += '<p class="small" style="color:#c8b4ff;margin-top:8px;">📜 冒険の記録 (§67 v0.18)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-open-record" style="border-color:#c8b4ff;color:#c8b4ff;">📜 冒険の記録モーダルを開く</button>';
-      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">📖 図鑑コンプリート報酬テスト (§66 v0.17.1)</p>';
+      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">📖 図鑑コンプリート報酬テスト (§66 v0.17.1 / §72 v0.21)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-complete-all" style="border-color:#98d8ff;color:#98d8ff;">📖 UMA図鑑コンプリート状態にする（全UMA捕獲済み）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑コンプリート報酬を未受取に戻す</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-modal" style="border-color:#98d8ff;color:#98d8ff;">📖 図鑑コンプリート報酬モーダルを見る</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-open-record-dex" style="border-color:#c8b4ff;color:#c8b4ff;">📜 冒険の記録で図鑑セクション確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-all-complete" style="border-color:#ffd700;color:#ffd700;">🌟 完全達成状態にする（クリア+横+図鑑）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-postclear" style="border-color:#a9e34b;color:#a9e34b;">👥 仲間クリア後セリフ確認（クリア状態+仲間全員）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
@@ -6357,6 +6371,12 @@
         closeModal("settings-modal");
         openDexCompleteModal();
         showToast("[DEBUG] 図鑑コンプリート報酬モーダルを表示（報酬は付与されます）");
+      };
+      // §72 v0.21: 図鑑確認デバッグ
+      document.getElementById("btn-debug-open-record-dex").onclick = function () {
+        closeModal("settings-modal");
+        openRecordModal();
+        showToast("[DEBUG] 冒険の記録を開いた（UMA図鑑セクションを確認）");
       };
       // §70 v0.20: 伝説装備デバッグ
       document.getElementById("btn-debug-legend-all").onclick = function () {

@@ -4066,3 +4066,38 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 | `btn-debug-legend-all` | 伝説装備7種の全フラグを true に |
 | `btn-debug-legend-reward-reset` | `legendaryRewardClaimed = false` |
 | `btn-debug-legend-reward-modal` | 全7種入手+未受取にしてモーダル表示 |
+
+---
+
+## §72 v0.21 — UMA図鑑コンプリート演出強化
+
+**[実装済み]**
+
+### `openDexCompleteModal()` 本文
+
+| パート | 内容 |
+|---|---|
+| 1行目 | 「すべてのUMAが図鑑に記録された！」 |
+| 2行目 | 「スカイフィッシュも、ツチノコも、そして究極ゴリラも。」 |
+| 3行目 | 「一匹ずつ向き合い、積み重ねてきた記録は、力だけではたどり着けない冒険の証だ。」 |
+| 報酬 | 「報酬：3000G ＋ ラーメン×3」 |
+| 称号（条件分岐） | クリア＋横スクロール制覇済みなら「究極とUMA図鑑を極めし者」、それ以外なら「UMA図鑑を極めし者」 |
+
+### UMA博士（NPC D）図鑑コンプリート反応
+
+| 条件 | セリフ概要 |
+|---|---|
+| `isUmaDexComplete() && !gameCleared` | 「見事じゃ → 歌が必要」。capturedCount 分岐より優先、早期 return。 |
+| `gameCleared && isFullyCompleted()` | v0.19 完全達成セリフが最高優先（変更なし） |
+| `gameCleared && isUmaDexComplete()` | 「すべてのUMAを記録し、究極ゴリラに歌を届けたのじゃな。」改定版 |
+
+### 冒険の記録 UMA図鑑セクション
+
+- コンプリート時：「✅ コンプリート！すべてのUMAが図鑑に記録された。」
+- 未コンプ時：「あとN種類 — 未捕獲のUMAを探してみよう。」
+
+### デバッグ §72
+
+| ボタンID | 動作 |
+|---|---|
+| `btn-debug-open-record-dex` | 冒険の記録モーダルを開いてUMA図鑑セクション確認 |
