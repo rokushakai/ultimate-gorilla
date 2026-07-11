@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.18] - 2026-07-11 — 冒険の記録・達成状況パネル (§67)
+
+### Added
+- **`#record-modal` 冒険の記録モーダル** (§67): 達成状況を一覧できる新モーダルを追加。
+- **「📜記録」ボタン** (§67): 上部メニュー `status-row` に `btn-record` ボタンを追加。
+- **`openRecordModal()` / `renderRecordBody()`** (§67): 記録モーダルの開閉・レンダリング関数。
+- **`getPlayerTitle()` 共通関数** (§67): 6段階称号判定を一元化。`renderStatus()` / `renderEndingPage()` の重複ロジックを置き換え。
+- **`.record-section` / `.record-row` CSS** (§67): 記録モーダル専用スタイルを style.css に追加。
+- **デバッグ §67** (§67): 「📜 冒険の記録を開く」ボタン追加。
+
+### 表示項目
+- 現在の称号（`getPlayerTitle()` の結果を大きく強調）
+- 究極ゴリラ捕獲状態（未捕獲なら条件ヒント付き）
+- 横スクロール編総合＋各ステージ（1〜6）クリア/ボス撃退状態
+- UMA図鑑捕獲数（コンプリートなら表示）
+- 図鑑コンプリート報酬受取状態
+- 次の目標（状態に応じて1文）
+- 称号条件一覧（6段階・現在の称号を▶でハイライト）
+
+### Changed
+- **`renderStatus()` playerTitle** (§67): `getPlayerTitle()` を呼ぶように1行化。
+- **`renderEndingPage()` finalTitle** (§67): `getPlayerTitle()` を呼ぶように1行化。
+
 ## [0.17.1] - 2026-07-11 — 図鑑コンプリート報酬・仲間別クリア後セリフ (§66)
 
 ### Added

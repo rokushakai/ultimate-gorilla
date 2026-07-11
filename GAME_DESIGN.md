@@ -3827,3 +3827,65 @@ index.html に「🌟 クリア後の遊び方」セクションを追加。
 | `getProgressHint()` | priority=0 に専用ブランチ追加 |
 | index.html ヘルプ | 「🌟 クリア後の遊び方」セクション追加 |
 | デバッグ §65 | 3ボタン追加（HTML + ハンドラ） |
+
+---
+
+## §67 v0.18: 冒険の記録・達成状況パネル
+
+### 概要
+
+上部メニューに「📜記録」ボタンを追加し、達成状況を一覧できる `#record-modal` を実装する。
+プレイヤーが「今どこまで達成しているか」「あと何が残っているか」を確認しやすくする。
+
+### メニューボタン
+
+`id="btn-record"` を `status-row` の `.small-btn` として追加（btn-statusの後、btn-settingsの前）。
+
+### record-modal 表示項目
+
+| セクション | 内容 |
+|---|---|
+| 現在の称号 | `getPlayerTitle()` の結果を大きく表示 |
+| 本編クリア | 究極ゴリラ捕獲状態（捕獲済み/未捕獲）。未捕獲なら条件ヒント |
+| 横スクロール編 | 制覇状態 + 各ステージ（1〜6）のクリア/ボス撃退状態 |
+| UMA図鑑 | 捕獲数/総数 + コンプリートか否か |
+| 図鑑コンプリート報酬 | 受取済み/未受取。未受取は「図鑑を開くと受け取れます」ヒント |
+| 次の目標 | 現在の状態に応じた最優先ガイダンス |
+| 称号条件一覧 | 6段階称号の全条件を一覧表示 |
+
+### 称号集中管理: `getPlayerTitle()`
+
+`renderStatus()` と `renderEndingPage()` の両箇所に散在していた6段階称号判定を
+`getPlayerTitle()` として共通関数化する。
+
+```js
+function getPlayerTitle() {
+  var p = state.player;
+  if (state.gameCleared && isSideStoryCleared() && isUmaDexComplete())
+    return "究極とUMA図鑑を極めし者";
+  if (state.gameCleared && isSideStoryCleared())
+    return "究極を歌い、聖域を越えし者";
+  if (isUmaDexComplete())
+    return "UMA図鑑を極めし者";
+  if (state.gameCleared)
+    return "森に歌を届けし者";
+  if (p.level >= 99 || p.level99Shown)
+    return "究極に近づきし者";
+  return "勇者の子孫";
+}
+```
+
+### 次の目標ロジック
+
+| 状態 | 表示 |
+|---|---|
+| 究極ゴリラ未捕獲 | Lv99・女神のウクレレ・HP1〜10・うたうを案内 |
+| クリア済み・横スクロール未制覇 | 🌀ゲートから横スクロールへ案内 |
+| 両方クリア・図鑑未コンプ | 未捕獲UMAを探す案内 |
+| 全達成 | 達成済みメッセージ |
+
+### デバッグ §67
+
+| ボタンID | 内容 |
+|---|---|
+| `btn-debug-open-record` | 冒険の記録モーダルを開く |

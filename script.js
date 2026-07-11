@@ -861,6 +861,17 @@
     return true;
   }
 
+  // §67 v0.18: 称号判定を一元化 (renderStatus / renderEndingPage / renderRecordBody で共用)
+  function getPlayerTitle() {
+    var p = state.player;
+    if (state.gameCleared && isSideStoryCleared() && isUmaDexComplete()) return "究極とUMA図鑑を極めし者";
+    if (state.gameCleared && isSideStoryCleared()) return "究極を歌い、聖域を越えし者";
+    if (isUmaDexComplete()) return "UMA図鑑を極めし者";
+    if (state.gameCleared) return "森に歌を届けし者";
+    if (p.level >= 99 || p.level99Shown) return "究極に近づきし者";
+    return "勇者の子孫";
+  }
+
   // ---------------------------------------------------------
   // 7.6 状態異常(GAME_DESIGN.md §13.5)
   // ---------------------------------------------------------
@@ -2624,18 +2635,8 @@
       });
       html += '</div>';
     } else if (page.isFinal) {
-      // §66 v0.17.1: 図鑑コンプリート含む称号優先順位
-      var finalTitle;
-      if (isSideStoryCleared() && isUmaDexComplete()) {
-        finalTitle = "究極とUMA図鑑を極めし者";
-      } else if (isSideStoryCleared()) {
-        finalTitle = "究極を歌い、聖域を越えし者";
-      } else if (isUmaDexComplete()) {
-        finalTitle = "究極とUMA図鑑を極めし者";
-      } else {
-        finalTitle = "森に歌を届けし者";
-      }
-      html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「' + finalTitle + '」</p>';
+      // §67 v0.18: getPlayerTitle() に一元化
+      html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:8px 0;">称号：「' + getPlayerTitle() + '」</p>';
       html += '<p class="small" style="color:#06d6a0;margin:4px 0;">この後も探索・図鑑集め・装備集めを続けられます。</p>';
       html += '<p class="small" style="color:#adb5bd;margin:4px 0;">エンディングはいつでも設定画面から再視聴できます。</p>';
     } else {
@@ -3673,6 +3674,144 @@
   }
 
   // ---------------------------------------------------------
+  // 18.5 冒険の記録モーダル(§67 v0.18)
+  // ---------------------------------------------------------
+  function openRecordModal() {
+    renderRecordBody();
+    openModal("record-modal");
+  }
+
+  function renderRecordBody() {
+    var p = state.player;
+    var sm = state.sideMap;
+    var capturedDexCount = UMA_DATA.filter(function(m) { return p.dex[m.id] === "captured"; }).length;
+    var totalUma = UMA_DATA.length;
+    var isComplete = isUmaDexComplete();
+    var sideCleared = isSideStoryCleared();
+    var s1c = !!(sm.stageCleared && sm.stageCleared["1"]);
+    var s1b = !!(sm.defeatedEnemies && sm.defeatedEnemies["36,1"]);
+    var s2c = !!(sm.stageCleared && sm.stageCleared["2"]);
+    var s2b = !!(sm.defeatedEnemies && sm.defeatedEnemies["2:35,1"]);
+    var s3c = !!(sm.stageCleared && sm.stageCleared["3"]);
+    var s3b = !!(sm.defeatedEnemies && sm.defeatedEnemies["3:31,2"]);
+    var s4c = !!(sm.stageCleared && sm.stageCleared["4"]);
+    var s4b = !!(sm.defeatedEnemies && sm.defeatedEnemies["4:33,2"]);
+    var s5c = !!(sm.stageCleared && sm.stageCleared["5"]);
+    var s5b = !!(sm.defeatedEnemies && sm.defeatedEnemies["5:33,2"]);
+    var s6c = !!(sm.stageCleared && sm.stageCleared["6"]);
+    var s6b = !!(sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+
+    function chk(val) { return val ? '<span class="record-done">✅ ' : '<span class="record-pending">'; }
+
+    var html = "";
+
+    // --- 称号 ---
+    html += '<div class="record-section">';
+    html += '<h4>現在の称号</h4>';
+    html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:4px 0;">' + getPlayerTitle() + '</p>';
+    html += '</div>';
+
+    // --- 本編クリア ---
+    html += '<div class="record-section">';
+    html += '<h4>🦍 究極ゴリラ</h4>';
+    if (state.gameCleared) {
+      html += '<div class="record-row"><span></span>' + chk(true) + '捕獲済み</span></div>';
+    } else {
+      html += '<div class="record-row"><span></span><span class="record-pending">未捕獲</span></div>';
+      html += '<div class="record-hint">条件：Lv99 ＋ 女神のウクレレ ＋ HP1〜10 ＋「うたう」</div>';
+    }
+    html += '</div>';
+
+    // --- 横スクロール編 ---
+    html += '<div class="record-section">';
+    html += '<h4>🗺 横スクロール編</h4>';
+    html += '<div class="record-row"><span>総合</span>' + (sideCleared ? '<span class="record-done">✅ 制覇済み</span>' : '<span class="record-pending">進行中</span>') + '</div>';
+    var stages = [
+      { n: "1 はじまりの草原", c: s1c, b: s1b, boss: "中ボスゴリラ" },
+      { n: "2 あやしい森",     c: s2c, b: s2b, boss: "ボスゴリラ" },
+      { n: "3 古びた町はずれ", c: s3c, b: s3b, boss: "魔王ゴリラ" },
+      { n: "4 ゴリラ山道",     c: s4c, b: s4b, boss: "大魔王ゴリラ" },
+      { n: "5 黒い城",         c: s5c, b: s5b, boss: "ラスボス級ゴリラ" },
+      { n: "6 聖域",           c: s6c, b: s6b, boss: "究極チンパンジー" }
+    ];
+    stages.forEach(function(s) {
+      html += '<div class="record-row"><span>S' + s.n + '</span>' + chk(s.c) + (s.c ? "クリア" : "未クリア") + '</span></div>';
+      html += '<div class="record-row"><span style="padding-left:8px;">' + s.boss + '</span>' + chk(s.b) + (s.b ? "撃退" : "未撃退") + '</span></div>';
+    });
+    if (!sideCleared && state.gameCleared) {
+      var nextStage = 1;
+      for (var _ns = 1; _ns <= 6; _ns++) {
+        if (!sm.stageCleared || !sm.stageCleared[String(_ns)]) { nextStage = _ns; break; }
+      }
+      html += '<div class="record-hint">次の目標：ステージ' + nextStage + 'を目指そう。🌀ゲートから横スクロールへ。</div>';
+    }
+    html += '</div>';
+
+    // --- UMA図鑑 ---
+    html += '<div class="record-section">';
+    html += '<h4>📖 UMA図鑑</h4>';
+    html += '<div class="record-row"><span>捕獲数</span><span style="color:#e0e0e0;">' + capturedDexCount + ' / ' + totalUma + '</span></div>';
+    if (isComplete) {
+      html += '<div class="record-row"><span></span><span class="record-done">✅ コンプリート！</span></div>';
+    } else {
+      html += '<div class="record-row"><span></span><span class="record-pending">あと' + (totalUma - capturedDexCount) + '種類</span></div>';
+    }
+    html += '</div>';
+
+    // --- 図鑑コンプリート報酬 ---
+    html += '<div class="record-section">';
+    html += '<h4>🎁 図鑑コンプリート報酬</h4>';
+    if (state.dexCompleteRewardClaimed) {
+      html += '<div class="record-row"><span></span><span class="record-done">✅ 受取済み</span></div>';
+    } else if (isComplete) {
+      html += '<div class="record-row"><span></span><span style="color:#ffd166;">未受取（図鑑を開くと受け取れます）</span></div>';
+    } else {
+      html += '<div class="record-row"><span></span><span class="record-pending">図鑑コンプリート後に解放</span></div>';
+    }
+    html += '</div>';
+
+    // --- 次の目標 ---
+    html += '<div class="record-section">';
+    html += '<h4>🎯 次の目標</h4>';
+    var nextGoal;
+    if (!state.gameCleared) {
+      nextGoal = "究極ゴリラを捕まえよう。Lv99・女神のウクレレ・HP1〜10・最後は「うたう」。";
+    } else if (!sideCleared) {
+      nextGoal = "横スクロール編を進めよう。通常マップの🌀ゲートから横スクロール世界へ行けます。";
+    } else if (!isComplete) {
+      nextGoal = "UMA図鑑を埋めよう。未捕獲のUMAを弱らせてから捕まえよう（📖図鑑で確認）。";
+    } else {
+      nextGoal = "すべての大きな目標を達成済み！図鑑を眺めたり、仲間のセリフを見たり、森を散歩しよう。";
+    }
+    html += '<p style="font-size:0.82em;color:#e0e0e0;margin:3px 0;">' + nextGoal + '</p>';
+    html += '</div>';
+
+    // --- 称号条件一覧 ---
+    html += '<div class="record-section">';
+    html += '<h4>🏆 称号条件一覧</h4>';
+    var titles = [
+      { name: "究極とUMA図鑑を極めし者", cond: "究極ゴリラ捕獲 ＋ 横スクロール制覇 ＋ UMA図鑑コンプリート" },
+      { name: "究極を歌い、聖域を越えし者", cond: "究極ゴリラ捕獲 ＋ 横スクロール制覇" },
+      { name: "UMA図鑑を極めし者", cond: "UMA図鑑コンプリート" },
+      { name: "森に歌を届けし者", cond: "究極ゴリラ捕獲" },
+      { name: "究極に近づきし者", cond: "Lv99以上" },
+      { name: "勇者の子孫", cond: "初期称号" }
+    ];
+    var currentTitle = getPlayerTitle();
+    titles.forEach(function(t) {
+      var isCurrent = (t.name === currentTitle);
+      html += '<div style="margin:4px 0;">';
+      html += '<div style="font-size:0.82em;font-weight:bold;color:' + (isCurrent ? "#ffd166" : "#adb5bd") + ';">';
+      if (isCurrent) html += "▶ ";
+      html += t.name + '</div>';
+      html += '<div style="font-size:0.75em;color:#666;padding-left:8px;">' + t.cond + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    document.getElementById("record-body").innerHTML = html;
+  }
+
   // 19. UMA図鑑モーダル(§31 v0.8.1 詳細タップ対応)
   // ---------------------------------------------------------
   function openDexModal() {
@@ -3927,21 +4066,8 @@
     } else {
       html += '<p class="small">フィールドを探索しよう！<br>UMAを見つけて経験値を集めよう。<br>実家🏠で回復・酒場🍺で仲間を探そう。</p>';
     }
-    var playerTitle;
-    // §66 v0.17.1: 称号優先順位 (完全制覇>図鑑完全>横スクロール>クリア>Lv99>デフォルト)
-    if (state.gameCleared && isSideStoryCleared() && isUmaDexComplete()) {
-      playerTitle = "究極とUMA図鑑を極めし者";
-    } else if (state.gameCleared && isSideStoryCleared()) {
-      playerTitle = "究極を歌い、聖域を越えし者";
-    } else if (isUmaDexComplete()) {
-      playerTitle = "UMA図鑑を極めし者";
-    } else if (state.gameCleared) {
-      playerTitle = "森に歌を届けし者";
-    } else if (p.level >= 99 || p.level99Shown) {
-      playerTitle = "究極に近づきし者";
-    } else {
-      playerTitle = "勇者の子孫";
-    }
+    // §67 v0.18: getPlayerTitle() に一元化
+    var playerTitle = getPlayerTitle();
     html += '<div class="shop-row"><span>称号</span><span style="font-size:0.85em;">' + playerTitle + "</span></div>";
     html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
     html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
@@ -5204,6 +5330,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-show-capture-modal" style="border-color:#f9c74f;color:#f9c74f;">🌟 捕獲成功モーダルを見る</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-full" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済み+横スクロール制覇状態にする（総合称号確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-set-postclear-only" style="border-color:#f9c74f;color:#f9c74f;">🌟 クリア済みのみにする（横スクロール未制覇）</button>';
+      html += '<p class="small" style="color:#c8b4ff;margin-top:8px;">📜 冒険の記録 (§67 v0.18)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-open-record" style="border-color:#c8b4ff;color:#c8b4ff;">📜 冒険の記録モーダルを開く</button>';
       html += '<p class="small" style="color:#98d8ff;margin-top:8px;">📖 図鑑コンプリート報酬テスト (§66 v0.17.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-complete-all" style="border-color:#98d8ff;color:#98d8ff;">📖 UMA図鑑コンプリート状態にする（全UMA捕獲済み）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-dex-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 図鑑コンプリート報酬を未受取に戻す</button>';
@@ -5985,6 +6113,12 @@
         renderStatus();
         showToast("[DEBUG] クリア済み（横スクロール未制覇）状態にした");
       };
+      // §67 v0.18: 冒険の記録テスト
+      document.getElementById("btn-debug-open-record").onclick = function () {
+        closeModal("settings-modal");
+        openRecordModal();
+        showToast("[DEBUG] 冒険の記録を開いた");
+      };
       // §66 v0.17.1: 図鑑コンプリートテスト
       document.getElementById("btn-debug-dex-complete-all").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -6404,6 +6538,12 @@
     // 転職モーダル
     document.getElementById("btn-god-close").addEventListener("click", function () {
       closeModal("god-modal");
+    });
+
+    // 冒険の記録モーダル(§67 v0.18)
+    document.getElementById("btn-record").addEventListener("click", openRecordModal);
+    document.getElementById("btn-record-close").addEventListener("click", function () {
+      closeModal("record-modal");
     });
 
     // 設定モーダル

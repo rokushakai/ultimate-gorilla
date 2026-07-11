@@ -553,6 +553,36 @@ html, body {
   to   { box-shadow: 0 0 14px #ffd700; }
 }
 
+/* §67 v0.18: 冒険の記録モーダル */
+.record-section {
+  border: 1px solid #2d3f5a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.record-section h4 {
+  margin: 0 0 5px;
+  font-size: 0.83em;
+  color: #8ecae6;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+}
+.record-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 2px 0;
+  font-size: 0.8em;
+  gap: 6px;
+}
+.record-row span:first-child {
+  color: #adb5bd;
+  flex-shrink: 0;
+}
+.record-done { color: #06d6a0; }
+.record-pending { color: #888; }
+.record-hint { color: #ffd166; font-size: 0.78em; margin-top: 2px; }
+
 .hidden {
   display: none !important;
 }

@@ -5,6 +5,22 @@
 
 ---
 
+## v0.18 (2026-07-11)
+
+### 追加・変更
+
+- **`getPlayerTitle()`**: `isSideStoryCleared()` / `isUmaDexComplete()` / `state.gameCleared` / Lv99 の6条件を `if` チェーンで返す。`renderStatus()` と `renderEndingPage()` の重複ロジックをこの1関数に置き換えた。
+- **`#record-modal` / `renderRecordBody()`**: 達成状況の全セクションを innerHTML で生成。`chk()` ローカルヘルパー（val→greenスパン）で✅/pending表示を統一。称号条件一覧は現在の称号を `▶` でハイライトする。
+- **「📜記録」ボタン**: `.status-row` に `flex-wrap:wrap` が既にあるので7個目のボタンを追加しても問題なく折り返す。
+- **デバッグ §67**: `btn-debug-open-record` 1ボタンのみ追加（`closeModal("settings-modal")` → `openRecordModal()`）。
+
+### 注意点
+
+- `renderRecordBody()` はモーダルを開く前に毎回呼ぶ（状態が変わっても常に最新表示になる）。
+- 横スクロールボス撃退キーは既存 `renderStatus()` と同じ文字列をそのまま使用（"36,1", "2:35,1", 等）。
+
+---
+
 ## v0.17.1 (2026-07-11)
 
 ### 追加・変更
