@@ -553,12 +553,17 @@ html, body {
   to   { box-shadow: 0 0 14px #ffd700; }
 }
 
-/* §67 v0.18: 冒険の記録モーダル */
+/* §67 v0.18 / §68 v0.18.1: 冒険の記録モーダル */
 .record-section {
-  border: 1px solid #2d3f5a;
-  border-radius: 8px;
-  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
   margin-bottom: 8px;
+  background: rgba(0,0,0,0.2);
+}
+.record-section-goal {
+  border-color: rgba(255,209,102,0.45);
+  background: rgba(255,209,102,0.06);
 }
 .record-section h4 {
   margin: 0 0 5px;
@@ -566,6 +571,18 @@ html, body {
   color: #8ecae6;
   font-weight: bold;
   letter-spacing: 0.03em;
+}
+.record-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+  margin: 5px 0 3px;
+}
+.record-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd54a, #8cff8c);
 }
 .record-row {
   display: flex;

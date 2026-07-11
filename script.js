@@ -3701,31 +3701,6 @@
     var s6c = !!(sm.stageCleared && sm.stageCleared["6"]);
     var s6b = !!(sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
 
-    function chk(val) { return val ? '<span class="record-done">✅ ' : '<span class="record-pending">'; }
-
-    var html = "";
-
-    // --- 称号 ---
-    html += '<div class="record-section">';
-    html += '<h4>現在の称号</h4>';
-    html += '<p style="font-size:1em;font-weight:bold;color:#ffd166;margin:4px 0;">' + getPlayerTitle() + '</p>';
-    html += '</div>';
-
-    // --- 本編クリア ---
-    html += '<div class="record-section">';
-    html += '<h4>🦍 究極ゴリラ</h4>';
-    if (state.gameCleared) {
-      html += '<div class="record-row"><span></span>' + chk(true) + '捕獲済み</span></div>';
-    } else {
-      html += '<div class="record-row"><span></span><span class="record-pending">未捕獲</span></div>';
-      html += '<div class="record-hint">条件：Lv99 ＋ 女神のウクレレ ＋ HP1〜10 ＋「うたう」</div>';
-    }
-    html += '</div>';
-
-    // --- 横スクロール編 ---
-    html += '<div class="record-section">';
-    html += '<h4>🗺 横スクロール編</h4>';
-    html += '<div class="record-row"><span>総合</span>' + (sideCleared ? '<span class="record-done">✅ 制覇済み</span>' : '<span class="record-pending">進行中</span>') + '</div>';
     var stages = [
       { n: "1 はじまりの草原", c: s1c, b: s1b, boss: "中ボスゴリラ" },
       { n: "2 あやしい森",     c: s2c, b: s2b, boss: "ボスゴリラ" },
@@ -3734,6 +3709,70 @@
       { n: "5 黒い城",         c: s5c, b: s5b, boss: "ラスボス級ゴリラ" },
       { n: "6 聖域",           c: s6c, b: s6b, boss: "究極チンパンジー" }
     ];
+
+    // §68 v0.18.1: スコア計算 (本編1 + 横スクロール12 + UMA図鑑12 = max25)
+    var mainPts = state.gameCleared ? 1 : 0;
+    var sidePts = [s1c, s1b, s2c, s2b, s3c, s3b, s4c, s4b, s5c, s5b, s6c, s6b].filter(Boolean).length;
+    var stagesCleared = stages.filter(function(s) { return s.c; }).length;
+    var bossesDefeated = stages.filter(function(s) { return s.b; }).length;
+    var dexPts = totalUma > 0 ? capturedDexCount / totalUma * 12 : 0;
+    var overallPct = Math.min(100, Math.round((mainPts + sidePts + dexPts) / 25 * 100));
+    var dexPct = totalUma > 0 ? Math.round(capturedDexCount / totalUma * 100) : 0;
+    var sidePct = Math.round(sidePts / 12 * 100);
+
+    function chk(val) { return val ? '<span class="record-done">✅ ' : '<span class="record-pending">'; }
+    function pbar(pct, grad) {
+      return '<div class="record-progress"><div class="record-progress-fill" style="width:' + pct + '%;' + (grad ? 'background:' + grad + ';' : '') + '"></div></div>';
+    }
+
+    var html = "";
+
+    // --- 総合達成率 ---
+    html += '<div class="record-section" style="background:rgba(255,209,102,0.06);border-color:rgba(255,209,102,0.4);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;color:#ffd166;">📊 総合達成率</h4>';
+    html += '<span style="font-size:1.1em;font-weight:bold;color:#ffd166;">' + overallPct + '%</span>';
+    html += '</div>';
+    html += pbar(overallPct);
+    html += '<div style="display:flex;justify-content:space-between;font-size:0.75em;color:#888;margin-top:5px;">';
+    html += '<span>本編 ' + mainPts + '/1</span>';
+    html += '<span>横スクロール ' + sidePts + '/12</span>';
+    html += '<span>UMA図鑑 ' + capturedDexCount + '/' + totalUma + '</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // --- 現在の称号 ---
+    html += '<div class="record-section">';
+    html += '<h4>🏅 現在の称号</h4>';
+    html += '<p style="font-size:1.05em;font-weight:bold;color:#ffd166;margin:4px 0;letter-spacing:0.02em;">' + getPlayerTitle() + '</p>';
+    html += '</div>';
+
+    // --- 本編クリア ---
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">🦍 本編（究極ゴリラ）</h4>';
+    html += '<span style="font-size:0.82em;color:' + (state.gameCleared ? "#06d6a0" : "#888") + ';">' + mainPts + ' / 1</span>';
+    html += '</div>';
+    html += pbar(mainPts * 100, state.gameCleared ? "linear-gradient(90deg,#06d6a0,#8cff8c)" : null);
+    if (state.gameCleared) {
+      html += '<div style="font-size:0.8em;color:#06d6a0;margin-top:4px;">✅ 捕獲済み</div>';
+    } else {
+      html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">未捕獲</div>';
+      html += '<div class="record-hint">条件：Lv99 ＋ 女神のウクレレ ＋ HP1〜10 ＋「うたう」</div>';
+    }
+    html += '</div>';
+
+    // --- 横スクロール編 ---
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">🗺 横スクロール編</h4>';
+    html += '<span style="font-size:0.82em;color:' + (sideCleared ? "#06d6a0" : "#adb5bd") + ';">' + sidePts + ' / 12</span>';
+    html += '</div>';
+    html += pbar(sidePct);
+    html += '<div style="font-size:0.78em;color:#adb5bd;margin:3px 0 6px;">ステージクリア ' + stagesCleared + '/6 ／ ボス撃退 ' + bossesDefeated + '/6</div>';
+    if (sideCleared) {
+      html += '<div style="font-size:0.8em;color:#06d6a0;margin-bottom:4px;">✅ 全ステージ制覇済み</div>';
+    }
     stages.forEach(function(s) {
       html += '<div class="record-row"><span>S' + s.n + '</span>' + chk(s.c) + (s.c ? "クリア" : "未クリア") + '</span></div>';
       html += '<div class="record-row"><span style="padding-left:8px;">' + s.boss + '</span>' + chk(s.b) + (s.b ? "撃退" : "未撃退") + '</span></div>';
@@ -3749,12 +3788,15 @@
 
     // --- UMA図鑑 ---
     html += '<div class="record-section">';
-    html += '<h4>📖 UMA図鑑</h4>';
-    html += '<div class="record-row"><span>捕獲数</span><span style="color:#e0e0e0;">' + capturedDexCount + ' / ' + totalUma + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">📖 UMA図鑑</h4>';
+    html += '<span style="font-size:0.82em;color:' + (isComplete ? "#ffd166" : "#adb5bd") + ';">' + capturedDexCount + ' / ' + totalUma + '</span>';
+    html += '</div>';
+    html += pbar(dexPct, "linear-gradient(90deg,#74c0fc,#ffd54a)");
     if (isComplete) {
-      html += '<div class="record-row"><span></span><span class="record-done">✅ コンプリート！</span></div>';
+      html += '<div style="font-size:0.8em;color:#ffd166;margin-top:4px;">✅ コンプリート！</div>';
     } else {
-      html += '<div class="record-row"><span></span><span class="record-pending">あと' + (totalUma - capturedDexCount) + '種類</span></div>';
+      html += '<div style="font-size:0.8em;color:#888;margin-top:4px;">あと' + (totalUma - capturedDexCount) + '種類</div>';
     }
     html += '</div>';
 
@@ -3770,9 +3812,9 @@
     }
     html += '</div>';
 
-    // --- 次の目標 ---
-    html += '<div class="record-section">';
-    html += '<h4>🎯 次の目標</h4>';
+    // --- 次の目標（強調） ---
+    html += '<div class="record-section record-section-goal">';
+    html += '<h4 style="color:#ffd166;">🎯 次の目標</h4>';
     var nextGoal;
     if (!state.gameCleared) {
       nextGoal = "究極ゴリラを捕まえよう。Lv99・女神のウクレレ・HP1〜10・最後は「うたう」。";
@@ -3783,7 +3825,7 @@
     } else {
       nextGoal = "すべての大きな目標を達成済み！図鑑を眺めたり、仲間のセリフを見たり、森を散歩しよう。";
     }
-    html += '<p style="font-size:0.82em;color:#e0e0e0;margin:3px 0;">' + nextGoal + '</p>';
+    html += '<p style="font-size:0.85em;color:#e0e0e0;margin:3px 0;">' + nextGoal + '</p>';
     html += '</div>';
 
     // --- 称号条件一覧 ---
