@@ -5,6 +5,28 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.27] - 2026-07-12 — 仲間の戦闘自動参加 (§80)
+
+### Added
+- **`scheduleAfterPlayerAttack()`** (§80): プレイヤーの攻撃行動後に仲間自動行動 → 敵ターンをスケジュールするヘルパー関数。600ms後に `runCompanionAutoActions()` → 400ms後に `enemyTurn()`。
+- **`runCompanionAutoActions()`** (§80): パーティ仲間を順番に自動行動させる関数。
+  - ジュリタニ 💪: `Math.min(20, 5 + floor(lv/8))` ダメージ、25%で会心x1.5
+  - シュリタニ 🪤: `Math.min(5, 1 + floor(lv/20))` ダメージ + 捕獲フレーバーメッセージ
+  - ノリオ 📈: `Math.min(15, 4 + floor(lv/10))` ダメージ + 経験値フレーバーメッセージ
+  - ハルミ ✨: `Math.min(18, 5 + floor(lv/9))` 魔法ダメージ
+  - **究極ゴリラ戦 (`e.final`)**: 仲間は一切行動しない（見守るだけ）。
+  - 仲間行動中に敵HP≤0になった場合はループ離脱（呼び出し元で `winBattle()` 判定）。
+
+### Changed
+- **`doFight()`** (§80): `setTimeout(enemyTurn, 600)` → `scheduleAfterPlayerAttack()` に変更。
+- **`castSpell()`** (§80): 攻撃呪文ブランチに `scheduleAfterPlayerAttack()` を追加（回復呪文は従来の `setTimeout(enemyTurn, 600)` を維持）。
+- **`useWaza()`** (§80): 固定ダメージわざブランチの `setTimeout(enemyTurn, 600)` → `scheduleAfterPlayerAttack()` に変更（ガマンわざブランチは変更なし）。
+
+### Not Changed
+- `finishBattle()` / `gainExp()` / `winBattle()` / `enemyTurn()` / BGM制御 は一切変更なし
+- `e.final` フラグはデータ層のみ（究極ゴリラ以外は影響なし）
+- `getCompanionBonus()` / `ノリオ EXP2倍` / `シュリタニ captureMod` / `ジュリタニ critBonus` の既存ボーナスも維持
+
 ## [0.26.1] - 2026-07-12 — フィールド仲間追従安定化 (§79)
 
 ### Added

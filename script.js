@@ -3012,7 +3012,58 @@
       return;
     }
     checkUltimateGorillaHpHint(e);
-    setTimeout(enemyTurn, 600);
+    scheduleAfterPlayerAttack(); // §80 v0.27
+  }
+
+  // §80 v0.27: プレイヤー攻撃後 → 仲間自動行動 → 敵ターン
+  function scheduleAfterPlayerAttack() {
+    setTimeout(function() {
+      if (!state.inBattle) return;
+      runCompanionAutoActions();
+      if (!state.inBattle) return;
+      if (state.enemy && state.enemy.hp <= 0) { winBattle(); return; }
+      setTimeout(enemyTurn, 400);
+    }, 600);
+  }
+
+  // §80 v0.27: 仲間の戦闘自動行動（プレイヤー攻撃後に発動）
+  function runCompanionAutoActions() {
+    var p = state.player, e = state.enemy;
+    if (!state.inBattle || !e || e.hp <= 0) return;
+    if (e.final) return;
+    var companions = p.companions;
+    for (var ci = 0; ci < companions.length; ci++) {
+      if (!state.inBattle || !e || e.hp <= 0) break;
+      var cid = companions[ci];
+      if (cid === "juritani") {
+        var dmgJ = Math.min(20, 5 + Math.floor(p.level / 8));
+        var isCritJ = Math.random() < 0.25;
+        if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.5); }
+        e.hp = Math.max(0, e.hp - dmgJ);
+        if (isCritJ) {
+          log("💪 ジュリタニの追撃！ 💥 会心！ " + e.name + "に" + dmgJ + "ダメージ！");
+        } else {
+          log("💪 ジュリタニの追撃！ " + e.name + "に" + dmgJ + "ダメージ！");
+        }
+        renderEnemy();
+      } else if (cid === "shurittani") {
+        var dmgS = Math.min(5, 1 + Math.floor(p.level / 20));
+        e.hp = Math.max(0, e.hp - dmgS);
+        log("🪤 シュリタニが相手の動きを読んだ！ " + e.name + "に" + dmgS + "ダメージ！");
+        log("なんだか捕まえやすくなった気がする。");
+        renderEnemy();
+      } else if (cid === "norio") {
+        var dmgN = Math.min(15, 4 + Math.floor(p.level / 10));
+        e.hp = Math.max(0, e.hp - dmgN);
+        log("📈 ノリオ「経験値のために倒せ！」 " + e.name + "に" + dmgN + "ダメージ！");
+        renderEnemy();
+      } else if (cid === "harumi") {
+        var dmgH = Math.min(18, 5 + Math.floor(p.level / 9));
+        e.hp = Math.max(0, e.hp - dmgH);
+        log("✨ ハルミが光を放った！ " + e.name + "に" + dmgH + "ダメージ！");
+        renderEnemy();
+      }
+    }
   }
 
   function openMagicMenu() {
@@ -3064,13 +3115,14 @@
       renderEnemy();
       updateBattlePlayerStatus();
       if (e.hp <= 0) { winBattle(); return; }
+      scheduleAfterPlayerAttack(); // §80 v0.27
     } else {
       var heal = Math.floor((sp.power + randInt(0, 5)) * spellMultiplier);
       p.hp = Math.min(p.maxHp, p.hp + heal);
       log("✨ " + sp.name + "！ HPが" + heal + "回復した！");
       updateBattlePlayerStatus();
+      setTimeout(enemyTurn, 600);
     }
-    setTimeout(enemyTurn, 600);
   }
 
   // ---------------------------------------------------------
@@ -3189,7 +3241,7 @@
       return;
     }
     checkUltimateGorillaHpHint(e);
-    setTimeout(enemyTurn, 600);
+    scheduleAfterPlayerAttack(); // §80 v0.27
   }
 
   function usePotion() {
@@ -5697,6 +5749,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-party-follow-on" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間2人をパーティに追加（歩いて追従確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-trail-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 仲間軌跡リセット（trail = []）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-clear-trail" style="border-color:#adb5bd;color:#adb5bd;">👥 パーティ解除 + 軌跡リセット</button>';
+      html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -6740,6 +6795,29 @@
         closeModal("settings-modal");
         renderField();
         showToast("[DEBUG] パーティ解除 + 軌跡リセット完了");
+      };
+      // §80 v0.27: 仲間自動戦闘テスト
+      document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間2人でのらいぬ戦闘。自動行動を確認！");
+      };
+      document.getElementById("btn-debug-companion-battle-gorilla").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var boss = findById(UMA_DATA, "ultimategorilla");
+        if (!boss) { showToast("[DEBUG] 究極ゴリラが見つからない"); return; }
+        actuallyStartBattle(boss);
+        state.enemy.hp = 10;
+        renderEnemy();
+        showToast("[DEBUG] 仲間2人+究極ゴリラHP10。仲間が見守るか確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

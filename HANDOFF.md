@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.26.1** |
+| 現在バージョン | **v0.27** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.21時点）
+## 現在実装済みの主要機能（v0.27時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,13 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.27] 仲間の戦闘自動参加**（§80）
+  - **`scheduleAfterPlayerAttack()`**: プレイヤー攻撃後600ms→仲間自動行動→400ms→敵ターン。
+  - **`runCompanionAutoActions()`**: 仲間を順番に自動行動。`e.final`（究極ゴリラ）時はスキップ。
+  - **4仲間の行動**: ジュリタニ会心追撃 / シュリタニ捕獲補助 / ノリオEXP煽り / ハルミ魔法攻撃。
+  - **トリガー**: `doFight()` / `castSpell()` 攻撃ブランチ / `useWaza()` 固定ダメージブランチ。
+  - **除外**: にげる / アイテム / うたう / つかまえる / 回復まほう → 仲間行動なし。
+  - **保護**: `finishBattle()` / `gainExp()` / `winBattle()` / `enemyTurn()` / BGM は変更なし。
 - **[v0.26.1] フィールド仲間追従安定化**（§79）
   - **`resetPartyTrail()`**: `state.partyTrail = []` を一本化した共通関数。ES5関数宣言でホイスト済み。
   - **仲間変更時リセット**: `recruitCompanion()` / `dismissCompanion()` で加入/離脱直後にリセット。
