@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.23] - 2026-07-11 — クリア後フィールドBGM軽量メロディ調整 (§74)
+
+### Added
+- **`BGM_DATA.fieldClear`** (§74): クリア後フィールド専用メロディエントリを `BGM_DATA` に追加。`waveType: "triangle"`（square より柔らかい音色）・vol: 0.05（field と同音量）・Cメジャー・約7.75秒ループ。ユーザー指定パターン（C-E-G-A→D-F-A-G→C-E-G-C5-B-A-G→E-G-A-G-E-D-C）を実装。
+- **`getFieldBgmType()` ヘルパー** (§74): `state.gameCleared` が true なら `"fieldClear"`、それ以外は `"field"` を返す小関数。BGM_DATA 定義の直前に配置。
+- **デバッグ §74**: `btn-debug-bgm-field-clear`（🌟 クリア後フィールドBGM テスト再生）ボタン追加。既存の `btn-debug-bgm-field` のラベルを「通常フィールドBGM」に更新。
+
+### Changed
+- **`updateBGM("field")` 全呼び出し箇所** (§74): `updateBGM(getFieldBgmType())` に置換（合計8箇所：finishBattle / サウンドトグル / BGMトグル / エンディング後フィールド復帰 / Dパッド4方向 / キーボード4方向）。BGM制御関数自体（`stopBGMHard` / `startBGM` / `updateBGM` / `_scheduleBGMLoop`）は一切変更なし。
+
+### Notes
+- BGM制御（stopBGMHard・bgmSessionId・activeBgmNodes・activeBgmTimers・bgmMasterGain 等）は変更なし。BGM重なりバグ対策（v0.8.6.3）は維持。
+- クリア前の通常フィールドBGM・バトルBGM・エンディングBGMは変更なし。
+
 ## [0.22] - 2026-07-11 — 図鑑未捕獲UMAヒント強化 (§73)
 
 ### Added

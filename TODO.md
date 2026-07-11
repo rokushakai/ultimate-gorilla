@@ -14,6 +14,19 @@
 
 ## ✅ 実装済み
 
+### Version 0.23 — クリア後フィールドBGM軽量メロディ調整 (§74)
+
+- **`BGM_DATA.fieldClear` 追加** (§74): triangle音色・Cメジャー・穏やか余韻ループ ✅
+- **`getFieldBgmType()` ヘルパー追加** (§74): `state.gameCleared` で field/fieldClear を切り替え ✅
+- **`updateBGM("field")` → `updateBGM(getFieldBgmType())` 全置換** (§74): 8箇所 ✅
+- **デバッグ §74**: クリア後フィールドBGMテストボタン追加 ✅
+
+### 今後のTODO
+
+- BGMメロディさらなる微調整
+- 仲間4人の会話バリエーション追加
+- 冒険の記録UI改善（達成率バー・アイコン追加など）
+
 ### Version 0.22 — 図鑑未捕獲UMAヒント強化 (§73)
 
 - **UMA_DATA 全9種に hintArea/hintText/hintCatch 追加** (§73): 究極ゴリラは専用ヒント ✅

@@ -4154,3 +4154,70 @@ isUmaDexComplete() === true    (全9種UMA捕獲済み)
 | `btn-debug-dex-one-uncaptured` | 最初のUMA（カッパ）だけ未捕獲、他を捕獲済みにして図鑑を開く |
 | `btn-debug-dex-one-seen` | 最初のUMA（カッパ）だけ「発見済み（未捕獲）」、他を未発見にして図鑑を開く |
 | `btn-debug-dex-reset` | 図鑑を全リセット（全UMA未発見状態）にして図鑑を開く |
+
+---
+
+## §74 v0.23 — クリア後フィールドBGM軽量メロディ調整
+
+**[実装済み]**
+
+### 方針
+
+- **BGM制御は一切変更しない**: `stopBGMHard()` / `startBGM()` / `stopBGM()` / `updateBGM()` / `_scheduleBGMLoop()` / `bgmSessionId` / `activeBgmNodes` / `activeBgmTimers` / `bgmMasterGain` / audioContext 初期化はすべて変更なし。
+- **変更対象**: `BGM_DATA` のメロディ配列のみ。新エントリ `fieldClear` を追加。
+
+### `getFieldBgmType()` ヘルパー
+
+```javascript
+function getFieldBgmType() {
+  return (state && state.gameCleared) ? "fieldClear" : "field";
+}
+```
+
+`updateBGM("field")` の全呼び出し箇所を `updateBGM(getFieldBgmType())` に置換。BGM制御ロジック自体は変更なし。
+
+### `BGM_DATA.fieldClear` メロディ仕様
+
+| 項目 | 値 |
+|---|---|
+| waveType | "triangle"（squareより柔らかい音色） |
+| vol | 0.05（fieldと同じ音量） |
+| キー | Cメジャー（fieldと同じ） |
+| テンポ | 0.25s/音符（fieldと同じ） |
+| 長さ | 約7.75秒/ループ |
+| 雰囲気 | 明るく穏やか・達成感・散歩感 |
+
+メロディパターン（ユーザー指定）：
+```
+C  E  G  A  G  E（上昇→折り返し）
+D  F  A  G  E  D（サブドミナント経由）
+C  E  G  C5 B  A  G（高音へ展開）
+E  G  A  G  E  D  C（解決）
+```
+
+### フィールドBGMの使い分け
+
+| 状態 | BGMタイプ |
+|---|---|
+| `state.gameCleared === false` | `"field"`（既存メロディ） |
+| `state.gameCleared === true` | `"fieldClear"`（余韻メロディ） |
+| 戦闘中 | `"battle"`（変更なし） |
+| エンディング | `"ending"`（変更なし） |
+| 横スクロールマップ | `getFieldBgmType()`（通常/クリア後で自動分岐） |
+
+### デバッグ §74
+
+| ボタンID | 動作 |
+|---|---|
+| `btn-debug-bgm-field` | 通常フィールドBGM（field）を再生 |
+| `btn-debug-bgm-field-clear` | クリア後フィールドBGM（fieldClear）を再生 |
+| `btn-debug-bgm-hard-stop` | `stopBGMHard()` で完全停止（変更なし） |
+
+### 触ってはいけないもの（保護対象）
+
+- `stopBGMHard()` の実装
+- `startBGM()` の実装
+- `updateBGM()` の実装
+- `_scheduleBGMLoop()` の実装
+- `bgmSessionId` / `activeBgmNodes` / `activeBgmTimers` / `bgmMasterGain`
+- BGM切り替え条件（戦闘→フィールド、エンディング等）

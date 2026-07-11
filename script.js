@@ -3550,7 +3550,7 @@
     updateSingButtonChance(false);  // §64 v0.16.1: うたうボタンをリセット
     state.enemy = null;
     stopWalking(); // 残留walkTimerをリセット
-    updateBGM("field");
+    updateBGM(getFieldBgmType());
     document.getElementById("btn-battle-ok").classList.add("hidden");
     tickSmellOnBattleEnd();
     document.getElementById("battle-screen").classList.add("hidden");
@@ -5526,7 +5526,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-reset-legendary">🔄 伝説装備フラグをリセット</button>';
       html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🔊 サウンドテスト</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-se-test">🔔 [TEST] SEを鳴らす</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-bgm-field">🎵 [TEST] フィールドBGM</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-field">🎵 [TEST] 通常フィールドBGM</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-bgm-field-clear" style="border-color:#ffd166;color:#ffd166;">🌟 [TEST] クリア後フィールドBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-battle">🎵 [TEST] バトルBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-ending">🎵 [TEST] エンディングBGM</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-bgm-stop">🔇 [TEST] BGM停止</button>';
@@ -5684,7 +5685,7 @@
       if (!soundEnabled) {
         stopBGM();
       } else {
-        if (bgmEnabled) updateBGM("field");
+        if (bgmEnabled) updateBGM(getFieldBgmType());
       }
       saveSoundSettings();
       renderSettingsBody();
@@ -5692,7 +5693,7 @@
     document.getElementById("btn-toggle-bgm").onclick = function () {
       if (!soundEnabled) return;
       bgmEnabled = !bgmEnabled;
-      if (!bgmEnabled) { stopBGM(); } else { updateBGM("field"); }
+      if (!bgmEnabled) { stopBGM(); } else { updateBGM(getFieldBgmType()); }
       saveSoundSettings();
       renderSettingsBody();
     };
@@ -5737,7 +5738,17 @@
         saveSoundSettings();
         stopBGM(); // ノードも含めて確実に停止してから再起動
         startBGM("field");
-        showToast("[DEBUG] フィールドBGM再生");
+        showToast("[DEBUG] 通常フィールドBGM再生");
+        renderSettingsBody();
+      };
+      // §74 v0.23: クリア後フィールドBGMテスト
+      document.getElementById("btn-debug-bgm-field-clear").onclick = function () {
+        if (!initAudioContext()) { showToast("[DEBUG] AudioContext利用不可"); return; }
+        soundEnabled = true; bgmEnabled = true;
+        saveSoundSettings();
+        stopBGM();
+        startBGM("fieldClear");
+        showToast("[DEBUG] クリア後フィールドBGM再生 (fieldClear)");
         renderSettingsBody();
       };
       document.getElementById("btn-debug-bgm-battle").onclick = function () {
@@ -6797,7 +6808,7 @@
     var btn = document.getElementById(buttonId);
     btn.addEventListener("pointerdown", function (ev) {
       ev.preventDefault();
-      updateBGM("field");
+      updateBGM(getFieldBgmType());
       startWalking(dx, dy);
     });
     btn.addEventListener("pointerup", stopWalking);
@@ -6814,16 +6825,16 @@
     // PCのキーボードでも動作確認できるようにする
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "ArrowUp") {
-        updateBGM("field");
+        updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(0, -1); } else { movePlayer(0, -1); }
       } else if (ev.key === "ArrowDown") {
-        updateBGM("field");
+        updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(0, 1); } else { movePlayer(0, 1); }
       } else if (ev.key === "ArrowLeft") {
-        updateBGM("field");
+        updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(-1, 0); } else { movePlayer(-1, 0); }
       } else if (ev.key === "ArrowRight") {
-        updateBGM("field");
+        updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(1, 0); } else { movePlayer(1, 0); }
       }
     });
@@ -6870,7 +6881,7 @@
         state.endingPage += 1;
         renderEndingPage();
       } else {
-        updateBGM("field");
+        updateBGM(getFieldBgmType());
         closeModal("clear-modal");
       }
     });
@@ -7128,6 +7139,11 @@
   }
 
   // BGMパターン定義: notes = [[freq_Hz, dur_sec], ...], freq=0は休符
+  // §74 v0.23: クリア後フィールドBGM切り替えヘルパー。制御ロジックは変更しない
+  function getFieldBgmType() {
+    return (state && state.gameCleared) ? "fieldClear" : "field";
+  }
+
   var BGM_DATA = {
     field: {
       waveType: "square", vol: 0.05,
@@ -7141,6 +7157,16 @@
         [294, 0.25], [523, 0.25], [494, 0.50],
         [392, 0.25], [440, 0.25], [494, 0.25], [523, 0.25],
         [440, 0.25], [392, 0.25], [330, 0.50]
+      ]
+    },
+    // §74 v0.23: クリア後フィールドBGM — Cメジャー 穏やか余韻ループ(~7.75秒) triangle音色
+    fieldClear: {
+      waveType: "triangle", vol: 0.05,
+      notes: [
+        [262, 0.25], [330, 0.25], [392, 0.25], [440, 0.25], [392, 0.25], [330, 0.50],
+        [294, 0.25], [349, 0.25], [440, 0.25], [392, 0.25], [330, 0.25], [294, 0.50],
+        [262, 0.25], [330, 0.25], [392, 0.25], [523, 0.25], [494, 0.25], [440, 0.25], [392, 0.50],
+        [330, 0.25], [392, 0.25], [440, 0.25], [392, 0.25], [330, 0.25], [294, 0.25], [262, 0.75]
       ]
     },
     battle: {

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.22** |
+| 現在バージョン | **v0.23** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,12 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.23] クリア後フィールドBGM軽量メロディ調整**（§74）
+  - **`BGM_DATA.fieldClear`**: クリア後専用フィールドBGMエントリを追加。triangle音色・Cメジャー・約7.75秒ループ。穏やか余韻メロディ。BGM制御コードは一切変更なし。
+  - **`getFieldBgmType()`**: `state.gameCleared` に応じて `"field"` / `"fieldClear"` を返すヘルパー。
+  - **`updateBGM("field")` 全置換**: finishBattle / サウンドトグル / BGMトグル / エンディング後 / Dパッド / キーボードの全8箇所を `updateBGM(getFieldBgmType())` に変更。
+  - **デバッグ §74**: クリア後フィールドBGMテストボタン追加（btn-debug-bgm-field-clear）。
+  - **保護対象**: `stopBGMHard()` / `startBGM()` / `updateBGM()` / `_scheduleBGMLoop()` / `bgmSessionId` / `activeBgmNodes` / `activeBgmTimers` / `bgmMasterGain` はすべて未変更。
 - **[v0.22] 図鑑未捕獲UMAヒント強化**（§73）
   - **UMA_DATA 全9種にヒントフィールド追加**: `hintArea`（出現エリア）/ `hintText`（発見ヒント）/ `hintCatch`（捕獲ヒント）。究極ゴリラは Lv99+ウクレレ+HP1〜10+うたう の専用ヒント。
   - **図鑑モーダルのヒント表示**: 未発見UMAに `hintArea`（📍）、発見済み未捕獲UMAに `hintText`（💡）を各カード内に表示。
@@ -482,9 +488,9 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **BGMメロディ改善** — 現行メロディの音楽的改善や音量調整。BGM制御(stopBGMHard等)は一切触らず、メロディ配列だけ調整の条件つきで進めると安全。工数小。
-2. **NPC固有イベント深化** — 仲間加入フラグ別の追加セリフや連続クエスト的な展開。工数中。
-3. **冒険の記録UI改善** — 達成率バー・アイコン追加など見栄えの強化。工数小。
+1. **仲間4人の会話バリエーション追加** — クリア後・図鑑コンプリート後など状態別のセリフ追加。工数中。
+2. **冒険の記録UI改善** — 達成率バー・アイコン追加など見栄えの強化。工数小。
+3. **BGMメロディさらなる微調整** — fieldClear の音階・テンポ調整。制御コード不変の条件で工数小。
 
 ## v0.12.1 横スクロール全体仕様 (最新)
 

@@ -5,6 +5,21 @@
 
 ---
 
+## v0.23 (2026-07-11)
+
+### 追加・変更
+
+- **`getFieldBgmType()` 追加**: `BGM_DATA` の直前に配置。`state.gameCleared` が true なら `"fieldClear"` を返す。BGM制御コードは一切変更なし。
+- **`BGM_DATA.fieldClear` 追加**: `waveType: "triangle"`（Web Audio API 標準対応）・`vol: 0.05`（field と同一）・Cメジャー・0.25s 単位ノート・約7.75秒ループ。ユーザー指定メロディパターンをそのまま実装。
+- **`updateBGM("field")` → `updateBGM(getFieldBgmType())` 全置換**: `replace_all: true` で8箇所一括置換。`startBGM("field")` は debug ボタン（明示テスト用）のみに残存。
+- **デバッグ**: `btn-debug-bgm-field-clear` 追加・`btn-debug-bgm-field` ラベルを「通常フィールドBGM」に更新。
+
+### 注意点
+
+- `stopBGMHard()` / `startBGM()` / `updateBGM()` / `_scheduleBGMLoop()` / `bgmSessionId` / `activeBgmNodes` / `activeBgmTimers` / `bgmMasterGain` はすべて変更なし。BGM重なりバグ対策（v0.8.6.3）は維持。
+- `waveType: "triangle"` は Web Audio API OscillatorNode の標準対応値（"sine" / "square" / "sawtooth" / "triangle"）。外部ファイル不要。
+- `updateBGM(getFieldBgmType())` は `bgmCurrentType === type` チェックがあるため、すでに fieldClear が鳴っている状態で再呼び出しされても二重再生しない（既存の updateBGM 安全設計が引き継がれる）。
+
 ## v0.22 (2026-07-11)
 
 ### 追加・変更
