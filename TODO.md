@@ -26,6 +26,13 @@
 
 ## ✅ 実装済み
 
+### Version 0.27.1 — 仲間自動戦闘安定化 (§81)
+
+- **`runCompanionAutoActions()` 返値**: `true` / `false` で仲間撃破を明示 ✅
+- **各仲間に `if (e.hp <= 0) { break; }` 追加**: 後続仲間の不要行動を防止 ✅
+- **`scheduleAfterPlayerAttack()` 判定強化**: `companionKilled` 返値で `winBattle/enemyTurn` 分岐 ✅
+- **デバッグボタン**: 「仲間2人+のらいぬHP3（仲間撃破確認）」 ✅
+
 ### Version 0.27 — 仲間の戦闘自動参加 (§80)
 
 - **`scheduleAfterPlayerAttack()`**: プレイヤー攻撃後に仲間行動→敵ターンをスケジュール ✅

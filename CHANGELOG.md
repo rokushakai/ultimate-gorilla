@@ -5,6 +5,18 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.27.1] - 2026-07-12 — 仲間自動戦闘安定化 (§81)
+
+### Changed
+- **`runCompanionAutoActions()`** (§81): 返値を追加（`true` = 仲間が敵を倒した、`false` = 敵生存 or スキップ）。各仲間の攻撃後に `if (e.hp <= 0) { break; }` を追加し、後続の仲間が不要に行動しないよう即ループ離脱。早期リターンも `return false;` に統一。
+- **`scheduleAfterPlayerAttack()`** (§81): `runCompanionAutoActions()` の返値 `companionKilled` を使用して勝利判定を明示化。`if (companionKilled || (state.enemy && state.enemy.hp <= 0))` — 返値 `true` の場合は `winBattle()` のみ呼ばれ、`setTimeout(enemyTurn, 400)` には到達しない。
+- **デバッグ新ボタン** (§81): `btn-debug-companion-kill-wilddog` — 仲間2人+のらいぬHP3。仲間が撃破→勝利処理→敵ターンなしを確認するための専用テストケース。
+
+### Not Changed
+- `winBattle()` / `finishBattle()` / `gainExp()` / `enemyTurn()` / BGM制御 は一切変更なし
+- 撃退フラグ（`defeatedEnemies`）は `finishBattle()` → OKボタン押下後に設定される従来フローを維持
+- `e.final`（究極ゴリラ）時の見守り仕様は変更なし
+
 ## [0.27] - 2026-07-12 — 仲間の戦闘自動参加 (§80)
 
 ### Added

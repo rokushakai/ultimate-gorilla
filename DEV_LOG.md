@@ -5,6 +5,21 @@
 
 ---
 
+## v0.27.1 (2026-07-12)
+
+### 追加・変更
+
+- **`runCompanionAutoActions()` 返値追加 (§81)**: `true` = 仲間攻撃で敵HP0、`false` = 敵生存またはスキップ。早期リターンも `return false` に統一。
+- **各仲間の攻撃後に即ブレーク (§81)**: `e.hp = Math.max(0, e.hp - dmg)` → `renderEnemy()` → `if (e.hp <= 0) { break; }` の順で処理。次ループ開始時の `if (e.hp <= 0) break` に頼るのではなく、攻撃直後に離脱する。
+- **`scheduleAfterPlayerAttack()` 判定強化 (§81)**: `runCompanionAutoActions()` の返値を `companionKilled` に受け取り、`if (companionKilled || (state.enemy && state.enemy.hp <= 0))` で勝利判定。返値が `true` の場合は `winBattle()` のみ実行され `setTimeout(enemyTurn, 400)` に到達しない。
+- **デバッグボタン追加 (§81)**: `btn-debug-companion-kill-wilddog` — 仲間2人+のらいぬHP3。たたかうを押した後、仲間が撃破→勝利処理→敵ターンなし、のフローを1回で確認できる。
+
+### 設計判断
+
+- `winBattle()` や `finishBattle()` には手を入れない方針を維持した。`scheduleAfterPlayerAttack()` の返値ベース判定だけで「仲間が倒したケース」を完全にカバーできる。
+- `state.battleWon` フラグは追加しなかった。`winBattle()` → `showBattleEnd()` → `setBattleLocked(true)` の流れで UI ロックされるため、非同期タイマーが再発火しても `state.inBattle` ガードと返値チェックで二重発火は防止できる。
+- ボス撃退フラグ（`defeatedEnemies`）の設定タイミングは `finishBattle()`（OKボタン押下後）で変わらない。仲間が倒しても `winBattle()` → `showBattleEnd()` → OK押下 → `finishBattle()` の正規ルートを経由するため、フラグが入らないリスクはない。
+
 ## v0.26.1 (2026-07-12)
 
 ### 追加・変更

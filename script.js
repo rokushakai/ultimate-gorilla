@@ -3015,22 +3015,24 @@
     scheduleAfterPlayerAttack(); // §80 v0.27
   }
 
-  // §80 v0.27: プレイヤー攻撃後 → 仲間自動行動 → 敵ターン
+  // §80 v0.27 / §81 v0.27.1: プレイヤー攻撃後 → 仲間自動行動 → 敵ターン
+  // §81: runCompanionAutoActions() 返値を使って winBattle/enemyTurn を制御
   function scheduleAfterPlayerAttack() {
     setTimeout(function() {
       if (!state.inBattle) return;
-      runCompanionAutoActions();
+      var companionKilled = runCompanionAutoActions(); // §81 v0.27.1: 返値でHP0を判定
       if (!state.inBattle) return;
-      if (state.enemy && state.enemy.hp <= 0) { winBattle(); return; }
+      if (companionKilled || (state.enemy && state.enemy.hp <= 0)) { winBattle(); return; }
       setTimeout(enemyTurn, 400);
     }, 600);
   }
 
-  // §80 v0.27: 仲間の戦闘自動行動（プレイヤー攻撃後に発動）
+  // §80 v0.27 / §81 v0.27.1: 仲間の戦闘自動行動（プレイヤー攻撃後に発動）
+  // §81: 返値 true = 仲間攻撃で敵HP0、false = 敵生存 or スキップ
   function runCompanionAutoActions() {
     var p = state.player, e = state.enemy;
-    if (!state.inBattle || !e || e.hp <= 0) return;
-    if (e.final) return;
+    if (!state.inBattle || !e || e.hp <= 0) return false;
+    if (e.final) return false;
     var companions = p.companions;
     for (var ci = 0; ci < companions.length; ci++) {
       if (!state.inBattle || !e || e.hp <= 0) break;
@@ -3046,24 +3048,29 @@
           log("💪 ジュリタニの追撃！ " + e.name + "に" + dmgJ + "ダメージ！");
         }
         renderEnemy();
+        if (e.hp <= 0) { break; } // §81 v0.27.1: 敵HP0で即ループ離脱
       } else if (cid === "shurittani") {
         var dmgS = Math.min(5, 1 + Math.floor(p.level / 20));
         e.hp = Math.max(0, e.hp - dmgS);
         log("🪤 シュリタニが相手の動きを読んだ！ " + e.name + "に" + dmgS + "ダメージ！");
         log("なんだか捕まえやすくなった気がする。");
         renderEnemy();
+        if (e.hp <= 0) { break; } // §81 v0.27.1
       } else if (cid === "norio") {
         var dmgN = Math.min(15, 4 + Math.floor(p.level / 10));
         e.hp = Math.max(0, e.hp - dmgN);
         log("📈 ノリオ「経験値のために倒せ！」 " + e.name + "に" + dmgN + "ダメージ！");
         renderEnemy();
+        if (e.hp <= 0) { break; } // §81 v0.27.1
       } else if (cid === "harumi") {
         var dmgH = Math.min(18, 5 + Math.floor(p.level / 9));
         e.hp = Math.max(0, e.hp - dmgH);
         log("✨ ハルミが光を放った！ " + e.name + "に" + dmgH + "ダメージ！");
         renderEnemy();
+        if (e.hp <= 0) { break; } // §81 v0.27.1
       }
     }
+    return !!(e && e.hp <= 0); // §81 v0.27.1: true=仲間が敵を倒した
   }
 
   function openMagicMenu() {
@@ -5752,6 +5759,7 @@
       html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-kill-wilddog" style="border-color:#06d6a0;color:#06d6a0;">💀 仲間2人+のらいぬHP3（仲間撃破確認）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -6818,6 +6826,19 @@
         state.enemy.hp = 10;
         renderEnemy();
         showToast("[DEBUG] 仲間2人+究極ゴリラHP10。仲間が見守るか確認！");
+      };
+      // §81 v0.27.1: 仲間撃破確認テスト（のらいぬHP3）
+      document.getElementById("btn-debug-companion-kill-wilddog").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        state.enemy.hp = 3;
+        renderEnemy();
+        showToast("[DEBUG] のらいぬHP3。仲間が撃破→勝利処理→敵ターンなしを確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

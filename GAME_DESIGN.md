@@ -4304,6 +4304,24 @@ E  G  A  G  E  D  C（解決）
 
 **保護対象（変更なし）**: 仲間能力・加入/離脱処理・パーティ上限・戦闘・BGM・横スクロールマップ描画
 
+## §81 v0.27.1 — 仲間自動戦闘安定化 [実装済み]
+
+**`runCompanionAutoActions()` 返値**:
+- `false`: 早期リターン（非戦闘中 / 敵なし / 敵HP既に0 / `e.final`）
+- 各仲間の攻撃後: `if (e.hp <= 0) { break; }` で即ループ離脱（次仲間は行動しない）
+- ループ終了後: `return !!(e && e.hp <= 0)` — 仲間が倒したなら `true`
+
+**`scheduleAfterPlayerAttack()` 判定**:
+```
+var companionKilled = runCompanionAutoActions();
+if (!state.inBattle) return;
+if (companionKilled || (state.enemy && state.enemy.hp <= 0)) { winBattle(); return; }
+setTimeout(enemyTurn, 400);
+```
+返値 `true` の場合 `winBattle()` のみ実行。`enemyTurn()` は呼ばれない。
+
+**ボス撃退フラグ**: `winBattle()` → `showBattleEnd()` → OK押下 → `finishBattle()` の正規ルートで `defeatedEnemies[key] = true` が設定される。仲間が撃破しても同じルートを経由するため、フラグ・EXP・Gold は正常に1回ずつ処理される。
+
 ## §80 v0.27 — 仲間の戦闘自動参加 [実装済み]
 
 主人公の攻撃行動後に仲間が自動で1回ずつ行動する。仲間コマンド選択はなし。

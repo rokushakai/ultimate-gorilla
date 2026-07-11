@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.27** |
+| 現在バージョン | **v0.27.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,12 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.27.1] 仲間自動戦闘安定化**（§81）
+  - **`runCompanionAutoActions()` 返値**: `true` = 仲間が敵を倒した、`false` = 生存 or スキップ。
+  - **即ブレーク**: 各仲間の攻撃後に `if (e.hp <= 0) { break; }` を追加。次の仲間が不要に行動しない。
+  - **`scheduleAfterPlayerAttack()` 判定強化**: `var companionKilled = runCompanionAutoActions()` → `if (companionKilled || ...)` でより明示的な勝利判定。
+  - **敵ターン完全封鎖**: 返値 true の場合は `setTimeout(enemyTurn, 400)` に到達しない。
+  - **保護**: `finishBattle()` / `gainExp()` / `winBattle()` / BGM は変更なし。
 - **[v0.27] 仲間の戦闘自動参加**（§80）
   - **`scheduleAfterPlayerAttack()`**: プレイヤー攻撃後600ms→仲間自動行動→400ms→敵ターン。
   - **`runCompanionAutoActions()`**: 仲間を順番に自動行動。`e.final`（究極ゴリラ）時はスキップ。
