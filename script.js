@@ -3237,11 +3237,14 @@
       else if (playerHpPct >= 0.85) { specialChance = 0.25; } // HP十分 → 回復を控える
     }
 
-    // §87 v0.31: 前回行動記憶による補正（±0.10, 0〜1 にクランプ）
+    // §87 v0.31: 前回行動記憶による補正（±0.10）
     if (!state.lastCompanionAutoAction) { state.lastCompanionAutoAction = {}; }
     var lastAction = state.lastCompanionAutoAction[cid];
-    if (lastAction === "special")      { specialChance = Math.max(0, specialChance - 0.10); }
-    else if (lastAction === "attack")  { specialChance = Math.min(1, specialChance + 0.10); }
+    if (lastAction === "special")      { specialChance -= 0.10; }
+    else if (lastAction === "attack")  { specialChance += 0.10; }
+
+    // §88 v0.31.1: 全補正適用後に 0〜1 へ確定クランプ
+    specialChance = Math.max(0, Math.min(1, specialChance));
 
     // 行動選択 & 前回行動を記録
     var useSpecial = (Math.random() < specialChance);

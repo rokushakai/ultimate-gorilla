@@ -5,6 +5,16 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.31.1] - 2026-07-12 — まかせるAI安定化 (§88)
+
+### Changed
+- **`runCompanionAutoCommand(cid)`** (§88): 前回行動補正（±0.10）を加算した後に `specialChance = Math.max(0, Math.min(1, specialChance))` で確定クランプ。複数の補正が重なっても 0〜1 の範囲外にならないことを保証。
+
+### 確認済み（変更なし）
+- `clearCompanionCommandState()` は `finishBattle()` 経由の `winBattle()` / `loseOrEscape()` 両経路で必ず呼ばれる。
+- 古いセーブデータ向けの `if (!state.lastCompanionAutoAction)` ガードは v0.31 時点で実装済み。
+
+
 ## [0.31] - 2026-07-12 — 仲間AIの状況判断・まかせる改善 (§87)
 
 ### Added
