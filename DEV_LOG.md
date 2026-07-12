@@ -5,6 +5,21 @@
 
 ---
 
+## v0.29.1 (2026-07-12)
+
+### 追加・変更
+
+- **`runCompanionAutoCommand(cid)` 新設 (§85)**: まかせる専用の関数。`Math.random() < 0.5` で通常攻撃（`runSingleCompanionAction`）または固有コマンド（`runCompanionSpecialAction`）をランダム選択。選択前に `"🤝 [名前]にまかせた！ → [行動名]"` をログ出力し、ユーザーが何が起きたか分かるようにした。
+- **`executeCompanionCommand()` 変更 (§85)**: `mode === "auto"` を `runCompanionAutoCommand()` に委譲。以前は `runSingleCompanionAction()` を直呼びしていたため「まかせる」=「たたかう」の状態だった。
+
+### 設計判断
+
+- **50/50 均等確率を採用した理由**: 仲間別比率も検討したが、まず均等で安定させてから v0.30 でバランス調整する方が安全。
+- **ログを「まかせる→行動名」の1行にした理由**: 2行目で各行動の固有ログが続くため、先頭ログは短くても意図が分かる。ログが渋滞しにくい。
+- **`runCompanionAutoCommand` 内でも早期ガードを追加した理由**: `executeCompanionCommand` で既にチェックしているが、直接呼び出されるケースを考慮して二重に守る。
+
+---
+
 ## v0.29 (2026-07-12)
 
 ### 追加・変更

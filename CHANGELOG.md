@@ -5,6 +5,16 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.29.1] - 2026-07-12 — 「まかせる」ランダム行動化 (§85)
+
+### Added
+- **`runCompanionAutoCommand(cid)` 新設** (§85): まかせる専用関数。`Math.random() < 0.5` で `runSingleCompanionAction(cid)` または `runCompanionSpecialAction(cid)` をランダム選択。選択前にログ `"🤝 [名前]にまかせた！ → [行動名]"` を出力。返値は選択関数に依存（ハルミ固有コマンド選択時は常に false）。
+- **デバッグボタン追加** (§85): 「まかせるランダム確認（仲間4人+のらいぬ）」「まかせるランダム確認（中ボスHP50）」「ハルミまかせる回復確認（HP40%）」。
+
+### Changed
+- **`executeCompanionCommand(cid, mode)`** (§85): `mode === "auto"` の分岐を `runSingleCompanionAction()` → `runCompanionAutoCommand()` 呼び出しに変更。これにより「まかせる」が通常攻撃と固有コマンドのランダム選択になった。
+
+
 ## [0.29] - 2026-07-12 — 仲間固有コマンド拡張 (§84)
 
 ### Added

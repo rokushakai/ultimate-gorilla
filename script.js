@@ -3118,7 +3118,9 @@
     var killed;
     if (mode === "special") { // §84 v0.29: 固有コマンド
       killed = runCompanionSpecialAction(cid);
-    } else { // たたかう / まかせる 共通
+    } else if (mode === "auto") { // §85 v0.29.1: まかせる → ランダム行動
+      killed = runCompanionAutoCommand(cid);
+    } else { // たたかう
       killed = runSingleCompanionAction(cid);
     }
     state.companionCommandIndex++;
@@ -3199,6 +3201,27 @@
       return false;
     }
     return false;
+  }
+
+  // §85 v0.29.1: まかせる専用。通常攻撃 or 固有コマンドを 50/50 でランダム選択して実行。
+  // 返値: true = 敵HP0（ハルミの固有コマンド選択時は常に false）
+  function runCompanionAutoCommand(cid) {
+    if (!state.inBattle || !state.enemy || state.enemy.hp <= 0) return false;
+    var cData = findById(COMPANION_DATA, cid);
+    var name = cData ? cData.name : cid;
+    var useSpecial = (Math.random() < 0.5);
+    if (useSpecial) {
+      var specialName = "固有コマンド";
+      if (cid === "juritani")        { specialName = "会心の構え"; }
+      else if (cid === "shurittani") { specialName = "捕獲アシスト"; }
+      else if (cid === "norio")      { specialName = "経験値の眼"; }
+      else if (cid === "harumi")     { specialName = "小さな癒し"; }
+      log("🤝 " + name + "にまかせた！ → " + specialName);
+      return runCompanionSpecialAction(cid);
+    } else {
+      log("🤝 " + name + "にまかせた！ → たたかう");
+      return runSingleCompanionAction(cid);
+    }
   }
 
   // §80 v0.27 / §81 v0.27.1 / §82 v0.28: 全仲間を自動行動（runSingleCompanionAction に委譲）
@@ -5910,6 +5933,10 @@
       html += '<p class="small" style="color:#ffcc66;margin-top:8px;">⭐ 仲間固有コマンドテスト (§84 v0.29)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-special-all" style="border-color:#ffcc66;color:#ffcc66;">⭐ 固有コマンドテスト（仲間4人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-special-harumi" style="border-color:#aaffcc;color:#aaffcc;">✨ ハルミ回復確認（HP40%+のらいぬ）</button>';
+      html += '<p class="small" style="color:#ff9de2;margin-top:8px;">🎲 まかせるランダム確認 (§85 v0.29.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-all" style="border-color:#ff9de2;color:#ff9de2;">🎲 まかせるランダム確認（仲間4人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-midboss" style="border-color:#ff9de2;color:#ff9de2;">🎲 まかせるランダム確認（中ボスHP50）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-harumi" style="border-color:#aaffcc;color:#aaffcc;">✨ ハルミまかせる回復確認（HP40%）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7046,6 +7073,40 @@
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
         showToast("[DEBUG] ハルミのみ+HP40%。小さな癒しでHP回復を確認！");
+      };
+      // §85 v0.29.1: まかせるランダム確認テスト
+      document.getElementById("btn-debug-companion-auto-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人+のらいぬ。まかせるのランダムログを確認！");
+      };
+      document.getElementById("btn-debug-companion-auto-midboss").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var mb = findById(NON_UMA_DATA, "midboss_gorilla");
+        if (!mb) { showToast("[DEBUG] 中ボスゴリラが見つからない"); return; }
+        actuallyStartBattle(mb);
+        state.enemy.hp = 50;
+        renderEnemy();
+        showToast("[DEBUG] 仲間4人+中ボスHP50。複数ターンのまかせるを確認！");
+      };
+      document.getElementById("btn-debug-companion-auto-harumi").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.4));
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ハルミのみ+HP40%。まかせるで癒しが出るか確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.29** |
+| 現在バージョン | **v0.29.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.29.1] 「まかせる」ランダム行動化**（§85）
+  - **`runCompanionAutoCommand(cid)` 新設**: 50/50 でランダム行動選択。選択前に `"🤝 [名前]にまかせた！ → [行動名]"` をログ出力。
+  - **`executeCompanionCommand()` 変更**: `mode === "auto"` → `runCompanionAutoCommand()` に変更。
+  - **ハルミ維持**: 「小さな癒し」選択時も `return false` で敵ダメージなし・勝利チェックなし。
+  - **保護**: `runSingleCompanionAction()` / `runCompanionSpecialAction()` / UIロック / BGM は変更なし。
 - **[v0.29] 仲間固有コマンド拡張**（§84）
   - **仲間コマンドUI 3択化**: `[⚔️ たたかう] [固有コマンド]` / `[🤝 まかせる (全幅)]`。`grid-column:1/-1` でスマホ最適レイアウト。
   - **ジュリタニ「💥 会心の構え」**: 強めの物理攻撃（上限30）、35%で大会心×1.6倍。
