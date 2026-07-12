@@ -5,6 +5,27 @@
 
 ---
 
+## v0.36 (2026-07-12)
+
+### 追加・変更
+
+- **`runCompanionAutoCommand(cid)` を4択に拡張 (§97)**: 3択（wA / wS1 / wS2）から4択（wA / wS1 / wS2 / wM）に拡張。`wM` はまほうの重み。
+- **仲間別基本比率の再設定**: 旧 v0.33 の比率から仲間まほうの重みを割り当て直した。既存の比率（wA/wS1/wS2）を若干減らして wM 分を確保。
+- **前回行動記憶に `"magic"` 追加**: `state.lastCompanionAutoAction[cid]` が `"magic"` の場合 `wM -= 0.10` → 正規化。他の3択補正ロジックと同じ形式。
+- **ウェイト正規化を4択対応**: `total = wA + wS1 + wS2 + wM`。フォールバックも `wM = 0` を追加。
+- **行動選択を4択対応**: `roll < wA + wS1 + wS2` の後に `else { chosenAction = "magic"; }` を追加。
+- **magic 実行ブランチを追加**: `runCompanionMagicAction(cid)` を呼び出す。ログは既存2行形式と統一。
+
+### 設計判断
+
+- **`runCompanionMagicAction` は変更不要**: まかせるAIから呼んでも手動選択時と全く同じ動作をする。`updateBattlePlayerStatus()` は `runCompanionMagicAction` 内で呼ばれるので、まかせる経由でもHP色更新が機能する。
+- **ハルミ小さな回復はまかせるで winBattle に入らない**: `runCompanionMagicAction("harumi")` は常に `return false` → `executeCompanionCommand` の `if (killed || e.hp <= 0)` は false → 次の仲間or敵ターンへ。
+- **攻撃系まほうの勝利フロー**: `runCompanionMagicAction(cid)` が `true` 返値 → `runCompanionAutoCommand` が `true` 返値 → `executeCompanionCommand` の `killed = true` → `winBattle()` → 二重 enemyTurn なし。v0.35 と同じフロー。
+- **敵HP≤15 での magic 15%**: とどめを優先しつつも、まほう（攻撃系）でとどめを刺せる確率を残す。ハルミは 15% が小さな回復（回復のみ、winBattle に入らない）だが、敵HP≤15 なら次のターンに通常攻撃でも倒せる確率が高い。
+- **ハルミ+HP≤40% の小さな回復35%**: 固有1の「小さな癒し」（45%）と合わせて回復系合計80%。2種の回復を両方使えるのが4択の利点。旧3択では固有1にすべての回復を集中させていたが、分散することでバリエーションが増える。
+
+---
+
 ## v0.35.1 (2026-07-12)
 
 ### 追加・変更

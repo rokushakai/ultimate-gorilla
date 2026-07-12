@@ -3405,7 +3405,7 @@
     return false;
   }
 
-  // §85 v0.29.1 / §86 v0.30 / §87 v0.31 / §91 v0.33 / §92 v0.33.1: まかせる専用。3択ウェイト正規化 + 状況判断 + 前回行動記憶
+  // §85 v0.29.1 / §86 v0.30 / §87 v0.31 / §91 v0.33 / §92 v0.33.1 / §97 v0.36: まかせる専用。4択ウェイト正規化 + 状況判断 + 前回行動記憶
   // 返値: true = 敵HP0（ハルミの固有コマンド / 防御系コマンドは常に false）
   function runCompanionAutoCommand(cid) {
     if (!state.inBattle || !state.enemy || state.enemy.hp <= 0) return false;
@@ -3414,36 +3414,36 @@
     var cData = findById(COMPANION_DATA, cid);
     var name = cData ? cData.name : cid;
 
-    // §91 v0.33: 仲間別基本ウェイト（wAttack / wSpecial1 / wSpecial2）
-    var wA = 0.40, wS1 = 0.40, wS2 = 0.20; // デフォルト（未知cid用）
+    // §97 v0.36: 仲間別基本ウェイト（wA / wS1 / wS2 / wM）
+    var wA = 0.35, wS1 = 0.35, wS2 = 0.15, wM = 0.15; // デフォルト（未知cid用）
     if (cid === "juritani") {
-      wA = 0.35; wS1 = 0.45; wS2 = 0.20; // 会心の構え多め
+      wA = 0.30; wS1 = 0.35; wS2 = 0.15; wM = 0.20; // 攻撃・会心の構え多め
     } else if (cid === "shurittani") {
-      wA = 0.25; wS1 = 0.45; wS2 = 0.30; // 捕獲系多め
+      wA = 0.20; wS1 = 0.35; wS2 = 0.25; wM = 0.20; // 捕獲系多め
     } else if (cid === "norio") {
-      wA = 0.40; wS1 = 0.40; wS2 = 0.20; // バランス型
+      wA = 0.35; wS1 = 0.30; wS2 = 0.15; wM = 0.20; // バランス型
     } else if (cid === "harumi") {
-      wA = 0.25; wS1 = 0.50; wS2 = 0.25; // 回復役
+      wA = 0.20; wS1 = 0.35; wS2 = 0.20; wM = 0.25; // 回復・まほう寄り
     }
 
-    // §91 v0.33: 状況判断（優先順位: 敵HP低 > ハルミHP判断 > 基本ウェイト）
+    // §97 v0.36: 状況判断（優先順位: 敵HP低 > ハルミHP判断 > 基本ウェイト）
     var enemyHpLow = (e.hp <= 15);
     var playerHpPct = p.hp / p.maxHp;
     if (enemyHpLow) {
       // 敵HPが残りわずか → 攻撃優先でとどめを刺す、防御系・回復を減らす
-      if (cid === "juritani")        { wA = 0.50; wS1 = 0.45; wS2 = 0.05; }
-      else if (cid === "shurittani") { wA = 0.55; wS1 = 0.35; wS2 = 0.10; }
-      else if (cid === "norio")      { wA = 0.60; wS1 = 0.35; wS2 = 0.05; }
-      else if (cid === "harumi")     { wA = 0.80; wS1 = 0.05; wS2 = 0.15; }
+      if (cid === "juritani")        { wA = 0.45; wS1 = 0.35; wS2 = 0.05; wM = 0.15; }
+      else if (cid === "shurittani") { wA = 0.50; wS1 = 0.25; wS2 = 0.10; wM = 0.15; }
+      else if (cid === "norio")      { wA = 0.55; wS1 = 0.25; wS2 = 0.05; wM = 0.15; }
+      else if (cid === "harumi")     { wA = 0.70; wS1 = 0.05; wS2 = 0.10; wM = 0.15; }
     } else if (cid === "harumi") {
       if (playerHpPct <= 0.40) {
-        wA = 0.05; wS1 = 0.80; wS2 = 0.15; // HP低下 → 小さな癒し優先
+        wA = 0.05; wS1 = 0.45; wS2 = 0.15; wM = 0.35; // HP低下 → 小さな癒し・小さな回復優先
       } else if (playerHpPct >= 0.85) {
-        wA = 0.50; wS1 = 0.10; wS2 = 0.40; // HP満タン付近 → まもりの光サポート
+        wA = 0.45; wS1 = 0.05; wS2 = 0.35; wM = 0.15; // HP満タン付近 → まもりの光サポート
       }
     }
 
-    // §91 v0.33: 前回行動記憶による補正（-0.10 して正規化で自動配分）
+    // §97 v0.36: 前回行動記憶による補正（-0.10 して正規化で自動配分）
     if (!state.lastCompanionAutoAction) { state.lastCompanionAutoAction = {}; }
     var lastAction = state.lastCompanionAutoAction[cid];
     if (lastAction === "attack") {
@@ -3452,14 +3452,17 @@
       wS1 = Math.max(0, wS1 - 0.10);
     } else if (lastAction === "special2") {
       wS2 = Math.max(0, wS2 - 0.10);
+    } else if (lastAction === "magic") { // §97 v0.36: magic 追加
+      wM = Math.max(0, wM - 0.10);
     }
 
     // 正規化（合計が必ず 1.0 になるようにする）
-    var total = wA + wS1 + wS2;
-    if (total <= 0) { wA = 1; wS1 = 0; wS2 = 0; total = 1; }
+    var total = wA + wS1 + wS2 + wM;
+    if (total <= 0) { wA = 1; wS1 = 0; wS2 = 0; wM = 0; total = 1; }
     wA  /= total;
     wS1 /= total;
     wS2 /= total;
+    wM  /= total;
 
     // 行動選択
     var roll = Math.random();
@@ -3468,14 +3471,16 @@
       chosenAction = "attack";
     } else if (roll < wA + wS1) {
       chosenAction = "special1";
-    } else {
+    } else if (roll < wA + wS1 + wS2) {
       chosenAction = "special2";
+    } else {
+      chosenAction = "magic"; // §97 v0.36
     }
 
     // 前回行動を記録
     state.lastCompanionAutoAction[cid] = chosenAction;
 
-    // §92 v0.33.1: ログを2行に変更（まかせた宣言 + 選んだコマンド名）
+    // §92 v0.33.1 / §97 v0.36: ログを2行（まかせた宣言 + 選んだコマンド名）
     if (chosenAction === "attack") {
       log("🤝 " + name + "にまかせた！");
       log("たたかうを選んだ！");
@@ -3489,7 +3494,7 @@
       log("🤝 " + name + "にまかせた！");
       log(s1Name + "を選んだ！");
       return runCompanionSpecialAction(cid);
-    } else { // special2
+    } else if (chosenAction === "special2") {
       var s2Name = "固有コマンド2";
       if (cid === "juritani")        { s2Name = "かばう"; }
       else if (cid === "shurittani") { s2Name = "捕獲の網"; }
@@ -3498,6 +3503,15 @@
       log("🤝 " + name + "にまかせた！");
       log(s2Name + "を選んだ！");
       return runCompanionSpecialAction(cid, "second");
+    } else { // magic §97 v0.36
+      var mName = "まほう";
+      if (cid === "juritani")        { mName = "熱血エール"; }
+      else if (cid === "shurittani") { mName = "おちつきの霧"; }
+      else if (cid === "norio")      { mName = "観察メモ"; }
+      else if (cid === "harumi")     { mName = "小さな回復"; }
+      log("🤝 " + name + "にまかせた！");
+      log(mName + "を選んだ！");
+      return runCompanionMagicAction(cid);
     }
   }
 
@@ -6269,6 +6283,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-back" style="border-color:#86efac;color:#86efac;">✨ 仲間まほうUI戻る確認（仲間2人）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v351-magic-win" style="border-color:#fbbf24;color:#fbbf24;">✨ 仲間まほう勝利確認（敵HP5）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v351-magic-lock" style="border-color:#a78bfa;color:#a78bfa;">✨ まほうメニュー連打防止確認（仲間1人）</button>';
+      html += '<p class="small" style="color:#6ee7b7;margin-top:8px;">🎲 まかせるAI 4択確認 (§97 v0.36)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4" style="border-color:#6ee7b7;color:#6ee7b7;">🎲 まかせるAI 4択確認（仲間4人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4-harumi" style="border-color:#f9a8d4;color:#f9a8d4;">🎲 まかせるAI ハルミ回復確認（HP25%）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4-hplow" style="border-color:#fbbf24;color:#fbbf24;">🎲 まかせるAI 敵HP10確認（まほう混入）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7634,6 +7652,46 @@
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
         showToast("[DEBUG] ジュリタニ1人。まほうボタン連打・戻る連打で壊れないか確認！");
+      };
+      // §97 v0.36: まかせるAI 4択確認（仲間4人+のらいぬ）
+      document.getElementById("btn-debug-v36-auto4").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
+        state.lastCompanionAutoAction = {};
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人。まかせるで「まほう」も選ばれるか確認！");
+      };
+      // §97 v0.36: まかせるAI ハルミ回復確認（HP25%）
+      document.getElementById("btn-debug-v36-auto4-harumi").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25));
+        state.lastCompanionAutoAction = {};
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ハルミHP25%。まかせるで小さな癒し・小さな回復が選ばれやすいか確認！");
+      };
+      // §97 v0.36: まかせるAI 敵HP10確認（まほう混入）
+      document.getElementById("btn-debug-v36-auto4-hplow").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
+        state.lastCompanionAutoAction = {};
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        if (state.enemy) { state.enemy.hp = 10; renderEnemy(); }
+        showToast("[DEBUG] 仲間4人+敵HP10。まかせるで攻撃優先（まほうも少し選ばれる）か確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {
