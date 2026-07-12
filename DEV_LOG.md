@@ -5,6 +5,21 @@
 
 ---
 
+## v0.32.1 (2026-07-12)
+
+### 追加・変更
+
+- **`showCompanionSpecialMenu()` ボタン無効化 (§90)**: s1/s2/sback のクリック直後に `querySelectorAll("button").forEach(disabled=true)` で全ボタンを無効化してから `classList.add("hidden")`。クリックとメニュー消滅の間に別ボタンを押される可能性を排除。
+- **`actuallyStartBattle()` リセット追加 (§90)**: `finishBattle()` → `clearCompanionCommandState()` でリセットされるが、将来的に別の戦闘開始パスができた場合に備え、`state.battleDamageReduction = 0` を `actuallyStartBattle` 先頭にも追加。
+- **軽減ログ変更 (§90)**: 「🛡️ ダメージが軽減された！」は技術的すぎるため「🛡️ 守りの効果でダメージが少し減った！」に変更。
+
+### 設計判断
+
+- **なぜ `sback` も disable したか**: 「戻る」連打で `showCompanionCommandForIdx` が二重に呼ばれても実害はないが、UI の一貫性のため同じ disable パターンで統一した。`showCompanionCommandForIdx` 内で `companionCommandLocked = false` が再設定されるので、戻る後のコマンド選択には影響しない。
+- **`clearCompanionCommandState` は既に完全だった**: v0.32 時点で companionCommandQueue/Index/Active/Locked/lastCompanionAutoAction/battleDamageReduction/companion-command-menu/companion-special-menu の8項目全てがクリアされており、v0.32.1 での追加変更は不要だった。
+
+---
+
 ## v0.32 (2026-07-12)
 
 ### 追加・変更

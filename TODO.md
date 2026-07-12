@@ -22,6 +22,13 @@
 
 ## ✅ 実装済み
 
+### Version 0.32.1 — 2つ目固有コマンド安定化 (§90)
+
+- **`showCompanionSpecialMenu()` 改善**: s1/s2/sback クリック直後に全ボタンを `disabled=true` ✅
+- **`actuallyStartBattle()` 更新**: `state.battleDamageReduction = 0` を追加（二重安全） ✅
+- **敵攻撃ログ改善**: 軽減発動時のログを「守りの効果でダメージが少し減った！」に変更 ✅
+- **確認済み**: clearCompanionCommandState / 戻る動作 / 究極ゴリラ戦 / 捕獲率 / gainExp ✅
+
 ### Version 0.32 — 仲間2つ目の固有コマンド追加 (§89)
 
 - **固有コマンドサブメニュー追加**: 「⭐ 固有」押下で2択+戻るのサブメニューを表示 ✅

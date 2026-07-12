@@ -2854,6 +2854,7 @@
     playSE("battleStart");
     updateBGM("battle");
     state.inBattle = true;
+    state.battleDamageReduction = 0; // §90 v0.32.1: 念のため戦闘開始時にもリセット
     state.enemy = {
       id: monster.id,
       name: monster.name,
@@ -3123,15 +3124,22 @@
     csMenu.classList.remove("hidden");
     document.getElementById("companion-command-menu").classList.add("hidden");
     document.getElementById("btn-companion-s1").onclick = function() {
-      document.getElementById("companion-special-menu").classList.add("hidden");
+      // §90 v0.32.1: 押下直後に全ボタンを disable して二重実行を確実に防ぐ
+      var _cs = document.getElementById("companion-special-menu");
+      _cs.querySelectorAll("button").forEach(function(b) { b.disabled = true; });
+      _cs.classList.add("hidden");
       executeCompanionCommand(cid, "special");
     };
     document.getElementById("btn-companion-s2").onclick = function() {
-      document.getElementById("companion-special-menu").classList.add("hidden");
+      var _cs = document.getElementById("companion-special-menu");
+      _cs.querySelectorAll("button").forEach(function(b) { b.disabled = true; });
+      _cs.classList.add("hidden");
       executeCompanionCommand(cid, "special2");
     };
     document.getElementById("btn-companion-sback").onclick = function() {
-      document.getElementById("companion-special-menu").classList.add("hidden");
+      var _cs = document.getElementById("companion-special-menu");
+      _cs.querySelectorAll("button").forEach(function(b) { b.disabled = true; });
+      _cs.classList.add("hidden");
       showCompanionCommandForIdx(state.companionCommandIndex);
     };
   }
@@ -3891,9 +3899,10 @@
     } else {
       dmg = Math.max(1, e.atk + randInt(0, 2) - p.def);
       // §89 v0.32: ダメージ軽減（かばう / まもりの光）— 究極ゴリラ戦には適用しない
+      // §90 v0.32.1: ログを分かりやすく変更
       if (state.battleDamageReduction) {
         dmg = Math.max(1, Math.floor(dmg * (1 - state.battleDamageReduction)));
-        log("🛡️ ダメージが軽減された！");
+        log("🛡️ 守りの効果でダメージが少し減った！");
         state.battleDamageReduction = 0;
       }
     }

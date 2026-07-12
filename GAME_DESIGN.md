@@ -4597,6 +4597,37 @@ v0.31 で追加した「まかせる」AI の安定化パッチ。
 
 ---
 
+---
+
+## §90 v0.32.1 — 2つ目固有コマンド安定化 [実装済み]
+
+v0.32 で追加した固有コマンド選択サブメニューと `battleDamageReduction` の安定化パッチ。
+
+**変更点**:
+
+- **`showCompanionSpecialMenu(cid)` 改善**: s1/s2/sback のクリック直後に全ボタンを `disabled=true` にする。
+  `companionCommandLocked` による二重実行防止に加え、ボタン無効化で確実にガード。
+- **`actuallyStartBattle()` に `battleDamageReduction` リセット追加**: 戦闘開始時に
+  `state.battleDamageReduction = 0;` をリセット。`clearCompanionCommandState()` の
+  `finishBattle` 経由でもリセットされるが、万一のパスに備えた二重安全。
+- **敵攻撃ログを改善**: 軽減発動時のログを
+  「🛡️ ダメージが軽減された！」→「守りの効果でダメージが少し減った！」に変更。
+  軽減量をパーセントで表示（例: 「（20% 軽減）」）は入れない。簡潔に1行のみ。
+
+**確認済み（変更なし）**:
+
+- `clearCompanionCommandState()` は companionCommandQueue / Index / Active / Locked /
+  lastCompanionAutoAction / battleDamageReduction / companion-command-menu / companion-special-menu を
+  全てクリアする（v0.32 時点で実装済み）。
+- 「戻る」クリック → `showCompanionCommandForIdx(state.companionCommandIndex)` → `companionCommandLocked = false` のパスが正常に動作。
+- 究極ゴリラ戦では仲間コマンドが出ないため `battleDamageReduction` は設定されない。
+- 捕獲率/`gainExp()` は変更なし。
+- まかせるAIは1つ目の固有コマンドのみ（2つ目は混入しない）。
+
+**変更しないもの**: 固有コマンドの効果・ダメージ値・比率（v0.32 のまま維持）。
+
+---
+
 ## 将来の実装候補（v0.33〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.33 候補 — まかせるAIに2つ目固有コマンド追加・戦闘UI改善 [未実装・将来機能]

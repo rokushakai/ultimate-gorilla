@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.32** |
+| 現在バージョン | **v0.32.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.32.1] 2つ目固有コマンド安定化**（§90）
+  - **`showCompanionSpecialMenu` 改善**: s1/s2/sback 押下直後に全ボタン `disabled=true`（二重実行確実防止）
+  - **`actuallyStartBattle` 更新**: `battleDamageReduction = 0` を先頭に追加（戦闘開始時リセット）
+  - **軽減ログ改善**: 「守りの効果でダメージが少し減った！」に変更
+  - **確認済み**: clearCompanionCommandState / 戻る動作 / 究極ゴリラ戦 / 捕獲率 / gainExp
 - **[v0.32] 仲間2つ目の固有コマンド追加**（§89）
   - **`#companion-special-menu`**: 固有コマンド選択サブメニュー（1つ目 / 2つ目 / 戻る）
   - **`showCompanionSpecialMenu(cid)`**: サブメニューを表示する関数

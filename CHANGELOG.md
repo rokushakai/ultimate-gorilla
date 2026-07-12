@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.32.1] - 2026-07-12 — 2つ目固有コマンド安定化 (§90)
+
+### Changed
+- **`showCompanionSpecialMenu(cid)`** (§90): s1/s2/sback ボタンのクリック直後に `querySelectorAll("button").forEach disabled=true` で全ボタンを無効化。`companion-special-menu` の hide と合わせて二重実行を確実にガード。
+- **`actuallyStartBattle(monster)`** (§90): `state.battleDamageReduction = 0` を先頭に追加。`clearCompanionCommandState()` 経由のリセットに加え、戦闘開始時にも確実にゼロ化。
+- **`enemyTurn()` 軽減ログ** (§90): 「🛡️ ダメージが軽減された！」→「🛡️ 守りの効果でダメージが少し減った！」に変更。
+
+### 確認済み（変更なし）
+- `clearCompanionCommandState()` が companionCommandQueue/Index/Active/Locked/lastCompanionAutoAction/battleDamageReduction/companion-command-menu/companion-special-menu を全クリアすることを確認。
+- 「戻る」→ `showCompanionCommandForIdx` → `companionCommandLocked = false` のパスが正常に動作。
+- 究極ゴリラ戦では `e.final` ガードで仲間コマンドが出ず、`battleDamageReduction` も発動しない。
+- 捕獲率本体/`gainExp()` は変更なし。
+- まかせるAIへの2つ目固有コマンド混入なし。
+
+
 ## [0.32] - 2026-07-12 — 仲間2つ目の固有コマンド追加 (§89)
 
 ### Added
