@@ -3239,9 +3239,10 @@
     var p = state.player, e = state.enemy;
     if (!state.inBattle || !e) return false;
     if (cid === "juritani") {
-      // 🔥 熱血エール: 敵に 5〜12 ダメージ
+      // 🔥 熱血エール: §101 v0.38: 成長ボーナス加算（5〜12 + growthBonus）
       if (e.hp <= 0) return false;
-      var dmgJ = 5 + Math.floor(Math.random() * 8);
+      var growthJ = getCompanionGrowthBonus("juritani");
+      var dmgJ = 5 + Math.floor(Math.random() * 8) + growthJ;
       e.hp = Math.max(0, e.hp - dmgJ);
       log("🔥 ジュリタニの熱血エール！");
       log("気合いの声が相手に響いた！");
@@ -3249,9 +3250,10 @@
       renderEnemy();
       return e.hp <= 0;
     } else if (cid === "shurittani") {
-      // 🫧 おちつきの霧: 敵に 1〜3 微ダメージ + 捕獲フレーバー（捕獲率本体は変更しない）
+      // 🫧 おちつきの霧: §101 v0.38: 成長ボーナス加算。捕獲率本体は変更しない
       if (e.hp <= 0) return false;
-      var dmgS = 1 + Math.floor(Math.random() * 3);
+      var growthS = getCompanionGrowthBonus("shurittani");
+      var dmgS = 1 + Math.floor(Math.random() * 3) + growthS;
       e.hp = Math.max(0, e.hp - dmgS);
       log("🫧 シュリタニのおちつきの霧！");
       log("相手の動きが少しゆるんだ！");
@@ -3259,9 +3261,10 @@
       renderEnemy();
       return e.hp <= 0;
     } else if (cid === "norio") {
-      // 🔍 観察メモ: 敵に 3〜7 小ダメージ + EXPフレーバー（gainExpは変更しない）
+      // 🔍 観察メモ: §101 v0.38: 成長ボーナス加算。gainExpは変更しない
       if (e.hp <= 0) return false;
-      var dmgN = 3 + Math.floor(Math.random() * 5);
+      var growthN = getCompanionGrowthBonus("norio");
+      var dmgN = 3 + Math.floor(Math.random() * 5) + growthN;
       e.hp = Math.max(0, e.hp - dmgN);
       log("🔍 ノリオの観察メモ！");
       log("相手のクセを記録した！");
@@ -3269,13 +3272,14 @@
       renderEnemy();
       return e.hp <= 0;
     } else if (cid === "harumi") {
-      // ✨ 小さな回復: 主人公HP 15〜25 回復。敵ダメージなし。常に false を返す。
+      // ✨ 小さな回復: §101 v0.38: 回復量に成長ボーナス加算。maxHpでクランプ。常に false を返す
       log("✨ ハルミの小さな回復！");
       if (p.hp >= p.maxHp) {
         log("しかし、HPはすでに満タンだ。");
         return false;
       }
-      var heal = 15 + Math.floor(Math.random() * 11);
+      var growthH = getCompanionGrowthBonus("harumi");
+      var heal = 15 + Math.floor(Math.random() * 11) + growthH;
       var before = p.hp;
       p.hp = Math.min(p.maxHp, p.hp + heal);
       var actual = p.hp - before;
@@ -3292,7 +3296,9 @@
     var p = state.player, e = state.enemy;
     if (!state.inBattle || !e || e.hp <= 0) return false;
     if (cid === "juritani") {
-      var dmgJ = Math.min(20, 5 + Math.floor(p.level / 8));
+      // §101 v0.38: 成長ボーナス加算（旧cap20 → 新cap30）
+      var growthJ = getCompanionGrowthBonus("juritani");
+      var dmgJ = Math.min(30, Math.min(20, 5 + Math.floor(p.level / 8)) + growthJ);
       var isCritJ = Math.random() < 0.25;
       if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.5); }
       e.hp = Math.max(0, e.hp - dmgJ);
@@ -3300,15 +3306,20 @@
         ? "💪 ジュリタニの追撃！ 💥 会心！ " + e.name + "に" + dmgJ + "ダメージ！"
         : "💪 ジュリタニの追撃！ " + e.name + "に" + dmgJ + "ダメージ！");
     } else if (cid === "shurittani") {
-      var dmgS = Math.min(5, 1 + Math.floor(p.level / 20));
+      // §101 v0.38: 成長ボーナス加算（旧cap5 → 新cap10）
+      var growthS = getCompanionGrowthBonus("shurittani");
+      var dmgS = Math.min(10, Math.min(5, 1 + Math.floor(p.level / 20)) + growthS);
       e.hp = Math.max(0, e.hp - dmgS);
       log("🪤 シュリタニが相手の動きを読んだ！ " + e.name + "に" + dmgS + "ダメージ！");
       log("なんだか捕まえやすくなった気がする。");
     } else if (cid === "norio") {
-      var dmgN = Math.min(15, 4 + Math.floor(p.level / 10));
+      // §101 v0.38: 成長ボーナス加算（旧cap15 → 新cap20）
+      var growthN = getCompanionGrowthBonus("norio");
+      var dmgN = Math.min(20, Math.min(15, 4 + Math.floor(p.level / 10)) + growthN);
       e.hp = Math.max(0, e.hp - dmgN);
       log("📈 ノリオ「経験値のために倒せ！」 " + e.name + "に" + dmgN + "ダメージ！");
     } else if (cid === "harumi") {
+      // §101 v0.38: ハルミ通常攻撃に成長ボーナスなし（回復量のみ成長）
       var dmgH = Math.min(18, 5 + Math.floor(p.level / 9));
       e.hp = Math.max(0, e.hp - dmgH);
       log("✨ ハルミが光を放った！ " + e.name + "に" + dmgH + "ダメージ！");
@@ -3326,30 +3337,32 @@
     // §89 v0.32: 2つ目の固有コマンド
     if (specialId === "second") {
       if (cid === "juritani") {
-        // 🛡️ かばう: 次の敵攻撃を20%軽減
+        // 🛡️ かばう: 次の敵攻撃を20%軽減（§101 v0.38: 軽減率変更なし）
         state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.20);
         log("🛡️ ジュリタニが前に出た！");
         log("次のダメージを少し受け止めてくれる！");
         updateBattleStatusBadges(); // §93 v0.34
         return false;
       } else if (cid === "shurittani") {
-        // 🕸️ 捕獲の網: Lv連動2〜4の微ダメージ
-        var dmgSN = Math.min(4, 2 + Math.floor(p.level / 40));
+        // 🕸️ 捕獲の網: §101 v0.38: 成長ボーナス加算（旧cap4 → 新cap9）
+        var growthSN = getCompanionGrowthBonus("shurittani");
+        var dmgSN = Math.min(9, Math.min(4, 2 + Math.floor(p.level / 40)) + growthSN);
         e.hp = Math.max(0, e.hp - dmgSN);
         log("🕸️ シュリタニが捕獲の網を広げた！");
         log("相手の動きが少し鈍った！ " + e.name + "に" + dmgSN + "ダメージ！");
         renderEnemy();
         return !!(e.hp <= 0);
       } else if (cid === "norio") {
-        // 📝 経験値メモ: Lv連動4〜8の小ダメージ
-        var dmgNM = Math.min(8, 4 + Math.floor(p.level / 20));
+        // 📝 経験値メモ: §101 v0.38: 成長ボーナス加算（旧cap8 → 新cap13）
+        var growthNM = getCompanionGrowthBonus("norio");
+        var dmgNM = Math.min(13, Math.min(8, 4 + Math.floor(p.level / 20)) + growthNM);
         e.hp = Math.max(0, e.hp - dmgNM);
         log("📝 ノリオが経験値メモを取り始めた！");
         log("この戦い、あとで振り返れそうだ！ " + e.name + "に" + dmgNM + "ダメージ！");
         renderEnemy();
         return !!(e.hp <= 0);
       } else if (cid === "harumi") {
-        // 🛡️ まもりの光: 次の敵攻撃を25%軽減
+        // 🛡️ まもりの光: 次の敵攻撃を25%軽減（§101 v0.38: 軽減率変更なし）
         state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.25);
         log("🛡️ ハルミがまもりの光を灯した！");
         log("次に受けるダメージが少し減りそうだ！");
@@ -3359,10 +3372,12 @@
       return false;
     }
 
-    // 1つ目の固有コマンド（既存）
+    // 1つ目の固有コマンド
     if (cid === "juritani") {
-      // §86 v0.30: 会心の構え: 上限28、会心率30%（35%→30%）、倍率1.6維持
-      var dmgJ = Math.min(28, 8 + Math.floor(p.level / 7));
+      // §86 v0.30: 会心の構え: 会心率30%、倍率1.6維持
+      // §101 v0.38: 成長ボーナス加算（旧cap28 → 新cap38）
+      var growthJ = getCompanionGrowthBonus("juritani");
+      var dmgJ = Math.min(38, Math.min(28, 8 + Math.floor(p.level / 7)) + growthJ);
       var isCritJ = Math.random() < 0.30;
       if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.6); }
       e.hp = Math.max(0, e.hp - dmgJ);
@@ -3373,24 +3388,30 @@
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "shurittani") {
-      // §86 v0.30: 捕獲アシスト: Lv連動1〜3ダメージ（固定1→1〜3）、ログ整理
-      var dmgS = Math.min(3, 1 + Math.floor(p.level / 30));
+      // §86 v0.30: 捕獲アシスト: 捕獲率変更なし
+      // §101 v0.38: 成長ボーナス加算（旧cap3 → 新cap8）
+      var growthS = getCompanionGrowthBonus("shurittani");
+      var dmgS = Math.min(8, Math.min(3, 1 + Math.floor(p.level / 30)) + growthS);
       e.hp = Math.max(0, e.hp - dmgS);
       log("🪤 シュリタニの捕獲アシスト！");
       log("捕まえやすい間合いを作った！ " + e.name + "に" + dmgS + "ダメージ！");
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "norio") {
-      // §86 v0.30: 経験値の眼: 上限12（10→12）、ログ整理
-      var dmgN = Math.min(12, 3 + Math.floor(p.level / 12));
+      // §86 v0.30: 経験値の眼
+      // §101 v0.38: 成長ボーナス加算（旧cap12 → 新cap17）
+      var growthN = getCompanionGrowthBonus("norio");
+      var dmgN = Math.min(17, Math.min(12, 3 + Math.floor(p.level / 12)) + growthN);
       e.hp = Math.max(0, e.hp - dmgN);
       log("📈 ノリオの経験値の眼！");
       log("この戦い、学びが多そうだ！ " + e.name + "に" + dmgN + "ダメージ！");
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "harumi") {
-      // §86 v0.30: 小さな癒し: 上限25（30→25）、HP満タン時に専用メッセージ
-      var heal = Math.min(25, 10 + Math.floor(p.level / 10));
+      // §86 v0.30: 小さな癒し（HP満タン時に専用メッセージ）
+      // §101 v0.38: 回復量に成長ボーナス加算（旧cap25 → 新cap35、maxHpでクランプ）
+      var growthH = getCompanionGrowthBonus("harumi");
+      var heal = Math.min(35, Math.min(25, 10 + Math.floor(p.level / 10)) + growthH);
       var before = p.hp;
       p.hp = Math.min(p.maxHp, p.hp + heal);
       var actual = p.hp - before;
@@ -4223,6 +4244,28 @@
     });
   }
 
+  // §101 v0.38: 仲間の成長段階を取得（Lvに応じた0〜5のティア）
+  function getCompanionGrowthTier(cid) {
+    var cl = getCompanionLevel(cid);
+    var lv = cl.level;
+    if (lv >= 99) return 5;
+    if (lv >= 75) return 4;
+    if (lv >= 50) return 3;
+    if (lv >= 25) return 2;
+    if (lv >= 10) return 1;
+    return 0;
+  }
+
+  // §101 v0.38: 仲間の成長ボーナスを取得（攻撃ダメージ加算値 or 回復加算値）
+  function getCompanionGrowthBonus(cid) {
+    var tier = getCompanionGrowthTier(cid);
+    if (cid === "juritani")   return tier * 2; // 攻撃+2/段階, 最大+10
+    if (cid === "shurittani") return tier * 1; // ダメージ+1/段階, 最大+5
+    if (cid === "norio")      return tier * 1; // ダメージ+1/段階, 最大+5
+    if (cid === "harumi")     return tier * 2; // 回復+2/段階, 最大+10
+    return 0;
+  }
+
   function addExp(amount) {
     var p = state.player;
     p.exp += amount;
@@ -4951,7 +4994,7 @@
         '<span style="color:' + (got ? "#ffd166" : "#888") + ';font-size:0.85em;">' +
         (got ? "★ 入手済" : "未入手") + "</span></div>";
     });
-    // §99 v0.37: 全仲間のLv/EXP表示（パーティ外も含む）
+    // §99 v0.37 / §101 v0.38: 全仲間のLv/EXP/成長効果表示（パーティ外も含む）
     html += "<h3>仲間</h3>";
     COMPANION_DATA.forEach(function (cd) {
       var cl = getCompanionLevel(cd.id);
@@ -4963,7 +5006,22 @@
         '<span style="font-size:0.82em;color:' + statusColor + ';">' + statusLabel + '</span></div>';
       html += '<div class="shop-row" style="font-size:0.8em;">' +
         '<span style="color:#888;padding-left:12px;">EXP</span>' +
-        '<span style="color:#a0cfff;">' + (cl.level >= 99 ? "MAX" : cl.exp + " / " + cl.nextExp) + '</span></div>'; // §100 v0.37.1: Lv99時MAX表示
+        '<span style="color:#a0cfff;">' + (cl.level >= 99 ? "MAX" : cl.exp + " / " + cl.nextExp) + '</span></div>'; // §100 v0.37.1
+      // §101 v0.38: 成長効果表示
+      var growthTier = getCompanionGrowthTier(cd.id);
+      var growthBonus = getCompanionGrowthBonus(cd.id);
+      var growthType = (cd.id === "harumi") ? "回復+" : "攻撃+";
+      var growthLabel;
+      if (growthTier === 0) {
+        growthLabel = "基本状態 (Lv1〜9)";
+      } else if (growthTier >= 5) {
+        growthLabel = "🌟 " + growthType + growthBonus + " (最大)";
+      } else {
+        growthLabel = growthType + growthBonus + " (段階" + growthTier + ")";
+      }
+      html += '<div class="shop-row" style="font-size:0.8em;">' +
+        '<span style="color:#888;padding-left:12px;">成長効果</span>' +
+        '<span style="color:#e9c46a;">' + growthLabel + '</span></div>';
     });
 
     // §47 v0.9.3 / §48 v0.10 / §50 v0.11 / §55 v0.12: 横スクロール進捗
@@ -6361,6 +6419,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-companion-lv1" style="border-color:#adb5bd;color:#adb5bd;">👥 仲間Lv1・EXP0に戻す（4人全員）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-multilv" style="border-color:#74c0fc;color:#74c0fc;">👥 複数Lvアップ確認（Lv1+EXP500付与）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-expcheck" style="border-color:#06d6a0;color:#06d6a0;">👥 パーティ仲間だけEXP確認（2人+2人待機）</button>';
+      html += '<p class="small" style="color:#e9c46a;margin-top:4px;">⚔️ 仲間成長システム確認 (§101 v0.38)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-growth-harumi-lv1" style="border-color:#e9c46a;color:#e9c46a;">✨ ハルミ回復成長確認（HP25%+ハルミLv1）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-growth-harumi-lv99" style="border-color:#ffd700;color:#ffd700;">✨ ハルミ回復成長確認（HP25%+ハルミLv99）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7840,6 +7901,27 @@
         gainCompanionExp(30);
         saveGame();
         showToast("[DEBUG] パーティ:ジュリ+ハルミ、待機:シュリ+ノリオ。EXP30付与→パーティのみLvアップをログで確認");
+        renderSettingsBody();
+      };
+      // §101 v0.38: 仲間成長確認ボタン
+      document.getElementById("btn-debug-growth-harumi-lv1").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("harumi");
+        cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25));
+        saveGame();
+        showToast("[DEBUG] ハルミLv1+HP25%。戦闘→小さな癒し/小さな回復で回復量を確認（Lv1:ボーナス0）");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-growth-harumi-lv99").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("harumi");
+        cl.level = 99; cl.exp = 0; cl.nextExp = 99 * 10 + 15;
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25));
+        saveGame();
+        showToast("[DEBUG] ハルミLv99+HP25%。戦闘→小さな癒し/小さな回復で回復量を確認（Lv99:回復+10）");
         renderSettingsBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
