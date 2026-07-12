@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.36.1] - 2026-07-12 — まかせるAI 4択安定化 (§98)
+
+### Changed
+- 実際のコード変更なし（v0.36 の動作が検証で全8項目パス）。
+
+### Added
+- **デバッグボタン2本追加** (§98): 「🎲 まかせるAI 魔法名ログ確認（仲間4人・前回記憶クリア）」「🎲 まかせるAI 攻撃魔法勝利確認（ジュリ/シュリ/ノリオ+敵HP5）」。
+
+### 確認済み（安定性検証）
+- **まほうログ形式**: `"🤝 名前にまかせた！"` + `"まほう名を選んだ！"` の2行形式が正しく動作。
+- **ウェイト正規化**: 全パス（基本 / 敵HP低下 / ハルミHP低下 / ハルミHP高め）で `total = wA + wS1 + wS2 + wM` → 正規化確認。
+- **前回行動記憶 `"magic"`**: `-0.10` ペナルティ → 正規化後に他択へ配分。次ターンに同じまほうが選ばれにくい。
+- **ハルミ低HP**: 固有回復（小さな癒し45%）+ まほう回復（小さな回復35%）合計80% 回復系。
+- **ハルミ高HP**: たたかう45% / まもりの光35% / 回復系20%以下でHP無駄遣いなし。
+- **攻撃系まほう勝利**: `runCompanionMagicAction` 返値 `true` → `runCompanionAutoCommand` 返値 `true` → `executeCompanionCommand` → `winBattle()` フロー正常。`enemyTurn()` 二重予約なし。
+- **ハルミ小さな回復（まかせる時）**: 常に `false` 返値 → winBattle に入らない。`updateBattlePlayerStatus()` は `runCompanionMagicAction` 内で呼ばれる。
+- **手動まほうUI**: `showCompanionMagicMenu` / `executeCompanionCommand("magic")` は変更なし。
+
+
 ## [0.36] - 2026-07-12 — まかせるAIに仲間まほうを混ぜる (§97)
 
 ### Changed

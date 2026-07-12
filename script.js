@@ -6287,6 +6287,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4" style="border-color:#6ee7b7;color:#6ee7b7;">🎲 まかせるAI 4択確認（仲間4人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4-harumi" style="border-color:#f9a8d4;color:#f9a8d4;">🎲 まかせるAI ハルミ回復確認（HP25%）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v36-auto4-hplow" style="border-color:#fbbf24;color:#fbbf24;">🎲 まかせるAI 敵HP10確認（まほう混入）</button>';
+      html += '<p class="small" style="color:#6ee7b7;margin-top:4px;">🎲 まかせるAI 4択安定化確認 (§98 v0.36.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v361-magic-log" style="border-color:#86efac;color:#86efac;">🎲 まかせるAI 魔法名ログ確認（仲間4人・前回記憶クリア）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v361-magic-win" style="border-color:#fbbf24;color:#fbbf24;">🎲 まかせるAI 攻撃魔法勝利確認（ジュリ/シュリ/ノリオ+敵HP5）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7692,6 +7695,33 @@
         actuallyStartBattle(dog);
         if (state.enemy) { state.enemy.hp = 10; renderEnemy(); }
         showToast("[DEBUG] 仲間4人+敵HP10。まかせるで攻撃優先（まほうも少し選ばれる）か確認！");
+      };
+      // §98 v0.36.1: まかせるAI 魔法名ログ確認
+      document.getElementById("btn-debug-v361-magic-log").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
+        state.lastCompanionAutoAction = {};
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人+前回記憶クリア。まかせるでまほうが選ばれた時に魔法名がログに出るか確認！");
+      };
+      // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
+      document.getElementById("btn-debug-v361-magic-win").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio"];
+        state.player.hp = state.player.maxHp;
+        state.lastCompanionAutoAction = {};
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        if (state.enemy) { state.enemy.hp = 5; renderEnemy(); }
+        showToast("[DEBUG] ジュリ/シュリ/ノリオ+敵HP5。まかせるの攻撃魔法でHP0→winBattle()を確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {
