@@ -22,6 +22,25 @@
 
 ## ✅ 実装済み
 
+### Version 0.38.1 — 仲間Lv能力成長安定化 (§102)
+
+- 成長段階境界値確認: Lv9→10 / 24→25 / 49→50 / 74→75 / 98→99 ✅
+- 二重適用なし確認: runCompanionAutoCommand()に追加適用なし ✅
+- 手動/まかせるAI同一値: 行動関数共用で構造上一致 ✅
+- ハルミ最大HP超過なし確認 ✅
+- 捕獲率・EXP2倍・軽減率・AI比率変更なし確認 ✅
+- セーブ互換確認: growthTier/growthBonusはLvから毎回計算 ✅
+
+### Version 0.38 — 仲間Lvによる能力成長 (§101)
+
+- **`getCompanionGrowthTier(cid)`**: Lv→Tier 0〜5 変換関数 ✅
+- **`getCompanionGrowthBonus(cid)`**: Tier→成長ボーナス変換関数 ✅
+- **`runSingleCompanionAction` 更新**: ジュリタニ/シュリタニ/ノリオに成長ボーナス加算。ハルミ通常攻撃はなし ✅
+- **`runCompanionSpecialAction` 更新**: 固有1・固有2に成長ボーナス加算。かばう・まもりの光の軽減率変更なし ✅
+- **`runCompanionMagicAction` 更新**: 攻撃まほう3種+ハルミ回復まほうに成長ボーナス加算 ✅
+- **ステータス画面「成長効果」行追加**: 全4仲間に Tier別表示 ✅
+- **デバッグボタン2本追加**: ハルミ回復成長確認 Lv1/Lv99 ✅
+
 ### Version 0.37.1 — 仲間成長システム安定化 (§100)
 
 - **`getCompanionLevel` データガード**: level(1〜99)/exp(0以上)/nextExp(正の数) の安全化 ✅

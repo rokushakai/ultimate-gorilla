@@ -5,6 +5,41 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.38.1] - 2026-07-12 — 仲間Lv能力成長安定化 (§102)
+
+### 確認済み（変更なし）
+- 成長段階の境界値: Lv9→10 / 24→25 / 49→50 / 74→75 / 98→99 が正しく動作。
+- 二重適用なし: 成長ボーナスは各行動関数（`runSingleCompanionAction` / `runCompanionSpecialAction` / `runCompanionMagicAction`）側のみ適用。`runCompanionAutoCommand()` 側に追加適用なし。
+- 手動行動とまかせるAIが同じ成長値（行動関数共用のため構造上一致）。
+- ジュリタニ会心率30% / 倍率1.6 / かばう20% 変更なし。
+- シュリタニ捕獲率変更なし（`attemptCapture()` / `captureRateBase` 未変更）。
+- ノリオ EXP2倍変更なし（`gainExp()` / `expMod:2` 未変更）。
+- ハルミ最大HP超過なし（`Math.min(p.maxHp, ...)` でクランプ済み）。
+- ハルミHP満タンメッセージ維持。
+- まかせるAI4択ウェイト変更なし。
+- `gainExp()` / BGM / セーブデータ構造変更なし。
+- 成長段階・ボーナスはLvから毎回計算（永続保存しない → 旧セーブ互換）。
+
+
+## [0.38] - 2026-07-12 — 仲間Lvによる能力成長 (§101)
+
+### Added
+- **`getCompanionGrowthTier(cid)`** (§101): 仲間Lvを0〜5のティアに変換。Lv1〜9=0 / 10〜24=1 / 25〜49=2 / 50〜74=3 / 75〜98=4 / 99=5。
+- **`getCompanionGrowthBonus(cid)`** (§101): ティアに応じた攻撃/回復ボーナスを返す。ジュリタニ×2(0〜+10) / シュリタニ×1(0〜+5) / ノリオ×1(0〜+5) / ハルミ×2(0〜+10)。
+- **ステータス画面「成長効果」行** (§101): 全4仲間に Tier 0=基本状態 / Tier 1〜4=攻撃+N or 回復+N / Tier 5=🌟最大 を表示。
+- **デバッグボタン2本** (§101): 「✨ ハルミ回復成長確認 Lv1」「✨ ハルミ回復成長確認 Lv99」（HP25%+ハルミパーティ設定）。
+
+### Changed
+- **`runSingleCompanionAction()`** (§101): ジュリタニ/シュリタニ/ノリオに `getCompanionGrowthBonus()` を加算。ハルミ通常攻撃はボーナスなし（回復のみ成長）。
+- **`runCompanionSpecialAction()`** (§101): ジュリタニ会心の構え / シュリタニ捕獲アシスト・捕獲の網 / ノリオ経験値の眼・経験値メモ / ハルミ小さな癒し に成長ボーナスを加算。かばう・まもりの光は軽減率変更なし。
+- **`runCompanionMagicAction()`** (§101): ジュリタニ熱血エール / シュリタニおちつきの霧 / ノリオ観察メモ / ハルミ小さな回復 に成長ボーナスを加算。
+
+### 確認済み（変更なし）
+- `runCompanionAutoCommand()` の4択ウェイト変更なし（行動関数を共用するため自動的に成長が反映される）。
+- `gainExp()` / `expMod:2` / `attemptCapture()` / `captureRateBase` / `battleDamageReduction` / BGM 変更なし。
+- セーブデータに `growthTier`/`growthBonus` は保存しない（Lvから都度計算）。
+
+
 ## [0.37.1] - 2026-07-12 — 仲間成長システム安定化 (§100)
 
 ### Changed
