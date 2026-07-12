@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.30** |
+| 現在バージョン | **v0.31** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.31] 仲間AIの状況判断・まかせる改善**（§87）
+  - **状況判断**: 敵HP≤15=攻撃優先 / ハルミ+プレイヤーHP≤40%=90%回復 / HP≥85%=25%回復
+  - **前回行動記憶**: `state.lastCompanionAutoAction[cid]` で "special"/"attack" を戦闘中記憶、±0.10 補正
+  - **`clearCompanionCommandState()`**: `lastCompanionAutoAction = {}` リセット追加
+  - **保護**: `runSingleCompanionAction()` / `runCompanionSpecialAction()` / UIロック / BGM は変更なし
 - **[v0.30] 仲間コマンド・バランス調整**（§86）
   - **「まかせる」比率仲間別化**: ジュリタニ55%/シュリタニ65%/ノリオ50%/ハルミ70% で固有コマンドを選びやすく。
   - **ジュリタニ「会心の構え」**: 上限28/会心率30%（倍率1.6維持）、ログ2行化。

@@ -3024,12 +3024,13 @@
     }, 600);
   }
 
-  // §83 v0.28.1: 仲間コマンドフラグ・UI を一括クリアするヘルパー
+  // §83 v0.28.1 / §87 v0.31: 仲間コマンドフラグ・UI を一括クリアするヘルパー
   function clearCompanionCommandState() {
     state.companionCommandQueue = [];
     state.companionCommandIndex = 0;
     state.companionCommandActive = false;
     state.companionCommandLocked = false;
+    state.lastCompanionAutoAction = {}; // §87 v0.31: 前回行動記憶をリセット
     var ccMenu = document.getElementById("companion-command-menu");
     if (ccMenu) { ccMenu.classList.add("hidden"); }
   }
@@ -3209,19 +3210,43 @@
     return false;
   }
 
-  // §85 v0.29.1 / §86 v0.30: まかせる専用。通常攻撃 or 固有コマンドを仲間別比率でランダム選択。
+  // §85 v0.29.1 / §86 v0.30 / §87 v0.31: まかせる専用。状況判断 + 前回行動記憶でランダム選択。
   // 返値: true = 敵HP0（ハルミの固有コマンド選択時は常に false）
   function runCompanionAutoCommand(cid) {
     if (!state.inBattle || !state.enemy || state.enemy.hp <= 0) return false;
+    var p = state.player;
+    var e = state.enemy;
     var cData = findById(COMPANION_DATA, cid);
     var name = cData ? cData.name : cid;
-    // §86 v0.30: 仲間ごとの固有コマンド選択確率
-    var specialChance = 0.5; // デフォルト
+
+    // §86 v0.30: 仲間別基本比率
+    var specialChance = 0.5;
     if (cid === "juritani")        { specialChance = 0.55; }
     else if (cid === "shurittani") { specialChance = 0.65; }
     else if (cid === "norio")      { specialChance = 0.50; }
     else if (cid === "harumi")     { specialChance = 0.70; }
+
+    // §87 v0.31: 状況判断による補正（優先順位: 敵HP低 > ハルミHP判断 > 基本比率）
+    var enemyHpLow = (e.hp <= 15);
+    var playerHpPct = p.hp / p.maxHp;
+    if (enemyHpLow) {
+      // 敵HPが残り少ない → 全仲間が攻撃を優先してとどめを刺す
+      specialChance = (cid === "harumi") ? 0.15 : 0.35;
+    } else if (cid === "harumi") {
+      if (playerHpPct <= 0.40)      { specialChance = 0.90; } // HP低下 → 回復を強く選ぶ
+      else if (playerHpPct >= 0.85) { specialChance = 0.25; } // HP十分 → 回復を控える
+    }
+
+    // §87 v0.31: 前回行動記憶による補正（±0.10, 0〜1 にクランプ）
+    if (!state.lastCompanionAutoAction) { state.lastCompanionAutoAction = {}; }
+    var lastAction = state.lastCompanionAutoAction[cid];
+    if (lastAction === "special")      { specialChance = Math.max(0, specialChance - 0.10); }
+    else if (lastAction === "attack")  { specialChance = Math.min(1, specialChance + 0.10); }
+
+    // 行動選択 & 前回行動を記録
     var useSpecial = (Math.random() < specialChance);
+    state.lastCompanionAutoAction[cid] = useSpecial ? "special" : "attack";
+
     if (useSpecial) {
       var specialName = "固有コマンド";
       if (cid === "juritani")        { specialName = "会心の構え"; }
@@ -5949,6 +5974,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-all" style="border-color:#ff9de2;color:#ff9de2;">🎲 まかせるランダム確認（仲間4人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-midboss" style="border-color:#ff9de2;color:#ff9de2;">🎲 まかせるランダム確認（中ボスHP50）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-auto-harumi" style="border-color:#aaffcc;color:#aaffcc;">✨ ハルミまかせる回復確認（HP40%）</button>';
+      html += '<p class="small" style="color:#80d8ff;margin-top:8px;">🧠 まかせるAI状況判断テスト (§87 v0.31)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-ai-hpfull" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（HP満タン+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-ai-hplow" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（HP30%+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-ai-enemylow" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（敵HP8）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7119,6 +7148,42 @@
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
         showToast("[DEBUG] ハルミのみ+HP40%。まかせるで癒しが出るか確認！");
+      };
+      // §87 v0.31: まかせるAI状況判断テスト
+      document.getElementById("btn-debug-ai-hpfull").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["harumi"];
+        state.player.hp = state.player.maxHp; // HP満タン
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ハルミ+HP満タン。まかせるで回復を控えるか確認！");
+      };
+      document.getElementById("btn-debug-ai-hplow").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.3)); // HP30%
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人+HP30%。ハルミが回復を選びやすいか確認！");
+      };
+      document.getElementById("btn-debug-ai-enemylow").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp; // HP満タン
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        state.enemy.hp = 8;
+        renderEnemy();
+        showToast("[DEBUG] 仲間4人+敵HP8。全員が攻撃優先でとどめを刺すか確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.31] - 2026-07-12 — 仲間AIの状況判断・まかせる改善 (§87)
+
+### Added
+- **`state.lastCompanionAutoAction`** (§87): 戦闘中のみ有効な仲間別前回行動メモ。`clearCompanionCommandState()` でリセット（transient, セーブ対象外）。
+- **デバッグボタン追加** (§87): 「まかせるAI確認（HP満タン）」「まかせるAI確認（HP30%）」「まかせるAI確認（敵HP8）」。
+
+### Changed
+- **`clearCompanionCommandState()`** (§87): `state.lastCompanionAutoAction = {}` を追加。
+- **`runCompanionAutoCommand(cid)`** (§87): 状況判断 + 前回行動補正を追加。
+  - 敵HP≤15: 全仲間攻撃優先（ハルミ=特殊15%、他=特殊35%）
+  - ハルミ + プレイヤーHP≤40%: 特殊90%（回復を強く選ぶ）
+  - ハルミ + プレイヤーHP≥85%: 特殊25%（回復を控える）
+  - 前回 "special" → 今回 -0.10 補正、前回 "attack" → 今回 +0.10 補正（0〜1クランプ）
+
+
 ## [0.30] - 2026-07-12 — 仲間コマンド・バランス調整 (§86)
 
 ### Changed
