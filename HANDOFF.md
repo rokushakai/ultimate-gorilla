@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.31.1** |
+| 現在バージョン | **v0.32** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,15 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.32] 仲間2つ目の固有コマンド追加**（§89）
+  - **`#companion-special-menu`**: 固有コマンド選択サブメニュー（1つ目 / 2つ目 / 戻る）
+  - **`showCompanionSpecialMenu(cid)`**: サブメニューを表示する関数
+  - **ジュリタニ「🛡️ かばう」**: 次の敵攻撃20%軽減 → `state.battleDamageReduction = 0.20`
+  - **シュリタニ「🕸️ 捕獲の網」**: 微ダメ（2〜4）+ 捕獲フレーバー
+  - **ノリオ「📝 経験値メモ」**: 小ダメ（4〜8）+ EXPフレーバー
+  - **ハルミ「🛡️ まもりの光」**: 次の敵攻撃25%軽減 → `state.battleDamageReduction = 0.25`
+  - **`enemyTurn()` ダメージ軽減**: `battleDamageReduction` 適用後リセット（究極ゴリラ戦を除く）
+  - **保護**: 捕獲率/gainExp/まかせるAI/究極ゴリラ戦/UIロック は変更なし
 - **[v0.31.1] まかせるAI安定化**（§88）
   - **最終クランプ追加**: 全補正後に `specialChance = Math.max(0, Math.min(1, specialChance))` で確定クランプ。
   - **確認済み**: 古いセーブガード・`clearCompanionCommandState()` の両クリアパスともに問題なし。

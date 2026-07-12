@@ -5,6 +5,24 @@
 
 ---
 
+## v0.32 (2026-07-12)
+
+### 追加・変更
+
+- **`showCompanionSpecialMenu(cid)` 新設 (§89)**: `companion-command-menu` を隠して `companion-special-menu` を表示する。1つ目 / 2つ目 / 戻る の3ボタン。「戻る」は `showCompanionCommandForIdx(state.companionCommandIndex)` を再呼び出し。
+- **`runCompanionSpecialAction(cid, specialId)` 拡張 (§89)**: `specialId === "second"` のブランチを先頭に追加。既存の1つ目コマンドは `if (cid === "juritani") ...` ブロックで変更なし。
+- **`state.battleDamageReduction` 追加 (§89)**: transient フラグ（セーブ対象外）。`clearCompanionCommandState()` でリセット。複数適用時は `Math.max` で高い方を採用。
+- **`enemyTurn()` 軽減処理追加 (§89)**: 通常敵の `dmg` 確定直後に `if (state.battleDamageReduction)` チェック。`Math.floor(dmg * (1 - reduction))` で計算し最低1を保証。
+
+### 設計判断
+
+- **固有コマンドをサブメニュー方式にした理由**: 1つ目と2つ目をそのまま横に並べると3列になり、スマホ幅 480px でボタンが小さくなりすぎる。サブメニューにすることで各ボタンが十分な幅を確保できる。
+- **「⭐ 固有」ラベルにした理由**: 元の「💥 会心の構え」等の長いラベルはサブメニューに移動したため、メインメニューでは「⭐ 固有」という短いラベルで統一した。
+- **`executeCompanionCommand` から companion-special-menu を hide した理由**: s1/s2 クリック時に `companion-special-menu` を hide してから `executeCompanionCommand` を呼ぶが、念のため `executeCompanionCommand` 内でも `csMenu.classList.add("hidden")` を実行する。二重呼び出し安全。
+- **究極ゴリラ戦で `battleDamageReduction` を無視した理由**: 究極ゴリラ戦では仲間コマンドが出ないため、かばう/まもりの光が発動する経路がない。ただし `!e.final` ガードを追加して明示的に除外した。
+
+---
+
 ## v0.31.1 (2026-07-12)
 
 ### 追加・変更

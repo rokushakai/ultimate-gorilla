@@ -14,13 +14,30 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.32 候補 — 仲間固有コマンド追加・戦闘UI改善
+### Version 0.33 候補 — まかせるAIに2つ目固有コマンド追加・戦闘UI改善
 
-仲間に2つ目の固有コマンド追加・仲間まほう/わざ等の検討。v0.31 安定後。
+まかせるAIが2つ目固有コマンドも選択肢に加える。v0.32 安定後。
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.32 — 仲間2つ目の固有コマンド追加 (§89)
+
+- **固有コマンドサブメニュー追加**: 「⭐ 固有」押下で2択+戻るのサブメニューを表示 ✅
+- **`#companion-special-menu` 追加**: `index.html` に `div.submenu.hidden` を追加 ✅
+- **`setBattleLocked()` 更新**: `:not(#companion-special-menu)` を除外セレクターに追加 ✅
+- **`clearCompanionCommandState()` 更新**: `battleDamageReduction=0` / `companion-special-menu` hidden を追加 ✅
+- **`showCompanionSpecialMenu(cid)` 新設**: 固有コマンド選択サブメニューを表示する関数 ✅
+- **`runCompanionSpecialAction(cid, specialId)` 拡張**: `specialId="second"` で2つ目を実行 ✅
+- **ジュリタニ「🛡️ かばう」**: 次の敵攻撃20%軽減（`battleDamageReduction=0.20`） ✅
+- **シュリタニ「🕸️ 捕獲の網」**: Lv連動微ダメージ（2〜4）+ 捕獲フレーバー ✅
+- **ノリオ「📝 経験値メモ」**: Lv連動小ダメージ（4〜8）+ EXPフレーバー ✅
+- **ハルミ「🛡️ まもりの光」**: 次の敵攻撃25%軽減（`battleDamageReduction=0.25`） ✅
+- **`enemyTurn()` ダメージ軽減**: `battleDamageReduction` が設定されていれば適用して1回リセット ✅
+- **捕獲率/`gainExp()` 変更なし** ✅
+- **まかせるAIへの混入なし**: 「まかせる」は1つ目固有コマンドのまま ✅
+- **究極ゴリラ戦で仲間コマンドなし** ✅ (変更なし)
 
 ### Version 0.31.1 — まかせるAI安定化 (§88)
 

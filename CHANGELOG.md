@@ -5,6 +5,33 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.32] - 2026-07-12 — 仲間2つ目の固有コマンド追加 (§89)
+
+### Added
+- **`#companion-special-menu`** (§89): `index.html` に `.submenu.hidden` div を追加。固有コマンド一覧を `innerHTML` で動的生成。
+- **`showCompanionSpecialMenu(cid)`** (§89): 固有コマンド選択サブメニューを表示する関数。1つ目 / 2つ目 / 戻る の3ボタン。
+- **ジュリタニ「🛡️ かばう」** (§89): 次の敵攻撃を20%軽減（`state.battleDamageReduction = 0.20`）。ダメージなし。
+- **シュリタニ「🕸️ 捕獲の網」** (§89): Lv連動微ダメージ `Math.min(4, 2+floor(Lv/40))`（2〜4）+ 捕獲フレーバー。
+- **ノリオ「📝 経験値メモ」** (§89): Lv連動小ダメージ `Math.min(8, 4+floor(Lv/20))`（4〜8）+ EXPフレーバー。
+- **ハルミ「🛡️ まもりの光」** (§89): 次の敵攻撃を25%軽減（`state.battleDamageReduction = 0.25`）。ダメージなし。
+- **デバッグボタン2種追加** (§89): 「2つ目固有コマンド確認（仲間4人）」「かばう/まもりの光 軽減確認（仲間2人）」。
+
+### Changed
+- **`setBattleLocked(locked)`** (§89): セレクターに `:not(#companion-special-menu)` を追加。固有サブメニューは `companionCommandLocked` で別管理。
+- **`clearCompanionCommandState()`** (§89): `state.battleDamageReduction = 0` と `companion-special-menu` hidden を追加。
+- **`showCompanionCommandForIdx(idx)`** (§89): 固有コマンドボタンのラベルを「⭐ 固有」に変更。onclick を `showCompanionSpecialMenu(cid)` へ変更。
+- **`executeCompanionCommand(cid, mode)`** (§89): `"special2"` モード追加（`runCompanionSpecialAction(cid, "second")` を呼ぶ）。`companion-special-menu` の隠蔽を追加。s1/s2 ボタンの disabled 処理を追加。
+- **`runCompanionSpecialAction(cid, specialId)`** (§89): 第2引数 `specialId="second"` で2つ目コマンドを実行。既存の1つ目コマンドは変更なし。
+- **`enemyTurn()`** (§89): ダメージ確定後（`e.final` 以外）に `battleDamageReduction` を適用して 1 回リセット。最低1ダメージを保証。
+
+### 変更なし
+- 捕獲率本体（`つかまえる` 処理）
+- `gainExp()` / ノリオのEXP2倍効果
+- 「まかせる」AI（1つ目の固有コマンドのみ選択）
+- 究極ゴリラ戦での仲間コマンドなし動作
+- v0.28.1 の `companionCommandLocked` / `setBattleLocked()` ロック機構
+
+
 ## [0.31.1] - 2026-07-12 — まかせるAI安定化 (§88)
 
 ### Changed

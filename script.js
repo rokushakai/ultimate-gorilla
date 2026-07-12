@@ -2950,8 +2950,8 @@
 
   function setBattleLocked(locked) {
     state.locked = locked;
-    // §83 v0.28.1: companion-command-menu は companionCommandLocked で別管理するため除外
-    var btns = document.querySelectorAll("#battle-menu button, .submenu:not(#companion-command-menu) button");
+    // §83 v0.28.1: companion-command-menu / §89 v0.32: companion-special-menu は companionCommandLocked で別管理するため除外
+    var btns = document.querySelectorAll("#battle-menu button, .submenu:not(#companion-command-menu):not(#companion-special-menu) button");
     btns.forEach(function (b) { b.disabled = locked; });
   }
 
@@ -3024,15 +3024,18 @@
     }, 600);
   }
 
-  // §83 v0.28.1 / §87 v0.31: 仲間コマンドフラグ・UI を一括クリアするヘルパー
+  // §83 v0.28.1 / §87 v0.31 / §89 v0.32: 仲間コマンドフラグ・UI を一括クリアするヘルパー
   function clearCompanionCommandState() {
     state.companionCommandQueue = [];
     state.companionCommandIndex = 0;
     state.companionCommandActive = false;
     state.companionCommandLocked = false;
     state.lastCompanionAutoAction = {}; // §87 v0.31: 前回行動記憶をリセット
+    state.battleDamageReduction = 0;   // §89 v0.32: ダメージ軽減をリセット
     var ccMenu = document.getElementById("companion-command-menu");
     if (ccMenu) { ccMenu.classList.add("hidden"); }
+    var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
+    if (csMenu) { csMenu.classList.add("hidden"); }
   }
 
   // §82 v0.28: 仲間コマンドシーケンスを開始する
@@ -3072,18 +3075,13 @@
     var cid = queue[idx];
     var cData = findById(COMPANION_DATA, cid);
     var label = cData ? (cData.emoji + " " + cData.name) : cid;
-    // §84 v0.29: 仲間ごとの固有コマンド名
-    var specialLabel = "⭐ 固有コマンド";
-    if (cid === "juritani")   { specialLabel = "💥 会心の構え"; }
-    else if (cid === "shurittani") { specialLabel = "🪤 捕獲アシスト"; }
-    else if (cid === "norio") { specialLabel = "📈 経験値の眼"; }
-    else if (cid === "harumi") { specialLabel = "✨ 小さな癒し"; }
     var menu = document.getElementById("companion-command-menu");
     // §84 v0.29: 3択レイアウト。p とまかせるは grid-column:1/-1 で横幅全体
+    // §89 v0.32: 「固有コマンド」ボタンを「⭐ 固有」に短縮し、サブメニューへ誘導
     menu.innerHTML =
       '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？</p>" +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
-      '<button id="btn-companion-special">' + specialLabel + '</button>' +
+      '<button id="btn-companion-special">⭐ 固有</button>' +
       '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
@@ -3092,11 +3090,49 @@
     document.getElementById("btn-companion-fight").onclick = function() {
       executeCompanionCommand(cid, "fight");
     };
-    document.getElementById("btn-companion-special").onclick = function() { // §84 v0.29
-      executeCompanionCommand(cid, "special");
+    document.getElementById("btn-companion-special").onclick = function() { // §89 v0.32: サブメニューへ
+      showCompanionSpecialMenu(cid);
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
+    };
+  }
+
+  // §89 v0.32: 固有コマンドサブメニューを表示する（1つ目 / 2つ目 / 戻る）
+  function showCompanionSpecialMenu(cid) {
+    if (!state.companionCommandActive) return;
+    var cData = findById(COMPANION_DATA, cid);
+    var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    // 仲間ごとのコマンド名
+    var s1Label = "⭐ 固有1"; var s2Label = "⭐ 固有2";
+    if (cid === "juritani") {
+      s1Label = "💥 会心の構え"; s2Label = "🛡️ かばう";
+    } else if (cid === "shurittani") {
+      s1Label = "🪤 捕獲アシスト"; s2Label = "🕸️ 捕獲の網";
+    } else if (cid === "norio") {
+      s1Label = "📈 経験値の眼"; s2Label = "📝 経験値メモ";
+    } else if (cid === "harumi") {
+      s1Label = "✨ 小さな癒し"; s2Label = "🛡️ まもりの光";
+    }
+    var csMenu = document.getElementById("companion-special-menu");
+    csMenu.innerHTML =
+      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + 'の固有コマンド</p>' +
+      '<button id="btn-companion-s1" style="grid-column:1/-1;">' + s1Label + '</button>' +
+      '<button id="btn-companion-s2" style="grid-column:1/-1;">' + s2Label + '</button>' +
+      '<button id="btn-companion-sback" class="submenu-back">↩ 戻る</button>';
+    csMenu.classList.remove("hidden");
+    document.getElementById("companion-command-menu").classList.add("hidden");
+    document.getElementById("btn-companion-s1").onclick = function() {
+      document.getElementById("companion-special-menu").classList.add("hidden");
+      executeCompanionCommand(cid, "special");
+    };
+    document.getElementById("btn-companion-s2").onclick = function() {
+      document.getElementById("companion-special-menu").classList.add("hidden");
+      executeCompanionCommand(cid, "special2");
+    };
+    document.getElementById("btn-companion-sback").onclick = function() {
+      document.getElementById("companion-special-menu").classList.add("hidden");
+      showCompanionCommandForIdx(state.companionCommandIndex);
     };
   }
 
@@ -3107,18 +3143,26 @@
     state.companionCommandLocked = true;
     var fBtn = document.getElementById("btn-companion-fight");
     var aBtn = document.getElementById("btn-companion-auto");
-    var sBtn = document.getElementById("btn-companion-special"); // §84 v0.29
+    var sBtn = document.getElementById("btn-companion-special");
+    var s1Btn = document.getElementById("btn-companion-s1"); // §89 v0.32
+    var s2Btn = document.getElementById("btn-companion-s2"); // §89 v0.32
     if (fBtn) { fBtn.disabled = true; }
     if (aBtn) { aBtn.disabled = true; }
-    if (sBtn) { sBtn.disabled = true; } // §84 v0.29
+    if (sBtn) { sBtn.disabled = true; }
+    if (s1Btn) { s1Btn.disabled = true; } // §89 v0.32
+    if (s2Btn) { s2Btn.disabled = true; } // §89 v0.32
     document.getElementById("companion-command-menu").classList.add("hidden");
+    var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
+    if (csMenu) { csMenu.classList.add("hidden"); }
     document.getElementById("battle-menu").classList.remove("hidden");
     if (!state.inBattle) return;
     var e = state.enemy;
     if (!e || e.hp <= 0) { winBattle(); return; }
     var killed;
-    if (mode === "special") { // §84 v0.29: 固有コマンド
+    if (mode === "special") { // §84 v0.29: 1つ目の固有コマンド
       killed = runCompanionSpecialAction(cid);
+    } else if (mode === "special2") { // §89 v0.32: 2つ目の固有コマンド
+      killed = runCompanionSpecialAction(cid, "second");
     } else if (mode === "auto") { // §85 v0.29.1: まかせる → ランダム行動
       killed = runCompanionAutoCommand(cid);
     } else { // たたかう
@@ -3160,10 +3204,47 @@
     return !!(e.hp <= 0);
   }
 
-  // §84 v0.29 / §86 v0.30: 仲間固有コマンド実行。返値 true=敵HP0（ハルミは常に false）
-  function runCompanionSpecialAction(cid) {
+  // §84 v0.29 / §86 v0.30 / §89 v0.32: 仲間固有コマンド実行。返値 true=敵HP0（ハルミは常に false）
+  // specialId="second" で2つ目の固有コマンドを実行（省略時は1つ目）
+  function runCompanionSpecialAction(cid, specialId) {
     var p = state.player, e = state.enemy;
     if (!state.inBattle || !e || e.hp <= 0) return false;
+
+    // §89 v0.32: 2つ目の固有コマンド
+    if (specialId === "second") {
+      if (cid === "juritani") {
+        // 🛡️ かばう: 次の敵攻撃を20%軽減
+        state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.20);
+        log("🛡️ ジュリタニが前に出た！");
+        log("次のダメージを少し受け止めてくれる！");
+        return false;
+      } else if (cid === "shurittani") {
+        // 🕸️ 捕獲の網: Lv連動2〜4の微ダメージ
+        var dmgSN = Math.min(4, 2 + Math.floor(p.level / 40));
+        e.hp = Math.max(0, e.hp - dmgSN);
+        log("🕸️ シュリタニが捕獲の網を広げた！");
+        log("相手の動きが少し鈍った！ " + e.name + "に" + dmgSN + "ダメージ！");
+        renderEnemy();
+        return !!(e.hp <= 0);
+      } else if (cid === "norio") {
+        // 📝 経験値メモ: Lv連動4〜8の小ダメージ
+        var dmgNM = Math.min(8, 4 + Math.floor(p.level / 20));
+        e.hp = Math.max(0, e.hp - dmgNM);
+        log("📝 ノリオが経験値メモを取り始めた！");
+        log("この戦い、あとで振り返れそうだ！ " + e.name + "に" + dmgNM + "ダメージ！");
+        renderEnemy();
+        return !!(e.hp <= 0);
+      } else if (cid === "harumi") {
+        // 🛡️ まもりの光: 次の敵攻撃を25%軽減
+        state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.25);
+        log("🛡️ ハルミがまもりの光を灯した！");
+        log("次に受けるダメージが少し減りそうだ！");
+        return false;
+      }
+      return false;
+    }
+
+    // 1つ目の固有コマンド（既存）
     if (cid === "juritani") {
       // §86 v0.30: 会心の構え: 上限28、会心率30%（35%→30%）、倍率1.6維持
       var dmgJ = Math.min(28, 8 + Math.floor(p.level / 7));
@@ -3809,6 +3890,12 @@
       log("💥💥 究極ゴリラの「かいしんのいちげき」！！");
     } else {
       dmg = Math.max(1, e.atk + randInt(0, 2) - p.def);
+      // §89 v0.32: ダメージ軽減（かばう / まもりの光）— 究極ゴリラ戦には適用しない
+      if (state.battleDamageReduction) {
+        dmg = Math.max(1, Math.floor(dmg * (1 - state.battleDamageReduction)));
+        log("🛡️ ダメージが軽減された！");
+        state.battleDamageReduction = 0;
+      }
     }
     p.hp = Math.max(0, p.hp - dmg);
     playSE("damage");
@@ -5981,6 +6068,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-ai-hpfull" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（HP満タン+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-ai-hplow" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（HP30%+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-ai-enemylow" style="border-color:#80d8ff;color:#80d8ff;">🧠 まかせるAI確認（敵HP8）</button>';
+      html += '<p class="small" style="color:#c4b5fd;margin-top:8px;">⭐ 2つ目固有コマンド確認 (§89 v0.32)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-special2-all" style="border-color:#c4b5fd;color:#c4b5fd;">⭐ 2つ目固有コマンド確認（仲間4人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-special2-guard" style="border-color:#c4b5fd;color:#c4b5fd;">🛡️ かばう/まもりの光 軽減確認（仲間4人+のらいぬ）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7187,6 +7277,29 @@
         state.enemy.hp = 8;
         renderEnemy();
         showToast("[DEBUG] 仲間4人+敵HP8。全員が攻撃優先でとどめを刺すか確認！");
+      };
+      // §89 v0.32: 2つ目固有コマンド確認
+      document.getElementById("btn-debug-special2-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人。固有コマンド→2つ目を選べるか確認！");
+      };
+      document.getElementById("btn-debug-special2-guard").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ジュリタニ+ハルミ。かばう/まもりの光→敵攻撃時に軽減ログが出るか確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {
