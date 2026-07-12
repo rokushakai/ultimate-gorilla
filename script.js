@@ -3159,57 +3159,69 @@
     return !!(e.hp <= 0);
   }
 
-  // §84 v0.29: 仲間固有コマンド実行。返値 true=敵HP0（ハルミは常に false）
+  // §84 v0.29 / §86 v0.30: 仲間固有コマンド実行。返値 true=敵HP0（ハルミは常に false）
   function runCompanionSpecialAction(cid) {
     var p = state.player, e = state.enemy;
     if (!state.inBattle || !e || e.hp <= 0) return false;
     if (cid === "juritani") {
-      // 会心の構え: 強めの物理攻撃、35%で大会心×1.6倍
-      var dmgJ = Math.min(30, 8 + Math.floor(p.level / 7));
-      var isCritJ = Math.random() < 0.35;
+      // §86 v0.30: 会心の構え: 上限28、会心率30%（35%→30%）、倍率1.6維持
+      var dmgJ = Math.min(28, 8 + Math.floor(p.level / 7));
+      var isCritJ = Math.random() < 0.30;
       if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.6); }
       e.hp = Math.max(0, e.hp - dmgJ);
+      log("💥 ジュリタニの会心の構え！");
       log(isCritJ
-        ? "💥 ジュリタニが会心の構えを見せた！ 大会心！ " + e.name + "に" + dmgJ + "ダメージ！"
-        : "💥 ジュリタニが会心の構えを見せた！ " + e.name + "に" + dmgJ + "ダメージ！");
+        ? "大会心！ " + e.name + "に" + dmgJ + "ダメージ！"
+        : e.name + "に" + dmgJ + "ダメージ！");
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "shurittani") {
-      // 捕獲アシスト: 1ダメージ + 捕獲フレーバーログ（捕獲率システムは触らない）
-      e.hp = Math.max(0, e.hp - 1);
-      log("🪤 シュリタニが捕獲のタイミングを見きった！");
-      log("なんだか捕まえやすくなった気がする。");
+      // §86 v0.30: 捕獲アシスト: Lv連動1〜3ダメージ（固定1→1〜3）、ログ整理
+      var dmgS = Math.min(3, 1 + Math.floor(p.level / 30));
+      e.hp = Math.max(0, e.hp - dmgS);
+      log("🪤 シュリタニの捕獲アシスト！");
+      log("捕まえやすい間合いを作った！ " + e.name + "に" + dmgS + "ダメージ！");
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "norio") {
-      // 経験値の眼: 小ダメージ + EXPフレーバーログ
-      var dmgN = Math.min(10, 3 + Math.floor(p.level / 12));
+      // §86 v0.30: 経験値の眼: 上限12（10→12）、ログ整理
+      var dmgN = Math.min(12, 3 + Math.floor(p.level / 12));
       e.hp = Math.max(0, e.hp - dmgN);
-      log("📈 ノリオが経験値のにおいを嗅ぎつけた！");
-      log("この戦い、少し学びが多くなりそうだ。 " + e.name + "に" + dmgN + "ダメージ！");
+      log("📈 ノリオの経験値の眼！");
+      log("この戦い、学びが多そうだ！ " + e.name + "に" + dmgN + "ダメージ！");
       renderEnemy();
       return !!(e.hp <= 0);
     } else if (cid === "harumi") {
-      // 小さな癒し: 主人公HPを小回復。敵ダメージなし → 常に false を返す
-      var heal = Math.min(30, 10 + Math.floor(p.level / 10));
+      // §86 v0.30: 小さな癒し: 上限25（30→25）、HP満タン時に専用メッセージ
+      var heal = Math.min(25, 10 + Math.floor(p.level / 10));
       var before = p.hp;
       p.hp = Math.min(p.maxHp, p.hp + heal);
       var actual = p.hp - before;
-      log("✨ ハルミが小さな癒しの光を灯した。");
-      log("HPが " + actual + " 回復した！");
+      log("✨ ハルミの小さな癒し！");
+      if (actual <= 0) {
+        log("しかし、HPはすでに満タンだ。");
+      } else {
+        log("HPが " + actual + " 回復した！");
+      }
       updateStatusBar();
       return false;
     }
     return false;
   }
 
-  // §85 v0.29.1: まかせる専用。通常攻撃 or 固有コマンドを 50/50 でランダム選択して実行。
+  // §85 v0.29.1 / §86 v0.30: まかせる専用。通常攻撃 or 固有コマンドを仲間別比率でランダム選択。
   // 返値: true = 敵HP0（ハルミの固有コマンド選択時は常に false）
   function runCompanionAutoCommand(cid) {
     if (!state.inBattle || !state.enemy || state.enemy.hp <= 0) return false;
     var cData = findById(COMPANION_DATA, cid);
     var name = cData ? cData.name : cid;
-    var useSpecial = (Math.random() < 0.5);
+    // §86 v0.30: 仲間ごとの固有コマンド選択確率
+    var specialChance = 0.5; // デフォルト
+    if (cid === "juritani")        { specialChance = 0.55; }
+    else if (cid === "shurittani") { specialChance = 0.65; }
+    else if (cid === "norio")      { specialChance = 0.50; }
+    else if (cid === "harumi")     { specialChance = 0.70; }
+    var useSpecial = (Math.random() < specialChance);
     if (useSpecial) {
       var specialName = "固有コマンド";
       if (cid === "juritani")        { specialName = "会心の構え"; }
