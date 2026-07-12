@@ -2935,7 +2935,7 @@
       e.name + (e.isUMA ? "(UMA)" : "");
     document.getElementById("enemy-hp-bar").style.width =
       Math.max(0, (e.hp / e.maxHp) * 100) + "%";
-    document.getElementById("enemy-hp-text").textContent = e.hp + "/" + e.maxHp;
+    document.getElementById("enemy-hp-text").textContent = "HP " + e.hp + "/" + e.maxHp; // §93 v0.34: "HP " プレフィックス追加
   }
 
   function clearLog() {
@@ -2970,6 +2970,7 @@
       log("🎵 究極ゴリラが歌を待っている！");
       log("HPは捕獲条件の範囲内だ！ 今こそ「うたう」チャンス！");
       updateSingButtonChance(true);
+      updateBattleStatusBadges(); // §93 v0.34: うたうチャンスバッジを表示
     } else if (!hasLv && !hasUk) {
       log("究極ゴリラはかなり弱っている。");
       log("しかし、まだ条件が足りない。もっと成長し、歌を届けるための楽器を探そう。");
@@ -3037,6 +3038,7 @@
     if (ccMenu) { ccMenu.classList.add("hidden"); }
     var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
     if (csMenu) { csMenu.classList.add("hidden"); }
+    updateBattleStatusBadges(); // §93 v0.34: 戦闘終了時にバッジをクリア
   }
 
   // §82 v0.28: 仲間コマンドシーケンスを開始する
@@ -3076,11 +3078,14 @@
     var cid = queue[idx];
     var cData = findById(COMPANION_DATA, cid);
     var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    // §93 v0.34: 仲間が2人以上のとき「N/M人目」を表示
+    var total = queue.length;
+    var progress = total > 1 ? "（" + (idx + 1) + "/" + total + "人目）" : "";
     var menu = document.getElementById("companion-command-menu");
     // §84 v0.29: 3択レイアウト。p とまかせるは grid-column:1/-1 で横幅全体
     // §89 v0.32: 「固有コマンド」ボタンを「⭐ 固有」に短縮し、サブメニューへ誘導
     menu.innerHTML =
-      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？</p>" +
+      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？ " + progress + '</p>' +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
       '<button id="btn-companion-special">⭐ 固有</button>' +
       '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
@@ -3225,6 +3230,7 @@
         state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.20);
         log("🛡️ ジュリタニが前に出た！");
         log("次のダメージを少し受け止めてくれる！");
+        updateBattleStatusBadges(); // §93 v0.34
         return false;
       } else if (cid === "shurittani") {
         // 🕸️ 捕獲の網: Lv連動2〜4の微ダメージ
@@ -3247,6 +3253,7 @@
         state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, 0.25);
         log("🛡️ ハルミがまもりの光を灯した！");
         log("次に受けるダメージが少し減りそうだ！");
+        updateBattleStatusBadges(); // §93 v0.34
         return false;
       }
       return false;
@@ -4146,7 +4153,11 @@
 
   function updateBattlePlayerStatus() {
     var p = state.player;
-    document.getElementById("b-hp-text").textContent = "HP " + p.hp + "/" + p.maxHp;
+    // §93 v0.34: HP割合でカラークラスを変更
+    var hpPct = p.maxHp > 0 ? (p.hp / p.maxHp) : 1;
+    var hpEl = document.getElementById("b-hp-text");
+    hpEl.textContent = "HP " + p.hp + "/" + p.maxHp;
+    hpEl.className = hpPct < 0.30 ? "battle-hp-danger" : (hpPct < 0.50 ? "battle-hp-warn" : "");
     document.getElementById("b-mp-text").textContent = "MP " + p.mp + "/" + p.maxMp;
     // §64 v0.16.1: ガマン中インジケーター
     var gamanEl = document.getElementById("battle-gaman-status");
@@ -4156,6 +4167,28 @@
       } else {
         gamanEl.classList.add("hidden");
       }
+    }
+    updateBattleStatusBadges(); // §93 v0.34
+  }
+
+  // §93 v0.34: 戦闘状態バッジ更新（守り効果あり / うたうチャンス）
+  function updateBattleStatusBadges() {
+    var el = document.getElementById("battle-status-badges");
+    if (!el) return;
+    var html = "";
+    if (state.battleDamageReduction > 0) {
+      html += '<span class="battle-badge battle-badge-guard">🛡️ 守り効果あり</span>';
+    }
+    var e = state.enemy;
+    var p = state.player;
+    if (e && e.id === "ultimategorilla" && e.hp >= 1 && e.hp <= 10 && p.level >= 99 && p.hasUkulele) {
+      html += '<span class="battle-badge battle-badge-sing">🎤 うたうチャンス</span>';
+    }
+    el.innerHTML = html;
+    if (html) {
+      el.classList.remove("hidden");
+    } else {
+      el.classList.add("hidden");
     }
   }
 
@@ -6126,6 +6159,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-all" style="border-color:#f9c74f;color:#f9c74f;">🎲 まかせるAI 3択確認（全員・ランダム）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-guard" style="border-color:#f9c74f;color:#f9c74f;">🛡️ まかせるAI 軽減確認（かばう/まもりの光）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-hplow" style="border-color:#f9c74f;color:#f9c74f;">⬇️ まかせるAI 敵HP10確認</button>';
+      html += '<p class="small" style="color:#80ffaa;margin-top:8px;">🎨 戦闘UI確認 (§93 v0.34)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v34-ui" style="border-color:#80ffaa;color:#80ffaa;">🎨 戦闘UI確認（仲間2人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v34-badge-guard" style="border-color:#4cc9f0;color:#4cc9f0;">🛡️ 守り効果バッジ確認（HP25%+かばう）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7378,6 +7414,31 @@
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
         showToast("[DEBUG] ジュリタニ+ハルミ。かばう/まもりの光が選ばれて🛡️軽減が発生するか確認！");
+      };
+      // §93 v0.34: 戦闘UI確認
+      document.getElementById("btn-debug-v34-ui").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ジュリタニ+ハルミ。HP/MP色・仲間コマンド「1/2人目」表示を確認！");
+      };
+      document.getElementById("btn-debug-v34-badge-guard").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25)); // HP25%→赤表示テスト
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        state.battleDamageReduction = 0.20;
+        updateBattleStatusBadges();
+        showToast("[DEBUG] HP25%（赤）+🛡️守り効果バッジを確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {

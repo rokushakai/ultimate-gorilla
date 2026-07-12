@@ -655,6 +655,36 @@ html, body {
 .record-pending { color: #888; }
 .record-hint { color: #ffd166; font-size: 0.78em; margin-top: 2px; }
 
+/* §93 v0.34: 主人公HP/MPカラー（HP割合による警告表示） */
+#b-hp-text.battle-hp-warn   { color: #ffd166; }
+#b-hp-text.battle-hp-danger { color: #ef233c; }
+
+/* §93 v0.34: 戦闘状態バッジ（守り効果あり / うたうチャンス） */
+#battle-status-badges {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.battle-badge {
+  font-size: 0.72em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+.battle-badge-guard {
+  background: rgba(30, 58, 95, 0.85);
+  border: 1px solid #4cc9f0;
+  color: #4cc9f0;
+}
+.battle-badge-sing {
+  background: rgba(58, 30, 95, 0.85);
+  border: 1px solid #c4b5fd;
+  color: #c4b5fd;
+}
+
 .hidden {
   display: none !important;
 }

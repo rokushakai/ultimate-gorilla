@@ -5,6 +5,23 @@
 
 ---
 
+## v0.34 (2026-07-12)
+
+### 追加・変更
+
+- **`#battle-status-badges` 追加 (§93)**: `index.html` の `battle-gaman-status` 直後に配置。CSS で `display:flex;gap:6px;` のバッジ行を形成。バッジがなければ `.hidden` で非表示。
+- **`updateBattleStatusBadges()` 新設 (§93)**: `battleDamageReduction > 0` → `🛡️ 守り効果あり`。究極ゴリラ HP1〜10 + Lv99 + ウクレレ → `🎤 うたうチャンス`。innerHTML 書き換えで管理。
+- **HP カラークラス (§93)**: `hpEl.className` を直接代入（クラスは1つしかないため `classList` でなく `className` で十分）。`battle-hp-danger`/`battle-hp-warn` の2クラスのみ。既存の `color: #ffd166` は `#battle-player-status` で設定済みなので、クラスなし時は自然にリセットされる。
+- **`showCompanionCommandForIdx` 進捗表示 (§93)**: `queue.length > 1` の場合のみ `（N/M人目）` をタイトルに追加。仲間1人のときは表示しない。
+
+### 設計判断
+
+- **なぜ `battle-gaman-status` をそのまま残したか**: v0.16.1 から安定動作しており、触る必要がない。`battle-status-badges` は「守り効果」と「うたうチャンス」に特化した別エリアとして追加し、両者は独立して動作する。
+- **`updateBattleStatusBadges()` を `updateBattlePlayerStatus()` の末尾に置いた理由**: `updateBattlePlayerStatus` は HP 変化のほぼ全タイミングで呼ばれるため、ここに置くだけで戦闘中の大半の状態変化をカバーできる。`battleDamageReduction` のセット直後（`runCompanionSpecialAction` の guard 系）だけは `updateBattlePlayerStatus` が呼ばれないため、そこだけ明示的に追加呼び出しした。
+- **`clearCompanionCommandState()` への追加**: 戦闘終了時に `battleDamageReduction = 0` の直後でバッジを消す。`finishBattle()` が直後に battle-screen を hide するので実際には見えないが、DOM を常にクリーンな状態に保つ設計として追加。
+
+---
+
 ## v0.33.1 (2026-07-12)
 
 ### 追加・変更

@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.34] - 2026-07-12 — 戦闘UI改善・状態表示 (§93)
+
+### Added
+- **`#battle-status-badges`** (§93): `index.html` に `.hidden` div を追加。戦闘状態バッジのコンテナ。
+- **`updateBattleStatusBadges()`** (§93): バッジを動的生成。`battleDamageReduction > 0` で「🛡️ 守り効果あり」、究極ゴリラHP1〜10+Lv99+ウクレレで「🎤 うたうチャンス」を表示。
+- **CSS追加** (§93): `.battle-hp-warn` / `.battle-hp-danger` / `.battle-badge` / `.battle-badge-guard` / `.battle-badge-sing` / `#battle-status-badges` の7スタイル。
+- **デバッグボタン2本追加** (§93): 「🎨 戦闘UI確認（仲間2人）」「🛡️ 守り効果バッジ確認（HP25%+かばう）」。
+
+### Changed
+- **`updateBattlePlayerStatus()`** (§93): HP割合 < 30% で `.battle-hp-danger`（赤）、< 50% で `.battle-hp-warn`（黄強調）を `#b-hp-text.className` に設定。末尾に `updateBattleStatusBadges()` 追加。
+- **`renderEnemy()`** (§93): `enemy-hp-text` を `"N/M"` → `"HP N/M"` 形式に変更。
+- **`showCompanionCommandForIdx(idx)`** (§93): 仲間2人以上のとき タイトルに `（N/M人目）` を付加。
+- **`runCompanionSpecialAction()`** (§93): かばう / まもりの光 発動直後に `updateBattleStatusBadges()` を追加（バッジを即時表示）。
+- **`checkUltimateGorillaHpHint()`** (§93): うたうチャンス確定時（hasLv && hasUk）に `updateBattleStatusBadges()` 追加。
+- **`clearCompanionCommandState()`** (§93): 末尾に `updateBattleStatusBadges()` 追加（戦闘終了時にバッジをクリア）。
+
+### 確認済み（変更なし）
+- 戦闘ロジック（`enemyTurn`/`winBattle`/`finishBattle`/`gainExp`/BGM制御）は変更なし。
+- 捕獲率本体/究極ゴリラ捕獲条件は変更なし。
+- `battle-gaman-status`（ガマン中インジケーター）は変更なし。独立して動作継続。
+- `updateSingButtonChance()`（うたうボタン強調）は変更なし。バッジと並立。
+
+
 ## [0.33.1] - 2026-07-12 — まかせるAI 3択安定化 (§92)
 
 ### Changed

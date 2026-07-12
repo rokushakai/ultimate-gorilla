@@ -14,13 +14,27 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.34 候補 — 戦闘UI改善
+### Version 0.35 候補 — 戦闘UIさらなる改善
 
-仲間コマンド選択中のHP表示、軽減バフ表示、状態の可視化など。v0.33.1 安定後。
+仲間まほう / 仲間わざ / サイドストーリー追加など。v0.34 安定後。
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.34 — 戦闘UI改善・状態表示 (§93)
+
+- **主人公HP カラー表示**: HP≥50%=通常(黄)、30〜49%=`.battle-hp-warn`(黄強調)、<30%=`.battle-hp-danger`(赤) ✅
+- **`#battle-status-badges`**: 戦闘状態バッジ表示エリア追加 (`index.html`) ✅
+- **`updateBattleStatusBadges()`**: 守り効果あり / うたうチャンス バッジを動的更新 ✅
+- **🛡️ 守り効果あり バッジ**: `battleDamageReduction > 0` の間表示。敵攻撃後に自動消去 ✅
+- **🎤 うたうチャンス バッジ**: 究極ゴリラHP1〜10 + Lv99 + ウクレレ所持 時に表示 ✅
+- **仲間コマンド進捗表示**: `showCompanionCommandForIdx` に「N/M人目」追加 ✅
+- **敵HP表示改善**: `enemy-hp-text` を `"HP N/M"` 形式に変更 ✅
+- **`updateBattleStatusBadges()` 呼び出しタイミング**: `updateBattlePlayerStatus()` / `runCompanionSpecialAction()` / `checkUltimateGorillaHpHint()` / `clearCompanionCommandState()` ✅
+- **デバッグボタン2本追加**: 戦闘UI確認 / 守り効果バッジ確認 ✅
+- **戦闘ロジック変更なし**: `enemyTurn`/`winBattle`/`finishBattle`/`gainExp`/BGM は変更なし ✅
+- **捕獲率/gainExp() 変更なし** ✅
 
 ### Version 0.33.1 — まかせるAI 3択安定化 (§92)
 
