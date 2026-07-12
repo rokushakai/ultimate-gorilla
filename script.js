@@ -6159,9 +6159,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-all" style="border-color:#f9c74f;color:#f9c74f;">🎲 まかせるAI 3択確認（全員・ランダム）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-guard" style="border-color:#f9c74f;color:#f9c74f;">🛡️ まかせるAI 軽減確認（かばう/まもりの光）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-auto3-hplow" style="border-color:#f9c74f;color:#f9c74f;">⬇️ まかせるAI 敵HP10確認</button>';
-      html += '<p class="small" style="color:#80ffaa;margin-top:8px;">🎨 戦闘UI確認 (§93 v0.34)</p>';
+      html += '<p class="small" style="color:#80ffaa;margin-top:8px;">🎨 戦闘UI確認 (§93 v0.34 / §94 v0.34.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v34-ui" style="border-color:#80ffaa;color:#80ffaa;">🎨 戦闘UI確認（仲間2人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v34-badge-guard" style="border-color:#4cc9f0;color:#4cc9f0;">🛡️ 守り効果バッジ確認（HP25%+かばう）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v341-hpcolor" style="border-color:#ff9f1c;color:#ff9f1c;">🎨 HP色確認（HP45% オレンジ確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v341-gaman-guard" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン+守りバッジ同時確認</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7439,6 +7441,33 @@
         state.battleDamageReduction = 0.20;
         updateBattleStatusBadges();
         showToast("[DEBUG] HP25%（赤）+🛡️守り効果バッジを確認！");
+      };
+      // §94 v0.34.1: HP色確認（HP45% → オレンジ warn が見えるか）
+      document.getElementById("btn-debug-v341-hpcolor").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = [];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.45)); // HP45%→オレンジ警告
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] HP45%。オレンジ（警告）が表示されるか確認！ダメージ受けると赤（危険）になる。");
+      };
+      // §94 v0.34.1: ガマン中 + 守り効果バッジの同時表示確認
+      document.getElementById("btn-debug-v341-gaman-guard").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        state.gamanActive = true;
+        state.battleDamageReduction = 0.20;
+        updateBattlePlayerStatus();
+        showToast("[DEBUG] 😤ガマン中 + 🛡️守り効果バッジが共存して崩れないか確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {

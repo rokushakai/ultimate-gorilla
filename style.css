@@ -655,8 +655,9 @@ html, body {
 .record-pending { color: #888; }
 .record-hint { color: #ffd166; font-size: 0.78em; margin-top: 2px; }
 
-/* §93 v0.34: 主人公HP/MPカラー（HP割合による警告表示） */
-#b-hp-text.battle-hp-warn   { color: #ffd166; }
+/* §93 v0.34 / §94 v0.34.1: 主人公HP/MPカラー（HP割合による警告表示） */
+/* battle-hp-warn は §94 で #ffd166（親と同色）→ #ff9f1c（オレンジ）に修正 */
+#b-hp-text.battle-hp-warn   { color: #ff9f1c; }
 #b-hp-text.battle-hp-danger { color: #ef233c; }
 
 /* §93 v0.34: 戦闘状態バッジ（守り効果あり / うたうチャンス） */

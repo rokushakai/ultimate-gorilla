@@ -5,6 +5,23 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.34.1] - 2026-07-12 — 戦闘UI安定化 (§94)
+
+### Fixed
+- **`#b-hp-text.battle-hp-warn` CSS バグ修正** (§94): `color: #ffd166`（親 `#battle-player-status` と同色で視覚的に区別不可）→ `color: #ff9f1c`（オレンジ）に変更。HP 30〜49% 時に警告色が正しく表示されるようになった。
+
+### Added
+- **デバッグボタン2本追加** (§94): 「🎨 HP色確認（HP45% オレンジ確認）」「😤 ガマン+守りバッジ同時確認」。
+
+### 確認済み（変更なし）
+- **HP色更新**: `hpEl.className` の直接代入で毎回上書き。回復後も色がリセットされる。次戦闘開始時に `updateBattlePlayerStatus()` が呼ばれてクリーンになる。
+- **守り効果バッジクリア**: `clearCompanionCommandState()` 内でリセット順 `battleDamageReduction = 0` → `updateBattleStatusBadges()` が正しい。
+- **うたうチャンスバッジ**: `state.enemy.id === "ultimategorilla"` チェックで通常敵戦では絶対に出ない。
+- **ガマン+守りバッジ共存**: `flex-wrap: wrap` で折り返し対応済み。スマホ幅で崩れない。
+- **仲間コマンド進捗**: `total > 1` のみ表示。次戦闘では `clearCompanionCommandState()` でキューリセット。
+- 戦闘ロジック / 捕獲率 / `gainExp()` / BGM制御は変更なし。
+
+
 ## [0.34] - 2026-07-12 — 戦闘UI改善・状態表示 (§93)
 
 ### Added
