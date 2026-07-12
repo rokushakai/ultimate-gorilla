@@ -5,6 +5,23 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.33] - 2026-07-12 — まかせるAI 2つ目固有コマンド対応 (§91)
+
+### Changed
+- **`runCompanionAutoCommand(cid)`** (§91): 2択（たたかう/固有1）から **3択（たたかう/固有1/固有2）** に拡張。ウェイト正規化方式（`wA + wS1 + wS2` を合計で除算）で確率を管理。
+- **基本ウェイト**: juritani (0.35/0.45/0.20)、shurittani (0.25/0.45/0.30)、norio (0.40/0.40/0.20)、harumi (0.25/0.50/0.25)。
+- **状況判断 (敵HP低い)**: juritani/shurittani/norio は攻撃寄りにシフト。harumi は回復技ゼロ化（固有2のまもりの光を増やす）。
+- **状況判断 (harumi HP 40%以下)**: 小さな癒し (wS1=0.80) を最優先。**HP 85%以上**: まもりの光 (wS2=0.40) を増やす。
+- **前回行動記憶**: `state.lastCompanionAutoAction[cid]` の取りうる値を `"attack"/"special"` から `"attack"/"special1"/"special2"` に拡張。前回と同じ行動に -0.10 ペナルティを課してから正規化。古い `"special"` 値は `"special1"` と同義で処理（セーブ互換）。
+
+### 確認済み（変更なし）
+- `runCompanionSpecialAction(cid, "second")` の呼び出しにより `battleDamageReduction` は正常に適用される。
+- `state.lastCompanionAutoAction` は transient（セーブ対象外）。`clearCompanionCommandState()` で毎戦闘クリア。
+- 究極ゴリラ戦 (`e.final`) では `runCompanionAutoActions()` が `e.final` ガードで即 return するため影響なし。
+- 捕獲率本体 / `gainExp()` は変更なし。
+- UI（固有コマンドサブメニュー）は変更なし。
+
+
 ## [0.32.1] - 2026-07-12 — 2つ目固有コマンド安定化 (§90)
 
 ### Changed

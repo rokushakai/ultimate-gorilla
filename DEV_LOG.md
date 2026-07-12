@@ -5,6 +5,22 @@
 
 ---
 
+## v0.33 (2026-07-12)
+
+### 追加・変更
+
+- **`runCompanionAutoCommand(cid)` 3択化 (§91)**: 旧: `specialChance` による 2 択（attack or special1）。新: `wA / wS1 / wS2` の 3 ウェイトを正規化して 3 択（attack / special1 / special2）。`Math.random()` の累積確率比較で選択し、`state.lastCompanionAutoAction[cid]` に `"attack"/"special1"/"special2"` を記録。
+- **状況判断テーブル追加 (§91)**: 敵HP低い（≤15）→ 全員攻撃寄りシフト。harumi のみ HP% 条件も追加（≤40% で癒し最優先 / ≥85% で光増量）。
+- **前回行動記憶の3択対応 (§91)**: `"special"` 値を `"special1"` として扱う後方互換処理を追加。ペナルティ(-0.10)後に正規化するため、残りのウェイトに自動再分配される。
+
+### 設計判断
+
+- **なぜ正規化方式にしたか**: 固定合計 1.0 のウェイトテーブルを手で調整するより、3 値を「大まかな比率」で書いて正規化した方が、将来 4 択に拡張する際も変更箇所が少ない。
+- **なぜ `"special"` 後方互換を入れたか**: `lastCompanionAutoAction` は transient（戦闘ごとにリセット）なので実際には引き継がれないが、将来的にセーブ対象にする可能性を考え、古い値でも落ちないようにした。
+- **`battleDamageReduction` との関係**: まかせる AI が special2（かばう / まもりの光）を選んだ場合、`runCompanionSpecialAction(cid, "second")` が `state.battleDamageReduction` をセットする。以降の `enemyTurn()` で適用 → 0 リセット、という既存フローに完全に乗る。新規の変更は不要だった。
+
+---
+
 ## v0.32.1 (2026-07-12)
 
 ### 追加・変更
