@@ -5,6 +5,23 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.35.1] - 2026-07-12 — 仲間まほう安定化 (§96)
+
+### Changed
+- **`showCompanionMagicMenu()` に `companionCommandLocked` ガード追加** (§96): `if (state.companionCommandLocked) return;` を先頭に追加。`companionCommandActive` チェックに加え、ロック中はサブメニューが開かないよう防護を強化。
+
+### Added
+- **デバッグボタン2本追加** (§96): 「✨ 仲間まほう勝利確認（敵HP5）」「✨ まほうメニュー連打防止確認（仲間1人）」。
+
+### 確認済み（変更なし）
+- **戻る動作**: `↩ 戻る` → `showCompanionCommandForIdx(state.companionCommandIndex)` → `companionCommandLocked = false` → 4択ボタン再表示の正常フロー確認済み。
+- **二重クリック防止**: `btn-companion-m1` / `btn-companion-mback` 押下直後に全ボタン `disabled=true`（v0.35 実装済み）。HTML の disabled ボタンはクリックイベントが発火しない。
+- **戦闘終了クリア**: `clearCompanionCommandState()` → `#companion-magic-menu` の `hidden` 追加済み（v0.35）。次戦闘に前回情報が残らない。
+- **ハルミ「小さな回復」HP更新**: `runCompanionMagicAction` → `updateBattlePlayerStatus()` → HP色・バッジ即更新確認済み。
+- **攻撃系まほう勝利処理**: `killed = true` → `executeCompanionCommand` の `winBattle()` → `enemyTurn()` は走らない確認済み。
+- 仲間MP / 主人公MP消費なし。まかせるAI 変更なし。捕獲率 / `gainExp()` / BGM制御 変更なし。
+
+
 ## [0.35] - 2026-07-12 — 仲間まほう追加 (§95)
 
 ### Added

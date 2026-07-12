@@ -14,13 +14,26 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.36 候補 — 仲間まほう安定化・まかせるAIに混ぜる
+### Version 0.36 候補 — まかせるAIに仲間まほうを混ぜる
 
-v0.35 の仲間まほうを安定化。まかせるAIに仲間まほうを追加する。仲間わざ / サイドストーリー追加など。v0.35 安定後。
+まかせるAIに仲間まほうを追加する（4択: たたかう / 固有1 / 固有2 / まほう）。仲間わざ / サイドストーリー追加など。v0.35.1 安定後。
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.35.1 — 仲間まほう安定化 (§96)
+
+- **`showCompanionMagicMenu()` に `companionCommandLocked` ガード追加**: `companionCommandActive` チェックに加え、`companionCommandLocked` チェックを追加。二重呼び出し防止を強化 ✅
+- **戻る動作確認**: `↩ 戻る` → `showCompanionCommandForIdx(idx)` → `companionCommandLocked = false` のパスが正常 ✅
+- **二重クリック防止確認**: `disabled=true` による防護が機能していることを確認。無効ボタンはイベント発火しない ✅
+- **`clearCompanionCommandState()` 確認**: `#companion-magic-menu` hidden 追加済み（v0.35）。次戦闘に前回情報が残らない ✅
+- **ハルミ「小さな回復」HP色更新確認**: `updateBattlePlayerStatus()` 呼び出しにより HP色・バッジが即更新 ✅
+- **攻撃系まほう勝利処理確認**: `true` 返値 → `executeCompanionCommand` → `winBattle()` フロー正常 ✅
+- **デバッグボタン2本追加** (§96): 「仲間まほう勝利確認（敵HP5）」「まほうメニュー連打防止確認」 ✅
+- 仲間MP / 主人公MP消費なし ✅
+- まかせるAI（3択）変更なし ✅
+- 捕獲率 / `gainExp()` / BGM制御 変更なし ✅
 
 ### Version 0.35 — 仲間まほう追加 (§95)
 

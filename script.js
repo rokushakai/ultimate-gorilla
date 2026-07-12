@@ -3155,9 +3155,10 @@
     };
   }
 
-  // §95 v0.35: 仲間まほうサブメニューを表示する（まほう1つ / 戻る）
+  // §95 v0.35 / §96 v0.35.1: 仲間まほうサブメニューを表示する（まほう1つ / 戻る）
   function showCompanionMagicMenu(cid) {
     if (!state.companionCommandActive) return;
+    if (state.companionCommandLocked) return; // §96 v0.35.1: 二重呼び出し防止ガード追加
     var cData = findById(COMPANION_DATA, cid);
     var label = cData ? (cData.emoji + " " + cData.name) : cid;
     var mLabel = "✨ まほう";
@@ -6262,10 +6263,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v34-badge-guard" style="border-color:#4cc9f0;color:#4cc9f0;">🛡️ 守り効果バッジ確認（HP25%+かばう）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v341-hpcolor" style="border-color:#ff9f1c;color:#ff9f1c;">🎨 HP色確認（HP45% オレンジ確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v341-gaman-guard" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン+守りバッジ同時確認</button>';
-      html += '<p class="small" style="color:#c4b5fd;margin-top:8px;">✨ 仲間まほう確認 (§95 v0.35)</p>';
+      html += '<p class="small" style="color:#c4b5fd;margin-top:8px;">✨ 仲間まほう確認 (§95 v0.35 / §96 v0.35.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-ui" style="border-color:#c4b5fd;color:#c4b5fd;">✨ 仲間まほう確認（仲間4人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-harumi" style="border-color:#f9a8d4;color:#f9a8d4;">✨ ハルミ小さな回復確認（HP25%）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-back" style="border-color:#86efac;color:#86efac;">✨ 仲間まほうUI戻る確認（仲間2人）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v351-magic-win" style="border-color:#fbbf24;color:#fbbf24;">✨ 仲間まほう勝利確認（敵HP5）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v351-magic-lock" style="border-color:#a78bfa;color:#a78bfa;">✨ まほうメニュー連打防止確認（仲間1人）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7606,6 +7609,31 @@
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
         showToast("[DEBUG] 仲間2人。まほうサブメニュー→戻るボタンで元に戻れるか確認！");
+      };
+      // §96 v0.35.1: 仲間まほう勝利確認（敵HP5）
+      document.getElementById("btn-debug-v351-magic-win").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        if (state.enemy) { state.enemy.hp = 5; renderEnemy(); }
+        showToast("[DEBUG] 仲間3人+敵HP5。まほうで倒すと winBattle() に進むか確認！");
+      };
+      // §96 v0.35.1: まほうメニュー連打防止確認（仲間1人）
+      document.getElementById("btn-debug-v351-magic-lock").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ジュリタニ1人。まほうボタン連打・戻る連打で壊れないか確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {

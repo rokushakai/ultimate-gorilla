@@ -5,6 +5,21 @@
 
 ---
 
+## v0.35.1 (2026-07-12)
+
+### 追加・変更
+
+- **`showCompanionMagicMenu()` に `companionCommandLocked` ガード追加 (§96)**: `if (!state.companionCommandActive) return;` の直後に `if (state.companionCommandLocked) return;` を追加。理論上は `✨ まほう` ボタンが表示されている時点で `companionCommandLocked = false` のはずだが（`showCompanionCommandForIdx` で明示的にリセットされる）、防御的プログラミングとして追加した。
+
+### 設計判断・確認結果
+
+- **なぜ `companionCommandLocked` ガードが必要か**: `showCompanionCommandForIdx` は末尾で `companionCommandLocked = false` を設定するが、何らかの予期しない経路で `companionCommandLocked = true` のまま `btn-companion-magic` が押せた場合に二重サブメニュー表示を防ぐ。守備的な追加。
+- **戻る動作フローの確認**: `↩ 戻る` クリック → 全ボタン disable → magic menu hidden → `showCompanionCommandForIdx(state.companionCommandIndex)` 呼び出し → この関数内の `state.companionCommandLocked = false` で確実にリセット → 4択ボタン再生成（disabled でない）。連打しても2回目は disabled ボタンのため無効。
+- **`clearCompanionCommandState()` の網羅性**: `#companion-magic-menu` の hidden は v0.35 で追加済み。`battle-gaman-status` は `updateBattlePlayerStatus()` 経由で制御され、`finishBattle()` が `gamanActive = false` を設定することで間接的にクリアされる。`clearCompanionCommandState` から直接 hidden を操作しなくても問題ない（battle screen 自体が hide される）。
+- **攻撃系まほうの勝利フロー確認**: `runCompanionMagicAction` が `e.hp <= 0` なら `true` → `executeCompanionCommand` の `if (killed || e.hp <= 0) { winBattle(); return; }` で winBattle → その後の `showCompanionCommandForIdx` には到達しない → `enemyTurn()` の二重予約もない。
+
+---
+
 ## v0.35 (2026-07-12)
 
 ### 追加・変更
