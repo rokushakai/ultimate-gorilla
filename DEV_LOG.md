@@ -5,6 +5,27 @@
 
 ---
 
+## v0.37 (2026-07-12)
+
+### 追加・変更
+
+- **`state.companionLevels` 追加**: state オブジェクトに `companionLevels: {}` を追加。`saveGame/loadGame` 両方に対応。古いセーブは `data.companionLevels || {}` で補完。
+- **`getCompanionLevel(cid)` 追加**: 仲間のLv/EXP状態を取得する関数。初回呼び出し時に `{ level: 1, exp: 0, nextExp: 25 }` で初期化する（guard付き）。
+- **`gainCompanionExp(baseExp)` 追加**: `gainExp/addExp/levelUp` の直後に定義。パーティ中の仲間にEXPを付与し、Lv99までレベルアップ処理を行う。
+- **`winBattle()` / `attemptCapture()` 更新**: `gainExp(e.exp)` 直後に `gainCompanionExp(e.exp)` を追加。どちらも敵のベースEXP（ノリオ倍率適用前）を付与。
+- **酒場UI Lv 表示追加**: `renderTavernRecruit` / `renderTavernViewParty` の各仲間カードに Lv.N を追加（水色、companion-card-header の直下）。
+- **ステータス画面「仲間」強化**: `COMPANION_DATA.forEach` で全4仲間を表示に変更。各仲間に Lv / EXP / パーティ状態を表示。
+- **冒険の記録「👥 仲間」追加**: 「次の目標」セクションの直前に全4仲間のLvを record-section として追加。
+
+### 設計判断
+
+- **ノリオ倍率を仲間に適用しない**: ノリオの `expMod:2` は主人公のための能力。仲間へは base exp（`e.exp`）を付与することで、ノリオ能力の独自性を保つ。
+- **`getCompanionLevel` 方式**: `COMPANION_DATA` に lv/exp を直接追加しない。`state.companionLevels` の別オブジェクトに分離することで、COMPANION_DATA はデータ（固有能力の定義）のまま保つ。起動時の初期値は state に、セーブは companionLevels キーで管理。
+- **Lv99でEXPを0にリセット**: キャップ後も `gainCompanionExp` を呼ぶたびに `if (cl.level >= 99) return;` でスキップ。EXPの「たまりっぱなし」を防ぐ。
+- **全4仲間を表示**: ステータス画面 / 冒険の記録では、パーティ外の仲間のLvも表示する。「待機中でも成長の痕跡が残る」設計は今後のEXP共有ルール変更を想定。
+
+---
+
 ## v0.36.1 (2026-07-12)
 
 ### 追加・変更

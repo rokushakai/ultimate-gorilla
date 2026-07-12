@@ -801,7 +801,8 @@
       stage6RewardLevel: 0,  // §59 v0.14: ステージ6報酬受取レベル (0=未, 1=300G, 2=全取得)
       gateExplained: false   // §52 v0.11.2: ゲートから初めて横スクロールへ入ったか
     },
-    partyTrail: []            // §78 v0.26: 仲間追従軌跡（最大2エントリ {x,y}）
+    partyTrail: [],            // §78 v0.26: 仲間追従軌跡（最大2エントリ {x,y}）
+    companionLevels: {}        // §99 v0.37: 仲間Lv/EXP { cid: {level, exp, nextExp} }
   };
 
   // ---------------------------------------------------------
@@ -3919,6 +3920,7 @@
       log("🪤 " + e.name + "を捕まえた！");
       captureUma(e);
       gainExp(e.exp);
+      gainCompanionExp(e.exp); // §99 v0.37: パーティ仲間にも同EXP付与
       showBattleEnd();
       return true;
     }
@@ -4032,6 +4034,7 @@
     ];
     log("💨 " + _escapeMsgs[Math.floor(Math.random() * _escapeMsgs.length)]);
     gainExp(e.exp);
+    gainCompanionExp(e.exp); // §99 v0.37: パーティ仲間にも同EXP付与
     var gold = Math.ceil(e.exp / 2);
     if (gold > 0) {
       state.player.gold += gold;
@@ -4175,6 +4178,34 @@
     }
     logExpGained(finalExp);
     return addExp(finalExp);
+  }
+
+  // §99 v0.37: 仲間Lv/EXP状態を取得（なければ初期化して返す）
+  function getCompanionLevel(cid) {
+    if (!state.companionLevels) { state.companionLevels = {}; }
+    if (!state.companionLevels[cid]) {
+      state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 };
+    }
+    return state.companionLevels[cid];
+  }
+
+  // §99 v0.37: パーティ内仲間にベースEXPを付与し、Lv99上限でレベルアップ
+  function gainCompanionExp(baseExp) {
+    var p = state.player;
+    p.companions.forEach(function (cid) {
+      var cData = findById(COMPANION_DATA, cid);
+      if (!cData) return;
+      var cl = getCompanionLevel(cid);
+      if (cl.level >= 99) return;
+      cl.exp += baseExp;
+      while (cl.level < 99 && cl.exp >= cl.nextExp) {
+        cl.exp -= cl.nextExp;
+        cl.level++;
+        cl.nextExp = cl.level * 10 + 15;
+        log("🎉 " + cData.name + "は Lv" + cl.level + "になった！");
+      }
+      if (cl.level >= 99) { cl.exp = 0; }
+    });
   }
 
   function addExp(amount) {
@@ -4496,6 +4527,17 @@
     } else {
       html += '<div class="record-row"><span></span><span class="record-pending">伝説装備7種入手後に解放</span></div>';
     }
+    html += '</div>';
+
+    // §99 v0.37: 仲間成長セクション
+    html += '<div class="record-section">';
+    html += '<h4>👥 仲間</h4>';
+    COMPANION_DATA.forEach(function (cd) {
+      var cl = getCompanionLevel(cd.id);
+      var inParty = hasCompanion(cd.id);
+      html += '<div class="record-row"><span>' + cd.emoji + " " + cd.name + '</span>' +
+        '<span>Lv.' + cl.level + (inParty ? ' <span style="color:#06d6a0;font-size:0.82em;">✓</span>' : '') + '</span></div>';
+    });
     html += '</div>';
 
     // --- 次の目標（強調） ---
@@ -4894,17 +4936,20 @@
         '<span style="color:' + (got ? "#ffd166" : "#888") + ';font-size:0.85em;">' +
         (got ? "★ 入手済" : "未入手") + "</span></div>";
     });
+    // §99 v0.37: 全仲間のLv/EXP表示（パーティ外も含む）
     html += "<h3>仲間</h3>";
-    if (p.companions.length === 0) {
-      html += '<p class="small">なし</p>';
-    } else {
-      p.companions.forEach(function (id) {
-        var c = findById(COMPANION_DATA, id);
-        if (!c) return;
-        html += '<div class="shop-row"><span>' + c.emoji + " " + c.name + "</span>" +
-          '<span class="small" style="color:#ffd166;">' + c.effectDesc + "</span></div>";
-      });
-    }
+    COMPANION_DATA.forEach(function (cd) {
+      var cl = getCompanionLevel(cd.id);
+      var inParty = hasCompanion(cd.id);
+      var statusColor = inParty ? "#06d6a0" : "#adb5bd";
+      var statusLabel = inParty ? "パーティ中" : "待機中";
+      html += '<div class="shop-row"><span>' + cd.emoji + " " + cd.name +
+        ' <span style="font-size:0.82em;color:#a0cfff;">Lv.' + cl.level + '</span></span>' +
+        '<span style="font-size:0.82em;color:' + statusColor + ';">' + statusLabel + '</span></div>';
+      html += '<div class="shop-row" style="font-size:0.8em;">' +
+        '<span style="color:#888;padding-left:12px;">EXP</span>' +
+        '<span style="color:#a0cfff;">' + cl.exp + ' / ' + cl.nextExp + '</span></div>';
+    });
 
     // §47 v0.9.3 / §48 v0.10 / §50 v0.11 / §55 v0.12: 横スクロール進捗
     var sm = state.sideMap;
@@ -5036,6 +5081,7 @@
       var inParty = hasCompanion(c.id);
       var _rq = getCompanionQuote(c);
       html += '<div class="companion-card">';
+      var _cl = getCompanionLevel(c.id); // §99 v0.37
       html += '<div class="companion-card-header">';
       html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
       if (inParty) {
@@ -5044,6 +5090,7 @@
         html += '<span class="companion-status" style="color:#adb5bd;">待機中</span>';
       }
       html += "</div>";
+      html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">Lv.' + _cl.level + '</div>'; // §99 v0.37
       html += '<div class="companion-ability">' + c.effectDesc + "</div>";
       if (_rq) {
         html += '<div class="companion-quote" style="color:' + _rq.color + ';">「' + _rq.text + "」</div>";
@@ -5075,11 +5122,13 @@
         var c = findById(COMPANION_DATA, id);
         if (!c) return;
         var _vq = getCompanionQuote(c);
+        var _vcl = getCompanionLevel(c.id); // §99 v0.37
         html += '<div class="companion-card">';
         html += '<div class="companion-card-header">';
         html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
         html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
         html += "</div>";
+        html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">Lv.' + _vcl.level + '</div>'; // §99 v0.37
         html += '<div class="companion-ability">' + c.effectDesc + "</div>";
         if (_vq) {
           html += '<div class="companion-quote" style="color:' + _vq.color + ';">「' + _vq.text + "」</div>";
@@ -6290,6 +6339,10 @@
       html += '<p class="small" style="color:#6ee7b7;margin-top:4px;">🎲 まかせるAI 4択安定化確認 (§98 v0.36.1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v361-magic-log" style="border-color:#86efac;color:#86efac;">🎲 まかせるAI 魔法名ログ確認（仲間4人・前回記憶クリア）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v361-magic-win" style="border-color:#fbbf24;color:#fbbf24;">🎲 まかせるAI 攻撃魔法勝利確認（ジュリ/シュリ/ノリオ+敵HP5）</button>';
+      html += '<p class="small" style="color:#a0cfff;margin-top:8px;">👥 仲間成長システム (§99 v0.37)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-lv10" style="border-color:#a0cfff;color:#a0cfff;">👥 仲間Lv10にする（4人全員）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-lv50" style="border-color:#74c0fc;color:#74c0fc;">👥 仲間Lv50にする（4人全員）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-lv99" style="border-color:#ffd700;color:#ffd700;">👥 仲間Lv99にする（4人全員）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7709,6 +7762,34 @@
         actuallyStartBattle(dog);
         showToast("[DEBUG] 仲間4人+前回記憶クリア。まかせるでまほうが選ばれた時に魔法名がログに出るか確認！");
       };
+      // §99 v0.37: 仲間Lv設定ボタン
+      document.getElementById("btn-debug-companion-lv10").onclick = function () {
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 10; cl.exp = 0; cl.nextExp = 10 * 10 + 15;
+        });
+        saveGame();
+        showToast("[DEBUG] 仲間4人をLv10に設定！酒場・ステータス・冒険の記録で確認");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-companion-lv50").onclick = function () {
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 50; cl.exp = 0; cl.nextExp = 50 * 10 + 15;
+        });
+        saveGame();
+        showToast("[DEBUG] 仲間4人をLv50に設定！酒場・ステータス・冒険の記録で確認");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-companion-lv99").onclick = function () {
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 99; cl.exp = 0; cl.nextExp = 99 * 10 + 15;
+        });
+        saveGame();
+        showToast("[DEBUG] 仲間4人をLv99に設定！酒場・ステータス・冒険の記録で確認");
+        renderSettingsBody();
+      };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -7919,7 +8000,8 @@
         sideMapStage4Reward: state.sideMap.stage4RewardLevel || 0,  // §55 v0.12
         sideMapStage5Reward: state.sideMap.stage5RewardLevel || 0,  // §57 v0.13
         sideMapStage6Reward: state.sideMap.stage6RewardLevel || 0,  // §59 v0.14
-        sideMapGateExplained: !!state.sideMap.gateExplained         // §52 v0.11.2
+        sideMapGateExplained: !!state.sideMap.gateExplained,        // §52 v0.11.2
+        companionLevels: state.companionLevels || {}                 // §99 v0.37
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -7995,6 +8077,7 @@
       state.sideMap.stage5RewardLevel = data.sideMapStage5Reward || 0;  // §57 v0.13
       state.sideMap.stage6RewardLevel = data.sideMapStage6Reward || 0;  // §59 v0.14
       state.sideMap.gateExplained = !!data.sideMapGateExplained;        // §52 v0.11.2
+      state.companionLevels = data.companionLevels || {};                // §99 v0.37
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
