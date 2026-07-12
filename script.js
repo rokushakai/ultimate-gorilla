@@ -3057,7 +3057,7 @@
     showCompanionCommandForIdx(0);
   }
 
-  // §82 v0.28: idx 番目の仲間コマンドメニューを表示
+  // §82 v0.28 / §84 v0.29: idx 番目の仲間コマンドメニューを表示（3択）
   function showCompanionCommandForIdx(idx) {
     var e = state.enemy;
     if (!state.inBattle) return;
@@ -3071,39 +3071,56 @@
     var cid = queue[idx];
     var cData = findById(COMPANION_DATA, cid);
     var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    // §84 v0.29: 仲間ごとの固有コマンド名
+    var specialLabel = "⭐ 固有コマンド";
+    if (cid === "juritani")   { specialLabel = "💥 会心の構え"; }
+    else if (cid === "shurittani") { specialLabel = "🪤 捕獲アシスト"; }
+    else if (cid === "norio") { specialLabel = "📈 経験値の眼"; }
+    else if (cid === "harumi") { specialLabel = "✨ 小さな癒し"; }
     var menu = document.getElementById("companion-command-menu");
+    // §84 v0.29: 3択レイアウト。p とまかせるは grid-column:1/-1 で横幅全体
     menu.innerHTML =
-      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;">' + label + "の行動は？</p>" +
+      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？</p>" +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
-      '<button id="btn-companion-auto">🤝 まかせる</button>';
+      '<button id="btn-companion-special">' + specialLabel + '</button>' +
+      '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
     // §83 v0.28.1: companionCommandLocked=false でこの仲間のターン開始
-    // setBattleLocked が companion-command-menu を除外したため disabled 上書き不要
     state.companionCommandLocked = false;
     document.getElementById("btn-companion-fight").onclick = function() {
       executeCompanionCommand(cid, "fight");
+    };
+    document.getElementById("btn-companion-special").onclick = function() { // §84 v0.29
+      executeCompanionCommand(cid, "special");
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
     };
   }
 
-  // §82 v0.28 / §83 v0.28.1: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
+  // §82 v0.28 / §83 v0.28.1 / §84 v0.29: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
   function executeCompanionCommand(cid, mode) {
     // §83 v0.28.1: 二重押し・二重実行を companionCommandLocked で防止
     if (state.companionCommandLocked) { return; }
     state.companionCommandLocked = true;
     var fBtn = document.getElementById("btn-companion-fight");
     var aBtn = document.getElementById("btn-companion-auto");
+    var sBtn = document.getElementById("btn-companion-special"); // §84 v0.29
     if (fBtn) { fBtn.disabled = true; }
     if (aBtn) { aBtn.disabled = true; }
+    if (sBtn) { sBtn.disabled = true; } // §84 v0.29
     document.getElementById("companion-command-menu").classList.add("hidden");
     document.getElementById("battle-menu").classList.remove("hidden");
     if (!state.inBattle) return;
     var e = state.enemy;
     if (!e || e.hp <= 0) { winBattle(); return; }
-    var killed = runSingleCompanionAction(cid); // たたかう/まかせる 共通
+    var killed;
+    if (mode === "special") { // §84 v0.29: 固有コマンド
+      killed = runCompanionSpecialAction(cid);
+    } else { // たたかう / まかせる 共通
+      killed = runSingleCompanionAction(cid);
+    }
     state.companionCommandIndex++;
     if (killed || (e && e.hp <= 0)) { winBattle(); return; }
     showCompanionCommandForIdx(state.companionCommandIndex);
@@ -3138,6 +3155,50 @@
     }
     renderEnemy();
     return !!(e.hp <= 0);
+  }
+
+  // §84 v0.29: 仲間固有コマンド実行。返値 true=敵HP0（ハルミは常に false）
+  function runCompanionSpecialAction(cid) {
+    var p = state.player, e = state.enemy;
+    if (!state.inBattle || !e || e.hp <= 0) return false;
+    if (cid === "juritani") {
+      // 会心の構え: 強めの物理攻撃、35%で大会心×1.6倍
+      var dmgJ = Math.min(30, 8 + Math.floor(p.level / 7));
+      var isCritJ = Math.random() < 0.35;
+      if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.6); }
+      e.hp = Math.max(0, e.hp - dmgJ);
+      log(isCritJ
+        ? "💥 ジュリタニが会心の構えを見せた！ 大会心！ " + e.name + "に" + dmgJ + "ダメージ！"
+        : "💥 ジュリタニが会心の構えを見せた！ " + e.name + "に" + dmgJ + "ダメージ！");
+      renderEnemy();
+      return !!(e.hp <= 0);
+    } else if (cid === "shurittani") {
+      // 捕獲アシスト: 1ダメージ + 捕獲フレーバーログ（捕獲率システムは触らない）
+      e.hp = Math.max(0, e.hp - 1);
+      log("🪤 シュリタニが捕獲のタイミングを見きった！");
+      log("なんだか捕まえやすくなった気がする。");
+      renderEnemy();
+      return !!(e.hp <= 0);
+    } else if (cid === "norio") {
+      // 経験値の眼: 小ダメージ + EXPフレーバーログ
+      var dmgN = Math.min(10, 3 + Math.floor(p.level / 12));
+      e.hp = Math.max(0, e.hp - dmgN);
+      log("📈 ノリオが経験値のにおいを嗅ぎつけた！");
+      log("この戦い、少し学びが多くなりそうだ。 " + e.name + "に" + dmgN + "ダメージ！");
+      renderEnemy();
+      return !!(e.hp <= 0);
+    } else if (cid === "harumi") {
+      // 小さな癒し: 主人公HPを小回復。敵ダメージなし → 常に false を返す
+      var heal = Math.min(30, 10 + Math.floor(p.level / 10));
+      var before = p.hp;
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      var actual = p.hp - before;
+      log("✨ ハルミが小さな癒しの光を灯した。");
+      log("HPが " + actual + " 回復した！");
+      updateStatusBar();
+      return false;
+    }
+    return false;
   }
 
   // §80 v0.27 / §81 v0.27.1 / §82 v0.28: 全仲間を自動行動（runSingleCompanionAction に委譲）
@@ -5846,6 +5907,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-companion-cmd-wilddog" style="border-color:#a9e34b;color:#a9e34b;">🎮 仲間コマンドテスト（のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-cmd-midboss" style="border-color:#a9e34b;color:#a9e34b;">🎮 仲間コマンドテスト（中ボスHP30）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-cmd-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間コマンド：究極ゴリラ見守り確認</button>';
+      html += '<p class="small" style="color:#ffcc66;margin-top:8px;">⭐ 仲間固有コマンドテスト (§84 v0.29)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-special-all" style="border-color:#ffcc66;color:#ffcc66;">⭐ 固有コマンドテスト（仲間4人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-special-harumi" style="border-color:#aaffcc;color:#aaffcc;">✨ ハルミ回復確認（HP40%+のらいぬ）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -6960,6 +7024,28 @@
         state.enemy.hp = 10;
         renderEnemy();
         showToast("[DEBUG] 仲間2人+究極ゴリラHP10。コマンド出ず見守りログを確認！");
+      };
+      // §84 v0.29: 仲間固有コマンドテスト
+      document.getElementById("btn-debug-companion-special-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人+のらいぬ。各固有コマンドを全て確認！");
+      };
+      document.getElementById("btn-debug-companion-special-harumi").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.4));
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ハルミのみ+HP40%。小さな癒しでHP回復を確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

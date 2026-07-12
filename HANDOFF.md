@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.28.1** |
+| 現在バージョン | **v0.29** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,15 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.29] 仲間固有コマンド拡張**（§84）
+  - **仲間コマンドUI 3択化**: `[⚔️ たたかう] [固有コマンド]` / `[🤝 まかせる (全幅)]`。`grid-column:1/-1` でスマホ最適レイアウト。
+  - **ジュリタニ「💥 会心の構え」**: 強めの物理攻撃（上限30）、35%で大会心×1.6倍。
+  - **シュリタニ「🪤 捕獲アシスト」**: 1ダメージ + 捕獲フレーバーログ。
+  - **ノリオ「📈 経験値の眼」**: 小ダメージ（上限10）+ EXPフレーバーログ。
+  - **ハルミ「✨ 小さな癒し」**: 主人公HP小回復（上限30）、敵ダメージなし。
+  - **`runCompanionSpecialAction(cid)` 新設**: 固有コマンド実行。返値 true=敵HP0（ハルミは常に false）。
+  - **`executeCompanionCommand()` 拡張**: `mode === "special"` 分岐追加。3ボタン全て disable。
+  - **保護**: `runSingleCompanionAction()` / `clearCompanionCommandState()` / `setBattleLocked()` / BGM は変更なし。
 - **[v0.28.1] 仲間コマンド選択安定化**（§83）
   - **`setBattleLocked()` 修正**: セレクターを `.submenu:not(#companion-command-menu) button` に変更。仲間コマンドボタンへの `disabled=false` 上書きが不要になった。
   - **`clearCompanionCommandState()` 新設**: キュー・フラグ・UI を一括クリアするヘルパー。`finishBattle()` から呼ばれる。

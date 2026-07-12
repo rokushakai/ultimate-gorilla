@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.29] - 2026-07-12 — 仲間固有コマンド拡張 (§84)
+
+### Added
+- **`runCompanionSpecialAction(cid)` 新設** (§84): 仲間固有コマンド実行関数。返値 true=敵HP0（ハルミは常に false）。
+  - ジュリタニ「会心の構え」: 強めの物理攻撃（上限30）、35%で大会心×1.6倍。
+  - シュリタニ「捕獲アシスト」: 1ダメージ + 捕獲フレーバーログ（捕獲率システム本体は触らない）。
+  - ノリオ「経験値の眼」: 小ダメージ（上限10）+ EXPフレーバーログ。
+  - ハルミ「小さな癒し」: 主人公HPを小回復（上限30）、最大HP超えない、敵ダメージなし。
+- **デバッグボタン追加** (§84): 「固有コマンドテスト（仲間4人+のらいぬ）」「ハルミ回復確認（HP40%+のらいぬ）」。
+
+### Changed
+- **`showCompanionCommandForIdx(idx)`** (§84): 2択 → 3択（たたかう / 固有コマンド / まかせる）に拡張。`<p>` と「まかせる」ボタンに `grid-column:1/-1` でスマホ最適レイアウト。`btn-companion-special` の onclick 登録を追加。
+- **`executeCompanionCommand(cid, mode)`** (§84): `mode === "special"` 分岐を追加し `runCompanionSpecialAction(cid)` を呼び出す。`sBtn (btn-companion-special)` の disable 処理を追加。
+
+
 ## [0.28.1] - 2026-07-12 — 仲間コマンド選択安定化 (§83)
 
 ### Fixed

@@ -5,6 +5,23 @@
 
 ---
 
+## v0.29 (2026-07-12)
+
+### 追加・変更
+
+- **`runCompanionSpecialAction(cid)` 新設 (§84)**: 仲間固有コマンドを実行する関数。`runSingleCompanionAction()` とは分離した独立関数。返値 true=敵HP0（ハルミは常に false）。
+- **`showCompanionCommandForIdx()` 変更 (§84)**: 2択から3択へ拡張。`specialLabel` を仲間IDで分岐して取得。`<p>` タグと `btn-companion-auto` に `grid-column:1/-1` を追加してスマホUIを整理。`btn-companion-special` のonclick追加。
+- **`executeCompanionCommand()` 変更 (§84)**: `sBtn (btn-companion-special)` の disable 処理を追加。`mode === "special"` 分岐で `runCompanionSpecialAction()` を呼び出す。
+- **デバッグボタン追加 (§84)**: 「固有コマンドテスト（仲間4人+のらいぬ）」「ハルミ回復確認（HP40%+のらいぬ）」を debug=1 に追加。
+
+### 設計判断
+
+- **`runSingleCompanionAction()` を変更しない理由**: たたかう/まかせるが共有するため、変更するとどちらの行動かが曖昧になる。固有コマンドは完全に別関数で管理。
+- **ハルミが `return false` 固定の理由**: 敵にダメージを与えないため、`e.hp <= 0` になることはない。winBattle() への誤接続を防ぐ。
+- **グリッドレイアウトの選択**: `grid-column:1/-1` を `p` タグと「まかせる」ボタンに付けることで、2列グリッドのまま「たたかう / 固有コマンド」が1行目、「まかせる（全幅）」が2行目に収まる。3列グリッドへの変更より変更量が最小。
+
+---
+
 ## v0.28.1 (2026-07-12)
 
 ### 追加・変更
