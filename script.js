@@ -4180,16 +4180,26 @@
     return addExp(finalExp);
   }
 
-  // §99 v0.37: 仲間Lv/EXP状態を取得（なければ初期化して返す）
+  // §99 v0.37 / §100 v0.37.1: 仲間Lv/EXP状態を取得（なければ初期化、旧セーブガード付き）
   function getCompanionLevel(cid) {
     if (!state.companionLevels) { state.companionLevels = {}; }
     if (!state.companionLevels[cid]) {
       state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 };
     }
-    return state.companionLevels[cid];
+    var cl = state.companionLevels[cid];
+    // §100 v0.37.1: データ安全化ガード（旧セーブ・破損データに対処）
+    if (typeof cl.level !== "number" || isNaN(cl.level) || cl.level < 1) { cl.level = 1; }
+    if (cl.level > 99) { cl.level = 99; }
+    if (typeof cl.exp !== "number" || isNaN(cl.exp) || cl.exp < 0) { cl.exp = 0; }
+    if (typeof cl.nextExp !== "number" || isNaN(cl.nextExp) || cl.nextExp <= 0) {
+      cl.nextExp = cl.level * 10 + 15;
+    }
+    if (cl.level >= 99) { cl.exp = 0; }
+    return cl;
   }
 
-  // §99 v0.37: パーティ内仲間にベースEXPを付与し、Lv99上限でレベルアップ
+  // §99 v0.37 / §100 v0.37.1: パーティ内仲間にベースEXPを付与し、Lv99上限でレベルアップ
+  // 複数Lvアップ時は最終到達Lvのみ1回ログ。Lv99到達時は専用ログ。
   function gainCompanionExp(baseExp) {
     var p = state.player;
     p.companions.forEach(function (cid) {
@@ -4198,13 +4208,18 @@
       var cl = getCompanionLevel(cid);
       if (cl.level >= 99) return;
       cl.exp += baseExp;
+      var startLevel = cl.level;
       while (cl.level < 99 && cl.exp >= cl.nextExp) {
         cl.exp -= cl.nextExp;
         cl.level++;
         cl.nextExp = cl.level * 10 + 15;
+      }
+      if (cl.level >= 99) {
+        cl.exp = 0;
+        log("🌟 " + cData.name + "は最高レベル Lv99 に到達した！");
+      } else if (cl.level > startLevel) {
         log("🎉 " + cData.name + "は Lv" + cl.level + "になった！");
       }
-      if (cl.level >= 99) { cl.exp = 0; }
     });
   }
 
@@ -4536,7 +4551,7 @@
       var cl = getCompanionLevel(cd.id);
       var inParty = hasCompanion(cd.id);
       html += '<div class="record-row"><span>' + cd.emoji + " " + cd.name + '</span>' +
-        '<span>Lv.' + cl.level + (inParty ? ' <span style="color:#06d6a0;font-size:0.82em;">✓</span>' : '') + '</span></div>';
+        '<span>' + (cl.level >= 99 ? 'Lv.99 <span style="color:#ffd700;font-size:0.82em;">MAX</span>' : 'Lv.' + cl.level) + (inParty ? ' <span style="color:#06d6a0;font-size:0.82em;">✓</span>' : '') + '</span></div>'; // §100 v0.37.1
     });
     html += '</div>';
 
@@ -4948,7 +4963,7 @@
         '<span style="font-size:0.82em;color:' + statusColor + ';">' + statusLabel + '</span></div>';
       html += '<div class="shop-row" style="font-size:0.8em;">' +
         '<span style="color:#888;padding-left:12px;">EXP</span>' +
-        '<span style="color:#a0cfff;">' + cl.exp + ' / ' + cl.nextExp + '</span></div>';
+        '<span style="color:#a0cfff;">' + (cl.level >= 99 ? "MAX" : cl.exp + " / " + cl.nextExp) + '</span></div>'; // §100 v0.37.1: Lv99時MAX表示
     });
 
     // §47 v0.9.3 / §48 v0.10 / §50 v0.11 / §55 v0.12: 横スクロール進捗
@@ -5090,7 +5105,7 @@
         html += '<span class="companion-status" style="color:#adb5bd;">待機中</span>';
       }
       html += "</div>";
-      html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">Lv.' + _cl.level + '</div>'; // §99 v0.37
+      html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">' + (_cl.level >= 99 ? "Lv.99 MAX" : "Lv." + _cl.level) + '</div>'; // §100 v0.37.1
       html += '<div class="companion-ability">' + c.effectDesc + "</div>";
       if (_rq) {
         html += '<div class="companion-quote" style="color:' + _rq.color + ';">「' + _rq.text + "」</div>";
@@ -5128,7 +5143,7 @@
         html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
         html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
         html += "</div>";
-        html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">Lv.' + _vcl.level + '</div>'; // §99 v0.37
+        html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">' + (_vcl.level >= 99 ? "Lv.99 MAX" : "Lv." + _vcl.level) + '</div>'; // §100 v0.37.1
         html += '<div class="companion-ability">' + c.effectDesc + "</div>";
         if (_vq) {
           html += '<div class="companion-quote" style="color:' + _vq.color + ';">「' + _vq.text + "」</div>";
@@ -6343,6 +6358,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-companion-lv10" style="border-color:#a0cfff;color:#a0cfff;">👥 仲間Lv10にする（4人全員）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-lv50" style="border-color:#74c0fc;color:#74c0fc;">👥 仲間Lv50にする（4人全員）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-lv99" style="border-color:#ffd700;color:#ffd700;">👥 仲間Lv99にする（4人全員）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-lv1" style="border-color:#adb5bd;color:#adb5bd;">👥 仲間Lv1・EXP0に戻す（4人全員）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-multilv" style="border-color:#74c0fc;color:#74c0fc;">👥 複数Lvアップ確認（Lv1+EXP500付与）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-companion-expcheck" style="border-color:#06d6a0;color:#06d6a0;">👥 パーティ仲間だけEXP確認（2人+2人待機）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7788,6 +7806,40 @@
         });
         saveGame();
         showToast("[DEBUG] 仲間4人をLv99に設定！酒場・ステータス・冒険の記録で確認");
+        renderSettingsBody();
+      };
+      // §100 v0.37.1: 仲間成長安定化 デバッグボタン
+      document.getElementById("btn-debug-companion-lv1").onclick = function () {
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+        });
+        saveGame();
+        showToast("[DEBUG] 仲間4人をLv1・EXP0にリセット！酒場・ステータスで確認");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-companion-multilv").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+        });
+        state.player.companions = ["juritani", "shurittani"];
+        gainCompanionExp(500);
+        saveGame();
+        showToast("[DEBUG] ジュリ+シュリにEXP500付与！バトルログで複数Lvアップを確認");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-companion-expcheck").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+        });
+        state.player.companions = ["juritani", "harumi"];
+        gainCompanionExp(30);
+        saveGame();
+        showToast("[DEBUG] パーティ:ジュリ+ハルミ、待機:シュリ+ノリオ。EXP30付与→パーティのみLvアップをログで確認");
         renderSettingsBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）

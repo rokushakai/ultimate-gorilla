@@ -22,6 +22,14 @@
 
 ## ✅ 実装済み
 
+### Version 0.37.1 — 仲間成長システム安定化 (§100)
+
+- **`getCompanionLevel` データガード**: level(1〜99)/exp(0以上)/nextExp(正の数) の安全化 ✅
+- **`gainCompanionExp` ログ改善**: 最終Lvのみ1回出力。Lv99到達は専用ログ `"🌟 最高レベル Lv99 に到達した！"` ✅
+- **Lv99時表示統一**: 酒場「Lv.99 MAX」/ステータスEXP「MAX」/冒険の記録「Lv.99 MAX」✅
+- **EXP二重付与なし確認**: winBattle/attemptCapture で各1回のみ確認 ✅
+- **デバッグボタン3本追加**: Lv1リセット/複数Lvアップ確認/パーティ仲間のみEXP確認 ✅
+
 ### Version 0.37 — 仲間成長システム（Lv・EXP 第一段階）(§99)
 
 - **`state.companionLevels` 追加**: `{ cid: { level, exp, nextExp } }` — state・saveGame・loadGame 対応 ✅
