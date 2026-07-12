@@ -5,6 +5,23 @@
 
 ---
 
+## v0.35 (2026-07-12)
+
+### 追加・変更
+
+- **仲間コマンドUIを4択化 (§95)**: `showCompanionCommandForIdx()` の `menu.innerHTML` を変更。`まかせる` から `grid-column:1/-1` を削除し、`✨ まほう` ボタンを追加。2×2グリッド（⚔️/⭐ / ✨/🤝）になる。
+- **`showCompanionMagicMenu(cid)` 新設 (§95)**: `showCompanionSpecialMenu` と同じパターン。表示時に `#companion-command-menu` を hidden にし、戻るボタンで `showCompanionCommandForIdx` に戻る。
+- **`runCompanionMagicAction(cid)` 新設 (§95)**: 4仲間分の仲間まほうを実装。ハルミのみ常に `return false`（回復は winBattle に入らない）。他3仲間は敵HP0なら `true` を返して winBattle フローへ。
+
+### 設計判断
+
+- **なぜ「まかせるAI」に仲間まほうを混ぜないか**: v0.35 は「仲間まほうの入口」。AI に混ぜると状況判断の複雑度が上がる。v0.36 以降で状況判断を整備してから追加する方針。
+- **ハルミの「小さな回復」と既存の「小さな癒し」（固有1）の違い**: 固有1（小さな癒し）は `runCompanionSpecialAction` で実行する。仲間まほう枠の「小さな回復」は `runCompanionMagicAction` で実行する。名前を変えることで UI 上の区別をつけた。効果量は近似しているが、仲間まほう枠からのみ選べる独立したコマンドとして管理する。
+- **`#companion-magic-menu` を `setBattleLocked()` から除外した理由**: 固有コマンドサブメニューと同じく `companionCommandLocked` で二重実行防止を管理するため、`setBattleLocked()` による全体ロックから除外する必要がある。
+- **ダメージ量を控えめにした理由**: 仲間まほうは「入口」なのでゲームバランスへの影響を最小化。ジュリタニ（会心の構え: 上限28）より弱い 5〜12。シュリタニはフレーバー中心で 1〜3。ノリオは観察キャラとして 3〜7。ハルミは回復のみ。
+
+---
+
 ## v0.34.1 (2026-07-12)
 
 ### 追加・変更

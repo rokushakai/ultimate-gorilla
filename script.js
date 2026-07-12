@@ -2951,8 +2951,8 @@
 
   function setBattleLocked(locked) {
     state.locked = locked;
-    // §83 v0.28.1: companion-command-menu / §89 v0.32: companion-special-menu は companionCommandLocked で別管理するため除外
-    var btns = document.querySelectorAll("#battle-menu button, .submenu:not(#companion-command-menu):not(#companion-special-menu) button");
+    // §83 v0.28.1: companion-command-menu / §89 v0.32: companion-special-menu / §95 v0.35: companion-magic-menu は companionCommandLocked で別管理するため除外
+    var btns = document.querySelectorAll("#battle-menu button, .submenu:not(#companion-command-menu):not(#companion-special-menu):not(#companion-magic-menu) button");
     btns.forEach(function (b) { b.disabled = locked; });
   }
 
@@ -3038,6 +3038,8 @@
     if (ccMenu) { ccMenu.classList.add("hidden"); }
     var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
     if (csMenu) { csMenu.classList.add("hidden"); }
+    var cmMenu = document.getElementById("companion-magic-menu"); // §95 v0.35
+    if (cmMenu) { cmMenu.classList.add("hidden"); }
     updateBattleStatusBadges(); // §93 v0.34: 戦闘終了時にバッジをクリア
   }
 
@@ -3082,13 +3084,14 @@
     var total = queue.length;
     var progress = total > 1 ? "（" + (idx + 1) + "/" + total + "人目）" : "";
     var menu = document.getElementById("companion-command-menu");
-    // §84 v0.29: 3択レイアウト。p とまかせるは grid-column:1/-1 で横幅全体
+    // §84 v0.29: 3択レイアウト。§95 v0.35: 4択（⚔️/⭐ / ✨/🤝）に変更。まかせるの grid-column:1/-1 を削除
     // §89 v0.32: 「固有コマンド」ボタンを「⭐ 固有」に短縮し、サブメニューへ誘導
     menu.innerHTML =
       '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？ " + progress + '</p>' +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
       '<button id="btn-companion-special">⭐ 固有</button>' +
-      '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
+      '<button id="btn-companion-magic">✨ まほう</button>' +
+      '<button id="btn-companion-auto">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
     // §83 v0.28.1: companionCommandLocked=false でこの仲間のターン開始
@@ -3098,6 +3101,9 @@
     };
     document.getElementById("btn-companion-special").onclick = function() { // §89 v0.32: サブメニューへ
       showCompanionSpecialMenu(cid);
+    };
+    document.getElementById("btn-companion-magic").onclick = function() { // §95 v0.35: まほうサブメニューへ
+      showCompanionMagicMenu(cid);
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
@@ -3149,6 +3155,37 @@
     };
   }
 
+  // §95 v0.35: 仲間まほうサブメニューを表示する（まほう1つ / 戻る）
+  function showCompanionMagicMenu(cid) {
+    if (!state.companionCommandActive) return;
+    var cData = findById(COMPANION_DATA, cid);
+    var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    var mLabel = "✨ まほう";
+    if (cid === "juritani")        { mLabel = "🔥 熱血エール"; }
+    else if (cid === "shurittani") { mLabel = "🫧 おちつきの霧"; }
+    else if (cid === "norio")      { mLabel = "🔍 観察メモ"; }
+    else if (cid === "harumi")     { mLabel = "✨ 小さな回復"; }
+    var cmMenu = document.getElementById("companion-magic-menu");
+    cmMenu.innerHTML =
+      '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + 'のまほう</p>' +
+      '<button id="btn-companion-m1" style="grid-column:1/-1;">' + mLabel + '</button>' +
+      '<button id="btn-companion-mback" class="submenu-back">↩ 戻る</button>';
+    cmMenu.classList.remove("hidden");
+    document.getElementById("companion-command-menu").classList.add("hidden");
+    document.getElementById("btn-companion-m1").onclick = function() {
+      var _cm = document.getElementById("companion-magic-menu");
+      _cm.querySelectorAll("button").forEach(function(b) { b.disabled = true; });
+      _cm.classList.add("hidden");
+      executeCompanionCommand(cid, "magic");
+    };
+    document.getElementById("btn-companion-mback").onclick = function() {
+      var _cm = document.getElementById("companion-magic-menu");
+      _cm.querySelectorAll("button").forEach(function(b) { b.disabled = true; });
+      _cm.classList.add("hidden");
+      showCompanionCommandForIdx(state.companionCommandIndex);
+    };
+  }
+
   // §82 v0.28 / §83 v0.28.1 / §84 v0.29: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
   function executeCompanionCommand(cid, mode) {
     // §83 v0.28.1: 二重押し・二重実行を companionCommandLocked で防止
@@ -3157,16 +3194,22 @@
     var fBtn = document.getElementById("btn-companion-fight");
     var aBtn = document.getElementById("btn-companion-auto");
     var sBtn = document.getElementById("btn-companion-special");
+    var mBtn = document.getElementById("btn-companion-magic");  // §95 v0.35
     var s1Btn = document.getElementById("btn-companion-s1"); // §89 v0.32
     var s2Btn = document.getElementById("btn-companion-s2"); // §89 v0.32
+    var m1Btn = document.getElementById("btn-companion-m1"); // §95 v0.35
     if (fBtn) { fBtn.disabled = true; }
     if (aBtn) { aBtn.disabled = true; }
     if (sBtn) { sBtn.disabled = true; }
+    if (mBtn) { mBtn.disabled = true; }  // §95 v0.35
     if (s1Btn) { s1Btn.disabled = true; } // §89 v0.32
     if (s2Btn) { s2Btn.disabled = true; } // §89 v0.32
+    if (m1Btn) { m1Btn.disabled = true; } // §95 v0.35
     document.getElementById("companion-command-menu").classList.add("hidden");
     var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
     if (csMenu) { csMenu.classList.add("hidden"); }
+    var cmMenu2 = document.getElementById("companion-magic-menu"); // §95 v0.35
+    if (cmMenu2) { cmMenu2.classList.add("hidden"); }
     document.getElementById("battle-menu").classList.remove("hidden");
     if (!state.inBattle) return;
     var e = state.enemy;
@@ -3176,6 +3219,8 @@
       killed = runCompanionSpecialAction(cid);
     } else if (mode === "special2") { // §89 v0.32: 2つ目の固有コマンド
       killed = runCompanionSpecialAction(cid, "second");
+    } else if (mode === "magic") { // §95 v0.35: 仲間まほう
+      killed = runCompanionMagicAction(cid);
     } else if (mode === "auto") { // §85 v0.29.1: まかせる → ランダム行動
       killed = runCompanionAutoCommand(cid);
     } else { // たたかう
@@ -3184,6 +3229,59 @@
     state.companionCommandIndex++;
     if (killed || (e && e.hp <= 0)) { winBattle(); return; }
     showCompanionCommandForIdx(state.companionCommandIndex);
+  }
+
+  // §95 v0.35: 仲間まほう実行。返値 true=敵HP0、false=敵生存または回復のみ
+  // 仲間MP・主人公MP消費なし。gainExp/captureRate/BGM変更なし。
+  function runCompanionMagicAction(cid) {
+    var p = state.player, e = state.enemy;
+    if (!state.inBattle || !e) return false;
+    if (cid === "juritani") {
+      // 🔥 熱血エール: 敵に 5〜12 ダメージ
+      if (e.hp <= 0) return false;
+      var dmgJ = 5 + Math.floor(Math.random() * 8);
+      e.hp = Math.max(0, e.hp - dmgJ);
+      log("🔥 ジュリタニの熱血エール！");
+      log("気合いの声が相手に響いた！");
+      log(e.name + "に" + dmgJ + "ダメージ！");
+      renderEnemy();
+      return e.hp <= 0;
+    } else if (cid === "shurittani") {
+      // 🫧 おちつきの霧: 敵に 1〜3 微ダメージ + 捕獲フレーバー（捕獲率本体は変更しない）
+      if (e.hp <= 0) return false;
+      var dmgS = 1 + Math.floor(Math.random() * 3);
+      e.hp = Math.max(0, e.hp - dmgS);
+      log("🫧 シュリタニのおちつきの霧！");
+      log("相手の動きが少しゆるんだ！");
+      log("捕まえやすくなった気がする！");
+      renderEnemy();
+      return e.hp <= 0;
+    } else if (cid === "norio") {
+      // 🔍 観察メモ: 敵に 3〜7 小ダメージ + EXPフレーバー（gainExpは変更しない）
+      if (e.hp <= 0) return false;
+      var dmgN = 3 + Math.floor(Math.random() * 5);
+      e.hp = Math.max(0, e.hp - dmgN);
+      log("🔍 ノリオの観察メモ！");
+      log("相手のクセを記録した！");
+      log("この戦い、学びが多そうだ！");
+      renderEnemy();
+      return e.hp <= 0;
+    } else if (cid === "harumi") {
+      // ✨ 小さな回復: 主人公HP 15〜25 回復。敵ダメージなし。常に false を返す。
+      log("✨ ハルミの小さな回復！");
+      if (p.hp >= p.maxHp) {
+        log("しかし、HPはすでに満タンだ。");
+        return false;
+      }
+      var heal = 15 + Math.floor(Math.random() * 11);
+      var before = p.hp;
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      var actual = p.hp - before;
+      log("HPが" + actual + "回復した！");
+      updateBattlePlayerStatus(); // §95 v0.35: HP色・状態バッジ連動
+      return false;
+    }
+    return false;
   }
 
   // §82 v0.28: 仲間1人の行動を実行する共通関数（コマンド選択・自動行動で共用）
@@ -6164,6 +6262,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v34-badge-guard" style="border-color:#4cc9f0;color:#4cc9f0;">🛡️ 守り効果バッジ確認（HP25%+かばう）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v341-hpcolor" style="border-color:#ff9f1c;color:#ff9f1c;">🎨 HP色確認（HP45% オレンジ確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v341-gaman-guard" style="border-color:#a9e34b;color:#a9e34b;">😤 ガマン+守りバッジ同時確認</button>';
+      html += '<p class="small" style="color:#c4b5fd;margin-top:8px;">✨ 仲間まほう確認 (§95 v0.35)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-ui" style="border-color:#c4b5fd;color:#c4b5fd;">✨ 仲間まほう確認（仲間4人+のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-harumi" style="border-color:#f9a8d4;color:#f9a8d4;">✨ ハルミ小さな回復確認（HP25%）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v35-magic-back" style="border-color:#86efac;color:#86efac;">✨ 仲間まほうUI戻る確認（仲間2人）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7468,6 +7570,42 @@
         state.battleDamageReduction = 0.20;
         updateBattlePlayerStatus();
         showToast("[DEBUG] 😤ガマン中 + 🛡️守り効果バッジが共存して崩れないか確認！");
+      };
+      // §95 v0.35: 仲間まほう確認（仲間4人+のらいぬ）
+      document.getElementById("btn-debug-v35-magic-ui").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間4人。コマンドに「✨ まほう」が表示されるか確認！");
+      };
+      // §95 v0.35: ハルミ小さな回復確認（HP25%）
+      document.getElementById("btn-debug-v35-magic-harumi").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25));
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] ハルミのみ HP25%。まほう→小さな回復でHP回復と色変化を確認！");
+      };
+      // §95 v0.35: 仲間まほうUI戻る確認（仲間2人）
+      document.getElementById("btn-debug-v35-magic-back").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["juritani", "harumi"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 仲間2人。まほうサブメニュー→戻るボタンで元に戻れるか確認！");
       };
       // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {

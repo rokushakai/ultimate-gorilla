@@ -5,6 +5,35 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.35] - 2026-07-12 — 仲間まほう追加 (§95)
+
+### Added
+- **仲間コマンドに「✨ まほう」ボタン追加** (§95): `showCompanionCommandForIdx()` のレイアウトを3択から4択（⚔️/⭐ / ✨/🤝）に変更。スマホ幅で2×2グリッドに収まる。
+- **`#companion-magic-menu`** (§95): `index.html` に仲間まほうサブメニュー div 追加（`class="hidden submenu"`）。
+- **`showCompanionMagicMenu(cid)`** (§95): 仲間まほうサブメニューを表示する関数。固有コマンドサブメニューと同じパターン（全ボタン即時 disable / hidden 切り替え）。
+- **`runCompanionMagicAction(cid)`** (§95): 仲間まほう実行関数。返値 true=敵HP0、false=生存または回復のみ。
+  - **ジュリタニ「🔥 熱血エール」**: 敵に 5〜12 ダメージ。`renderEnemy()` 呼び出し。
+  - **シュリタニ「🫧 おちつきの霧」**: 敵に 1〜3 微ダメージ + 捕獲フレーバーログ（捕獲率本体は変更しない）。
+  - **ノリオ「🔍 観察メモ」**: 敵に 3〜7 小ダメージ + EXPフレーバーログ（`gainExp()` は変更しない）。
+  - **ハルミ「✨ 小さな回復」**: 主人公HP 15〜25 回復。最大HP超えない。HP満タン時は「しかし、HPはすでに満タンだ。」メッセージ。常に `return false`。`updateBattlePlayerStatus()` 呼び出し（HP色・状態バッジ連動）。
+- **デバッグボタン3本追加** (§95): 「✨ 仲間まほう確認（仲間4人+のらいぬ）」「✨ ハルミ小さな回復確認（HP25%）」「✨ 仲間まほうUI戻る確認（仲間2人）」。
+
+### Changed
+- **`setBattleLocked()`** (§95): セレクターに `:not(#companion-magic-menu)` を追加。`companionCommandLocked` による独立管理から外れないようにする。
+- **`clearCompanionCommandState()`** (§95): `#companion-magic-menu` を `hidden` にする処理を追加（戦闘終了時に確実に非表示にする）。
+- **`executeCompanionCommand()`** (§95): `mode === "magic"` ブランチ追加。`mBtn` (`btn-companion-magic`) と `m1Btn` (`btn-companion-m1`) の disable 処理追加。`#companion-magic-menu` の hidden 処理追加。
+
+### 確認済み（変更なし）
+- 仲間MP・主人公MP消費なし。
+- まかせるAI（たたかう / 固有1 / 固有2 の3択）は変更なし。
+- 捕獲率本体 / `gainExp()` は変更なし。
+- BGM制御 (`stopBGMHard` / `startBGM` / `updateBGM`) は変更なし。
+- 究極ゴリラ戦（`e.final`）では仲間コマンドが出ないため仲間まほうも出ない（変更なし）。
+- `runSingleCompanionAction` / `runCompanionSpecialAction` / `runCompanionAutoCommand` は変更なし。
+- `winBattle` / `enemyTurn` / `finishBattle` / `gainExp` は変更なし。
+- v0.34.1 の戦闘UI（HP色・状態バッジ・守り効果・うたうチャンス）は変更なし。
+
+
 ## [0.34.1] - 2026-07-12 — 戦闘UI安定化 (§94)
 
 ### Fixed
