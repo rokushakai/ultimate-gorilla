@@ -4349,6 +4349,28 @@ setTimeout(enemyTurn, 400);
 
 **保護対象**: `finishBattle()` / `gainExp()` / `winBattle()` / `enemyTurn()` / BGM制御 は変更なし。
 
+## §83 v0.28.1 — 仲間コマンド選択安定化 [実装済み]
+
+v0.28 の `setBattleLocked(true)` 中に `disabled=false` で上書きしていた問題を解消し、二重押し・二重実行を明示的なフラグで防止する。
+
+**変更方針**:
+- `setBattleLocked()` のセレクターから `#companion-command-menu` を除外（`.submenu:not(#companion-command-menu) button`）
+- 仲間コマンドのロック状態を `state.companionCommandLocked` で管理
+- 仲間コマンドフェーズ全体を `state.companionCommandActive` で管理
+- `clearCompanionCommandState()` ヘルパーで状態・UI を一括クリア
+
+**主要変更**:
+- `setBattleLocked(locked)`: セレクターを変更し `companion-command-menu` を対象外に
+- `clearCompanionCommandState()` 新設: `companionCommandQueue/Index/Active/Locked` リセット + メニュー非表示
+- `startCompanionCommands()`: `companionCommandActive = true; companionCommandLocked = false;` 追加
+- `showCompanionCommandForIdx(idx)`: `disabled=false` 上書きを削除、`companionCommandLocked = false;` で仲間ターン開始
+- `executeCompanionCommand(cid, mode)`: 先頭に `if (companionCommandLocked) return;` / `companionCommandLocked = true;` 追加
+- `finishBattle()`: インライン掃除 → `clearCompanionCommandState()` 呼び出しに集約
+
+**状態フラグ**: `state.companionCommandActive`, `state.companionCommandLocked`（transient, セーブ対象外）。
+
+---
+
 ## §82 v0.28 — 仲間ごとの戦闘コマンド選択・第一段階 [実装済み]
 
 主人公の攻撃行動後、パーティ中の仲間ごとに「たたかう / まかせる」を選ぶ。第一段階では2択のみ。
@@ -4392,14 +4414,8 @@ setTimeout(enemyTurn, 400);
 
 **前提条件**: v0.28.1 安定化後に着手。GAME_DESIGN.md に詳細仕様必須。
 
-### v0.28.1 候補 — 仲間コマンド選択安定化 [未実装・将来機能]
+### v0.29 候補 — 仲間固有コマンド拡張 [未実装・将来機能]
 
-v0.28 の仲間コマンド選択の安定化（二重勝利処理防止・UIロック確認・ボス撃退フラグ確認）。
+仲間ごとに固有のコマンドを追加する（ジュリタニ:かいしん狙い、シュリタニ:まもる、ノリオ:はげます等）。
 
-**前提条件**: v0.28 が安定してから着手。GAME_DESIGN.md に詳細仕様を書いてから実装開始すること。
-
-**概要**:
-- 戦闘UIの大改修（コマンドパネルを仲間分繰り返す）
-- 仲間のHP/MP管理・状態異常・死亡処理も追加が必要
-
-**前提条件**: v0.27 が安定してから着手。GAME_DESIGN.md に詳細仕様必須。
+**前提条件**: v0.28.1 安定化後に着手。GAME_DESIGN.md に詳細仕様必須。

@@ -14,10 +14,6 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.28.1 候補 — 仲間コマンド選択安定化
-
-v0.28 の仲間コマンド選択の安定化（UIロック確認・ボス撃退フラグ・二重勝利処理防止）。
-
 ### Version 0.29 候補 — 仲間固有コマンド拡張
 
 仲間ごとに固有コマンドを追加（ジュリタニ:かいしん狙い、シュリタニ:まもる等）。v0.28.1 安定後。
@@ -25,6 +21,14 @@ v0.28 の仲間コマンド選択の安定化（UIロック確認・ボス撃退
 ---
 
 ## ✅ 実装済み
+
+### Version 0.28.1 — 仲間コマンド選択安定化 (§83)
+
+- **`setBattleLocked()` セレクター修正**: `companion-command-menu` を除外し `disabled=false` 上書き不要に ✅
+- **`clearCompanionCommandState()` 新設**: キュー・フラグ・UI を一括クリア ✅
+- **`state.companionCommandActive/Locked` 追加**: フェーズ管理と二重押し防止 ✅
+- **`executeCompanionCommand()` ガード強化**: 先頭の `if (companionCommandLocked) return;` 追加 ✅
+- **`finishBattle()` 集約**: インライン掃除 → `clearCompanionCommandState()` 呼び出し ✅
 
 ### Version 0.28 — 仲間ごとの戦闘コマンド選択・第一段階 (§82)
 

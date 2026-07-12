@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.28** |
+| 現在バージョン | **v0.28.1** |
 | ブランチ | main |
 
 ---
@@ -63,12 +63,18 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.28.1] 仲間コマンド選択安定化**（§83）
+  - **`setBattleLocked()` 修正**: セレクターを `.submenu:not(#companion-command-menu) button` に変更。仲間コマンドボタンへの `disabled=false` 上書きが不要になった。
+  - **`clearCompanionCommandState()` 新設**: キュー・フラグ・UI を一括クリアするヘルパー。`finishBattle()` から呼ばれる。
+  - **`state.companionCommandActive/Locked`**: フェーズ管理フラグ（transient, セーブ対象外）。
+  - **`executeCompanionCommand()` 強化**: `if (companionCommandLocked) return;` / `companionCommandLocked = true;` で二重実行を防止。
+  - **保護**: `index.html` / BGM / セーブデータ / `winBattle()` / `enemyTurn()` は変更なし。
 - **[v0.28] 仲間ごとの戦闘コマンド選択・第一段階**（§82）
   - **`runSingleCompanionAction(cid)`**: 仲間1人分の行動共通関数。返値 true=敵HP0。
   - **`startCompanionCommands()`**: コマンドキュー初期化。`e.final` → 見守りログ→敵ターン。仲間なし → 敵ターン。
-  - **`showCompanionCommandForIdx(idx)`**: 「⚔️ たたかう」「🤝 まかせる」2択メニューを表示。ロック中でもボタン有効化。
+  - **`showCompanionCommandForIdx(idx)`**: 「⚔️ たたかう」「🤝 まかせる」2択メニューを表示。
   - **`executeCompanionCommand(cid, mode)`**: ダブルクリック防止→行動実行→次の仲間 or 勝利/敵ターン。
-  - **`finishBattle()` クリーンアップ**: コマンドキューリセット + メニュー非表示。
+  - **`finishBattle()` クリーンアップ**: `clearCompanionCommandState()` 呼び出しに集約（§83）。
   - **HTML**: `companion-command-menu` div を `index.html` に追加（`waza-menu` 直後）。
   - **保護**: `winBattle()` / `enemyTurn()` / `finishBattle()` / BGM は変更なし。
 - **[v0.27.1] 仲間自動戦闘安定化**（§81）

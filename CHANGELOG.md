@@ -5,6 +5,23 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.28.1] - 2026-07-12 — 仲間コマンド選択安定化 (§83)
+
+### Fixed
+- **`setBattleLocked()` セレクター** (§83): `.submenu:not(#companion-command-menu) button` に変更し、仲間コマンドメニューのボタンを `setBattleLocked(true)` の対象外にした。`showCompanionCommandForIdx()` 内の `disabled=false` 上書きハックが不要になった。
+- **二重押し防止** (§83): `executeCompanionCommand()` 先頭に `if (state.companionCommandLocked) return; state.companionCommandLocked = true;` を追加。ボタン disabled による防止と二重で守る。
+- **`finishBattle()` 掃除集約** (§83): インライン4行 → `clearCompanionCommandState()` 呼び出し1行に集約。
+
+### Added
+- **`clearCompanionCommandState()` 新設** (§83): `companionCommandQueue` / `companionCommandIndex` / `companionCommandActive` / `companionCommandLocked` をリセットし `companion-command-menu` を非表示にするヘルパー。`finishBattle()` から呼ばれる。
+- **`state.companionCommandActive`** (§83): 仲間コマンドフェーズ中フラグ（transient, セーブ対象外）。
+- **`state.companionCommandLocked`** (§83): 仲間コマンド1択分の二重押しガードフラグ（transient, セーブ対象外）。
+
+### Changed
+- **`startCompanionCommands()`** (§83): `state.companionCommandActive = true; state.companionCommandLocked = false;` を追加。
+- **`showCompanionCommandForIdx()`** (§83): `state.companionCommandLocked = false;` でこの仲間のターン開始。`disabled=false` 上書きを削除。
+
+
 ## [0.28] - 2026-07-12 — 仲間ごとの戦闘コマンド選択・第一段階 (§82)
 
 ### Added

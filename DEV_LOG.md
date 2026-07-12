@@ -5,6 +5,22 @@
 
 ---
 
+## v0.28.1 (2026-07-12)
+
+### 追加・変更
+
+- **`setBattleLocked()` セレクター変更 (§83)**: `.submenu:not(#companion-command-menu) button` にすることで、`companion-command-menu` のボタンを `setBattleLocked(true)` の影響外に置いた。v0.28 の `disabled=false` 上書きハックが不要になった。
+- **`clearCompanionCommandState()` 新設 (§83)**: `companionCommandQueue/Index/Active/Locked` のリセットと `companion-command-menu` の非表示を1か所に集約。`finishBattle()` から呼ばれる。
+- **`state.companionCommandActive/Locked` 追加 (§83)**: `Active` はコマンドフェーズ中フラグ、`Locked` は仲間1人分のターン内二重押しガード。どちらも transient でセーブ対象外。
+- **`executeCompanionCommand()` ガード追加 (§83)**: 先頭に `if (state.companionCommandLocked) return; state.companionCommandLocked = true;` を追加。ボタン disabled と二重で二重実行を防止。
+
+### 設計判断
+
+- **`disabled=false` 上書き廃止**: v0.28 では `showCompanionCommandForIdx()` 内で明示的に `disabled=false` を呼んでいたが、`setBattleLocked` のセレクターを修正することで不要になった。`companion-command-menu` のボタンは `state.companionCommandLocked` によってのみ制御される。
+- **二重ガードの理由**: `disabled=true` はUIレイヤーの防止であり、JS コールバック経由の二重実行は防げない。`companionCommandLocked` フラグで JS ロジックレベルで確実に1度だけ実行することを保証する。
+
+---
+
 ## v0.28 (2026-07-12)
 
 ### 追加・変更

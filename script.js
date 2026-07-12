@@ -2950,7 +2950,8 @@
 
   function setBattleLocked(locked) {
     state.locked = locked;
-    var btns = document.querySelectorAll("#battle-menu button, .submenu button");
+    // §83 v0.28.1: companion-command-menu は companionCommandLocked で別管理するため除外
+    var btns = document.querySelectorAll("#battle-menu button, .submenu:not(#companion-command-menu) button");
     btns.forEach(function (b) { b.disabled = locked; });
   }
 
@@ -3023,6 +3024,16 @@
     }, 600);
   }
 
+  // §83 v0.28.1: 仲間コマンドフラグ・UI を一括クリアするヘルパー
+  function clearCompanionCommandState() {
+    state.companionCommandQueue = [];
+    state.companionCommandIndex = 0;
+    state.companionCommandActive = false;
+    state.companionCommandLocked = false;
+    var ccMenu = document.getElementById("companion-command-menu");
+    if (ccMenu) { ccMenu.classList.add("hidden"); }
+  }
+
   // §82 v0.28: 仲間コマンドシーケンスを開始する
   function startCompanionCommands() {
     var e = state.enemy;
@@ -3041,6 +3052,8 @@
     }
     state.companionCommandQueue = companions.slice();
     state.companionCommandIndex = 0;
+    state.companionCommandActive = true;  // §83 v0.28.1
+    state.companionCommandLocked = false; // §83 v0.28.1
     showCompanionCommandForIdx(0);
   }
 
@@ -3065,9 +3078,9 @@
       '<button id="btn-companion-auto">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
-    // ロック中でも仲間コマンドボタンは有効化する
-    document.getElementById("btn-companion-fight").disabled = false;
-    document.getElementById("btn-companion-auto").disabled = false;
+    // §83 v0.28.1: companionCommandLocked=false でこの仲間のターン開始
+    // setBattleLocked が companion-command-menu を除外したため disabled 上書き不要
+    state.companionCommandLocked = false;
     document.getElementById("btn-companion-fight").onclick = function() {
       executeCompanionCommand(cid, "fight");
     };
@@ -3076,9 +3089,11 @@
     };
   }
 
-  // §82 v0.28: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
+  // §82 v0.28 / §83 v0.28.1: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
   function executeCompanionCommand(cid, mode) {
-    // ダブルクリック防止
+    // §83 v0.28.1: 二重押し・二重実行を companionCommandLocked で防止
+    if (state.companionCommandLocked) { return; }
+    state.companionCommandLocked = true;
     var fBtn = document.getElementById("btn-companion-fight");
     var aBtn = document.getElementById("btn-companion-auto");
     if (fBtn) { fBtn.disabled = true; }
@@ -3738,11 +3753,7 @@
     state.inBattle = false;
     state.gamanActive = false;  // §63 v0.16: ガマン効果を解除
     updateSingButtonChance(false);  // §64 v0.16.1: うたうボタンをリセット
-    // §82 v0.28: 仲間コマンドキューをクリア・メニューを非表示
-    state.companionCommandQueue = [];
-    state.companionCommandIndex = 0;
-    var ccMenu = document.getElementById("companion-command-menu");
-    if (ccMenu) { ccMenu.classList.add("hidden"); }
+    clearCompanionCommandState();  // §83 v0.28.1: 仲間コマンド状態を一括クリア
     state.enemy = null;
     stopWalking(); // 残留walkTimerをリセット
     updateBGM(getFieldBgmType());
