@@ -3299,7 +3299,7 @@
     return false;
   }
 
-  // §85 v0.29.1 / §86 v0.30 / §87 v0.31 / §91 v0.33: まかせる専用。3択ウェイト正規化 + 状況判断 + 前回行動記憶
+  // §85 v0.29.1 / §86 v0.30 / §87 v0.31 / §91 v0.33 / §92 v0.33.1: まかせる専用。3択ウェイト正規化 + 状況判断 + 前回行動記憶
   // 返値: true = 敵HP0（ハルミの固有コマンド / 防御系コマンドは常に false）
   function runCompanionAutoCommand(cid) {
     if (!state.inBattle || !state.enemy || state.enemy.hp <= 0) return false;
@@ -3369,9 +3369,10 @@
     // 前回行動を記録
     state.lastCompanionAutoAction[cid] = chosenAction;
 
-    // 実行 & ログ
+    // §92 v0.33.1: ログを2行に変更（まかせた宣言 + 選んだコマンド名）
     if (chosenAction === "attack") {
-      log("🤝 " + name + "にまかせた！ → たたかう");
+      log("🤝 " + name + "にまかせた！");
+      log("たたかうを選んだ！");
       return runSingleCompanionAction(cid);
     } else if (chosenAction === "special1") {
       var s1Name = "固有コマンド";
@@ -3379,7 +3380,8 @@
       else if (cid === "shurittani") { s1Name = "捕獲アシスト"; }
       else if (cid === "norio")      { s1Name = "経験値の眼"; }
       else if (cid === "harumi")     { s1Name = "小さな癒し"; }
-      log("🤝 " + name + "にまかせた！ → " + s1Name);
+      log("🤝 " + name + "にまかせた！");
+      log(s1Name + "を選んだ！");
       return runCompanionSpecialAction(cid);
     } else { // special2
       var s2Name = "固有コマンド2";
@@ -3387,7 +3389,8 @@
       else if (cid === "shurittani") { s2Name = "捕獲の網"; }
       else if (cid === "norio")      { s2Name = "経験値メモ"; }
       else if (cid === "harumi")     { s2Name = "まもりの光"; }
-      log("🤝 " + name + "にまかせた！ → " + s2Name);
+      log("🤝 " + name + "にまかせた！");
+      log(s2Name + "を選んだ！");
       return runCompanionSpecialAction(cid, "second");
     }
   }
@@ -6119,10 +6122,10 @@
       html += '<p class="small" style="color:#c4b5fd;margin-top:8px;">⭐ 2つ目固有コマンド確認 (§89 v0.32)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-special2-all" style="border-color:#c4b5fd;color:#c4b5fd;">⭐ 2つ目固有コマンド確認（仲間4人+のらいぬ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-special2-guard" style="border-color:#c4b5fd;color:#c4b5fd;">🛡️ かばう/まもりの光 軽減確認（仲間4人+のらいぬ）</button>';
-      html += '<p class="small" style="color:#f9c74f;margin-top:8px;">🎲 まかせるAI 3択確認 (§91 v0.33)</p>';
-      html += '<button class="shop-menu-btn" id="btn-debug-auto3-all" style="border-color:#f9c74f;color:#f9c74f;">🎲 まかせるAI 3択確認（仲間4人+のらいぬ）</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-auto3-guard" style="border-color:#f9c74f;color:#f9c74f;">🛡️ まかせるAI 軽減確認（ジュリタニ+ハルミ）</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-auto3-hplow" style="border-color:#f9c74f;color:#f9c74f;">✨ まかせるAI ハルミHP低下確認（HP30%）</button>';
+      html += '<p class="small" style="color:#f9c74f;margin-top:8px;">🎲 まかせるAI 3択確認 (§91 v0.33 / §92 v0.33.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-auto3-all" style="border-color:#f9c74f;color:#f9c74f;">🎲 まかせるAI 3択確認（全員・ランダム）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-auto3-guard" style="border-color:#f9c74f;color:#f9c74f;">🛡️ まかせるAI 軽減確認（かばう/まもりの光）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-auto3-hplow" style="border-color:#f9c74f;color:#f9c74f;">⬇️ まかせるAI 敵HP10確認</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7363,7 +7366,7 @@
         var dog = findById(NON_UMA_DATA, "wilddog");
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
-        showToast("[DEBUG] 仲間4人。まかせるで3択が選ばれるか確認！");
+        showToast("[DEBUG] 仲間4人。まかせるで「○○を選んだ！」が2行で出るか確認！");
       };
       document.getElementById("btn-debug-auto3-guard").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -7374,18 +7377,20 @@
         var dog = findById(NON_UMA_DATA, "wilddog");
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
-        showToast("[DEBUG] ジュリタニ+ハルミ。まかせるでかばう/まもりの光が出て軽減が発生するか確認！");
+        showToast("[DEBUG] ジュリタニ+ハルミ。かばう/まもりの光が選ばれて🛡️軽減が発生するか確認！");
       };
+      // §92 v0.33.1: 敵HP10を設定して「敵HP低下時の状況判断」をテスト（旧: ハルミHP30%確認）
       document.getElementById("btn-debug-auto3-hplow").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
-        state.player.companions = ["harumi"];
-        state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.3));
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = state.player.maxHp;
         resetPartyTrail();
         closeModal("settings-modal");
         var dog = findById(NON_UMA_DATA, "wilddog");
         if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
         actuallyStartBattle(dog);
-        showToast("[DEBUG] ハルミのみ+HP30%。まかせるで小さな癒しを優先するか確認！");
+        if (state.enemy) { state.enemy.hp = 10; renderEnemy(); }
+        showToast("[DEBUG] 仲間4人+敵HP10。まかせるで攻撃優先（たたかうが多め）になるか確認！");
       };
       // §69 v0.19: NPC会話テスト
       document.getElementById("btn-debug-npc-full-complete").onclick = function () {

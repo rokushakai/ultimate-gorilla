@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.33.1] - 2026-07-12 — まかせるAI 3択安定化 (§92)
+
+### Changed
+- **`runCompanionAutoCommand(cid)` ログ改善** (§92): `"🤝 name にまかせた！ → action"` （1行）を `log("🤝 name にまかせた！")` + `log("actionName を選んだ！")` （2行）に分割。special1/special2 のどちらが選ばれたかプレイヤーに明示。
+- **デバッグボタンラベル改善** (§92): 3本のボタンを「全員・ランダム」「かばう/まもりの光」「敵HP10確認」に整理。
+- **デバッグボタン3の動作変更** (§92): 「ハルミのみ + HP30%」→「仲間4人 + 敵HP10」に変更。`enemyHpLow` 状況判断（攻撃優先シフト）のテストに特化。
+
+### 確認済み（変更なし）
+- ウェイト正規化: `total <= 0` フォールバック済み。各値 `Math.max(0, ...)` でゼロ未満にならない。
+- 前回行動記憶: `"attack"/"special1"/"special2"` の3値対応。`"special"` 後方互換あり。
+- `battleDamageReduction` 経路: 手動選択と同じ `runCompanionSpecialAction(cid, "second")` 経由で動作。
+- 究極ゴリラ戦 (`e.final`) では仲間コマンドなし・まかせるAI無動作・`battleDamageReduction` 無発動。
+- 捕獲率本体/`gainExp()` は変更なし。
+
+
 ## [0.33] - 2026-07-12 — まかせるAI 2つ目固有コマンド対応 (§91)
 
 ### Changed
