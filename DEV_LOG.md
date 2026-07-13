@@ -5,6 +5,25 @@
 
 ---
 
+## v0.39 (2026-07-13)
+
+### 追加・変更
+
+- **`COMPANION_LEVEL_MILESTONE_LINES` 追加**: COMPANION_DATA直後に配置。4仲間×3段階（Lv10/50/99）のセリフを定数オブジェクトで管理。
+- **`checkCompanionLevelMilestones(cid, oldLevel, newLevel)` 追加**: 節目到達チェック・戦闘ログ・フラグ更新の共通関数。複数節目を一度に越えた場合は最高節目セリフのみ表示し、全通過済みをtrueに記録する。
+- **`getCompanionLevel()` 更新**: `milestones` フィールドが未定義の場合、現在Lvに基づいて旧セーブを自動補完。Lv10→level10:true / Lv50→level10+level50:true / Lv99→全true。
+- **`gainCompanionExp()` 更新**: `startLevel` を `oldLevel` に改名し、Lvアップ後に `checkCompanionLevelMilestones` を呼び出す。既存Lv99専用ログは保持。
+- **ステータス画面 「成長の節目」行**: 成長効果行の直後に追加。`Lv10 ✓　Lv50 ✓　Lv99 ・` 形式で節目到達状況を表示。`cl.milestones` を直接使用（`getCompanionLevel()` でフィールドが保証されているため null ガード不要）。
+
+### 設計判断
+
+- **セーブ形式**: `state.companionLevels[cid].milestones` として既存の `companionLevels` キーに内包。新しいトップレベルキーを追加しないため、既存のsave/loadコードを変更不要。
+- **旧セーブ補完のタイミング**: `getCompanionLevel()` 内で行う。この関数は必ず最初に呼ばれるため、saveGame/loadGame側に補完コードを書く必要がない。
+- **「最高節目のみ表示」の理由**: 大量EXP付与デバッグや戦闘チェーンでセリフが連続するのを防ぐ。低い節目フラグはtrueに記録されるため、後から遅れて表示されることもない。
+- **`gainCompanionExp()` の `startLevel` → `oldLevel` 変更**: 変数名を意図に合わせて明確化。`startLevel` は「節目計算の起点」の意味を正確に伝えていなかった。
+
+---
+
 ## v0.38.1 (2026-07-12)
 
 ### 確認・設計判断

@@ -598,6 +598,30 @@
       legendaryLine: "伝説装備が全部そろったのね。武器や防具も、旅の記憶をまとっているみたい。" }
   ];
 
+  // §103 v0.39: 仲間Lv節目セリフデータ（Lv10/50/99 各仲間固有）
+  var COMPANION_LEVEL_MILESTONE_LINES = {
+    juritani: {
+      10: "ようやく体が旅になじんできた。次はもっと派手にいくぞ！",
+      50: "ここまで来れば、会心は偶然じゃない。狙って出すものだ！",
+      99: "最高レベルか。でも、あんたとならまだ先へ行けそうだ！"
+    },
+    shurittani: {
+      10: "相手の動きが少し読めるようになってきたよ。",
+      50: "追い詰めるだけじゃだめ。逃げ道まで見てこそ捕獲なの。",
+      99: "捕まえることより、向き合うことの方が大事だって分かったよ。"
+    },
+    norio: {
+      10: "経験って、数字だけじゃないんだな。少し分かってきた。",
+      50: "この旅の経験、もうメモ一冊じゃ足りないな。",
+      99: "経験値はもう増えなくても、経験は終わらないんだな。"
+    },
+    harumi: {
+      10: "小さな光でも、重ねれば誰かを守れるのね。",
+      50: "回復するだけじゃない。みんなが進めるように支えるわ。",
+      99: "ここまでの旅、全部がひとつの物語になったわ。"
+    }
+  };
+
   // §75 v0.24 / §76 v0.24.1: 仲間セリフ状態判定ヘルパー
   // 優先度: full+legendary > fullClear > legendary_only > dex > side > clear > side_only
   function getCompanionQuote(c) {
@@ -4216,6 +4240,14 @@
       cl.nextExp = cl.level * 10 + 15;
     }
     if (cl.level >= 99) { cl.exp = 0; }
+    // §103 v0.39: 旧セーブ互換 - 節目フラグがなければ現在Lvに基づいて補完
+    if (!cl.milestones) {
+      cl.milestones = {
+        level10: cl.level >= 10,
+        level50: cl.level >= 50,
+        level99: cl.level >= 99
+      };
+    }
     return cl;
   }
 
@@ -4228,8 +4260,8 @@
       if (!cData) return;
       var cl = getCompanionLevel(cid);
       if (cl.level >= 99) return;
+      var oldLevel = cl.level; // §103 v0.39: 節目判定用に開始Lvを保存
       cl.exp += baseExp;
-      var startLevel = cl.level;
       while (cl.level < 99 && cl.exp >= cl.nextExp) {
         cl.exp -= cl.nextExp;
         cl.level++;
@@ -4238,10 +4270,51 @@
       if (cl.level >= 99) {
         cl.exp = 0;
         log("🌟 " + cData.name + "は最高レベル Lv99 に到達した！");
-      } else if (cl.level > startLevel) {
+      } else if (cl.level > oldLevel) {
         log("🎉 " + cData.name + "は Lv" + cl.level + "になった！");
       }
+      // §103 v0.39: 節目セリフチェック（Lvアップ後に実行）
+      if (cl.level > oldLevel) {
+        checkCompanionLevelMilestones(cid, oldLevel, cl.level);
+      }
     });
+  }
+
+  // §103 v0.39: 仲間Lv節目セリフチェック（Lv10/50/99 一度だけ表示）
+  // 複数節目を一度に越えた場合は最高節目のセリフだけ表示し、全通過済みをtrueに記録する
+  function checkCompanionLevelMilestones(cid, oldLevel, newLevel) {
+    var cl = getCompanionLevel(cid);
+    var ms = cl.milestones;
+    var cData = findById(COMPANION_DATA, cid);
+    if (!cData) return;
+    var lines = COMPANION_LEVEL_MILESTONE_LINES[cid];
+    if (!lines) return;
+
+    var cross10 = (oldLevel < 10 && newLevel >= 10);
+    var cross50 = (oldLevel < 50 && newLevel >= 50);
+    var cross99 = (oldLevel < 99 && newLevel >= 99);
+
+    // 最高節目だけ表示（表示済みフラグがfalseの場合のみ）
+    var showMs = 0;
+    if (cross99 && !ms.level99) { showMs = 99; }
+    else if (cross50 && !ms.level50) { showMs = 50; }
+    else if (cross10 && !ms.level10) { showMs = 10; }
+
+    // 全通過済み節目をtrueに記録（表示有無に関わらず）
+    if (cross10) { ms.level10 = true; }
+    if (cross50) { ms.level50 = true; }
+    if (cross99) { ms.level99 = true; }
+
+    if (showMs === 10) {
+      log("🌱 " + cData.name + "が成長の節目 Lv10 に到達！");
+      log("「" + lines[10] + "」");
+    } else if (showMs === 50) {
+      log("🔥 " + cData.name + "が成長の節目 Lv50 に到達！");
+      log("「" + lines[50] + "」");
+    } else if (showMs === 99) {
+      log("👑 " + cData.name + "が最後の成長の節目に到達！");
+      log("「" + lines[99] + "」");
+    }
   }
 
   // §101 v0.38: 仲間の成長段階を取得（Lvに応じた0〜5のティア）
@@ -5022,6 +5095,12 @@
       html += '<div class="shop-row" style="font-size:0.8em;">' +
         '<span style="color:#888;padding-left:12px;">成長効果</span>' +
         '<span style="color:#e9c46a;">' + growthLabel + '</span></div>';
+      // §103 v0.39: 成長の節目表示
+      var ms = cl.milestones || { level10: false, level50: false, level99: false };
+      var msLabel = "Lv10 " + (ms.level10 ? "✓" : "・") + "　Lv50 " + (ms.level50 ? "✓" : "・") + "　Lv99 " + (ms.level99 ? "✓" : "・");
+      html += '<div class="shop-row" style="font-size:0.8em;">' +
+        '<span style="color:#888;padding-left:12px;">成長の節目</span>' +
+        '<span style="color:#c8b4ff;">' + msLabel + '</span></div>';
     });
 
     // §47 v0.9.3 / §48 v0.10 / §50 v0.11 / §55 v0.12: 横スクロール進捗
@@ -6422,6 +6501,11 @@
       html += '<p class="small" style="color:#e9c46a;margin-top:4px;">⚔️ 仲間成長システム確認 (§101 v0.38)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-growth-harumi-lv1" style="border-color:#e9c46a;color:#e9c46a;">✨ ハルミ回復成長確認（HP25%+ハルミLv1）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-growth-harumi-lv99" style="border-color:#ffd700;color:#ffd700;">✨ ハルミ回復成長確認（HP25%+ハルミLv99）</button>';
+      html += '<p class="small" style="color:#c8b4ff;margin-top:4px;">🌱 仲間節目セリフ確認 (§103 v0.39)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-lv10" style="border-color:#c8b4ff;color:#c8b4ff;">🌱 Lv10節目セリフ確認（ジュリタニ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-lv50" style="border-color:#ff9de2;color:#ff9de2;">🔥 Lv50節目セリフ確認（シュリタニ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-lv99" style="border-color:#ffd700;color:#ffd700;">👑 Lv99節目セリフ確認（ノリオ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-reset" style="border-color:#adb5bd;color:#adb5bd;">🔄 仲間節目フラグ全リセット（Lv1・EXP0）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -7922,6 +8006,51 @@
         state.player.hp = Math.max(1, Math.floor(state.player.maxHp * 0.25));
         saveGame();
         showToast("[DEBUG] ハルミLv99+HP25%。戦闘→小さな癒し/小さな回復で回復量を確認（Lv99:回復+10）");
+        renderSettingsBody();
+      };
+      // §103 v0.39: 仲間節目セリフ確認ボタン
+      document.getElementById("btn-debug-milestone-lv10").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("juritani");
+        cl.level = 9; cl.exp = 0; cl.nextExp = 9 * 10 + 15;
+        cl.milestones = { level10: false, level50: false, level99: false };
+        state.player.companions = ["juritani"];
+        gainCompanionExp(110); // Lv9→Lv10（nextExp=105を超える）
+        saveGame();
+        showToast("[DEBUG] ジュリタニLv9→Lv10。バトルログでLv10節目セリフを確認！");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-milestone-lv50").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("shurittani");
+        cl.level = 49; cl.exp = 0; cl.nextExp = 49 * 10 + 15;
+        cl.milestones = { level10: true, level50: false, level99: false };
+        state.player.companions = ["shurittani"];
+        gainCompanionExp(510); // Lv49→Lv50（nextExp=505を超える）
+        saveGame();
+        showToast("[DEBUG] シュリタニLv49→Lv50。バトルログでLv50節目セリフを確認！");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-milestone-lv99").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("norio");
+        cl.level = 98; cl.exp = 0; cl.nextExp = 98 * 10 + 15;
+        cl.milestones = { level10: true, level50: true, level99: false };
+        state.player.companions = ["norio"];
+        gainCompanionExp(1000); // Lv98→Lv99（nextExp=995を超える）
+        saveGame();
+        showToast("[DEBUG] ノリオLv98→Lv99。バトルログで🌟専用ログ＋👑節目セリフを確認！");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-milestone-reset").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        COMPANION_DATA.forEach(function (c) {
+          var cl = getCompanionLevel(c.id);
+          cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+          cl.milestones = { level10: false, level50: false, level99: false };
+        });
+        saveGame();
+        showToast("[DEBUG] 仲間4人Lv1・EXP0・節目フラグ全リセット。ステータス画面で「成長の節目：Lv10 ・」を確認！");
         renderSettingsBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）

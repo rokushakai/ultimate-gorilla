@@ -14,13 +14,25 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.38 候補以降
+### Version 0.40 候補以降
 
-仲間わざ / サイドストーリー追加 / 仲間Lvによる能力強化など。
+v0.39.1 仲間節目セリフ安定化 / 仲間装備システム第一段階 / 仲間わざ / サイドストーリー追加
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.39 — 仲間Lv節目セリフ・成長の記録 (§103)
+
+- **`COMPANION_LEVEL_MILESTONE_LINES`**: 仲間4人×Lv10/50/99のセリフデータ定数 ✅
+- **`checkCompanionLevelMilestones(cid, oldLevel, newLevel)`**: 節目チェック・ログ表示・フラグ更新 ✅
+- **`getCompanionLevel()` 更新**: `milestones` 未定義時に現在Lvで補完（旧セーブ互換） ✅
+- **`gainCompanionExp()` 更新**: `oldLevel` 保存・Lvアップ後に `checkCompanionLevelMilestones` 呼び出し ✅
+- **ステータス画面「成長の節目」行**: 全4仲間に Lv10/50/99 到達状況を表示 ✅
+- **デバッグボタン4本 (§103)**: Lv10確認(ジュリタニ) / Lv50確認(シュリタニ) / Lv99確認(ノリオ) / フラグ全リセット ✅
+- セーブ/ロード: `state.companionLevels[cid].milestones` として既存キーに内包 ✅
+- 旧セーブ: Lv10→10済 / Lv50→10/50済 / Lv99→全済 / Lv1〜9→全未達 に自動補完 ✅
+- 複数節目越え: 最高節目セリフのみ表示、全通過済みをtrueに記録 ✅
 
 ### Version 0.38.1 — 仲間Lv能力成長安定化 (§102)
 

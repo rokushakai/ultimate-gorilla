@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.38.1** |
+| 現在バージョン | **v0.39** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.28時点）
+## 現在実装済みの主要機能（v0.39時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,28 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.39] 仲間Lv節目セリフ・成長の記録**（§103）
+  - **`COMPANION_LEVEL_MILESTONE_LINES`**: 仲間4人×Lv10/50/99のセリフデータ定数
+  - **`checkCompanionLevelMilestones(cid, oldLevel, newLevel)`**: 節目到達チェック・ログ表示・フラグ更新
+  - **`getCompanionLevel()` 更新**: `milestones` 未定義時に現在Lvで補完（旧セーブ互換）
+  - **`gainCompanionExp()` 更新**: oldLevel保存 → Lvアップ後に `checkCompanionLevelMilestones` 呼び出し
+  - **ステータス画面「成長の節目」行**: `Lv10 ✓　Lv50 ・　Lv99 ・` 形式で全4仲間に表示
+  - **デバッグ4本 (§103)**: Lv10/50/99確認 + 全リセット
+  - **保護**: 仲間能力成長値・捕獲率・EXP倍率・AI比率 変更なし
+- **[v0.38.1] 仲間Lv能力成長安定化**（§102）
+  - 成長段階境界値・二重適用なし・手動/AI同一値・ハルミ最大HP超過なし 確認済み
+  - セーブ互換: growthTier/growthBonusはLvから毎回計算（永続保存しない）
+- **[v0.38] 仲間Lvによる能力成長**（§101）
+  - **`getCompanionGrowthTier(cid)`**: Lv→Tier 0〜5変換
+  - **`getCompanionGrowthBonus(cid)`**: Tier×係数でボーナス値（ジュリタニ/ハルミ×2、シュリタニ/ノリオ×1）
+  - 全行動関数 (runSingleCompanionAction/runCompanionSpecialAction/runCompanionMagicAction) に成長ボーナス適用
+  - ステータス画面に「成長効果」行追加
+- **[v0.37.1] 仲間Lv/EXPシステム安定化**（§100）
+  - `getCompanionLevel()` にデータ安全ガード追加（level/exp/nextExp各フィールド検証）
+  - 複数Lvアップ時は最終到達Lvのみログ、Lv99専用ログ、パーティ限定EXP確認済み
+- **[v0.37] 仲間Lv/EXPシステム**（§99）
+  - `state.companionLevels` / `getCompanionLevel(cid)` / `gainCompanionExp(baseExp)` 追加
+  - 酒場・ステータス・冒険の記録でLv/EXP表示
 - **[v0.32.1] 2つ目固有コマンド安定化**（§90）
   - **`showCompanionSpecialMenu` 改善**: s1/s2/sback 押下直後に全ボタン `disabled=true`（二重実行確実防止）
   - **`actuallyStartBattle` 更新**: `battleDamageReduction = 0` を先頭に追加（戦闘開始時リセット）
