@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.39** |
+| 現在バージョン | **v0.39.1** |
 | ブランチ | main |
 
 ---
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.39.1] 仲間Lv節目セリフ安定化**（§104）
+  - **`getCompanionLevel()` ガード強化**: null/配列/破損→旧セーブ補完。存在するobject→既存値尊重・欠損/非booleanのみ補完。
+  - **debug設定保護**: getCompanionLevel()再呼び出しでdebug設定のfalseが上書きされない
+  - **デバッグ2本 (§104)**: 2人同時Lv10確認 / Lv1→Lv60複数節目確認
+  - **確認済み**: 境界値 / Lv99ダブルログなし / 複数節目挙動 / セーブタイミング
 - **[v0.39] 仲間Lv節目セリフ・成長の記録**（§103）
   - **`COMPANION_LEVEL_MILESTONE_LINES`**: 仲間4人×Lv10/50/99のセリフデータ定数
   - **`checkCompanionLevelMilestones(cid, oldLevel, newLevel)`**: 節目到達チェック・ログ表示・フラグ更新

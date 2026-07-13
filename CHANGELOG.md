@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.39.1] - 2026-07-13 — 仲間Lv節目セリフ安定化 (§104)
+
+### 確認済み（変更なし）
+- 境界値: Lv9→10 / Lv49→50 / Lv98→99 が正しく節目セリフを表示。Lv10→11 / Lv50→51 等で再表示なし。
+- Lv99ダブルログなし: `if (lv>=99) { 🌟ログ } else if (lv>old) { 🎉ログ }` で排他制御済み。
+- 複数節目越え: Lv1→Lv60でLv50セリフのみ / Lv1→Lv99でLv99セリフのみ。全通過フラグtrue。
+- 通常勝利・捕獲成功の両経路でセリフ表示後 `finishBattle()→saveGame()` でフラグ保存済み。
+- セリフ12種（4仲間×3段階）変更なし。仲間能力成長値・捕獲率・EXP倍率・AI比率 変更なし。
+
+### Changed
+- **`getCompanionLevel()` milestonesガード強化** (§104): 旧セーブ補完と新セーブ保存値尊重を明確に分離。
+  - `!cl.milestones` / `typeof !== "object"` / `Array.isArray()` のいずれかが真 → 旧セーブ補完（現在Lvで一括生成）
+  - milestonesがobjectの場合 → 既存boolean値を尊重し、欠損/非booleanキーだけ現在Lvで安全補完
+  - debugで明示的に設定した `false` フラグが `getCompanionLevel()` 再呼び出しで上書きされない
+
+### Added
+- **デバッグボタン2本** (§104): `🌱 2人同時Lv10節目確認（ジュリタニ+ハルミ）` / `🚀 複数節目確認（ジュリタニLv1→Lv60）`。
+
+
 ## [0.39] - 2026-07-13 — 仲間Lv節目セリフ・成長の記録 (§103)
 
 ### Added

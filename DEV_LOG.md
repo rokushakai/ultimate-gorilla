@@ -5,6 +5,17 @@
 
 ---
 
+## v0.39.1 (2026-07-13)
+
+### 確認・設計判断
+
+- **milestonesガード2段階化**: `!cl.milestones || typeof !== "object" || Array.isArray()` のいずれかで旧セーブ補完。milestonesがobjectなら `typeof key !== "boolean"` でキー単位の安全補完。これにより `debugでfalseを設定してからgetCompanionLevel()を再呼び出ししても上書きされない` という保証が生まれた。
+- **Lv99ダブルログ問題なし**: `gainCompanionExp()` の `if (cl.level >= 99) { 🌟ログ } else if (cl.level > oldLevel) { 🎉ログ }` は排他的if/else if 構造のため、🌟と🎉が同時に出ることはない。確認のみでコード変更なし。
+- **セーブタイミング問題なし**: milestonesフラグは `checkCompanionLevelMilestones()` 内でメモリ更新され、`finishBattle()→saveGame()` で確実に保存される。追加saveは不要。
+- **Lv1→Lv60の複数節目確認**: 20000EXP付与でLv60超え。Lv50セリフのみ表示・Lv10/50フラグtrue・Lv99false が期待動作。デバッグボタン `🚀 複数節目確認` で再現可能。
+
+---
+
 ## v0.39 (2026-07-13)
 
 ### 追加・変更

@@ -4240,13 +4240,19 @@
       cl.nextExp = cl.level * 10 + 15;
     }
     if (cl.level >= 99) { cl.exp = 0; }
-    // §103 v0.39: 旧セーブ互換 - 節目フラグがなければ現在Lvに基づいて補完
-    if (!cl.milestones) {
+    // §103 v0.39 / §104 v0.39.1: milestonesデータガード強化
+    // 旧セーブ（milestones未定義/null/配列/破損）→ 現在Lvで補完
+    // 新セーブ（milestonesオブジェクト存在）→ 既存値を尊重し欠損・非booleanキーのみ安全補完
+    if (!cl.milestones || typeof cl.milestones !== "object" || Array.isArray(cl.milestones)) {
       cl.milestones = {
         level10: cl.level >= 10,
         level50: cl.level >= 50,
         level99: cl.level >= 99
       };
+    } else {
+      if (typeof cl.milestones.level10 !== "boolean") { cl.milestones.level10 = cl.level >= 10; }
+      if (typeof cl.milestones.level50 !== "boolean") { cl.milestones.level50 = cl.level >= 50; }
+      if (typeof cl.milestones.level99 !== "boolean") { cl.milestones.level99 = cl.level >= 99; }
     }
     return cl;
   }
@@ -6506,6 +6512,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-milestone-lv50" style="border-color:#ff9de2;color:#ff9de2;">🔥 Lv50節目セリフ確認（シュリタニ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-milestone-lv99" style="border-color:#ffd700;color:#ffd700;">👑 Lv99節目セリフ確認（ノリオ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-milestone-reset" style="border-color:#adb5bd;color:#adb5bd;">🔄 仲間節目フラグ全リセット（Lv1・EXP0）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-2person" style="border-color:#a0f0b4;color:#a0f0b4;">🌱 2人同時Lv10節目確認（ジュリタニ+ハルミ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-milestone-multi" style="border-color:#ffb3d9;color:#ffb3d9;">🚀 複数節目確認（ジュリタニLv1→Lv60）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8051,6 +8059,31 @@
         });
         saveGame();
         showToast("[DEBUG] 仲間4人Lv1・EXP0・節目フラグ全リセット。ステータス画面で「成長の節目：Lv10 ・」を確認！");
+        renderSettingsBody();
+      };
+      // §104 v0.39.1: 節目セリフ安定化確認ボタン
+      document.getElementById("btn-debug-milestone-2person").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        ["juritani", "harumi"].forEach(function (cid) {
+          var cl = getCompanionLevel(cid);
+          cl.level = 9; cl.exp = 0; cl.nextExp = 9 * 10 + 15;
+          cl.milestones = { level10: false, level50: false, level99: false };
+        });
+        state.player.companions = ["juritani", "harumi"];
+        gainCompanionExp(110); // 両者Lv9→Lv10（nextExp=105を超える）
+        saveGame();
+        showToast("[DEBUG] ジュリタニ+ハルミ同時Lv9→Lv10。2人分のLv10節目セリフをバトルログで確認！");
+        renderSettingsBody();
+      };
+      document.getElementById("btn-debug-milestone-multi").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var cl = getCompanionLevel("juritani");
+        cl.level = 1; cl.exp = 0; cl.nextExp = 25;
+        cl.milestones = { level10: false, level50: false, level99: false };
+        state.player.companions = ["juritani"];
+        gainCompanionExp(20000); // Lv1→Lv60超え（Lv60到達に約18600必要）
+        saveGame();
+        showToast("[DEBUG] ジュリタニLv1→Lv60超え。Lv50セリフのみ表示・Lv10/50フラグtrue・Lv99falseをバトルログとステータスで確認！");
         renderSettingsBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
