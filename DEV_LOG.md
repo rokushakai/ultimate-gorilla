@@ -5,6 +5,15 @@
 
 ---
 
+## v0.40 (2026-07-14)
+
+### 設計判断
+
+- **`renderStatus()` は未定義**: コード全体で `renderStatus()` が多数呼び出されているが、定義は `renderStatusBody()` のみ。pre-existing bug。v0.40の `equipCompanionGear()` では `renderStatusBody()` を直接呼び出す方針とした。
+- **装備ボーナスは会心倍率に乗せない**: ジュリタニ 会心の構え / 通常攻撃ともに、会心倍率（×1.5/×1.6）計算後にフラット加算。意図: 装備が強くなりすぎない・会心の価値を保持。
+- **`ensureCompanionGearState()` は冪等**: loadGame後・equipCompanionGear・renderStatusBody内で複数回呼ばれても、`companionGearVersion >= 1` ガードで二重配布しない。
+- **スターター装備は自動装備しない**: `ensureCompanionGearState()` はインベントリに追加するのみ。プレイヤーがステータス画面で手動装備する設計。
+
 ## v0.39.1 (2026-07-13)
 
 ### 確認・設計判断

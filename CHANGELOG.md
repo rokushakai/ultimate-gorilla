@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.40] - 2026-07-14 — 仲間装備システム第一段階 (§105)
+
+### Added
+- **`COMPANION_GEAR_DATA`定数**: スターター装備4種（熱血バンダナ/捕獲グローブ/観察メガネ/癒しのリボン）
+- **セーブデータ3キー追加**: `companionEquipment`, `companionGearInventory`, `companionGearVersion`
+- **`ensureCompanionGearState()`**: 冪等な初期化・ガード。バージョン0の旧セーブに自動配布
+- **`getCompanionEquippedGear(cid)`**, **`getCompanionEquipmentBonus(cid, type)`**, **`equipCompanionGear(cid, gearId)`**
+- **全コンバットアクションに装備ボーナス適用**: ジュリタニ会心後+2・シュリタニ/ノリオ+1・ハルミ回復+3
+- **ステータス画面**: 仲間ごとの装備表示、装備/解除ボタン、仲間装備袋セクション、おすすめ一括装備/全解除
+- **デバッグボタン5本** (§105): 全装備/全解除/スターターリセット/ジュリタニ確認/ハルミ確認
+
+### Confirmed unchanged
+- プレイヤー装備・BGM・捕獲率・ノリオEXP×2・ジュリタニ会心30%/1.6×・軽減20%/25% 変更なし
+
 ## [0.39.1] - 2026-07-13 — 仲間Lv節目セリフ安定化 (§104)
 
 ### 確認済み（変更なし）

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.39.1** |
+| 現在バージョン | **v0.40** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.39時点）
+## 現在実装済みの主要機能（v0.40時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,13 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.40] 仲間装備システム第一段階**（§105）
+  - **`COMPANION_GEAR_DATA`**: スターター4種（熱血バンダナ/捕獲グローブ/観察メガネ/癒しのリボン）
+  - **`ensureCompanionGearState()`**: 初期化・ガード・スターター自動配布（旧セーブ互換）
+  - **装備ボーナス全適用**: runSingleCompanionAction / runCompanionSpecialAction / runCompanionMagicAction（8箇所）
+  - **ステータス画面**: 仲間ごとの装備行・装備袋・一括装備/全解除ボタン
+  - **デバッグ5本 (§105)**: 全装備/全解除/スターターリセット/ジュリタニ確認/ハルミ確認
+  - **保護**: プレイヤー装備・BGM・捕獲率・ノリオEXP×2・ジュリタニ会心30%/1.6×・軽減率 変更なし
 - **[v0.39.1] 仲間Lv節目セリフ安定化**（§104）
   - **`getCompanionLevel()` ガード強化**: null/配列/破損→旧セーブ補完。存在するobject→既存値尊重・欠損/非booleanのみ補完。
   - **debug設定保護**: getCompanionLevel()再呼び出しでdebug設定のfalseが上書きされない

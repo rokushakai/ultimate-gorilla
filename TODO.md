@@ -14,13 +14,23 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.40 候補以降
+### Version 0.41 候補以降
 
-v0.39.1 仲間節目セリフ安定化 / 仲間装備システム第一段階 / 仲間わざ / サイドストーリー追加
+仲間装備システム第二段階（装備追加・ショップ購入） / 仲間わざ / サイドストーリー追加
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.40 — 仲間装備システム第一段階 (§105)
+
+- **COMPANION_GEAR_DATA**: スターター4種定義（専用+ボーナス） ✅
+- **ensureCompanionGearState()**: 旧セーブ自動スターター配布 (version=0→1) ✅
+- **装備ヘルパー3関数**: getCompanionEquippedGear / getCompanionEquipmentBonus / equipCompanionGear ✅
+- **全コンバットアクションに装備ボーナス適用**: 8箇所（通常/特殊/魔法×4仲間、ジュリタニ会心後、ハルミmaxHp前） ✅
+- **ステータス画面**: 装備行・装備袋・おすすめ一括装備 ✅
+- **saveGame/loadGame/newGame**: companionEquipment/GearInventory/GearVersion ✅
+- **デバッグボタン5本** ✅
 
 ### Version 0.39.1 — 仲間Lv節目セリフ安定化 (§104)
 
