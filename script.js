@@ -4370,7 +4370,9 @@
   }
 
   // §105 v0.40: 仲間装備 - 初期化・ガード・ヘルパー
+  // §106 v0.40.1: 安定化済み
   function ensureCompanionGearState() {
+    // companionEquipment ガード
     if (!state.companionEquipment || typeof state.companionEquipment !== "object" || Array.isArray(state.companionEquipment)) {
       state.companionEquipment = {};
     }
@@ -4378,49 +4380,87 @@
     for (var _i = 0; _i < _cids.length; _i++) {
       if (state.companionEquipment[_cids[_i]] === undefined) { state.companionEquipment[_cids[_i]] = null; }
     }
+    // companionGearInventory ガード
     if (!state.companionGearInventory || typeof state.companionGearInventory !== "object" || Array.isArray(state.companionGearInventory)) {
       state.companionGearInventory = {};
     }
-    if (!state.companionGearVersion || state.companionGearVersion < 1) {
+    // §106 v0.40.1: inventory値サニタイズ（NaN/負数/Infinity/文字列/null → 0）
+    var _invKeys = Object.keys(state.companionGearInventory);
+    for (var _ik = 0; _ik < _invKeys.length; _ik++) {
+      var _raw = state.companionGearInventory[_invKeys[_ik]];
+      var _n = Math.floor(Number(_raw));
+      state.companionGearInventory[_invKeys[_ik]] = (isNaN(_n) || !isFinite(_n) || _n < 0) ? 0 : _n;
+    }
+    // スターター配布（version < 1 の場合のみ。inventory空は再配布トリガーにしない）
+    if (typeof state.companionGearVersion !== "number" || isNaN(state.companionGearVersion)) {
+      state.companionGearVersion = 0;
+    }
+    if (state.companionGearVersion < 1) {
       state.companionGearInventory.hotblood_bandana    = (state.companionGearInventory.hotblood_bandana    || 0) + 1;
       state.companionGearInventory.capture_gloves      = (state.companionGearInventory.capture_gloves      || 0) + 1;
       state.companionGearInventory.observation_glasses = (state.companionGearInventory.observation_glasses || 0) + 1;
       state.companionGearInventory.healing_ribbon      = (state.companionGearInventory.healing_ribbon      || 0) + 1;
       state.companionGearVersion = 1;
     }
+    // 装備スロットの整合性チェック
     for (var _j = 0; _j < _cids.length; _j++) {
       var _cid = _cids[_j];
       var _gid = state.companionEquipment[_cid];
-      if (_gid === null || _gid === undefined) { state.companionEquipment[_cid] = null; continue; }
+      if (_gid === null || _gid === undefined || typeof _gid !== "string") { state.companionEquipment[_cid] = null; continue; }
       var _gdat = COMPANION_GEAR_DATA[_gid];
       if (!_gdat || _gdat.allowedCompanion !== _cid) { state.companionEquipment[_cid] = null; continue; }
       if ((state.companionGearInventory[_gid] || 0) <= 0) { state.companionEquipment[_cid] = null; }
     }
   }
+  // §106 v0.40.1: cid/gear/allowedCompanion/所持数 すべて確認
   function getCompanionEquippedGear(cid) {
+    var _vc = ["juritani", "shurittani", "norio", "harumi"];
+    var _ok = false;
+    for (var _vi = 0; _vi < _vc.length; _vi++) { if (_vc[_vi] === cid) { _ok = true; break; } }
+    if (!_ok) return null;
     if (!state.companionEquipment) return null;
-    return state.companionEquipment[cid] || null;
+    var gearId = state.companionEquipment[cid];
+    if (!gearId || typeof gearId !== "string") return null;
+    var gear = COMPANION_GEAR_DATA[gearId];
+    if (!gear || gear.allowedCompanion !== cid) return null;
+    if ((state.companionGearInventory[gearId] || 0) <= 0) return null;
+    return gearId;
   }
+  // §106 v0.40.1: 常に 0 以上の整数を返す
   function getCompanionEquipmentBonus(cid, type) {
     var gearId = getCompanionEquippedGear(cid);
     if (!gearId) return 0;
     var gear = COMPANION_GEAR_DATA[gearId];
     if (!gear) return 0;
-    if (type === "damage") return gear.damageBonus || 0;
-    if (type === "heal")   return gear.healBonus   || 0;
-    return 0;
+    var bonus = 0;
+    if (type === "damage") bonus = gear.damageBonus;
+    else if (type === "heal") bonus = gear.healBonus;
+    else return 0;
+    if (typeof bonus !== "number" || isNaN(bonus) || !isFinite(bonus)) return 0;
+    return Math.max(0, bonus);
   }
+  // §106 v0.40.1: cid検証・失敗通知・解除の最小保存
   function equipCompanionGear(cid, gearId) {
     ensureCompanionGearState();
-    if (gearId === null) {
-      state.companionEquipment[cid] = null;
-      saveGame();
+    var _vc = ["juritani", "shurittani", "norio", "harumi"];
+    var _ok = false;
+    for (var _vi = 0; _vi < _vc.length; _vi++) { if (_vc[_vi] === cid) { _ok = true; break; } }
+    if (!_ok) { return; }
+    if (gearId === null || gearId === undefined) {
+      if (state.companionEquipment[cid] !== null) {
+        state.companionEquipment[cid] = null;
+        saveGame();
+      }
       renderStatusBody();
       return;
     }
     var gear = COMPANION_GEAR_DATA[gearId];
-    if (!gear || gear.allowedCompanion !== cid) { return; }
-    if ((state.companionGearInventory[gearId] || 0) <= 0) { return; }
+    if (!gear) { showToast("その装備は存在しない。"); return; }
+    if (gear.allowedCompanion !== cid) {
+      var _cDat = findById(COMPANION_DATA, cid);
+      showToast((_cDat ? _cDat.name : cid) + "には装備できない。"); return;
+    }
+    if ((state.companionGearInventory[gearId] || 0) <= 0) { showToast("所持していない装備だ。"); return; }
     state.companionEquipment[cid] = gearId;
     saveGame();
     renderStatusBody();
@@ -6698,6 +6738,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gear-starter-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 スターター配布リセット（version=0・所持空）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-juritani-only" style="border-color:#ff9de2;color:#ff9de2;">⚔️ ジュリタニだけ装備+のらいぬ（攻撃+2確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-harumi-only" style="border-color:#06d6a0;color:#06d6a0;">✨ ハルミだけ装備+HP30%+のらいぬ（回復+3確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-corrupt-check" style="border-color:#ffb3d9;color:#ffb3d9;">🧪 仲間装備データ破損確認（補正結果をtoast）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-dup-check" style="border-color:#a0f0b4;color:#a0f0b4;">🎒 スターター増殖防止確認（ensure×3→各1個）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8334,6 +8376,53 @@
         if (state.enemy) { state.enemy.hp = 100; renderEnemy(); }
         showToast("[DEBUG] ハルミ癒しのリボン装備+HP30%+のらいぬ。小さな癒しで+3を確認！");
       };
+      // §106 v0.40.1: データ破損確認
+      document.getElementById("btn-debug-gear-corrupt-check").onclick = function () {
+        ensureCompanionGearState();
+        // 破損データをセット
+        state.companionEquipment = ["invalid_array"];
+        state.companionGearInventory = { hotblood_bandana: -5, capture_gloves: "abc", observation_glasses: NaN, healing_ribbon: null };
+        state.companionEquipment["juritani"] = "observation_glasses"; // 他人の装備を装備
+        state.companionGearVersion = "wrong_type";
+        // 補正実行
+        ensureCompanionGearState();
+        // 結果確認
+        var _inv = state.companionGearInventory;
+        var _eq = state.companionEquipment;
+        var _pass = (
+          !Array.isArray(_eq) && typeof _eq === "object" &&
+          _eq["juritani"] === null &&
+          _inv["hotblood_bandana"] === 0 &&
+          _inv["capture_gloves"] === 0 &&
+          _inv["observation_glasses"] === 0 &&
+          _inv["healing_ribbon"] === 0 &&
+          typeof state.companionGearVersion === "number" && !isNaN(state.companionGearVersion)
+        );
+        showToast("[DEBUG] 破損確認: " + (_pass ? "PASS ✅ すべて補正済み" : "FAIL ❌ コンソール確認"));
+        if (!_pass) { console.log("[DEBUG] eq:", JSON.stringify(_eq), "inv:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
+        renderStatusBody();
+      };
+      // §106 v0.40.1: スターター増殖防止確認
+      document.getElementById("btn-debug-gear-dup-check").onclick = function () {
+        // リセット
+        state.companionGearInventory = {};
+        state.companionGearVersion = 0;
+        // ensure×3回実行
+        ensureCompanionGearState();
+        ensureCompanionGearState();
+        ensureCompanionGearState();
+        var _inv = state.companionGearInventory;
+        var _pass = (
+          _inv["hotblood_bandana"]    === 1 &&
+          _inv["capture_gloves"]      === 1 &&
+          _inv["observation_glasses"] === 1 &&
+          _inv["healing_ribbon"]      === 1 &&
+          state.companionGearVersion  === 1
+        );
+        showToast("[DEBUG] 増殖防止確認: " + (_pass ? "PASS ✅ 各1個のみ" : "FAIL ❌ コンソール確認"));
+        if (!_pass) { console.log("[DEBUG] inv after ×3:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
+        renderStatusBody();
+      };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -8628,6 +8717,7 @@
       state.companionEquipment    = data.companionEquipment    || {};   // §105 v0.40
       state.companionGearInventory= data.companionGearInventory|| {};   // §105 v0.40
       state.companionGearVersion  = data.companionGearVersion  || 0;    // §105 v0.40
+      var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
@@ -8638,6 +8728,8 @@
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
       p.mp = Math.min(data.mp != null ? data.mp : p.maxMp, p.maxMp);
+      // §106 v0.40.1: 旧セーブでスターター配布が起きた場合は即座に保存（再起動での増殖防止）
+      if (_prevGearVer < 1 && state.companionGearVersion >= 1) { saveGame(); }
       return true;
     } catch (e) {
       return false;

@@ -5,6 +5,16 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.40.1] - 2026-07-14 — 仲間装備システム安定化 (§106)
+
+### Fixed / Hardened
+- **`ensureCompanionGearState()`**: inventory値をサニタイズ（NaN/負数/Infinity/文字列/null → 0）。`companionGearVersion` 型ガード（非数→0リセット）
+- **`getCompanionEquippedGear(cid)`**: cid有効性チェック・gearId型検証・COMPANION_GEAR_DATA存在確認・allowedCompanion照合・在庫>0チェックを完備。`ensureCompanionGearState()` 事前呼び出し不要
+- **`getCompanionEquipmentBonus(cid, type)`**: `Math.max(0, bonus)` 保証で負ボーナス排除。型不正（非数/NaN/Infinity）→ 0返却
+- **`equipCompanionGear(cid, gearId)`**: cid無効時サイレントリターン→ 存在確認ガードに強化。装備不可・未所持のtoast通知。unequip時は値変化がある場合のみ `saveGame()` 呼び出し最適化
+- **`loadGame()`**: `_prevGearVer` で配布前後を検出し、スターター配布直後に `saveGame()` を呼ぶ（ゲーム終了でも再配布しない）
+- **デバッグボタン2本追加** (§106): 破損データ補正確認 / スターター増殖防止確認（ensure×3→各1個）
+
 ## [0.40] - 2026-07-14 — 仲間装備システム第一段階 (§105)
 
 ### Added

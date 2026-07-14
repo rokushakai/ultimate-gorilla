@@ -5308,6 +5308,56 @@ v0.39で追加したLv10・Lv50・Lv99の仲間固有セリフを安定化する
 - ✨ ハルミだけ装備+HP30%+のらいぬ（回復+3確認）
 
 
+## §106 v0.40.1 — 仲間装備システム安定化 [実装済み]
+
+v0.40で追加した仲間専用装備枠・スターター装備・装備UI・所持装備・戦闘ボーナス・セーブ/ロードを安定化する。
+
+旧セーブへのスターター装備は一度だけ配布し、ロードや初期化処理のたびに増殖させない。
+
+不正な仲間ID・装備ID・所持数・装備状態を安全に補正する。
+
+装備効果は手動行動とまかせるAIで一度だけ適用する。
+
+主人公装備、捕獲率、EXP倍率、会心率、会心倍率、軽減率、AI比率は変更しない。
+
+### 安定化内容
+
+#### ensureCompanionGearState() 冪等性強化
+- `companionGearVersion >= 1` の場合は再配布しない
+- inventoryの各値をサニタイズ（NaN/負数/Infinity/文字列/null → 0、小数→切り捨て）
+- 配布判断はversionのみ基準（inventory空≠再配布トリガー）
+
+#### getCompanionEquippedGear(cid) ガード強化
+- cidが有効な4人のいずれかでない場合はnull
+- equipmentが未初期化でもエラーなし
+- gearIdがCOMPANION_GEAR_DATAに存在しない場合はnull
+- allowedCompanionがcidと一致しない場合はnull
+- 所持数0の場合はnull（データ破損扱い）
+
+#### getCompanionEquipmentBonus(cid, type) ガード強化
+- 常に `0` 以上の数値を返す（Math.max(0, ...)）
+- 不正type・不正gear・NaN/Infinity/マイナスbonusは0
+- 専用外・装備なしは0
+
+#### equipCompanionGear(cid, gearId) ガード強化
+- cidの有効性チェック
+- 解除時(gearId=null): 既にnullなら再保存しない
+- 不正gearId・専用外・所持0はshowToastで失敗通知
+- 成功時のみsaveGame()+renderStatusBody()
+
+#### 所持数と装備状態の仕様
+- inventoryは総所有数（装備中でも減少しない）
+- 解除時もinventory数を変更しない
+- 利用可能数 = 総所有数（専用装備なので競合なし）
+
+#### loadGame() ロード後のスターター保存
+- ensureCompanionGearState()によりversion 0→1に昇格した場合、ロード完了後にsaveGame()を1回呼ぶ
+- 旧セーブ移行後に即ゲームを閉じても再配布されない
+
+### デバッグ追加（§106）
+- 🧪 データ破損確認（不正データ→ensure→補正結果をtoast）
+- 🎒 増殖防止確認（version=0リセット→ensure×3回→各1個を確認）
+
 ## 将来の実装候補（v0.41〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.41 候補以降 [未実装・将来機能]

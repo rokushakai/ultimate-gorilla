@@ -5,6 +5,14 @@
 
 ---
 
+## v0.40.1 (2026-07-14)
+
+### 設計判断・注意点
+
+- **スターター増殖バグの根本対策**: `ensureCompanionGearState()` は `companionGearVersion < 1` の場合のみ配布する。インベントリが空かどうかは配布トリガーにしない（空=消費したケースと区別するため）。この判断はv0.40の設計だが、v0.40.1で `loadGame()` に `_prevGearVer` → `saveGame()` の自動永続化を追加し、スターター配布後にゲームを閉じても再配布しない保証を確立。
+- **getCompanionEquippedGear 完全自己完結化**: v0.40では `ensureCompanionGearState()` 事前呼び出しが前提だったが、v0.40.1で完全なバリデーション（cid/gearId型/COMPANION_GEAR_DATA存在/allowedCompanion/在庫>0）を関数内に組み込み。戦闘フロー中のどの時点で呼ばれても安全。
+- **破損データ対策**: `ensureCompanionGearState()` が `companionEquipment` が配列だった場合も `{}` にリセット。また在庫値が文字列・NaN・負数の場合は `Math.floor(Number(val))` → NaN/Infinity/負数チェックで 0 に正規化。
+
 ## v0.40 (2026-07-14)
 
 ### 設計判断

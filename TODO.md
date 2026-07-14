@@ -22,6 +22,15 @@
 
 ## ✅ 実装済み
 
+### Version 0.40.1 — 仲間装備システム安定化 (§106)
+
+- **`ensureCompanionGearState()`**: inventory値サニタイズ (NaN/負数/Infinity/文字列/null → 0)。companionGearVersion 型ガード ✅
+- **`getCompanionEquippedGear()`**: cid検証・gearId型検証・allowedCompanion照合・在庫チェック完備 ✅
+- **`getCompanionEquipmentBonus()`**: Math.max(0,bonus) 保証・型不正ガード ✅
+- **`equipCompanionGear()`**: cidガード強化・toast通知 ✅
+- **`loadGame()`**: _prevGearVer でスターター配布後の saveGame() 追加 ✅
+- **デバッグボタン2本**: 破損確認 / 増殖防止確認 ✅
+
 ### Version 0.40 — 仲間装備システム第一段階 (§105)
 
 - **COMPANION_GEAR_DATA**: スターター4種定義（専用+ボーナス） ✅
