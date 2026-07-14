@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.41.1** |
+| 現在バージョン | **v0.42** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.41.1時点）
+## 現在実装済みの主要機能（v0.42時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,15 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.42] 特化装備探索報酬システム**（§109）
+  - **特化装備4種を探索報酬へ変更**: ステージ2〜5初回クリアで取得（自動配布廃止）
+  - **`COMPANION_GEAR_REWARD_DATA`**: 特化装備の入手元情報定数
+  - **`state.companionGearRewardFlags`**: `{ gearId: bool }` 取得済みフラグ（二重取得防止）
+  - **`grantCompanionGearReward(gearId)`**: フラグ確認→初回のみ付与ヘルパー
+  - **`reconcileCompanionGearRewards()`**: ロード時に過去クリア済みステージ報酬を自動補完
+  - **旧セーブ互換**: v2セーブの既存特化装備はrewardFlags=trueで引き継ぎ。v1セーブはreconcileで補完
+  - **UI**: 未所持特化装備の入手先表示 / 冒険の記録「🎁 特化装備収集」セクション
+  - **デバッグ4本 (§109)**: リセット / 全取得 / v2→v3移行確認 / 二重取得防止確認
 - **[v0.41.1] 仲間装備選択システム安定化**（§108）
   - **`ensureCompanionGearState()` versionガード強化**: Infinity/文字列/"1"→パース/負数→0クランプ。文字列`"2"`→version=2扱いで再配布なし
   - **装備選択UI 連打防止**: `data-gear-action` クリック直後 `disabled=true`（renderStatusBodyで再構築）

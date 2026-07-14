@@ -5,6 +5,19 @@
 
 ---
 
+## v0.42 (2026-07-15)
+
+### 設計判断・確認事項
+
+- **v1→v2自動配布ブロック削除の安全性**: v0.41.1まで存在したv1→v2配布ブロックを完全削除。v2セーブは既に `companionGearVersion=2` が保存されているため、削除後も「v1→v2」分岐には入らない。削除による影響は新規インストールのみ（今後は初期配布しない）。
+- **v2→v3移行でrewardFlags設定**: v2セーブは `companionGearInventory` に既に特化装備が入っているため、`(state.companionGearInventory[rid] || 0) > 0` の判定でtrueになり `rewardFlags=true` として引き継ぐ。装備が消えることも増えることもない。
+- **`reconcileCompanionGearRewards()`の呼び出しタイミング**: `loadGame()` → `ensureCompanionGearState()` → `reconcileCompanionGearRewards()` の順で呼ぶ。`sideMap.stageCleared` はv9.1以降のセーブから存在するため、v1/v2セーブでも補完できる。
+- **新規プレイヤーは特化装備なし**: 初期state `companionGearVersion=0` → v0→v1（スターター付与） → v<3→v3（インベントリ空→全rewardFlags=false）。ステージ2〜5クリア時にはじめて取得する。
+- **二重取得防止の根拠**: `grantCompanionGearReward()` はフラグ=trueなら即return。`reconcileCompanionGearRewards()` は `!state.companionGearRewardFlags[id]` を確認してからgrant呼び出し。ゴールモーダルの `rewardLevel === 0` ブロックは1回しか実行されない（`rewardLevel` がセーブされて次回 `!== 0` になる）。3重の防止構造。
+- **stage goal modalでのgrant呼び出し位置**: `rewardLevel === 0` ブロックの末尾、`else if` の直前に追加。`renderStatus(); saveGame();` はブロック外（共通処理）で呼ばれるため、grant後の状態がセーブに確実に含まれる。
+
+---
+
 ## v0.41.1 (2026-07-14)
 
 ### 設計判断・確認事項
