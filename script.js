@@ -623,11 +623,33 @@
   };
 
   // §105 v0.40: 仲間装備データ（スターター4種）
+  // §105 v0.40: スターター4種 / §107 v0.41: 特化装備4種追加（合計8種）
+  // damageBonus/healBonus = 全行動汎用。actionKey別ボーナスは special1/special2/magicDamageBonus等
   var COMPANION_GEAR_DATA = {
-    hotblood_bandana:    { id: "hotblood_bandana",    name: "熱血バンダナ",  emoji: "🩺", allowedCompanion: "juritani",   damageBonus: 2, healBonus: 0 },
-    capture_gloves:      { id: "capture_gloves",      name: "捕獲グローブ",  emoji: "🧤", allowedCompanion: "shurittani", damageBonus: 1, healBonus: 0 },
-    observation_glasses: { id: "observation_glasses", name: "観察メガネ",    emoji: "🔍", allowedCompanion: "norio",      damageBonus: 1, healBonus: 0 },
-    healing_ribbon:      { id: "healing_ribbon",      name: "癒しのリボン",  emoji: "🎀", allowedCompanion: "harumi",     damageBonus: 0, healBonus: 3 }
+    hotblood_bandana:    { id: "hotblood_bandana",    name: "熱血バンダナ",  emoji: "🩺", allowedCompanion: "juritani",
+      damageBonus: 2, healBonus: 0,
+      effectDesc: "通常攻撃・会心の構え・熱血エール +2" },
+    critical_bracelet:   { id: "critical_bracelet",   name: "会心の腕輪",    emoji: "⚡", allowedCompanion: "juritani",
+      damageBonus: 0, healBonus: 0, special1DamageBonus: 5,
+      effectDesc: "会心の構え +5" },
+    capture_gloves:      { id: "capture_gloves",      name: "捕獲グローブ",  emoji: "🧤", allowedCompanion: "shurittani",
+      damageBonus: 1, healBonus: 0,
+      effectDesc: "通常攻撃・捕獲アシスト・捕獲の網・おちつきの霧 +1" },
+    net_master_belt:     { id: "net_master_belt",     name: "網師のベルト",  emoji: "🕸️", allowedCompanion: "shurittani",
+      damageBonus: 0, healBonus: 0, special2DamageBonus: 4,
+      effectDesc: "捕獲の網 +4" },
+    observation_glasses: { id: "observation_glasses", name: "観察メガネ",    emoji: "🔍", allowedCompanion: "norio",
+      damageBonus: 1, healBonus: 0,
+      effectDesc: "通常攻撃・経験値の眼・経験値メモ・観察メモ +1" },
+    research_notebook:   { id: "research_notebook",   name: "研究ノート",    emoji: "📓", allowedCompanion: "norio",
+      damageBonus: 0, healBonus: 0, special2DamageBonus: 3, magicDamageBonus: 3,
+      effectDesc: "経験値メモ・観察メモ +3" },
+    healing_ribbon:      { id: "healing_ribbon",      name: "癒しのリボン",  emoji: "🎀", allowedCompanion: "harumi",
+      damageBonus: 0, healBonus: 3,
+      effectDesc: "小さな癒し・小さな回復 +3" },
+    prayer_brooch:       { id: "prayer_brooch",       name: "祈りのブローチ", emoji: "🙏", allowedCompanion: "harumi",
+      damageBonus: 0, healBonus: 0, magicHealBonus: 6,
+      effectDesc: "小さな回復 +6" }
   };
 
   // §75 v0.24 / §76 v0.24.1: 仲間セリフ状態判定ヘルパー
@@ -3278,7 +3300,7 @@
       if (e.hp <= 0) return false;
       var growthJ = getCompanionGrowthBonus("juritani");
       var dmgJ = 5 + Math.floor(Math.random() * 8) + growthJ;
-      dmgJ += getCompanionEquipmentBonus("juritani", "damage"); // §105 v0.40
+      dmgJ += getCompanionEquipmentBonus("juritani", "damage", "magic"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgJ);
       log("🔥 ジュリタニの熱血エール！");
       log("気合いの声が相手に響いた！");
@@ -3290,7 +3312,7 @@
       if (e.hp <= 0) return false;
       var growthS = getCompanionGrowthBonus("shurittani");
       var dmgS = 1 + Math.floor(Math.random() * 3) + growthS;
-      dmgS += getCompanionEquipmentBonus("shurittani", "damage"); // §105 v0.40
+      dmgS += getCompanionEquipmentBonus("shurittani", "damage", "magic"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgS);
       log("🫧 シュリタニのおちつきの霧！");
       log("相手の動きが少しゆるんだ！");
@@ -3302,7 +3324,7 @@
       if (e.hp <= 0) return false;
       var growthN = getCompanionGrowthBonus("norio");
       var dmgN = 3 + Math.floor(Math.random() * 5) + growthN;
-      dmgN += getCompanionEquipmentBonus("norio", "damage"); // §105 v0.40
+      dmgN += getCompanionEquipmentBonus("norio", "damage", "magic"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgN);
       log("🔍 ノリオの観察メモ！");
       log("相手のクセを記録した！");
@@ -3318,7 +3340,7 @@
       }
       var growthH = getCompanionGrowthBonus("harumi");
       var heal = 15 + Math.floor(Math.random() * 11) + growthH;
-      heal += getCompanionEquipmentBonus("harumi", "heal"); // §105 v0.40
+      heal += getCompanionEquipmentBonus("harumi", "heal", "magic"); // §107 v0.41
       var before = p.hp;
       p.hp = Math.min(p.maxHp, p.hp + heal);
       var actual = p.hp - before;
@@ -3340,7 +3362,7 @@
       var dmgJ = Math.min(30, Math.min(20, 5 + Math.floor(p.level / 8)) + growthJ);
       var isCritJ = Math.random() < 0.25;
       if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.5); }
-      dmgJ += getCompanionEquipmentBonus("juritani", "damage"); // §105 v0.40
+      dmgJ += getCompanionEquipmentBonus("juritani", "damage", "attack"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgJ);
       log(isCritJ
         ? "💪 ジュリタニの追撃！ 💥 会心！ " + e.name + "に" + dmgJ + "ダメージ！"
@@ -3349,7 +3371,7 @@
       // §101 v0.38: 成長ボーナス加算（旧cap5 → 新cap10）
       var growthS = getCompanionGrowthBonus("shurittani");
       var dmgS = Math.min(10, Math.min(5, 1 + Math.floor(p.level / 20)) + growthS);
-      dmgS += getCompanionEquipmentBonus("shurittani", "damage"); // §105 v0.40
+      dmgS += getCompanionEquipmentBonus("shurittani", "damage", "attack"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgS);
       log("🪤 シュリタニが相手の動きを読んだ！ " + e.name + "に" + dmgS + "ダメージ！");
       log("なんだか捕まえやすくなった気がする。");
@@ -3357,7 +3379,7 @@
       // §101 v0.38: 成長ボーナス加算（旧cap15 → 新cap20）
       var growthN = getCompanionGrowthBonus("norio");
       var dmgN = Math.min(20, Math.min(15, 4 + Math.floor(p.level / 10)) + growthN);
-      dmgN += getCompanionEquipmentBonus("norio", "damage"); // §105 v0.40
+      dmgN += getCompanionEquipmentBonus("norio", "damage", "attack"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgN);
       log("📈 ノリオ「経験値のために倒せ！」 " + e.name + "に" + dmgN + "ダメージ！");
     } else if (cid === "harumi") {
@@ -3389,7 +3411,7 @@
         // 🕸️ 捕獲の網: §101 v0.38: 成長ボーナス加算（旧cap4 → 新cap9）
         var growthSN = getCompanionGrowthBonus("shurittani");
         var dmgSN = Math.min(9, Math.min(4, 2 + Math.floor(p.level / 40)) + growthSN);
-        dmgSN += getCompanionEquipmentBonus("shurittani", "damage"); // §105 v0.40
+        dmgSN += getCompanionEquipmentBonus("shurittani", "damage", "special2"); // §107 v0.41
         e.hp = Math.max(0, e.hp - dmgSN);
         log("🕸️ シュリタニが捕獲の網を広げた！");
         log("相手の動きが少し鈍った！ " + e.name + "に" + dmgSN + "ダメージ！");
@@ -3399,7 +3421,7 @@
         // 📝 経験値メモ: §101 v0.38: 成長ボーナス加算（旧cap8 → 新cap13）
         var growthNM = getCompanionGrowthBonus("norio");
         var dmgNM = Math.min(13, Math.min(8, 4 + Math.floor(p.level / 20)) + growthNM);
-        dmgNM += getCompanionEquipmentBonus("norio", "damage"); // §105 v0.40
+        dmgNM += getCompanionEquipmentBonus("norio", "damage", "special2"); // §107 v0.41
         e.hp = Math.max(0, e.hp - dmgNM);
         log("📝 ノリオが経験値メモを取り始めた！");
         log("この戦い、あとで振り返れそうだ！ " + e.name + "に" + dmgNM + "ダメージ！");
@@ -3424,7 +3446,7 @@
       var dmgJ = Math.min(38, Math.min(28, 8 + Math.floor(p.level / 7)) + growthJ);
       var isCritJ = Math.random() < 0.30;
       if (isCritJ) { dmgJ = Math.floor(dmgJ * 1.6); }
-      dmgJ += getCompanionEquipmentBonus("juritani", "damage"); // §105 v0.40: 会心倍率後に加算
+      dmgJ += getCompanionEquipmentBonus("juritani", "damage", "special1"); // §107 v0.41: 会心倍率後に加算
       e.hp = Math.max(0, e.hp - dmgJ);
       log("💥 ジュリタニの会心の構え！");
       log(isCritJ
@@ -3437,7 +3459,7 @@
       // §101 v0.38: 成長ボーナス加算（旧cap3 → 新cap8）
       var growthS = getCompanionGrowthBonus("shurittani");
       var dmgS = Math.min(8, Math.min(3, 1 + Math.floor(p.level / 30)) + growthS);
-      dmgS += getCompanionEquipmentBonus("shurittani", "damage"); // §105 v0.40
+      dmgS += getCompanionEquipmentBonus("shurittani", "damage", "special1"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgS);
       log("🪤 シュリタニの捕獲アシスト！");
       log("捕まえやすい間合いを作った！ " + e.name + "に" + dmgS + "ダメージ！");
@@ -3448,7 +3470,7 @@
       // §101 v0.38: 成長ボーナス加算（旧cap12 → 新cap17）
       var growthN = getCompanionGrowthBonus("norio");
       var dmgN = Math.min(17, Math.min(12, 3 + Math.floor(p.level / 12)) + growthN);
-      dmgN += getCompanionEquipmentBonus("norio", "damage"); // §105 v0.40
+      dmgN += getCompanionEquipmentBonus("norio", "damage", "special1"); // §107 v0.41
       e.hp = Math.max(0, e.hp - dmgN);
       log("📈 ノリオの経験値の眼！");
       log("この戦い、学びが多そうだ！ " + e.name + "に" + dmgN + "ダメージ！");
@@ -3459,7 +3481,7 @@
       // §101 v0.38: 回復量に成長ボーナス加算（旧cap25 → 新cap35、maxHpでクランプ）
       var growthH = getCompanionGrowthBonus("harumi");
       var heal = Math.min(35, Math.min(25, 10 + Math.floor(p.level / 10)) + growthH);
-      heal += getCompanionEquipmentBonus("harumi", "heal"); // §105 v0.40
+      heal += getCompanionEquipmentBonus("harumi", "heal", "special1"); // §107 v0.41
       var before = p.hp;
       p.hp = Math.min(p.maxHp, p.hp + heal);
       var actual = p.hp - before;
@@ -4402,6 +4424,14 @@
       state.companionGearInventory.healing_ribbon      = (state.companionGearInventory.healing_ribbon      || 0) + 1;
       state.companionGearVersion = 1;
     }
+    // §107 v0.41: v1→v2 新装備4種配布（versionが1以上2未満の場合のみ。inventory空は再配布トリガーにしない）
+    if (state.companionGearVersion >= 1 && state.companionGearVersion < 2) {
+      state.companionGearInventory.critical_bracelet  = (state.companionGearInventory.critical_bracelet  || 0) + 1;
+      state.companionGearInventory.net_master_belt    = (state.companionGearInventory.net_master_belt    || 0) + 1;
+      state.companionGearInventory.research_notebook  = (state.companionGearInventory.research_notebook  || 0) + 1;
+      state.companionGearInventory.prayer_brooch      = (state.companionGearInventory.prayer_brooch      || 0) + 1;
+      state.companionGearVersion = 2;
+    }
     // 装備スロットの整合性チェック
     for (var _j = 0; _j < _cids.length; _j++) {
       var _cid = _cids[_j];
@@ -4426,17 +4456,32 @@
     if ((state.companionGearInventory[gearId] || 0) <= 0) return null;
     return gearId;
   }
-  // §106 v0.40.1: 常に 0 以上の整数を返す
-  function getCompanionEquipmentBonus(cid, type) {
+  // §106 v0.40.1 / §107 v0.41: actionKey対応（"attack"/"special1"/"special2"/"magic"）
+  // 2引数呼び出し後方互換: actionKeyなし = damageBonus/healBonusのみ返す
+  function getCompanionEquipmentBonus(cid, type, actionKey) {
     var gearId = getCompanionEquippedGear(cid);
     if (!gearId) return 0;
     var gear = COMPANION_GEAR_DATA[gearId];
     if (!gear) return 0;
+    var _sb = function (v) {
+      var n = (typeof v === "number") ? Math.floor(v) : 0;
+      return (isNaN(n) || !isFinite(n) || n < 0) ? 0 : n;
+    };
     var bonus = 0;
-    if (type === "damage") bonus = gear.damageBonus;
-    else if (type === "heal") bonus = gear.healBonus;
-    else return 0;
-    if (typeof bonus !== "number" || isNaN(bonus) || !isFinite(bonus)) return 0;
+    if (type === "damage") {
+      bonus += _sb(gear.damageBonus);
+      if (actionKey === "attack")   bonus += _sb(gear.attackDamageBonus);
+      else if (actionKey === "special1") bonus += _sb(gear.special1DamageBonus);
+      else if (actionKey === "special2") bonus += _sb(gear.special2DamageBonus);
+      else if (actionKey === "magic")    bonus += _sb(gear.magicDamageBonus);
+    } else if (type === "heal") {
+      bonus += _sb(gear.healBonus);
+      if (actionKey === "special1")      bonus += _sb(gear.special1HealBonus);
+      else if (actionKey === "special2") bonus += _sb(gear.special2HealBonus);
+      else if (actionKey === "magic")    bonus += _sb(gear.magicHealBonus);
+    } else {
+      return 0;
+    }
     return Math.max(0, bonus);
   }
   // §106 v0.40.1: cid検証・失敗通知・解除の最小保存
@@ -5228,69 +5273,78 @@
       html += '<div class="shop-row" style="font-size:0.8em;">' +
         '<span style="color:#888;padding-left:12px;">成長の節目</span>' +
         '<span style="color:#c8b4ff;">' + msLabel + '</span></div>';
-      // §105 v0.40: 仲間装備表示
+      // §107 v0.41: 仲間装備選択UI（2種類から選択可）
       ensureCompanionGearState();
-      var cgId = getCompanionEquippedGear(cd.id);
-      var cgDat = cgId ? COMPANION_GEAR_DATA[cgId] : null;
+      var cgEquippedId = getCompanionEquippedGear(cd.id);
+      var cgEquippedDat = cgEquippedId ? COMPANION_GEAR_DATA[cgEquippedId] : null;
       html += '<div class="shop-row" style="font-size:0.8em;">' +
         '<span style="color:#888;padding-left:12px;">装備</span>' +
-        '<span style="color:' + (cgDat ? "#ffd700" : "#adb5bd") + ';">' +
-        (cgDat ? cgDat.emoji + " " + cgDat.name : "なし") + '</span></div>';
-      if (cgDat) {
-        var cgBonusTxt = cgDat.damageBonus > 0 ? "攻撃+" + cgDat.damageBonus : "回復+" + cgDat.healBonus;
-        html += '<div class="shop-row" style="font-size:0.8em;">' +
-          '<span style="color:#888;padding-left:12px;">装備効果</span>' +
-          '<span style="color:#e9c46a;">' + cgBonusTxt + '</span></div>';
-        html += '<div style="padding:2px 12px 4px 12px;"><button class="shop-menu-btn" ' +
-          'data-gear-cid="' + cd.id + '" data-gear-action="unequip" ' +
-          'style="font-size:0.82em;padding:4px 10px;margin:2px 0;">🔄 装備を外す</button></div>';
-      } else {
-        var cgSId = null;
-        var cgKs = Object.keys(COMPANION_GEAR_DATA);
-        for (var cgi = 0; cgi < cgKs.length; cgi++) {
-          if (COMPANION_GEAR_DATA[cgKs[cgi]].allowedCompanion === cd.id) { cgSId = cgKs[cgi]; break; }
+        '<span style="color:' + (cgEquippedDat ? "#ffd700" : "#adb5bd") + ';">' +
+        (cgEquippedDat ? cgEquippedDat.emoji + " " + cgEquippedDat.name : "なし") + '</span></div>';
+      // この仲間の全装備を列挙
+      var cgAllIds = Object.keys(COMPANION_GEAR_DATA);
+      for (var cgi = 0; cgi < cgAllIds.length; cgi++) {
+        var cgGid2 = cgAllIds[cgi];
+        var cgGD2 = COMPANION_GEAR_DATA[cgGid2];
+        if (!cgGD2 || cgGD2.allowedCompanion !== cd.id) continue;
+        var cgOwned2 = (state.companionGearInventory[cgGid2] || 0) > 0;
+        var cgIsEquipped2 = (cgEquippedId === cgGid2);
+        var cgStatusTxt2, cgStatusCol2;
+        if (cgIsEquipped2) {
+          cgStatusTxt2 = "★装備中"; cgStatusCol2 = "#ffd700";
+        } else if (cgOwned2) {
+          cgStatusTxt2 = "装備可能"; cgStatusCol2 = "#a0cfff";
+        } else {
+          cgStatusTxt2 = "未所持"; cgStatusCol2 = "#888";
         }
-        if (cgSId && (state.companionGearInventory[cgSId] || 0) > 0) {
-          var cgSD = COMPANION_GEAR_DATA[cgSId];
-          html += '<div style="padding:2px 12px 4px 12px;"><button class="shop-menu-btn" ' +
-            'data-gear-cid="' + cd.id + '" data-gear-id="' + cgSId + '" data-gear-action="equip" ' +
-            'style="font-size:0.82em;padding:4px 10px;margin:2px 0;">' +
-            cgSD.emoji + ' ' + cgSD.name + 'を装備</button></div>';
+        html += '<div class="shop-row" style="font-size:0.8em;padding-left:4px;margin-top:2px;">' +
+          '<span>' + cgGD2.emoji + ' <span style="color:#e0e0e0;">' + cgGD2.name + '</span>' +
+          ' <span style="color:' + cgStatusCol2 + ';font-size:0.9em;">' + cgStatusTxt2 + '</span></span>';
+        if (cgIsEquipped2) {
+          html += '<button class="shop-menu-btn" data-gear-cid="' + cd.id + '" data-gear-action="unequip" ' +
+            'style="font-size:0.78em;padding:3px 8px;margin:0;">外す</button>';
+        } else if (cgOwned2) {
+          html += '<button class="shop-menu-btn" data-gear-cid="' + cd.id + '" data-gear-id="' + cgGid2 + '" data-gear-action="equip" ' +
+            'style="font-size:0.78em;padding:3px 8px;margin:0;">装備する</button>';
         }
+        html += '</div>';
+        html += '<div class="shop-row" style="font-size:0.76em;">' +
+          '<span style="color:#888;padding-left:16px;">効果: </span>' +
+          '<span style="color:#e9c46a;">' + (cgGD2.effectDesc || "") + '</span></div>';
       }
     });
 
-    // §105 v0.40: 仲間装備袋
+    // §107 v0.41: 仲間装備袋（8種類・仲間ごとグループ化）
     html += "<h3>仲間装備袋</h3>";
-    var cgOrder = ["hotblood_bandana", "capture_gloves", "observation_glasses", "healing_ribbon"];
-    for (var cgOi = 0; cgOi < cgOrder.length; cgOi++) {
-      var cgGid = cgOrder[cgOi];
-      var cgGD  = COMPANION_GEAR_DATA[cgGid];
-      if (!cgGD) continue;
-      var cgCnt  = state.companionGearInventory[cgGid] || 0;
-      var cgOwner = findById(COMPANION_DATA, cgGD.allowedCompanion);
-      var cgOwnerName = cgOwner ? cgOwner.name : cgGD.allowedCompanion;
-      var cgEqCid = null;
-      var cgCids2 = ["juritani", "shurittani", "norio", "harumi"];
-      for (var cgCi = 0; cgCi < cgCids2.length; cgCi++) {
-        if (state.companionEquipment[cgCids2[cgCi]] === cgGid) { cgEqCid = cgCids2[cgCi]; break; }
+    var cgBagGroups = [
+      { cid: "juritani",   label: "ジュリタニ",   ids: ["hotblood_bandana", "critical_bracelet"] },
+      { cid: "shurittani", label: "シュリタニ",   ids: ["capture_gloves", "net_master_belt"] },
+      { cid: "norio",      label: "ノリオ",       ids: ["observation_glasses", "research_notebook"] },
+      { cid: "harumi",     label: "ハルミ",       ids: ["healing_ribbon", "prayer_brooch"] }
+    ];
+    for (var cgBi = 0; cgBi < cgBagGroups.length; cgBi++) {
+      var cgBg = cgBagGroups[cgBi];
+      html += '<div class="shop-row" style="margin-top:6px;">' +
+        '<span style="color:#a0cfff;font-size:0.88em;font-weight:bold;">【' + cgBg.label + '】</span></div>';
+      for (var cgBij = 0; cgBij < cgBg.ids.length; cgBij++) {
+        var cgBGid = cgBg.ids[cgBij];
+        var cgBGD  = COMPANION_GEAR_DATA[cgBGid];
+        if (!cgBGD) continue;
+        var cgBCnt = state.companionGearInventory[cgBGid] || 0;
+        var cgBIsEq = (state.companionEquipment[cgBg.cid] === cgBGid);
+        var cgBStatus    = cgBIsEq ? "装備中" : (cgBCnt > 0 ? "未装備" : "未入手");
+        var cgBStatusCol = cgBIsEq ? "#06d6a0" : (cgBCnt > 0 ? "#a0cfff" : "#888");
+        html += '<div class="shop-row" style="font-size:0.82em;">' +
+          '<span>' + cgBGD.emoji + " " + cgBGD.name +
+          ' <span style="color:#888;font-size:0.88em;">×' + cgBCnt + '</span></span>' +
+          '<span style="color:' + cgBStatusCol + ';font-size:0.85em;">' + cgBStatus + '</span></div>';
+        html += '<div class="shop-row" style="font-size:0.76em;">' +
+          '<span style="color:#888;padding-left:12px;">効果</span>' +
+          '<span style="color:#e9c46a;">' + (cgBGD.effectDesc || "") + '</span></div>';
       }
-      var cgEqOwner = cgEqCid ? findById(COMPANION_DATA, cgEqCid) : null;
-      var cgStatus    = cgEqOwner ? (cgEqOwner.name + "装備中") : (cgCnt > 0 ? "未装備（袋の中）" : "未入手");
-      var cgStatusCol = cgEqOwner ? "#06d6a0" : (cgCnt > 0 ? "#a0cfff" : "#888");
-      var cgEffTxt    = cgGD.damageBonus > 0 ? "攻撃+" + cgGD.damageBonus : "回復+" + cgGD.healBonus;
-      html += '<div class="shop-row"><span>' + cgGD.emoji + " " + cgGD.name +
-        ' <span style="color:#888;font-size:0.85em;">×' + cgCnt + '</span></span>' +
-        '<span style="color:#adb5bd;font-size:0.85em;">' + cgOwnerName + '専用</span></div>';
-      html += '<div class="shop-row" style="font-size:0.8em;">' +
-        '<span style="color:#888;padding-left:12px;">効果</span>' +
-        '<span style="color:#e9c46a;">' + cgEffTxt + '</span></div>';
-      html += '<div class="shop-row" style="font-size:0.8em;">' +
-        '<span style="color:#888;padding-left:12px;">状態</span>' +
-        '<span style="color:' + cgStatusCol + ';">' + cgStatus + '</span></div>';
     }
     html += '<div style="padding:4px 12px;">' +
-      '<button class="shop-menu-btn" data-gear-action="equip-all" style="margin:2px 0;">🎒 おすすめ一括装備</button>' +
+      '<button class="shop-menu-btn" data-gear-action="equip-all" style="margin:2px 0;">🎒 おすすめ一括装備（汎用型）</button>' +
       '<button class="shop-menu-btn" data-gear-action="unequip-all" style="margin:2px 0;">🔄 全解除</button>' +
       '</div>';
 
@@ -5393,15 +5447,14 @@
           } else if (_a === "unequip") {
             equipCompanionGear(_c, null);
           } else if (_a === "equip-all") {
+            // §107 v0.41: おすすめ = 汎用型（スターター4種）を明示的に選択
             ensureCompanionGearState();
-            var _acs = ["juritani", "shurittani", "norio", "harumi"];
-            var _aks = Object.keys(COMPANION_GEAR_DATA);
-            for (var _ai = 0; _ai < _acs.length; _ai++) {
-              for (var _ki = 0; _ki < _aks.length; _ki++) {
-                var _gd = COMPANION_GEAR_DATA[_aks[_ki]];
-                if (_gd.allowedCompanion === _acs[_ai] && (state.companionGearInventory[_aks[_ki]] || 0) > 0) {
-                  state.companionEquipment[_acs[_ai]] = _aks[_ki]; break;
-                }
+            var _pref = { juritani: "hotblood_bandana", shurittani: "capture_gloves", norio: "observation_glasses", harumi: "healing_ribbon" };
+            var _acs2 = ["juritani", "shurittani", "norio", "harumi"];
+            for (var _ai2 = 0; _ai2 < _acs2.length; _ai2++) {
+              var _pid = _pref[_acs2[_ai2]];
+              if (_pid && (state.companionGearInventory[_pid] || 0) > 0) {
+                state.companionEquipment[_acs2[_ai2]] = _pid;
               }
             }
             saveGame(); renderStatusBody();
@@ -6740,6 +6793,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gear-harumi-only" style="border-color:#06d6a0;color:#06d6a0;">✨ ハルミだけ装備+HP30%+のらいぬ（回復+3確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-corrupt-check" style="border-color:#ffb3d9;color:#ffb3d9;">🧪 仲間装備データ破損確認（補正結果をtoast）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-dup-check" style="border-color:#a0f0b4;color:#a0f0b4;">🎒 スターター増殖防止確認（ensure×3→各1個）</button>';
+      html += '<p class="small" style="color:#ffd700;margin-top:4px;">🎒 仲間装備2種類目 (§107 v0.41)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-v2-migrate" style="border-color:#ffd700;color:#ffd700;">🎒 v1→v2移行確認（新装備4種配布・増殖なし）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-new-equip-all" style="border-color:#a0cfff;color:#a0cfff;">🎒 新装備を全員に装備（会心の腕輪等）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-juritani-crit" style="border-color:#ff9de2;color:#ff9de2;">⚔️ ジュリタニ2装備比較（会心の構え確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-harumi-brooch" style="border-color:#06d6a0;color:#06d6a0;">✨ ハルミ2装備比較（小さな回復+6確認）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8402,26 +8460,97 @@
         if (!_pass) { console.log("[DEBUG] eq:", JSON.stringify(_eq), "inv:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
         renderStatusBody();
       };
-      // §106 v0.40.1: スターター増殖防止確認
+      // §106 v0.40.1 / §107 v0.41: 全装備増殖防止確認（v0→v2を3回ensure）
       document.getElementById("btn-debug-gear-dup-check").onclick = function () {
-        // リセット
         state.companionGearInventory = {};
         state.companionGearVersion = 0;
-        // ensure×3回実行
         ensureCompanionGearState();
         ensureCompanionGearState();
         ensureCompanionGearState();
         var _inv = state.companionGearInventory;
         var _pass = (
-          _inv["hotblood_bandana"]    === 1 &&
-          _inv["capture_gloves"]      === 1 &&
-          _inv["observation_glasses"] === 1 &&
-          _inv["healing_ribbon"]      === 1 &&
-          state.companionGearVersion  === 1
+          _inv["hotblood_bandana"]    === 1 && _inv["capture_gloves"]      === 1 &&
+          _inv["observation_glasses"] === 1 && _inv["healing_ribbon"]      === 1 &&
+          _inv["critical_bracelet"]   === 1 && _inv["net_master_belt"]     === 1 &&
+          _inv["research_notebook"]   === 1 && _inv["prayer_brooch"]       === 1 &&
+          state.companionGearVersion  === 2
         );
-        showToast("[DEBUG] 増殖防止確認: " + (_pass ? "PASS ✅ 各1個のみ" : "FAIL ❌ コンソール確認"));
+        showToast("[DEBUG] 増殖防止確認: " + (_pass ? "PASS ✅ 全8種×1個・ver=2" : "FAIL ❌ コンソール確認"));
         if (!_pass) { console.log("[DEBUG] inv after ×3:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
         renderStatusBody();
+      };
+      // §107 v0.41: v1→v2移行確認
+      document.getElementById("btn-debug-gear-v2-migrate").onclick = function () {
+        // version=1 + スターター各1個 + 新装備なし の状態を作る
+        state.companionGearInventory = { hotblood_bandana: 1, capture_gloves: 1, observation_glasses: 1, healing_ribbon: 1 };
+        state.companionGearVersion = 1;
+        var _prevInvJ = state.companionGearInventory["hotblood_bandana"];
+        // ensure×3回（3回呼んでも1回分のみ配布されるべき）
+        ensureCompanionGearState();
+        ensureCompanionGearState();
+        ensureCompanionGearState();
+        var _inv2 = state.companionGearInventory;
+        var _pass2 = (
+          _inv2["hotblood_bandana"]    === _prevInvJ &&   // 既存数維持
+          _inv2["critical_bracelet"]   === 1 &&
+          _inv2["net_master_belt"]     === 1 &&
+          _inv2["research_notebook"]   === 1 &&
+          _inv2["prayer_brooch"]       === 1 &&
+          state.companionGearVersion   === 2
+        );
+        showToast("[DEBUG] v1→v2移行確認: " + (_pass2 ? "PASS ✅ 新装備各1個・既存維持・ver=2" : "FAIL ❌ コンソール確認"));
+        if (!_pass2) { console.log("[DEBUG] inv:", JSON.stringify(_inv2), "ver:", state.companionGearVersion); }
+        renderStatusBody();
+      };
+      // §107 v0.41: 新装備を全員に装備
+      document.getElementById("btn-debug-gear-new-equip-all").onclick = function () {
+        ensureCompanionGearState();
+        var _newPref = { juritani: "critical_bracelet", shurittani: "net_master_belt", norio: "research_notebook", harumi: "prayer_brooch" };
+        var _ncs = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _ni = 0; _ni < _ncs.length; _ni++) {
+          var _ngid = _newPref[_ncs[_ni]];
+          if ((state.companionGearInventory[_ngid] || 0) > 0) { state.companionEquipment[_ncs[_ni]] = _ngid; }
+        }
+        saveGame(); renderSettingsBody();
+        showToast("[DEBUG] 新装備（会心の腕輪等）を全員装備。ステータス画面で確認！");
+      };
+      // §107 v0.41: ジュリタニ2装備比較（会心の構えで違いを確認）
+      document.getElementById("btn-debug-gear-juritani-crit").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        ensureCompanionGearState();
+        state.companionEquipment["juritani"]   = "critical_bracelet"; // 会心の腕輪
+        state.companionEquipment["shurittani"] = null;
+        state.companionEquipment["norio"]      = null;
+        state.companionEquipment["harumi"]     = null;
+        state.player.companions = ["juritani"];
+        state.player.hp = state.player.maxHp;
+        resetPartyTrail();
+        saveGame();
+        var _djcrit = findById(NON_UMA_DATA, "wilddog");
+        if (!_djcrit) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        closeModal("settings-modal");
+        actuallyStartBattle(_djcrit);
+        if (state.enemy) { state.enemy.hp = 200; renderEnemy(); }
+        showToast("[DEBUG] ジュリタニ会心の腕輪装備+のらいぬHP200。固有1(会心の構え)で+5・通常攻撃で+0を確認！");
+      };
+      // §107 v0.41: ハルミ2装備比較（小さな回復で違いを確認）
+      document.getElementById("btn-debug-gear-harumi-brooch").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        ensureCompanionGearState();
+        state.companionEquipment["juritani"]   = null;
+        state.companionEquipment["shurittani"] = null;
+        state.companionEquipment["norio"]      = null;
+        state.companionEquipment["harumi"]     = "prayer_brooch"; // 祈りのブローチ
+        state.player.companions = ["harumi"];
+        state.player.hp = Math.floor(state.player.maxHp * 0.25);
+        resetPartyTrail();
+        saveGame();
+        var _dhb = findById(NON_UMA_DATA, "wilddog");
+        if (!_dhb) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        closeModal("settings-modal");
+        actuallyStartBattle(_dhb);
+        if (state.enemy) { state.enemy.hp = 200; renderEnemy(); }
+        showToast("[DEBUG] ハルミ祈りのブローチ装備+HP25%+のらいぬ。まほう(小さな回復)で+6・固有1(小さな癒し)で+0を確認！");
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
@@ -8729,7 +8858,7 @@
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
       p.mp = Math.min(data.mp != null ? data.mp : p.maxMp, p.maxMp);
       // §106 v0.40.1: 旧セーブでスターター配布が起きた場合は即座に保存（再起動での増殖防止）
-      if (_prevGearVer < 1 && state.companionGearVersion >= 1) { saveGame(); }
+      if (_prevGearVer < 2 && state.companionGearVersion >= 2) { saveGame(); } // §107 v0.41: v2昇格検出
       return true;
     } catch (e) {
       return false;

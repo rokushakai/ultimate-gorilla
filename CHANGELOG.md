@@ -5,6 +5,30 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.41] - 2026-07-14 — 仲間装備2種類目・装備選択アップデート (§107)
+
+### Added
+- **`COMPANION_GEAR_DATA` 拡張**: 特化装備4種追加（合計8種）
+  - ジュリタニ: 会心の腕輪 ⚡（会心の構え +5、他ゼロ）
+  - シュリタニ: 網師のベルト 🕸️（捕獲の網 +4、他ゼロ）
+  - ノリオ: 研究ノート 📓（経験値メモ・観察メモ +3、他ゼロ）
+  - ハルミ: 祈りのブローチ 🙏（小さな回復 +6、他ゼロ）
+- **`getCompanionEquipmentBonus(cid, type, actionKey)` 拡張**: `actionKey` パラメータ対応
+  - `"attack"` / `"special1"` / `"special2"` / `"magic"` でアクション別追加ボーナス
+  - 2引数呼び出し（actionKeyなし）は後方互換を維持
+  - アクション別フィールド: `special1DamageBonus` / `special2DamageBonus` / `magicDamageBonus` / `magicHealBonus`
+- **全コンバットアクションに `actionKey` 引数追加**: 8箇所のボーナス取得呼び出しを更新
+- **`ensureCompanionGearState()` v1→v2移行ブロック追加**: version=1の旧セーブに新装備4種を各1個配布し version=2 へ
+- **`loadGame()` v2昇格検出**: `_prevGearVer < 2 && version >= 2` 時に自動 saveGame()
+- **ステータス画面装備UI全面刷新**: 各仲間の全装備を「★装備中/装備可能/未所持」バッジ付きで一覧表示
+- **仲間装備袋 仲間別グループ表示**: 4仲間×2種のグループ形式、effectDesc・在庫数・ステータスバッジを表示
+- **おすすめ一括装備を「汎用型（スターター4種）」に明示化**: 旧暗黙的な先頭選択→明示的 preferred map で `hotblood_bandana`/`capture_gloves`/`observation_glasses`/`healing_ribbon` を選択
+- **デバッグボタン4本追加 (§107)**: v1→v2移行確認 / 新装備全員装備 / ジュリタニ2装備比較 / ハルミ2装備比較
+
+### Confirmed unchanged
+- プレイヤー装備・BGM・捕獲率・ノリオEXP×2・ジュリタニ会心30%/1.6× 変更なし
+- 仲間HP/MP/防御なし・敵からの仲間攻撃なし・捕獲率/EXP/会心/軽減ボーナス装備なし
+
 ## [0.40.1] - 2026-07-14 — 仲間装備システム安定化 (§106)
 
 ### Fixed / Hardened
