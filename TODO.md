@@ -22,6 +22,13 @@
 
 ## ✅ 実装済み
 
+### Version 0.41.1 — 仲間装備選択システム安定化 (§108)
+
+- **`ensureCompanionGearState()` versionガード強化**: Infinity/文字列/"1"パース/負数クランプ ✅
+- **装備選択UI 連打防止**: data-gear-action クリック直後 disabled=true ✅
+- **v0.41実装構造確認**: 8装備×actionKey対応・version移行チェーン・combat actionKey統一 ✅
+- **デバッグボタン2本 (§108)**: 行動別ボーナス全確認(32パターン) / 装備切替残留チェック ✅
+
 ### Version 0.41 — 仲間装備2種類目・装備選択アップデート (§107)
 
 - **`COMPANION_GEAR_DATA` 拡張**: 特化装備4種追加（会心の腕輪/網師のベルト/研究ノート/祈りのブローチ）で合計8種 ✅

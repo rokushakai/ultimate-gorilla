@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.41** |
+| 現在バージョン | **v0.41.1** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.41時点）
+## 現在実装済みの主要機能（v0.41.1時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -63,6 +63,11 @@
 - 酒場・仲間4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）
 - 状態異常（アレルギー・におい）
 - UMA図鑑（発見済み/捕獲済みの3状態）
+- **[v0.41.1] 仲間装備選択システム安定化**（§108）
+  - **`ensureCompanionGearState()` versionガード強化**: Infinity/文字列/"1"→パース/負数→0クランプ。文字列`"2"`→version=2扱いで再配布なし
+  - **装備選択UI 連打防止**: `data-gear-action` クリック直後 `disabled=true`（renderStatusBodyで再構築）
+  - **デバッグ2本 (§108)**: 行動別ボーナス全確認（8種×4actionKey=32パターン）/ 装備切替残留チェック（4段階）
+  - **確認済み**: ジュリタニ会心倍率後+5・ハルミ実回復量・AI/手動一致・勝利処理・セーブ・ロード
 - **[v0.41] 仲間装備2種類目・装備選択アップデート**（§107）
   - **`COMPANION_GEAR_DATA` 全8種**: スターター4種 + 特化4種（会心の腕輪/網師のベルト/研究ノート/祈りのブローチ）
   - **`getCompanionEquipmentBonus(cid, type, actionKey)`**: actionKeyで固有コマンド別ボーナスを区別

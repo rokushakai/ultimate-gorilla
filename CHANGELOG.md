@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.41.1] - 2026-07-14 — 仲間装備選択システム安定化 (§108)
+
+### Fixed / Hardened
+- **`ensureCompanionGearState()` versionガード強化**: `Infinity` / 文字列 / 負数 の各ケースに対応。文字列版（例: `"1"`/`"2"`）はNumber()でパースして正しいversion値として扱う（再配布なし）。Infinity→0クランプ。負数→0クランプ
+- **装備選択UI 連打防止**: `data-gear-action` ボタンクリック直後に `disabled=true` を設定。`renderStatusBody()` による再構築まで追加クリックを無効化
+- **v0.41実装構造確認**: 8装備のactionKey対応、全コンバットアクションへのbonusパス、version移行チェーンを確認
+- **デバッグボタン2本追加 (§108)**:
+  - `🧪 行動別装備ボーナス全確認`: 8種×4actionKey（attack/special1/special2/magic）= 32パターンをPASS/FAIL表示（コンソール詳細付き）
+  - `🔄 装備切替残留チェック`: 熱血バンダナ→会心の腕輪→熱血バンダナ→装備なしの順で切替、旧効果が残らないことをPASS/FAIL表示
+
+### Confirmed unchanged
+- プレイヤー装備・BGM・捕獲率・ノリオEXP×2・ジュリタニ会心率30%/1.6× 変更なし
+- `runCompanionAutoCommand()` に装備ボーナス追加なし（行動関数側で1回のみ）
+- ハルミ最大HP超過なし・実回復量ログ（`actual = p.hp - before`）維持
+
 ## [0.41] - 2026-07-14 — 仲間装備2種類目・装備選択アップデート (§107)
 
 ### Added

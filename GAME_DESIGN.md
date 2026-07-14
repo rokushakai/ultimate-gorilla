@@ -5432,6 +5432,86 @@ version=0から起動した場合、1回の ensure() 呼び出しで両方の配
 - 捕獲率・EXP倍率・会心率30%・会心倍率1.6・かばう20%・まもりの光25%
 - まかせるAI比率・BGM制御・究極ゴリラ捕獲条件・主人公装備・主人公アイテム
 
+## §108 v0.41.1 — 仲間装備選択システム安定化 [実装済み]
+
+v0.41で追加した汎用装備・特化装備の選択、行動別装備ボーナス、version 2移行、
+ステータス画面の装備選択UIを安定化する。
+
+特化装備は指定された行動だけに効果を与え、対象外行動へ効果を漏らさない。
+
+装備切替後は直ちに現在装備だけを参照し、旧装備の効果を残さない。
+（ボーナスはstateにキャッシュせず、毎回companionEquipmentから取得する設計を明示）
+
+主人公装備、捕獲率、EXP倍率、会心率、会心倍率、軽減率、まかせるAI比率、BGM制御は変更しない。
+
+### version移行仕様（確定）
+
+```
+version 0（または負数/null/undefined/NaN/Infinity/不正文字列）
+↓ ensureCompanionGearState()
+スターター4種を各1個配布
+version 1
+↓ ensureCompanionGearState()
+新装備4種を各1個配布
+version 2（以上は何もしない）
+```
+
+- `version="1"`（文字列）→ Number()で1にパース → v1→v2のみ実行（スター再配布なし）
+- `version="2"`（文字列）→ Number()で2にパース → 何もしない
+- `version=Infinity` → 0扱い → 全8種を配布してversion=2
+- `version < 0` → 0クランプ → 全8種を配布してversion=2
+- `version >= 2` は将来バージョンとして尊重（再配布なし）
+- inventoryが空でもversion=2なら再配布しない（消費したケースと区別できないため）
+
+### actionKey統一仕様（確定）
+
+| actionKey | 行動 |
+|---|---|
+| `"attack"` | 通常攻撃（runSingleCompanionAction） |
+| `"special1"` | 固有1（runCompanionSpecialAction・specialIdなし） |
+| `"special2"` | 固有2（runCompanionSpecialAction specialId="second"） |
+| `"magic"` | まほう（runCompanionMagicAction） |
+
+runCompanionAutoCommand()は各行動関数を呼ぶだけ。装備ボーナスは行動関数側で1回のみ計算。
+
+### 装備ボーナス対応表（v0.41.1確認済み）
+
+| 装備 | attack | special1 | special2 | magic |
+|---|---|---|---|---|
+| 熱血バンダナ（ジュリ） | damage+2 | damage+2 | damage+0 | damage+2 |
+| 会心の腕輪（ジュリ） | damage+0 | damage+5 | damage+0 | damage+0 |
+| 捕獲グローブ（シュリ） | damage+1 | damage+1 | damage+1 | damage+1 |
+| 網師のベルト（シュリ） | damage+0 | damage+0 | damage+4 | damage+0 |
+| 観察メガネ（ノリオ） | damage+1 | damage+1 | damage+1 | damage+1 |
+| 研究ノート（ノリオ） | damage+0 | damage+0 | damage+3 | damage+3 |
+| 癒しのリボン（ハルミ） | – | heal+3 | – | heal+3 |
+| 祈りのブローチ（ハルミ） | – | heal+0 | – | heal+6 |
+
+※ ジュリタニかばう（special2）はgetCompanionEquipmentBonusを呼ばないため常に+0
+※ ハルミまもりの光（special2）も同様
+
+### ジュリタニ会心計算順（確定）
+
+```
+基本ダメージ + Lv成長ボーナス
+↓ × 1.6（大会心時、30%）
+↓ + 会心の腕輪+5（会心倍率後フラット加算）
+```
+
++5は1.6倍されない。通常攻撃の会心（25%/×1.5）では会心の腕輪の+5は乗らない（special1ボーナスのため）。
+
+### 安定化の保護対象
+
+- 主人公装備・BGM制御・捕獲率・ノリオEXP×2 変更なし
+- ジュリタニ会心率30%/倍率1.6×/かばう20% 変更なし
+- ハルミまもりの光25%・HP最大超過なし 変更なし
+- runCompanionAutoCommand()に装備ボーナス追加なし
+
+### debug追加（§108 v0.41.1）
+
+- `🧪 行動別装備ボーナス全確認`: 8種×4actionKey=32パターンをPASS/FAIL表示
+- `🔄 装備切替残留チェック`: 熱血バンダナ→会心の腕輪→熱血バンダナの切替で旧効果が残らないことを確認
+
 ## 将来の実装候補（v0.42〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.42 候補以降 [未実装・将来機能]

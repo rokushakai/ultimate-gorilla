@@ -5,6 +5,19 @@
 
 ---
 
+## v0.41.1 (2026-07-14)
+
+### 設計判断・確認事項
+
+- **versionガードにInfinityチェック追加**: v0.41までは `typeof !== "number" || isNaN()` でガードしていたが `Infinity` は `typeof === "number"` かつ `!isNaN()` であるため漏れていた。`!isFinite()` を追加し、さらに文字列版（`"1"`/`"2"`）を `Number()` でパースして正しいversionとして扱うよう改善。`"2"` → version=2 → 再配布なし。旧セーブのlocalStorageが破壊されても安全になった。
+- **装備切替でキャッシュなし**: `getCompanionEquipmentBonus()` は `getCompanionEquippedGear(cid)` → `state.companionEquipment[cid]` を毎回参照するため、切替直後から効果が変わる。stateへのキャッシュは一切なし。これをdebugボタンで明示的に確認できるようにした（装備切替残留チェック）。
+- **UI連打防止の設計**: 装備ボタンのonclick冒頭で `_btn.disabled = true` を設定し、`renderStatusBody()` による DOM 再構築（同期）が完了するまで追加クリックを受け付けない。戦闘用の `companionCommandLocked` とは別変数で独立している。
+- **runCompanionAutoCommand()に装備ボーナスなし（意図的）**: AIは最終的に `runSingleCompanionAction()` / `runCompanionSpecialAction()` / `runCompanionMagicAction()` を呼ぶだけ。各行動関数が `getCompanionEquipmentBonus()` を内部で呼ぶため、AI経由でも手動経由でも同じボーナスが1回だけ適用される。二重加算なし。
+- **debug行動別ボーナス全確認**: 元の装備を退避→各装備に差し替えて`getCompanionEquipmentBonus`を呼ぶ→元に戻す。`state.companionEquipment` の直接書き換えが必要なため、テスト完了後に必ず元の値を復元する設計。`renderStatusBody()` は最後に1回だけ呼ぶ。
+- **ジュリタニかばう（special2）はボーナスなし**: `runCompanionSpecialAction()` のジュリタニspecial2ブランチは `getCompanionEquipmentBonus` を呼ばないため装備に関わらず+0。仕様通り。ハルミまもりの光（special2）も同様。
+- **特化装備が対象外行動に漏れない構造確認**: 例えば会心の腕輪（`special1DamageBonus: 5`）を持つ場合、通常攻撃（"attack"）では `getCompanionEquipmentBonus("juritani","damage","attack")` → `damageBonus(0) + attackDamageBonus(undefined→0) = 0`。漏れない。
+- **ハルミ祈りのブローチと癒しのリボンの二重適用なし**: どちらか一方しか装備できない設計（`equipCompanionGear` が既存装備を上書き）。そもそも同一仲間に両方装備させる経路がない。
+
 ## v0.41 (2026-07-14)
 
 ### 設計判断・注意点

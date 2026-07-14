@@ -4414,9 +4414,13 @@
       state.companionGearInventory[_invKeys[_ik]] = (isNaN(_n) || !isFinite(_n) || _n < 0) ? 0 : _n;
     }
     // スターター配布（version < 1 の場合のみ。inventory空は再配布トリガーにしない）
-    if (typeof state.companionGearVersion !== "number" || isNaN(state.companionGearVersion)) {
-      state.companionGearVersion = 0;
+    // §108 v0.41.1: Infinity/文字列/"1"→1パース対応。負数→0クランプ
+    var _gv = state.companionGearVersion;
+    if (typeof _gv !== "number" || isNaN(_gv) || !isFinite(_gv)) {
+      var _gvParsed = Math.floor(Number(_gv));
+      state.companionGearVersion = (isNaN(_gvParsed) || !isFinite(_gvParsed) || _gvParsed < 0) ? 0 : _gvParsed;
     }
+    if (state.companionGearVersion < 0) { state.companionGearVersion = 0; }
     if (state.companionGearVersion < 1) {
       state.companionGearInventory.hotblood_bandana    = (state.companionGearInventory.hotblood_bandana    || 0) + 1;
       state.companionGearInventory.capture_gloves      = (state.companionGearInventory.capture_gloves      || 0) + 1;
@@ -5436,10 +5440,12 @@
 
     document.getElementById("status-body").innerHTML = html;
     // §105 v0.40: 仲間装備ボタンのイベントバインド
+    // §108 v0.41.1: 連打防止 - クリック直後にdisable（renderStatusBodyで再構築されるまで有効）
     var _cgBtns = document.querySelectorAll("[data-gear-action]");
     for (var _cgBi = 0; _cgBi < _cgBtns.length; _cgBi++) {
       (function (_btn) {
         _btn.onclick = function () {
+          _btn.disabled = true; // 連打防止
           var _a = _btn.getAttribute("data-gear-action");
           var _c = _btn.getAttribute("data-gear-cid");
           if (_a === "equip") {
@@ -6798,6 +6804,9 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gear-new-equip-all" style="border-color:#a0cfff;color:#a0cfff;">🎒 新装備を全員に装備（会心の腕輪等）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-juritani-crit" style="border-color:#ff9de2;color:#ff9de2;">⚔️ ジュリタニ2装備比較（会心の構え確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-harumi-brooch" style="border-color:#06d6a0;color:#06d6a0;">✨ ハルミ2装備比較（小さな回復+6確認）</button>';
+      html += '<p class="small" style="color:#06d6a0;margin-top:4px;">🧪 装備選択安定化 (§108 v0.41.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-bonus-check" style="border-color:#06d6a0;color:#06d6a0;">🧪 行動別装備ボーナス全確認（8種×4行動）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-switch-check" style="border-color:#ff9de2;color:#ff9de2;">🔄 装備切替残留チェック（旧効果残留なし確認）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8551,6 +8560,106 @@
         actuallyStartBattle(_dhb);
         if (state.enemy) { state.enemy.hp = 200; renderEnemy(); }
         showToast("[DEBUG] ハルミ祈りのブローチ装備+HP25%+のらいぬ。まほう(小さな回復)で+6・固有1(小さな癒し)で+0を確認！");
+      };
+      // §108 v0.41.1: 行動別装備ボーナス全確認（8種×4actionKey）
+      document.getElementById("btn-debug-gear-bonus-check").onclick = function () {
+        ensureCompanionGearState();
+        var _oldEq = {
+          juritani: state.companionEquipment["juritani"],
+          shurittani: state.companionEquipment["shurittani"],
+          norio: state.companionEquipment["norio"],
+          harumi: state.companionEquipment["harumi"]
+        };
+        var _lines = [];
+        var _allPass = true;
+        function _chk(cid, gid, type, ak, exp) {
+          state.companionEquipment[cid] = gid;
+          var val = getCompanionEquipmentBonus(cid, type, ak);
+          return val === exp;
+        }
+        // ジュリタニ 熱血バンダナ: damage attack/s1/s2/magic = 2/2/0/2
+        var jb = [_chk("juritani","hotblood_bandana","damage","attack",2), _chk("juritani","hotblood_bandana","damage","special1",2), _chk("juritani","hotblood_bandana","damage","special2",0), _chk("juritani","hotblood_bandana","damage","magic",2)];
+        var jbP = jb[0]&&jb[1]&&jb[2]&&jb[3]; if(!jbP){_allPass=false;}
+        state.companionEquipment["juritani"] = "hotblood_bandana";
+        var jbVals = [getCompanionEquipmentBonus("juritani","damage","attack"),getCompanionEquipmentBonus("juritani","damage","special1"),getCompanionEquipmentBonus("juritani","damage","special2"),getCompanionEquipmentBonus("juritani","damage","magic")];
+        _lines.push("熱血バンダナ:" + jbVals.join("/") + (jbP?" ✅":" ❌(exp 2/2/0/2)"));
+        // ジュリタニ 会心の腕輪: 0/5/0/0
+        state.companionEquipment["juritani"] = "critical_bracelet";
+        var jcVals = [getCompanionEquipmentBonus("juritani","damage","attack"),getCompanionEquipmentBonus("juritani","damage","special1"),getCompanionEquipmentBonus("juritani","damage","special2"),getCompanionEquipmentBonus("juritani","damage","magic")];
+        var jcP = (jcVals[0]===0&&jcVals[1]===5&&jcVals[2]===0&&jcVals[3]===0); if(!jcP){_allPass=false;}
+        _lines.push("会心の腕輪:" + jcVals.join("/") + (jcP?" ✅":" ❌(exp 0/5/0/0)"));
+        // シュリタニ 捕獲グローブ: 1/1/1/1
+        state.companionEquipment["shurittani"] = "capture_gloves";
+        var sgVals = [getCompanionEquipmentBonus("shurittani","damage","attack"),getCompanionEquipmentBonus("shurittani","damage","special1"),getCompanionEquipmentBonus("shurittani","damage","special2"),getCompanionEquipmentBonus("shurittani","damage","magic")];
+        var sgP = (sgVals[0]===1&&sgVals[1]===1&&sgVals[2]===1&&sgVals[3]===1); if(!sgP){_allPass=false;}
+        _lines.push("捕獲グローブ:" + sgVals.join("/") + (sgP?" ✅":" ❌(exp 1/1/1/1)"));
+        // シュリタニ 網師のベルト: 0/0/4/0
+        state.companionEquipment["shurittani"] = "net_master_belt";
+        var snVals = [getCompanionEquipmentBonus("shurittani","damage","attack"),getCompanionEquipmentBonus("shurittani","damage","special1"),getCompanionEquipmentBonus("shurittani","damage","special2"),getCompanionEquipmentBonus("shurittani","damage","magic")];
+        var snP = (snVals[0]===0&&snVals[1]===0&&snVals[2]===4&&snVals[3]===0); if(!snP){_allPass=false;}
+        _lines.push("網師のベルト:" + snVals.join("/") + (snP?" ✅":" ❌(exp 0/0/4/0)"));
+        // ノリオ 観察メガネ: 1/1/1/1
+        state.companionEquipment["norio"] = "observation_glasses";
+        var ngVals = [getCompanionEquipmentBonus("norio","damage","attack"),getCompanionEquipmentBonus("norio","damage","special1"),getCompanionEquipmentBonus("norio","damage","special2"),getCompanionEquipmentBonus("norio","damage","magic")];
+        var ngP = (ngVals[0]===1&&ngVals[1]===1&&ngVals[2]===1&&ngVals[3]===1); if(!ngP){_allPass=false;}
+        _lines.push("観察メガネ:" + ngVals.join("/") + (ngP?" ✅":" ❌(exp 1/1/1/1)"));
+        // ノリオ 研究ノート: 0/0/3/3
+        state.companionEquipment["norio"] = "research_notebook";
+        var nnVals = [getCompanionEquipmentBonus("norio","damage","attack"),getCompanionEquipmentBonus("norio","damage","special1"),getCompanionEquipmentBonus("norio","damage","special2"),getCompanionEquipmentBonus("norio","damage","magic")];
+        var nnP = (nnVals[0]===0&&nnVals[1]===0&&nnVals[2]===3&&nnVals[3]===3); if(!nnP){_allPass=false;}
+        _lines.push("研究ノート:" + nnVals.join("/") + (nnP?" ✅":" ❌(exp 0/0/3/3)"));
+        // ハルミ 癒しのリボン: heal s1=3, magic=3
+        state.companionEquipment["harumi"] = "healing_ribbon";
+        var hrS1 = getCompanionEquipmentBonus("harumi","heal","special1");
+        var hrM  = getCompanionEquipmentBonus("harumi","heal","magic");
+        var hrP = (hrS1===3&&hrM===3); if(!hrP){_allPass=false;}
+        _lines.push("癒しのリボン:s1h=" + hrS1 + "/mh=" + hrM + (hrP?" ✅":" ❌(exp 3/3)"));
+        // ハルミ 祈りのブローチ: heal s1=0, magic=6
+        state.companionEquipment["harumi"] = "prayer_brooch";
+        var hbS1 = getCompanionEquipmentBonus("harumi","heal","special1");
+        var hbM  = getCompanionEquipmentBonus("harumi","heal","magic");
+        var hbP = (hbS1===0&&hbM===6); if(!hbP){_allPass=false;}
+        _lines.push("祈りのブローチ:s1h=" + hbS1 + "/mh=" + hbM + (hbP?" ✅":" ❌(exp 0/6)"));
+        // 元の装備を復元
+        state.companionEquipment["juritani"]   = _oldEq.juritani;
+        state.companionEquipment["shurittani"] = _oldEq.shurittani;
+        state.companionEquipment["norio"]      = _oldEq.norio;
+        state.companionEquipment["harumi"]     = _oldEq.harumi;
+        console.log("[DEBUG] 行動別ボーナス全確認 (attack/special1/special2/magic):\n" + _lines.join("\n"));
+        showToast("[DEBUG] ボーナス全確認: " + (_allPass ? "全PASS ✅" : "FAIL ❌ あり") + " (詳細はコンソール)");
+        renderStatusBody();
+      };
+      // §108 v0.41.1: 装備切替残留チェック
+      document.getElementById("btn-debug-gear-switch-check").onclick = function () {
+        ensureCompanionGearState();
+        var _oldJ = state.companionEquipment["juritani"];
+        // Step1: 熱血バンダナ
+        state.companionEquipment["juritani"] = "hotblood_bandana";
+        var s1a = getCompanionEquipmentBonus("juritani","damage","attack");
+        var s1s1 = getCompanionEquipmentBonus("juritani","damage","special1");
+        // Step2: 会心の腕輪に切替
+        state.companionEquipment["juritani"] = "critical_bracelet";
+        var s2a = getCompanionEquipmentBonus("juritani","damage","attack");
+        var s2s1 = getCompanionEquipmentBonus("juritani","damage","special1");
+        // Step3: 熱血バンダナに戻す
+        state.companionEquipment["juritani"] = "hotblood_bandana";
+        var s3a = getCompanionEquipmentBonus("juritani","damage","attack");
+        var s3s1 = getCompanionEquipmentBonus("juritani","damage","special1");
+        // Step4: 装備なしに切替
+        state.companionEquipment["juritani"] = null;
+        var s4a = getCompanionEquipmentBonus("juritani","damage","attack");
+        var s4s1 = getCompanionEquipmentBonus("juritani","damage","special1");
+        var _pass = (s1a===2&&s1s1===2 && s2a===0&&s2s1===5 && s3a===2&&s3s1===2 && s4a===0&&s4s1===0);
+        var _lines = [
+          "熱血バンダナ: atk=" + s1a + " s1=" + s1s1 + (s1a===2&&s1s1===2?" ✅":" ❌(exp 2/2)"),
+          "会心の腕輪: atk=" + s2a + " s1=" + s2s1 + (s2a===0&&s2s1===5?" ✅":" ❌(exp 0/5)"),
+          "熱血バンダナ戻す: atk=" + s3a + " s1=" + s3s1 + (s3a===2&&s3s1===2?" ✅":" ❌(exp 2/2)"),
+          "装備なし: atk=" + s4a + " s1=" + s4s1 + (s4a===0&&s4s1===0?" ✅":" ❌(exp 0/0)")
+        ];
+        state.companionEquipment["juritani"] = _oldJ;
+        console.log("[DEBUG] 装備切替残留チェック:\n" + _lines.join("\n"));
+        showToast("[DEBUG] 切替残留: " + (_pass ? "PASS ✅ 旧効果なし" : "FAIL ❌ 残留あり") + " (詳細はコンソール)");
+        renderStatusBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
