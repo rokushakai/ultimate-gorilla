@@ -5,6 +5,42 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.43] - 2026-07-15 — 仲間わざ第一段階 (§111)
+
+### Added
+- **`COMPANION_TECHNIQUE_DATA`**: 仲間わざ定数（4仲間分）
+  - ジュリタニ: 超会心ラッシュ（damage, 32〜46）
+  - シュリタニ: 絶対包囲網（damage_leave_one, 22〜34, HP1以上残す）
+  - ノリオ: 完全解析レポート（damage, 26〜38）
+  - ハルミ: 大いなる祈り（heal_protect, 40〜55, 次敵攻撃15%軽減）
+- **`isCompanionTechniqueUnlocked(cid)`**: 習得判定（Lv25以上 + rewardFlag=true）
+- **`getCompanionTechniqueLockReason(cid)`**: 未習得時の理由テキスト生成
+- **`resetCompanionTechniqueUsage()`**: 1戦闘1回状態を全falseにリセット
+- **`runCompanionTechniqueAction(cid)`**: わざ実行（返値: true=撃破, false=生存/回復, null=不発）
+- **仲間コマンドUI 5択化**: たたかう/固有/まほう/わざ/まかせる（まかせるをfull-width）
+  - 🔒わざ: 未習得（ロック理由をログ表示、ターン消費なし）
+  - ⚡わざ: 習得済み・未使用（通常クリック）
+  - ⚡わざ: 使用済み（disabled）
+- **`executeCompanionCommand()` technique分岐**: null返値時はターン消費なくメニューへ戻る
+- **`state.companionTechniqueUsed`**: 1戦闘1回フラグ（非永続・saveしない）
+- **ステータス画面 仲間わざセクション**: 習得済み/未習得・条件表示（全仲間）
+- **冒険の記録 ⚡仲間わざ習得セクション**: 習得数カウント（0/4〜4/4）
+- **デバッグボタン4本 (§111)**: 全員習得状態 / 使用リセット / ロック条件確認 / 1戦闘1回確認
+
+### Changed
+- **`clearCompanionCommandState()`**: `resetCompanionTechniqueUsage()` 呼び出しを追加（戦闘終了・逃走・捕獲全経路）
+- **`state` 初期化**: `companionTechniqueUsed` フィールド追加
+- **`showCompanionCommandForIdx()`**: 5択レイアウトに変更（まかせるがgrid-column:1/-1）
+
+### セーブデータ互換
+- 新規保存キーなし。`companionLevels` と `companionGearRewardFlags` から毎回導出
+- `companionTechniqueUsed` はセーブ対象外（ロード後は常にfalse）
+- 既存セーブ互換（v0.42.1以前のセーブで正常動作）
+
+### 変更しないもの
+- BGM制御・捕獲率・究極ゴリラ捕獲条件・ノリオEXP2倍・会心率・会心倍率・AI比率
+
+
 ## [0.42.1] - 2026-07-15 — 仲間装備探索報酬安定化 (§110)
 
 ### Fixed / Hardened

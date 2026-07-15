@@ -22,6 +22,21 @@
 
 ## ✅ 実装済み
 
+### Version 0.43 — 仲間わざ第一段階 (§111)
+
+- **`COMPANION_TECHNIQUE_DATA`**: 4仲間分の仲間わざ定数（名前・習得条件・効果値） ✅
+- **習得条件**: Lv25以上 + 特化装備rewardFlag=true（両方必要） ✅
+- **`isCompanionTechniqueUnlocked(cid)`**: 習得判定ヘルパー ✅
+- **`getCompanionTechniqueLockReason(cid)`**: 未習得理由テキスト ✅
+- **`resetCompanionTechniqueUsage()`**: 1戦闘1回状態リセット ✅
+- **`runCompanionTechniqueAction(cid)`**: わざ実行（null=不発ターン消費なし） ✅
+- **仲間コマンドUI 5択**: たたかう/固有/まほう/わざ/まかせる ✅
+- **`executeCompanionCommand()` technique分岐**: null時メニュー戻り ✅
+- **ステータス画面 仲間わざセクション**: 習得済み/未習得・条件表示 ✅
+- **冒険の記録 ⚡仲間わざ習得セクション**: 0/4〜4/4 ✅
+- **デバッグ4本 (§111)**: 全員習得 / 使用リセット / ロック確認 / 1回確認 ✅
+- **`clearCompanionCommandState()` 更新**: resetCompanionTechniqueUsage()追加 ✅
+
 ### Version 0.42.1 — 仲間装備探索報酬安定化 (§110)
 
 - **`normalizeCompanionGearRewardFlags()`**: rewardFlags全エントリ検証・補正（boolean以外→false、インベントリ/装備スロット存在→true昇格） ✅

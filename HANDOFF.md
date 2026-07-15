@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.42.1** |
+| 現在バージョン | **v0.43** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.42時点）
+## 現在実装済みの主要機能（v0.43時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -79,6 +79,18 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.43] 仲間わざ第一段階**（§111）
+  - **`COMPANION_TECHNIQUE_DATA`**: 4仲間×1わざ（超会心ラッシュ/絶対包囲網/完全解析レポート/大いなる祈り）
+  - **習得条件**: 仲間Lv25以上 + 対応特化装備のrewardFlag=true（両方必要）
+  - **`isCompanionTechniqueUnlocked(cid)`**: 習得判定（毎回Lv+rewardFlagsから導出、永続フラグなし）
+  - **`runCompanionTechniqueAction(cid)`**: 実行（null=不発・ターン消費なし）
+  - **仲間コマンドUI 5択**: たたかう/固有/まほう/⚡わざ/まかせる（まかせるfull-width）
+  - **1戦闘1回**: `state.companionTechniqueUsed`（非永続）、`clearCompanionCommandState()`でリセット
+  - **手動操作限定**: `runCompanionAutoCommand()`には追加なし。AI4択維持
+  - **シュリタニ**: 敵HP1なら不発（HP1以上残す）
+  - **ハルミ**: HP満タン+軽減率15%以上なら不発。軽減は既存値とMath.max（加算なし）
+  - **装備ボーナス**: わざには`getCompanionEquipmentBonus()`を加算しない
+  - **デバッグ4本 (§111)**: 全員習得 / 使用リセット / ロック条件確認 / 1戦闘1回確認
 - **[v0.41.1] 仲間装備選択システム安定化**（§108）
   - **`ensureCompanionGearState()` versionガード強化**: Infinity/文字列/"1"→パース/負数→0クランプ。文字列`"2"`→version=2扱いで再配布なし
   - **装備選択UI 連打防止**: `data-gear-action` クリック直後 `disabled=true`（renderStatusBodyで再構築）

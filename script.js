@@ -660,6 +660,18 @@
     prayer_brooch:      { gearId: "prayer_brooch",      source: "ステージ5初回クリア報酬" }
   };
 
+  // §111 v0.43: 仲間わざデータ（習得条件・効果・値）
+  var COMPANION_TECHNIQUE_DATA = {
+    juritani:   { id: "juritani_technique",   name: "超会心ラッシュ",   unlockLevel: 25, requiredGearId: "critical_bracelet",
+                  type: "damage",          description: "渾身の連撃で大ダメージを与える。1戦闘に1回。",                minValue: 32, maxValue: 46 },
+    shurittani: { id: "shurittani_technique", name: "絶対包囲網",       unlockLevel: 25, requiredGearId: "net_master_belt",
+                  type: "damage_leave_one", description: "敵を包囲して追い詰める。敵HPを必ず1以上残す。1戦闘に1回。", minValue: 22, maxValue: 34 },
+    norio:      { id: "norio_technique",      name: "完全解析レポート", unlockLevel: 25, requiredGearId: "research_notebook",
+                  type: "damage",          description: "完全な分析をぶつけて大ダメージを与える。1戦闘に1回。",      minValue: 26, maxValue: 38 },
+    harumi:     { id: "harumi_technique",     name: "大いなる祈り",     unlockLevel: 25, requiredGearId: "prayer_brooch",
+                  type: "heal_protect",    description: "HPを大きく回復し、次の敵攻撃を15%軽減する。1戦闘に1回。",  minValue: 40, maxValue: 55, damageReduction: 0.15 }
+  };
+
   // §75 v0.24 / §76 v0.24.1: 仲間セリフ状態判定ヘルパー
   // 優先度: full+legendary > fullClear > legendary_only > dex > side > clear > side_only
   function getCompanionQuote(c) {
@@ -869,7 +881,8 @@
     companionEquipment: {},    // §105 v0.40: 仲間装備スロット { cid: gearId|null }
     companionGearInventory: {},// §105 v0.40: 仲間装備所持 { gearId: count }
     companionGearVersion: 0,   // §105 v0.40: スターター配布バージョン (0=未配布, 1=配布済, 3=探索報酬方式)
-    companionGearRewardFlags: {}// §109 v0.42: 特化装備取得済みフラグ { gearId: bool }
+    companionGearRewardFlags: {},// §109 v0.42: 特化装備取得済みフラグ { gearId: bool }
+    companionTechniqueUsed: { juritani: false, shurittani: false, norio: false, harumi: false } // §111 v0.43: 仲間わざ1戦闘1回（非永続・saveしない）
   };
 
   // ---------------------------------------------------------
@@ -3112,6 +3125,7 @@
     state.companionCommandLocked = false;
     state.lastCompanionAutoAction = {}; // §87 v0.31: 前回行動記憶をリセット
     state.battleDamageReduction = 0;   // §89 v0.32: ダメージ軽減をリセット
+    resetCompanionTechniqueUsage();    // §111 v0.43: 仲間わざ使用状態リセット
     var ccMenu = document.getElementById("companion-command-menu");
     if (ccMenu) { ccMenu.classList.add("hidden"); }
     var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
@@ -3119,6 +3133,41 @@
     var cmMenu = document.getElementById("companion-magic-menu"); // §95 v0.35
     if (cmMenu) { cmMenu.classList.add("hidden"); }
     updateBattleStatusBadges(); // §93 v0.34: 戦闘終了時にバッジをクリア
+  }
+
+  // §111 v0.43: 仲間わざ使用状態を全リセット（戦闘開始時・戦闘終了時共用）
+  function resetCompanionTechniqueUsage() {
+    state.companionTechniqueUsed = { juritani: false, shurittani: false, norio: false, harumi: false };
+  }
+
+  // §111 v0.43: 仲間わざ習得済みか判定（Lv25以上 + rewardFlag=true）
+  function isCompanionTechniqueUnlocked(cid) {
+    var td = COMPANION_TECHNIQUE_DATA[cid];
+    if (!td) return false;
+    var cl = getCompanionLevel(cid);
+    if (cl.level < td.unlockLevel) return false;
+    normalizeCompanionGearRewardFlags();
+    return !!(state.companionGearRewardFlags && state.companionGearRewardFlags[td.requiredGearId]);
+  }
+
+  // §111 v0.43: 習得条件が満たされていない理由を返す（ステータス画面・コマンドUI用）
+  function getCompanionTechniqueLockReason(cid) {
+    var td = COMPANION_TECHNIQUE_DATA[cid];
+    if (!td) return "";
+    var cl = getCompanionLevel(cid);
+    var lvOk = cl.level >= td.unlockLevel;
+    normalizeCompanionGearRewardFlags();
+    var gearOk = !!(state.companionGearRewardFlags && state.companionGearRewardFlags[td.requiredGearId]);
+    var gearDat = COMPANION_GEAR_DATA[td.requiredGearId];
+    var gearName = gearDat ? gearDat.name : td.requiredGearId;
+    var gearSrc  = COMPANION_GEAR_REWARD_DATA[td.requiredGearId];
+    if (!lvOk && !gearOk) {
+      return "Lv" + td.unlockLevel + " ＋ " + gearName + "を入手で習得";
+    }
+    if (!lvOk) {
+      return "Lv" + td.unlockLevel + "で習得（装備入手済み）";
+    }
+    return gearName + "を入手で習得" + (gearSrc ? "（" + gearSrc.source + "）" : "");
   }
 
   // §82 v0.28: 仲間コマンドシーケンスを開始する
@@ -3164,12 +3213,23 @@
     var menu = document.getElementById("companion-command-menu");
     // §84 v0.29: 3択レイアウト。§95 v0.35: 4択（⚔️/⭐ / ✨/🤝）に変更。まかせるの grid-column:1/-1 を削除
     // §89 v0.32: 「固有コマンド」ボタンを「⭐ 固有」に短縮し、サブメニューへ誘導
+    // §111 v0.43: ⚡わざボタン追加（5択：たたかう/固有/まほう/わざ/まかせる）
+    var _hasTech = !!(COMPANION_TECHNIQUE_DATA[cid]);
+    var _techUnlocked = _hasTech && isCompanionTechniqueUnlocked(cid);
+    var _techUsed = !!(state.companionTechniqueUsed && state.companionTechniqueUsed[cid]);
+    var _techLabel = _techUnlocked ? "⚡ わざ" : "🔒 わざ";
+    var _techStyle = _techUnlocked ? (_techUsed ? "color:#555;border-color:#555;" : "color:#ffd166;border-color:#ffd166;") : "color:#888;border-color:#666;";
+    var _techDisabled = (_techUnlocked && _techUsed) ? " disabled" : "";
+    var techBtn = _hasTech
+      ? '<button id="btn-companion-tech"' + _techDisabled + ' style="' + _techStyle + '">' + _techLabel + '</button>'
+      : '<button id="btn-companion-tech" disabled style="color:#555;border-color:#555;">⚡ わざ</button>';
     menu.innerHTML =
       '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？ " + progress + '</p>' +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
       '<button id="btn-companion-special">⭐ 固有</button>' +
       '<button id="btn-companion-magic">✨ まほう</button>' +
-      '<button id="btn-companion-auto">🤝 まかせる</button>';
+      techBtn +
+      '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
     // §83 v0.28.1: companionCommandLocked=false でこの仲間のターン開始
@@ -3182,6 +3242,9 @@
     };
     document.getElementById("btn-companion-magic").onclick = function() { // §95 v0.35: まほうサブメニューへ
       showCompanionMagicMenu(cid);
+    };
+    document.getElementById("btn-companion-tech").onclick = function() { // §111 v0.43: わざ
+      executeCompanionCommand(cid, "technique");
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
@@ -3300,6 +3363,15 @@
       killed = runCompanionSpecialAction(cid, "second");
     } else if (mode === "magic") { // §95 v0.35: 仲間まほう
       killed = runCompanionMagicAction(cid);
+    } else if (mode === "technique") { // §111 v0.43: 仲間わざ
+      var techResult = runCompanionTechniqueAction(cid);
+      if (techResult === null) {
+        // 不発（習得未達・使用済み・条件不足）→ ターン消費なし・メニューへ戻る
+        state.companionCommandLocked = false;
+        showCompanionCommandForIdx(state.companionCommandIndex);
+        return;
+      }
+      killed = techResult;
     } else if (mode === "auto") { // §85 v0.29.1: まかせる → ランダム行動
       killed = runCompanionAutoCommand(cid);
     } else { // たたかう
@@ -3369,6 +3441,91 @@
       return false;
     }
     return false;
+  }
+
+  // §111 v0.43: 仲間わざ実行。返値 true=敵HP0, false=敵生存/回復のみ, null=不発（ターン消費なし）
+  function runCompanionTechniqueAction(cid) {
+    var p = state.player, e = state.enemy;
+    if (!state.inBattle || !e) return null;
+    var td = COMPANION_TECHNIQUE_DATA[cid];
+    if (!td) { log("このわざは存在しない。"); return null; }
+    if (!state.companionTechniqueUsed) { resetCompanionTechniqueUsage(); }
+    if (!isCompanionTechniqueUnlocked(cid)) {
+      var lockReason = getCompanionTechniqueLockReason(cid);
+      log("🔒 " + td.name + "はまだ習得していない。");
+      if (lockReason) { log("習得条件：" + lockReason); }
+      return null; // ターン消費なし
+    }
+    if (state.companionTechniqueUsed[cid]) {
+      log("この戦闘では、すでに仲間わざを使っている。");
+      return null; // ターン消費なし
+    }
+    var cData = findById(COMPANION_DATA, cid);
+    var cName = cData ? cData.name : cid;
+    var growthBonus = getCompanionGrowthBonus(cid);
+
+    if (td.type === "damage") {
+      if (e.hp <= 0) return null;
+      var dmgTech = randInt(td.minValue, td.maxValue) + growthBonus;
+      state.companionTechniqueUsed[cid] = true;
+      log("⚡ " + cName + "の「" + td.name + "」！");
+      if (cid === "juritani") { log("勢いのまま連撃をたたき込んだ！"); }
+      if (cid === "norio")    { log("弱点と行動パターンを完全に読み切った！"); }
+      e.hp = Math.max(0, e.hp - dmgTech);
+      log(e.name + "に" + dmgTech + "ダメージ！");
+      renderEnemy();
+      return e.hp <= 0;
+    }
+
+    if (td.type === "damage_leave_one") {
+      if (e.hp <= 0) return null;
+      if (e.hp <= 1) {
+        log("⚡ " + cName + "の「" + td.name + "」！");
+        log("しかし、これ以上追い詰めることはできない。");
+        return null; // HP1のため不発・ターン消費なし
+      }
+      var dmgShu = randInt(td.minValue, td.maxValue) + growthBonus;
+      var actualShu = Math.max(0, Math.min(dmgShu, e.hp - 1));
+      state.companionTechniqueUsed[cid] = true;
+      log("⚡ " + cName + "の「" + td.name + "」！");
+      log("逃げ道をすべて封じた！");
+      e.hp = Math.max(1, e.hp - actualShu);
+      log(e.name + "に" + actualShu + "ダメージ！");
+      if (e.hp <= 1) { log(e.name + "をHP1まで追い詰めた！"); }
+      renderEnemy();
+      return false; // 絶対に撃破しない
+    }
+
+    if (td.type === "heal_protect") {
+      var alreadyReduced = (state.battleDamageReduction || 0) >= td.damageReduction;
+      if (p.hp >= p.maxHp && alreadyReduced) {
+        log("⚡ " + cName + "の「" + td.name + "」！");
+        log("しかし、HPは満タンで、強い守りの効果がすでにある。");
+        return null; // 効果なし・ターン消費なし
+      }
+      state.companionTechniqueUsed[cid] = true;
+      log("⚡ " + cName + "の「" + td.name + "」！");
+      log("あたたかな光が仲間を包んだ！");
+      if (p.hp < p.maxHp) {
+        var healAmt = randInt(td.minValue, td.maxValue) + growthBonus;
+        var beforeH = p.hp;
+        p.hp = Math.min(p.maxHp, p.hp + healAmt);
+        var actualH = p.hp - beforeH;
+        log("HPが" + actualH + "回復した！");
+      } else {
+        log("HPは満タンのまま。");
+      }
+      if (!alreadyReduced) {
+        state.battleDamageReduction = Math.max(state.battleDamageReduction || 0, td.damageReduction);
+        log("次の敵攻撃を15%軽減する！");
+      } else {
+        log("強い守りの効果が維持された！");
+      }
+      updateBattlePlayerStatus();
+      return false; // 回復わざは撃破なし
+    }
+
+    return null;
   }
 
   // §82 v0.28: 仲間1人の行動を実行する共通関数（コマンド選択・自動行動で共用）
@@ -4970,6 +5127,29 @@
     }
     html += '</div>';
 
+    // §111 v0.43: 仲間わざ習得セクション
+    var _techCids111 = ["juritani", "shurittani", "norio", "harumi"];
+    var _techCount111 = 0;
+    for (var _tci111 = 0; _tci111 < _techCids111.length; _tci111++) {
+      if (isCompanionTechniqueUnlocked(_techCids111[_tci111])) { _techCount111++; }
+    }
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">⚡ 仲間わざ習得</h4>';
+    html += '<span style="font-size:0.82em;color:' + (_techCount111 === 4 ? "#ffd166" : "#adb5bd") + ';">' + _techCount111 + ' / 4</span>';
+    html += '</div>';
+    for (var _tci111b = 0; _tci111b < _techCids111.length; _tci111b++) {
+      var _tcid111 = _techCids111[_tci111b];
+      var _td111r = COMPANION_TECHNIQUE_DATA[_tcid111];
+      var _tcUnlocked111 = isCompanionTechniqueUnlocked(_tcid111);
+      var _tcCDat111 = findById(COMPANION_DATA, _tcid111);
+      var _tcName111 = _tcCDat111 ? _tcCDat111.name : _tcid111;
+      html += '<div class="record-row"><span>' + (_tcUnlocked111 ? "✅ " : "・") + _tcName111 +
+        '　<span style="color:#888;font-size:0.82em;">' + (_td111r ? _td111r.name : "") + '</span></span>' +
+        chk(_tcUnlocked111) + (_tcUnlocked111 ? "習得済み" : "未習得") + '</span></div>';
+    }
+    html += '</div>';
+
     // --- 次の目標（強調） ---
     html += '<div class="record-section record-section-goal">';
     html += '<h4 style="color:#ffd166;">🎯 次の目標</h4>';
@@ -5447,6 +5627,37 @@
         html += '<div class="shop-row" style="font-size:0.76em;">' +
           '<span style="color:#888;padding-left:16px;">効果: </span>' +
           '<span style="color:#e9c46a;">' + (cgGD2.effectDesc || "") + '</span></div>';
+      }
+      // §111 v0.43: 仲間わざ表示
+      var _td111 = COMPANION_TECHNIQUE_DATA[cd.id];
+      if (_td111) {
+        var _techUnlocked111 = isCompanionTechniqueUnlocked(cd.id);
+        html += '<div class="shop-row" style="font-size:0.8em;margin-top:4px;border-top:1px solid #2a3a5a;padding-top:4px;">' +
+          '<span style="color:#ffd166;font-weight:bold;">⚡ 仲間わざ</span></div>';
+        html += '<div class="shop-row" style="font-size:0.8em;">' +
+          '<span style="color:#e0e0e0;padding-left:12px;">' + _td111.name + '</span>' +
+          '<span style="color:' + (_techUnlocked111 ? "#06d6a0" : "#888") + ';font-size:0.85em;">' +
+          (_techUnlocked111 ? "習得済み" : "未習得") + '</span></div>';
+        if (_techUnlocked111) {
+          var _techEffDesc;
+          if (_td111.type === "damage" || _td111.type === "damage_leave_one") {
+            _techEffDesc = _td111.minValue + "〜" + _td111.maxValue + "ダメージ＋成長ボーナス";
+            if (_td111.type === "damage_leave_one") { _techEffDesc += "（敵HP必ず1以上残す）"; }
+          } else {
+            _techEffDesc = _td111.minValue + "〜" + _td111.maxValue + "回復＋成長ボーナス、次敵攻撃" + Math.round(_td111.damageReduction * 100) + "%軽減";
+          }
+          html += '<div class="shop-row" style="font-size:0.76em;">' +
+            '<span style="color:#888;padding-left:16px;">効果: </span>' +
+            '<span style="color:#a0cfff;">' + _techEffDesc + '</span></div>';
+          html += '<div class="shop-row" style="font-size:0.76em;">' +
+            '<span style="color:#888;padding-left:16px;"></span>' +
+            '<span style="color:#c8b4ff;">1戦闘に1回</span></div>';
+        } else {
+          var _lockReason111 = getCompanionTechniqueLockReason(cd.id);
+          html += '<div class="shop-row" style="font-size:0.76em;">' +
+            '<span style="color:#888;padding-left:16px;">条件: </span>' +
+            '<span style="color:#a08060;">' + _lockReason111 + '</span></div>';
+        }
       }
     });
 
@@ -6951,6 +7162,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gear-reward-dup-check" style="border-color:#a0f0b4;color:#a0f0b4;">🧪 二重取得防止確認（grant×3→各×1のみ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-stage2-clearcheck" style="border-color:#b4e0ff;color:#b4e0ff;">🎁 ステージ2初回・再クリア確認（重複付与なし）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-reconcile-multi" style="border-color:#d4b4ff;color:#d4b4ff;">🧪 reconcile複数回確認（2回目はno-op）</button>';
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">⚡ 仲間わざテスト (§111 v0.43)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-tech-unlock-all" style="border-color:#ffd166;color:#ffd166;">⚡ 仲間わざを全員習得状態にする（Lv25＋rewardFlags）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-tech-reset-used" style="border-color:#a0f0b4;color:#a0f0b4;">⚡ 仲間わざ使用状態リセット（全falseに戻す）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-tech-lock-check" style="border-color:#a0cfff;color:#a0cfff;">🧪 仲間わざロック条件確認（Lv不足/装備未取得/両方達成）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-tech-oneshot-check" style="border-color:#c8b4ff;color:#c8b4ff;">🧪 1戦闘1回確認（grant×2→2回目はno-op）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8923,6 +9139,93 @@
         state.companionGearInventory["critical_bracelet"] = _prevCnt110r;
         _pendingGearRewardNotices = [];
         showToast("[DEBUG] reconcile×2: " + (_pass110r ? "PASS ✅ 1回=true/2回=false/cnt=1" : "FAIL ❌ r1=" + _r1 + " r2=" + _r2 + " cnt=" + _cnt2));
+        renderStatusBody();
+      };
+      // §111 v0.43: 仲間わざ全員習得状態にする（Lv25以上 + rewardFlags=true）
+      document.getElementById("btn-debug-tech-unlock-all").onclick = function () {
+        ensureCompanionGearState();
+        var _tcids111d = ["juritani", "shurittani", "norio", "harumi"];
+        var _tgids111d = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        for (var _ti111d = 0; _ti111d < _tcids111d.length; _ti111d++) {
+          var _cid111d = _tcids111d[_ti111d];
+          if (!state.companionLevels[_cid111d]) { state.companionLevels[_cid111d] = { level: 1, exp: 0, nextExp: 25 }; }
+          if (state.companionLevels[_cid111d].level < 25) {
+            state.companionLevels[_cid111d].level = 25;
+            state.companionLevels[_cid111d].exp = 0;
+            state.companionLevels[_cid111d].nextExp = 265; // 25*10+15
+          }
+          state.companionGearRewardFlags[_tgids111d[_ti111d]] = true;
+        }
+        saveGame(); renderStatusBody();
+        showToast("[DEBUG] 全員わざ習得状態にした ✅ Lv25以上・rewardFlags=true");
+      };
+      // §111 v0.43: 仲間わざ使用状態リセット
+      document.getElementById("btn-debug-tech-reset-used").onclick = function () {
+        resetCompanionTechniqueUsage();
+        showToast("[DEBUG] 仲間わざ使用状態リセット ✅ 全false");
+        renderStatusBody();
+      };
+      // §111 v0.43: ロック条件確認（Lv不足/装備未取得/両方達成の3パターン）
+      document.getElementById("btn-debug-tech-lock-check").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // バックアップ
+        var _prev111Lv   = state.companionLevels["juritani"] ? state.companionLevels["juritani"].level : 1;
+        var _prev111Flag = !!state.companionGearRewardFlags["critical_bracelet"];
+        // パターン1: Lv24・装備取得済み → 未習得
+        if (!state.companionLevels["juritani"]) { state.companionLevels["juritani"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["juritani"].level = 24;
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        var _res1 = isCompanionTechniqueUnlocked("juritani");
+        // パターン2: Lv25・装備未取得 → 未習得
+        state.companionLevels["juritani"].level = 25;
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        var _res2 = isCompanionTechniqueUnlocked("juritani");
+        // パターン3: Lv25・装備取得済み → 習得済み
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        var _res3 = isCompanionTechniqueUnlocked("juritani");
+        // 復元
+        state.companionLevels["juritani"].level = _prev111Lv;
+        state.companionGearRewardFlags["critical_bracelet"] = _prev111Flag;
+        var _pass111Lock = (!_res1 && !_res2 && _res3);
+        showToast("[DEBUG] ロック条件: " + (_pass111Lock ? "PASS ✅" : "FAIL ❌") +
+          " Lv24+装備=" + _res1 + " Lv25-装備=" + _res2 + " Lv25+装備=" + _res3);
+        renderStatusBody();
+      };
+      // §111 v0.43: 1戦闘1回確認（2回目はno-op）
+      document.getElementById("btn-debug-tech-oneshot-check").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // ジュリタニを習得状態に設定（バックアップ付き）
+        var _prev111OsLv   = state.companionLevels["juritani"] ? state.companionLevels["juritani"].level : 1;
+        var _prev111OsFlag = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prev111OsUsed = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["juritani"]);
+        if (!state.companionLevels["juritani"]) { state.companionLevels["juritani"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["juritani"].level = 25;
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        resetCompanionTechniqueUsage(); // used=false
+        // 1回目: 習得済み・未使用 → 使用可能なはず
+        var _unlocked111Os = isCompanionTechniqueUnlocked("juritani");
+        var _used111Os1 = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["juritani"]);
+        // state.companionTechniqueUsedを直接trueに（戦闘外なのでrunCompanionTechniqueActionは呼べない）
+        if (!state.companionTechniqueUsed) { state.companionTechniqueUsed = {}; }
+        state.companionTechniqueUsed["juritani"] = true;
+        // 2回目: 使用済み → 不発のはず（used=trueで再チェック）
+        var _used111Os2 = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["juritani"]);
+        // resetしたらfalseに戻るはず
+        resetCompanionTechniqueUsage();
+        var _used111OsAfterReset = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["juritani"]);
+        // 復元
+        state.companionLevels["juritani"].level = _prev111OsLv;
+        state.companionGearRewardFlags["critical_bracelet"] = _prev111OsFlag;
+        if (state.companionTechniqueUsed) { state.companionTechniqueUsed["juritani"] = _prev111OsUsed; }
+        var _pass111Os = (_unlocked111Os && !_used111Os1 && _used111Os2 && !_used111OsAfterReset);
+        showToast("[DEBUG] 1戦闘1回: " + (_pass111Os ? "PASS ✅" : "FAIL ❌") +
+          " 習得=" + _unlocked111Os + " 1回目used前=" + _used111Os1 + " used後=" + _used111Os2 + " reset後=" + _used111OsAfterReset);
         renderStatusBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）

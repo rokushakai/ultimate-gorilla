@@ -5,6 +5,20 @@
 
 ---
 
+## v0.43 (2026-07-15)
+
+### 設計判断・確認事項
+
+- **仲間わざの習得状態は永続フラグなしで導出**: `isCompanionTechniqueUnlocked(cid)` は `getCompanionLevel(cid).level` と `state.companionGearRewardFlags[requiredGearId]` から毎回計算する。セーブ移行不要。旧セーブ互換も自動。
+- **null返値によるターン消費制御**: `runCompanionTechniqueAction()` は不発時に `null` を返す（true/falseは既存の killed/alive）。`executeCompanionCommand()` は `null` を受け取ったらindexを進めずメニューへ戻る。この設計で既存の killed/false パターンを壊さずに「行動取り消し」を実装できた。
+- **5択レイアウト**: submenuは2カラムgridを使用。5ボタン目（まかせる）に `grid-column:1/-1` を追加して全幅に。既存の2×2配置から2×2+1へ変更。スマホ縦画面で崩れない。
+- **clearCompanionCommandState()にresetを追加**: 戦闘終了・逃走・捕獲・敵逃走など全終了経路がclearCompanionCommandState()を通るため、ここに1箇所追加するだけで全ケースをカバーできる。戦闘開始時もclear→startの順で呼ばれるため、開始時リセットも保証される。
+- **シュリタニ絶対包囲網のHP1ガード**: `e.hp <= 1` で不発（null返値・ターン消費なし）。`actualDamage = Math.min(dmg, e.hp - 1)` で必ずHP1以上残す。`e.hp = Math.max(1, e.hp - actual)` で念押し。究極ゴリラ捕獲条件はattemptCapture()側にあるため変更なし。
+- **ハルミの大いなる祈りの不発条件**: HP満タン AND 既存軽減率>=15% の両方同時のみ不発。HP満タンでも軽減未設定なら使用可能（軽減付与のみ）。HP不満でも軽減>=15%なら回復のみで使用可能。
+- **装備ボーナス加算なし（意図的）**: 特化装備の入手記録自体が習得条件のため、装備中かどうかでわざ威力を変えない。成長ボーナス（getCompanionGrowthBonus）のみ加算。
+- **まかせるAI4択維持**: `runCompanionAutoCommand()` の chosenAction は "fight"/"special1"/"special2"/"magic" の4択のまま。"technique" は追加しない。仲間わざは手動操作専用。
+- **`_techDisabled`の設計**: 使用済みボタンは `disabled` 属性でUIレベルで防御。未習得は `disabled` なしでクリック可能・ログでロック理由を表示・null返値でターン消費なし。二重の防御。
+
 ## v0.42.1 (2026-07-15)
 
 ### 設計判断・確認事項
