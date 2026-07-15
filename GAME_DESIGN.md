@@ -5765,10 +5765,73 @@ v0.43 実装後の懸念: `clearCompanionCommandState()` が `resetCompanionTech
 - COMPANION_GEAR_DATA・既存装備ボーナス効果
 - companionGearRewardFlags・rewardFlags既存状態
 
-## 将来の実装候補（v0.44〜）— プレイヤーフィードバックより [未実装・将来機能]
+## §113 v0.44 — 仲間サイドストーリー第一段階 [実装済み]
 
-### v0.44 候補以降 [未実装・将来機能]
+### 概要
+
+酒場の新セクション「仲間の物語」から、仲間4人それぞれの短いサイドストーリーを読める。
+
+### 解放条件
+
+`hasCompanionEverJoined(cid) && isCompanionTechniqueUnlocked(cid)`
+
+- `hasCompanionEverJoined(cid)`: `hasCompanion(cid) || level > 1 || exp > 0` のプロキシ判定（永続フラグなし）
+- `isCompanionTechniqueUnlocked(cid)`: 仲間Lv25以上 + 対応rewardFlag=true（§111の条件と同一）
+
+### ストーリー一覧
+
+| 仲間 | タイトル | 行数 |
+|---|---|---|
+| ジュリタニ | 会心の意味 | 7行 |
+| シュリタニ | 逃げ道の先 | 7行 |
+| ノリオ | 数字に残らない経験 | 8行 |
+| ハルミ | 小さな光の物語 | 8行 |
+
+### 閲覧フロー
+
+1. 酒場 → 「📖 仲間の物語」ボタン → `renderTavernStories()`
+2. 解放済みストーリーの「物語を読む」→ `startCompanionSideStory(cid)`
+3. 酒場モーダルを閉じ → `#companion-story-modal` を開く
+4. 1行ずつ「次へ」で進める
+5. 最終行で「物語を終える」→ `completeCompanionSideStory(cid)` → `closeCompanionSideStoryModal()`
+6. 酒場モーダルを再度開き → `renderTavernStories()` で完了状態を表示
+
+### データ構造
+
+```javascript
+// COMPANION_SIDE_STORY_DATA[cid].lines[i] = { speaker, text }
+// state.companionSideStoryFlags = { juritani: bool, shurittani: bool, norio: bool, harumi: bool }
+// state.activeCompanionSideStory = cid or null  (非永続)
+// state.activeCompanionSideStoryLine = index    (非永続)
+```
+
+### セーブデータ
+
+- `companionSideStoryFlags`: saveGame/loadGame/newGame 対応
+- `loadGame()`: `normalizeCompanionSideStoryFlags()` で旧セーブ互換（全false補完）
+
+### debug追加（§113 v0.44）
+
+- `📖 全員Lv25+gearFlag解放` — 解放条件セット
+- `📖 完了フラグ全リセット` — companionSideStoryFlags全false
+- `📖 全完了` — companionSideStoryFlags全true
+- `🧪 途中終了・完了境界確認` — PASS/FAIL（途中closeで未完 / 最終nextで完了 / 二重完了防止）
+- `🧪 再読・重複完了防止確認` — PASS/FAIL（complete後もflag=true維持）
+- `📖 各仲間を直接開く（4本）` — startCompanionSideStory()直接呼び出し
+
+### 変更しないもの（§113 v0.44）
+
+- BGM制御・stopBGMHard()・BGMセッション・BGMタイマー
+- 究極ゴリラ捕獲条件・HP1〜10・女神のウクレレ・うたう条件
+- 仲間わざ・COMPANION_TECHNIQUE_DATA・isCompanionTechniqueUnlocked
+- 仲間装備・COMPANION_GEAR_DATA・getCompanionEquipmentBonus
+- まかせるAI・gainCompanionExp・getCompanionGrowthBonus
+- 報酬なし（Gold・アイテム付与なし）
+
+## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
+
+### v0.45 候補以降 [未実装・将来機能]
 
 - 仲間装備の商人販売
-- サイドストーリー追加
+- サイドストーリー第2話
 - 仲間節目セリフ演出強化

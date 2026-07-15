@@ -5,6 +5,19 @@
 
 ---
 
+## v0.44 (2026-07-16)
+
+### 設計判断・確認事項
+
+- **「一度でも仲間になった」判定を永続フラグなしで実現**: `hasCompanionEverJoined(cid)` は `hasCompanion(cid) || getCompanionLevel(cid).level > 1 || getCompanionLevel(cid).exp > 0` で判定。仲間わざの解放条件が Lv25+rewardFlag であるため、物語解放に到達したプレイヤーは必ずLv>1になっており、このプロキシで実用上は十分。
+- **酒場モーダルを閉じてから物語モーダルを開く設計**: 二重モーダルを避けるため `startCompanionSideStory()` 内で `closeModal("tavern-modal")` → `openModal("companion-story-modal")` の順。物語終了・閉じるボタンでは逆順（物語→酒場→renderTavernStories）。酒場の状態（仲間の物語ビュー）に戻ることでUXの文脈を維持。
+- **`_cstoryBusy` フラグで二重押し防止**: 最終行のnextボタンを押した瞬間に `_cstoryBusy=true` にし、`completeCompanionSideStory()` と `closeCompanionSideStoryModal()` が完了するまでボタンを無効化。同期処理のみなので実際には一瞬で解除されるが、タップの重複をガード。
+- **`completeCompanionSideStory()` の冪等設計**: フラグが既にtrueなら何もしない（saveGame()も呼ばない）。これにより再読後の「物語を終える」でも副作用なし。初回完了トーストも `if (!already)` で1回だけ表示。
+- **再読可能設計（意図的）**: 完了後も `startCompanionSideStory()` はフラグチェックせず物語を開始する。「完了済み」表示のボタンも同じ関数を呼ぶ（テキストが「もう一度読む」に変わるのみ）。報酬・フラグ変化はないため副作用なし。
+- **物語コンテンツをJSのみで完結**: ダイアログ・テキストはすべて `COMPANION_SIDE_STORY_DATA` 定数。翻訳・変更が必要な場合は1箇所だけ修正すればよい。
+
+---
+
 ## v0.43.1 (2026-07-16)
 
 ### 設計判断・確認事項

@@ -5,6 +5,50 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.44] - 2026-07-16 — 仲間サイドストーリー第一段階 (§113)
+
+### Added
+- **`COMPANION_SIDE_STORY_DATA`**: サイドストーリー定数（4仲間分）
+  - ジュリタニ「会心の意味」(7行)
+  - シュリタニ「逃げ道の先」(7行)
+  - ノリオ「数字に残らない経験」(8行)
+  - ハルミ「小さな光の物語」(8行)
+- **`state.companionSideStoryFlags`**: 完了フラグ（永続・セーブ対象）
+- **`state.activeCompanionSideStory` / `state.activeCompanionSideStoryLine`**: 閲覧中状態（非永続）
+- **`normalizeCompanionSideStoryFlags()`**: boolean以外→false・never demote true（旧セーブ互換）
+- **`hasCompanionEverJoined(cid)`**: 「一度でも仲間になった」判定（Lv>1 or EXP>0 or 現在パーティ）
+- **`isCompanionSideStoryUnlocked(cid)`**: 解放判定（hasCompanionEverJoined && isCompanionTechniqueUnlocked）
+- **`getCompanionSideStoryLockReason(cid)`**: 未解放理由テキスト
+- **`showCompanionSideStoryLine()`**: 会話1行をDOMへ描画（speaker/text/progress/nextボタン）
+- **`startCompanionSideStory(cid)`**: 酒場モーダルを閉じ → 物語モーダルを開いて最初の行を表示
+- **`completeCompanionSideStory(cid)`**: 完了フラグをtrue・saveGame()・初回のみトースト（冪等）
+- **`closeCompanionSideStoryModal()`**: 物語モーダルを閉じ → 酒場モーダルを再開・renderTavernStories()
+- **酒場「📖 仲間の物語」セクション** (`renderTavernStories()`): 4仲間のストーリーカード・状態表示・ボタン
+- **`renderTavernMain()` 更新**: 「📖 仲間の物語」ボタン追加
+- **ステータス画面 §113物語セクション** (`renderStatusBody()`): 全仲間に📖物語ラベル・タイトル・状態・理由
+- **冒険の記録 §113物語進捗** (`renderRecordBody()`): 📖仲間の物語 X/4・各仲間✅/・行
+- **`#companion-story-modal`** (`index.html`): 物語会話モーダル（title/speaker/text/progress/nextBtn/closeBtn）
+- **`btn-cstory-next` / `btn-cstory-close` イベント** (`init()`): `_cstoryBusy` フラグで二重押し防止
+- **デバッグ9本 (§113)**:
+  - `📖 全員Lv25+gearFlag解放`: 全解放条件セット
+  - `📖 完了フラグ全リセット`: companionSideStoryFlags全false
+  - `📖 全完了`: companionSideStoryFlags全true
+  - `🧪 途中終了・完了境界確認`: PASS/FAIL
+  - `🧪 再読・重複完了防止確認`: PASS/FAIL
+  - 各仲間の物語を直接開く（4本）
+
+### セーブデータ互換
+- `companionSideStoryFlags: {}` を `saveGame()` / `loadGame()` に追加
+- `loadGame()` で `normalizeCompanionSideStoryFlags()` を呼び出し（旧セーブは全false補完）
+- `newGame()` で `companionSideStoryFlags` をリセット
+
+### 今回実装しなかったこと
+- 報酬なし（Gold/アイテム付与なし）
+- BGM変更なし（BGM制御には一切触れていない）
+- 新マップ・新敵なし
+- 第2話以降なし
+- 究極ゴリラ捕獲条件変更なし
+
 ## [0.43.1] - 2026-07-16 — 仲間わざ安定化 (§112)
 
 ### Added

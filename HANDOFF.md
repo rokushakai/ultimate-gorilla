@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.43.1** |
+| 現在バージョン | **v0.44** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,15 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.44] 仲間サイドストーリー第一段階**（§113）
+  - **`COMPANION_SIDE_STORY_DATA`**: 4仲間×1話（会心の意味/逃げ道の先/数字に残らない経験/小さな光の物語）
+  - **解放条件**: `hasCompanionEverJoined(cid)` && `isCompanionTechniqueUnlocked(cid)`（Lv25+rewardFlag）
+  - **`companionSideStoryFlags`**: 永続完了フラグ（saveGame/loadGame/newGame対応）
+  - **酒場「📖 仲間の物語」**: renderTavernMain()→renderTavernStories()→startCompanionSideStory()フロー
+  - **物語モーダル**: `#companion-story-modal`（title/speaker/text/progress）、ライン毎に読み進め
+  - **完了処理**: `completeCompanionSideStory(cid)` 冪等・再読可能・初回のみトースト
+  - **ステータス/冒険の記録**: 各仲間ごとに物語状態を表示
+  - **デバッグ9本 (§113)**: 解放セット / リセット / 全完了 / 境界確認2本 / 直接開く4本
 - **[v0.43.1] 仲間わざ安定化**（§112）
   - **調査結果**: `clearCompanionCommandState()` は `finishBattle()` からのみ呼ばれる（ラウンド間リセットバグなし確認済み）
   - **`ensureCompanionTechniqueUsageState()`**: 欠損キー補完ヘルパー（全リセットせずキーだけ補完）

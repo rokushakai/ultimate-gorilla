@@ -14,13 +14,30 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.43.1 候補以降
+### Version 0.44 候補以降
 
-仲間装備商人販売（購入・売却） / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー追加
+仲間装備商人販売（購入・売却） / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー第2話
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.44 — 仲間サイドストーリー第一段階 (§113)
+
+- **`COMPANION_SIDE_STORY_DATA`**: 4仲間分のストーリーデータ定数 ✅
+- **`state.companionSideStoryFlags`**: 完了フラグ（永続） ✅
+- **`normalizeCompanionSideStoryFlags()`**: 旧セーブ互換ガード ✅
+- **`hasCompanionEverJoined(cid)`**: 「一度でも仲間になった」判定 ✅
+- **`isCompanionSideStoryUnlocked(cid)` / `getCompanionSideStoryLockReason(cid)`**: 解放判定・理由テキスト ✅
+- **`showCompanionSideStoryLine()` / `startCompanionSideStory()` / `completeCompanionSideStory()` / `closeCompanionSideStoryModal()`**: 物語フロー関数群 ✅
+- **酒場「📖 仲間の物語」セクション** (`renderTavernStories()`): ストーリーカード表示 ✅
+- **`renderTavernMain()` 更新**: 仲間の物語ボタン追加 ✅
+- **ステータス画面 §113セクション** (`renderStatusBody()`): 物語状態表示（全仲間） ✅
+- **冒険の記録 §113セクション** (`renderRecordBody()`): 物語進捗 X/4 ✅
+- **`#companion-story-modal`** (`index.html`): 会話モーダル ✅
+- **`btn-cstory-next` / `btn-cstory-close`** (`init()`): 二重押し防止イベント ✅
+- **`saveGame()` / `loadGame()` / `newGame()`**: companionSideStoryFlags対応 ✅
+- **デバッグ9本 (§113)**: 解放セット / リセット / 全完了 / 境界確認2本 / 直接開く4本 ✅
 
 ### Version 0.43.1 — 仲間わざ安定化 (§112)
 
