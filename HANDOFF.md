@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.43** |
+| 現在バージョン | **v0.43.1** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.43時点）
+## 現在実装済みの主要機能（v0.43.1時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.43.1] 仲間わざ安定化**（§112）
+  - **調査結果**: `clearCompanionCommandState()` は `finishBattle()` からのみ呼ばれる（ラウンド間リセットバグなし確認済み）
+  - **`ensureCompanionTechniqueUsageState()`**: 欠損キー補完ヘルパー（全リセットせずキーだけ補完）
+  - **`actuallyStartBattle()` 更新**: `resetCompanionTechniqueUsage()` 追加（belt-and-suspenders）
+  - **`runCompanionTechniqueAction()` 更新**: ガードを `ensureCompanionTechniqueUsageState()` に変更
+  - **デバッグ3本 (§112)**: ラウンド持越し確認 / シュリタニHP1境界 / ハルミ回復・軽減境界
 - **[v0.43] 仲間わざ第一段階**（§111）
   - **`COMPANION_TECHNIQUE_DATA`**: 4仲間×1わざ（超会心ラッシュ/絶対包囲網/完全解析レポート/大いなる祈り）
   - **習得条件**: 仲間Lv25以上 + 対応特化装備のrewardFlag=true（両方必要）

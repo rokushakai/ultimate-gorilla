@@ -5,6 +5,18 @@
 
 ---
 
+## v0.43.1 (2026-07-16)
+
+### 設計判断・確認事項
+
+- **ラウンド間リセットバグは存在しない**: `clearCompanionCommandState()` の呼び出し元を全調査した結果、`finishBattle()` からのみ呼ばれることを確認。プレイヤー行動 → `startCompanionCommands()` → `executeCompanionCommand()` → `enemyTurn()` → `setBattleLocked(false)` というラウンド内ループのいずれも `clearCompanionCommandState()` を呼ばない。v0.43 の実装は設計通り正常動作。
+- **`actuallyStartBattle()` へのリセット追加（belt-and-suspenders）**: 通常は前の戦闘の `finishBattle()` でリセット済みだが、ゲームロード直後・異常終了復帰・デバッグ操作後などで前回の `used=true` が残るエッジケースを排除するため追加。コストゼロで安全性が上がる。
+- **`ensureCompanionTechniqueUsageState()` の設計**: `resetCompanionTechniqueUsage()` との違いは「既存の `used=true` を消さない」こと。戦闘中に状態が壊れた場合（nullになった等）の修復に使う。全リセットは戦闘開始・終了時のみ意図的に行う。
+- **シュリタニHP1境界の数値確認**: HP=1 → `e.hp <= 1` で不発（null）、used変化なし。HP=2 → `actualShu = Math.min(randInt(22,34+bonus), 2-1) = 1`、`e.hp = Math.max(1, 2-1) = 1`。成長ボーナスに関わらず HP=2 では必ず 1 ダメージになる（Math.min がキャップ）。
+- **ハルミ境界の `alreadyReduced` 判定**: `(state.battleDamageReduction || 0) >= td.damageReduction` (≥0.15)。`clearCompanionCommandState()` でリセットされた後（=0）は必ず false。「かばう」(0.20) や「まもりの光」(0.25) が有効な状態では true → null（不発）。ハルミわざを使った後（0.15）も true → 同一戦闘内での2回目は不発。
+
+---
+
 ## v0.43 (2026-07-15)
 
 ### 設計判断・確認事項

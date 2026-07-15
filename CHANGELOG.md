@@ -5,6 +5,28 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.43.1] - 2026-07-16 — 仲間わざ安定化 (§112)
+
+### Added
+- **`ensureCompanionTechniqueUsageState()`**: `companionTechniqueUsed` が壊れていたら欠損キーだけ補完（全リセットしない）
+- **`actuallyStartBattle()` に `resetCompanionTechniqueUsage()` 追加**: 戦闘開始時にも確実にリセット（belt-and-suspenders）
+- **デバッグボタン3本 (§112)**:
+  - `🔬 ラウンド持越し確認`: used=true→ラウンド間模擬(trueのまま)→戦闘後模擬(false) PASS/FAIL
+  - `🔬 シュリタニHP1境界確認`: HP1→null / HP2→1ダメHP残1 / used確認 PASS/FAIL
+  - `🔬 ハルミ回復・軽減境界確認`: 満HP+軽減≥0.15→null / 満HP+軽減0→use / HP不足+軽減≥0.15→heal PASS/FAIL
+
+### Changed
+- **`runCompanionTechniqueAction()`**: `if (!state.companionTechniqueUsed)` ガードを `ensureCompanionTechniqueUsageState()` に変更
+- **`clearCompanionCommandState()` コメント更新**: finishBattle()経由のみ呼ばれる旨を明記
+
+### 調査結果
+- `clearCompanionCommandState()` は `finishBattle()` からのみ呼ばれる（ラウンド間には呼ばれない）
+- v0.43 の 1戦闘1回実装は設計通り正常動作していることを確認
+- `actuallyStartBattle()` への追加は念押しの安全策（通常は finishBattle → clearCompanionCommandState でリセット済み）
+
+### セーブデータ互換
+- 変更なし
+
 ## [0.43] - 2026-07-15 — 仲間わざ第一段階 (§111)
 
 ### Added

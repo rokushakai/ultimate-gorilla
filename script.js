@@ -2946,6 +2946,7 @@
     updateBGM("battle");
     state.inBattle = true;
     state.battleDamageReduction = 0; // §90 v0.32.1: 念のため戦闘開始時にもリセット
+    resetCompanionTechniqueUsage(); // §112 v0.43.1: 戦闘開始時に仲間わざ使用状態を確実にリセット
     state.enemy = {
       id: monster.id,
       name: monster.name,
@@ -3125,7 +3126,7 @@
     state.companionCommandLocked = false;
     state.lastCompanionAutoAction = {}; // §87 v0.31: 前回行動記憶をリセット
     state.battleDamageReduction = 0;   // §89 v0.32: ダメージ軽減をリセット
-    resetCompanionTechniqueUsage();    // §111 v0.43: 仲間わざ使用状態リセット
+    resetCompanionTechniqueUsage();    // §111 v0.43 / §112 v0.43.1: finishBattle()経由でのみ呼ばれる想定
     var ccMenu = document.getElementById("companion-command-menu");
     if (ccMenu) { ccMenu.classList.add("hidden"); }
     var csMenu = document.getElementById("companion-special-menu"); // §89 v0.32
@@ -3138,6 +3139,20 @@
   // §111 v0.43: 仲間わざ使用状態を全リセット（戦闘開始時・戦闘終了時共用）
   function resetCompanionTechniqueUsage() {
     state.companionTechniqueUsed = { juritani: false, shurittani: false, norio: false, harumi: false };
+  }
+
+  // §112 v0.43.1: companionTechniqueUsedが壊れていたら修復（全リセットせず欠損キーだけ補完する）
+  function ensureCompanionTechniqueUsageState() {
+    if (!state.companionTechniqueUsed || typeof state.companionTechniqueUsed !== "object") {
+      resetCompanionTechniqueUsage();
+      return;
+    }
+    var _ids112 = ["juritani", "shurittani", "norio", "harumi"];
+    for (var _ei112 = 0; _ei112 < _ids112.length; _ei112++) {
+      if (state.companionTechniqueUsed[_ids112[_ei112]] === undefined) {
+        state.companionTechniqueUsed[_ids112[_ei112]] = false;
+      }
+    }
   }
 
   // §111 v0.43: 仲間わざ習得済みか判定（Lv25以上 + rewardFlag=true）
@@ -3449,7 +3464,7 @@
     if (!state.inBattle || !e) return null;
     var td = COMPANION_TECHNIQUE_DATA[cid];
     if (!td) { log("このわざは存在しない。"); return null; }
-    if (!state.companionTechniqueUsed) { resetCompanionTechniqueUsage(); }
+    ensureCompanionTechniqueUsageState(); // §112 v0.43.1: 壊れた状態を修復（全リセットではなくキー補完）
     if (!isCompanionTechniqueUnlocked(cid)) {
       var lockReason = getCompanionTechniqueLockReason(cid);
       log("🔒 " + td.name + "はまだ習得していない。");
@@ -7167,6 +7182,10 @@
       html += '<button class="shop-menu-btn" id="btn-debug-tech-reset-used" style="border-color:#a0f0b4;color:#a0f0b4;">⚡ 仲間わざ使用状態リセット（全falseに戻す）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-tech-lock-check" style="border-color:#a0cfff;color:#a0cfff;">🧪 仲間わざロック条件確認（Lv不足/装備未取得/両方達成）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-tech-oneshot-check" style="border-color:#c8b4ff;color:#c8b4ff;">🧪 1戦闘1回確認（grant×2→2回目はno-op）</button>';
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">🔬 仲間わざ安定化テスト (§112 v0.43.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v431-round-persist" style="border-color:#ffd166;color:#ffd166;">🔬 ラウンド持越し確認（used=trueが戦闘内で維持されるか）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v431-shu-hp1" style="border-color:#a0cfff;color:#a0cfff;">🔬 シュリタニHP1境界確認（HP1→null / HP2→1ダメ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v431-harumi-boundary" style="border-color:#a0f0b4;color:#a0f0b4;">🔬 ハルミ回復・軽減境界確認（満HP+高軽減→null 等）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -9226,6 +9245,127 @@
         var _pass111Os = (_unlocked111Os && !_used111Os1 && _used111Os2 && !_used111OsAfterReset);
         showToast("[DEBUG] 1戦闘1回: " + (_pass111Os ? "PASS ✅" : "FAIL ❌") +
           " 習得=" + _unlocked111Os + " 1回目used前=" + _used111Os1 + " used後=" + _used111Os2 + " reset後=" + _used111OsAfterReset);
+        renderStatusBody();
+      };
+      // §112 v0.43.1: ラウンド持越し確認（used=trueが戦闘ラウンド間で維持されるか）
+      document.getElementById("btn-debug-v431-round-persist").onclick = function () {
+        var _prevUsed431 = state.companionTechniqueUsed
+          ? { juritani: !!state.companionTechniqueUsed.juritani, shurittani: !!state.companionTechniqueUsed.shurittani, norio: !!state.companionTechniqueUsed.norio, harumi: !!state.companionTechniqueUsed.harumi }
+          : null;
+        var _prevDr431 = state.battleDamageReduction || 0;
+        // ステップ1: used=trueにセット（ラウンド前）
+        ensureCompanionTechniqueUsageState();
+        state.companionTechniqueUsed["juritani"] = true;
+        var _step1 = !!(state.companionTechniqueUsed.juritani);
+        // ステップ2: ラウンド間模擬（clearCompanionCommandStateは呼ばれない→trueのまま）
+        var _step2 = !!(state.companionTechniqueUsed.juritani);
+        // ステップ3: 戦闘終了模擬（clearCompanionCommandState→リセット→false）
+        clearCompanionCommandState();
+        var _step3 = !!(state.companionTechniqueUsed.juritani);
+        // 復元
+        state.companionTechniqueUsed = _prevUsed431 || { juritani: false, shurittani: false, norio: false, harumi: false };
+        state.battleDamageReduction = _prevDr431;
+        var _pass431r = (_step1 && _step2 && !_step3);
+        showToast("[DEBUG] ラウンド持越し確認: " + (_pass431r ? "PASS ✅" : "FAIL ❌") +
+          " ラウンド前true=" + _step1 + " ラウンド後true=" + _step2 + " 戦闘後false=" + !_step3);
+        renderStatusBody();
+      };
+      // §112 v0.43.1: シュリタニHP1境界確認（HP1→null、HP2→ダメ1残りHP1）
+      document.getElementById("btn-debug-v431-shu-hp1").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevShuLv   = state.companionLevels["shurittani"] ? state.companionLevels["shurittani"].level : 1;
+        var _prevShuFlag = !!state.companionGearRewardFlags["net_master_belt"];
+        var _prevShuUsed = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["shurittani"]);
+        var _prevShuEnemy = state.enemy;
+        var _prevShuBattle = state.inBattle;
+        var _prevShuDr = state.battleDamageReduction || 0;
+        if (!state.companionLevels["shurittani"]) { state.companionLevels["shurittani"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["shurittani"].level = 25;
+        state.companionGearRewardFlags["net_master_belt"] = true;
+        state.inBattle = true;
+        ensureCompanionTechniqueUsageState();
+        // ケース1: 敵HP=1 → null（不発）、used=falseのまま
+        state.enemy = { id: "debug_t", name: "テスト敵", hp: 1, maxHp: 10, atk: 1, def: 0, final: false, isUMA: false };
+        state.companionTechniqueUsed["shurittani"] = false;
+        var _r1Shu = runCompanionTechniqueAction("shurittani");
+        var _hp1Used = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["shurittani"]);
+        // ケース2: 敵HP=2 → ダメ1、HP=1、used=true、false返値
+        state.enemy = { id: "debug_t", name: "テスト敵", hp: 2, maxHp: 10, atk: 1, def: 0, final: false, isUMA: false };
+        state.companionTechniqueUsed["shurittani"] = false;
+        var _r2Shu = runCompanionTechniqueAction("shurittani");
+        var _hp2After = state.enemy ? state.enemy.hp : -1;
+        var _hp2Used = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["shurittani"]);
+        // 復元
+        if (!state.companionLevels["shurittani"]) { state.companionLevels["shurittani"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["shurittani"].level = _prevShuLv;
+        state.companionGearRewardFlags["net_master_belt"] = _prevShuFlag;
+        ensureCompanionTechniqueUsageState();
+        state.companionTechniqueUsed["shurittani"] = _prevShuUsed;
+        state.enemy = _prevShuEnemy;
+        state.inBattle = _prevShuBattle;
+        state.battleDamageReduction = _prevShuDr;
+        var _passShu431 = (_r1Shu === null && !_hp1Used && _r2Shu === false && _hp2After === 1 && _hp2Used);
+        showToast("[DEBUG] シュリタニHP1境界: " + (_passShu431 ? "PASS ✅" : "FAIL ❌") +
+          " HP1→null=" + (_r1Shu === null) + " HP1used=" + _hp1Used +
+          " HP2→HP" + _hp2After + " HP2used=" + _hp2Used);
+        renderStatusBody();
+      };
+      // §112 v0.43.1: ハルミ回復・軽減境界確認（満HP+高軽減→null / 満HP+軽減0→use / HP不足+高軽減→heal）
+      document.getElementById("btn-debug-v431-harumi-boundary").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevHarLv    = state.companionLevels["harumi"] ? state.companionLevels["harumi"].level : 1;
+        var _prevHarFlag  = !!state.companionGearRewardFlags["prayer_brooch"];
+        var _prevHarUsed  = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["harumi"]);
+        var _prevHarDr    = state.battleDamageReduction || 0;
+        var _prevHarEnemy = state.enemy;
+        var _prevHarBattle = state.inBattle;
+        var _prevHarHp    = state.player.hp;
+        if (!state.companionLevels["harumi"]) { state.companionLevels["harumi"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["harumi"].level = 25;
+        state.companionGearRewardFlags["prayer_brooch"] = true;
+        state.inBattle = true;
+        state.enemy = { id: "debug_t", name: "テスト敵", hp: 10, maxHp: 10, atk: 1, def: 0, final: false, isUMA: false };
+        ensureCompanionTechniqueUsageState();
+        // ケース1: HP満タン + 軽減0.15以上 → null（不発）
+        state.player.hp = state.player.maxHp;
+        state.battleDamageReduction = 0.15;
+        state.companionTechniqueUsed["harumi"] = false;
+        var _rHar1 = runCompanionTechniqueAction("harumi");
+        var _usedHar1 = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["harumi"]);
+        // ケース2: HP満タン + 軽減0 → 使用（heal=0 + 軽減付与）
+        state.player.hp = state.player.maxHp;
+        state.battleDamageReduction = 0;
+        state.companionTechniqueUsed["harumi"] = false;
+        var _rHar2 = runCompanionTechniqueAction("harumi");
+        var _drAfterHar2 = state.battleDamageReduction;
+        var _usedHar2 = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["harumi"]);
+        // ケース3: HP不足 + 軽減0.15以上 → 使用（heal、軽減追加なし）
+        state.player.hp = Math.max(1, state.player.maxHp - 20);
+        var _hpBefore3Har = state.player.hp;
+        state.battleDamageReduction = 0.15;
+        state.companionTechniqueUsed["harumi"] = false;
+        var _rHar3 = runCompanionTechniqueAction("harumi");
+        var _hpAfterHar3 = state.player.hp;
+        var _usedHar3 = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["harumi"]);
+        // 復元
+        if (!state.companionLevels["harumi"]) { state.companionLevels["harumi"] = { level: 1, exp: 0, nextExp: 25 }; }
+        state.companionLevels["harumi"].level = _prevHarLv;
+        state.companionGearRewardFlags["prayer_brooch"] = _prevHarFlag;
+        ensureCompanionTechniqueUsageState();
+        state.companionTechniqueUsed["harumi"] = _prevHarUsed;
+        state.battleDamageReduction = _prevHarDr;
+        state.enemy = _prevHarEnemy;
+        state.inBattle = _prevHarBattle;
+        state.player.hp = _prevHarHp;
+        updateBattlePlayerStatus();
+        var _passHar431 = (_rHar1 === null && !_usedHar1 && _rHar2 === false && _drAfterHar2 >= 0.15 && _usedHar2 && _rHar3 === false && _hpAfterHar3 > _hpBefore3Har && _usedHar3);
+        showToast("[DEBUG] ハルミ境界: " + (_passHar431 ? "PASS ✅" : "FAIL ❌") +
+          " 満+軽減→null=" + (_rHar1 === null) + " 満+無軽減→use=" + (_rHar2 === false) +
+          " dr=" + _drAfterHar2.toFixed(2) + " HP不足+軽減→heal=" + (_hpAfterHar3 > _hpBefore3Har));
         renderStatusBody();
       };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）

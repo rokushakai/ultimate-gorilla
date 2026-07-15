@@ -14,13 +14,22 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.43 候補以降
+### Version 0.43.1 候補以降
 
-仲間装備商人販売（購入・売却） / 仲間わざ / サイドストーリー追加
+仲間装備商人販売（購入・売却） / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー追加
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.43.1 — 仲間わざ安定化 (§112)
+
+- **`ensureCompanionTechniqueUsageState()`**: 欠損キー補完ヘルパー（全リセットなし） ✅
+- **`actuallyStartBattle()` 更新**: `resetCompanionTechniqueUsage()` 追加（belt-and-suspenders） ✅
+- **`runCompanionTechniqueAction()` 更新**: ガードを `ensureCompanionTechniqueUsageState()` に変更 ✅
+- **`clearCompanionCommandState()` コメント更新**: finishBattle()経由のみ呼ばれる旨を明記 ✅
+- **デバッグ3本 (§112)**: ラウンド持越し / シュリタニHP1境界 / ハルミ回復・軽減境界 ✅
+- **調査結果**: `clearCompanionCommandState()` は finishBattle() からのみ呼ばれる（ラウンド間リセットバグなし）✅
 
 ### Version 0.43 — 仲間わざ第一段階 (§111)
 

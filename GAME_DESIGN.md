@@ -5704,12 +5704,66 @@ var COMPANION_TECHNIQUE_DATA = {
 - COMPANION_GEAR_DATA・既存装備ボーナス効果
 - companionGearRewardFlags・rewardFlags既存状態
 
-### 将来候補（v0.43.1〜）
+### 将来候補（v0.44〜）
 
-- v0.43.1: 仲間わざ安定化
 - 仲間わざ習得演出（Lv25到達時／特化装備取得時の通知）
 - 仲間わざ2種類目
 - 仲間装備専用サイドストーリー
+
+## §112 v0.43.1 — 仲間わざ安定化 [実装済み]
+
+### 背景と調査結果
+
+v0.43 実装後の懸念: `clearCompanionCommandState()` が `resetCompanionTechniqueUsage()` を呼んでいるため、もし戦闘ラウンド間にも `clearCompanionCommandState()` が呼ばれていれば、`companionTechniqueUsed` が毎ラウンドリセットされる（1戦闘1回 → 1ラウンド1回 になる）バグが発生する。
+
+**調査結果**: `clearCompanionCommandState()` は **`finishBattle()` からのみ呼ばれる**（戦闘終了・逃走・捕獲の全経路）。ラウンド間には呼ばれない。v0.43 の実装は設計通り正常動作。
+
+### 安定化の変更内容
+
+1. **`actuallyStartBattle()` に `resetCompanionTechniqueUsage()` 追加**: 戦闘開始時にも確実にリセット（belt-and-suspenders）。通常は `finishBattle()` → `clearCompanionCommandState()` でリセット済みだが、万一のセーブ復帰・異常終了後に前回の `used=true` が残るリスクを排除。
+
+2. **`ensureCompanionTechniqueUsageState()` 関数追加**: `companionTechniqueUsed` が壊れていた場合に、全リセットせず欠損キーだけ補完する修復ヘルパー。`runCompanionTechniqueAction()` の防御ガードとして使用。
+
+3. **デバッグボタン3本 (§112)** 追加:
+   - `🔬 ラウンド持越し確認`: used=true設定→ラウンド間模擬→trueのまま→finishBattle模擬→false PASS/FAIL
+   - `🔬 シュリタニHP1境界確認`: HP1→null(不発)、HP2→1ダメ(HP残1)、used=false/true PASS/FAIL
+   - `🔬 ハルミ回復・軽減境界確認`: 満HP+軽減≥0.15→null、満HP+軽減0→use+軽減付与、HP不足+軽減≥0.15→heal PASS/FAIL
+
+### 境界値の仕様確認
+
+**シュリタニ「絶対包囲網」(damage_leave_one)**:
+- 敵HP ≤ 0: null（戦闘終了後の呼び出し想定、ターン消費なし）
+- 敵HP = 1: null（HP1以上残す制約により不発、メッセージあり、ターン消費なし、used=falseのまま）
+- 敵HP = 2: `actualDamage = Math.min(dmg, 1)` = 1、敵HP → 1、used=true、return false
+- 敵HP ≥ 3: `actualDamage = Math.min(dmg, e.hp-1)` → 敵HP最低1残す、used=true、return false
+
+**ハルミ「大いなる祈り」(heal_protect)**:
+- HP満タン + battleDamageReduction ≥ 0.15: null（不発、ターン消費なし、used=falseのまま）
+- HP満タン + battleDamageReduction < 0.15: used=true、heal=0（ログ「HPは満タンのまま」）、battleDamageReduction = max(現在値, 0.15)、return false
+- HP不足 + battleDamageReduction ≥ 0.15: used=true、heal発生（40〜55+成長ボーナス）、battleDamageReduction変化なし（alreadyReduced=trueのため）、return false
+- HP不足 + battleDamageReduction < 0.15: used=true、heal発生、battleDamageReduction付与、return false
+
+### セーブデータ互換
+
+変更なし。`companionTechniqueUsed` は非永続（セーブ対象外）。
+
+### debug追加（§112 v0.43.1）
+
+- `🔬 ラウンド持越し確認`: ラウンド間維持→戦闘後リセット PASS/FAIL
+- `🔬 シュリタニHP1境界確認`: HP1→null / HP2→1ダメ / used確認 PASS/FAIL
+- `🔬 ハルミ回復・軽減境界確認`: 満+高軽減→null / 満+無軽減→use / HP不足+高軽減→heal PASS/FAIL
+
+### 変更しないもの（§112 v0.43.1）
+
+- BGM制御・stopBGMHard()・BGMセッション・BGMタイマー
+- 究極ゴリラ捕獲条件・HP1〜10・女神のウクレレ・うたう条件
+- attemptCapture()・捕獲率計算・captureRateBase
+- ノリオexpMod:2・gainExp()
+- ジュリタニ会心率30%・会心倍率1.6
+- かばう20%・まもりの光25%・ハルミわざ15%（既存軽減との競合解決ロジック）
+- まかせるAI4択比率・state.lastCompanionAutoAction
+- COMPANION_GEAR_DATA・既存装備ボーナス効果
+- companionGearRewardFlags・rewardFlags既存状態
 
 ## 将来の実装候補（v0.44〜）— プレイヤーフィードバックより [未実装・将来機能]
 
