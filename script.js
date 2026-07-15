@@ -774,6 +774,7 @@
   // ---------------------------------------------------------
   var SAVE_KEY = "ultimateGorillaSaveV2";
   var SOUND_KEY = "ultimateGorillaSoundV1";
+  var _pendingGearRewardNotices = []; // §110 v0.42.1: reconcile遅延通知（非永続・saveしない）
 
   // ---------------------------------------------------------
   // 5. ゲーム状態
@@ -1085,6 +1086,12 @@
     // 通常マップ: CSS変数を必ず正しい値にリセット
     viewport.style.setProperty("--cols", VIEW_COLS);
     viewport.style.setProperty("--rows", VIEW_ROWS);
+
+    // §110 v0.42.1: reconcile遅延通知（loadGame時はtoast未生成のため）
+    if (_pendingGearRewardNotices.length > 0) {
+      var _pn = _pendingGearRewardNotices.shift();
+      showToast(_pn);
+    }
 
     var p = state.player;
 
@@ -4455,6 +4462,8 @@
       }
       state.companionGearVersion = 3;
     }
+    // §110 v0.42.1: スロット整合チェック前にrewardFlagsを正規化（装備中判定を含む）
+    normalizeCompanionGearRewardFlags();
     // 装備スロットの整合性チェック
     for (var _j = 0; _j < _cids.length; _j++) {
       var _cid = _cids[_j];
@@ -4465,30 +4474,72 @@
       if ((state.companionGearInventory[_gid] || 0) <= 0) { state.companionEquipment[_cid] = null; }
     }
   }
-  // §109 v0.42: 特化装備を初回のみ付与（二重取得防止）
+  // §110 v0.42.1: v3通常運用でもrewardFlagsの整合性を保証
+  function normalizeCompanionGearRewardFlags() {
+    if (!state.companionGearRewardFlags || typeof state.companionGearRewardFlags !== "object" || Array.isArray(state.companionGearRewardFlags)) {
+      state.companionGearRewardFlags = {};
+    }
+    var _specials = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
+    var _ecids = ["juritani", "shurittani", "norio", "harumi"];
+    for (var _nfi = 0; _nfi < _specials.length; _nfi++) {
+      var _nfid = _specials[_nfi];
+      // flag=trueは降格しない
+      if (state.companionGearRewardFlags[_nfid] === true) { continue; }
+      // 所持済みならtrue昇格（没収なし）
+      if ((state.companionGearInventory[_nfid] || 0) > 0) {
+        state.companionGearRewardFlags[_nfid] = true; continue;
+      }
+      // 装備中ならtrue昇格（スロット整合チェック前なのでまだ装備状態を見れる）
+      if (state.companionEquipment) {
+        var _nfEq = false;
+        for (var _nfi2 = 0; _nfi2 < _ecids.length; _nfi2++) {
+          if (state.companionEquipment[_ecids[_nfi2]] === _nfid) { _nfEq = true; break; }
+        }
+        if (_nfEq) { state.companionGearRewardFlags[_nfid] = true; continue; }
+      }
+      // 非booleanならfalse補完（falseはそのまま維持）
+      if (typeof state.companionGearRewardFlags[_nfid] !== "boolean") {
+        state.companionGearRewardFlags[_nfid] = false;
+      }
+    }
+  }
+  // §109 v0.42 / §110 v0.42.1: 特化装備を初回のみ付与（冪等性保証・gearId検証付き）
   function grantCompanionGearReward(gearId) {
+    if (!COMPANION_GEAR_REWARD_DATA[gearId]) { return; } // 不正gearId拒否
     if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
     if (state.companionGearRewardFlags[gearId]) { return; } // 既取得
-    state.companionGearInventory[gearId] = (state.companionGearInventory[gearId] || 0) + 1;
+    // flag=false でも所持数>0なら追加配布せずflagだけ補完
+    if ((state.companionGearInventory[gearId] || 0) > 0) {
+      state.companionGearRewardFlags[gearId] = true; return;
+    }
+    state.companionGearInventory[gearId] = 1;
     state.companionGearRewardFlags[gearId] = true;
   }
-  // §109 v0.42: ロード時に過去クリア済みステージの特化装備を補完（旧セーブ互換）
+  // §109 v0.42 / §110 v0.42.1: ロード時補完・冪等性保証・遅延通知
   function reconcileCompanionGearRewards() {
     if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
     var sm = state.sideMap;
     var stageGears = [
-      { cleared: !!(sm.stageCleared && sm.stageCleared["2"]), gearId: "critical_bracelet" },
-      { cleared: !!(sm.stageCleared && sm.stageCleared["3"]), gearId: "net_master_belt" },
-      { cleared: !!(sm.stageCleared && sm.stageCleared["4"]), gearId: "research_notebook" },
-      { cleared: !!(sm.stageCleared && sm.stageCleared["5"]), gearId: "prayer_brooch" }
+      { cleared: !!(sm.stageCleared && sm.stageCleared["2"]), gearId: "critical_bracelet",  gearName: "会心の腕輪" },
+      { cleared: !!(sm.stageCleared && sm.stageCleared["3"]), gearId: "net_master_belt",    gearName: "網師のベルト" },
+      { cleared: !!(sm.stageCleared && sm.stageCleared["4"]), gearId: "research_notebook",  gearName: "研究ノート" },
+      { cleared: !!(sm.stageCleared && sm.stageCleared["5"]), gearId: "prayer_brooch",      gearName: "祈りのブローチ" }
     ];
     var reconciled = false;
+    var grantedNames = [];
     for (var _rci = 0; _rci < stageGears.length; _rci++) {
       var _sg = stageGears[_rci];
       if (_sg.cleared && !state.companionGearRewardFlags[_sg.gearId]) {
         grantCompanionGearReward(_sg.gearId);
-        reconciled = true;
+        if (state.companionGearRewardFlags[_sg.gearId]) { // grant成功確認
+          grantedNames.push(_sg.gearName);
+          reconciled = true;
+        }
       }
+    }
+    // ロード中はtoast未生成のため遅延通知リストへ積む（renderField時に表示）
+    if (grantedNames.length > 0) {
+      _pendingGearRewardNotices.push("🎁 過去の冒険の報酬を受け取った：" + grantedNames.join("、"));
     }
     return reconciled;
   }
@@ -5371,9 +5422,13 @@
         } else if (cgOwned2) {
           cgStatusTxt2 = "装備可能"; cgStatusCol2 = "#a0cfff";
         } else {
+          // §110 v0.42.1: flag=true+所持0 → 入手済み(未所持), flag=false → 未入手+入手場所
+          var _cgFlag2 = !!(state.companionGearRewardFlags && state.companionGearRewardFlags[cgGid2]);
           var _cgSrc2 = COMPANION_GEAR_REWARD_DATA[cgGid2];
-          if (_cgSrc2) {
-            cgStatusTxt2 = "未所持 (" + _cgSrc2.source + ")"; cgStatusCol2 = "#a08060";
+          if (_cgFlag2) {
+            cgStatusTxt2 = "入手済み(現在未所持)"; cgStatusCol2 = "#888";
+          } else if (_cgSrc2) {
+            cgStatusTxt2 = "未入手 (" + _cgSrc2.source + ")"; cgStatusCol2 = "#a08060";
           } else {
             cgStatusTxt2 = "未所持"; cgStatusCol2 = "#888";
           }
@@ -5414,8 +5469,12 @@
         var cgBCnt = state.companionGearInventory[cgBGid] || 0;
         var cgBIsEq = (state.companionEquipment[cgBg.cid] === cgBGid);
         var _cgBSrc = COMPANION_GEAR_REWARD_DATA[cgBGid];
-        var cgBStatus    = cgBIsEq ? "装備中" : (cgBCnt > 0 ? "未装備" : (_cgBSrc ? "未入手(" + _cgBSrc.source + ")" : "未入手"));
-        var cgBStatusCol = cgBIsEq ? "#06d6a0" : (cgBCnt > 0 ? "#a0cfff" : (_cgBSrc ? "#a08060" : "#888"));
+        var _cgBFlag = !!(state.companionGearRewardFlags && state.companionGearRewardFlags[cgBGid]);
+        // §110 v0.42.1: flag=true+所持0 → 入手済み(未所持)、flag=false → 未入手+場所
+        var cgBStatus    = cgBIsEq ? "装備中" : (cgBCnt > 0 ? "未装備" :
+          (_cgBFlag ? "入手済み(現在未所持)" : (_cgBSrc ? "未入手(" + _cgBSrc.source + ")" : "未入手")));
+        var cgBStatusCol = cgBIsEq ? "#06d6a0" : (cgBCnt > 0 ? "#a0cfff" :
+          (_cgBFlag ? "#888" : (_cgBSrc ? "#a08060" : "#888")));
         html += '<div class="shop-row" style="font-size:0.82em;">' +
           '<span>' + cgBGD.emoji + " " + cgBGD.name +
           ' <span style="color:#888;font-size:0.88em;">×' + cgBCnt + '</span></span>' +
@@ -6890,6 +6949,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-gear-reward-all" style="border-color:#ffd700;color:#ffd700;">🎁 特化装備を全取得（4種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-v3-migrate-check" style="border-color:#a0cfff;color:#a0cfff;">🔄 v2→v3移行確認（既存v2プレイヤー互換）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-gear-reward-dup-check" style="border-color:#a0f0b4;color:#a0f0b4;">🧪 二重取得防止確認（grant×3→各×1のみ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-stage2-clearcheck" style="border-color:#b4e0ff;color:#b4e0ff;">🎁 ステージ2初回・再クリア確認（重複付与なし）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-gear-reconcile-multi" style="border-color:#d4b4ff;color:#d4b4ff;">🧪 reconcile複数回確認（2回目はno-op）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -8816,6 +8877,54 @@
         showToast("[DEBUG] 二重取得防止: " + (_pass42d ? "PASS ✅ ×1のまま" : "FAIL ❌ ×" + _afterCnt42d + "に増殖"));
         renderStatusBody();
       };
+      // §110 v0.42.1: ステージ2初回・再クリア確認
+      document.getElementById("btn-debug-gear-stage2-clearcheck").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.sideMap) { state.sideMap = {}; }
+        if (!state.sideMap.stageCleared) { state.sideMap.stageCleared = {}; }
+        var _prevCleared110 = !!state.sideMap.stageCleared["2"];
+        var _prevFlag110 = !!(state.companionGearRewardFlags && state.companionGearRewardFlags["critical_bracelet"]);
+        var _prevCnt110 = state.companionGearInventory["critical_bracelet"] || 0;
+        state.sideMap.stageCleared["2"] = true;
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        state.companionGearInventory["critical_bracelet"] = 0;
+        grantCompanionGearReward("critical_bracelet");
+        var _cntAfter1 = state.companionGearInventory["critical_bracelet"] || 0;
+        var _flagAfter1 = !!state.companionGearRewardFlags["critical_bracelet"];
+        grantCompanionGearReward("critical_bracelet");
+        var _cntAfter2 = state.companionGearInventory["critical_bracelet"] || 0;
+        var _pass110 = (_cntAfter1 === 1 && _flagAfter1 && _cntAfter2 === 1);
+        state.sideMap.stageCleared["2"] = _prevCleared110;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag110;
+        state.companionGearInventory["critical_bracelet"] = _prevCnt110;
+        showToast("[DEBUG] Stage2初回・再クリア: " + (_pass110 ? "PASS ✅ 1回のみ付与" : "FAIL ❌ cnt=" + _cntAfter2));
+        renderStatusBody();
+      };
+      // §110 v0.42.1: reconcile複数回確認（2回目はno-op）
+      document.getElementById("btn-debug-gear-reconcile-multi").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.sideMap) { state.sideMap = {}; }
+        if (!state.sideMap.stageCleared) { state.sideMap.stageCleared = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevCleared110r = !!state.sideMap.stageCleared["2"];
+        var _prevFlag110r = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevCnt110r = state.companionGearInventory["critical_bracelet"] || 0;
+        state.sideMap.stageCleared["2"] = true;
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        state.companionGearInventory["critical_bracelet"] = 0;
+        var _r1 = reconcileCompanionGearRewards();
+        var _cnt1 = state.companionGearInventory["critical_bracelet"] || 0;
+        var _r2 = reconcileCompanionGearRewards();
+        var _cnt2 = state.companionGearInventory["critical_bracelet"] || 0;
+        var _pass110r = (_r1 === true && _r2 === false && _cnt1 === 1 && _cnt2 === 1);
+        state.sideMap.stageCleared["2"] = _prevCleared110r;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag110r;
+        state.companionGearInventory["critical_bracelet"] = _prevCnt110r;
+        _pendingGearRewardNotices = [];
+        showToast("[DEBUG] reconcile×2: " + (_pass110r ? "PASS ✅ 1回=true/2回=false/cnt=1" : "FAIL ❌ r1=" + _r1 + " r2=" + _r2 + " cnt=" + _cnt2));
+        renderStatusBody();
+      };
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -9123,9 +9232,9 @@
       recomputeStats();
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
       p.mp = Math.min(data.mp != null ? data.mp : p.maxMp, p.maxMp);
-      reconcileCompanionGearRewards(); // §109 v0.42: 過去クリア済みステージの特化装備を補完
-      // §106 v0.40.1 / §109 v0.42: 旧セーブ昇格時は即座に保存（再起動での増殖防止）
-      if (_prevGearVer < 3 && state.companionGearVersion >= 3) { saveGame(); }
+      var _reconciled = reconcileCompanionGearRewards(); // §109 v0.42 / §110 v0.42.1: 過去クリア済み補完
+      // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
+      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled) { saveGame(); }
       return true;
     } catch (e) {
       return false;

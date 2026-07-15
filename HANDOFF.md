@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.42** |
+| 現在バージョン | **v0.42.1** |
 | ブランチ | main |
 
 ---
@@ -72,6 +72,13 @@
   - **旧セーブ互換**: v2セーブの既存特化装備はrewardFlags=trueで引き継ぎ。v1セーブはreconcileで補完
   - **UI**: 未所持特化装備の入手先表示 / 冒険の記録「🎁 特化装備収集」セクション
   - **デバッグ4本 (§109)**: リセット / 全取得 / v2→v3移行確認 / 二重取得防止確認
+- **[v0.42.1] 仲間装備探索報酬安定化**（§110）
+  - **`normalizeCompanionGearRewardFlags()`**: rewardFlags全エントリ検証（boolean以外→false、インベントリ/スロット存在→true昇格、never demote）
+  - **`grantCompanionGearReward()` バリデーション強化**: 無効gearId拒否・flag未設定インベントリ持ち→flag=true修正
+  - **`reconcileCompanionGearRewards()` 改善**: 付与装備名収集・`_pendingGearRewardNotices` push・返値true/false
+  - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
+  - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
+  - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
 - **[v0.41.1] 仲間装備選択システム安定化**（§108）
   - **`ensureCompanionGearState()` versionガード強化**: Infinity/文字列/"1"→パース/負数→0クランプ。文字列`"2"`→version=2扱いで再配布なし
   - **装備選択UI 連打防止**: `data-gear-action` クリック直後 `disabled=true`（renderStatusBodyで再構築）

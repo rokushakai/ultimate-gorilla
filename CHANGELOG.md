@@ -5,6 +5,28 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.42.1] - 2026-07-15 — 仲間装備探索報酬安定化 (§110)
+
+### Fixed / Hardened
+- **`normalizeCompanionGearRewardFlags()`**: `rewardFlags` の全特化装備エントリを検証・補正する関数を追加
+  - boolean以外 → false に正規化。インベントリ/装備スロットに存在すれば → true に昇格（never demote: 既にtrueなら変更しない）
+  - `ensureCompanionGearState()` の装備スロット整合性チェック **前**に実行（スロットが見える状態でフラグ確認可能）
+- **`grantCompanionGearReward()` バリデーション強化**:
+  - 無効 `gearId`（`COMPANION_GEAR_REWARD_DATA` に存在しない）は即 `return` で拒否
+  - フラグ=true かつ在庫>0 の「フラグ未設定インベントリ持ち」を `rewardFlags=true` に修正（在庫は増やさない）
+- **`reconcileCompanionGearRewards()` 改善**:
+  - 付与した装備名（日本語）を `grantedNames` に収集し `_pendingGearRewardNotices` へ push
+  - 返値 `true`（1件以上付与）/ `false`（no-op）で冪等性が外から確認可能
+- **`renderField()` 遅延トースト表示**: `_pendingGearRewardNotices` に通知がある場合、通常マップの最初のレンダリングで `showToast()` を実行（`loadGame()` 直後は DOM 未構築のため遅延）
+- **`loadGame()` save条件**: `_reconciled = true` の場合も即 `saveGame()`（v3セーブで reconcile が発生したケースも永続化）
+- **`renderStatusBody()` UI**: flag=true かつ 所持数0 の特化装備を「入手済み(現在未所持)」と表示（仲間装備リスト・装備袋の両セクション）
+- **デバッグボタン2本 (§110)**:
+  - `btn-debug-gear-stage2-clearcheck`: ステージ2初回・再クリア確認（grant×2 → ×1のみ PASS）
+  - `btn-debug-gear-reconcile-multi`: reconcile×2確認（1回目=true/2回目=false/cnt=1 PASS）
+
+### Internal
+- **`_pendingGearRewardNotices`**: モジュールレベル非永続配列（セーブ対象外）。`loadGame()` での reconcile 通知を `renderField()` 初回描画まで保留
+
 ## [0.42] - 2026-07-15 — 特化装備探索報酬システム (§109)
 
 ### Added

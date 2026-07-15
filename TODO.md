@@ -22,6 +22,16 @@
 
 ## ✅ 実装済み
 
+### Version 0.42.1 — 仲間装備探索報酬安定化 (§110)
+
+- **`normalizeCompanionGearRewardFlags()`**: rewardFlags全エントリ検証・補正（boolean以外→false、インベントリ/装備スロット存在→true昇格） ✅
+- **`grantCompanionGearReward()` バリデーション強化**: 無効gearId拒否・フラグ未設定インベントリ持ち→flag=true修正（在庫増やさない） ✅
+- **`reconcileCompanionGearRewards()` 改善**: 付与装備名収集・`_pendingGearRewardNotices` push・返値true/false（冪等性確認可能） ✅
+- **`renderField()` 遅延トースト**: loadGame時の reconcile 通知を初回フィールド描画時に showToast() ✅
+- **`loadGame()` save条件**: `|| _reconciled` 追加（reconcile発生セーブも即時永続化） ✅
+- **`renderStatusBody()` UI**: flag=true+所持0 → 「入手済み(現在未所持)」表示（仲間装備リスト・装備袋の両セクション） ✅
+- **デバッグボタン2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認 ✅
+
 ### Version 0.42 — 特化装備探索報酬システム (§109)
 
 - **特化装備4種を探索報酬として実装**: ステージ2〜5初回クリア付与 ✅

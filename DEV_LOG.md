@@ -5,6 +5,17 @@
 
 ---
 
+## v0.42.1 (2026-07-15)
+
+### 設計判断・確認事項
+
+- **`normalizeCompanionGearRewardFlags()` の呼び出し位置**: `ensureCompanionGearState()` 内の装備スロット整合性チェック**前**に実行する。スロットチェックは `companionEquipment[cid]` を参照して装備外しを行うため、その前にスロット状態からフラグを読み取っておく必要がある。スロットチェック後に呼ぶと、外されたスロット情報が失われる。
+- **never demote 原則**: `normalizeCompanionGearRewardFlags()` は `true` を `false` に変更しない。セーブ整合性チェック（例: インベントリ=0、未装備）を通じてフラグが誤って降格するのを防ぐ。ユーザーが正当に取得し使用・消費した場合（装備外し→在庫0）でも「入手済み」状態を保持する。
+- **`_pendingGearRewardNotices` を非永続にした理由**: loadGame直後はDOM（toast用要素）が未構築のためshowToastが動かないケースがある。セッション開始後の最初のフィールド描画（`renderField()`）まで通知を遅延させる設計。state/saveに含めると古い通知が永続化されるリスクがあるため、モジュールレベル変数（非永続）に留める。
+- **`reconcileCompanionGearRewards()` 返値**: `true`（付与あり）/ `false`（no-op）を返すことで `loadGame()` 内で `_reconciled` 変数として捕捉し、`saveGame()` のトリガー条件に使える。従来のv2→v3昇格条件（`_prevGearVer < 3`）に OR で追加。これにより「v3だが reconcile が必要だった」セーブも即時永続化される。
+- **「入手済み(現在未所持)」UI**: ユーザーが一度取得した特化装備を他の仲間に装備→外した後に在庫0になるケースを区別するためのUI。flag=true+在庫0 の状態はゲームバグではなく「使い道がなくて手放した」正常状態。未入手（flag=false）とは意味が異なるため表示を分ける。
+- **デバッグ復元パターン**: `btn-debug-gear-stage2-clearcheck` と `btn-debug-gear-reconcile-multi` はどちらもテスト前の状態を `_prev*` 変数に保存し、テスト後に必ず復元する。テスト中に保存・ページ更新が発生しても影響が出ないよう、saveGame()は呼ばない設計。
+
 ## v0.42 (2026-07-15)
 
 ### 設計判断・確認事項
