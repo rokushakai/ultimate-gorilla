@@ -5,6 +5,24 @@
 
 ---
 
+## v0.44.1 (2026-07-16)
+
+### 設計判断・確認事項
+
+- **最終行と完了操作の分離（最重要）**: v0.44の`_csIsLast`チェックは「最終行にいる状態でnextボタンを押した」時にcompleteを呼ぶ設計だった。これは正しい。`showCompanionSideStoryLine()`が最終行表示時に「物語を終える」ボタンを表示し、ユーザーが明示的に押すことで初めて`completeCompanionSideStory()`が呼ばれる。最終行に「進んだ瞬間」に自動完了する実装ではない。
+
+- **高速連打防止にTimeoutを使う理由**: JavaScriptのイベントハンドラは「1つ実行してから次のイベントを処理」する。`_cstoryAdvanceLock`を同期的に`false`に戻すと、次のクリックが即座に通過できる。`setTimeout(200ms)`でasync的にfalseに戻すことで200ms以内の連打を1回分だけ受け付ける。200msは「意図的な2クリック」と「誤タップによる高速連打」を区別できる閾値として選択。
+
+- **セッションIDの役割**: `_cstorySessionId`は物語を閉じた後に別の物語を開いた場合、以前の物語の古いクリックイベントが動かないようにするセーフガード。`closeCompanionSideStoryModal()`ではIDを変更しない（次に`startCompanionSideStory()`が呼ばれた時にインクリメント）。
+
+- **酒場復帰の制御**: デバッグボタンから物語を直接開いた場合（設定画面から`startCompanionSideStory()`を呼ぶ）、`_cstoryFromTavern = false`になるため`closeCompanionSideStoryModal()`は酒場を開かない。これにより「閉じたら突然酒場が開く」という不自然な挙動を防ぐ。
+
+- **`normalizeCompanionSideStoryFlags()`の返値設計**: 正常なロードでは毎回`saveGame()`を呼ばないために返値を追加。`true → true`は「変化なし」→ falseを返す。`"yes" → false`は「変化あり」→ trueを返す。既存の`_reconciled`パターンに合わせた設計。
+
+- **再読時のボタンテキスト差分**: 初回は「物語を終える」、再読（flag=true）は「物語を閉じる」。`showCompanionSideStoryLine()`が呼ばれるたびに`state.companionSideStoryFlags[cid]`を確認して決定する。`completeCompanionSideStory()`自体は再読時も呼ばれるが、冪等ガードにより保存・通知なし。
+
+---
+
 ## v0.44 (2026-07-16)
 
 ### 設計判断・確認事項

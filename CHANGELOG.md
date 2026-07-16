@@ -5,6 +5,47 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.44.1] - 2026-07-16 — 仲間サイドストーリー安定化 (§114)
+
+### Fixed / Changed
+- **`normalizeCompanionSideStoryFlags()` 返値追加**: `changed`(bool)を返す。`loadGame()`でこの返値を利用し、フラグ修復時のみ`saveGame()`を呼ぶ（正常ロードで不要なsaveをしない）
+- **`loadGame()` save条件更新**: `_storyFlagChanged`をsave条件に追加（`|| _storyFlagChanged`）
+- **`startCompanionSideStory()` 強化**:
+  - `story.lines`の存在・配列チェック・長さ>0チェックを追加（不正データは「この物語のデータを読み込めなかった。」でトースト）
+  - `_cstoryFromTavern`で酒場から開いたかを追跡（close後の復帰先制御）
+  - `_cstorySessionId++`でセッション更新（古いクリックを無効化）
+  - `_cstoryAdvanceLock`と`_cstoryAdvanceTimer`をリセット
+- **`closeCompanionSideStoryModal()` 強化**:
+  - `_cstoryFromTavern`が`true`の場合のみ酒場モーダルを再開（デバッグから直接開いた場合は酒場を開かない）
+  - セッション変数（`_cstoryFromTavern`/`_cstoryAdvanceLock`/タイマー）をクリア
+  - 冪等性を維持
+- **`btn-cstory-next`ハンドラ強化**:
+  - `_cstoryAdvanceLock`を全行で設定（非最終行は`setTimeout(200ms)`でリセット）→ 高速連打による行飛ばし防止
+  - `_cstorySessionId`検証（`_capSess !== _cstorySessionId`で古いクリックを棄却）
+  - 境界チェック強化（`typeof _csIdx !== "number" || _csIdx < 0 || _csIdx >= lines.length`）
+  - `lines`存在チェック追加
+- **`showCompanionSideStoryLine()` 強化**:
+  - `lines`存在チェック、`line`nullチェック追加
+  - 再読時（flag=true）の最終ボタンを「物語を閉じる」に変更（初回完了は「物語を終える」）
+- **`btn-debug-v44-story-reset-flags`**: 物語閲覧中に押しても安全にモーダルをcloseしてからリセット
+- **`btn-debug-v44-story-boundary`**: テスト項目を4点に強化（途中終了→未完 / 最終行表示だけ→未完 / complete→完了 / 二重完了防止）
+
+### Added
+- **モジュールスコープ変数 4本** (§114, 非永続・IIFEスコープ):
+  - `_cstorySessionId`: 物語開始のたびにインクリメント
+  - `_cstoryFromTavern`: 酒場から開いたか追跡
+  - `_cstoryAdvanceLock`: 高速連打防止ロック
+  - `_cstoryAdvanceTimer`: 高速連打防止タイマーID
+- **デバッグ2本追加 (§114)**:
+  - `🧪 物語高速連打・行飛ばし確認`: advance×1で1増加 / complete×2でflag=true / 最終行表示だけで未完 PASS/FAIL
+  - `🧪 物語フラグ破損修復確認`: trueを維持 / 文字列/null/欠損→false補正 / 変更検出 PASS/FAIL
+
+### 今回変更しなかったこと
+- COMPANION_SIDE_STORY_DATA（4話の内容）
+- 解放条件・`isCompanionSideStoryUnlocked()`
+- 報酬なし
+- BGM制御・捕獲率・AI比率・EXP倍率変更なし
+
 ## [0.44] - 2026-07-16 — 仲間サイドストーリー第一段階 (§113)
 
 ### Added

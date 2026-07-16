@@ -5828,10 +5828,84 @@ v0.43 実装後の懸念: `clearCompanionCommandState()` が `resetCompanionTech
 - まかせるAI・gainCompanionExp・getCompanionGrowthBonus
 - 報酬なし（Gold・アイテム付与なし）
 
+## §114 v0.44.1 — 仲間サイドストーリー安定化 [実装済み]
+
+### 概要
+
+v0.44で追加した仲間4人のサイドストーリー閲覧システムを安定化する。
+
+### 最重要仕様
+
+物語は「最後の行を表示しただけ」では完了しない。  
+最後の行を読んだ後、「物語を終える」を押した時だけ完了する。
+
+途中でモーダルを閉じた場合は未完了のまま。
+
+### セッション管理（§114新規）
+
+モジュールスコープ変数（非永続・saveしない）：
+
+| 変数 | 説明 |
+|---|---|
+| `_cstorySessionId` | 物語開始のたびにインクリメント。古いクリックを無効化 |
+| `_cstoryFromTavern` | 酒場から開いたか追跡。closeModal後の復帰先を制御 |
+| `_cstoryAdvanceLock` | 高速連打防止ロック（bool） |
+| `_cstoryAdvanceTimer` | 高速連打防止タイマーのID |
+
+### 高速連打による行飛ばし防止
+
+- `_cstoryAdvanceLock = true` → 次の行を描画 → `setTimeout(200ms)` でfalseに戻す
+- 200ms以内の2クリック目は `if (_cstoryAdvanceLock) return;` で棄却
+- セッションID検証で古いボタン操作も無効化
+
+### 最終行と完了の分離
+
+- 最終行（idx === lines.length - 1）を表示: ボタン「物語を終える」
+- 最終行を表示しただけ: 未完了（flag=false）
+- 「物語を終える」を押す: `completeCompanionSideStory()` 呼び出し → flag=true
+
+### 再読時の最終ボタン
+
+- 初回: 「物語を終える」
+- 再読（flag=true）: 「物語を閉じる」
+- 再読時に「物語を閉じる」を押しても `completeCompanionSideStory()` の冪等ガードにより保存・通知なし
+
+### 酒場への復帰制御
+
+- `_cstoryFromTavern = true` の場合のみ `closeCompanionSideStoryModal()` が酒場を再開
+- デバッグボタンから直接開いた場合（`_cstoryFromTavern = false`）は酒場を開かない
+
+### `normalizeCompanionSideStoryFlags()` 返値
+
+`changed` (bool) を返す。変更がなかった場合は `false`。  
+`loadGame()` でこの返値を受け取り、変更があった場合のみ `saveGame()` する。
+
+### `startCompanionSideStory()` 追加ガード
+
+- `story.lines` が配列かつ長さ > 0 を確認
+- 不正データの場合「この物語のデータを読み込めなかった。」をトーストして中断
+
+### debug追加（§114 v0.44.1）
+
+- `🧪 物語高速連打・行飛ばし確認` — advance×1でindexが1だけ増えること / complete×2で1回だけ処理 PASS/FAIL
+- `🧪 物語フラグ破損修復確認` — 非boolean/null/欠損→false補正 / trueは維持 PASS/FAIL
+
+### 変更しないもの（§114 v0.44.1）
+
+- COMPANION_SIDE_STORY_DATA（4話の内容）
+- 解放条件（hasCompanionEverJoined && isCompanionTechniqueUnlocked）
+- companionSideStoryFlags（保存・ロード）
+- 報酬なし
+- BGM制御・stopBGMHard()・BGMセッション・BGMタイマー
+- 究極ゴリラ捕獲条件
+- 仲間戦闘能力・装備・捕獲率・EXP倍率・AI比率
+
 ## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.45 候補以降 [未実装・将来機能]
 
-- 仲間装備の商人販売
+- 仲間サイドストーリー完了演出（v0.44.2候補）
 - サイドストーリー第2話
+- 4人完了後の最終サイドストーリー接続
+- 仲間装備の商人販売
 - 仲間節目セリフ演出強化

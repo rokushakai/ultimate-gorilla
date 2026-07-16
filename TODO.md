@@ -14,13 +14,25 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.44 候補以降
+### Version 0.44.1 候補以降
 
-仲間装備商人販売（購入・売却） / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー第2話
+仲間サイドストーリー完了演出(v0.44.2候補) / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー第2話
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.44.1 — 仲間サイドストーリー安定化 (§114)
+
+- **`normalizeCompanionSideStoryFlags()` 返値**: `changed` bool返却、loadGame()でsave判定に使用 ✅
+- **モジュールスコープ変数4本**: `_cstorySessionId` / `_cstoryFromTavern` / `_cstoryAdvanceLock` / `_cstoryAdvanceTimer` ✅
+- **`startCompanionSideStory()` 強化**: データ検証・酒場追跡・セッション更新 ✅
+- **`closeCompanionSideStoryModal()` 強化**: 酒場からの場合のみ酒場再開・セッション変数クリア ✅
+- **`btn-cstory-next`ハンドラ強化**: 全行advanceLock・200msタイマー・セッション検証 ✅
+- **`showCompanionSideStoryLine()` 強化**: 再読時「物語を閉じる」・nullチェック ✅
+- **`btn-debug-v44-story-reset-flags`**: 閲覧中でも安全なリセット ✅
+- **`btn-debug-v44-story-boundary` 強化**: 4点境界確認（最終行表示だけ→未完 を追加） ✅
+- **デバッグ2本追加**: 高速連打確認 / フラグ破損修復確認 ✅
 
 ### Version 0.44 — 仲間サイドストーリー第一段階 (§113)
 
