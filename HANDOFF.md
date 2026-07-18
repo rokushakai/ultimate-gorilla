@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.44.2** |
+| 現在バージョン | **v0.44.3** |
 | ブランチ | main |
 
 ---
@@ -79,13 +79,24 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.44.3] 全話完了演出モーダル重なり安定化**（§116）
+  - **z-index: 40** で `#companion-story-all-complete-modal` を酒場(.modal z-index:30)より前面保証
+  - **`_companionStoryAllCompleteOrigin`**: 表示元追跡 ("tavern"/"field"/"debug")
+  - **`_pendingCompanionStoryAllCompleteOrigin`**: pending中の表示元
+  - **`_companionStoryAllCompleteNoticeTimer`**: 遅延タイマーID管理（clearTimeout二重防止）
+  - **`showCompanionStoryAllCompleteCelebration(origin)`**: origin引数・フォーカス管理追加
+  - **`closeCompanionStoryAllCompleteCelebration()`**: 専用クローズ関数（酒場開中はmodalOpen維持）
+  - **`consumePendingCompanionStoryAllCompleteNotice()`**: ガード強化（celebrated/4全完了/戦闘中チェック）
+  - **ESCキー**: `_companionStoryAllCompleteNoticeVisible`=true時のみ演出モーダルを閉じる（酒場は維持）
+  - **背景クリック**: `companion-story-all-complete-modal` の click に `stopPropagation`
+  - **デバッグ3本 (§116)**: 重なり確認 / pending保留 / 10回開閉
 - **[v0.44.2] 仲間サイドストーリー全話完了演出**（§115）
   - **`areAllCompanionSideStoriesComplete()`**: 4話全完了判定ヘルパー
   - **`checkCompanionSideStoryAllComplete()`**: 全話完了確認→celebrated=true→pending登録（初回のみ）
   - **`state.companionSideStoryAllCompleteCelebrated`**: 永続フラグ（save/load対象）
   - **`_pendingCompanionStoryAllCompleteNotice`** / **`_companionStoryAllCompleteNoticeVisible`**: 非永続一時状態
   - **演出モーダル** `#companion-story-all-complete-modal`: 🌟アニメーション + 「旅を続ける」
-  - **closeCompanionSideStoryModal()**: `setTimeout(consume, 250)`で安全な遅延表示
+  - **closeCompanionSideStoryModal()**: タイマー管理+origin設定で安全な遅延表示
   - **renderField()**: フォールバック消費（旧セーブ救済）
   - **旧セーブ救済**: loadGame()でcelebrated未定義 + 4/4 → pending登録 → renderField()で表示
   - **酒場バナー**: 4/4完了時「🌟 4人の物語をすべて読み終えました」

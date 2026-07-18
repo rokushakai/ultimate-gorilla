@@ -700,6 +700,11 @@ html, body {
   animation: cstory-star-pop 0.45s ease-out forwards;
 }
 
+/* §116 v0.44.3: 全話完了演出を酒場より前面へ（.modal の z-index:30 より高く） */
+#companion-story-all-complete-modal {
+  z-index: 40;
+}
+
 .hidden {
   display: none !important;
 }

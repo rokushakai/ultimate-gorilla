@@ -6040,11 +6040,98 @@ showCompanionStoryAllCompleteCelebration()
 
 ---
 
+## §116 v0.44.3 — 全話完了演出モーダル重なり安定化 [実装済み]
+
+### 変更目的
+
+v0.44.2 で追加した `#companion-story-all-complete-modal` は、酒場モーダル上に重ねて表示される場合に z-index が DOM 順に依存していた。加えて、タイマー管理・ガード不足・ESC制御・フォーカスなどが未整備だったため、これらを安定化する。
+
+### CSS 変更
+
+- `#companion-story-all-complete-modal { z-index: 40; }` を追加
+- 通常の `.modal` は `z-index: 30`。酒場モーダルより常に前面に表示される。
+
+### 新規モジュールスコープ変数（§116）
+
+| 変数 | 型 | 説明 |
+|---|---|---|
+| `_companionStoryAllCompleteOrigin` | `string\|null` | 表示元: "tavern"/"field"/"debug" |
+| `_pendingCompanionStoryAllCompleteOrigin` | `string\|null` | pending中の表示元（consume時に参照） |
+| `_companionStoryAllCompleteNoticeTimer` | `number\|null` | setTimeout ID（clearTimeout管理） |
+
+### 関数変更
+
+#### `showCompanionStoryAllCompleteCelebration(origin)`
+- `origin` 引数追加。`_companionStoryAllCompleteOrigin` に格納
+- `openModal()` 後に `btn-cstory-all-complete-close` を `.focus()` する
+
+#### `closeCompanionStoryAllCompleteCelebration()` ← 新規追加
+- `_companionStoryAllCompleteNoticeVisible = false` / `_pendingCompanionStoryAllCompleteNotice = false`
+- `closeModal("companion-story-all-complete-modal")`
+- 酒場がまだ開いている場合: `state.modalOpen = true` に戻す（closeModalが false にするため）
+- `_companionStoryAllCompleteOrigin = null`
+
+#### `consumePendingCompanionStoryAllCompleteNotice()` — ガード強化
+追加ガード:
+- `!state.companionSideStoryAllCompleteCelebrated` → return（celebratedが設定されていなければ表示しない）
+- `!areAllCompanionSideStoriesComplete()` → return（4/4未満なら表示しない）
+- `state.inBattle` → return（戦闘中は待機）
+- 直接呼び出し時に `_companionStoryAllCompleteNoticeTimer` を `clearTimeout` して二重実行防止
+- `_pendingCompanionStoryAllCompleteOrigin` を origin として `showCompanionStoryAllCompleteCelebration(origin)` に渡す
+
+#### `closeCompanionSideStoryModal()` — タイマー管理
+- `_pendingCompanionStoryAllCompleteOrigin = _fromTavern ? "tavern" : "field"` を設定
+- 旧 `setTimeout(consume, 250)` → `_companionStoryAllCompleteNoticeTimer = setTimeout(...)` に変更（ID保持）
+
+#### `btn-cstory-all-complete-close` ハンドラ
+- 旧: 直接 `closeModal()` 呼び出し → 新: `closeCompanionStoryAllCompleteCelebration()` に委譲
+
+### ESC キー対応
+
+`keydown` リスナーに Escape 分岐追加:
+```
+} else if (ev.key === "Escape") {
+    if (_companionStoryAllCompleteNoticeVisible) {
+        ev.preventDefault();
+        closeCompanionStoryAllCompleteCelebration();
+    }
+}
+```
+酒場が開いたままの場合、演出モーダルのみ閉じて酒場は維持する。
+
+### 背景クリック伝播防止
+
+`#companion-story-all-complete-modal` に `click` リスナーを追加し `ev.stopPropagation()` を呼ぶ。下層の酒場モーダルへのクリック伝播を防ぐ。
+
+### loadGame() への追加
+
+```javascript
+var _storyRescued = checkCompanionSideStoryAllComplete();
+if (_storyRescued) { _pendingCompanionStoryAllCompleteOrigin = "field"; }
+```
+
+### debug追加（§116 v0.44.3）
+
+| ボタンID | 内容 |
+|---|---|
+| `btn-debug-v443-overlap` | 酒場を開いた状態で演出モーダルを前面に重ねる確認 |
+| `btn-debug-v443-pending-hold` | 物語モーダル開中は pending 保留されることを確認（PASS/FAIL） |
+| `btn-debug-v443-open-close-10` | 演出モーダル10回開閉で二重防止確認（PASS/FAIL） |
+
+### 変更しないもの（§116 v0.44.3）
+
+- BGM制御・stopBGMHard()・BGMセッション・BGMタイマー 変更なし
+- 究極ゴリラ捕獲条件 変更なし
+- 究極チンパンジー・既存最終サイドストーリー 変更なし
+- 報酬なし（EXP/GOLD/アイテム/装備/わざ/能力上昇 なし）
+- 仲間戦闘能力・装備効果・捕獲率・EXP倍率・AI比率 変更なし
+
+---
+
 ## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.45 候補以降 [未実装・将来機能]
 
-- v0.44.3 全話完了演出安定化（必要に応じて）
 - v0.45 仲間サイドストーリー第2話（各仲間の成長後を描く）
 - 将来: 4人の物語完了後の最終サイドストーリー接続
 - 仲間装備の商人販売

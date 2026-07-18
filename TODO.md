@@ -14,13 +14,24 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.44.2 候補以降
+### Version 0.44.3 候補以降
 
-v0.44.3 全話完了演出安定化（必要に応じて） / v0.45 仲間サイドストーリー第2話 / 将来: 4人完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+v0.45 仲間サイドストーリー第2話 / 将来: 4人完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.44.3 — 全話完了演出モーダル重なり安定化 (§116)
+
+- **z-index: 40** `#companion-story-all-complete-modal`（酒場 z-index:30 より前面保証） ✅
+- **新変数3本**: `_companionStoryAllCompleteOrigin` / `_pendingCompanionStoryAllCompleteOrigin` / `_companionStoryAllCompleteNoticeTimer` ✅
+- **`showCompanionStoryAllCompleteCelebration(origin)`**: origin 引数・フォーカス管理 ✅
+- **`closeCompanionStoryAllCompleteCelebration()`**: 専用クローズ（酒場開中 modalOpen 維持） ✅
+- **`consumePendingCompanionStoryAllCompleteNotice()`**: ガード強化・タイマー管理 ✅
+- **ESCキー**: 演出モーダルのみ閉じて酒場維持 ✅
+- **背景クリック**: stopPropagation で下層酒場へ伝播しない ✅
+- **デバッグ3本 (§116)**: 重なり確認 / pending保留 / 10回開閉 PASS/FAIL ✅
 
 ### Version 0.44.2 — 仲間サイドストーリー全話完了演出 (§115)
 

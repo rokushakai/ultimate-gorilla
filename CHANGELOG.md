@@ -5,6 +5,30 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.44.3] - 2026-07-18 — 全話完了演出モーダル重なり安定化 (§116)
+
+### Added
+- `#companion-story-all-complete-modal` に `z-index: 40` を設定（酒場モーダル z-index:30 より前面）
+- モジュールスコープ変数3本追加: `_companionStoryAllCompleteOrigin` / `_pendingCompanionStoryAllCompleteOrigin` / `_companionStoryAllCompleteNoticeTimer`
+- `closeCompanionStoryAllCompleteCelebration()` 専用クローズ関数（酒場開中は `state.modalOpen` を維持）
+- ESCキー対応: `_companionStoryAllCompleteNoticeVisible` = true 時のみ演出モーダルを閉じ、酒場は維持
+- `#companion-story-all-complete-modal` に click → `stopPropagation`（下層酒場への伝播防止）
+- デバッグ3本（§116）: 重なり確認 / pending保留 PASS/FAIL / 10回開閉 PASS/FAIL
+
+### Changed
+- `showCompanionStoryAllCompleteCelebration(origin)`: origin 引数追加・`_companionStoryAllCompleteOrigin` 設定・close ボタンへ `.focus()`
+- `consumePendingCompanionStoryAllCompleteNotice()`: ガード強化（celebrated 未設定 / 4/4 未満 / 戦闘中 → return）。直接呼び出し時に pending タイマーを `clearTimeout`
+- `closeCompanionSideStoryModal()`: `_companionStoryAllCompleteNoticeTimer` で setTimeout を管理・`_pendingCompanionStoryAllCompleteOrigin` を設定
+- `btn-cstory-all-complete-close` ハンドラ: `closeCompanionStoryAllCompleteCelebration()` に委譲
+- `loadGame()`: `_storyRescued` 時に `_pendingCompanionStoryAllCompleteOrigin = "field"` を設定
+- デバッグリセット系ハンドラ: 新変数クリア・タイマーキャンセルを追加
+
+### 変更しないもの
+- BGM制御・究極ゴリラ捕獲条件・究極チンパンジー・既存最終サイドストーリー
+- 報酬なし。仲間戦闘能力・装備効果・捕獲率・EXP倍率・AI比率変更なし
+
+---
+
 ## [0.44.2] - 2026-07-18 — 仲間サイドストーリー全話完了演出 (§115)
 
 ### Added
