@@ -14,13 +14,26 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.44.1 候補以降
+### Version 0.44.2 候補以降
 
-仲間サイドストーリー完了演出(v0.44.2候補) / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目 / サイドストーリー第2話
+v0.44.3 全話完了演出安定化（必要に応じて） / v0.45 仲間サイドストーリー第2話 / 将来: 4人完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.44.2 — 仲間サイドストーリー全話完了演出 (§115)
+
+- **`areAllCompanionSideStoriesComplete()`**: 4話全完了判定ヘルパー ✅
+- **`normalizeCompanionSideStoryAllCompleteFlag()`**: celebratedフラグboolean保証・never demote ✅
+- **`checkCompanionSideStoryAllComplete()`**: 全話完了確認→pending登録（初回のみ） ✅
+- **`showCompanionStoryAllCompleteCelebration()`** / **`consumePendingCompanionStoryAllCompleteNotice()`**: 演出表示・二重防止 ✅
+- **`state.companionSideStoryAllCompleteCelebrated`**: 永続フラグ（save/load） ✅
+- **達成演出モーダル** `#companion-story-all-complete-modal`: 🌟アニメーション・「旅を続ける」 ✅
+- **酒場バナー**: 4/4完了時「🌟 4人の物語をすべて読み終えました」 ✅
+- **冒険の記録**: 4/4完了時「🌟 4人の物語をすべて読了」行 ✅
+- **旧セーブ救済**: loadGame()でcelebrated未定義 + 4/4→pending登録 ✅
+- **デバッグ5本 (§115)**: 演出確認 / 演出フラグリセット / 4話目境界 / 旧セーブ救済 / 二重防止 PASS/FAIL ✅
 
 ### Version 0.44.1 — 仲間サイドストーリー安定化 (§114)
 

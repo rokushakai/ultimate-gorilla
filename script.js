@@ -947,7 +947,8 @@
     companionTechniqueUsed: { juritani: false, shurittani: false, norio: false, harumi: false }, // §111 v0.43: 仲間わざ1戦闘1回（非永続・saveしない）
     companionSideStoryFlags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §113 v0.44: 物語完了フラグ（永続・saveする）
     activeCompanionSideStory: null, // §113 v0.44: 現在閲覧中のcid（非永続）
-    activeCompanionSideStoryLine: 0 // §113 v0.44: 現在の行インデックス（非永続）
+    activeCompanionSideStoryLine: 0, // §113 v0.44: 現在の行インデックス（非永続）
+    companionSideStoryAllCompleteCelebrated: false // §115 v0.44.2: 全話完了演出済み（永続・saveする）
   };
 
   // ---------------------------------------------------------
@@ -1170,6 +1171,8 @@
       var _pn = _pendingGearRewardNotices.shift();
       showToast(_pn);
     }
+    // §115 v0.44.2: 全話完了演出フォールバック（旧セーブ救済など）
+    consumePendingCompanionStoryAllCompleteNotice();
 
     var p = state.player;
 
@@ -3230,6 +3233,10 @@
   var _cstoryAdvanceLock = false; // 高速連打防止ロック
   var _cstoryAdvanceTimer = null; // 高速連打防止タイマーID
 
+  // §115 v0.44.2: 全話完了演出一時状態（非永続・IIFEスコープ・saveしない）
+  var _pendingCompanionStoryAllCompleteNotice = false;  // 演出表示予約（true=表示待ち）
+  var _companionStoryAllCompleteNoticeVisible = false;  // 演出表示中フラグ（二重表示防止）
+
   // companionSideStoryFlagsの整合性を保証（欠損・非boolean→false補正、true→維持）
   // §114 v0.44.1: 変更があればtrueを返す（loadGame()でのsave判定に使用）
   function normalizeCompanionSideStoryFlags() {
@@ -3247,6 +3254,57 @@
       }
     }
     return _changed;
+  }
+
+  // §115 v0.44.2: 4話すべて完了しているか（side-effect なし・normalize後判定）
+  function areAllCompanionSideStoriesComplete() {
+    var _cids115 = ["juritani", "shurittani", "norio", "harumi"];
+    if (!state.companionSideStoryFlags || typeof state.companionSideStoryFlags !== "object") return false;
+    for (var _i115 = 0; _i115 < _cids115.length; _i115++) {
+      if (state.companionSideStoryFlags[_cids115[_i115]] !== true) return false;
+    }
+    return true;
+  }
+
+  // §115 v0.44.2: companionSideStoryAllCompleteCelebratedをboolean保証（never demote）
+  // 変更があればtrueを返す
+  function normalizeCompanionSideStoryAllCompleteFlag() {
+    if (state.companionSideStoryAllCompleteCelebrated === true) return false;  // trueを維持
+    if (state.companionSideStoryAllCompleteCelebrated !== false) {
+      state.companionSideStoryAllCompleteCelebrated = false;
+      return true;  // 不正値→falseへ修正
+    }
+    return false;  // 正常なfalse
+  }
+
+  // §115 v0.44.2: 全話完了を確認し、未祝賀なら演出を予約する
+  // 新規達成ならtrueを返す（saveGame()は呼び出し側で行う）
+  function checkCompanionSideStoryAllComplete() {
+    normalizeCompanionSideStoryFlags();
+    if (!areAllCompanionSideStoriesComplete()) return false;
+    normalizeCompanionSideStoryAllCompleteFlag();
+    if (state.companionSideStoryAllCompleteCelebrated === true) return false;  // 処理済み
+    state.companionSideStoryAllCompleteCelebrated = true;
+    _pendingCompanionStoryAllCompleteNotice = true;
+    return true;
+  }
+
+  // §115 v0.44.2: 全話完了演出モーダルを開く
+  function showCompanionStoryAllCompleteCelebration() {
+    if (_companionStoryAllCompleteNoticeVisible) return;
+    _companionStoryAllCompleteNoticeVisible = true;
+    openModal("companion-story-all-complete-modal");
+  }
+
+  // §115 v0.44.2: pending演出を安全なタイミングで消費・表示（二重表示防止）
+  function consumePendingCompanionStoryAllCompleteNotice() {
+    if (!_pendingCompanionStoryAllCompleteNotice) return;
+    if (_companionStoryAllCompleteNoticeVisible) return;
+    // 物語モーダルが開いていれば待機（物語と演出を重ねない）
+    var _storyEl = document.getElementById("companion-story-modal");
+    if (_storyEl && !_storyEl.classList.contains("hidden")) return;
+    _pendingCompanionStoryAllCompleteNotice = false;
+    showCompanionStoryAllCompleteCelebration();
   }
 
   // 仲間がパーティに加入したことがあるか（現在パーティ中 or 過去にEXPを獲得済み）
@@ -3347,7 +3405,9 @@
       return; // 既に完了済み: 追加save・通知なし
     }
     state.companionSideStoryFlags[cid] = true;
-    saveGame();
+    // §115 v0.44.2: 全話完了チェック（4話目完了時にcelebrated=true + pending登録）
+    checkCompanionSideStoryAllComplete();
+    saveGame(); // flag + celebratedを1回で保存
     var story = COMPANION_SIDE_STORY_DATA[cid];
     var title = story ? story.title : cid;
     var c = findById(COMPANION_DATA, cid);
@@ -3369,6 +3429,8 @@
       openModal("tavern-modal");
       renderTavernStories();
     }
+    // §115 v0.44.2: 全話完了演出pending消費（toastが表示されてから重ねて見えるよう250ms後）
+    setTimeout(consumePendingCompanionStoryAllCompleteNotice, 250);
   }
 
   // §111 v0.43: 仲間わざ習得済みか判定（Lv25以上 + rewardFlag=true）
@@ -5404,6 +5466,10 @@
         '　<span style="color:#888;font-size:0.82em;">「' + _stTitle113 + '」</span></span>' +
         chk(_sdone113) + (_sdone113 ? "完了" : "未完了") + '</span></div>';
     }
+    // §115 v0.44.2: 全4話完了バッジ（celebratedフラグではなく現在の完了状態で判定）
+    if (_storyDoneCount113 === 4) {
+      html += '<div style="color:#ffd166;font-weight:bold;margin-top:6px;font-size:0.88em;">🌟 4人の物語をすべて読了</div>';
+    }
     html += '</div>';
 
     // --- 次の目標（強調） ---
@@ -6162,6 +6228,10 @@
         html += '<button class="shop-menu-btn" data-story-cid-lock="' + _scid + '" style="font-size:0.82em;padding:4px 10px;margin-top:2px;color:#555;border-color:#444;">🔒 未解放</button>';
       }
       html += '</div>';
+    }
+    // §115 v0.44.2: 全4話完了時のバナー
+    if (areAllCompanionSideStoriesComplete()) {
+      html += '<div style="text-align:center;margin:6px 0 8px;color:#ffd166;font-weight:bold;font-size:0.88em;border-top:1px solid #2a3a5a;padding-top:8px;">🌟 4人の物語をすべて読み終えました</div>';
     }
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
     body.innerHTML = html;
@@ -7512,6 +7582,12 @@
       html += '<p class="small" style="color:#ff9f7f;margin-top:8px;">🧪 §114 v0.44.1 安定化テスト</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v441-story-rapid" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 物語高速連打・行飛ばし確認（PASS/FAIL）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v441-story-flagrepair" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 物語フラグ破損修復確認（PASS/FAIL）</button>';
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">🌟 §115 v0.44.2 全話完了演出テスト</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v442-story-celebration" style="border-color:#ffd166;color:#ffd166;">🌟 全話完了演出を確認（セーブ消費注意）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v442-story-celeb-reset" style="border-color:#adb5bd;color:#adb5bd;">🌟 演出済みフラグのみリセット（4話フラグ維持）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v442-story-boundary" style="border-color:#06d6a0;color:#06d6a0;">🧪 4話目完了境界確認（PASS/FAIL）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v442-story-oldsave" style="border-color:#a0cfff;color:#a0cfff;">🧪 旧4/4セーブ救済確認（PASS/FAIL）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v442-story-double-prev" style="border-color:#c8b4ff;color:#c8b4ff;">🧪 演出二重防止確認（PASS/FAIL）</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -9727,16 +9803,27 @@
           if (_cstoryAdvanceTimer) { clearTimeout(_cstoryAdvanceTimer); _cstoryAdvanceTimer = null; }
           closeModal("companion-story-modal");
         }
+        // §115 v0.44.2: 全話完了演出モーダルも安全に閉じる
+        var _celebModalEl = document.getElementById("companion-story-all-complete-modal");
+        if (_celebModalEl && !_celebModalEl.classList.contains("hidden")) {
+          closeModal("companion-story-all-complete-modal");
+        }
         state.companionSideStoryFlags = { juritani: false, shurittani: false, norio: false, harumi: false };
+        state.companionSideStoryAllCompleteCelebrated = false; // §115 v0.44.2
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _companionStoryAllCompleteNoticeVisible = false;
         saveGame();
-        showToast("[DEBUG] 仲間の物語: 完了フラグ全リセット ✅");
+        showToast("[DEBUG] 仲間の物語: 完了フラグ・演出フラグ全リセット ✅");
         renderStatusBody();
       };
 
       document.getElementById("btn-debug-v44-story-complete-all").onclick = function () {
         state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        // §115 v0.44.2: 演出済みをfalseにして演出確認できる状態にする
+        state.companionSideStoryAllCompleteCelebrated = false;
+        var _willCelebrate = checkCompanionSideStoryAllComplete();
         saveGame();
-        showToast("[DEBUG] 仲間の物語: 全完了状態にした ✅");
+        showToast("[DEBUG] 仲間の物語: 全完了状態 + 演出" + (_willCelebrate ? "予約済み🌟" : "（既に処理済み）") + " ✅");
         renderStatusBody();
       };
 
@@ -9883,6 +9970,110 @@
         saveGame();
         showToast("[DEBUG] フラグ破損修復: " + (_pass ? "PASS ✅" : "FAIL ❌") +
           " true維持=" + _passJ + " str→false=" + _passS + " null→false=" + _passN + " 欠損→false=" + _passH + " 変更検出=" + _passC);
+      };
+
+      // §115 v0.44.2: 全話完了演出を直接確認
+      document.getElementById("btn-debug-v442-story-celebration").onclick = function () {
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _companionStoryAllCompleteNoticeVisible = false;
+        checkCompanionSideStoryAllComplete();
+        saveGame();
+        consumePendingCompanionStoryAllCompleteNotice();
+        showToast("[DEBUG] 全話完了演出確認（セーブ消費）");
+      };
+
+      // §115 v0.44.2: 演出済みフラグのみリセット（4話フラグ維持）
+      document.getElementById("btn-debug-v442-story-celeb-reset").onclick = function () {
+        state.companionSideStoryAllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _companionStoryAllCompleteNoticeVisible = false;
+        var _celebModalEl = document.getElementById("companion-story-all-complete-modal");
+        if (_celebModalEl && !_celebModalEl.classList.contains("hidden")) {
+          closeModal("companion-story-all-complete-modal");
+        }
+        saveGame();
+        showToast("[DEBUG] 演出済みフラグリセット（4話フラグは維持） ✅");
+      };
+
+      // §115 v0.44.2: 4話目完了境界確認
+      document.getElementById("btn-debug-v442-story-boundary").onclick = function () {
+        var _prevFlags = JSON.stringify(state.companionSideStoryFlags);
+        var _prevCeleb = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending = _pendingCompanionStoryAllCompleteNotice;
+        // 初期: 3話true, 1話false, celebrated=false
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: false };
+        state.companionSideStoryAllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        // 確認1: 3/4では演出発動しない
+        var _r1 = checkCompanionSideStoryAllComplete();
+        var _pass1 = (_r1 === false && state.companionSideStoryAllCompleteCelebrated === false && !_pendingCompanionStoryAllCompleteNotice);
+        // 確認2: 4話目をtrue→4/4で演出発動
+        state.companionSideStoryFlags.harumi = true;
+        var _r2 = checkCompanionSideStoryAllComplete();
+        var _pass2 = (_r2 === true && state.companionSideStoryAllCompleteCelebrated === true && _pendingCompanionStoryAllCompleteNotice);
+        // 確認3: 再度checkしても発動しない
+        var _r3 = checkCompanionSideStoryAllComplete();
+        var _pass3 = (_r3 === false);
+        // 復元
+        state.companionSideStoryFlags = JSON.parse(_prevFlags);
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending;
+        saveGame();
+        var _pass = _pass1 && _pass2 && _pass3;
+        showToast("[DEBUG] 4話目境界: " + (_pass ? "PASS ✅" : "FAIL ❌") +
+          " 3/4→未発動=" + _pass1 + " 4/4→発動=" + _pass2 + " 再実行→未発動=" + _pass3);
+      };
+
+      // §115 v0.44.2: 旧4/4セーブ救済確認
+      document.getElementById("btn-debug-v442-story-oldsave").onclick = function () {
+        var _prevFlags = JSON.stringify(state.companionSideStoryFlags);
+        var _prevCeleb = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending = _pendingCompanionStoryAllCompleteNotice;
+        // 旧セーブ状態: 4話全true + celebrated=false（未設定相当）
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _companionStoryAllCompleteNoticeVisible = false;
+        // 救済処理（loadGame相当）
+        var _rescued = checkCompanionSideStoryAllComplete();
+        var _pass1 = (_rescued === true && state.companionSideStoryAllCompleteCelebrated === true && _pendingCompanionStoryAllCompleteNotice);
+        // 再度救済しても追加通知なし
+        var _rescued2 = checkCompanionSideStoryAllComplete();
+        var _pass2 = (_rescued2 === false);
+        // 復元
+        state.companionSideStoryFlags = JSON.parse(_prevFlags);
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending;
+        saveGame();
+        var _pass = _pass1 && _pass2;
+        showToast("[DEBUG] 旧セーブ救済: " + (_pass ? "PASS ✅" : "FAIL ❌") +
+          " 救済→pending=" + _pass1 + " 再救済→なし=" + _pass2);
+      };
+
+      // §115 v0.44.2: 演出二重防止確認
+      document.getElementById("btn-debug-v442-story-double-prev").onclick = function () {
+        var _prevFlags = JSON.stringify(state.companionSideStoryFlags);
+        var _prevCeleb = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending = _pendingCompanionStoryAllCompleteNotice;
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        // check×3回: 1回目だけtrue
+        var _c1 = checkCompanionSideStoryAllComplete();
+        var _c2 = checkCompanionSideStoryAllComplete();
+        var _c3 = checkCompanionSideStoryAllComplete();
+        var _pass1 = (_c1 === true && _c2 === false && _c3 === false);
+        var _pass2 = (state.companionSideStoryAllCompleteCelebrated === true);
+        // 復元
+        state.companionSideStoryFlags = JSON.parse(_prevFlags);
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending;
+        saveGame();
+        var _pass = _pass1 && _pass2;
+        showToast("[DEBUG] 二重防止: " + (_pass ? "PASS ✅" : "FAIL ❌") +
+          " check×3→1回のみtrue=" + _pass1 + " celebrated=true=" + _pass2);
       };
 
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
@@ -10101,7 +10292,8 @@
         companionGearInventory: state.companionGearInventory || {},  // §105 v0.40
         companionGearVersion: state.companionGearVersion || 0,       // §105 v0.40
         companionGearRewardFlags: state.companionGearRewardFlags || {}, // §109 v0.42
-        companionSideStoryFlags: state.companionSideStoryFlags || {}   // §113 v0.44
+        companionSideStoryFlags: state.companionSideStoryFlags || {},  // §113 v0.44
+        companionSideStoryAllCompleteCelebrated: !!state.companionSideStoryAllCompleteCelebrated // §115 v0.44.2
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -10184,6 +10376,12 @@
       state.companionGearRewardFlags = data.companionGearRewardFlags || {}; // §109 v0.42
       state.companionSideStoryFlags = data.companionSideStoryFlags || {};   // §113 v0.44
       var _storyFlagChanged = normalizeCompanionSideStoryFlags(); // §114 v0.44.1: 返値でsave判定
+      // §115 v0.44.2: 全話完了演出済みフラグ（旧セーブはundefined→false補完）
+      state.companionSideStoryAllCompleteCelebrated = !!data.companionSideStoryAllCompleteCelebrated;
+      var _celebFlagChanged = normalizeCompanionSideStoryAllCompleteFlag();
+      // §115 v0.44.2: 旧セーブ救済 — 4話完了済みだがcelebrated未設定
+      var _storyRescued = checkCompanionSideStoryAllComplete();
+      if (_celebFlagChanged) { _storyFlagChanged = true; } // normalize修正があればsave対象に含める
       var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
@@ -10197,7 +10395,7 @@
       p.mp = Math.min(data.mp != null ? data.mp : p.maxMp, p.maxMp);
       var _reconciled = reconcileCompanionGearRewards(); // §109 v0.42 / §110 v0.42.1: 過去クリア済み補完
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
-      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged) { saveGame(); } // §114: storyFlag修復時もsave
+      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued) { saveGame(); } // §114: storyFlag修復時 / §115: 旧セーブ救済時もsave
       return true;
     } catch (e) {
       return false;
@@ -10349,6 +10547,13 @@
     document.getElementById("btn-cstory-close").addEventListener("click", function () {
       if (_cstoryAdvanceLock) return;
       closeCompanionSideStoryModal();
+    });
+
+    // §115 v0.44.2: 全話完了演出モーダルを閉じる
+    document.getElementById("btn-cstory-all-complete-close").addEventListener("click", function () {
+      _companionStoryAllCompleteNoticeVisible = false;
+      _pendingCompanionStoryAllCompleteNotice = false;
+      closeModal("companion-story-all-complete-modal");
     });
 
     // §54 v0.11.3.2: ゴールモーダルのボタンはJS生成方式に変更したため静的リスナー不要

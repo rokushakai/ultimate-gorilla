@@ -5,6 +5,43 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.44.2] - 2026-07-18 — 仲間サイドストーリー全話完了演出 (§115)
+
+### Added
+- **`areAllCompanionSideStoriesComplete()`**: 4話全完了判定ヘルパー（side-effectなし）
+- **`normalizeCompanionSideStoryAllCompleteFlag()`**: `companionSideStoryAllCompleteCelebrated`のboolean保証（never demote）
+- **`checkCompanionSideStoryAllComplete()`**: 全話完了確認 → `celebrated=true` / `pending=true` 登録（初回のみ）
+- **`showCompanionStoryAllCompleteCelebration()`**: 達成演出モーダルを開く
+- **`consumePendingCompanionStoryAllCompleteNotice()`**: 安全なタイミングでpending消費・演出表示
+- **`state.companionSideStoryAllCompleteCelebrated`**: 全話完了演出済みフラグ（永続・saveする）
+- **モジュールスコープ変数2本** (§115, 非永続):
+  - `_pendingCompanionStoryAllCompleteNotice`: 演出表示予約
+  - `_companionStoryAllCompleteNoticeVisible`: 演出表示中（二重防止）
+- **達成演出モーダル** `#companion-story-all-complete-modal`: 🌟アニメーション + 「旅を続ける」ボタン
+- **CSSアニメーション** `.cstory-complete-star` / `@keyframes cstory-star-pop`
+- **酒場「仲間の物語」**: 4/4完了時に「🌟 4人の物語をすべて読み終えました」バナー追加
+- **冒険の記録**: 4/4完了時に「🌟 4人の物語をすべて読了」行追加
+- **デバッグ5本追加 (§115)**:
+  - `🌟 全話完了演出を確認` — 直接演出表示（セーブ消費）
+  - `🌟 演出済みフラグのみリセット` — 4話フラグ維持したまま再確認可能に
+  - `🧪 4話目完了境界確認` — 3/4→未発動 / 4/4→発動 / 再実行→未発動 PASS/FAIL
+  - `🧪 旧4/4セーブ救済確認` — 旧セーブで1回だけpending登録されることを確認 PASS/FAIL
+  - `🧪 演出二重防止確認` — check×3回で1回だけtrue PASS/FAIL
+
+### Changed
+- **`completeCompanionSideStory()`**: flag=true設定後に`checkCompanionSideStoryAllComplete()`呼び出し → flagとcelebratedを1回のsaveGame()で保存
+- **`closeCompanionSideStoryModal()`**: 末尾に`setTimeout(consumePendingCompanionStoryAllCompleteNotice, 250)`追加（個別完了toastと重ならない遅延）
+- **`renderField()`**: `consumePendingCompanionStoryAllCompleteNotice()`呼び出し追加（旧セーブ救済フォールバック）
+- **`saveGame()`**: `companionSideStoryAllCompleteCelebrated`追加
+- **`loadGame()`**: `companionSideStoryAllCompleteCelebrated`ロード + `normalizeCompanionSideStoryAllCompleteFlag()` + `checkCompanionSideStoryAllComplete()`旧セーブ救済
+- **`btn-debug-v44-story-reset-flags`**: `celebratedフラグ・pending・visible`もリセット（§115対応）
+- **`btn-debug-v44-story-complete-all`**: 全完了後に`checkCompanionSideStoryAllComplete()`呼んで演出予約
+
+### 変更しないもの
+- 報酬なし（EXP/GOLD/アイテム/装備/わざ/能力上昇）、BGM制御、究極ゴリラ捕獲条件、究極チンパンジー、既存最終サイドストーリー
+
+---
+
 ## [0.44.1] - 2026-07-16 — 仲間サイドストーリー安定化 (§114)
 
 ### Fixed / Changed

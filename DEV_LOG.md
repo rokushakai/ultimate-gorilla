@@ -5,6 +5,24 @@
 
 ---
 
+## v0.44.2 (2026-07-18)
+
+### 設計判断・確認事項
+
+- **pending+visible二変数の理由**: `_pendingCompanionStoryAllCompleteNotice`は「演出を表示すべき」、`_companionStoryAllCompleteNoticeVisible`は「現在表示中」を分離している。pendingだけだと「表示した後に再びconsumeが呼ばれた時」にモーダルを二重に開こうとする危険がある。visibleガードでそれを防ぐ。
+
+- **250msの遅延の意図**: `completeCompanionSideStory()`はtoastを表示してから`closeCompanionSideStoryModal()`が呼ばれる。toastは1800ms表示される。250ms後に演出モーダルを開くことで「個別完了toast→250ms→全話完了モーダル」という順番になり、toastが読めなくなることを防ぐ。
+
+- **`renderField()`フォールバックの必要性**: `closeCompanionSideStoryModal()`の`setTimeout(250ms)`が正常動作すれば基本的に不要。ただし旧セーブ救済シナリオ（ロード時にpending登録 → まだ物語モーダルを一度も開かない）では、`renderField()`が初回フィールド表示時に消費する唯一の機会になる。
+
+- **旧セーブ救済のsave回数**: `loadGame()`の末尾の`if (...|| _storyRescued) { saveGame(); }`で他の修復条件と合算して1回保存。演出モーダルの表示・closeではsaveしない。
+
+- **celebratedフラグと各話フラグの独立性**: `companionSideStoryFlags`は各話の読了状態。`companionSideStoryAllCompleteCelebrated`は演出処理済み状態。「4話完了・演出未処理」はありえる正常状態（旧セーブ）。「演出済み・4話未完了」はdebug後等で発生しうるが、never demoteにより`celebrated`をfalseに戻さない。全話完了バッジの表示は4話の実際の完了状態を使い、`celebrated`フラグは使わない。
+
+- **酒場モーダルとの重ね方**: `closeCompanionSideStoryModal()`が酒場を開いた後、setTimeout 250ms後に`openModal("companion-story-all-complete-modal")`が呼ばれる。両方のモーダルが`hidden`を外した状態になるが、後から開いた達成演出モーダルがz-indexで上に表示される（同一class `.modal`の場合DOM順が後のものが手前）。演出を閉じると酒場が下に見える。
+
+---
+
 ## v0.44.1 (2026-07-16)
 
 ### 設計判断・確認事項

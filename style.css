@@ -686,6 +686,20 @@ html, body {
   color: #c4b5fd;
 }
 
+/* §115 v0.44.2: 全話完了演出 星アイコンアニメーション */
+@keyframes cstory-star-pop {
+  0%   { transform: scale(0.4); opacity: 0.2; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.cstory-complete-star {
+  display: block;
+  font-size: 52px;
+  text-align: center;
+  margin-bottom: 10px;
+  animation: cstory-star-pop 0.45s ease-out forwards;
+}
+
 .hidden {
   display: none !important;
 }
