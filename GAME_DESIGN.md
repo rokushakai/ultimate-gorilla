@@ -6480,11 +6480,116 @@ expectedLineIndex = state.activeCompanionSideStoryLine
 
 ---
 
-## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
+---
 
-### v0.45.3 候補以降 [未実装・将来機能]
+## §120 v0.45.3 — 第1話・第2話 全話完了演出キュー安定化 [実装済み]
 
-- v0.45.3 第2話全話完了演出安定化（表示順・旧セーブ救済・二つの全話完了モーダルの競合確認）
-- 将来: 第2話4人完了後の最終サイドストーリー接続
+### 目的
+
+第1話と第2話の全話完了演出が同時にpendingとなった場合、
+第1話、第2話の順で1枚ずつ表示する。
+
+### 共通キュー調整関数
+
+`consumePendingCompanionStoryCompletionNotices()`:
+- 第1話または第2話の演出が表示中なら何もしない
+- 第1話pendingがtrueなら第1話consumeを呼び、return
+- 第1話pendingがなく、第2話pendingがtrueなら第2話consumeを呼び、return
+- どちらもpendingでなければ何もしない
+- 第1話優先。第1話pendingが表示不能でも第2話を追い越して表示しない
+- 同じ呼び出し内で両方を開かない
+
+### 共通スケジュール関数
+
+`schedulePendingCompanionStoryCompletionNotices(delay)`:
+- 共通キュータイマー `_companionStoryCompletionNoticeQueueTimer` を1本管理
+- 既存timerがあればclearTimeout
+- delay後に `consumePendingCompanionStoryCompletionNotices()` を呼ぶ
+- saveGame()しない / originを変更しない / pendingを変更しない
+
+### 変更箇所
+
+**`closeCompanionSideStoryModal()`**:
+- §119の「第1話timer + 第2話timer」の2本登録を廃止
+- 両originを先に設定
+- `schedulePendingCompanionStoryCompletionNotices(250)` に一本化
+- pendingが存在する場合のみ予約
+
+**`closeCompanionStoryAllCompleteCelebration()`**:
+- 第2話pendingが存在する場合、`state.modalOpen=true` を維持
+- `schedulePendingCompanionStoryCompletionNotices(50)` で第2話を再消費
+- renderField()への依存を解消
+
+**`closeCompanionStoryChapter2AllCompleteCelebration()`**:
+- 残存pendingを `schedulePendingCompanionStoryCompletionNotices(50)` で安全確認
+- 通常はch2後にch1が残ることはないが、debug・破損状態対策
+
+**`showCompanionStoryChapter2AllCompleteCelebration()`**:
+- `if (_companionStoryAllCompleteNoticeVisible) return;` を追加
+- 第1話表示中は第2話を開かない（二重表示の最終防衛線）
+
+**`renderField()`**:
+- 2つの個別consume呼び出しを `consumePendingCompanionStoryCompletionNotices()` 1回に統合
+
+### 表示順保証
+
+両pendingが存在する場合:
+```text
+closeCompanionSideStoryModal()
+↓
+schedulePendingCompanionStoryCompletionNotices(250)
+↓
+consumePendingCompanionStoryCompletionNotices()
+↓ ch1優先
+第1話演出表示
+↓ ユーザーが閉じる
+closeCompanionStoryAllCompleteCelebration()
+↓ ch2 pending確認
+state.modalOpen=true維持
+schedulePendingCompanionStoryCompletionNotices(50)
+↓
+consumePendingCompanionStoryCompletionNotices()
+↓
+第2話演出表示
+```
+
+### state.modalOpen維持
+
+第1話close後、第2話pendingがある場合:
+- `state.modalOpen = true` を設定（closeModal()によるfalse化を上書き）
+- 50ms後に第2話が開くまでの隙間で背景操作不可を維持
+
+### 旧セーブ救済（両方4/4）
+
+- `loadGame()` 内で `checkCompanionSideStoryAllComplete()` と `checkCompanionSideStoryChapter2AllComplete("field")` を両方呼ぶ（変更なし）
+- ch1とch2それぞれにpending=true, origin="field" が設定される
+- `renderField()` の `consumePendingCompanionStoryCompletionNotices()` で第1話から順に表示
+
+### セーブデータ変更
+
+- セーブ構造に変更なし
+- `_companionStoryCompletionNoticeQueueTimer` は非永続（saveしない）
+
+### 変更しないもの（§120 v0.45.3）
+
+- COMPANION_SIDE_STORY_DATA / COMPANION_SIDE_STORY_CHAPTER2_DATA
+- 第1話・第2話の本文・タイトル
+- 第1話・第2話の解放条件・完了フラグ
+- 第1話・第2話の演出内容・モーダル構造
+- 第1話・第2話の celebrated / origin / visible 変数（専用consume関数の責務維持）
+- 酒場バナー・冒険の記録バッジ
+- 報酬なし・能力変更なし・BGM変更なし・捕獲率変更なし
+- 究極チンパンジー・既存最終サイドストーリー・エンディング条件
+
+---
+
+## 将来の実装候補（v0.45.4〜）— プレイヤーフィードバックより [未実装・将来機能]
+
+### v0.45.4 候補以降 [未実装・将来機能]
+
+- v0.45.4 全話完了演出最終回帰確認
+- v0.46 フィールド仲間追従表示
+- v0.47 仲間サイドストーリー第3話
+- 将来: 仲間物語と最終サイドストーリーの接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

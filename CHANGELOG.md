@@ -5,6 +5,30 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.45.3] - 2026-07-19 — 第1話・第2話 全話完了演出キュー安定化 (§120)
+
+### Added
+- **`_companionStoryCompletionNoticeQueueTimer`**: 共通キュータイマー（非永続・IIFEスコープ）
+- **`consumePendingCompanionStoryCompletionNotices()`**: 共通キュー調整関数（第1話優先・同時表示防止）
+- **`schedulePendingCompanionStoryCompletionNotices(delay)`**: 共通スケジュール関数（timer1本管理）
+- デバッグ5本（§120）: 連続表示確認 / 両旧4/4救済確認 / キュー二重防止確認 / ch1close後ch2再消費確認 / modalOpen維持確認
+
+### Changed
+- **`closeCompanionSideStoryModal()`**: 個別タイマー2本登録 → 共通キュー1本に変更。pendingなし側のtimer登録廃止
+- **`closeCompanionStoryAllCompleteCelebration()`**: 第2話pending時に `state.modalOpen=true` 維持 + `schedulePendingCompanionStoryCompletionNotices(50)` で第2話再消費（renderField依存を解消）
+- **`closeCompanionStoryChapter2AllCompleteCelebration()`**: 残存pending時に `schedulePendingCompanionStoryCompletionNotices(50)` で安全確認（debug・破損対策）
+- **`showCompanionStoryChapter2AllCompleteCelebration()`**: `if (_companionStoryAllCompleteNoticeVisible) return;` ガード追加（同時表示の最終防衛線）
+- **`renderField()`**: 個別consume2回 → `consumePendingCompanionStoryCompletionNotices()` 1回に統合
+- 既存debugリセット4本: `_companionStoryCompletionNoticeQueueTimer` クリアを追加
+
+### Fixed
+- 第1話演出表示後に第2話pendingが消費されず残留する問題を修正
+- `closeCompanionSideStoryModal()` が両pendingを同時に250msタイマー2本で競合登録する問題を修正
+- 第1話演出close後、renderField()を呼ばなければ第2話演出が表示されない問題を修正
+- 第1話close時のstate.modalOpen=falseによる演出間の背景操作可能期間を修正
+
+---
+
 ## [0.45.2] - 2026-07-19 — 仲間サイドストーリー第2話・全話完了演出 (§119)
 
 ### Added

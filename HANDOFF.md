@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.45.2** |
+| 現在バージョン | **v0.45.3** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,18 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.45.3] 第1話・第2話 全話完了演出キュー安定化**（§120）
+  - **`_companionStoryCompletionNoticeQueueTimer`**: 共通キュータイマー（非永続）
+  - **`consumePendingCompanionStoryCompletionNotices()`**: 共通キュー調整関数（ch1優先・同時open防止）
+  - **`schedulePendingCompanionStoryCompletionNotices(delay)`**: 共通スケジュール関数（timer1本・clearTimeout保証）
+  - **`closeCompanionSideStoryModal()` 更新**: 2本timer → 共通キュー1本。origin設定維持
+  - **`closeCompanionStoryAllCompleteCelebration()` 更新**: ch2 pending時にmodalOpen維持 + 50ms後に再消費
+  - **`closeCompanionStoryChapter2AllCompleteCelebration()` 更新**: 残存pending確認（safety）
+  - **`showCompanionStoryChapter2AllCompleteCelebration()` 更新**: ch1 visible時は開かないガード追加
+  - **`renderField()` 更新**: 個別consume2回 → 共通関数1回
+  - **既存debugリセット4本更新**: queue timer clear追加
+  - **デバッグ5本（§120）**: 連続表示確認 / 両旧4/4救済確認 / キュー二重防止確認 / ch1close後ch2再消費確認 / modalOpen維持確認
+  - **根本修正**: 第1話close後にch2pendingが永遠に残留するバグ（renderField()依存）を解消
 - **[v0.45.2] 仲間サイドストーリー第2話・全話完了演出**（§119）
   - **`state.companionSideStoryChapter2AllCompleteCelebrated`**: 第2話全話完了演出済み（永続・never demote）
   - **第2話専用pending変数5本**: pending/visible/origin/pendingOrigin/timer（非永続）
@@ -748,10 +760,12 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.45.3 第2話全話完了演出安定化** — 表示順・旧セーブ救済・両全話完了モーダルの競合確認。工数小。§119実装を前提とする。
-2. **v0.26 フィールド仲間追従表示** — パーティ仲間を通常マップで主人公の後ろにドラクエ風に表示。工数中〜大（renderField改修）。専用ブランチで着手。
-3. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.26 完了後。
+1. **v0.46 フィールド仲間追従表示** — パーティ仲間を通常マップで主人公の後ろにドラクエ風に表示。工数中〜大（renderField改修）。専用ブランチで着手。v0.45.3完了後に着手可能。
+2. **v0.47 仲間サイドストーリー第3話** — 4人第3話データ追加。第2話Lv75以上解放条件。工数中。
+3. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.46 完了後。
 4. **v0.28 仲間ごとのコマンド選択** — 戦闘UIの大改修。最後に回す。
+
+> v0.45.3（§120 全話完了演出キュー安定化）実装済み。小規模な回帰確認後 v0.46 へ進む状態。
 
 > プレイヤーフィードバック (v0.25 時点): 「仲間をフィールドで後ろに並べたい」「仲間も戦闘に参加してほしい」
 

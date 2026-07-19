@@ -14,9 +14,26 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.45.3 候補以降
+### Version 0.45.4 候補以降
 
-将来: v0.45.3 第2話全話完了演出安定化 / 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: v0.45.4 全話完了演出最終回帰確認 / v0.46 フィールド仲間追従表示 / v0.47 仲間サイドストーリー第3話 / 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+
+---
+
+## ✅ 実装済み（最新）
+
+### Version 0.45.3 — 第1話・第2話 全話完了演出キュー安定化 (§120)
+
+- **`_companionStoryCompletionNoticeQueueTimer`**: 共通キュータイマー（非永続・IIFEスコープ） ✅
+- **`consumePendingCompanionStoryCompletionNotices()`**: 共通キュー調整関数（第1話優先・同時open防止） ✅
+- **`schedulePendingCompanionStoryCompletionNotices(delay)`**: 共通スケジュール関数（timer1本・clearTimeout保証） ✅
+- **`closeCompanionSideStoryModal()` 更新**: 2本timer → 共通キュー1本。origin設定維持 ✅
+- **`closeCompanionStoryAllCompleteCelebration()` 更新**: ch2 pending時にmodalOpen維持 + 50ms後に再消費 ✅
+- **`closeCompanionStoryChapter2AllCompleteCelebration()` 更新**: 残存pending確認（safety） ✅
+- **`showCompanionStoryChapter2AllCompleteCelebration()` 更新**: ch1 visible時は開かないガード追加 ✅
+- **`renderField()` 更新**: 個別consume2回 → 共通関数1回 ✅
+- **既存debug更新**: ch1リセット・演出確認・ch2リセットに queue timer clear を追加 ✅
+- **デバッグ5本（§120）**: 連続表示確認 / 両旧4/4救済確認 / キュー二重防止確認 / ch1close後ch2再消費確認 / modalOpen維持確認 ✅
 
 ---
 

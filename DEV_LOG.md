@@ -5,6 +5,28 @@
 
 ---
 
+## v0.45.3 (2026-07-19) — 第1話・第2話 全話完了演出キュー安定化 (§120)
+
+### 根本原因と修正
+
+- **バグ**: `closeCompanionSideStoryModal()` が ch1・ch2 それぞれに 250ms タイマーを登録。両方が同タイミングで発火し ch2 が ch1-visible ガードで返った後、ch2 pending が永遠に残留（`renderField()` が呼ばれない限り消費されない）。
+
+- **修正パターン**: 共通キュー関数 `consumePendingCompanionStoryCompletionNotices()`（ch1 優先）+ 共通スケジューラ `schedulePendingCompanionStoryCompletionNotices(delay)` を追加。`closeCompanionSideStoryModal()` は 1 本の共通タイマーに統一。
+
+### 設計判断
+
+- **ch1 close → ch2 の流れ**: `closeCompanionStoryAllCompleteCelebration()` で ch2 pending を検出したら `state.modalOpen = true` を維持したまま 50ms 後に `schedulePendingCompanionStoryCompletionNotices(50)` を呼ぶ。これにより ch1 close〜ch2 open の隙間でフィールド操作が可能になる問題を防止する。
+
+- **`showCompanionStoryChapter2AllCompleteCelebration()` の最終防衛線**: ch1 visible ガード（`_companionStoryAllCompleteNoticeVisible`）を追加。これは timer ベースの遅延が外部要因で狂った場合にも二枚重ね open を防ぐ。
+
+- **`renderField()` フォールバックは維持**: 旧セーブ救済（loadGame 直後にまだ物語モーダルを開いていない状態）では `renderField()` が唯一の消費機会になる。共通関数 1 本化で安全性は高まっている。
+
+- **個別変数の分離は維持**: ch1/ch2 の pending・visible・origin・timer 変数は完全に分離したまま。共通キュー関数はディスパッチ順序を制御するだけで、個別変数の意味を変えない。
+
+- **`_companionStoryCompletionNoticeQueueTimer` は非永続**: セッション変数（IIFE スコープ）。セーブデータに含めない。既存 debug リセット 4 本でクリアを追加。
+
+---
+
 ## v0.45.2 (2026-07-19) — 第2話全話完了演出 (§119)
 
 ### 設計判断・確認事項

@@ -1251,12 +1251,8 @@
       var _pn = _pendingGearRewardNotices.shift();
       showToast(_pn);
     }
-    // §115 v0.44.2: 全話完了演出フォールバック（旧セーブ救済など）
-    consumePendingCompanionStoryAllCompleteNotice();
-    // §119 v0.45.2: 第2話全話完了演出フォールバック（第1話演出が優先・二枚重ね防止）
-    if (!_companionStoryAllCompleteNoticeVisible) {
-      consumePendingCompanionStoryChapter2AllCompleteNotice();
-    }
+    // §120 v0.45.3: 全話完了演出フォールバック（共通キューで順序制御・二枚重ね防止）
+    consumePendingCompanionStoryCompletionNotices();
 
     var p = state.player;
 
@@ -3332,6 +3328,7 @@
   var _companionStoryChapter2AllCompleteOrigin = null;
   var _pendingCompanionStoryChapter2AllCompleteOrigin = null;
   var _companionStoryChapter2AllCompleteNoticeTimer = null;
+  var _companionStoryCompletionNoticeQueueTimer = null; // §120 v0.45.3: 共通キュータイマー（非永続）
 
   // §117 v0.45: 第2話閲覧中chapter追跡（非永続・saveしない）
   var _cstoryActiveChapter = 1;  // 現在閲覧中のchapter（1 or 2）
@@ -3477,6 +3474,7 @@
   // §119 v0.45.2: 第2話全話完了演出モーダルを開く
   function showCompanionStoryChapter2AllCompleteCelebration(origin) {
     if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    if (_companionStoryAllCompleteNoticeVisible) return; // §120 v0.45.3: 第1話表示中は開かない（同時表示防止最終防衛線）
     var _el119 = document.getElementById("companion-story-chapter2-all-complete-modal");
     if (!_el119) return;
     _companionStoryChapter2AllCompleteNoticeVisible = true;
@@ -3502,6 +3500,10 @@
     var _tavernEl119 = document.getElementById("tavern-modal");
     if (_tavernEl119 && !_tavernEl119.classList.contains("hidden")) {
       state.modalOpen = true;
+    }
+    // §120 v0.45.3: 残存pendingの安全確認（通常ch2後にch1は残らないが、debug・破損状態対策）
+    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice) {
+      schedulePendingCompanionStoryCompletionNotices(50);
     }
   }
 
@@ -3550,6 +3552,12 @@
       state.modalOpen = true;
     }
     _companionStoryAllCompleteOrigin = null;
+    // §120 v0.45.3: 第1話close後に第2話pendingがあれば短い遅延後に再消費
+    // state.modalOpen=trueを維持して演出間の隙間で背景操作不可を保証
+    if (_pendingCompanionStoryChapter2AllCompleteNotice) {
+      state.modalOpen = true;
+      schedulePendingCompanionStoryCompletionNotices(50);
+    }
   }
 
   // §116 v0.44.3: ガード強化・タイマー管理・origin引数対応
@@ -3572,6 +3580,36 @@
     _pendingCompanionStoryAllCompleteNotice = false;
     _pendingCompanionStoryAllCompleteOrigin = null;
     showCompanionStoryAllCompleteCelebration(_origin116);
+  }
+
+  // §120 v0.45.3: 共通キュー調整関数 — 第1話優先で安全にpendingを消費する
+  // 第1話または第2話の演出表示中なら何もしない
+  // 第1話pendingが存在する限り第2話を追い越して表示しない
+  function consumePendingCompanionStoryCompletionNotices() {
+    if (_companionStoryAllCompleteNoticeVisible) return;
+    if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    if (_pendingCompanionStoryAllCompleteNotice) {
+      consumePendingCompanionStoryAllCompleteNotice();
+      return;
+    }
+    if (_pendingCompanionStoryChapter2AllCompleteNotice) {
+      consumePendingCompanionStoryChapter2AllCompleteNotice();
+      return;
+    }
+  }
+
+  // §120 v0.45.3: 共通スケジュール関数 — 既存timerをキャンセルしdelay後にキュー消費を実行
+  // saveGame()しない / originを変更しない / pendingを変更しない
+  function schedulePendingCompanionStoryCompletionNotices(delay) {
+    if (_companionStoryCompletionNoticeQueueTimer) {
+      clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+      _companionStoryCompletionNoticeQueueTimer = null;
+    }
+    var _d = (typeof delay === "number" && delay >= 0) ? delay : 0;
+    _companionStoryCompletionNoticeQueueTimer = setTimeout(function () {
+      _companionStoryCompletionNoticeQueueTimer = null;
+      consumePendingCompanionStoryCompletionNotices();
+    }, _d);
   }
 
   // 仲間がパーティに加入したことがあるか（現在パーティ中 or 過去にEXPを獲得済み）
@@ -3764,26 +3802,21 @@
       openModal("tavern-modal");
       renderTavernStories();
     }
-    // §116 v0.44.3: origin設定・タイマー管理（前の予約を破棄してから再登録）
+    // §120 v0.45.3: 両話のoriginを先に設定（個別consume関数が参照）
     _pendingCompanionStoryAllCompleteOrigin = _fromTavern ? "tavern" : "field";
+    _pendingCompanionStoryChapter2AllCompleteOrigin = _fromTavern ? "tavern" : "field";
+    // §120 v0.45.3: 個別timerをクリアし共通キューで一本化（競合防止・表示順保証）
     if (_companionStoryAllCompleteNoticeTimer) {
       clearTimeout(_companionStoryAllCompleteNoticeTimer);
       _companionStoryAllCompleteNoticeTimer = null;
     }
-    _companionStoryAllCompleteNoticeTimer = setTimeout(function () {
-      _companionStoryAllCompleteNoticeTimer = null;
-      consumePendingCompanionStoryAllCompleteNotice();
-    }, 250);
-    // §119 v0.45.2: 第2話全話完了演出も同様に遅延消費（250ms: 個別toastの後）
-    _pendingCompanionStoryChapter2AllCompleteOrigin = _fromTavern ? "tavern" : "field";
     if (_companionStoryChapter2AllCompleteNoticeTimer) {
       clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
       _companionStoryChapter2AllCompleteNoticeTimer = null;
     }
-    _companionStoryChapter2AllCompleteNoticeTimer = setTimeout(function () {
-      _companionStoryChapter2AllCompleteNoticeTimer = null;
-      consumePendingCompanionStoryChapter2AllCompleteNotice();
-    }, 250);
+    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice) {
+      schedulePendingCompanionStoryCompletionNotices(250);
+    }
   }
 
   // §111 v0.43: 仲間わざ習得済みか判定（Lv25以上 + rewardFlag=true）
@@ -8055,6 +8088,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-rescue" style="border-color:#a0cfff;color:#a0cfff;">🧪 第2話旧4/4セーブ救済確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-noduplicate" style="border-color:#06d6a0;color:#06d6a0;">🧪 第2話演出二重防止確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v452-ch1ch2-sep" style="border-color:#a0cfff;color:#a0cfff;">🧪 第1話・第2話演出分離確認</button>';
+      html += '<p class="small" style="color:#88d8b0;margin-top:8px;">🔗 全話完了演出キュー安定化 (§120 v0.45.3)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v453-queue-seq" style="border-color:#88d8b0;color:#88d8b0;">🧪 第1話→第2話 pending連続表示確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v453-both-rescue" style="border-color:#88d8b0;color:#88d8b0;">🧪 両旧4/4セーブ連続救済確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v453-queue-nodup" style="border-color:#88d8b0;color:#88d8b0;">🧪 全話完了キュー二重実行防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v453-ch1close-ch2" style="border-color:#88d8b0;color:#88d8b0;">🧪 第1話close後の第2話再消費確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v453-modalopen" style="border-color:#88d8b0;color:#88d8b0;">🧪 連続演出中modalOpen維持確認</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -10275,6 +10314,11 @@
           clearTimeout(_companionStoryAllCompleteNoticeTimer);
           _companionStoryAllCompleteNoticeTimer = null;
         }
+        // §120 v0.45.3: 共通キュータイマーもクリア
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
         closeCompanionStoryAllCompleteCelebration();
         state.companionSideStoryFlags = { juritani: false, shurittani: false, norio: false, harumi: false };
         state.companionSideStoryAllCompleteCelebrated = false; // §115 v0.44.2
@@ -10453,6 +10497,10 @@
           clearTimeout(_companionStoryAllCompleteNoticeTimer);
           _companionStoryAllCompleteNoticeTimer = null;
         }
+        if (_companionStoryCompletionNoticeQueueTimer) { // §120 v0.45.3
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
         checkCompanionSideStoryAllComplete();
         _pendingCompanionStoryAllCompleteOrigin = "debug"; // §116 v0.44.3
         saveGame();
@@ -10469,6 +10517,10 @@
         if (_companionStoryAllCompleteNoticeTimer) {
           clearTimeout(_companionStoryAllCompleteNoticeTimer);
           _companionStoryAllCompleteNoticeTimer = null;
+        }
+        if (_companionStoryCompletionNoticeQueueTimer) { // §120 v0.45.3
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
         }
         _companionStoryAllCompleteOrigin = null;
         _pendingCompanionStoryAllCompleteOrigin = null;
@@ -10879,6 +10931,10 @@
           clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
           _companionStoryChapter2AllCompleteNoticeTimer = null;
         }
+        if (_companionStoryCompletionNoticeQueueTimer) { // §120 v0.45.3
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
         closeModal("companion-story-chapter2-all-complete-modal");
         saveGame();
         showToast("[DEBUG v0.45.2] 第2話演出済みフラグをリセット ✅");
@@ -10997,6 +11053,236 @@
         showToast("[DEBUG v0.45.2] ch1/ch2分離: " + (_allPass ? "PASS ✅" : "FAIL ❌") +
           "\n ch2pending=" + _pass1 + " ch2celeb=" + _pass2 +
           "\n ch1celeb維持=" + _pass3 + " ch1pending維持=" + _pass4 + " ch1vis維持=" + _pass5);
+      };
+
+      // §120 v0.45.3: 第1話→第2話 pending連続表示確認
+      document.getElementById("btn-debug-v453-queue-seq").onclick = function () {
+        var _snap453a = {
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          pending1: _pendingCompanionStoryAllCompleteNotice,
+          pending2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          vis1: _companionStoryAllCompleteNoticeVisible,
+          vis2: _companionStoryChapter2AllCompleteNoticeVisible,
+          origin1: _pendingCompanionStoryAllCompleteOrigin,
+          origin2: _pendingCompanionStoryChapter2AllCompleteOrigin
+        };
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = true;
+        state.companionSideStoryChapter2AllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = true;
+        _pendingCompanionStoryChapter2AllCompleteNotice = true;
+        _companionStoryAllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _pendingCompanionStoryAllCompleteOrigin = "debug";
+        _pendingCompanionStoryChapter2AllCompleteOrigin = "debug";
+        consumePendingCompanionStoryCompletionNotices();
+        var _pass453a1 = (_companionStoryAllCompleteNoticeVisible === true);
+        var _pass453a2 = (_companionStoryChapter2AllCompleteNoticeVisible === false);
+        var _pass453a3 = (_pendingCompanionStoryChapter2AllCompleteNotice === true);
+        var _allPass453a = (_pass453a1 && _pass453a2 && _pass453a3);
+        showToast("[DEBUG v0.45.3] 連続表示確認: " + (_allPass453a ? "PASS ✅" : "FAIL ❌") +
+          "\n ch1open=" + _pass453a1 + " ch2closed=" + _pass453a2 + " ch2pending維持=" + _pass453a3);
+        closeCompanionStoryAllCompleteCelebration();
+        closeModal("companion-story-chapter2-all-complete-modal");
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        state.companionSideStoryAllCompleteCelebrated = _snap453a.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap453a.celeb2;
+        _pendingCompanionStoryAllCompleteNotice = _snap453a.pending1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap453a.pending2;
+        _companionStoryAllCompleteNoticeVisible = _snap453a.vis1;
+        _companionStoryChapter2AllCompleteNoticeVisible = _snap453a.vis2;
+        _pendingCompanionStoryAllCompleteOrigin = _snap453a.origin1;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = _snap453a.origin2;
+      };
+
+      // §120 v0.45.3: 両旧4/4セーブ連続救済確認
+      document.getElementById("btn-debug-v453-both-rescue").onclick = function () {
+        var _snap453b = {
+          flags1: JSON.parse(JSON.stringify(state.companionSideStoryFlags || {})),
+          flags2: JSON.parse(JSON.stringify(state.companionSideStoryChapter2Flags || {})),
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          pending1: _pendingCompanionStoryAllCompleteNotice,
+          pending2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          origin1: _pendingCompanionStoryAllCompleteOrigin,
+          origin2: _pendingCompanionStoryChapter2AllCompleteOrigin
+        };
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = false;
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        _companionStoryAllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        var _r453b1 = checkCompanionSideStoryAllComplete();
+        if (_r453b1) { _pendingCompanionStoryAllCompleteOrigin = "field"; }
+        var _r453b2 = checkCompanionSideStoryChapter2AllComplete("field");
+        var _pass453b1 = (state.companionSideStoryAllCompleteCelebrated === true);
+        var _pass453b2 = (state.companionSideStoryChapter2AllCompleteCelebrated === true);
+        var _pass453b3 = (_pendingCompanionStoryAllCompleteNotice === true);
+        var _pass453b4 = (_pendingCompanionStoryChapter2AllCompleteNotice === true);
+        var _pass453b5 = (_pendingCompanionStoryAllCompleteOrigin === "field");
+        var _pass453b6 = (_pendingCompanionStoryChapter2AllCompleteOrigin === "field");
+        var _allPass453b = (_pass453b1 && _pass453b2 && _pass453b3 && _pass453b4 && _pass453b5 && _pass453b6);
+        showToast("[DEBUG v0.45.3] 両4/4救済: " + (_allPass453b ? "PASS ✅" : "FAIL ❌") +
+          "\n celeb1=" + _pass453b1 + " celeb2=" + _pass453b2 +
+          "\n pending1=" + _pass453b3 + " pending2=" + _pass453b4 +
+          "\n origin1=field:" + _pass453b5 + " origin2=field:" + _pass453b6);
+        state.companionSideStoryFlags = _snap453b.flags1;
+        state.companionSideStoryChapter2Flags = _snap453b.flags2;
+        state.companionSideStoryAllCompleteCelebrated = _snap453b.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap453b.celeb2;
+        _pendingCompanionStoryAllCompleteNotice = _snap453b.pending1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap453b.pending2;
+        _pendingCompanionStoryAllCompleteOrigin = _snap453b.origin1;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = _snap453b.origin2;
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+      };
+
+      // §120 v0.45.3: 全話完了キュー二重実行防止確認
+      document.getElementById("btn-debug-v453-queue-nodup").onclick = function () {
+        var _snap453c = {
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          pending1: _pendingCompanionStoryAllCompleteNotice,
+          pending2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          vis1: _companionStoryAllCompleteNoticeVisible,
+          vis2: _companionStoryChapter2AllCompleteNoticeVisible,
+          origin1: _pendingCompanionStoryAllCompleteOrigin,
+          origin2: _pendingCompanionStoryChapter2AllCompleteOrigin
+        };
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = true;
+        state.companionSideStoryChapter2AllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = true;
+        _pendingCompanionStoryChapter2AllCompleteNotice = true;
+        _companionStoryAllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _pendingCompanionStoryAllCompleteOrigin = "debug";
+        _pendingCompanionStoryChapter2AllCompleteOrigin = "debug";
+        var _fail453c = false;
+        for (var _i453c = 0; _i453c < 10; _i453c++) {
+          consumePendingCompanionStoryCompletionNotices();
+          if (_companionStoryChapter2AllCompleteNoticeVisible) { _fail453c = true; break; }
+        }
+        var _pass453c1 = (_companionStoryAllCompleteNoticeVisible === true);
+        var _pass453c2 = (_companionStoryChapter2AllCompleteNoticeVisible === false);
+        var _pass453c3 = (!_fail453c);
+        var _allPass453c = (_pass453c1 && _pass453c2 && _pass453c3);
+        showToast("[DEBUG v0.45.3] キュー二重防止x10: " + (_allPass453c ? "PASS ✅" : "FAIL ❌") +
+          "\n ch1=1枚:" + _pass453c1 + " ch2=0枚:" + _pass453c2 + " 二重なし:" + _pass453c3);
+        closeCompanionStoryAllCompleteCelebration();
+        closeModal("companion-story-chapter2-all-complete-modal");
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        state.companionSideStoryAllCompleteCelebrated = _snap453c.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap453c.celeb2;
+        _pendingCompanionStoryAllCompleteNotice = _snap453c.pending1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap453c.pending2;
+        _companionStoryAllCompleteNoticeVisible = _snap453c.vis1;
+        _companionStoryChapter2AllCompleteNoticeVisible = _snap453c.vis2;
+        _pendingCompanionStoryAllCompleteOrigin = _snap453c.origin1;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = _snap453c.origin2;
+      };
+
+      // §120 v0.45.3: 第1話close後の第2話再消費確認（最重要テスト）
+      document.getElementById("btn-debug-v453-ch1close-ch2").onclick = function () {
+        var _snap453d = {
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          pending1: _pendingCompanionStoryAllCompleteNotice,
+          pending2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          vis1: _companionStoryAllCompleteNoticeVisible,
+          vis2: _companionStoryChapter2AllCompleteNoticeVisible,
+          origin1: _pendingCompanionStoryAllCompleteOrigin,
+          origin2: _pendingCompanionStoryChapter2AllCompleteOrigin
+        };
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = true;
+        state.companionSideStoryChapter2AllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = true;
+        _companionStoryAllCompleteNoticeVisible = true;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _pendingCompanionStoryAllCompleteOrigin = "debug";
+        _pendingCompanionStoryChapter2AllCompleteOrigin = "debug";
+        closeCompanionStoryAllCompleteCelebration();
+        var _pass453d1 = (_companionStoryAllCompleteNoticeVisible === false);
+        var _pass453d2 = (_pendingCompanionStoryChapter2AllCompleteNotice === true);
+        var _pass453d3 = (_companionStoryCompletionNoticeQueueTimer !== null);
+        var _allPass453d = (_pass453d1 && _pass453d2 && _pass453d3);
+        showToast("[DEBUG v0.45.3] ch1close後ch2再消費: " + (_allPass453d ? "PASS ✅" : "FAIL ❌") +
+          "\n ch1閉じた=" + _pass453d1 + " ch2pending維持=" + _pass453d2 + " timer予約=" + _pass453d3);
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        closeModal("companion-story-chapter2-all-complete-modal");
+        state.companionSideStoryAllCompleteCelebrated = _snap453d.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap453d.celeb2;
+        _pendingCompanionStoryAllCompleteNotice = _snap453d.pending1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap453d.pending2;
+        _companionStoryAllCompleteNoticeVisible = _snap453d.vis1;
+        _companionStoryChapter2AllCompleteNoticeVisible = _snap453d.vis2;
+        _pendingCompanionStoryAllCompleteOrigin = _snap453d.origin1;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = _snap453d.origin2;
+      };
+
+      // §120 v0.45.3: 連続演出中のmodalOpen維持確認
+      document.getElementById("btn-debug-v453-modalopen").onclick = function () {
+        var _snap453e = {
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          pending1: _pendingCompanionStoryAllCompleteNotice,
+          pending2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          vis1: _companionStoryAllCompleteNoticeVisible,
+          vis2: _companionStoryChapter2AllCompleteNoticeVisible,
+          origin1: _pendingCompanionStoryAllCompleteOrigin,
+          origin2: _pendingCompanionStoryChapter2AllCompleteOrigin,
+          modalOpen: state.modalOpen
+        };
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = true;
+        state.companionSideStoryChapter2AllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = true;
+        _companionStoryAllCompleteNoticeVisible = true;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _pendingCompanionStoryAllCompleteOrigin = "debug";
+        _pendingCompanionStoryChapter2AllCompleteOrigin = "debug";
+        closeCompanionStoryAllCompleteCelebration();
+        var _pass453e1 = (state.modalOpen === true);
+        var _allPass453e = _pass453e1;
+        showToast("[DEBUG v0.45.3] 連続演出中modalOpen維持: " + (_allPass453e ? "PASS ✅" : "FAIL ❌") +
+          "\n ch2pending中 modalOpen=" + state.modalOpen);
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        closeModal("companion-story-chapter2-all-complete-modal");
+        state.companionSideStoryAllCompleteCelebrated = _snap453e.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap453e.celeb2;
+        _pendingCompanionStoryAllCompleteNotice = _snap453e.pending1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap453e.pending2;
+        _companionStoryAllCompleteNoticeVisible = _snap453e.vis1;
+        _companionStoryChapter2AllCompleteNoticeVisible = _snap453e.vis2;
+        _pendingCompanionStoryAllCompleteOrigin = _snap453e.origin1;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = _snap453e.origin2;
+        state.modalOpen = _snap453e.modalOpen;
       };
 
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
