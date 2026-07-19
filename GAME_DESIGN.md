@@ -6128,11 +6128,152 @@ if (_storyRescued) { _pendingCompanionStoryAllCompleteOrigin = "field"; }
 
 ---
 
+---
+
+## §117 v0.45 — 仲間サイドストーリー第2話 [実装済み]
+
+### 概要
+
+仲間4人に第2話を追加する。第1話で自分の役割や力の意味を見つけた4人が、自分だけで背負わず仲間を信頼することを学ぶ物語。
+
+### 第2話タイトル
+
+| 仲間 | タイトル |
+|---|---|
+| ジュリタニ | 拳を下ろす勇気 |
+| シュリタニ | 待つという追跡 |
+| ノリオ | 余白に残った名前 |
+| ハルミ | 光を受け取る日 |
+
+### 第2話解放条件
+
+```
+対象仲間が加入済み
++ 対象仲間の第1話が完了済み
++ 対象仲間がLv50以上
+```
+
+### データ定数
+
+```javascript
+var COMPANION_SIDE_STORY_CHAPTER2_DATA = {
+  juritani:   { id: "juritani_story_2",   companionId: "juritani",   chapter: 2, title: "拳を下ろす勇気",   lines: [...] },
+  shurittani: { id: "shurittani_story_2", companionId: "shurittani", chapter: 2, title: "待つという追跡",   lines: [...] },
+  norio:      { id: "norio_story_2",      companionId: "norio",      chapter: 2, title: "余白に残った名前", lines: [...] },
+  harumi:     { id: "harumi_story_2",     companionId: "harumi",     chapter: 2, title: "光を受け取る日",   lines: [...] }
+};
+```
+
+### 新規永続フラグ
+
+```javascript
+state.companionSideStoryChapter2Flags = {
+  juritani: false, shurittani: false, norio: false, harumi: false
+};
+```
+
+第1話の `companionSideStoryFlags` とは別キーで保存。
+
+### 新規モジュールスコープ変数
+
+```javascript
+var _cstoryActiveChapter = 1;  // 現在閲覧中のchapter（1 or 2）
+```
+
+非永続。`startCompanionSideStory()` で設定、`closeCompanionSideStoryModal()` でリセット。
+
+### 新規関数
+
+| 関数 | 説明 |
+|---|---|
+| `normalizeCompanionSideStoryChapter2Flags()` | 第2話フラグをboolean保証・never demote・changedを返す |
+| `getCompanionSideStoryData(cid, chapter)` | chapter未指定=1話 / 2=第2話 / 不正=null |
+| `isCompanionSideStoryCompleted(cid, chapter)` | chapter指定で完了フラグを返す |
+
+### 変更関数
+
+| 関数 | 変更内容 |
+|---|---|
+| `isCompanionSideStoryUnlocked(cid, chapter)` | chapter=2: 加入+第1話完了+Lv50 |
+| `getCompanionSideStoryLockReason(cid, chapter)` | chapter=2: 未加入/第1話未完了/Lv不足を返す |
+| `showCompanionSideStoryLine()` | `_cstoryActiveChapter` に応じたデータ取得・再読判定 |
+| `startCompanionSideStory(cid, chapter)` | chapter引数追加・`_cstoryActiveChapter` 設定 |
+| `completeCompanionSideStory(cid, chapter)` | chapter=2: ch2フラグ設定・check非呼び出し・ch2 toast |
+| `closeCompanionSideStoryModal()` | `_cstoryActiveChapter = 1` にリセット |
+| `btn-cstory-next` ハンドラ | `getCompanionSideStoryData` / `_cstoryActiveChapter` 対応 |
+| `renderTavernStories()` | 第1話・第2話を仲間ごとに両方表示 |
+| ステータス画面 | 第2話状態を表示 |
+| 冒険の記録 | 第1話・第2話を別セクションに分離 |
+| `saveGame()` | `companionSideStoryChapter2Flags` 追加 |
+| `loadGame()` | 第2話フラグロード・normalize・旧セーブ補完 |
+
+### 第2話完了処理
+
+```
+第2話flag=true
+↓ saveGame()1回
+↓ 第2話個別完了toast（例: 「📖 ジュリタニの物語・第2話\n「拳を下ろす勇気」を読み終えた。」）
+↓ モーダルclose
+↓ 酒場更新（fromTavernなら）
+```
+
+`checkCompanionSideStoryAllComplete()` は呼ばない。第1話全話完了演出を発動させない。
+
+### 第1話全話完了バナー変更
+
+酒場バナー:
+```
+🌟 4人の第1話をすべて読み終えました
+```
+
+冒険の記録バッジ:
+```
+🌟 4人の第1話をすべて読了
+```
+
+「第1話」を明記して第2話と混同しない。
+
+### 旧セーブ互換
+
+v0.44.3以前のセーブには `companionSideStoryChapter2Flags` がない。  
+`loadGame()` で `data.companionSideStoryChapter2Flags || {}` で補完し、`normalizeCompanionSideStoryChapter2Flags()` で4件false保証。
+
+### 変更しないもの（§117 v0.45）
+
+- COMPANION_SIDE_STORY_DATA（第1話データ）
+- companionSideStoryFlags（第1話フラグ）
+- companionSideStoryAllCompleteCelebrated
+- 第1話全話完了演出（checkCompanionSideStoryAllComplete/consumePending等）
+- 第2話全話完了演出なし
+- 報酬なし（EXP/GOLD/アイテム/装備/わざ/能力上昇 なし）
+- Lv50節目セリフ変更なし
+- 仲間戦闘能力・装備効果・捕獲率・EXP倍率・AI比率 変更なし
+- BGM制御・stopBGMHard()・BGMセッション・BGMタイマー 変更なし
+- 究極ゴリラ捕獲条件 変更なし
+- 究極チンパンジー・既存最終サイドストーリー 変更なし
+
+### debug追加（§117 v0.45）
+
+| ボタンID | 内容 |
+|---|---|
+| `btn-debug-v45-story2-unlock-all` | 第2話を全解放状態にする（Lv50+第1話完了） |
+| `btn-debug-v45-story2-reset-flags` | 第2話完了フラグを全リセット |
+| `btn-debug-v45-story2-complete-all` | 第2話を全完了 |
+| `btn-debug-v45-story2-boundary` | 第2話解放条件境界確認（PASS/FAIL） |
+| `btn-debug-v45-story2-flag-sep` | 第1話・第2話フラグ分離確認（PASS/FAIL） |
+| `btn-debug-v45-story2-no-celeb` | 第2話完了で第1話全話演出が発動しない確認（PASS/FAIL） |
+| `btn-debug-v45-story2-open-j` | ジュリタニ第2話を直接確認 |
+| `btn-debug-v45-story2-open-s` | シュリタニ第2話を直接確認 |
+| `btn-debug-v45-story2-open-n` | ノリオ第2話を直接確認 |
+| `btn-debug-v45-story2-open-h` | ハルミ第2話を直接確認 |
+
+---
+
 ## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
 
-### v0.45 候補以降 [未実装・将来機能]
+### v0.45.1 候補以降 [未実装・将来機能]
 
-- v0.45 仲間サイドストーリー第2話（各仲間の成長後を描く）
-- 将来: 4人の物語完了後の最終サイドストーリー接続
+- v0.45.1 第2話安定化（第1話・第2話間セッション混入確認・旧セーブ補完・各画面表示同期）
+- 将来: 第2話4人完了後の最終サイドストーリー接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

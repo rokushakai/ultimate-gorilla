@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.44.3** |
+| 現在バージョン | **v0.45** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,18 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.45] 仲間サイドストーリー第2話**（§117）
+  - **`COMPANION_SIDE_STORY_CHAPTER2_DATA`**: 4人分の第2話データ定数（各10行）
+  - **解放条件**: 加入済み + 第1話完了 + 仲間Lv50以上（ch2専用）
+  - **`state.companionSideStoryChapter2Flags`**: 永続完了フラグ（saveGame/loadGame対応）
+  - **`_cstoryActiveChapter`**: 閲覧中chapter追跡変数（非永続・モジュールスコープ）
+  - **`getCompanionSideStoryData(cid, chapter)`**: ch1/ch2データディスパッチャ
+  - **`isCompanionSideStoryCompleted(cid, chapter)`** / **`isCompanionSideStoryUnlocked(cid, chapter)`**: chapter引数対応
+  - **`completeCompanionSideStory(cid, chapter)`**: ch2はch1演出（`checkCompanionSideStoryAllComplete`）をトリガーしない
+  - **`renderTavernStories()`**: ch1/ch2カードを仲間ごとに並列表示
+  - **adventure log**: 「第1話」「第2話」の2セクションに分割
+  - **ステータス画面仲間カード**: ch1/ch2両話の状態表示
+  - **デバッグ10本 (§117)**: ch2全解放 / リセット / 全完了 / 境界確認 / フラグ独立 / 演出なし確認 / 4人直接開く
 - **[v0.44.3] 全話完了演出モーダル重なり安定化**（§116）
   - **z-index: 40** で `#companion-story-all-complete-modal` を酒場(.modal z-index:30)より前面保証
   - **`_companionStoryAllCompleteOrigin`**: 表示元追跡 ("tavern"/"field"/"debug")

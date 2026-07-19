@@ -14,13 +14,33 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.44.3 候補以降
+### Version 0.45 候補以降
 
-v0.45 仲間サイドストーリー第2話 / 将来: 4人完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.45 — 仲間サイドストーリー第2話 (§117)
+
+- **`COMPANION_SIDE_STORY_CHAPTER2_DATA`**: 4人分の第2話データ定数（各10行） ✅
+- **`state.companionSideStoryChapter2Flags`**: 永続完了フラグ（saveGame/loadGame対応） ✅
+- **`normalizeCompanionSideStoryChapter2Flags()`**: ch2フラグ整合性保証（never demote） ✅
+- **`getCompanionSideStoryData(cid, chapter)`**: ch1/ch2データディスパッチャ ✅
+- **`isCompanionSideStoryCompleted(cid, chapter)`** / **`isCompanionSideStoryUnlocked(cid, chapter)`**: chapter引数対応 ✅
+- **`getCompanionSideStoryLockReason(cid, chapter)`**: ch2用メッセージ対応 ✅
+- **`_cstoryActiveChapter`**: 閲覧中chapter追跡変数（非永続） ✅
+- **`startCompanionSideStory(cid, chapter)`**: chapter引数追加 ✅
+- **`showCompanionSideStoryLine()`**: `getCompanionSideStoryData` 使用 ✅
+- **`completeCompanionSideStory(cid, chapter)`**: ch2はch1演出トリガーなし ✅
+- **`closeCompanionSideStoryModal()`**: `_cstoryActiveChapter` リセット ✅
+- **`btn-cstory-next` ハンドラ**: `_cstoryActiveChapter` キャプチャ・chapter対応 ✅
+- **`renderTavernStories()`**: ch1/ch2カードを仲間ごとに並列表示 ✅
+- **adventure log**: 「第1話」「第2話」の2セクションに分割 ✅
+- **ステータス画面仲間カード**: ch1/ch2両話の状態表示 ✅
+- **saveGame / loadGame**: `companionSideStoryChapter2Flags` 追加 ✅
+- **デバッグ10本 (§117)**: ch2全解放 / リセット / 全完了 / 境界確認 / フラグ独立 / 演出なし確認 / 4人直接開く ✅
 
 ### Version 0.44.3 — 全話完了演出モーダル重なり安定化 (§116)
 

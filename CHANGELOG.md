@@ -5,6 +5,39 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.45] - 2026-07-19 — 仲間サイドストーリー第2話 (§117)
+
+### Added
+- **`COMPANION_SIDE_STORY_CHAPTER2_DATA`**: 4人分の第2話データ定数
+  - ジュリタニ「拳を下ろす勇気」/ シュリタニ「待つという追跡」/ ノリオ「余白に残った名前」/ ハルミ「光を受け取る日」（各10行）
+- **`state.companionSideStoryChapter2Flags`**: 第2話完了フラグ（永続・saveする）
+- **`normalizeCompanionSideStoryChapter2Flags()`**: ch2フラグ整合性保証（never demote）
+- **`getCompanionSideStoryData(cid, chapter)`**: chapter引数でch1/ch2データを取得するディスパッチャ
+- **`isCompanionSideStoryCompleted(cid, chapter)`**: chapter引数対応の完了判定
+- **`_cstoryActiveChapter`**: 閲覧中chapter追跡変数（非永続・saveしない）
+- デバッグ10本（§117）: ch2全解放 / フラグリセット / 全完了 / 境界確認 / フラグ独立確認 / 演出なし確認 / 4人直接開く
+
+### Changed
+- **`isCompanionSideStoryUnlocked(cid, chapter)`**: chapter引数追加（ch2 = 加入+ch1完了+Lv50）
+- **`getCompanionSideStoryLockReason(cid, chapter)`**: chapter引数追加（ch2用メッセージ対応）
+- **`startCompanionSideStory(cid, chapter)`**: chapter引数追加・`_cstoryActiveChapter` 設定
+- **`showCompanionSideStoryLine()`**: `getCompanionSideStoryData(cid, _cstoryActiveChapter)` 使用
+- **`completeCompanionSideStory(cid, chapter)`**: chapter引数追加（ch2: ch1演出トリガーなし）
+- **`closeCompanionSideStoryModal()`**: `_cstoryActiveChapter = 1` リセット追加
+- **`btn-cstory-next` ハンドラ**: `_cstoryActiveChapter` キャプチャ・`getCompanionSideStoryData` 使用
+- **`renderTavernStories()`**: ch1/ch2 カードを仲間ごとに並列表示。ch1完了バナー文言修正
+- **adventure log 物語セクション**: 「第1話」「第2話」の2セクションに分割。バッジ文言修正
+- **ステータス画面仲間カード**: ch1/ch2 両話の状態（完了/閲覧可能/未解放+条件）を表示
+- **`saveGame()`**: `companionSideStoryChapter2Flags` 追加
+- **`loadGame()`**: `companionSideStoryChapter2Flags` ロード + `normalizeCompanionSideStoryChapter2Flags()` 呼び出し
+
+### 変更しないもの
+- BGM制御・究極ゴリラ捕獲条件・究極チンパンジー・既存最終サイドストーリー・その解放条件
+- 報酬なし（Gold・アイテム付与なし）。仲間戦闘能力・装備効果・捕獲率・EXP倍率・AI比率変更なし
+- 第1話全話完了演出（`checkCompanionSideStoryAllComplete`）はch2完了からはトリガーされない
+
+---
+
 ## [0.44.3] - 2026-07-18 — 全話完了演出モーダル重なり安定化 (§116)
 
 ### Added
