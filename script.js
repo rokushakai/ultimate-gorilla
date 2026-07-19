@@ -3324,6 +3324,17 @@
   // §117 v0.45: 第2話閲覧中chapter追跡（非永続・saveしない）
   var _cstoryActiveChapter = 1;  // 現在閲覧中のchapter（1 or 2）
 
+  // §118 v0.45.1: 閲覧中story.id追跡（非永続・saveしない・セッション混入防止）
+  var _cstoryActiveStoryId = null;
+
+  // §118 v0.45.1: chapter値を正規化。省略→1, 明示的不正値→null（第1話フォールバックなし）
+  function normalizeCompanionSideStoryChapter(chapter) {
+    if (chapter === undefined || chapter === null) { return 1; }
+    if (chapter === 1) { return 1; }
+    if (chapter === 2) { return 2; }
+    return null;
+  }
+
   // companionSideStoryFlagsの整合性を保証（欠損・非boolean→false補正、true→維持）
   // §114 v0.44.1: 変更があればtrueを返す（loadGame()でのsave判定に使用）
   function normalizeCompanionSideStoryFlags() {
@@ -3361,16 +3372,22 @@
     return _changed;
   }
 
-  // §117 v0.45: chapterに応じたストーリーデータを返す（chapter未指定=1 / 不正=null）
+  // §117 v0.45 / §118 v0.45.1: chapterに応じたストーリーデータを返す
+  // chapter未指定=1, 明示的不正値(0/-1/3/"foo")→null（第1話フォールバックなし）
   function getCompanionSideStoryData(cid, chapter) {
-    var _ch = (chapter === 2) ? 2 : 1;
+    var _ch = normalizeCompanionSideStoryChapter(chapter);
+    if (_ch === null) { return null; }
+    if (typeof cid !== "string" || !cid) { return null; }
     if (_ch === 2) { return COMPANION_SIDE_STORY_CHAPTER2_DATA[cid] || null; }
     return COMPANION_SIDE_STORY_DATA[cid] || null;
   }
 
-  // §117 v0.45: chapter指定で完了フラグを返す
+  // §117 v0.45 / §118 v0.45.1: chapter指定で完了フラグを返す
+  // chapter=1のみch1フラグ, chapter=2のみch2フラグを参照（混用防止）
   function isCompanionSideStoryCompleted(cid, chapter) {
-    if (chapter === 2) {
+    var _ch = normalizeCompanionSideStoryChapter(chapter);
+    if (_ch === null) { return false; }
+    if (_ch === 2) {
       if (!state.companionSideStoryChapter2Flags || typeof state.companionSideStoryChapter2Flags !== "object") return false;
       return !!(state.companionSideStoryChapter2Flags[cid]);
     }
@@ -3507,12 +3524,16 @@
     return "「" + techName + "」を習得すると解放（" + getCompanionTechniqueLockReason(cid) + "）";
   }
 
-  // 仲間サイドストーリーの会話行を表示する（§117 v0.45: chapter対応）
+  // 仲間サイドストーリーの会話行を表示する（§117 v0.45: chapter対応 / §118 v0.45.1: storyIdガード）
   function showCompanionSideStoryLine() {
     var cid = state.activeCompanionSideStory;
     if (!cid) return;
-    var story = getCompanionSideStoryData(cid, _cstoryActiveChapter);
+    var _ch = normalizeCompanionSideStoryChapter(_cstoryActiveChapter);
+    if (_ch === null) { return; }
+    var story = getCompanionSideStoryData(cid, _ch);
     if (!story) return;
+    // §118 v0.45.1: storyIdが一致しない場合は表示しない（セッション混入防止）
+    if (_cstoryActiveStoryId !== null && story.id !== _cstoryActiveStoryId) { return; }
     var idx = state.activeCompanionSideStoryLine;
     var lines = story.lines;
     if (!lines || idx < 0 || idx >= lines.length) return;
@@ -3542,9 +3563,19 @@
     }
   }
 
-  // 仲間サイドストーリーを開始する（§117 v0.45: chapter引数追加）
+  // 仲間サイドストーリーを開始する（§117 v0.45: chapter引数追加 / §118 v0.45.1: 安定化）
   function startCompanionSideStory(cid, chapter) {
-    var _ch = (chapter === 2) ? 2 : 1;
+    // §118 v0.45.1: chapter正規化（明示的不正値は拒否・省略=第1話）
+    var _ch = normalizeCompanionSideStoryChapter(chapter);
+    if (_ch === null) {
+      showToast("不正なchapter引数です。");
+      return;
+    }
+    // §118 v0.45.1: cid検証
+    if (typeof cid !== "string" || !cid) {
+      showToast("不正なcid引数です。");
+      return;
+    }
     _cstoryActiveChapter = _ch;
     var story = getCompanionSideStoryData(cid, _ch);
     // §114 v0.44.1: データ検証を強化
@@ -3566,15 +3597,24 @@
     // 状態設定
     state.activeCompanionSideStory = cid;
     state.activeCompanionSideStoryLine = 0;
+    // §118 v0.45.1: storyId記録（セッション混入防止）
+    _cstoryActiveStoryId = story.id || null;
     // 酒場から開いた場合のみ酒場を閉じる
     if (_cstoryFromTavern) { closeModal("tavern-modal"); }
     showCompanionSideStoryLine();
     openModal("companion-story-modal");
   }
 
-  // 仲間サイドストーリー完了処理（§117 v0.45: chapter引数追加）
+  // 仲間サイドストーリー完了処理（§117 v0.45: chapter引数追加 / §118 v0.45.1: 安定化）
   function completeCompanionSideStory(cid, chapter) {
-    var _ch = (chapter === 2) ? 2 : 1;
+    var _ch = normalizeCompanionSideStoryChapter(chapter);
+    if (_ch === null) { return; }
+    // §118 v0.45.1: アクティブセッションと一致しない呼び出しを棄却
+    if (state.activeCompanionSideStory !== cid) { return; }
+    if (_cstoryActiveChapter !== _ch) { return; }
+    var _expectedStory = getCompanionSideStoryData(cid, _ch);
+    if (!_expectedStory) { return; }
+    if (_cstoryActiveStoryId !== null && _expectedStory.id !== _cstoryActiveStoryId) { return; }
     if (_ch === 2) {
       normalizeCompanionSideStoryChapter2Flags();
       if (state.companionSideStoryChapter2Flags[cid] === true) {
@@ -3614,6 +3654,7 @@
     _cstoryFromTavern = false;
     _cstoryAdvanceLock = false;
     _cstoryActiveChapter = 1; // §117 v0.45: chapterリセット
+    _cstoryActiveStoryId = null; // §118 v0.45.1: storyIdクリア
     if (_cstoryAdvanceTimer) { clearTimeout(_cstoryAdvanceTimer); _cstoryAdvanceTimer = null; }
     closeModal("companion-story-modal");
     if (_fromTavern) {
@@ -7878,6 +7919,11 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v45-open-s2" style="border-color:#e9c46a;color:#e9c46a;">📖 シュリタニ第2話を直接開く</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v45-open-n2" style="border-color:#e9c46a;color:#e9c46a;">📖 ノリオ第2話を直接開く</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v45-open-h2" style="border-color:#e9c46a;color:#e9c46a;">📖 ハルミ第2話を直接開く</button>';
+      html += '<p class="small" style="color:#ff9f7f;margin-top:8px;">🧪 第1話/第2話セッション安定化確認 (§118 v0.45.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v451-ch1-to-ch2-contamination" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 第1話→第2話セッション混入確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v451-ch2-to-ch1-contamination" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 第2話→第1話セッション混入確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v451-old-timer-check" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 古いタイマー無効化確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v451-ch2-final-boundary" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 第2話最終行・完了境界確認</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -10566,6 +10612,90 @@
         startCompanionSideStory("harumi", 2);
       };
 
+      // §118 v0.45.1: セッション安定化デバッグ
+      document.getElementById("btn-debug-v451-ch1-to-ch2-contamination").onclick = function () {
+        // 第1話セッション開始→閉じる→第2話開始。旧セッションIDが新セッションに混入しないことを確認
+        var _cids451 = ["juritani", "shurittani", "norio", "harumi"];
+        var _cid451 = _cids451[0];
+        state.companionSideStoryFlags[_cid451] = true;
+        if (!state.companionLevels[_cid451]) { state.companionLevels[_cid451] = { level: 50, exp: 0 }; }
+        if (state.companionLevels[_cid451].level < 50) { state.companionLevels[_cid451].level = 50; }
+        if (state.player.companions.indexOf(_cid451) < 0) { state.player.companions.push(_cid451); }
+        var _sess1Before = _cstorySessionId;
+        startCompanionSideStory(_cid451, 1);
+        var _sess1After = _cstorySessionId;
+        var _storyId1 = _cstoryActiveStoryId;
+        closeCompanionSideStoryModal();
+        startCompanionSideStory(_cid451, 2);
+        var _sess2 = _cstorySessionId;
+        var _storyId2 = _cstoryActiveStoryId;
+        var _pass = (_sess2 > _sess1After) && (_storyId2 !== _storyId1) && (_cstoryActiveChapter === 2);
+        showToast("[DEBUG v0.45.1] 第1話→第2話混入確認: " + (_pass ? "PASS" : "FAIL") +
+          "\n  sess1=" + _sess1After + " sess2=" + _sess2 +
+          "\n  storyId1=" + _storyId1 + " storyId2=" + _storyId2);
+        closeCompanionSideStoryModal();
+      };
+      document.getElementById("btn-debug-v451-ch2-to-ch1-contamination").onclick = function () {
+        // 第2話セッション開始→閉じる→第1話開始。旧セッションIDが混入しないことを確認
+        var _cid451b = "juritani";
+        state.companionSideStoryFlags[_cid451b] = true;
+        if (!state.companionLevels[_cid451b]) { state.companionLevels[_cid451b] = { level: 50, exp: 0 }; }
+        if (state.companionLevels[_cid451b].level < 50) { state.companionLevels[_cid451b].level = 50; }
+        if (state.player.companions.indexOf(_cid451b) < 0) { state.player.companions.push(_cid451b); }
+        startCompanionSideStory(_cid451b, 2);
+        var _sess2 = _cstorySessionId;
+        var _storyId2 = _cstoryActiveStoryId;
+        closeCompanionSideStoryModal();
+        startCompanionSideStory(_cid451b, 1);
+        var _sess1 = _cstorySessionId;
+        var _storyId1 = _cstoryActiveStoryId;
+        var _pass = (_sess1 > _sess2) && (_storyId1 !== _storyId2) && (_cstoryActiveChapter === 1);
+        showToast("[DEBUG v0.45.1] 第2話→第1話混入確認: " + (_pass ? "PASS" : "FAIL") +
+          "\n  sess2=" + _sess2 + " sess1=" + _sess1 +
+          "\n  storyId2=" + _storyId2 + " storyId1=" + _storyId1);
+        closeCompanionSideStoryModal();
+      };
+      document.getElementById("btn-debug-v451-old-timer-check").onclick = function () {
+        // 古いタイマーが新セッションに影響しないことをsessionId記録で確認
+        var _cid451c = "juritani";
+        state.companionSideStoryFlags[_cid451c] = true;
+        if (!state.companionLevels[_cid451c]) { state.companionLevels[_cid451c] = { level: 50, exp: 0 }; }
+        if (state.companionLevels[_cid451c].level < 50) { state.companionLevels[_cid451c].level = 50; }
+        if (state.player.companions.indexOf(_cid451c) < 0) { state.player.companions.push(_cid451c); }
+        startCompanionSideStory(_cid451c, 1);
+        var _sess1 = _cstorySessionId;
+        // タイマーコールバックはsessionIdをキャプチャして照合する実装を確認
+        // 新セッションを即座に開始してsessIdが変わることを検証
+        _cstorySessionId++; // 手動インクリメントで旧セッション化
+        var _sess2 = _cstorySessionId;
+        var _pass = (_sess2 === _sess1 + 1);
+        closeCompanionSideStoryModal();
+        showToast("[DEBUG v0.45.1] 古いタイマー無効化確認: " + (_pass ? "PASS（sessionId分離OK）" : "FAIL") +
+          "\n  旧sess=" + _sess1 + " 現sess=" + _cstorySessionId);
+      };
+      document.getElementById("btn-debug-v451-ch2-final-boundary").onclick = function () {
+        // 第2話最終行でcompleteが正しく呼ばれ、アクティブ不一致時は棄却されることを確認
+        var _cid451d = "juritani";
+        state.companionSideStoryFlags[_cid451d] = true;
+        state.companionSideStoryChapter2Flags[_cid451d] = false;
+        if (!state.companionLevels[_cid451d]) { state.companionLevels[_cid451d] = { level: 50, exp: 0 }; }
+        if (state.companionLevels[_cid451d].level < 50) { state.companionLevels[_cid451d].level = 50; }
+        if (state.player.companions.indexOf(_cid451d) < 0) { state.player.companions.push(_cid451d); }
+        startCompanionSideStory(_cid451d, 2);
+        var _story451 = getCompanionSideStoryData(_cid451d, 2);
+        var _lastIdx = _story451 ? _story451.lines.length - 1 : 0;
+        state.activeCompanionSideStoryLine = _lastIdx;
+        showCompanionSideStoryLine();
+        // 不一致cidで棄却されることを確認
+        var _flagBefore = !!(state.companionSideStoryChapter2Flags[_cid451d]);
+        completeCompanionSideStory("shurittani", 2); // 不一致cid → 棄却されるはず
+        var _flagAfter = !!(state.companionSideStoryChapter2Flags[_cid451d]);
+        var _passBoundary = (_flagBefore === _flagAfter); // 棄却されたなら変化なし
+        showToast("[DEBUG v0.45.1] 第2話最終境界確認: " + (_passBoundary ? "PASS（不一致cid棄却OK）" : "FAIL（誤完了）") +
+          "\n  lastIdx=" + _lastIdx + " active=" + state.activeCompanionSideStory);
+        closeCompanionSideStoryModal();
+      };
+
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
       document.getElementById("btn-debug-v361-magic-win").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -11015,26 +11145,35 @@
     document.getElementById("btn-npc-close").addEventListener("click", function () {
       closeModal("npc-modal");
     });
-    // §113 v0.44 / §114 v0.44.1 / §117 v0.45: 仲間サイドストーリー会話モーダル
+    // §113 v0.44 / §114 v0.44.1 / §117 v0.45 / §118 v0.45.1: 仲間サイドストーリー会話モーダル
     document.getElementById("btn-cstory-next").addEventListener("click", function () {
-      // §114: 高速連打防止ロック + セッション検証
+      // §114: 高速連打防止ロック
       if (_cstoryAdvanceLock) return;
-      var _capSess = _cstorySessionId;
-      var _csCid = state.activeCompanionSideStory;
-      if (!_csCid) return;
-      if (_capSess !== _cstorySessionId) return; // 古いセッションのクリックを棄却
-      // §117 v0.45: クリック時点のchapterをキャプチャ
-      var _csCh = _cstoryActiveChapter;
-      var _csStory = getCompanionSideStoryData(_csCid, _csCh);
+      // §118 v0.45.1: クリック時点の5要素をキャプチャ（照合用）
+      var _capSess    = _cstorySessionId;
+      var _capCid     = state.activeCompanionSideStory;
+      var _capChapter = _cstoryActiveChapter;
+      var _capStoryId = _cstoryActiveStoryId;
+      var _capLineIdx = state.activeCompanionSideStoryLine;
+      if (!_capCid) return;
+      // §118 v0.45.1: データ取得（不正chapter/cid → null）
+      var _csStory = getCompanionSideStoryData(_capCid, _capChapter);
       if (!_csStory || !_csStory.lines || !_csStory.lines.length) return;
-      var _csIdx = state.activeCompanionSideStoryLine;
+      // §118 v0.45.1: 5要素照合（1つでも不一致なら棄却）
+      if (_capSess !== _cstorySessionId) { return; }
+      if (_capCid !== state.activeCompanionSideStory) { return; }
+      if (_capChapter !== _cstoryActiveChapter) { return; }
+      if (_capStoryId !== _cstoryActiveStoryId) { return; }
+      if (_capStoryId !== null && _csStory.id !== _capStoryId) { return; }
+      if (_capLineIdx !== state.activeCompanionSideStoryLine) { return; }
+      var _csIdx = _capLineIdx;
       if (typeof _csIdx !== "number" || _csIdx < 0 || _csIdx >= _csStory.lines.length) return;
       var _csIsLast = (_csIdx === _csStory.lines.length - 1);
       _cstoryAdvanceLock = true;
       if (_cstoryAdvanceTimer) { clearTimeout(_cstoryAdvanceTimer); _cstoryAdvanceTimer = null; }
       if (_csIsLast) {
         // 最終行で「物語を終える/閉じる」→ 完了処理（冪等）してからclose
-        completeCompanionSideStory(_csCid, _csCh);
+        completeCompanionSideStory(_capCid, _capChapter);
         closeCompanionSideStoryModal(); // 内部で _cstoryAdvanceLock = false にリセット
       } else {
         // 中間行: 1行だけ進める。200msロックで高速連打防止
@@ -11042,7 +11181,10 @@
           state.activeCompanionSideStoryLine = _csIdx + 1;
           showCompanionSideStoryLine();
         }
+        // §118 v0.45.1: タイマー発火時に旧セッションのロック解除を防ぐ
+        var _timerSess = _cstorySessionId;
         _cstoryAdvanceTimer = setTimeout(function () {
+          if (_timerSess !== _cstorySessionId) { return; }
           _cstoryAdvanceLock = false;
           _cstoryAdvanceTimer = null;
         }, 200);

@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.45.1] - 2026-07-19 — 仲間サイドストーリー第2話・安定化 (§118)
+
+### Added
+- **`_cstoryActiveStoryId`**: 閲覧中storyId追跡変数（非永続・IIFEスコープ・saveしない）
+- **`normalizeCompanionSideStoryChapter(chapter)`**: chapter値正規化ヘルパー（省略→1, 不正→null）
+- デバッグ4本（§118）: 第1話→第2話セッション混入確認 / 第2話→第1話混入確認 / 古いタイマー無効化確認 / 第2話最終境界確認
+
+### Changed
+- **`getCompanionSideStoryData(cid, chapter)`**: normalizer使用・不正chapter→null（第1話フォールバック廃止）
+- **`isCompanionSideStoryCompleted(cid, chapter)`**: normalizer使用・不正chapter→false（ch1/ch2フラグ混用防止）
+- **`startCompanionSideStory(cid, chapter)`**: 不正chapter/cid即拒否 + `_cstoryActiveStoryId = story.id` セット
+- **`showCompanionSideStoryLine()`**: `_cstoryActiveStoryId` 不一致時は描画しない
+- **`btn-cstory-next` ハンドラ**: 5要素（sessionId/cid/chapter/storyId/lineIndex）キャプチャ・全照合
+- **`btn-cstory-next` タイマー**: `_timerSess` キャプチャで旧セッションのロック解除を防止
+- **`completeCompanionSideStory(cid, chapter)`**: `activeCompanionSideStory` / `_cstoryActiveChapter` / `_cstoryActiveStoryId` 照合ガード追加
+- **`closeCompanionSideStoryModal()`**: `_cstoryActiveStoryId = null` クリア追加
+
+---
+
 ## [0.45] - 2026-07-19 — 仲間サイドストーリー第2話 (§117)
 
 ### Added

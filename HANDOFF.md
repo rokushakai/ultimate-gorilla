@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.45** |
+| 現在バージョン | **v0.45.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,17 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.45.1] 仲間サイドストーリー第2話・安定化**（§118）
+  - **`_cstoryActiveStoryId`**: 閲覧中storyId追跡変数（非永続・モジュールスコープ）
+  - **`normalizeCompanionSideStoryChapter(chapter)`**: chapter正規化（省略→1, 不正→null）
+  - **`getCompanionSideStoryData()`** / **`isCompanionSideStoryCompleted()`**: normalizer使用・不正chapter→null/false
+  - **`startCompanionSideStory()`**: 不正引数即拒否 + `_cstoryActiveStoryId = story.id`
+  - **`showCompanionSideStoryLine()`**: storyId不一致→描画スキップ
+  - **`btn-cstory-next` ハンドラ**: 5要素照合（sessionId/cid/chapter/storyId/lineIndex）
+  - **`btn-cstory-next` タイマー**: `_timerSess`キャプチャで旧セッションのlock解除を防止
+  - **`completeCompanionSideStory()`**: active cid/chapter/storyId照合ガード
+  - **`closeCompanionSideStoryModal()`**: `_cstoryActiveStoryId = null` クリア追加
+  - **デバッグ4本 (§118)**: 第1→第2混入確認 / 第2→第1混入確認 / タイマー無効化確認 / 最終境界確認
 - **[v0.45] 仲間サイドストーリー第2話**（§117）
   - **`COMPANION_SIDE_STORY_CHAPTER2_DATA`**: 4人分の第2話データ定数（各10行）
   - **解放条件**: 加入済み + 第1話完了 + 仲間Lv50以上（ch2専用）
@@ -723,9 +734,10 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.26 フィールド仲間追従表示** — パーティ仲間を通常マップで主人公の後ろにドラクエ風に表示。工数中〜大（renderField改修）。専用ブランチで着手。
-2. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.26 完了後。
-3. **v0.28 仲間ごとのコマンド選択** — 戦闘UIの大改修。最後に回す。
+1. **v0.45.2 第2話4人全完了演出** — 第2話4人全完了時に一度限りの祝賀モーダル表示。工数小〜中。§118の安定化を前提とする。
+2. **v0.26 フィールド仲間追従表示** — パーティ仲間を通常マップで主人公の後ろにドラクエ風に表示。工数中〜大（renderField改修）。専用ブランチで着手。
+3. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.26 完了後。
+4. **v0.28 仲間ごとのコマンド選択** — 戦闘UIの大改修。最後に回す。
 
 > プレイヤーフィードバック (v0.25 時点): 「仲間をフィールドで後ろに並べたい」「仲間も戦闘に参加してほしい」
 

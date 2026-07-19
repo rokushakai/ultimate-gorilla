@@ -6269,11 +6269,114 @@ v0.44.3以前のセーブには `companionSideStoryChapter2Flags` がない。
 
 ---
 
+## §118 v0.45.1 — 仲間サイドストーリー第2話安定化 [実装済み]
+
+### 概要
+
+v0.45で追加した仲間4人の第2話と、第1話・第2話共通閲覧システムを安定化する。
+
+物語セッションでは sessionId / cid / chapter / storyId / lineIndex の5要素を照合する。
+
+古い第1話のボタンから第2話を進行・完了できない。
+古い第2話のボタンから第1話を進行・完了できない。
+
+### 追加した変数
+
+| 変数名 | 型 | 説明 |
+|---|---|---|
+| `_cstoryActiveStoryId` | string \| null | 現在閲覧中の story.id（非永続・saveしない） |
+
+### 追加した関数
+
+#### `normalizeCompanionSideStoryChapter(chapter)`
+
+- `undefined` / `null` → 1（省略扱い）
+- `1` → 1
+- `2` → 2
+- `0` / `3` / `-1` / `NaN` / 配列 / オブジェクト / 文字列 → `null`（不正）
+
+省略時は第1話扱い。明示的な不正値は null を返し、呼び出し側で拒否する。
+
+### 修正した関数
+
+#### `getCompanionSideStoryData(cid, chapter)`
+
+- `normalizeCompanionSideStoryChapter()` で chapter を正規化
+- 不正 chapter → null（第1話にフォールバックしない）
+- 不正 cid → null
+
+#### `isCompanionSideStoryCompleted(cid, chapter)`
+
+- `chapter !== 1 && chapter !== 2` → false（不正 chapter）
+- 第1話フラグと第2話フラグを混用しない
+
+#### `startCompanionSideStory(cid, chapter)`
+
+- chapter 正規化。不正値はエラーメッセージを表示して拒否
+- cid が文字列でない場合も拒否
+- データ取得・解放条件確認は変更なし
+- セッション開始時に `_cstoryActiveStoryId = story.id` を設定
+
+#### `showCompanionSideStoryLine()`
+
+- `_cstoryActiveStoryId` と取得した story.id が一致しない場合は表示しない
+- chapter が 1 または 2 でない場合は何もしない
+
+#### `btn-cstory-next` イベントハンドラ
+
+クリック時に以下の5要素をキャプチャ:
+
+```
+expectedSessionId = _cstorySessionId
+expectedCid       = state.activeCompanionSideStory
+expectedChapter   = _cstoryActiveChapter
+expectedStoryId   = _cstoryActiveStoryId
+expectedLineIndex = state.activeCompanionSideStoryLine
+```
+
+データ取得後、全5要素を現在値と照合。1つでも不一致ならreturn。
+
+`setTimeout` コールバック内で `_timerSess` をキャプチャし、発火時に `_cstorySessionId` と一致する場合だけ `_cstoryAdvanceLock = false` にする。
+これにより古いセッションのタイマーが新しいセッションのロックを解除しない。
+
+#### `completeCompanionSideStory(cid, chapter)`
+
+完了前に以下を確認:
+- `state.activeCompanionSideStory === cid`
+- `_cstoryActiveChapter === _ch`
+- `_cstoryActiveStoryId` と story.id が一致
+
+一致しない場合は何も実行しない（古いセッションからの呼び出しを棄却）。
+
+#### `closeCompanionSideStoryModal()`
+
+- `_cstoryActiveStoryId = null` を追加（セッション情報の完全クリア）
+
+### 追加したdebugボタン4本（§118 v0.45.1）
+
+| ボタンID | 内容 |
+|---|---|
+| `btn-debug-v451-ch1-to-ch2-contamination` | 🧪 第1話→第2話セッション混入確認（PASS/FAIL） |
+| `btn-debug-v451-ch2-to-ch1-contamination` | 🧪 第2話→第1話セッション混入確認（PASS/FAIL） |
+| `btn-debug-v451-old-timer-check` | 🧪 古いタイマー無効化確認（PASS/FAIL） |
+| `btn-debug-v451-ch2-final-boundary` | 🧪 第2話最終行・完了境界確認（PASS/FAIL） |
+
+### 変更しないもの（§118 v0.45.1）
+
+- COMPANION_SIDE_STORY_DATA / COMPANION_SIDE_STORY_CHAPTER2_DATA（物語本文）
+- 第1話・第2話の解放条件
+- 第1話全話完了演出 / pending / origin / timer / z-index
+- 全話完了モーダル
+- 既存最終サイドストーリー・究極チンパンジー・BGM制御
+- 報酬なし・能力変更なし
+
+---
+
 ## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
 
-### v0.45.1 候補以降 [未実装・将来機能]
+### v0.45.2 候補以降 [未実装・将来機能]
 
-- v0.45.1 第2話安定化（第1話・第2話間セッション混入確認・旧セーブ補完・各画面表示同期）
+- v0.45.2 第2話全話完了演出（第2話4人完了時の一度限り演出）
 - 将来: 第2話4人完了後の最終サイドストーリー接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

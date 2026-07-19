@@ -5,6 +5,22 @@
 
 ---
 
+## v0.45.1 (2026-07-19) — セッション安定化 (§118)
+
+### 設計判断・確認事項
+
+- **5要素照合の理由**: `btn-cstory-next` クリック時に sessionId / cid / chapter / storyId / lineIndex の5要素をキャプチャし、データ取得後に全照合する。第1話閲覧中に第2話が始まった場合、sessionIdが変わるためcidが同じでも棄却される。
+
+- **`_cstoryActiveStoryId` を追加した理由**: sessionIdだけでは「同一cid/同一chapter」の誤呼び出し（デバッグハンドラや外部コードからの直接呼び出し）を防げない。story.idまで照合することで「今開いているその物語」のみを進められる。
+
+- **タイマー `_timerSess` キャプチャ**: `var _timerSess = _cstorySessionId` をsetTimeoutの外側でキャプチャし、コールバック内で照合する。ES5の `var` はクロージャキャプチャが正常動作するため `let` に依存しない。
+
+- **`normalizeCompanionSideStoryChapter()` の省略→1の理由**: 既存呼び出し元で `chapter` 引数を省略しているコードが多い（`getCompanionSideStoryData(cid)` など）。`undefined` を1と扱うことで後方互換性を維持しつつ、明示的な不正値（0, -1, 3, "foo"）は棄却できる。
+
+- **`completeCompanionSideStory()` の3重ガード**: この関数はデバッグボタンのhandlerや将来の拡張から直接呼ばれる可能性がある。activeCompanionSideStory（cid）/ _cstoryActiveChapter（chapter）/ _cstoryActiveStoryId（story.id）の3つを照合することで、非アクティブセッションからの完了処理を完全に防止する。
+
+---
+
 ## v0.44.2 (2026-07-18)
 
 ### 設計判断・確認事項

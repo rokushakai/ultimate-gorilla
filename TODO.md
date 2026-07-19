@@ -14,13 +14,27 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.45 候補以降
+### Version 0.45.2 候補以降
 
-将来: 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 第2話4人全完了演出（一度限り）/ 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.45.1 — 仲間サイドストーリー第2話・安定化 (§118)
+
+- **`_cstoryActiveStoryId`**: 閲覧中storyId追跡変数（非永続・saveしない・セッション混入防止） ✅
+- **`normalizeCompanionSideStoryChapter(chapter)`**: chapter値正規化（省略=1, 不正=null） ✅
+- **`getCompanionSideStoryData(cid, chapter)`**: 不正chapter→null（第1話フォールバック廃止） ✅
+- **`isCompanionSideStoryCompleted(cid, chapter)`**: 不正chapter→false（ch1/ch2フラグ混用防止） ✅
+- **`startCompanionSideStory(cid, chapter)`**: 不正chapter/cid拒否 + `_cstoryActiveStoryId` セット ✅
+- **`showCompanionSideStoryLine()`**: `_cstoryActiveStoryId` 不一致時は表示しない ✅
+- **`btn-cstory-next` ハンドラ**: 5要素照合（sessionId/cid/chapter/storyId/lineIndex） ✅
+- **`btn-cstory-next` タイマー**: `_timerSess` キャプチャで旧セッションのロック解除を防止 ✅
+- **`completeCompanionSideStory(cid, chapter)`**: activeCompanionSideStory/chapter/storyId 照合ガード ✅
+- **`closeCompanionSideStoryModal()`**: `_cstoryActiveStoryId = null` クリア追加 ✅
+- デバッグ4本（§118）: 第1話→第2話混入確認 / 第2話→第1話混入確認 / 古いタイマー確認 / 最終境界確認 ✅
 
 ### Version 0.45 — 仲間サイドストーリー第2話 (§117)
 
