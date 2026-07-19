@@ -14,13 +14,34 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.45.2 候補以降
+### Version 0.45.3 候補以降
 
-将来: 第2話4人全完了演出（一度限り）/ 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: v0.45.3 第2話全話完了演出安定化 / 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み
+
+### Version 0.45.2 — 仲間サイドストーリー第2話・全話完了演出 (§119)
+
+- **`state.companionSideStoryChapter2AllCompleteCelebrated`**: 第2話全話完了演出済み（永続・never demote） ✅
+- **第2話専用非永続変数5本**: pending/visible/origin/pendingOrigin/timer ✅
+- **`areAllCompanionSideStoryChapter2Complete()`**: 第2話4/4判定（副作用なし） ✅
+- **`normalizeCompanionSideStoryChapter2AllCompleteFlag()`**: celebrated boolean保証（never demote） ✅
+- **`checkCompanionSideStoryChapter2AllComplete(origin)`**: 第2話全話完了確認・pending予約・saveは呼び出し側 ✅
+- **`showCompanionStoryChapter2AllCompleteCelebration(origin)`**: 第2話演出モーダルを開く ✅
+- **`closeCompanionStoryChapter2AllCompleteCelebration()`**: 第2話演出モーダルを安全に閉じる（origin別後処理） ✅
+- **`consumePendingCompanionStoryChapter2AllCompleteNotice()`**: 第2話pending消費（10個のガード付き） ✅
+- **`#companion-story-chapter2-all-complete-modal`**: 第2話全話完了演出HTML + `z-index:40` ✅
+- **`completeCompanionSideStory()` 接続**: ch2初回完了後に`checkCompanionSideStoryChapter2AllComplete()`を呼ぶ ✅
+- **`closeCompanionSideStoryModal()` 接続**: 第2話pending用250msタイマーを追加 ✅
+- **`renderField()` 接続**: 第2話pending消費（第1話演出表示中は保留） ✅
+- **`saveGame()` / `loadGame()`**: ch2 celebrated 保存・ロード・正規化・旧4/4セーブ救済 ✅
+- **ESCキー**: ch2演出を最優先（ch1演出より先に閉じる） ✅
+- **酒場バナー**: 第2話4/4時 `🌟 4人の第2話をすべて読み終えました` ✅
+- **冒険の記録バッジ**: 第2話4/4時 `🌟 4人の第2話をすべて読了` ✅
+- **デバッグ6本（§119）**: 演出確認 / リセット / 3→4境界 / 旧4/4救済 / 二重防止 / ch1/ch2分離 ✅
+- **既存デバッグ更新**: `btn-debug-v45-ch2-reset-flags`（ch2 celebrated同時リセット）/ `btn-debug-v45-ch2-complete-all`（ch2演出正しくトリガー） ✅
 
 ### Version 0.45.1 — 仲間サイドストーリー第2話・安定化 (§118)
 

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.45.1** |
+| 現在バージョン | **v0.45.2** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,20 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.45.2] 仲間サイドストーリー第2話・全話完了演出**（§119）
+  - **`state.companionSideStoryChapter2AllCompleteCelebrated`**: 第2話全話完了演出済み（永続・never demote）
+  - **第2話専用pending変数5本**: pending/visible/origin/pendingOrigin/timer（非永続）
+  - **`areAllCompanionSideStoryChapter2Complete()`**: 第2話4/4判定
+  - **`normalizeCompanionSideStoryChapter2AllCompleteFlag()`**: never demote
+  - **`checkCompanionSideStoryChapter2AllComplete(origin)`**: 第2話全話完了確認・pending予約
+  - **`showCompanionStoryChapter2AllCompleteCelebration()`** / **`closeCompanionStoryChapter2AllCompleteCelebration()`** / **`consumePendingCompanionStoryChapter2AllCompleteNotice()`**: 第2話専用演出制御
+  - **`#companion-story-chapter2-all-complete-modal`**: 第2話全話完了演出モーダル（z-index:40）
+  - **第1話演出との完全分離**: ch2完了処理でch1 celebrated/pending/origin/timerを変更しない
+  - **旧4/4セーブ救済**: loadGame()でch2 4/4 + celebrated未設定を検出してpending登録
+  - **酒場バナー**: `🌟 4人の第2話をすべて読み終えました`
+  - **冒険の記録バッジ**: `🌟 4人の第2話をすべて読了`
+  - **ESC制御**: ch2演出が最優先→ch1演出→その他の順
+  - **デバッグ6本（§119）**: 演出確認 / リセット / 3→4境界 / 旧4/4救済 / 二重防止 / ch1/ch2分離
 - **[v0.45.1] 仲間サイドストーリー第2話・安定化**（§118）
   - **`_cstoryActiveStoryId`**: 閲覧中storyId追跡変数（非永続・モジュールスコープ）
   - **`normalizeCompanionSideStoryChapter(chapter)`**: chapter正規化（省略→1, 不正→null）
@@ -734,7 +748,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.45.2 第2話4人全完了演出** — 第2話4人全完了時に一度限りの祝賀モーダル表示。工数小〜中。§118の安定化を前提とする。
+1. **v0.45.3 第2話全話完了演出安定化** — 表示順・旧セーブ救済・両全話完了モーダルの競合確認。工数小。§119実装を前提とする。
 2. **v0.26 フィールド仲間追従表示** — パーティ仲間を通常マップで主人公の後ろにドラクエ風に表示。工数中〜大（renderField改修）。専用ブランチで着手。
 3. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.26 完了後。
 4. **v0.28 仲間ごとのコマンド選択** — 戦闘UIの大改修。最後に回す。

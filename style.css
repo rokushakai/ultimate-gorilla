@@ -705,6 +705,11 @@ html, body {
   z-index: 40;
 }
 
+/* §119 v0.45.2: 第2話全話完了演出を酒場より前面へ */
+#companion-story-chapter2-all-complete-modal {
+  z-index: 40;
+}
+
 .hidden {
   display: none !important;
 }

@@ -6372,11 +6372,119 @@ expectedLineIndex = state.activeCompanionSideStoryLine
 
 ---
 
+## §119 v0.45.2 — 仲間サイドストーリー第2話・全話完了演出 [実装済み]
+
+### 概要
+
+仲間4人の第2話をすべて完了した時、一度だけ第2話全話完了の達成演出を表示する。
+
+第1話全話完了演出（§115 v0.44.2）とは完全に分離する。
+
+### 達成条件
+
+`state.companionSideStoryChapter2Flags` の juritani / shurittani / norio / harumi がすべて true。
+
+### 新規追加フラグ
+
+| キー | 型 | 説明 |
+|---|---|---|
+| `state.companionSideStoryChapter2AllCompleteCelebrated` | boolean（永続） | 第2話全話完了演出済み（never demote） |
+
+### 新規追加変数（非永続・IIFEスコープ）
+
+| 変数名 | 型 | 説明 |
+|---|---|---|
+| `_pendingCompanionStoryChapter2AllCompleteNotice` | boolean | 演出表示予約 |
+| `_companionStoryChapter2AllCompleteNoticeVisible` | boolean | 演出表示中（二重防止） |
+| `_companionStoryChapter2AllCompleteOrigin` | string\|null | 表示元（"tavern"/"field"/"debug"） |
+| `_pendingCompanionStoryChapter2AllCompleteOrigin` | string\|null | pending中の表示元 |
+| `_companionStoryChapter2AllCompleteNoticeTimer` | timer\|null | 遅延表示タイマーID |
+
+### 新規追加関数
+
+| 関数名 | 説明 |
+|---|---|
+| `areAllCompanionSideStoryChapter2Complete()` | 第2話4/4判定（副作用なし） |
+| `normalizeCompanionSideStoryChapter2AllCompleteFlag()` | celebrated boolean保証（never demote） |
+| `checkCompanionSideStoryChapter2AllComplete(origin)` | 第2話全話完了確認・pending予約 |
+| `showCompanionStoryChapter2AllCompleteCelebration(origin)` | 第2話演出モーダルを開く |
+| `closeCompanionStoryChapter2AllCompleteCelebration()` | 第2話演出モーダルを安全に閉じる |
+| `consumePendingCompanionStoryChapter2AllCompleteNotice()` | 第2話pending消費（ガード付き） |
+
+### モーダル
+
+- HTML: `#companion-story-chapter2-all-complete-modal`
+- 閉じるボタン: `#btn-cstory-chapter2-all-complete-close`
+- CSS: `z-index: 40`（酒場z-index:30より前面）
+- 第1話モーダルと同時表示しない
+
+### 演出内容
+
+```
+🌟 仲間の物語・第2話 全話完了
+
+4人の仲間の続きを
+すべて読み終えました。
+
+それぞれは、自分だけで背負わず、
+仲間を信じる強さを知りました。
+```
+
+補足: 「冒険の記録から、いつでも読了状況を確認できます。」
+
+### 第2話4話目完了時の接続
+
+`completeCompanionSideStory(cid, 2)` の ch2初回完了後：
+
+1. `companionSideStoryChapter2Flags[cid] = true`
+2. `checkCompanionSideStoryChapter2AllComplete()` で4/4確認
+3. 4/4なら: `chapter2AllCompleteCelebrated = true`, `pending = true`
+4. `saveGame()` 1回（flags + celebrated）
+5. 個別完了toast（先）
+6. `closeCompanionSideStoryModal()` → 250ms後にpending消費 → 演出表示
+
+### 第1話演出との分離
+
+- 第1話 `companionSideStoryAllCompleteCelebrated` を変更しない
+- 第1話 `_pendingCompanionStoryAllCompleteNotice` を変更しない
+- 第1話 pending表示中は第2話pendingを保留
+- 第1話演出を閉じた後、安全なタイミングで第2話pendingを消費
+
+### 旧セーブ救済（v0.45.2以前の4/4セーブ）
+
+- `loadGame()` で ch2 flags 4/4 + celebrated未定義を検出
+- `celebrated = true`, `pending = true`, `origin = "field"` を設定
+- saveGame() 1回（他補正とまとめて）
+- renderField() 後に一度だけ演出表示
+
+### 酒場バナー
+
+第2話4/4時: `🌟 4人の第2話をすべて読み終えました`
+
+### 冒険の記録バッジ
+
+第2話4/4時: `🌟 4人の第2話をすべて読了`
+
+### ESC制御
+
+第2話演出モーダル表示中は第2話演出だけ閉じる（早期return）。
+第1話演出モーダルは閉じない。
+
+### 変更しないもの（§119 v0.45.2）
+
+- COMPANION_SIDE_STORY_DATA / COMPANION_SIDE_STORY_CHAPTER2_DATA
+- 第1話・第2話の解放条件
+- 第1話全話完了演出 / pending / origin / timer / z-index
+- 既存最終サイドストーリー・究極チンパンジー・BGM制御
+- 報酬なし・能力変更なし
+
+---
+
 ## 将来の実装候補（v0.45〜）— プレイヤーフィードバックより [未実装・将来機能]
 
-### v0.45.2 候補以降 [未実装・将来機能]
+### v0.45.3 候補以降 [未実装・将来機能]
 
-- v0.45.2 第2話全話完了演出（第2話4人完了時の一度限り演出）
+- v0.45.3 第2話全話完了演出安定化（表示順・旧セーブ救済・二つの全話完了モーダルの競合確認）
 - 将来: 第2話4人完了後の最終サイドストーリー接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

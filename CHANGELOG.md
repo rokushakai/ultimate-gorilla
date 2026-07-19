@@ -5,6 +5,34 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.45.2] - 2026-07-19 — 仲間サイドストーリー第2話・全話完了演出 (§119)
+
+### Added
+- **`state.companionSideStoryChapter2AllCompleteCelebrated`**: 第2話全話完了演出済みフラグ（永続・saveする・never demote）
+- **`_pendingCompanionStoryChapter2AllCompleteNotice`** / **`_companionStoryChapter2AllCompleteNoticeVisible`** / **`_companionStoryChapter2AllCompleteOrigin`** / **`_pendingCompanionStoryChapter2AllCompleteOrigin`** / **`_companionStoryChapter2AllCompleteNoticeTimer`**: 第2話専用一時状態（非永続）
+- **`areAllCompanionSideStoryChapter2Complete()`**: 第2話4/4判定（副作用なし）
+- **`normalizeCompanionSideStoryChapter2AllCompleteFlag()`**: ch2 celebrated boolean保証（never demote）
+- **`checkCompanionSideStoryChapter2AllComplete(origin)`**: 第2話全話完了確認・pending予約
+- **`showCompanionStoryChapter2AllCompleteCelebration(origin)`**: 第2話演出モーダルを開く
+- **`closeCompanionStoryChapter2AllCompleteCelebration()`**: 第2話演出モーダルを安全に閉じる
+- **`consumePendingCompanionStoryChapter2AllCompleteNotice()`**: 第2話pending消費（ガード付き）
+- **`#companion-story-chapter2-all-complete-modal`**: 第2話全話完了演出HTML（z-index:40）
+- デバッグ6本（§119）: 演出確認 / リセット / 3→4境界 / 旧4/4救済 / 二重防止 / ch1/ch2分離
+
+### Changed
+- **`completeCompanionSideStory(cid, 2)`**: `checkCompanionSideStoryChapter2AllComplete()` を呼ぶよう接続
+- **`closeCompanionSideStoryModal()`**: 第2話pending用タイマー（250ms）を追加
+- **`renderField()`**: `consumePendingCompanionStoryChapter2AllCompleteNotice()` を追加（第1話後に実行）
+- **`saveGame()`**: `companionSideStoryChapter2AllCompleteCelebrated` を保存
+- **`loadGame()`**: ch2 celebrated 読み込み・正規化・旧4/4セーブ救済を追加
+- **ESCキー処理**: 第2話演出モーダルを最優先で閉じるよう更新
+- **`renderTavernStories()`**: 第2話4/4バナー `🌟 4人の第2話をすべて読み終えました` を追加
+- **冒険の記録 第2話セクション**: 第2話4/4バッジ `🌟 4人の第2話をすべて読了` を追加
+- **`btn-debug-v45-ch2-reset-flags`**: ch2 celebrated・pending・visible・timerも同時リセット
+- **`btn-debug-v45-ch2-complete-all`**: ch2演出を正しくトリガー・ch1状態変化なしを確認
+
+---
+
 ## [0.45.1] - 2026-07-19 — 仲間サイドストーリー第2話・安定化 (§118)
 
 ### Added

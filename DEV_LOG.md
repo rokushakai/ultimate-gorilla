@@ -5,6 +5,22 @@
 
 ---
 
+## v0.45.2 (2026-07-19) — 第2話全話完了演出 (§119)
+
+### 設計判断・確認事項
+
+- **第1話演出との完全分離**: 変数名に `Chapter2` を付けることで第1話変数と完全に分離した。`checkCompanionSideStoryChapter2AllComplete()` は `_pendingCompanionStoryAllCompleteNotice` (ch1) に一切触れない。
+
+- **pendingの表示優先順位**: `consumePendingCompanionStoryChapter2AllCompleteNotice()` 内で `if (_companionStoryAllCompleteNoticeVisible) return;` により、第1話演出表示中は第2話pendingを保留する。`renderField()` での消費も `if (!_companionStoryAllCompleteNoticeVisible)` で囲む。これにより同時に2枚が開く状況を防ぐ。
+
+- **closeCompanionSideStoryModal()でのタイマー順序**: 第1話タイマー(250ms)の後に第2話タイマー(250ms)を登録。どちらも同じ250msだが、第2話consumeは `_companionStoryAllCompleteNoticeVisible` ガードで第1話を先に処理させる。実際には第1話のpendingがある場合、第1話タイマー発火→ch1演出→ch2はvisibleガードで保留→renderField()で後日消費という流れになる。
+
+- **旧セーブ救済の1回saveGame()保証**: `loadGame()` 内で `checkCompanionSideStoryChapter2AllComplete("field")` を呼び、その結果（`_story2Rescued`）を `_storyFlagChanged` に OR して最後の `saveGame()` 1回でまとめて保存する。
+
+- **never demoteの徹底**: `normalizeCompanionSideStoryChapter2AllCompleteFlag()` は `true` を維持し、`false` や不正値のみ補正する。デバッグリセットボタンだけが明示的に `false` に設定できる。
+
+---
+
 ## v0.45.1 (2026-07-19) — セッション安定化 (§118)
 
 ### 設計判断・確認事項

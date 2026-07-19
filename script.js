@@ -1027,7 +1027,8 @@
     companionSideStoryChapter2Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §117 v0.45: 第2話完了フラグ（永続・saveする）
     activeCompanionSideStory: null, // §113 v0.44: 現在閲覧中のcid（非永続）
     activeCompanionSideStoryLine: 0, // §113 v0.44: 現在の行インデックス（非永続）
-    companionSideStoryAllCompleteCelebrated: false // §115 v0.44.2: 全話完了演出済み（永続・saveする）
+    companionSideStoryAllCompleteCelebrated: false, // §115 v0.44.2: 全話完了演出済み（永続・saveする）
+    companionSideStoryChapter2AllCompleteCelebrated: false // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
   };
 
   // ---------------------------------------------------------
@@ -1252,6 +1253,10 @@
     }
     // §115 v0.44.2: 全話完了演出フォールバック（旧セーブ救済など）
     consumePendingCompanionStoryAllCompleteNotice();
+    // §119 v0.45.2: 第2話全話完了演出フォールバック（第1話演出が優先・二枚重ね防止）
+    if (!_companionStoryAllCompleteNoticeVisible) {
+      consumePendingCompanionStoryChapter2AllCompleteNotice();
+    }
 
     var p = state.player;
 
@@ -3321,6 +3326,13 @@
   var _pendingCompanionStoryAllCompleteOrigin = null;  // pending中の表示元
   var _companionStoryAllCompleteNoticeTimer = null;    // 遅延表示タイマーID
 
+  // §119 v0.45.2: 第2話全話完了演出専用状態（非永続・IIFEスコープ・saveしない）
+  var _pendingCompanionStoryChapter2AllCompleteNotice = false;
+  var _companionStoryChapter2AllCompleteNoticeVisible = false;
+  var _companionStoryChapter2AllCompleteOrigin = null;
+  var _pendingCompanionStoryChapter2AllCompleteOrigin = null;
+  var _companionStoryChapter2AllCompleteNoticeTimer = null;
+
   // §117 v0.45: 第2話閲覧中chapter追跡（非永続・saveしない）
   var _cstoryActiveChapter = 1;  // 現在閲覧中のchapter（1 or 2）
 
@@ -3426,6 +3438,95 @@
     state.companionSideStoryAllCompleteCelebrated = true;
     _pendingCompanionStoryAllCompleteNotice = true;
     return true;
+  }
+
+  // §119 v0.45.2: 第2話4人全完了判定（副作用なし）
+  function areAllCompanionSideStoryChapter2Complete() {
+    var _cids119 = ["juritani", "shurittani", "norio", "harumi"];
+    if (!state.companionSideStoryChapter2Flags || typeof state.companionSideStoryChapter2Flags !== "object") return false;
+    for (var _i119 = 0; _i119 < _cids119.length; _i119++) {
+      if (state.companionSideStoryChapter2Flags[_cids119[_i119]] !== true) return false;
+    }
+    return true;
+  }
+
+  // §119 v0.45.2: Chapter2 celebratedをboolean保証（never demote）
+  // 変更があればtrueを返す
+  function normalizeCompanionSideStoryChapter2AllCompleteFlag() {
+    if (state.companionSideStoryChapter2AllCompleteCelebrated === true) return false;
+    if (state.companionSideStoryChapter2AllCompleteCelebrated !== false) {
+      state.companionSideStoryChapter2AllCompleteCelebrated = false;
+      return true;
+    }
+    return false;
+  }
+
+  // §119 v0.45.2: 第2話全話完了を確認し、未祝賀なら演出を予約する
+  // 新規達成ならtrueを返す（saveGame()は呼び出し側で行う）
+  function checkCompanionSideStoryChapter2AllComplete(origin) {
+    normalizeCompanionSideStoryChapter2Flags();
+    if (!areAllCompanionSideStoryChapter2Complete()) return false;
+    normalizeCompanionSideStoryChapter2AllCompleteFlag();
+    if (state.companionSideStoryChapter2AllCompleteCelebrated === true) return false;
+    state.companionSideStoryChapter2AllCompleteCelebrated = true;
+    _pendingCompanionStoryChapter2AllCompleteNotice = true;
+    if (origin) { _pendingCompanionStoryChapter2AllCompleteOrigin = origin; }
+    return true;
+  }
+
+  // §119 v0.45.2: 第2話全話完了演出モーダルを開く
+  function showCompanionStoryChapter2AllCompleteCelebration(origin) {
+    if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    var _el119 = document.getElementById("companion-story-chapter2-all-complete-modal");
+    if (!_el119) return;
+    _companionStoryChapter2AllCompleteNoticeVisible = true;
+    _companionStoryChapter2AllCompleteOrigin = origin || "field";
+    openModal("companion-story-chapter2-all-complete-modal");
+    var _closeBtn119 = document.getElementById("btn-cstory-chapter2-all-complete-close");
+    if (_closeBtn119) { _closeBtn119.focus(); }
+  }
+
+  // §119 v0.45.2: 第2話全話完了演出モーダルを安全に閉じる（origin別後処理）
+  function closeCompanionStoryChapter2AllCompleteCelebration() {
+    _companionStoryChapter2AllCompleteNoticeVisible = false;
+    _pendingCompanionStoryChapter2AllCompleteNotice = false;
+    closeModal("companion-story-chapter2-all-complete-modal");
+    var _closeOrigin119 = _companionStoryChapter2AllCompleteOrigin;
+    _companionStoryChapter2AllCompleteOrigin = null;
+    _pendingCompanionStoryChapter2AllCompleteOrigin = null;
+    if (_companionStoryChapter2AllCompleteNoticeTimer) {
+      clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
+      _companionStoryChapter2AllCompleteNoticeTimer = null;
+    }
+    // 酒場がまだ開いている場合: closeModalがstate.modalOpen=falseにするのを戻す
+    var _tavernEl119 = document.getElementById("tavern-modal");
+    if (_tavernEl119 && !_tavernEl119.classList.contains("hidden")) {
+      state.modalOpen = true;
+    }
+  }
+
+  // §119 v0.45.2: 第2話全話完了演出pending消費（ガード付き）
+  function consumePendingCompanionStoryChapter2AllCompleteNotice() {
+    if (!_pendingCompanionStoryChapter2AllCompleteNotice) return;
+    if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    if (!state.companionSideStoryChapter2AllCompleteCelebrated) return;
+    if (!areAllCompanionSideStoryChapter2Complete()) return;
+    // 物語モーダルが開いていれば待機
+    var _storyEl119 = document.getElementById("companion-story-modal");
+    if (_storyEl119 && !_storyEl119.classList.contains("hidden")) return;
+    // 戦闘中は待機
+    if (state.inBattle) return;
+    // 第1話演出表示中は待機（二枚重ね防止）
+    if (_companionStoryAllCompleteNoticeVisible) return;
+    // 前の遅延タイマーをキャンセル
+    if (_companionStoryChapter2AllCompleteNoticeTimer) {
+      clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
+      _companionStoryChapter2AllCompleteNoticeTimer = null;
+    }
+    var _origin119 = _pendingCompanionStoryChapter2AllCompleteOrigin || "field";
+    _pendingCompanionStoryChapter2AllCompleteNotice = false;
+    _pendingCompanionStoryChapter2AllCompleteOrigin = null;
+    showCompanionStoryChapter2AllCompleteCelebration(_origin119);
   }
 
   // §116 v0.44.3: 全話完了演出モーダルを開く（origin引数・フォーカス管理）
@@ -3621,7 +3722,9 @@
         return; // 既に完了済み: 追加save・通知なし
       }
       state.companionSideStoryChapter2Flags[cid] = true;
-      saveGame(); // ch2フラグを保存（全話完了演出はトリガーしない）
+      // §119 v0.45.2: 第2話全話完了チェック（4話目完了時にcelebrated=true + pending登録）
+      checkCompanionSideStoryChapter2AllComplete();
+      saveGame(); // ch2 flags + chapter2AllCompleteCelebrated を1回で保存
       var _story2 = getCompanionSideStoryData(cid, 2);
       var _title2 = _story2 ? _story2.title : cid;
       var _c2 = findById(COMPANION_DATA, cid);
@@ -3670,6 +3773,16 @@
     _companionStoryAllCompleteNoticeTimer = setTimeout(function () {
       _companionStoryAllCompleteNoticeTimer = null;
       consumePendingCompanionStoryAllCompleteNotice();
+    }, 250);
+    // §119 v0.45.2: 第2話全話完了演出も同様に遅延消費（250ms: 個別toastの後）
+    _pendingCompanionStoryChapter2AllCompleteOrigin = _fromTavern ? "tavern" : "field";
+    if (_companionStoryChapter2AllCompleteNoticeTimer) {
+      clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
+      _companionStoryChapter2AllCompleteNoticeTimer = null;
+    }
+    _companionStoryChapter2AllCompleteNoticeTimer = setTimeout(function () {
+      _companionStoryChapter2AllCompleteNoticeTimer = null;
+      consumePendingCompanionStoryChapter2AllCompleteNotice();
     }, 250);
   }
 
@@ -5732,6 +5845,10 @@
         '　<span style="color:#888;font-size:0.82em;">「' + _stTitle117c + '」</span></span>' +
         chk(_sdone117c) + (_sdone117c ? "完了" : "未完了") + '</span></div>';
     }
+    // §119 v0.45.2: 第2話全4話完了バッジ
+    if (_story2DoneCount117 === 4) {
+      html += '<div style="color:#c8b4ff;font-weight:bold;margin-top:6px;font-size:0.88em;">🌟 4人の第2話をすべて読了</div>';
+    }
     html += '</div>';
 
     // --- 次の目標（強調） ---
@@ -6535,10 +6652,17 @@
       }
       html += '</div>';
     }
-    // §115 v0.44.2 / §117 v0.45: 第1話全4話完了バナー
+    // §115 v0.44.2 / §117 v0.45 / §119 v0.45.2: 全話完了バナー
+    var _hasBanner = false;
     if (areAllCompanionSideStoriesComplete()) {
-      html += '<div style="text-align:center;margin:6px 0 8px;color:#ffd166;font-weight:bold;font-size:0.88em;border-top:1px solid #2a3a5a;padding-top:8px;">🌟 4人の第1話をすべて読み終えました</div>';
+      if (!_hasBanner) { html += '<div style="border-top:1px solid #2a3a5a;padding-top:8px;margin-top:6px;margin-bottom:4px;">'; _hasBanner = true; }
+      html += '<div style="text-align:center;margin:0 0 4px;color:#ffd166;font-weight:bold;font-size:0.88em;">🌟 4人の第1話をすべて読み終えました</div>';
     }
+    if (areAllCompanionSideStoryChapter2Complete()) {
+      if (!_hasBanner) { html += '<div style="border-top:1px solid #2a3a5a;padding-top:8px;margin-top:6px;margin-bottom:4px;">'; _hasBanner = true; }
+      html += '<div style="text-align:center;margin:0 0 4px;color:#c8b4ff;font-weight:bold;font-size:0.88em;">🌟 4人の第2話をすべて読み終えました</div>';
+    }
+    if (_hasBanner) { html += '</div>'; }
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
     body.innerHTML = html;
     // 閲覧可能・完了済みボタン
@@ -7924,6 +8048,13 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v451-ch2-to-ch1-contamination" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 第2話→第1話セッション混入確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v451-old-timer-check" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 古いタイマー無効化確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v451-ch2-final-boundary" style="border-color:#ff9f7f;color:#ff9f7f;">🧪 第2話最終行・完了境界確認</button>';
+      html += '<p class="small" style="color:#c8b4ff;margin-top:8px;">🌟 第2話全話完了演出確認 (§119 v0.45.2)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-celeb-show" style="border-color:#c8b4ff;color:#c8b4ff;">🌟 第2話全話完了演出を確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-celeb-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 第2話演出済みフラグをリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-34-boundary" style="border-color:#ffd166;color:#ffd166;">🧪 第2話3/4→4/4境界確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-rescue" style="border-color:#a0cfff;color:#a0cfff;">🧪 第2話旧4/4セーブ救済確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch2-noduplicate" style="border-color:#06d6a0;color:#06d6a0;">🧪 第2話演出二重防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v452-ch1ch2-sep" style="border-color:#a0cfff;color:#a0cfff;">🧪 第1話・第2話演出分離確認</button>';
       html += '<p class="small" style="color:#ffb347;margin-top:8px;">⚔️ 伝説装備コンプリート報酬テスト (§70 v0.20)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-all" style="border-color:#ffb347;color:#ffb347;">⚔️ 伝説装備を全入手（全7種）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-legend-reward-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 伝説装備コンプリート報酬を未受取に戻す</button>';
@@ -10510,24 +10641,38 @@
       document.getElementById("btn-debug-v45-ch2-reset-flags").onclick = function () {
         normalizeCompanionSideStoryChapter2Flags();
         state.companionSideStoryChapter2Flags = { juritani: false, shurittani: false, norio: false, harumi: false };
+        // §119 v0.45.2: ch2 celebrated・pending・visible・timerも同時リセット
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteOrigin = null;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = null;
+        if (_companionStoryChapter2AllCompleteNoticeTimer) {
+          clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
+          _companionStoryChapter2AllCompleteNoticeTimer = null;
+        }
+        closeModal("companion-story-chapter2-all-complete-modal");
         saveGame();
-        showToast("[DEBUG] 第2話: 完了フラグ全リセット ✅");
+        showToast("[DEBUG] 第2話: 完了フラグ全リセット + ch2演出済みリセット ✅");
         renderStatusBody();
       };
 
       document.getElementById("btn-debug-v45-ch2-complete-all").onclick = function () {
-        var _prevCeleb = state.companionSideStoryAllCompleteCelebrated;
-        var _prevPending = _pendingCompanionStoryAllCompleteNotice;
+        // §119 v0.45.2: ch2全完了・ch2演出をトリガー・ch1は維持
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
         state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        checkCompanionSideStoryChapter2AllComplete("debug");
         saveGame();
-        var _celebTrig = !state.companionSideStoryAllCompleteCelebrated || _pendingCompanionStoryAllCompleteNotice;
-        if (!_celebTrig) {
-          showToast("[DEBUG] 第2話: 全完了 ✅（ch1演出はトリガーされず）");
+        var _ch1Changed = (state.companionSideStoryAllCompleteCelebrated !== _prevCeleb1 || _pendingCompanionStoryAllCompleteNotice !== _prevPending1);
+        if (!_ch1Changed) {
+          showToast("[DEBUG] 第2話: 全完了 ✅（ch2演出予約 / ch1演出変化なし）");
+          consumePendingCompanionStoryChapter2AllCompleteNotice();
         } else {
-          // ch2完了でch1演出が誤ってトリガーされた場合
-          state.companionSideStoryAllCompleteCelebrated = _prevCeleb;
-          _pendingCompanionStoryAllCompleteNotice = _prevPending;
-          showToast("[DEBUG] FAIL: ch2完了でch1演出がトリガーされた ❌");
+          state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+          _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+          showToast("[DEBUG] FAIL: ch2完了でch1演出が変化した ❌");
         }
         renderStatusBody();
       };
@@ -10694,6 +10839,164 @@
         showToast("[DEBUG v0.45.1] 第2話最終境界確認: " + (_passBoundary ? "PASS（不一致cid棄却OK）" : "FAIL（誤完了）") +
           "\n  lastIdx=" + _lastIdx + " active=" + state.activeCompanionSideStory);
         closeCompanionSideStoryModal();
+      };
+
+      // §119 v0.45.2: 第2話全話完了演出デバッグ
+      document.getElementById("btn-debug-v452-ch2-celeb-show").onclick = function () {
+        // ch2全完了演出を直接確認
+        var _cids452 = ["juritani", "shurittani", "norio", "harumi"];
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        for (var _ci452 = 0; _ci452 < _cids452.length; _ci452++) {
+          if (!state.player.companions || state.player.companions.indexOf(_cids452[_ci452]) < 0) {
+            if (!state.player.companions) { state.player.companions = []; }
+            state.player.companions.push(_cids452[_ci452]);
+          }
+        }
+        checkCompanionSideStoryChapter2AllComplete("debug");
+        saveGame();
+        // ch1演出状態が変わっていないことを確認
+        var _ch1Changed = (state.companionSideStoryAllCompleteCelebrated !== _prevCeleb1 || _pendingCompanionStoryAllCompleteNotice !== _prevPending1);
+        if (_ch1Changed) {
+          state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+          _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+          showToast("[DEBUG v0.45.2] FAIL: ch1演出状態が変化した ❌");
+        } else {
+          consumePendingCompanionStoryChapter2AllCompleteNotice();
+        }
+      };
+      document.getElementById("btn-debug-v452-ch2-celeb-reset").onclick = function () {
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteOrigin = null;
+        _pendingCompanionStoryChapter2AllCompleteOrigin = null;
+        if (_companionStoryChapter2AllCompleteNoticeTimer) {
+          clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
+          _companionStoryChapter2AllCompleteNoticeTimer = null;
+        }
+        closeModal("companion-story-chapter2-all-complete-modal");
+        saveGame();
+        showToast("[DEBUG v0.45.2] 第2話演出済みフラグをリセット ✅");
+      };
+      document.getElementById("btn-debug-v452-ch2-34-boundary").onclick = function () {
+        // 3/4では発動しない・4/4で初回発動・再実行では発動しない
+        var _prevCeleb2 = state.companionSideStoryChapter2AllCompleteCelebrated;
+        var _prevPending2 = _pendingCompanionStoryChapter2AllCompleteNotice;
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
+        // 3/4状態でcheck
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: false };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        var _r1 = checkCompanionSideStoryChapter2AllComplete("debug");
+        var _pass1 = (_r1 === false && !_pendingCompanionStoryChapter2AllCompleteNotice);
+        // 4/4にしてcheck
+        state.companionSideStoryChapter2Flags.harumi = true;
+        var _r2 = checkCompanionSideStoryChapter2AllComplete("debug");
+        var _pass2 = (_r2 === true && _pendingCompanionStoryChapter2AllCompleteNotice && state.companionSideStoryChapter2AllCompleteCelebrated === true);
+        // 再実行でcheck
+        var _r3 = checkCompanionSideStoryChapter2AllComplete("debug");
+        var _pass3 = (_r3 === false);
+        // ch1状態が変わっていないことを確認
+        var _passNoChange = (state.companionSideStoryAllCompleteCelebrated === _prevCeleb1 && _pendingCompanionStoryAllCompleteNotice === _prevPending1);
+        // 復元
+        state.companionSideStoryChapter2AllCompleteCelebrated = _prevCeleb2;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _prevPending2;
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+        var _allPass = (_pass1 && _pass2 && _pass3 && _passNoChange);
+        showToast("[DEBUG v0.45.2] 3/4→4/4境界: " + (_allPass ? "PASS ✅" : "FAIL ❌") +
+          "\n 3/4でfalse=" + _pass1 + " 4/4でtrue=" + _pass2 +
+          "\n 再実行false=" + _pass3 + " ch1変化なし=" + _passNoChange);
+      };
+      document.getElementById("btn-debug-v452-ch2-rescue").onclick = function () {
+        // 旧4/4セーブ救済: ch2 4/4 + celebrated=false → pending登録
+        var _prevCeleb2 = state.companionSideStoryChapter2AllCompleteCelebrated;
+        var _prevPending2 = _pendingCompanionStoryChapter2AllCompleteNotice;
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        var _rescued = checkCompanionSideStoryChapter2AllComplete("field");
+        var _pass1 = (_rescued === true && state.companionSideStoryChapter2AllCompleteCelebrated === true && _pendingCompanionStoryChapter2AllCompleteNotice === true);
+        // 再実行で追加pending発生しないこと
+        var _r2 = checkCompanionSideStoryChapter2AllComplete("field");
+        var _pass2 = (_r2 === false);
+        // ch1状態変化なし
+        var _passNoChange = (state.companionSideStoryAllCompleteCelebrated === _prevCeleb1 && _pendingCompanionStoryAllCompleteNotice === _prevPending1);
+        // 復元
+        state.companionSideStoryChapter2AllCompleteCelebrated = _prevCeleb2;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _prevPending2;
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+        var _allPass = (_pass1 && _pass2 && _passNoChange);
+        showToast("[DEBUG v0.45.2] 旧4/4救済: " + (_allPass ? "PASS ✅" : "FAIL ❌") +
+          "\n rescued=" + _pass1 + " 重複なし=" + _pass2 + " ch1変化なし=" + _passNoChange);
+      };
+      document.getElementById("btn-debug-v452-ch2-noduplicate").onclick = function () {
+        // 二重防止: check×3回 → pending最初の1回だけ
+        var _prevCeleb2 = state.companionSideStoryChapter2AllCompleteCelebrated;
+        var _prevPending2 = _pendingCompanionStoryChapter2AllCompleteNotice;
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        var _results452 = [];
+        for (var _qi = 0; _qi < 3; _qi++) {
+          _results452.push(checkCompanionSideStoryChapter2AllComplete("debug"));
+        }
+        var _pass = (_results452[0] === true && _results452[1] === false && _results452[2] === false);
+        var _pendingOnce = (_pendingCompanionStoryChapter2AllCompleteNotice === true);
+        // 復元
+        state.companionSideStoryChapter2AllCompleteCelebrated = _prevCeleb2;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _prevPending2;
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+        showToast("[DEBUG v0.45.2] 二重防止: " + (_pass && _pendingOnce ? "PASS ✅" : "FAIL ❌") +
+          "\n 初回=true 2回目=false 3回目=false pending1回のみ");
+      };
+      document.getElementById("btn-debug-v452-ch1ch2-sep").onclick = function () {
+        // ch1/ch2演出の完全分離確認
+        var _prevCeleb1 = state.companionSideStoryAllCompleteCelebrated;
+        var _prevPending1 = _pendingCompanionStoryAllCompleteNotice;
+        var _prevVis1 = _companionStoryAllCompleteNoticeVisible;
+        var _prevOrigin1 = _companionStoryAllCompleteOrigin;
+        var _prevCeleb2 = state.companionSideStoryChapter2AllCompleteCelebrated;
+        var _prevPending2 = _pendingCompanionStoryChapter2AllCompleteNotice;
+        // ch1=4/4済み・ch2=3/4の状態
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryAllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = false;
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: false };
+        state.companionSideStoryChapter2AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter2AllCompleteNotice = false;
+        // ch2を4/4に
+        state.companionSideStoryChapter2Flags.harumi = true;
+        checkCompanionSideStoryChapter2AllComplete("debug");
+        var _pass1 = (_pendingCompanionStoryChapter2AllCompleteNotice === true);
+        var _pass2 = (state.companionSideStoryChapter2AllCompleteCelebrated === true);
+        var _pass3 = (state.companionSideStoryAllCompleteCelebrated === true);
+        var _pass4 = (_pendingCompanionStoryAllCompleteNotice === false);
+        var _pass5 = (_companionStoryAllCompleteNoticeVisible === false);
+        // 復元
+        state.companionSideStoryAllCompleteCelebrated = _prevCeleb1;
+        _pendingCompanionStoryAllCompleteNotice = _prevPending1;
+        _companionStoryAllCompleteNoticeVisible = _prevVis1;
+        _companionStoryAllCompleteOrigin = _prevOrigin1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _prevCeleb2;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _prevPending2;
+        var _allPass = (_pass1 && _pass2 && _pass3 && _pass4 && _pass5);
+        showToast("[DEBUG v0.45.2] ch1/ch2分離: " + (_allPass ? "PASS ✅" : "FAIL ❌") +
+          "\n ch2pending=" + _pass1 + " ch2celeb=" + _pass2 +
+          "\n ch1celeb維持=" + _pass3 + " ch1pending維持=" + _pass4 + " ch1vis維持=" + _pass5);
       };
 
       // §98 v0.36.1: まかせるAI 攻撃魔法勝利確認（敵HP5）
@@ -10914,7 +11217,8 @@
         companionGearRewardFlags: state.companionGearRewardFlags || {}, // §109 v0.42
         companionSideStoryFlags: state.companionSideStoryFlags || {},  // §113 v0.44
         companionSideStoryAllCompleteCelebrated: !!state.companionSideStoryAllCompleteCelebrated, // §115 v0.44.2
-        companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {} // §117 v0.45
+        companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {}, // §117 v0.45
+        companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated // §119 v0.45.2
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -11008,6 +11312,13 @@
       state.companionSideStoryChapter2Flags = data.companionSideStoryChapter2Flags || {};
       var _story2FlagChanged = normalizeCompanionSideStoryChapter2Flags();
       if (_story2FlagChanged) { _storyFlagChanged = true; }
+      // §119 v0.45.2: 第2話全話完了演出済みフラグ（旧セーブはundefined→false補完）
+      state.companionSideStoryChapter2AllCompleteCelebrated = !!data.companionSideStoryChapter2AllCompleteCelebrated;
+      var _ch2CelebFlagChanged = normalizeCompanionSideStoryChapter2AllCompleteFlag();
+      if (_ch2CelebFlagChanged) { _storyFlagChanged = true; }
+      // §119 v0.45.2: 旧セーブ救済 — 第2話4/4完了済みだがchapter2AllCompleteCelebrated未設定
+      var _story2Rescued = checkCompanionSideStoryChapter2AllComplete("field");
+      if (_story2Rescued) { _storyFlagChanged = true; }
       var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
@@ -11072,8 +11383,12 @@
         updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(1, 0); } else { movePlayer(1, 0); }
       } else if (ev.key === "Escape") {
-        // §116 v0.44.3: ESCは最前面（全話完了演出）のみ閉じる。酒場は閉じない
-        if (_companionStoryAllCompleteNoticeVisible) {
+        // §119 v0.45.2: 第2話全話完了演出が最前面なら先に閉じる
+        if (_companionStoryChapter2AllCompleteNoticeVisible) {
+          ev.preventDefault();
+          closeCompanionStoryChapter2AllCompleteCelebration();
+        // §116 v0.44.3: 第1話全話完了演出のみ閉じる。酒場は閉じない
+        } else if (_companionStoryAllCompleteNoticeVisible) {
           ev.preventDefault();
           closeCompanionStoryAllCompleteCelebration();
         }
@@ -11202,6 +11517,14 @@
 
     // §116 v0.44.3: 全話完了演出モーダル背景クリック伝播防止（下層の酒場へ伝播させない）
     document.getElementById("companion-story-all-complete-modal").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+
+    // §119 v0.45.2: 第2話全話完了演出モーダル
+    document.getElementById("btn-cstory-chapter2-all-complete-close").addEventListener("click", function () {
+      closeCompanionStoryChapter2AllCompleteCelebration();
+    });
+    document.getElementById("companion-story-chapter2-all-complete-modal").addEventListener("click", function (ev) {
       ev.stopPropagation();
     });
 
