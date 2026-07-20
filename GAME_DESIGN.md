@@ -6647,11 +6647,55 @@ consumePendingCompanionStoryCompletionNotices()
 
 ---
 
-## 将来の実装候補（v0.47〜）— プレイヤーフィードバックより [未実装・将来機能]
+---
 
-### v0.47 候補以降 [未実装・将来機能]
+## §122 v0.47 — 仲間サイドストーリー第3話 [実装済み]
 
-- v0.47 仲間サイドストーリー第3話
+### 概要
+
+仲間4人それぞれの第3話を追加。解放条件: 加入済み＋対象仲間の第2話完了＋仲間Lv75以上。  
+酒場の物語リストが12枚カード（4人×3話）になる。  
+第3話全話完了演出は追加しない（第1話・第2話演出との完全分離）。
+
+### 各話タイトルとテーマ
+
+| 仲間 | 第3話タイトル | テーマ |
+|------|-------------|--------|
+| ジュリタニ | 託された一撃 | 自分が全部やらず、次の人のために道を開ける |
+| シュリタニ | 帰る場所のしるし | 直接救うのではなく、帰れる道があると気づかせる |
+| ノリオ | 未来へ渡す記録 | 最後のページを次の旅人のために空けておく |
+| ハルミ | 灯りをつなぐ朝 | 光を分けても消えない、つながった光の強さ |
+
+### 実装詳細
+
+- `COMPANION_SIDE_STORY_CHAPTER3_DATA` — 4人分のストーリーデータ（ch3フィールド付き）
+- `state.companionSideStoryChapter3Flags` — 永続フラグ（saveGame/loadGame対応）
+- `normalizeCompanionSideStoryChapter3Flags()` — never demote保証
+- `normalizeCompanionSideStoryChapter()` — chapter=3 を返すよう拡張
+- `getCompanionSideStoryData()` — chapter=3 → CHAPTER3_DATA を参照
+- `isCompanionSideStoryCompleted()` — chapter=3 → ch3Flags を参照
+- `isCompanionSideStoryUnlocked()` — chapter=3 解放条件: ch2完了＋Lv75以上
+- `getCompanionSideStoryLockReason()` — chapter=3 用メッセージ
+- `completeCompanionSideStory()` — ch3完了処理（ch1/ch2演出は呼ばない）
+- `renderTavernStories()` — 12枚カード対応
+- ステータス画面・冒険の記録 — 第3話セクション追加
+
+### 変更しないもの（§122 v0.47）
+
+- BGM制御・BGMセッション管理
+- 究極ゴリラ捕獲条件
+- 究極チンパンジー・既存最終サイドストーリー・その解放条件
+- 第1話・第2話の演出（checkCompanionSideStoryAllComplete / checkCompanionSideStoryChapter2AllComplete は第3話完了から呼ばない）
+- 既存 COMPANION_SIDE_STORY_DATA / COMPANION_SIDE_STORY_CHAPTER2_DATA
+- 仲間の戦闘能力・装備効果・捕獲率・EXP倍率
+- 報酬追加なし（Gold・アイテム付与なし）
+
+---
+
+## 将来の実装候補（v0.48〜）— プレイヤーフィードバックより [未実装・将来機能]
+
+### v0.48 候補以降 [未実装・将来機能]
+
 - 将来: 仲間物語と最終サイドストーリーの接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

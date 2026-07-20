@@ -14,13 +14,30 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.47 候補以降
+### Version 0.48 候補以降
 
-将来: v0.47 仲間サイドストーリー第3話 / 4人第2話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 4人第3話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み（最新）
+
+### Version 0.47 — 仲間サイドストーリー第3話 (§122)
+
+- **`COMPANION_SIDE_STORY_CHAPTER3_DATA`** 追加: 4人分の第3話ストーリーデータ ✅
+- **`state.companionSideStoryChapter3Flags`** 追加: 永続フラグ ✅
+- **`normalizeCompanionSideStoryChapter3Flags()`** 追加: never demote保証 ✅
+- **`normalizeCompanionSideStoryChapter()`** 拡張: chapter=3 対応 ✅
+- **`getCompanionSideStoryData()`** 拡張: chapter=3 → CHAPTER3_DATA ✅
+- **`isCompanionSideStoryCompleted()`** 拡張: chapter=3 → ch3Flags ✅
+- **`isCompanionSideStoryUnlocked()`** 拡張: chapter=3 解放条件（ch2完了＋Lv75以上） ✅
+- **`getCompanionSideStoryLockReason()`** 拡張: chapter=3 メッセージ ✅
+- **`completeCompanionSideStory()`** 拡張: ch3完了処理（ch1/ch2演出と完全分離） ✅
+- **`renderTavernStories()`** 更新: 12枚カード（4人×3話） ✅
+- **ステータス画面** 更新: 第3話表示セクション追加 ✅
+- **冒険の記録** 更新: 第3話セクション追加 ✅
+- **saveGame / loadGame** 更新: ch3Flags 保存・読み込み ✅
+- **デバッグボタン** 追加: 第3話確認用8ボタン ✅
 
 ### Version 0.46 — フィールド仲間追従表示・仲間アイコン人型化 (§121)
 

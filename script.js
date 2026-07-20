@@ -812,6 +812,81 @@
     }
   };
 
+  // §122 v0.47: 仲間サイドストーリー第3話データ（既存CHAPTER1/CHAPTER2_DATAは変更しない）
+  var COMPANION_SIDE_STORY_CHAPTER3_DATA = {
+    juritani: {
+      id: "juritani_story_3",
+      companionId: "juritani",
+      chapter: 3,
+      title: "託された一撃",
+      lines: [
+        { speaker: "語り",       text: "修行中の若い戦士を見て、ジュリタニはかつての自分を思い出した。" },
+        { speaker: "ジュリタニ", text: "俺が全部片付けてやろうと思ったんだ。最初は。" },
+        { speaker: "あなた",     text: "でも、やめたの？" },
+        { speaker: "ジュリタニ", text: "ああ。俺が打てば終わる。でもそれじゃ、あいつは何も掴めない。" },
+        { speaker: "ジュリタニ", text: "怖い思いをして、それでも踏み出す。それが一撃の重さになる。" },
+        { speaker: "あなた",     text: "一歩引くのも、勇気がいるね。" },
+        { speaker: "ジュリタニ", text: "そうだな。俺の役目は、次に打つ奴のために道を開けておくことだ。" },
+        { speaker: "ジュリタニ", text: "俺が教えたい一撃は、力じゃない。それを選んだ覚悟だ。" },
+        { speaker: "語り",       text: "ジュリタニは若い戦士の横に立ち、大きな手で静かに道を示した。" }
+      ]
+    },
+    shurittani: {
+      id: "shurittani_story_3",
+      companionId: "shurittani",
+      chapter: 3,
+      title: "帰る場所のしるし",
+      lines: [
+        { speaker: "語り",       text: "シュリタニは深い森の奥に、静かに小さな目印をつけていた。" },
+        { speaker: "あなた",     text: "何をしてるの？" },
+        { speaker: "シュリタニ", text: "迷った人が、自分で帰れるように。" },
+        { speaker: "あなた",     text: "連れて帰らないの？" },
+        { speaker: "シュリタニ", text: "もし連れて帰ってあげても、また迷っちゃうかもしれないから。" },
+        { speaker: "シュリタニ", text: "自分でしるしを見つけて、自分で歩いて帰る。その経験が大事。" },
+        { speaker: "あなた",     text: "でも、見つけられなかったら？" },
+        { speaker: "シュリタニ", text: "その時は行く。でも、先に答えを持っていったら、その人の力にならない。" },
+        { speaker: "シュリタニ", text: "救うんじゃない。帰れる道があるって、気づいてもらうだけ。" },
+        { speaker: "語り",       text: "木々の間に静かに灯る小さな目印が、深い森を少しだけやさしくしていた。" }
+      ]
+    },
+    norio: {
+      id: "norio_story_3",
+      companionId: "norio",
+      chapter: 3,
+      title: "未来へ渡す記録",
+      lines: [
+        { speaker: "語り",   text: "ノリオは長い旅の記録をひとつの冊子にまとめ、最後のページを開いた。" },
+        { speaker: "ノリオ", text: "ここには何も書かない。" },
+        { speaker: "あなた", text: "なんで？書き忘れじゃないの？" },
+        { speaker: "ノリオ", text: "違う。次に旅をする誰かのために、空けておくんだ。" },
+        { speaker: "あなた", text: "自分の記録なのに？" },
+        { speaker: "ノリオ", text: "俺の記録は、俺で終わらせるために書いたんじゃない。" },
+        { speaker: "ノリオ", text: "次の奴がここまで読んで、最後のページに自分の旅を書ける。それが目的だ。" },
+        { speaker: "あなた", text: "きっと誰かが書いてくれるよ。" },
+        { speaker: "ノリオ", text: "ああ。俺より先に行った奴がいるなら、俺も同じことをしてもらったはずだからな。" },
+        { speaker: "語り",   text: "最後の白いページが、次の旅人を静かに待ち続けていた。" }
+      ]
+    },
+    harumi: {
+      id: "harumi_story_3",
+      companionId: "harumi",
+      chapter: 3,
+      title: "灯りをつなぐ朝",
+      lines: [
+        { speaker: "語り",   text: "夜明けの光が差し込む中で、ハルミは仲間ひとりひとりの手に小さな光を灯した。" },
+        { speaker: "あなた", text: "自分の光を分けて、大丈夫なの？" },
+        { speaker: "ハルミ", text: "分けても、消えなかった。" },
+        { speaker: "あなた", text: "どういうこと？" },
+        { speaker: "ハルミ", text: "灯りって、誰かに渡すと、その人の中でも光るのね。だから消えないの。" },
+        { speaker: "ハルミ", text: "前はひとりで抱えなきゃいけないと思ってたけど、渡した方がずっと明るかった。" },
+        { speaker: "あなた", text: "みんなの光がつながってるみたいだね。" },
+        { speaker: "ハルミ", text: "ええ。誰か一人の光が消えそうになっても、つながった光があれば戻ってこられる。" },
+        { speaker: "ハルミ", text: "これが、私の本当の守り方かもしれない。" },
+        { speaker: "語り",   text: "夜明けの光の中で、四人の小さな灯りがひとつにつながって輝いていた。" }
+      ]
+    }
+  };
+
   // §75 v0.24 / §76 v0.24.1: 仲間セリフ状態判定ヘルパー
   // 優先度: full+legendary > fullClear > legendary_only > dex > side > clear > side_only
   function getCompanionQuote(c) {
@@ -1028,7 +1103,8 @@
     activeCompanionSideStory: null, // §113 v0.44: 現在閲覧中のcid（非永続）
     activeCompanionSideStoryLine: 0, // §113 v0.44: 現在の行インデックス（非永続）
     companionSideStoryAllCompleteCelebrated: false, // §115 v0.44.2: 全話完了演出済み（永続・saveする）
-    companionSideStoryChapter2AllCompleteCelebrated: false // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
+    companionSideStoryChapter2AllCompleteCelebrated: false, // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
+    companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false } // §122 v0.47: 第3話完了フラグ（永続・saveする）
   };
 
   // ---------------------------------------------------------
@@ -3343,6 +3419,7 @@
     if (chapter === undefined || chapter === null) { return 1; }
     if (chapter === 1) { return 1; }
     if (chapter === 2) { return 2; }
+    if (chapter === 3) { return 3; } // §122 v0.47: 第3話対応
     return null;
   }
 
@@ -3383,21 +3460,44 @@
     return _changed;
   }
 
-  // §117 v0.45 / §118 v0.45.1: chapterに応じたストーリーデータを返す
-  // chapter未指定=1, 明示的不正値(0/-1/3/"foo")→null（第1話フォールバックなし）
+  // §122 v0.47: 第3話フラグboolean保証（never demote）。変更あればtrueを返す
+  function normalizeCompanionSideStoryChapter3Flags() {
+    var _cids122 = ["juritani", "shurittani", "norio", "harumi"];
+    var _changed = false;
+    if (!state.companionSideStoryChapter3Flags || typeof state.companionSideStoryChapter3Flags !== "object" || Array.isArray(state.companionSideStoryChapter3Flags)) {
+      state.companionSideStoryChapter3Flags = { juritani: false, shurittani: false, norio: false, harumi: false };
+      return true;
+    }
+    for (var _ni122 = 0; _ni122 < _cids122.length; _ni122++) {
+      var _k122 = _cids122[_ni122];
+      if (state.companionSideStoryChapter3Flags[_k122] !== true) {
+        if (state.companionSideStoryChapter3Flags[_k122] !== false) { _changed = true; }
+        state.companionSideStoryChapter3Flags[_k122] = false;
+      }
+    }
+    return _changed;
+  }
+
+  // §117 v0.45 / §118 v0.45.1 / §122 v0.47: chapterに応じたストーリーデータを返す
+  // chapter未指定=1, 明示的不正値(0/-1/4/"foo")→null（第1話フォールバックなし）
   function getCompanionSideStoryData(cid, chapter) {
     var _ch = normalizeCompanionSideStoryChapter(chapter);
     if (_ch === null) { return null; }
     if (typeof cid !== "string" || !cid) { return null; }
+    if (_ch === 3) { return COMPANION_SIDE_STORY_CHAPTER3_DATA[cid] || null; } // §122 v0.47
     if (_ch === 2) { return COMPANION_SIDE_STORY_CHAPTER2_DATA[cid] || null; }
     return COMPANION_SIDE_STORY_DATA[cid] || null;
   }
 
-  // §117 v0.45 / §118 v0.45.1: chapter指定で完了フラグを返す
-  // chapter=1のみch1フラグ, chapter=2のみch2フラグを参照（混用防止）
+  // §117 v0.45 / §118 v0.45.1 / §122 v0.47: chapter指定で完了フラグを返す
+  // chapter=1のみch1フラグ, chapter=2のみch2フラグ, chapter=3のみch3フラグを参照（混用防止）
   function isCompanionSideStoryCompleted(cid, chapter) {
     var _ch = normalizeCompanionSideStoryChapter(chapter);
     if (_ch === null) { return false; }
+    if (_ch === 3) { // §122 v0.47
+      if (!state.companionSideStoryChapter3Flags || typeof state.companionSideStoryChapter3Flags !== "object") return false;
+      return !!(state.companionSideStoryChapter3Flags[cid]);
+    }
     if (_ch === 2) {
       if (!state.companionSideStoryChapter2Flags || typeof state.companionSideStoryChapter2Flags !== "object") return false;
       return !!(state.companionSideStoryChapter2Flags[cid]);
@@ -3623,10 +3723,17 @@
 
   // 仲間サイドストーリーが解放済みか（chapter未指定=1話）
   // §117 v0.45: chapter=2対応（加入済み＋第1話完了＋Lv50以上）
+  // §122 v0.47: chapter=3対応（加入済み＋第2話完了＋Lv75以上）
   function isCompanionSideStoryUnlocked(cid, chapter) {
-    var _ch = (chapter === 2) ? 2 : 1;
+    var _ch = (chapter === 3) ? 3 : (chapter === 2) ? 2 : 1; // §122 v0.47
     if (!findById(COMPANION_DATA, cid)) return false;
     if (!hasCompanionEverJoined(cid)) return false;
+    if (_ch === 3) { // §122 v0.47
+      if (!COMPANION_SIDE_STORY_CHAPTER3_DATA[cid]) return false;
+      if (!isCompanionSideStoryCompleted(cid, 2)) return false;
+      var _cl122 = getCompanionLevel(cid);
+      return _cl122.level >= 75;
+    }
     if (_ch === 2) {
       if (!COMPANION_SIDE_STORY_CHAPTER2_DATA[cid]) return false;
       if (!isCompanionSideStoryCompleted(cid, 1)) return false;
@@ -3639,13 +3746,25 @@
   }
 
   // 仲間サイドストーリーのロック理由テキストを返す（chapter未指定=1話）
-  // §117 v0.45: chapter=2対応
+  // §117 v0.45: chapter=2対応 / §122 v0.47: chapter=3対応
   function getCompanionSideStoryLockReason(cid, chapter) {
-    var _ch = (chapter === 2) ? 2 : 1;
+    var _ch = (chapter === 3) ? 3 : (chapter === 2) ? 2 : 1; // §122 v0.47
     var c = findById(COMPANION_DATA, cid);
     if (!c) return "";
     if (!hasCompanionEverJoined(cid)) {
       return "まずは" + c.name + "と出会おう";
+    }
+    if (_ch === 3) { // §122 v0.47
+      if (!isCompanionSideStoryCompleted(cid, 2)) {
+        var _s2 = COMPANION_SIDE_STORY_CHAPTER2_DATA[cid];
+        var _s2title = _s2 ? _s2.title : "第2話";
+        return "第2話「" + _s2title + "」を完了すると解放";
+      }
+      var _cl122b = getCompanionLevel(cid);
+      if (_cl122b.level < 75) {
+        return "仲間Lv75で解放（現在Lv" + _cl122b.level + "）";
+      }
+      return "閲覧可能";
     }
     if (_ch === 2) {
       if (!isCompanionSideStoryCompleted(cid, 1)) {
@@ -3746,7 +3865,7 @@
     openModal("companion-story-modal");
   }
 
-  // 仲間サイドストーリー完了処理（§117 v0.45: chapter引数追加 / §118 v0.45.1: 安定化）
+  // 仲間サイドストーリー完了処理（§117 v0.45: chapter引数追加 / §118 v0.45.1: 安定化 / §122 v0.47: ch3対応）
   function completeCompanionSideStory(cid, chapter) {
     var _ch = normalizeCompanionSideStoryChapter(chapter);
     if (_ch === null) { return; }
@@ -3756,6 +3875,20 @@
     var _expectedStory = getCompanionSideStoryData(cid, _ch);
     if (!_expectedStory) { return; }
     if (_cstoryActiveStoryId !== null && _expectedStory.id !== _cstoryActiveStoryId) { return; }
+    if (_ch === 3) { // §122 v0.47: 第3話完了処理（全話完了演出なし・ch1/ch2と完全分離）
+      normalizeCompanionSideStoryChapter3Flags();
+      if (state.companionSideStoryChapter3Flags[cid] === true) {
+        return; // 既に完了済み: 追加save・通知なし
+      }
+      state.companionSideStoryChapter3Flags[cid] = true;
+      saveGame(); // ch3 flags を保存
+      var _story3 = getCompanionSideStoryData(cid, 3);
+      var _title3 = _story3 ? _story3.title : cid;
+      var _c3 = findById(COMPANION_DATA, cid);
+      var _cName3 = _c3 ? _c3.icon + " " + _c3.name : cid;
+      showToast("📖 " + _cName3 + "の物語・第3話\n「" + _title3 + "」を読み終えた。");
+      return;
+    }
     if (_ch === 2) {
       normalizeCompanionSideStoryChapter2Flags();
       if (state.companionSideStoryChapter2Flags[cid] === true) {
@@ -5831,15 +5964,18 @@
     }
     html += '</div>';
 
-    // §113 v0.44 / §117 v0.45: 仲間サイドストーリー完了セクション（第1話・第2話）
+    // §113 v0.44 / §117 v0.45 / §122 v0.47: 仲間サイドストーリー完了セクション（第1話・第2話・第3話）
     normalizeCompanionSideStoryFlags();
     normalizeCompanionSideStoryChapter2Flags();
+    normalizeCompanionSideStoryChapter3Flags(); // §122 v0.47
     var _storyCids117 = ["juritani", "shurittani", "norio", "harumi"];
     var _storyDoneCount117 = 0;
     var _story2DoneCount117 = 0;
+    var _story3DoneCount122 = 0; // §122 v0.47
     for (var _sci117 = 0; _sci117 < _storyCids117.length; _sci117++) {
       if (state.companionSideStoryFlags && state.companionSideStoryFlags[_storyCids117[_sci117]]) { _storyDoneCount117++; }
       if (state.companionSideStoryChapter2Flags && state.companionSideStoryChapter2Flags[_storyCids117[_sci117]]) { _story2DoneCount117++; }
+      if (state.companionSideStoryChapter3Flags && state.companionSideStoryChapter3Flags[_storyCids117[_sci117]]) { _story3DoneCount122++; } // §122 v0.47
     }
     // 第1話セクション
     html += '<div class="record-section">';
@@ -5883,6 +6019,27 @@
     // §119 v0.45.2: 第2話全4話完了バッジ
     if (_story2DoneCount117 === 4) {
       html += '<div style="color:#c8b4ff;font-weight:bold;margin-top:6px;font-size:0.88em;">🌟 4人の第2話をすべて読了</div>';
+    }
+    html += '</div>';
+    // §122 v0.47: 第3話セクション
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">📖 仲間の物語・第3話</h4>';
+    html += '<span style="font-size:0.82em;color:' + (_story3DoneCount122 === 4 ? "#f4a261" : "#adb5bd") + ';">' + _story3DoneCount122 + ' / 4</span>';
+    html += '</div>';
+    for (var _sci122 = 0; _sci122 < _storyCids117.length; _sci122++) {
+      var _scid122 = _storyCids117[_sci122];
+      var _scd122 = findById(COMPANION_DATA, _scid122);
+      var _sss122 = COMPANION_SIDE_STORY_CHAPTER3_DATA[_scid122];
+      var _sdone122 = !!(state.companionSideStoryChapter3Flags && state.companionSideStoryChapter3Flags[_scid122]);
+      var _scName122 = _scd122 ? _scd122.name : _scid122;
+      var _stTitle122 = _sss122 ? _sss122.title : _scid122;
+      html += '<div class="record-row"><span>' + (_sdone122 ? "✅ " : "・") + _scName122 +
+        '　<span style="color:#888;font-size:0.82em;">「' + _stTitle122 + '」</span></span>' +
+        chk(_sdone122) + (_sdone122 ? "完了" : "未完了") + '</span></div>';
+    }
+    if (_story3DoneCount122 === 4) {
+      html += '<div style="color:#f4a261;font-weight:bold;margin-top:6px;font-size:0.88em;">🌟 4人の第3話をすべて読了</div>';
     }
     html += '</div>';
 
@@ -6395,11 +6552,12 @@
             '<span style="color:#a08060;">' + _lockReason111 + '</span></div>';
         }
       }
-      // §113 v0.44 / §117 v0.45: 仲間サイドストーリー状態表示（第1話・第2話）
+      // §113 v0.44 / §117 v0.45 / §122 v0.47: 仲間サイドストーリー状態表示（第1話・第2話・第3話）
       var _ss113 = COMPANION_SIDE_STORY_DATA[cd.id];
       if (_ss113) {
         normalizeCompanionSideStoryFlags();
         normalizeCompanionSideStoryChapter2Flags();
+        normalizeCompanionSideStoryChapter3Flags(); // §122 v0.47
         html += '<div class="shop-row" style="font-size:0.8em;margin-top:4px;border-top:1px solid #2a3a5a;padding-top:4px;">' +
           '<span style="color:#a0cfff;font-weight:bold;">📖 仲間の物語</span></div>';
         // 第1話
@@ -6431,6 +6589,23 @@
             html += '<div class="shop-row" style="font-size:0.76em;">' +
               '<span style="color:#888;padding-left:24px;">条件: </span>' +
               '<span style="color:#a08060;">' + _sLock2_113 + '</span></div>';
+          }
+        }
+        // §122 v0.47: 第3話
+        var _ss3_113 = COMPANION_SIDE_STORY_CHAPTER3_DATA[cd.id];
+        if (_ss3_113) {
+          var _sDone3_113 = !!(state.companionSideStoryChapter3Flags && state.companionSideStoryChapter3Flags[cd.id]);
+          var _sUnlocked3_113 = isCompanionSideStoryUnlocked(cd.id, 3);
+          html += '<div class="shop-row" style="font-size:0.8em;">' +
+            '<span style="color:#c0a060;padding-left:8px;">第3話</span>' +
+            '<span style="color:#e0e0e0;padding-left:4px;">「' + _ss3_113.title + '」</span>' +
+            '<span style="color:' + (_sDone3_113 ? "#06d6a0" : (_sUnlocked3_113 ? "#ffd166" : "#888")) + ';font-size:0.85em;">' +
+            (_sDone3_113 ? "✓ 完了" : (_sUnlocked3_113 ? "閲覧可能" : "未解放")) + '</span></div>';
+          if (!_sDone3_113 && !_sUnlocked3_113) {
+            var _sLock3_113 = getCompanionSideStoryLockReason(cd.id, 3);
+            html += '<div class="shop-row" style="font-size:0.76em;">' +
+              '<span style="color:#888;padding-left:24px;">条件: </span>' +
+              '<span style="color:#a08060;">' + _sLock3_113 + '</span></div>';
           }
         }
       }
@@ -6633,6 +6808,7 @@
     var body = document.getElementById("tavern-body");
     normalizeCompanionSideStoryFlags();
     normalizeCompanionSideStoryChapter2Flags();
+    normalizeCompanionSideStoryChapter3Flags(); // §122 v0.47
     var html = '<p style="margin:0 0 4px;font-weight:bold;color:#a0cfff;">📖 仲間の物語</p>';
     var cids = ["juritani", "shurittani", "norio", "harumi"];
     for (var _si = 0; _si < cids.length; _si++) {
@@ -6641,6 +6817,7 @@
       if (!_sc) continue;
       var _ss1 = COMPANION_SIDE_STORY_DATA[_scid];
       var _ss2 = COMPANION_SIDE_STORY_CHAPTER2_DATA[_scid];
+      var _ss3 = COMPANION_SIDE_STORY_CHAPTER3_DATA[_scid]; // §122 v0.47
       html += '<div style="border:1px solid #2a3a5a;border-radius:6px;padding:8px 10px;margin-bottom:8px;">';
       html += '<div style="font-size:0.9em;font-weight:bold;margin-bottom:4px;">' + _sc.icon + " " + _sc.name + '</div>'; // §121 v0.46: icon（人型）に変更
       // 第1話カード
@@ -6668,7 +6845,7 @@
       if (_ss2) {
         var _s2Unlocked = isCompanionSideStoryUnlocked(_scid, 2);
         var _s2Done = isCompanionSideStoryCompleted(_scid, 2);
-        html += '<div style="border-left:2px solid #5a3a8a;padding-left:8px;">';
+        html += '<div style="border-left:2px solid #5a3a8a;padding-left:8px;margin-bottom:6px;">';
         html += '<div style="font-size:0.78em;color:#9070c0;margin-bottom:2px;">第2話</div>';
         html += '<div style="font-size:0.82em;color:#e0e0e0;">「' + _ss2.title + '」</div>';
         if (_s2Done) {
@@ -6682,6 +6859,27 @@
           html += '<div style="font-size:0.78em;color:#888;margin:2px 0;">未解放</div>';
           html += '<div style="font-size:0.76em;color:#a08060;margin:2px 0 2px;">条件：' + _s2Lock + '</div>';
           html += '<button class="shop-menu-btn" data-story-cid-lock="' + _scid + '" data-story-chapter-lock="2" style="font-size:0.82em;padding:4px 10px;margin-top:2px;color:#555;border-color:#444;">🔒 未解放</button>';
+        }
+        html += '</div>';
+      }
+      // §122 v0.47: 第3話カード
+      if (_ss3) {
+        var _s3Unlocked = isCompanionSideStoryUnlocked(_scid, 3);
+        var _s3Done = isCompanionSideStoryCompleted(_scid, 3);
+        html += '<div style="border-left:2px solid #6a5a3a;padding-left:8px;">';
+        html += '<div style="font-size:0.78em;color:#c0a060;margin-bottom:2px;">第3話</div>';
+        html += '<div style="font-size:0.82em;color:#e0e0e0;">「' + _ss3.title + '」</div>';
+        if (_s3Done) {
+          html += '<div style="font-size:0.78em;color:#06d6a0;margin:2px 0;">✓ 完了</div>';
+          html += '<button class="shop-menu-btn" data-story-cid="' + _scid + '" data-story-chapter="3" style="font-size:0.82em;padding:4px 10px;margin-top:2px;border-color:#555;color:#aaa;">もう一度読む</button>';
+        } else if (_s3Unlocked) {
+          html += '<div style="font-size:0.78em;color:#ffd166;margin:2px 0;">閲覧可能</div>';
+          html += '<button class="shop-menu-btn" data-story-cid="' + _scid + '" data-story-chapter="3" style="font-size:0.82em;padding:4px 10px;margin-top:2px;border-color:#ffd166;color:#ffd166;">物語を読む</button>';
+        } else {
+          var _s3Lock = getCompanionSideStoryLockReason(_scid, 3);
+          html += '<div style="font-size:0.78em;color:#888;margin:2px 0;">未解放</div>';
+          html += '<div style="font-size:0.76em;color:#a08060;margin:2px 0 2px;">条件：' + _s3Lock + '</div>';
+          html += '<button class="shop-menu-btn" data-story-cid-lock="' + _scid + '" data-story-chapter-lock="3" style="font-size:0.82em;padding:4px 10px;margin-top:2px;color:#555;border-color:#444;">🔒 未解放</button>';
         }
         html += '</div>';
       }
@@ -7953,6 +8151,15 @@
       html += '<button class="shop-menu-btn" id="btn-debug-party-clear-trail" style="border-color:#adb5bd;color:#adb5bd;">👥 パーティ解除 + 軌跡リセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v46-icon-check" style="border-color:#88d8b0;color:#88d8b0;">👤 仲間アイコン一覧確認（人型チェック）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v46-one-follow" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間1人追従確認（シュリタニのみ）</button>';
+      html += '<p class="small" style="color:#f4a261;margin-top:8px;">📖 仲間サイドストーリー第3話 (§122 v0.47)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 第3話フラグ全リセット（4人→未完了）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-all" style="border-color:#f4a261;color:#f4a261;">🌟 第3話全完了状態にする（4人）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-ch2-lv75-all" style="border-color:#ffd166;color:#ffd166;">🔓 第3話解放条件を整える（ch2全完了+Lv75+仲間加入）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-juritani" style="border-color:#f4a261;color:#f4a261;">🧑 ジュリタニ第3話のみ完了</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-shurittani" style="border-color:#f4a261;color:#f4a261;">👩 シュリタニ第3話のみ完了</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-norio" style="border-color:#f4a261;color:#f4a261;">👨 ノリオ第3話のみ完了</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-story3-harumi" style="border-color:#f4a261;color:#f4a261;">👧 ハルミ第3話のみ完了</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v47-open-tavern-stories" style="border-color:#a0cfff;color:#a0cfff;">🍺 酒場・物語リストを開く（12枚カード確認）</button>';
       html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
@@ -9155,6 +9362,84 @@
         closeModal("settings-modal");
         renderField();
         showToast("[DEBUG] シュリタニのみパーティ追加。歩いて👩 1人追従を確認！");
+      };
+      // §122 v0.47: 仲間サイドストーリー第3話デバッグ
+      document.getElementById("btn-debug-v47-story3-reset").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags = { juritani: false, shurittani: false, norio: false, harumi: false };
+        saveGame();
+        showToast("[DEBUG] 第3話フラグ全リセット完了 ✅");
+        renderStatusBody();
+      };
+      document.getElementById("btn-debug-v47-story3-all").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        saveGame();
+        showToast("[DEBUG] 第3話全完了状態にした ✅");
+        renderStatusBody();
+      };
+      document.getElementById("btn-debug-v47-ch2-lv75-all").onclick = function () {
+        var _cids47 = ["juritani", "shurittani", "norio", "harumi"];
+        normalizeCompanionSideStoryFlags();
+        normalizeCompanionSideStoryChapter2Flags();
+        // ch1・ch2全完了
+        state.companionSideStoryFlags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryChapter2Flags = { juritani: true, shurittani: true, norio: true, harumi: true };
+        // 仲間加入 + Lv75以上
+        for (var _i47 = 0; _i47 < _cids47.length; _i47++) {
+          var _c47 = _cids47[_i47];
+          if (!hasCompanionEverJoined(_c47)) {
+            if (!state.companionLevels) { state.companionLevels = {}; }
+            if (!state.companionLevels[_c47]) { state.companionLevels[_c47] = { level: 1, exp: 0, nextExp: 100 }; }
+            state.companionLevels[_c47].level = 75;
+          } else {
+            var _cl47 = getCompanionLevel(_c47);
+            if (_cl47.level < 75) {
+              if (!state.companionLevels) { state.companionLevels = {}; }
+              if (!state.companionLevels[_c47]) { state.companionLevels[_c47] = { level: 1, exp: 0, nextExp: 100 }; }
+              state.companionLevels[_c47].level = 75;
+            }
+          }
+        }
+        saveGame();
+        showToast("[DEBUG] ch2全完了 + 仲間4人Lv75以上 → 第3話解放条件を整えた ✅\n酒場→物語で12枚カードを確認");
+        renderStatusBody();
+      };
+      document.getElementById("btn-debug-v47-story3-juritani").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags["juritani"] = true;
+        saveGame();
+        showToast("[DEBUG] ジュリタニ第3話を完了にした ✅");
+      };
+      document.getElementById("btn-debug-v47-story3-shurittani").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags["shurittani"] = true;
+        saveGame();
+        showToast("[DEBUG] シュリタニ第3話を完了にした ✅");
+      };
+      document.getElementById("btn-debug-v47-story3-norio").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags["norio"] = true;
+        saveGame();
+        showToast("[DEBUG] ノリオ第3話を完了にした ✅");
+      };
+      document.getElementById("btn-debug-v47-story3-harumi").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryChapter3Flags["harumi"] = true;
+        saveGame();
+        showToast("[DEBUG] ハルミ第3話を完了にした ✅");
+      };
+      document.getElementById("btn-debug-v47-open-tavern-stories").onclick = function () {
+        closeModal("settings-modal");
+        openTavernModal();
+        // 酒場モーダルを開いてから物語リストを表示
+        setTimeout(function () {
+          var _tavernEl = document.getElementById("tavern-modal");
+          if (_tavernEl && !_tavernEl.classList.contains("hidden")) {
+            renderTavernStories();
+          }
+        }, 100);
+        showToast("[DEBUG] 酒場を開いた。「仲間の物語」を選んで12枚カードを確認");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -11522,7 +11807,8 @@
         companionSideStoryFlags: state.companionSideStoryFlags || {},  // §113 v0.44
         companionSideStoryAllCompleteCelebrated: !!state.companionSideStoryAllCompleteCelebrated, // §115 v0.44.2
         companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {}, // §117 v0.45
-        companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated // §119 v0.45.2
+        companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated, // §119 v0.45.2
+        companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {} // §122 v0.47
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -11623,6 +11909,10 @@
       // §119 v0.45.2: 旧セーブ救済 — 第2話4/4完了済みだがchapter2AllCompleteCelebrated未設定
       var _story2Rescued = checkCompanionSideStoryChapter2AllComplete("field");
       if (_story2Rescued) { _storyFlagChanged = true; }
+      // §122 v0.47: 第3話完了フラグ（旧セーブはundefined→{}補完）
+      state.companionSideStoryChapter3Flags = data.companionSideStoryChapter3Flags || {};
+      var _story3FlagChanged = normalizeCompanionSideStoryChapter3Flags();
+      if (_story3FlagChanged) { _storyFlagChanged = true; }
       var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット

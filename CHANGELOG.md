@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.47] - 2026-07-20 — 仲間サイドストーリー第3話 (§122)
+
+### Added
+- **`COMPANION_SIDE_STORY_CHAPTER3_DATA`**: 4人分の第3話ストーリーデータ（ジュリタニ「託された一撃」・シュリタニ「帰る場所のしるし」・ノリオ「未来へ渡す記録」・ハルミ「灯りをつなぐ朝」）
+- **`state.companionSideStoryChapter3Flags`**: 第3話完了フラグ（永続・saveGame/loadGame対応）
+- **`normalizeCompanionSideStoryChapter3Flags()`**: never demote保証、変更あればtrue返す
+- **デバッグ8ボタン（§122）**: 第3話フラグ全リセット / 全完了 / 解放条件整備 / 4人個別完了 / 酒場物語リスト直接オープン
+- **酒場 物語リスト**: 12枚カード（4人×第1話・第2話・第3話）
+
+### Changed
+- **`normalizeCompanionSideStoryChapter()`**: chapter=3 を返すよう拡張
+- **`getCompanionSideStoryData()`**: chapter=3 → `COMPANION_SIDE_STORY_CHAPTER3_DATA` を参照
+- **`isCompanionSideStoryCompleted()`**: chapter=3 → `companionSideStoryChapter3Flags` を参照
+- **`isCompanionSideStoryUnlocked()`**: chapter=3 解放条件（加入済み＋ch2完了＋Lv75以上）追加
+- **`getCompanionSideStoryLockReason()`**: chapter=3 用ロック理由メッセージ追加
+- **`completeCompanionSideStory()`**: chapter=3 完了処理追加（ch1/ch2演出呼び出しなし）
+- **`renderTavernStories()`**: ch3カード追加（12枚カード、第3話は茶系ボーダー `#6a5a3a`）
+- **ステータス画面**: 仲間ごとに第3話表示行追加
+- **冒険の記録**: 第3話セクション追加（橙 `#f4a261` で全完了バッジ）
+- **saveGame / loadGame**: `companionSideStoryChapter3Flags` 保存・読み込み追加
+
+---
+
 ## [0.46] - 2026-07-20 — フィールド仲間追従表示・仲間アイコン人型化 (§121)
 
 ### Added

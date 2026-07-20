@@ -5,6 +5,20 @@
 
 ---
 
+## v0.47 (2026-07-20) — 仲間サイドストーリー第3話 (§122)
+
+### 設計判断・確認事項
+
+- **ch1/ch2演出との完全分離の徹底**: `completeCompanionSideStory(ch3)` では `checkCompanionSideStoryAllComplete()` も `checkCompanionSideStoryChapter2AllComplete()` も呼ばない。第3話は独立したフラグ体系（`companionSideStoryChapter3Flags`）を持ち、全話完了演出モーダルも持たない設計とした。将来第3話全話完了演出を追加する場合は、専用の pending 変数・モーダル・visible フラグを設ける。
+
+- **第3話ストーリーのテーマ選定**: 第1話が「自分の行動の意味・信念の確認」、第2話が「他者との関わり方の変化」であるのに対し、第3話は「次世代への継承・手放すことの勇気」をテーマに設定した。ジュリタニ「次に打つ人のために退く」、シュリタニ「救うのではなく気づかせる」、ノリオ「最後のページを空けておく」、ハルミ「光を分けても消えない」という対称的なメタファーを各キャラクターのアビリティ（攻撃・捕獲・経験値・回復）から逆算して設計。
+
+- **normalizeCompanionSideStoryChapter() の拡張**: 既存コードは `chapter === 3` を `null`（不正値）として扱っていた。拡張で `return 3` を追加した後、依存する全関数（`getCompanionSideStoryData`・`isCompanionSideStoryCompleted`・`completeCompanionSideStory`）が ch3 ブランチを持つことを確認。これにより ch3 引数が ch1 にフォールバックする誤動作を防いでいる。
+
+- **デバッグ「解放条件を整える」ボタンの実装方針**: hasCompanionEverJoined() が true（過去に加入履歴あり）でも現在パーティに居なくてよい。加入歴のチェックは `companionLevels` が存在することではなく `hasCompanionEverJoined()` 関数で行っているため、仲間をパーティに入れなくてもデバッグボタンで解放条件を整えられる。ただし、Lv75未満の仲間は `companionLevels[cid].level = 75` に強制昇格させる。
+
+---
+
 ## v0.46 (2026-07-20) — フィールド仲間追従表示・仲間アイコン人型化 (§121)
 
 ### 設計判断・確認事項

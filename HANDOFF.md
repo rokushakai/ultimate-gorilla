@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.46** |
+| 現在バージョン | **v0.47** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,16 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.47] 仲間サイドストーリー第3話**（§122）
+  - **`COMPANION_SIDE_STORY_CHAPTER3_DATA`**: 4人分の第3話（ジュリタニ「託された一撃」・シュリタニ「帰る場所のしるし」・ノリオ「未来へ渡す記録」・ハルミ「灯りをつなぐ朝」）
+  - **`state.companionSideStoryChapter3Flags`**: 永続フラグ（saveGame/loadGame対応）
+  - **`normalizeCompanionSideStoryChapter3Flags()`**: never demote保証
+  - **`normalizeCompanionSideStoryChapter()`**: chapter=3 対応追加
+  - **`isCompanionSideStoryUnlocked(ch3)`**: 加入済み＋ch2完了＋Lv75以上
+  - **`completeCompanionSideStory(ch3)`**: ch1/ch2演出を一切呼ばない完全分離
+  - **酒場 物語リスト**: 12枚カード（4人×3話、第3話は茶系 `#6a5a3a` ボーダー）
+  - **ステータス画面・冒険の記録**: 第3話セクション追加（橙バッジ `#f4a261`）
+  - **デバッグ8ボタン（§122）**: フラグ全リセット / 全完了 / 解放条件整備 / 4人個別完了 / 酒場直接オープン
 - **[v0.46] フィールド仲間追従表示・仲間アイコン人型化**（§121）
   - **`COMPANION_DATA.icon`**: 仲間本人識別アイコン（人型）を一元管理（ジュリタニ🧑 / シュリタニ👩 / ノリオ👨 / ハルミ👧）
   - **`renderField()` 優先度修正**: 仲間追従 < NPC/施設/ゲート/宝箱。草地・道のみに表示
@@ -766,12 +776,11 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.47 仲間サイドストーリー第3話** — 4人第3話データ追加。第2話Lv75以上解放条件。工数中。v0.46完了済み。
-2. **v0.48 仲間物語クリア後イベント** — 全仲間第2話完了後の特別な接続イベント。工数中〜大。
-3. **v0.27 仲間の戦闘自動参加** — 仲間が自動行動（コマンド選択なし）。工数中。v0.46 完了後。
-4. **v0.28 仲間ごとのコマンド選択** — 戦闘UIの大改修。最後に回す。
+1. **v0.48 仲間物語クリア後イベント** — 全仲間第3話完了後の特別な接続イベント。工数中〜大。v0.47完了済み。
+2. **v0.49 仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
+3. **仲間わざ習得演出強化** — Lv25到達時の仲間わざ習得に演出追加。工数小。
 
-> v0.45.3（§120 全話完了演出キュー安定化）実装済み。小規模な回帰確認後 v0.46 へ進む状態。
+> v0.47（§122 仲間サイドストーリー第3話）実装済み。4人×3話の12枚カード、デバッグ8ボタン対応。
 
 > プレイヤーフィードバック (v0.25 時点): 「仲間をフィールドで後ろに並べたい」「仲間も戦闘に参加してほしい」
 
