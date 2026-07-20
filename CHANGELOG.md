@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.47.1] - 2026-07-20 — 仲間サイドストーリー第3話・安定化 (§123)
+
+### Changed
+- **`startCompanionSideStory()`** アトミック化: `_cstoryActiveChapter = _ch` を全ガード（データ検証・解放チェック）通過後にのみセット。ガード失敗時の `_cstoryActiveChapter` 汚染を防止
+- **`_cstoryActiveChapter` コメント**: 「1 or 2」→「1, 2 or 3」へ修正
+- **`var _cstoryCompleting = false`** モジュール変数追加: 完了処理中の多重実行防止（非永続・IIFEスコープ）
+- **`completeCompanionSideStory()` ch3ブランチ**: `_cstoryCompleting` ロック追加 + 最終行インデックス再確認 + early-return時の `_cstoryCompleting = false` リセット
+- **`btn-cstory-next` タイマー**: sessionId のみキャプチャ → sessionId/cid/chapter/storyId の4要素キャプチャに強化
+
+### Added
+- **`isValidCompanionSideStoryData(data, cid, chapter)`** ヘルパー追加: id/chapter/companionId 三条件を一括検証
+- **デバッグ8ボタン（§123）**: セッション変数表示 / アトミック起動テスト / セッション外complete棄却確認 / completingフラグ表示 / 途中close未完了確認 / 二重complete防止確認 / ch1・ch2祝賀分離確認 / 全フラグ一覧表示
+
+---
+
 ## [0.47] - 2026-07-20 — 仲間サイドストーリー第3話 (§122)
 
 ### Added

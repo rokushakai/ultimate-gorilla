@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.47** |
+| 現在バージョン | **v0.47.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,13 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.47.1] 仲間サイドストーリー第3話・安定化**（§123）
+  - **`startCompanionSideStory()` アトミック化**: `_cstoryActiveChapter` を全ガード通過後にのみセット
+  - **`var _cstoryCompleting = false`**: 完了処理多重実行防止フラグ（非永続）
+  - **`isValidCompanionSideStoryData()`**: id/chapter/companionId 三条件ヘルパー追加
+  - **`completeCompanionSideStory()` ch3ブランチ強化**: completing lock + 最終行再確認
+  - **タイマー4要素キャプチャ**: sessionId/cid/chapter/storyId でロック解除を守護
+  - **デバッグ8ボタン（§123）**: 安定化テスト用（セッション変数表示・アトミックテスト・分離確認など）
 - **[v0.47] 仲間サイドストーリー第3話**（§122）
   - **`COMPANION_SIDE_STORY_CHAPTER3_DATA`**: 4人分の第3話（ジュリタニ「託された一撃」・シュリタニ「帰る場所のしるし」・ノリオ「未来へ渡す記録」・ハルミ「灯りをつなぐ朝」）
   - **`state.companionSideStoryChapter3Flags`**: 永続フラグ（saveGame/loadGame対応）

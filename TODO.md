@@ -22,6 +22,16 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.47.1 — 仲間サイドストーリー第3話・安定化 (§123)
+
+- **`startCompanionSideStory()`** アトミック化: `_cstoryActiveChapter = _ch` を全ガード通過後にのみセット ✅
+- **`_cstoryActiveChapter` コメント** 修正: 「1 or 2」→「1, 2 or 3」 ✅
+- **`var _cstoryCompleting = false`** モジュール変数追加: 完了多重実行防止 ✅
+- **`isValidCompanionSideStoryData()`** ヘルパー追加: id/chapter/companionId 三条件検証 ✅
+- **`completeCompanionSideStory()` ch3ブランチ** 強化: completing lock・最終行確認を追加 ✅
+- **`btn-cstory-next` タイマー** 強化: sessionId に加え cid/chapter/storyId も4要素キャプチャ ✅
+- **デバッグボタン** 追加: §123 安定化テスト用8ボタン ✅
+
 ### Version 0.47 — 仲間サイドストーリー第3話 (§122)
 
 - **`COMPANION_SIDE_STORY_CHAPTER3_DATA`** 追加: 4人分の第3話ストーリーデータ ✅

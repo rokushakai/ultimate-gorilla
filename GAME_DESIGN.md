@@ -6692,6 +6692,64 @@ consumePendingCompanionStoryCompletionNotices()
 
 ---
 
+## §123 v0.47.1 — 仲間サイドストーリー第3話・安定化アップデート [実装済み]
+
+### 概要
+
+v0.47 (§122) で実装した仲間サイドストーリー第3話の安定化パッチ。
+セッション汚染防止・原子的スタート処理・完了多重ガード・タイマー安全化・ch1/ch2との完全分離を強化する。
+
+### 修正内容
+
+#### 1. `startCompanionSideStory` アトミック化
+- `_cstoryActiveChapter = _ch` をすべてのガード（データ検証・解放チェック）通過**後**にのみセット
+- ガード失敗時に `_cstoryActiveChapter` が汚染される問題を修正
+
+#### 2. `_cstoryActiveChapter` コメント更新
+- コメントを「1 or 2」から「1, 2 or 3」へ修正
+
+#### 3. `isValidCompanionSideStoryData(data, cid, chapter)` ヘルパー追加
+- `data.id === expected.id` / `data.chapter === chapter` / `data.companionId === cid` の三条件を一括検証
+- データが不正な場合は `false` を返す
+
+#### 4. `var _cstoryCompleting = false` モジュール変数追加
+- 完了処理中の多重実行を防ぐフラグ（非永続・IIFEスコープ・saveしない）
+
+#### 5. `completeCompanionSideStory` ch3ブランチ強化
+- `_cstoryCompleting` ロックによる多重完了防止（開始時 true、終了時 false）
+- 現在行インデックスが最終行であることを完了処理側でも再確認
+- 早期return時は `_cstoryCompleting = false` をリセットしてから return
+
+#### 6. `btn-cstory-next` タイマー: cid/chapter/storyId も追加キャプチャ
+- 現行はセッションIDのみキャプチャ
+- `_timerCid`, `_timerChapter`, `_timerStoryId` を追加し4要素照合でロック解除
+
+#### 7. ch1/ch2との完全分離（確認）
+- ch3完了から `checkCompanionSideStoryAllComplete` / `checkCompanionSideStoryChapter2AllComplete` を呼ばない（§122で既に実装済み）
+- `state.companionSideStoryChapter3Flags` は ch1/ch2フラグと完全に別オブジェクト（§122で既に実装済み）
+
+#### 8. デバッグボタン追加（§123 v0.47.1 安定化テスト用・8ボタン）
+- `btn-debug-v471-session-info`: セッション変数6種をtoast表示
+- `btn-debug-v471-atomicity-test`: 無効chapter=99でstartを呼び `_cstoryActiveChapter` が汚染されないか確認
+- `btn-debug-v471-direct-complete-test`: セッション外からcompleteCompanionSideStory直呼び→棄却確認
+- `btn-debug-v471-completing-flag`: `_cstoryCompleting` フラグ現在値をtoast表示
+- `btn-debug-v471-mid-close-test`: ch3をline=0で開いて即close→flag=false維持確認
+- `btn-debug-v471-double-complete-test`: 模擬セッションでcomplete二重呼び出し→1回のみ完了確認
+- `btn-debug-v471-ch3-ch12-isolated`: ch1/ch2祝賀pendingフラグ値をtoast表示（ch3完了後も0であることを確認）
+- `btn-debug-v471-flags-all-display`: ch1/ch2/ch3の全フラグを4仲間分一覧表示
+
+### 変更しないもの（§123 v0.47.1）
+
+- BGM制御・BGMセッション管理
+- 究極ゴリラ捕獲条件
+- 究極チンパンジー・既存最終サイドストーリー・その解放条件
+- COMPANION_SIDE_STORY_DATA / COMPANION_SIDE_STORY_CHAPTER2_DATA / COMPANION_SIDE_STORY_CHAPTER3_DATA（ストーリー本文）
+- 第3話全話完了演出（v0.47.1では追加しない）
+- 仲間の戦闘能力・装備効果・捕獲率・EXP倍率
+- 報酬追加なし（Gold・アイテム付与なし）
+
+---
+
 ## 将来の実装候補（v0.48〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.48 候補以降 [未実装・将来機能]

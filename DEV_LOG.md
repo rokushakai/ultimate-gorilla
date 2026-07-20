@@ -5,6 +5,22 @@
 
 ---
 
+## v0.47.1 (2026-07-20) — 仲間サイドストーリー第3話・安定化 (§123)
+
+### 設計判断・確認事項
+
+- **`startCompanionSideStory` のアトミック化**: v0.47 では `_cstoryActiveChapter = _ch` がデータ検証・解放チェックより前に配置されており、ガード失敗時でも chapter が書き換わる問題があった。全ガード通過後に1行のみ配置することで、関数が返った後のモジュール変数を常に「実行中セッションの値 or 直前の正常値」に保つ。
+
+- **`_cstoryCompleting` フラグの位置付け**: JavaScript はシングルスレッドのため、同期的な二重呼び出しは理論上不可能。ただし `closeCompanionSideStoryModal()` 後の外部呼び出しや debug ボタンからの直接呼び出しに対するベルト・サスペンダー防御として設けた。フラグは常に最終行確認後・normalize 前にセットし、どの早期 return でも必ず false にリセットする。
+
+- **タイマー4要素キャプチャの意図**: sessionId だけでも `startCompanionSideStory` を呼ぶたびにインクリメントされるため、旧セッションのタイマーが新セッションのロックを解除することはない。しかし、仕様書（§123 §16）が明示的に cid/chapter/storyId のキャプチャを要求しているため実装。将来 sessionId のインクリメント方法が変わった場合にも安全。
+
+- **最終行確認を complete 側でも行う理由**: `btn-cstory-next` ハンドラは `_csIsLast` を評価してから `completeCompanionSideStory` を呼ぶが、`completeCompanionSideStory` は debug ボタンや将来の API から直接呼び出される可能性がある。最終行チェックを complete 側でも持つことで、「行インデックスが最後でない状態で完了フラグが立つ」バグを防ぐ。
+
+- **`isValidCompanionSideStoryData()` の設計**: 三条件（id・chapter・companionId）をすべて照合することで、異なる仲間の同 chapter データや、同 cid の別 chapter データが混入しても確実に弾ける。内部で `getCompanionSideStoryData(cid, chapter)` を呼ぶため、normalize と data-source の一元化も維持。
+
+---
+
 ## v0.47 (2026-07-20) — 仲間サイドストーリー第3話 (§122)
 
 ### 設計判断・確認事項
