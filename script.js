@@ -1375,6 +1375,11 @@
             emoji = state.openedChests[key] ? "📦" : "🪄";
           } else if (tileChar === "X") {
             emoji = state.openedChests[key] ? "📦" : "✨";
+          } else if (_adventureGuideNpcVisible &&
+                     mapX === _adventureGuideNpcX && mapY === _adventureGuideNpcY &&
+                     (tileChar === "." || tileChar === ",")) {
+            // §124 v0.48: 旅の案内人NPC（仲間トレイルより高優先・草地・道のみ）
+            emoji = "🧭";
           } else if (trailMap[key] && (tileChar === "." || tileChar === ",")) {
             // §121 v0.46: 仲間追従はNPC/施設/ゲートより低優先。草地・道のみ表示
             emoji = trailMap[key];
@@ -2749,6 +2754,24 @@
 
     renderField();
 
+    // §124 v0.48: 旅の案内人NPC接触判定
+    if (_adventureGuideNpcVisible && nx === _adventureGuideNpcX && ny === _adventureGuideNpcY) {
+      openAdventureGuideNpcModal();
+      return;
+    }
+    // §124 v0.48: 有効移動カウント + 目標変化リセット + 案内人スポーン判定
+    var _agObj = getCurrentAdventureGuide().objectiveId;
+    if (_agObj !== _adventureGuideLastObjectiveId) {
+      _adventureGuideLastObjectiveId = _agObj;
+      _adventureGuideStepCount = 0;
+      _adventureGuideNpcVisible = false;
+      _adventureGuideNpcX = -1;
+      _adventureGuideNpcY = -1;
+    } else if (!_adventureGuideNpcVisible) {
+      _adventureGuideStepCount++;
+      if (_adventureGuideStepCount >= 15) { trySpawnAdventureGuideNpc(); }
+    }
+
     var tile = state.terrain[ny][nx];
     if (tile === "H") {
       openHomeModal();
@@ -3416,6 +3439,13 @@
 
   // §123 v0.47.1: 完了処理中の多重実行を防ぐフラグ（非永続・IIFEスコープ・saveしない）
   var _cstoryCompleting = false;
+
+  // §124 v0.48: 旅の案内人NPC 一時状態（非永続・IIFEスコープ・saveしない）
+  var _adventureGuideStepCount = 0;         // 有効移動カウント（NPC未表示時のみ加算）
+  var _adventureGuideNpcVisible = false;    // 案内人表示中フラグ
+  var _adventureGuideNpcX = -1;             // 案内人X座標（-1=未配置）
+  var _adventureGuideNpcY = -1;             // 案内人Y座標（-1=未配置）
+  var _adventureGuideLastObjectiveId = "";  // 前回objectiveId（目標変化検出用）
 
   // §118 v0.45.1: chapter値を正規化。省略→1, 明示的不正値→null（第1話フォールバックなし）
   function normalizeCompanionSideStoryChapter(chapter) {
@@ -8195,6 +8225,15 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v471-double-complete-test" style="border-color:#a0e0b0;color:#a0e0b0;">🔄 ch3二重complete→1回のみ完了確認（ジュリタニ模擬セッション）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v471-ch3-ch12-isolated" style="border-color:#a0e0b0;color:#a0e0b0;">🔐 ch1/ch2祝賀pendingフラグ表示（ch3完了後も0か確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v471-flags-all-display" style="border-color:#a0e0b0;color:#a0e0b0;">📊 全フラグ一覧表示（ch1/ch2/ch3独立性確認）</button>';
+      html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧭 冒険ナビゲーション確認 (§124 v0.48)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-guide-info" style="border-color:#74c0fc;color:#74c0fc;">📋 現在のガイド情報を表示（objectiveId/title/shortText）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-npc-state" style="border-color:#74c0fc;color:#74c0fc;">🔍 案内人NPC状態を表示（visible/x/y/stepCount）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-spawn-npc" style="border-color:#74c0fc;color:#74c0fc;">✨ 案内人NPCを即時スポーン（trySpawnAdventureGuideNpc）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-dismiss-npc" style="border-color:#74c0fc;color:#74c0fc;">🚫 案内人NPCを強制消去（visible=false）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-objective-cycle" style="border-color:#74c0fc;color:#74c0fc;">🔄 全objectiveIdのガイドテキストをtoastで順番に確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-stages-clear" style="border-color:#74c0fc;color:#74c0fc;">🗺️ s1〜s5 stageCleared=true にセット（s6手前状態）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-reset-guide" style="border-color:#74c0fc;color:#74c0fc;">🔁 ガイドカウント・NPC状態をリセット（stepCount=0）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v48-paperview-open" style="border-color:#74c0fc;color:#74c0fc;">📰 ペーパービュー屋を直接開く（冒険ガイド表示確認）</button>';
       html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
@@ -9553,6 +9592,69 @@
           _lines471.push(_dc471 + ":\nch1=" + (_f1[_dc471] ? "✅" : "❌") + " ch2=" + (_f2[_dc471] ? "✅" : "❌") + " ch3=" + (_f3[_dc471] ? "✅" : "❌"));
         }
         showToast("[DEBUG v0.47.1] 全フラグ:\n" + _lines471.join("\n"));
+      };
+      // §124 v0.48: 冒険ナビゲーション確認デバッグ
+      document.getElementById("btn-debug-v48-guide-info").onclick = function () {
+        var g = getCurrentAdventureGuide();
+        showToast("[DEBUG v0.48] 冒険ガイド:\nid=" + g.objectiveId + "\ntitle=" + g.title + "\nshort=" + g.shortText + "\nloc=" + (g.locationText || "なし"));
+      };
+      document.getElementById("btn-debug-v48-npc-state").onclick = function () {
+        showToast("[DEBUG v0.48] 案内人NPC状態:\nvisible=" + _adventureGuideNpcVisible + "\nx=" + _adventureGuideNpcX + " y=" + _adventureGuideNpcY + "\nstepCount=" + _adventureGuideStepCount + "\nlastId=" + (_adventureGuideLastObjectiveId || "未設定"));
+      };
+      document.getElementById("btn-debug-v48-spawn-npc").onclick = function () {
+        var _bx = _adventureGuideNpcX, _by = _adventureGuideNpcY, _bv = _adventureGuideNpcVisible;
+        _adventureGuideNpcVisible = false;
+        _adventureGuideNpcX = -1;
+        _adventureGuideNpcY = -1;
+        _adventureGuideStepCount = 15;
+        trySpawnAdventureGuideNpc();
+        var _result = _adventureGuideNpcVisible ? "✅ スポーン成功 x=" + _adventureGuideNpcX + " y=" + _adventureGuideNpcY : "⚠ 有効位置なし（再試行待ち）";
+        showToast("[DEBUG v0.48] 案内人即時スポーン:\n" + _result);
+        closeModal("settings-modal");
+      };
+      document.getElementById("btn-debug-v48-dismiss-npc").onclick = function () {
+        _adventureGuideNpcVisible = false;
+        _adventureGuideNpcX = -1;
+        _adventureGuideNpcY = -1;
+        renderField();
+        showToast("[DEBUG v0.48] 案内人NPCを強制消去した");
+      };
+      document.getElementById("btn-debug-v48-objective-cycle").onclick = function () {
+        var _ids = ["visit_side_gate", "stage1_explore", "stage2_challenge", "stage3_challenge", "stage4_challenge", "stage5_challenge", "stage6_challenge", "defeat_chimp", "prepare_gorilla", "challenge_gorilla", "adventure_complete"];
+        var g = getCurrentAdventureGuide();
+        var _idx = _ids.indexOf(g.objectiveId);
+        var _msg = "[DEBUG v0.48] 現在:\n" + g.objectiveId + "\n---\n";
+        _msg += "全ステージ数=" + g.stages.length + "\n";
+        for (var _oi = 0; _oi < g.stages.length; _oi++) {
+          _msg += "s" + (_oi + 1) + ":" + g.stages[_oi].status + " ";
+        }
+        showToast(_msg);
+      };
+      document.getElementById("btn-debug-v48-stages-clear").onclick = function () {
+        if (!state.sideMap) { showToast("[DEBUG v0.48] sideMapが初期化されていない"); return; }
+        if (!state.sideMap.stageCleared) { state.sideMap.stageCleared = {}; }
+        state.sideMap.stageCleared["1"] = true;
+        state.sideMap.stageCleared["2"] = true;
+        state.sideMap.stageCleared["3"] = true;
+        state.sideMap.stageCleared["4"] = true;
+        state.sideMap.stageCleared["5"] = true;
+        saveGame();
+        _adventureGuideLastObjectiveId = ""; // 強制リセット → 次歩でstage6へ更新
+        var g = getCurrentAdventureGuide();
+        showToast("[DEBUG v0.48] s1〜s5 クリア済みにセット\n現在のガイド: " + g.objectiveId);
+      };
+      document.getElementById("btn-debug-v48-reset-guide").onclick = function () {
+        _adventureGuideStepCount = 0;
+        _adventureGuideNpcVisible = false;
+        _adventureGuideNpcX = -1;
+        _adventureGuideNpcY = -1;
+        _adventureGuideLastObjectiveId = "";
+        renderField();
+        showToast("[DEBUG v0.48] ガイドカウント・NPC状態をリセットした");
+      };
+      document.getElementById("btn-debug-v48-paperview-open").onclick = function () {
+        closeModal("settings-modal");
+        openHintShopModal();
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12684,6 +12786,223 @@
   // フィールド(4,3)のNPC。10G/50G/100Gで状況別ヒントを売る。
   // ---------------------------------------------------------
 
+  // ---------------------------------------------------------
+  // §124 v0.48: 冒険ナビゲーションシステム
+  // ---------------------------------------------------------
+
+  function getCurrentAdventureGuide() {
+    var p = state.player;
+    var ef = state.eventFlags;
+    var sm = state.sideMap;
+    var s1C = !!(sm && sm.stageCleared && sm.stageCleared["1"]);
+    var s2C = !!(sm && sm.stageCleared && sm.stageCleared["2"]);
+    var s3C = !!(sm && sm.stageCleared && sm.stageCleared["3"]);
+    var s4C = !!(sm && sm.stageCleared && sm.stageCleared["4"]);
+    var s5C = !!(sm && sm.stageCleared && sm.stageCleared["5"]);
+    var s6C = !!(sm && sm.stageCleared && sm.stageCleared["6"]);
+    var chimpDefeated = !!(sm && sm.defeatedEnemies && sm.defeatedEnemies["6:34,2"]);
+    var sideVisited = !!(sm && (
+      Object.keys(sm.openedChests || {}).length > 0 ||
+      Object.keys(sm.defeatedEnemies || {}).length > 0
+    ));
+
+    var stageNames = ["はじまりの草原", "あやしい森", "古びた町はずれ", "ゴリラ山道", "黒い城", "チンパンジーの聖域"];
+    var stageClearedArr = [s1C, s2C, s3C, s4C, s5C, s6C];
+    var activeStageIdx = -1;
+    for (var si = 0; si < 6; si++) {
+      if (!stageClearedArr[si]) { activeStageIdx = si; break; }
+    }
+    var stages = [];
+    for (var sj = 0; sj < 6; sj++) {
+      var st;
+      if (stageClearedArr[sj]) {
+        st = "✅"; // ✅
+      } else if (sj === activeStageIdx && (sideVisited || sj === 0)) {
+        st = "▶"; // ▶
+      } else {
+        st = "🔒"; // 🔒
+      }
+      stages.push({ name: stageNames[sj], status: st });
+    }
+
+    var obj = { stages: stages };
+
+    if (state.gameCleared) {
+      obj.objectiveId = "adventure_complete";
+      obj.title = "大きな目標は達成された";
+      obj.shortText = "究極ゴリラを捕まえ、冒険は完結した。図鑑を埋め、仲間の物語を楽しもう。";
+      obj.locationText = "";
+    } else if (s6C && chimpDefeated) {
+      if (p.level >= 99 && p.hasUkulele) {
+        obj.objectiveId = "challenge_gorilla";
+        obj.title = "究極ゴリラに挑もう";
+        obj.shortText = "準備完了！究極ゴリラのHPを1〜10に削り「🎵うたう」を使え。";
+        obj.locationText = "通常フィールド（究極ゴリラは低確率で出現）";
+      } else {
+        obj.objectiveId = "prepare_gorilla";
+        obj.title = "究極ゴリラとの対決に備えよう";
+        var _missingLv = (p.level < 99);
+        var _missingUke = !p.hasUkulele;
+        if (_missingLv) {
+          obj.shortText = "Lv99まであと" + (99 - p.level) + "レベル！フィールドでUMAを倒して鍛えよう。";
+          obj.locationText = "通常フィールド（レベル上げ）";
+        } else {
+          obj.shortText = "フィールド下部の🪗宝箱で女神のウクレレを入手しよう。これがないとクリアできない。";
+          obj.locationText = "通常フィールド（下部の🪗宝箱）";
+        }
+        if (_missingUke && !_missingLv) { obj.locationText = "通常フィールド（下部の🪗宝箱）"; }
+      }
+    } else if (s6C) {
+      obj.objectiveId = "defeat_chimp";
+      obj.title = "聖域の奥の強敵を退かせよう";
+      obj.shortText = "ステージ6「チンパンジーの聖域」のゴール先にいる強敵を撃退しよう！";
+      obj.locationText = "横スクロール：チンパンジーの聖域（ゴール🏁の奥）";
+    } else if (s5C) {
+      obj.objectiveId = "stage6_challenge";
+      obj.title = "第6ステージ「チンパンジーの聖域」へ";
+      obj.shortText = "🌀ゲートからステージ6「チンパンジーの聖域」へ。最後のステージだ！";
+      obj.locationText = "横スクロール：チンパンジーの聖域";
+    } else if (s4C) {
+      obj.objectiveId = "stage5_challenge";
+      obj.title = "第5ステージ「黒い城」へ";
+      obj.shortText = "🌀ゲートからステージ5「黒い城」に挑もう。強敵が多い。";
+      obj.locationText = "横スクロール：黒い城";
+    } else if (s3C) {
+      obj.objectiveId = "stage4_challenge";
+      obj.title = "第4ステージ「ゴリラ山道」へ";
+      obj.shortText = "🌀ゲートからステージ4「ゴリラ山道」に挑もう。";
+      obj.locationText = "横スクロール：ゴリラ山道";
+    } else if (s2C) {
+      obj.objectiveId = "stage3_challenge";
+      obj.title = "第3ステージ「古びた町はずれ」へ";
+      obj.shortText = "🌀ゲートからステージ3「古びた町はずれ」に挑もう。";
+      obj.locationText = "横スクロール：古びた町はずれ";
+    } else if (s1C) {
+      obj.objectiveId = "stage2_challenge";
+      obj.title = "第2ステージ「あやしい森」へ";
+      obj.shortText = "🌀ゲートからステージ2「あやしい森」に挑もう。";
+      obj.locationText = "横スクロール：あやしい森";
+    } else if (sideVisited) {
+      obj.objectiveId = "stage1_explore";
+      obj.title = "第1ステージ「はじまりの草原」を進もう";
+      obj.shortText = "横スクロールの草原を右に進み、ゴール🏁を目指そう！";
+      obj.locationText = "横スクロール：はじまりの草原";
+    } else if (p.level < 40) {
+      obj.objectiveId = "visit_side_gate";
+      obj.title = "横スクロールの入口へ向かおう";
+      obj.shortText = "村の🌀ゲートから横スクロールの世界へ踏み出そう！（現在Lv" + p.level + "）";
+      obj.locationText = "通常マップ：村の🌀ゲート";
+    } else if (!ef.cygnusHelmetGot) {
+      obj.objectiveId = "get_cygnus";
+      obj.title = "キグナスのかぶとを手に入れよう";
+      obj.shortText = "草原右上の✨宝箱にキグナスのかぶとが眠っている。Lv40以上で開けられる！";
+      obj.locationText = "通常フィールド：草原右上の✨宝箱";
+    } else if (!ef.pegasusArmorGot) {
+      obj.objectiveId = "get_pegasus";
+      obj.title = "ペガサスのよろいを手に入れよう";
+      obj.shortText = "草原右端の🌟宝箱にペガサスのよろいがある。Lv50以上で開けられる！";
+      obj.locationText = "通常フィールド：草原右端の🌟宝箱";
+    } else if (!p.hasUkulele) {
+      obj.objectiveId = "get_ukulele";
+      obj.title = "女神のウクレレを手に入れよう";
+      obj.shortText = "フィールド下部の🪗宝箱に女神のウクレレがある。これがないとゴールに届かない。";
+      obj.locationText = "通常フィールド：下部の🪗宝箱";
+    } else if (!ef.nyoiboGot && p.level >= 70 && hasCompanion("juritani")) {
+      obj.objectiveId = "get_nyoibo";
+      obj.title = "如意棒を手に入れよう";
+      obj.shortText = "ジュリタニを連れてフィールド最下部の🪄宝箱を調べよう。最強の武器が手に入る！";
+      obj.locationText = "通常フィールド：最下部の🪄宝箱";
+    } else if (p.level < 99) {
+      obj.objectiveId = "raise_level";
+      obj.title = "Lv99を目指そう";
+      obj.shortText = "究極ゴリラにはLv99が必要！フィールドでUMAを倒して鍛えよう（現在Lv" + p.level + "）。";
+      obj.locationText = "通常フィールド（レベル上げ）";
+    } else {
+      obj.objectiveId = "challenge_gorilla";
+      obj.title = "究極ゴリラに挑もう";
+      obj.shortText = "Lv99達成！究極ゴリラのHPを1〜10に削り「🎵うたう」を使え。";
+      obj.locationText = "通常フィールド（究極ゴリラは低確率で出現）";
+    }
+    return obj;
+  }
+
+  function trySpawnAdventureGuideNpc() {
+    var p = state.player;
+    var candidates = [];
+    for (var dy = -4; dy <= 4; dy++) {
+      for (var dx = -4; dx <= 4; dx++) {
+        var dist = Math.abs(dx) + Math.abs(dy);
+        if (dist < 2 || dist > 4) continue;
+        candidates.push({ dx: dx, dy: dy });
+      }
+    }
+    for (var i = candidates.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
+    }
+    var trailSet = {};
+    var trail = state.partyTrail || [];
+    for (var ti = 0; ti < trail.length; ti++) {
+      if (trail[ti]) { trailSet[trail[ti].x + "," + trail[ti].y] = true; }
+    }
+    for (var k = 0; k < candidates.length; k++) {
+      var nx = p.x + candidates[k].dx;
+      var ny = p.y + candidates[k].dy;
+      if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) continue;
+      if (!state.terrain[ny] || !state.terrain[ny][nx]) continue;
+      var tc = state.terrain[ny][nx];
+      if (tc !== "." && tc !== ",") continue;
+      if (state.items[nx + "," + ny]) continue;
+      if (trailSet[nx + "," + ny]) continue;
+      _adventureGuideNpcX = nx;
+      _adventureGuideNpcY = ny;
+      _adventureGuideNpcVisible = true;
+      _adventureGuideStepCount = 0;
+      renderField();
+      return;
+    }
+    _adventureGuideStepCount = 12; // 有効位置なし → 数歩後に再試行
+  }
+
+  function openAdventureGuideNpcModal() {
+    var guide = getCurrentAdventureGuide();
+    var header = '<div style="font-size:40px;line-height:1.2;">🧭</div>';
+    header += '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">旅の案内人</div>';
+    document.getElementById("npc-header").innerHTML = header;
+    var speechHtml = "<p>「" + guide.shortText + "」</p>";
+    if (guide.locationText) {
+      speechHtml += "<p style=\"font-size:0.85em;color:#74c0fc;\">📍 " + guide.locationText + "</p>";
+    }
+    speechHtml += "<p style=\"font-size:0.82em;color:#adb5bd;\">（📰 攻略ペーパービュー屋で詳細を確認できます）</p>";
+    document.getElementById("npc-speech").innerHTML = speechHtml;
+    _adventureGuideNpcVisible = false;
+    _adventureGuideNpcX = -1;
+    _adventureGuideNpcY = -1;
+    renderField();
+    openModal("npc-modal");
+  }
+
+  function renderAdventureGuideSection() {
+    var guide = getCurrentAdventureGuide();
+    var html = "";
+    html += "<div style=\"border:1px solid #3a6a4a;border-radius:6px;padding:8px 10px;margin-bottom:12px;background:#1a3a2a;\">";
+    html += "<p class=\"small\" style=\"color:#06d6a0;font-weight:bold;margin-bottom:6px;\">🧭 冒険ガイド</p>";
+    html += "<p class=\"small\" style=\"color:#e0e0e0;margin-bottom:3px;font-weight:bold;\">" + guide.title + "</p>";
+    html += "<p class=\"small\" style=\"color:#b0c4b0;margin-bottom:8px;\">" + guide.shortText + "</p>";
+    for (var si = 0; si < guide.stages.length; si++) {
+      var s = guide.stages[si];
+      html += "<div style=\"display:flex;justify-content:space-between;align-items:center;font-size:0.78em;color:#ccc;margin-bottom:2px;\">";
+      html += "<span>第" + (si + 1) + "ステージ " + s.name + "</span>";
+      html += "<span>" + s.status + "</span>";
+      html += "</div>";
+    }
+    if (guide.locationText) {
+      html += "<p style=\"font-size:0.78em;color:#74c0fc;margin-top:6px;margin-bottom:0;\">📍 " + guide.locationText + "</p>";
+    }
+    html += "</div>";
+    return html;
+  }
+
   // 現在の進行状況からヒント優先度(0〜14)を返す
   function getHintPriority() {
     var p = state.player;
@@ -12929,6 +13248,7 @@
     var html = "";
     html += "<p class=\"small\" style=\"margin-bottom:4px;\">「今の君に必要な情報を売っているよ。</p>";
     html += "<p class=\"small\" style=\"margin-bottom:12px;\">情報にも価値がある。払える者だけが知れる。」</p>";
+    html += renderAdventureGuideSection(); // §124 v0.48: 🧭 冒険ガイド（無料）
     html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:10px;\">所持金: 💰 " + p.gold + "G</p>";
     var tiers = [
       { tier: 1, cost: 10,  label: "ぼんやりヒント",  color: "#adb5bd" },

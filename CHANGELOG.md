@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.48] - 2026-07-20 — 冒険ナビゲーションシステム (§124)
+
+### Added
+- **`getCurrentAdventureGuide()`** 追加: 純粋関数（副作用なし）。ゲーム進行状態を読み取り、objectiveId / title / shortText / locationText / stages（全6ステージの✅▶🔒）を返す
+- **旅の案内人NPC（通常フィールド）**: 有効移動15歩ごとにプレイヤー周囲2〜4タイルのランダム草地・道に🧭が出現。接触で会話モーダルを表示。会話後は消去
+- **`trySpawnAdventureGuideNpc()`** 追加: マンハッタン距離2〜4の候補をランダムシャッフルし、安全タイル（草地・道・アイテムなし・仲間軌跡なし）を選択して配置
+- **`openAdventureGuideNpcModal()`** 追加: 既存 `npc-modal` を流用。NPC会話後は接触済み消去 + `renderField()` 更新
+- **攻略ペーパービュー屋に「🧭 冒険ガイド」セクション追加**: 無料。現在の目標タイトル・短文・全6ステージ進捗・目的地ヒントを表示
+- **`renderAdventureGuideSection()`** 追加: ペーパービュー屋のガイドHTML生成関数
+- **非永続モジュール変数** 追加: `_adventureGuideStepCount` / `_adventureGuideNpcVisible` / `_adventureGuideNpcX` / `_adventureGuideNpcY` / `_adventureGuideLastObjectiveId`
+- **デバッグ8ボタン（§124）**: ガイド情報表示 / NPC状態表示 / NPC即時スポーン / NPC強制消去 / 全objectiveId確認 / s1〜s5クリア済みセット / ガイドリセット / ペーパービュー直接オープン
+
+### Changed
+- **`renderField()`** 更新: 旅の案内人NPC（🧭）を仲間トレイルより高優先で草地・道タイルに描画
+- **`movePlayer()`** 更新: 有効移動カウント・目標変化リセット・NPC接触判定を追加（renderField直後、tile dispatch前）
+- **`renderHintShopMenu()`** 更新: 🧭 冒険ガイドセクション（無料）を最上部に追加
+
+---
+
 ## [0.47.1] - 2026-07-20 — 仲間サイドストーリー第3話・安定化 (§123)
 
 ### Changed

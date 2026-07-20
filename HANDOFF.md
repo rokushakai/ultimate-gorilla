@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.47.1** |
+| 現在バージョン | **v0.48** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.48] 冒険ナビゲーションシステム**（§124）
+  - **`getCurrentAdventureGuide()`**: 純粋関数。objectiveId/title/shortText/locationText/stages（✅▶🔒）を返す
+  - **旅の案内人NPC（🧭）**: 通常フィールド、有効移動15歩ごとに周囲2〜4タイルに出現。接触で会話→消去
+  - **`trySpawnAdventureGuideNpc()`**: マンハッタン距離2〜4・草地道・安全位置をランダム選択して配置
+  - **攻略ペーパービュー屋**に「🧭 冒険ガイド」セクション追加（無料・全6ステージ✅▶🔒付き）
+  - **デバッグ8ボタン（§124）**: ガイド情報/NPC状態/即時スポーン/強制消去/objectiveId確認/stageセット/リセット/ペーパービュー直接オープン
 - **[v0.47.1] 仲間サイドストーリー第3話・安定化**（§123）
   - **`startCompanionSideStory()` アトミック化**: `_cstoryActiveChapter` を全ガード通過後にのみセット
   - **`var _cstoryCompleting = false`**: 完了処理多重実行防止フラグ（非永続）

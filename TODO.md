@@ -14,13 +14,25 @@
 
 ## 🔮 今後の実装候補（プレイヤーフィードバックより）
 
-### Version 0.48 候補以降
+### Version 0.49 候補以降
 
 将来: 4人第3話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み（最新）
+
+### Version 0.48 — 冒険ナビゲーションシステム (§124)
+
+- **`getCurrentAdventureGuide()`** 追加: 純粋関数・副作用なし・objectiveId/title/shortText/detailLines/locationText/stages を返す ✅
+- **`trySpawnAdventureGuideNpc()`** 追加: マンハッタン距離2〜4のランダム候補から安全タイルを探してNPC配置 ✅
+- **`openAdventureGuideNpcModal()`** 追加: 既存npc-modalを使用・NPC接触時に会話を表示・接触後はNPC消去 ✅
+- **`renderAdventureGuideSection()`** 追加: ペーパービュー屋の冒険ガイドセクション HTML を生成 ✅
+- **非永続モジュール変数** 追加: `_adventureGuideStepCount` / `_adventureGuideNpcVisible` / `_adventureGuideNpcX` / `_adventureGuideNpcY` / `_adventureGuideLastObjectiveId` ✅
+- **`renderField()` 更新**: 旅の案内人NPC（🧭）を草地・道タイル上に描画（仲間トレイルより高優先） ✅
+- **`movePlayer()` 更新**: 有効移動カウント・目標変化リセット・NPC接触判定を追加 ✅
+- **`renderHintShopMenu()` 更新**: 🧭 冒険ガイドセクション（無料）を冒頭に追加 ✅
+- **デバッグボタン** 追加: §124 冒険ナビ確認用8ボタン ✅
 
 ### Version 0.47.1 — 仲間サイドストーリー第3話・安定化 (§123)
 
