@@ -548,7 +548,7 @@
   // fleeMod: doRun()加算  spellMod: castSpell()の威力/回復倍率加算
   var COMPANION_MAX = 2; // パーティー上限
   var COMPANION_DATA = [
-    { id: "juritani",   name: "ジュリタニ", emoji: "💪",
+    { id: "juritani",   name: "ジュリタニ", emoji: "💪", icon: "🧑", // §121 v0.46: 人型識別アイコン
       feature: "会心の一撃の確率が高い",
       effectDesc: "攻撃時に会心の一撃が出やすくなる(確率+20%)",
       critBonus: 0.20,
@@ -560,7 +560,7 @@
       sideClearLine: "チンパンジーまで退かせるなんて、ずいぶん遠くまで来たな。横に長い旅も、なかなか悪くなかったぜ。",
       dexLine: "UMAを全部記録したのか。会心の一撃だけじゃなく、根気も必要だったな。",
       legendaryLine: "伝説装備まで全部そろえたのか。見た目も中身も、もう完全に勇者だな。" },
-    { id: "shurittani", name: "シュリタニ", emoji: "🪤",
+    { id: "shurittani", name: "シュリタニ", emoji: "🪤", icon: "👩", // §121 v0.46: 人型識別アイコン
       feature: "UMAを捕まえるのが得意",
       effectDesc: "捕獲率+0.10",
       captureMod: 0.10,
@@ -572,7 +572,7 @@
       sideClearLine: "強い相手を倒すだけじゃなくて、ちゃんと向き合って進んできたんだね。",
       dexLine: "図鑑が全部埋まったんだね。一匹ずつ見つけて、弱らせて、向き合ってきた証だよ。",
       legendaryLine: "伝説装備も全部そろったんだね。道具も、仲間も、思い出も、ちゃんと積み重なってる。" },
-    { id: "norio",      name: "ノリオ",     emoji: "📈",   // §45 v0.9.2: 逃走→経験値2倍に変更
+    { id: "norio",      name: "ノリオ",     emoji: "📈", icon: "👨", // §121 v0.46: 人型識別アイコン  // §45 v0.9.2: 逃走→経験値2倍に変更
       feature: "経験値が2倍になる",
       effectDesc: "獲得経験値×2",
       expMod: 2,
@@ -584,7 +584,7 @@
       sideClearLine: "横スクロール編、経験値的にもだいぶおいしかったな。いや、もちろん思い出もだけどな。",
       dexLine: "図鑑コンプリートか。経験値には出ないけど、こういう達成感も悪くないな。",
       legendaryLine: "伝説装備まで全部そろえたのか。もう装備欄だけで経験値がにじみ出てるぞ。" },
-    { id: "harumi",     name: "ハルミ",     emoji: "✨",
+    { id: "harumi",     name: "ハルミ",     emoji: "✨", icon: "👧", // §121 v0.46: 人型識別アイコン
       feature: "まほうが得意",
       effectDesc: "まほう効果+20%",
       spellMod: 0.20,
@@ -1260,7 +1260,8 @@
     var camX = clamp(p.x - Math.floor(VIEW_COLS / 2), 0, MAP_W - VIEW_COLS);
     var camY = clamp(p.y - Math.floor(VIEW_ROWS / 2), 0, MAP_H - VIEW_ROWS);
 
-    // §78 v0.26: 仲間追従表示用の軌跡→絵文字マップを構築（companion 0 優先）
+    // §121 v0.46: 仲間追従表示用の軌跡→人型アイコンマップを構築（companion 0 優先）
+    // cData.icon（人型）を使用。§78 v0.26時点のcData.emoji（能力アイコン）から変更
     var trailMap = {};
     var trail = state.partyTrail || [];
     var companions = p.companions;
@@ -1269,39 +1270,40 @@
       var tp = trail[ti];
       if (!tp || (tp.x === p.x && tp.y === p.y)) continue;
       var cData = findById(COMPANION_DATA, companions[ti]);
-      if (cData) { trailMap[tp.x + "," + tp.y] = cData.emoji; }
+      if (cData) { trailMap[tp.x + "," + tp.y] = cData.icon; } // §121 v0.46: icon（人型）を使用
     }
     var html = "";
     for (var r = 0; r < VIEW_ROWS; r++) {
       for (var c = 0; c < VIEW_COLS; c++) {
         var mapX = camX + c;
         var mapY = camY + r;
+        var key = mapX + "," + mapY; // §121 v0.46: 優先度制御のため先に宣言
         var emoji;
         if (mapX === p.x && mapY === p.y) {
-          emoji = "🧙"; // プレイヤー
-        } else if (trailMap[mapX + "," + mapY]) { // §78 v0.26: 仲間追従
-          emoji = trailMap[mapX + "," + mapY];
+          emoji = "🧙"; // プレイヤー（最優先）
+        } else if (state.items[key] === "weapon") {
+          emoji = "🗡️";
+        } else if (state.items[key] === "potion") {
+          emoji = "🧪";
         } else {
-          var key = mapX + "," + mapY;
-          if (state.items[key] === "weapon") emoji = "🗡️";
-          else if (state.items[key] === "potion") emoji = "🧪";
-          else {
-            var tileChar = state.terrain[mapY][mapX];
-            if (tileChar === "B") {
-              emoji = state.openedChests[key] ? "📦" : "🎁";
-            } else if (tileChar === "U") {
-              emoji = state.openedChests[key] ? "📦" : "🪗";
-            } else if (tileChar === "A") {
-              emoji = state.openedChests[key] ? "📦" : "🌟";
-            } else if (tileChar === "C") {
-              emoji = state.openedChests[key] ? "📦" : "⭐";
-            } else if (tileChar === "J") {
-              emoji = state.openedChests[key] ? "📦" : "🪄";
-            } else if (tileChar === "X") {
-              emoji = state.openedChests[key] ? "📦" : "✨";
-            } else {
-              emoji = TERRAIN_EMOJI[tileChar] || "🟩";
-            }
+          var tileChar = state.terrain[mapY][mapX];
+          if (tileChar === "B") {
+            emoji = state.openedChests[key] ? "📦" : "🎁";
+          } else if (tileChar === "U") {
+            emoji = state.openedChests[key] ? "📦" : "🪗";
+          } else if (tileChar === "A") {
+            emoji = state.openedChests[key] ? "📦" : "🌟";
+          } else if (tileChar === "C") {
+            emoji = state.openedChests[key] ? "📦" : "⭐";
+          } else if (tileChar === "J") {
+            emoji = state.openedChests[key] ? "📦" : "🪄";
+          } else if (tileChar === "X") {
+            emoji = state.openedChests[key] ? "📦" : "✨";
+          } else if (trailMap[key] && (tileChar === "." || tileChar === ",")) {
+            // §121 v0.46: 仲間追従はNPC/施設/ゲートより低優先。草地・道のみ表示
+            emoji = trailMap[key];
+          } else {
+            emoji = TERRAIN_EMOJI[tileChar] || "🟩";
           }
         }
         html += '<div class="tile">' + emoji + "</div>";
@@ -3885,7 +3887,7 @@
     }
     var cid = queue[idx];
     var cData = findById(COMPANION_DATA, cid);
-    var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    var label = cData ? (cData.icon + " " + cData.name) : cid; // §121 v0.46: icon（人型）に変更
     // §93 v0.34: 仲間が2人以上のとき「N/M人目」を表示
     var total = queue.length;
     var progress = total > 1 ? "（" + (idx + 1) + "/" + total + "人目）" : "";
@@ -3934,7 +3936,7 @@
   function showCompanionSpecialMenu(cid) {
     if (!state.companionCommandActive) return;
     var cData = findById(COMPANION_DATA, cid);
-    var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    var label = cData ? (cData.icon + " " + cData.name) : cid; // §121 v0.46: icon（人型）に変更
     // 仲間ごとのコマンド名
     var s1Label = "⭐ 固有1"; var s2Label = "⭐ 固有2";
     if (cid === "juritani") {
@@ -3980,7 +3982,7 @@
     if (!state.companionCommandActive) return;
     if (state.companionCommandLocked) return; // §96 v0.35.1: 二重呼び出し防止ガード追加
     var cData = findById(COMPANION_DATA, cid);
-    var label = cData ? (cData.emoji + " " + cData.name) : cid;
+    var label = cData ? (cData.icon + " " + cData.name) : cid; // §121 v0.46: icon（人型）に変更
     var mLabel = "✨ まほう";
     if (cid === "juritani")        { mLabel = "🔥 熱血エール"; }
     else if (cid === "shurittani") { mLabel = "🫧 おちつきの霧"; }
@@ -5775,7 +5777,7 @@
     COMPANION_DATA.forEach(function (cd) {
       var cl = getCompanionLevel(cd.id);
       var inParty = hasCompanion(cd.id);
-      html += '<div class="record-row"><span>' + cd.emoji + " " + cd.name + '</span>' +
+      html += '<div class="record-row"><span>' + cd.icon + " " + cd.name + '</span>' + // §121 v0.46: icon（人型）に変更
         '<span>' + (cl.level >= 99 ? 'Lv.99 <span style="color:#ffd700;font-size:0.82em;">MAX</span>' : 'Lv.' + cl.level) + (inParty ? ' <span style="color:#06d6a0;font-size:0.82em;">✓</span>' : '') + '</span></div>'; // §100 v0.37.1
     });
     html += '</div>';
@@ -6287,7 +6289,7 @@
       var inParty = hasCompanion(cd.id);
       var statusColor = inParty ? "#06d6a0" : "#adb5bd";
       var statusLabel = inParty ? "パーティ中" : "待機中";
-      html += '<div class="shop-row"><span>' + cd.emoji + " " + cd.name +
+      html += '<div class="shop-row"><span>' + cd.icon + " " + cd.name + // §121 v0.46: icon（人型）に変更
         ' <span style="font-size:0.82em;color:#a0cfff;">Lv.' + cl.level + '</span></span>' +
         '<span style="font-size:0.82em;color:' + statusColor + ';">' + statusLabel + '</span></div>';
       html += '<div class="shop-row" style="font-size:0.8em;">' +
@@ -6640,7 +6642,7 @@
       var _ss1 = COMPANION_SIDE_STORY_DATA[_scid];
       var _ss2 = COMPANION_SIDE_STORY_CHAPTER2_DATA[_scid];
       html += '<div style="border:1px solid #2a3a5a;border-radius:6px;padding:8px 10px;margin-bottom:8px;">';
-      html += '<div style="font-size:0.9em;font-weight:bold;margin-bottom:4px;">' + _sc.emoji + " " + _sc.name + '</div>';
+      html += '<div style="font-size:0.9em;font-weight:bold;margin-bottom:4px;">' + _sc.icon + " " + _sc.name + '</div>'; // §121 v0.46: icon（人型）に変更
       // 第1話カード
       if (_ss1) {
         var _s1Unlocked = isCompanionSideStoryUnlocked(_scid, 1);
@@ -6737,7 +6739,7 @@
       html += '<div class="companion-card">';
       var _cl = getCompanionLevel(c.id); // §99 v0.37
       html += '<div class="companion-card-header">';
-      html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
+      html += '<span class="companion-name">' + c.icon + " " + c.name + "</span>"; // §121 v0.46: icon（人型）に変更
       if (inParty) {
         html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
       } else {
@@ -6779,7 +6781,7 @@
         var _vcl = getCompanionLevel(c.id); // §99 v0.37
         html += '<div class="companion-card">';
         html += '<div class="companion-card-header">';
-        html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
+        html += '<span class="companion-name">' + c.icon + " " + c.name + "</span>"; // §121 v0.46: icon（人型）に変更
         html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
         html += "</div>";
         html += '<div style="font-size:0.82em;color:#a0cfff;margin:1px 0 3px;">' + (_vcl.level >= 99 ? "Lv.99 MAX" : "Lv." + _vcl.level) + '</div>'; // §100 v0.37.1
@@ -6808,7 +6810,7 @@
         if (!c) return;
         html += '<div class="companion-card">';
         html += '<div class="companion-card-header">';
-        html += '<span class="companion-name">' + c.emoji + " " + c.name + "</span>";
+        html += '<span class="companion-name">' + c.icon + " " + c.name + "</span>"; // §121 v0.46: icon（人型）に変更
         html += '<span class="companion-status" style="color:#06d6a0;">✓ パーティ中</span>';
         html += "</div>";
         html += '<div class="companion-ability">' + c.effectDesc + "</div>";
@@ -6838,7 +6840,7 @@
     var success = Math.random() < c.joinRate;
     var msgs = success ? c.joinMsgs : c.failMsgs;
     var html = '<div style="padding:8px 2px;">';
-    html += '<p style="margin:0 0 10px;font-size:13px;font-weight:bold;">' + c.emoji + " " + c.name + "</p>";
+    html += '<p style="margin:0 0 10px;font-size:13px;font-weight:bold;">' + c.icon + " " + c.name + "</p>"; // §121 v0.46: icon（人型）に変更
     msgs.forEach(function (msg) {
       html += '<p style="margin:4px 0;font-size:13px;">' + msg + "</p>";
     });
@@ -7945,10 +7947,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-companions-full-clear" style="border-color:#ffd166;color:#ffd166;">👥 仲間UI：完全達成（金）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-legendary-only" style="border-color:#ffb347;color:#ffb347;">👥 仲間UI：伝説装備コンプのみ・未完全達成（橙）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companions-legendary" style="border-color:#ffd700;color:#ffd700;">👥 仲間UI：完全達成+伝説装備コンプ（明金）</button>';
-      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">🚶 フィールド仲間追従 (§78 v0.26)</p>';
-      html += '<button class="shop-menu-btn" id="btn-debug-party-follow-on" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間2人をパーティに追加（歩いて追従確認）</button>';
+      html += '<p class="small" style="color:#98d8ff;margin-top:8px;">🚶 フィールド仲間追従・アイコン人型化 (§121 v0.46)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-party-follow-on" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間2人追従確認（ジュリタニ+ハルミ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-trail-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 仲間軌跡リセット（trail = []）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-party-clear-trail" style="border-color:#adb5bd;color:#adb5bd;">👥 パーティ解除 + 軌跡リセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v46-icon-check" style="border-color:#88d8b0;color:#88d8b0;">👤 仲間アイコン一覧確認（人型チェック）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v46-one-follow" style="border-color:#98d8ff;color:#98d8ff;">🚶 仲間1人追従確認（シュリタニのみ）</button>';
       html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
@@ -9137,6 +9141,20 @@
         closeModal("settings-modal");
         renderField();
         showToast("[DEBUG] パーティ解除 + 軌跡リセット完了");
+      };
+      // §121 v0.46: 仲間アイコン人型化・追従確認
+      document.getElementById("btn-debug-v46-icon-check").onclick = function () {
+        var lines = [];
+        COMPANION_DATA.forEach(function (c) { lines.push(c.icon + " " + c.name + "（能力:" + c.emoji + "）"); });
+        showToast("[DEBUG] 仲間アイコン確認\n" + lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v46-one-follow").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.companions = ["shurittani"];
+        resetPartyTrail(); // §79 v0.26.1
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] シュリタニのみパーティ追加。歩いて👩 1人追従を確認！");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
