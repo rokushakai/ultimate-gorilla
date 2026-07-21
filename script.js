@@ -2625,6 +2625,7 @@
   }
 
   function switchToSideMap() {
+    resetAdventureGuideNpcState(); // §125 v0.48.1: サイドマップ移行時に案内人状態リセット
     resetPartyTrail(); // §79 v0.26.1
     state.mapMode = "side";
     var stageData = SIDE_STAGE_DATA[state.sideMap.stage] || SIDE_STAGE_DATA[1];
@@ -2643,6 +2644,7 @@
   }
 
   function switchToNormalMap() {
+    resetAdventureGuideNpcState(); // §125 v0.48.1: 通常マップ復帰時に案内人状態リセット
     state.mapMode = "normal";
     // §53 v0.11.3: 🌀ゲート(2,3)の1マス下(2,4)へ戻す → 戻った直後の再接触ループを防止
     state.player.x = 2;
@@ -2754,23 +2756,13 @@
 
     renderField();
 
-    // §124 v0.48: 旅の案内人NPC接触判定
+    // §125 v0.48.1: NPC接触判定（talkLock付き・最新objective確認）
     if (_adventureGuideNpcVisible && nx === _adventureGuideNpcX && ny === _adventureGuideNpcY) {
-      openAdventureGuideNpcModal();
+      if (!_adventureGuideTalkLock) { openAdventureGuideNpcModal(); }
       return;
     }
-    // §124 v0.48: 有効移動カウント + 目標変化リセット + 案内人スポーン判定
-    var _agObj = getCurrentAdventureGuide().objectiveId;
-    if (_agObj !== _adventureGuideLastObjectiveId) {
-      _adventureGuideLastObjectiveId = _agObj;
-      _adventureGuideStepCount = 0;
-      _adventureGuideNpcVisible = false;
-      _adventureGuideNpcX = -1;
-      _adventureGuideNpcY = -1;
-    } else if (!_adventureGuideNpcVisible) {
-      _adventureGuideStepCount++;
-      if (_adventureGuideStepCount >= 15) { trySpawnAdventureGuideNpc(); }
-    }
+    // §125 v0.48.1: 目標変化同期（草地・道以外タイルでも同期は実行。step加算はしない）
+    syncAdventureGuideObjective();
 
     var tile = state.terrain[ny][nx];
     if (tile === "H") {
@@ -2842,6 +2834,13 @@
         state.stepsSinceEncounter = 0;
         triggerEncounter();
       }
+    }
+
+    // §125 v0.48.1: 有効移動カウント（草地・道の非イベントマス到達時のみ加算）
+    // H/M/G/T/B/U/A/C/J/X/D/R/K/E/S/N/V タイルはすべて上で return されるため、ここには到達しない
+    if (!_adventureGuideNpcVisible) {
+      _adventureGuideStepCount++;
+      if (_adventureGuideStepCount >= 15) { trySpawnAdventureGuideNpc(); }
     }
   }
 
@@ -3440,12 +3439,13 @@
   // §123 v0.47.1: 完了処理中の多重実行を防ぐフラグ（非永続・IIFEスコープ・saveしない）
   var _cstoryCompleting = false;
 
-  // §124 v0.48: 旅の案内人NPC 一時状態（非永続・IIFEスコープ・saveしない）
-  var _adventureGuideStepCount = 0;         // 有効移動カウント（NPC未表示時のみ加算）
+  // §124 v0.48 / §125 v0.48.1: 旅の案内人NPC 一時状態（非永続・IIFEスコープ・saveしない）
+  var _adventureGuideStepCount = 0;         // 有効移動カウント（NPC未表示・草地道歩行のみ加算）
   var _adventureGuideNpcVisible = false;    // 案内人表示中フラグ
   var _adventureGuideNpcX = -1;             // 案内人X座標（-1=未配置）
   var _adventureGuideNpcY = -1;             // 案内人Y座標（-1=未配置）
   var _adventureGuideLastObjectiveId = "";  // 前回objectiveId（目標変化検出用）
+  var _adventureGuideTalkLock = false;      // §125 v0.48.1: 接触会話多重防止（非永続）
 
   // §118 v0.45.1: chapter値を正規化。省略→1, 明示的不正値→null（第1話フォールバックなし）
   function normalizeCompanionSideStoryChapter(chapter) {
@@ -8234,6 +8234,17 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v48-stages-clear" style="border-color:#74c0fc;color:#74c0fc;">🗺️ s1〜s5 stageCleared=true にセット（s6手前状態）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v48-reset-guide" style="border-color:#74c0fc;color:#74c0fc;">🔁 ガイドカウント・NPC状態をリセット（stepCount=0）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v48-paperview-open" style="border-color:#74c0fc;color:#74c0fc;">📰 ペーパービュー屋を直接開く（冒険ガイド表示確認）</button>';
+      html += '<p class="small" style="color:#ffd43b;margin-top:8px;">🧪 冒険ナビ安定性確認 (§125 v0.48.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-pure-fn" style="border-color:#ffd43b;color:#ffd43b;">🧪 冒険案内純粋関数確認（呼び出し副作用なし）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-stage-unique" style="border-color:#ffd43b;color:#ffd43b;">🧪 ステージcurrent一意性確認（▶が1つのみ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-obj-change-dismiss" style="border-color:#ffd43b;color:#ffd43b;">🧪 objective変更時NPC消去確認（同期テスト）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-invalid-step" style="border-color:#ffd43b;color:#ffd43b;">🧪 無効移動カウント防止確認（stepCountログ表示）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-safe-tile" style="border-color:#ffd43b;color:#ffd43b;">🧪 案内人安全タイル確認（isAdventureGuideSpawnTileSafe）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-no-candidate" style="border-color:#ffd43b;color:#ffd43b;">🧪 案内人候補なし再試行確認（stepCount=15状態確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-talk-lock" style="border-color:#ffd43b;color:#ffd43b;">🧪 案内人接触多重起動防止確認（talkLock=true→false）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-obj-refresh" style="border-color:#ffd43b;color:#ffd43b;">🧪 案内人最新objective再取得確認（接触時freshness）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-paperview-nodedup" style="border-color:#ffd43b;color:#ffd43b;">🧪 PaperView再描画重複防止確認（renderField回数）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v481-obj-match" style="border-color:#ffd43b;color:#ffd43b;">🧪 PaperView・案内人objective一致確認（同一objectiveId）</button>';
       html += '<p class="small" style="color:#06d6a0;margin-top:8px;">⚔️ 仲間自動戦闘テスト (§80 v0.27)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-wilddog" style="border-color:#06d6a0;color:#06d6a0;">⚔️ 仲間2人+のらいぬ戦闘（自動行動確認）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-companion-battle-gorilla" style="border-color:#ffd166;color:#ffd166;">⚠️ 仲間2人+究極ゴリラHP10（見守り確認）</button>';
@@ -9655,6 +9666,72 @@
       document.getElementById("btn-debug-v48-paperview-open").onclick = function () {
         closeModal("settings-modal");
         openHintShopModal();
+      };
+      // §125 v0.48.1: 冒険ナビ安定性確認デバッグ
+      document.getElementById("btn-debug-v481-pure-fn").onclick = function () {
+        var _before = _adventureGuideStepCount + "/" + _adventureGuideNpcVisible + "/" + _adventureGuideLastObjectiveId;
+        var _g1 = getCurrentAdventureGuide();
+        var _g2 = getCurrentAdventureGuide();
+        var _after = _adventureGuideStepCount + "/" + _adventureGuideNpcVisible + "/" + _adventureGuideLastObjectiveId;
+        var _same = (_g1.objectiveId === _g2.objectiveId && _g1.shortText === _g2.shortText);
+        showToast("[DEBUG v0.48.1] 純粋関数確認:\n2回呼び出し結果一致=" + _same + "\n状態変化なし=" + (_before === _after) + "\nid=" + _g1.objectiveId);
+      };
+      document.getElementById("btn-debug-v481-stage-unique").onclick = function () {
+        var _g = getCurrentAdventureGuide();
+        var _active = 0;
+        for (var _si = 0; _si < _g.stages.length; _si++) {
+          if (_g.stages[_si].status === "▶") _active++;
+        }
+        showToast("[DEBUG v0.48.1] stage▶一意性確認:\nactive▶数=" + _active + "（期待値=1）\nid=" + _g.objectiveId);
+      };
+      document.getElementById("btn-debug-v481-obj-change-dismiss").onclick = function () {
+        var _origId = _adventureGuideLastObjectiveId;
+        _adventureGuideNpcVisible = true;
+        _adventureGuideNpcX = 3; _adventureGuideNpcY = 3;
+        _adventureGuideLastObjectiveId = "__fake_old_id__";
+        syncAdventureGuideObjective();
+        var _dismissed = !_adventureGuideNpcVisible;
+        showToast("[DEBUG v0.48.1] objective変更時NPC消去確認:\n消去=" + _dismissed + "（期待=true）\n旧id=__fake_old_id__\n新id=" + _adventureGuideLastObjectiveId);
+        renderField();
+      };
+      document.getElementById("btn-debug-v481-invalid-step").onclick = function () {
+        showToast("[DEBUG v0.48.1] 有効移動カウント状態:\nstepCount=" + _adventureGuideStepCount + "\nnpcVisible=" + _adventureGuideNpcVisible + "\n（草地・道のみカウント。NPC表示中はカウント停止）");
+      };
+      document.getElementById("btn-debug-v481-safe-tile").onclick = function () {
+        var _p = state.player;
+        var _results = [];
+        for (var _dy = -2; _dy <= 2; _dy++) {
+          for (var _dx = -2; _dx <= 2; _dx++) {
+            if (_dx === 0 && _dy === 0) continue;
+            var _tx = _p.x + _dx, _ty = _p.y + _dy;
+            if (_tx < 0 || _tx >= MAP_W || _ty < 0 || _ty >= MAP_H) continue;
+            var _tc = (state.terrain[_ty] || [])[_tx] || "?";
+            var _safe = isAdventureGuideSpawnTileSafe(_tx, _ty);
+            if (_safe) _results.push("(" + _tx + "," + _ty + ")=" + _tc);
+          }
+        }
+        showToast("[DEBUG v0.48.1] 近隣安全タイル（±2）:\n" + (_results.length ? _results.slice(0,5).join(" ") : "なし") + "\n合計=" + _results.length + "マス");
+      };
+      document.getElementById("btn-debug-v481-no-candidate").onclick = function () {
+        var _oldCount = _adventureGuideStepCount;
+        _adventureGuideNpcVisible = false;
+        _adventureGuideStepCount = 14;
+        showToast("[DEBUG v0.48.1] 候補なし再試行確認:\n現stepCount=14にセット\n次有効移動でtrySpawn呼び出し\n（失敗時はstepCount=15になる）");
+      };
+      document.getElementById("btn-debug-v481-talk-lock").onclick = function () {
+        showToast("[DEBUG v0.48.1] talkLock状態確認:\n_adventureGuideTalkLock=" + _adventureGuideTalkLock + "\n（接触中=true、通常=false）");
+      };
+      document.getElementById("btn-debug-v481-obj-refresh").onclick = function () {
+        var _g = getCurrentAdventureGuide();
+        var _fresh = (_adventureGuideLastObjectiveId === "" || _g.objectiveId === _adventureGuideLastObjectiveId);
+        showToast("[DEBUG v0.48.1] objective鮮度確認:\n現在id=" + _g.objectiveId + "\n記録id=" + (_adventureGuideLastObjectiveId || "未設定") + "\n一致=" + _fresh);
+      };
+      document.getElementById("btn-debug-v481-paperview-nodedup").onclick = function () {
+        showToast("[DEBUG v0.48.1] renderField重複防止確認:\ntrySpawnAdventureGuideNpc内のrenderField()は削除済み\n（呼び出し元movePlayerのrenderFieldのみ実行）");
+      };
+      document.getElementById("btn-debug-v481-obj-match").onclick = function () {
+        var _g = getCurrentAdventureGuide();
+        showToast("[DEBUG v0.48.1] PaperView/NPC objective一致確認:\ncurrentAdventureGuide.objectiveId=" + _g.objectiveId + "\nnpcLastObjectiveId=" + (_adventureGuideLastObjectiveId || "未設定") + "\n一致=" + (_g.objectiveId === _adventureGuideLastObjectiveId || _adventureGuideLastObjectiveId === ""));
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12142,6 +12219,7 @@
       var _reconciled = reconcileCompanionGearRewards(); // §109 v0.42 / §110 v0.42.1: 過去クリア済み補完
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
       if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued) { saveGame(); } // §114: storyFlag修復時 / §115: 旧セーブ救済時もsave
+      resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
       return true;
     } catch (e) {
       return false;
@@ -12926,8 +13004,52 @@
     return obj;
   }
 
-  function trySpawnAdventureGuideNpc() {
+  // §125 v0.48.1: 安全タイル判定ヘルパー
+  function isAdventureGuideSpawnTileSafe(x, y) {
+    if (x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) return false;
+    if (!state.terrain[y] || !state.terrain[y][x]) return false;
+    var tc = state.terrain[y][x];
+    if (tc !== "." && tc !== ",") return false; // 草地・道のみ
+    if (state.items[x + "," + y]) return false; // フィールドアイテムなし
     var p = state.player;
+    if (p.x === x && p.y === y) return false;   // プレイヤー位置なし
+    var trail = state.partyTrail || [];
+    for (var _ti = 0; _ti < trail.length; _ti++) {
+      if (trail[_ti] && trail[_ti].x === x && trail[_ti].y === y) return false;
+    }
+    return true;
+  }
+
+  // §125 v0.48.1: 一時状態を安全にリセット（セーブデータ変更なし）
+  function resetAdventureGuideNpcState() {
+    _adventureGuideStepCount = 0;
+    _adventureGuideNpcVisible = false;
+    _adventureGuideNpcX = -1;
+    _adventureGuideNpcY = -1;
+    _adventureGuideTalkLock = false;
+    _adventureGuideLastObjectiveId = ""; // 次移動またはrenderField前に再同期
+  }
+
+  // §125 v0.48.1: 目標変化検出・同期（冪等）
+  function syncAdventureGuideObjective() {
+    var _curId = getCurrentAdventureGuide().objectiveId;
+    if (_curId !== _adventureGuideLastObjectiveId) {
+      _adventureGuideLastObjectiveId = _curId;
+      _adventureGuideStepCount = 0;
+      _adventureGuideNpcVisible = false;
+      _adventureGuideNpcX = -1;
+      _adventureGuideNpcY = -1;
+      _adventureGuideTalkLock = false;
+    }
+  }
+
+  function trySpawnAdventureGuideNpc() {
+    // §125 v0.48.1: 多重スポーン・不正状態ガード
+    if (_adventureGuideNpcVisible) return;
+    if (state.mapMode === "side") return;
+    if (state.inBattle || state.modalOpen) return;
+    var p = state.player;
+    if (!p || p.x === undefined || p.y === undefined) return;
     var candidates = [];
     for (var dy = -4; dy <= 4; dy++) {
       for (var dx = -4; dx <= 4; dx++) {
@@ -12940,32 +13062,34 @@
       var j = Math.floor(Math.random() * (i + 1));
       var tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
     }
-    var trailSet = {};
-    var trail = state.partyTrail || [];
-    for (var ti = 0; ti < trail.length; ti++) {
-      if (trail[ti]) { trailSet[trail[ti].x + "," + trail[ti].y] = true; }
-    }
     for (var k = 0; k < candidates.length; k++) {
       var nx = p.x + candidates[k].dx;
       var ny = p.y + candidates[k].dy;
-      if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) continue;
-      if (!state.terrain[ny] || !state.terrain[ny][nx]) continue;
-      var tc = state.terrain[ny][nx];
-      if (tc !== "." && tc !== ",") continue;
-      if (state.items[nx + "," + ny]) continue;
-      if (trailSet[nx + "," + ny]) continue;
+      if (!isAdventureGuideSpawnTileSafe(nx, ny)) continue;
       _adventureGuideNpcX = nx;
       _adventureGuideNpcY = ny;
       _adventureGuideNpcVisible = true;
       _adventureGuideStepCount = 0;
-      renderField();
-      return;
+      return; // §125 v0.48.1: renderField()は呼び出し元に委ねる
     }
-    _adventureGuideStepCount = 12; // 有効位置なし → 数歩後に再試行
+    _adventureGuideStepCount = 15; // §125 v0.48.1: 12→15（次有効移動で即再試行）
   }
 
   function openAdventureGuideNpcModal() {
+    // §125 v0.48.1: 多重起動防止
+    if (_adventureGuideTalkLock) return;
+    _adventureGuideTalkLock = true;
+    // §125 v0.48.1: 接触時に最新objectiveIdを再取得・変化していれば消去して会話しない
     var guide = getCurrentAdventureGuide();
+    if (_adventureGuideLastObjectiveId !== "" && guide.objectiveId !== _adventureGuideLastObjectiveId) {
+      _adventureGuideNpcVisible = false;
+      _adventureGuideNpcX = -1;
+      _adventureGuideNpcY = -1;
+      _adventureGuideTalkLock = false;
+      syncAdventureGuideObjective();
+      renderField();
+      return;
+    }
     var header = '<div style="font-size:40px;line-height:1.2;">🧭</div>';
     header += '<div style="font-weight:bold;font-size:1em;margin-bottom:4px;">旅の案内人</div>';
     document.getElementById("npc-header").innerHTML = header;
@@ -12978,6 +13102,8 @@
     _adventureGuideNpcVisible = false;
     _adventureGuideNpcX = -1;
     _adventureGuideNpcY = -1;
+    _adventureGuideStepCount = 0; // §125 v0.48.1: 会話後に新サイクル開始
+    _adventureGuideTalkLock = false;
     renderField();
     openModal("npc-modal");
   }

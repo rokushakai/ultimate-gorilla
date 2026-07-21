@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.48** |
+| 現在バージョン | **v0.48.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,16 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.48.1] 冒険ナビゲーション安定化**（§125）
+  - **`_adventureGuideTalkLock`**: 接触会話多重起動防止フラグ（非永続）
+  - **`isAdventureGuideSpawnTileSafe(x, y)`**: スポーン候補タイル安全判定ヘルパー
+  - **`resetAdventureGuideNpcState()`**: 6変数一括リセット（マップ切替・ロード時に呼び出し）
+  - **`syncAdventureGuideObjective()`**: objective変化検出・即リセット（movePlayer NPC接触前に呼び出し）
+  - **有効移動カウント修正**: v0.48のイベントタイルでのカウント誤加算を修正。関数末尾で加算
+  - **`trySpawnAdventureGuideNpc()` 強化**: ガード4種追加・`isAdventureGuideSpawnTileSafe`使用・失敗stepCount 12→15・内部renderField削除
+  - **`openAdventureGuideNpcModal()` 強化**: talkLock・objective鮮度チェック・stepCount=0リセット
+  - **マップ切替/ロード**: `switchToSideMap` / `switchToNormalMap` / `loadGame` に `resetAdventureGuideNpcState()` 追加
+  - **デバッグ10ボタン（§125・🧪）**: 純粋関数/stage▶一意性/objective変更消去/無効カウント/安全タイル/候補なし再試行/talkLock/objective鮮度/renderField重複/PaperView一致
 - **[v0.48] 冒険ナビゲーションシステム**（§124）
   - **`getCurrentAdventureGuide()`**: 純粋関数。objectiveId/title/shortText/locationText/stages（✅▶🔒）を返す
   - **旅の案内人NPC（🧭）**: 通常フィールド、有効移動15歩ごとに周囲2〜4タイルに出現。接触で会話→消去

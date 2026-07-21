@@ -22,6 +22,20 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.48.1 — 冒険ナビゲーション安定化 (§125)
+
+- **`_adventureGuideTalkLock`** 追加: 接触会話多重起動防止フラグ（非永続・IIFEスコープ） ✅
+- **`isAdventureGuideSpawnTileSafe(x, y)`** 追加: タイル安全判定ヘルパー（草地・道・アイテムなし・プレイヤーなし・トレイルなし） ✅
+- **`resetAdventureGuideNpcState()`** 追加: 6変数を初期値にリセット（セーブデータ変更なし） ✅
+- **`syncAdventureGuideObjective()`** 追加: objective変化検出・変化時に即リセット（冪等） ✅
+- **`movePlayer()` 修正**: NPC接触ブロックにtalkLock追加・有効移動カウントを関数末尾へ移動（NPC/宝箱/ゲートタイルでのカウント防止） ✅
+- **`trySpawnAdventureGuideNpc()` 修正**: visible/sideMap/inBattle/modalOpenガード追加・isAdventureGuideSpawnTileSafe使用・stepCount失敗値12→15・内部renderField()削除 ✅
+- **`openAdventureGuideNpcModal()` 修正**: talkLock判定・objective鮮度チェック・stepCount=0リセット・talkLock解放 ✅
+- **`switchToSideMap()` 修正**: `resetAdventureGuideNpcState()` 呼び出し追加 ✅
+- **`switchToNormalMap()` 修正**: `resetAdventureGuideNpcState()` 呼び出し追加 ✅
+- **`loadGame()` 修正**: `resetAdventureGuideNpcState()` 呼び出し追加（return true直前） ✅
+- **デバッグボタン** 追加: §125 安定性確認用10ボタン（🧪シリーズ） ✅
+
 ### Version 0.48 — 冒険ナビゲーションシステム (§124)
 
 - **`getCurrentAdventureGuide()`** 追加: 純粋関数・副作用なし・objectiveId/title/shortText/detailLines/locationText/stages を返す ✅

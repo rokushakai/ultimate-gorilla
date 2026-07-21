@@ -5,6 +5,25 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.48.1] - 2026-07-21 — 冒険ナビゲーション安定化 (§125)
+
+### Added
+- **`_adventureGuideTalkLock`** 追加: 接触会話多重起動防止フラグ（非永続・IIFEスコープ・saveしない）
+- **`isAdventureGuideSpawnTileSafe(x, y)`** 追加: スポーン候補タイルの安全性を一括判定（草地・道・範囲内・アイテムなし・プレイヤーなし・仲間軌跡なし）
+- **`resetAdventureGuideNpcState()`** 追加: 6変数すべてを初期値にリセット（セーブデータ変更なし）。マップ切替・ロード時に呼び出し
+- **`syncAdventureGuideObjective()`** 追加: 現在のobjectiveIdと記録値を比較し、変化していれば即リセット（冪等。movePlayer NPC接触前に呼び出し）
+- **デバッグ10ボタン（§125・🧪シリーズ）**: 純粋関数確認 / stage▶一意性確認 / objective変更NPC消去確認 / 無効カウント防止確認 / 安全タイル確認 / 候補なし再試行確認 / talkLock確認 / objective鮮度確認 / renderField重複防止確認 / PaperView一致確認
+
+### Fixed
+- **`movePlayer()` 有効移動カウント**: v0.48ではNPC/宝箱/ゲート等のイベントタイルでもカウントが増加していた不具合を修正。カウント処理を関数末尾へ移動し、すべての早期returnの後でのみ加算されるよう変更
+- **`trySpawnAdventureGuideNpc()` ガード不足**: visible=true時・sideMap時・inBattle時・modalOpen時の多重スポーンを防止するガードを追加
+- **`trySpawnAdventureGuideNpc()` 失敗時stepCount**: 候補なしの場合 `stepCount = 12` → `15` に変更（次の有効移動で即再試行可能に）
+- **`trySpawnAdventureGuideNpc()` 二重renderField**: 関数内部のrenderField()呼び出しを削除（呼び出し元のmovePlayerがrenderFieldを行うため）
+- **`openAdventureGuideNpcModal()` 多重起動**: talkLockによるガード追加。接触時に最新objectiveIdを再取得し、変化していれば会話を開かずNPCを消去
+- **`switchToSideMap()` / `switchToNormalMap()` / `loadGame()`**: マップ切替・ロード時に案内人状態がリセットされていなかった不具合を修正。`resetAdventureGuideNpcState()` 呼び出しを追加
+
+---
+
 ## [0.48] - 2026-07-20 — 冒険ナビゲーションシステム (§124)
 
 ### Added
