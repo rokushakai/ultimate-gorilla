@@ -7001,11 +7001,114 @@ v0.48で実装した冒険ナビゲーションシステムの安定化。進行
 
 ---
 
-## 将来の実装候補（v0.49〜）— プレイヤーフィードバックより [未実装・将来機能]
+## §126 v0.49 — 主人公命名・統合メンバー管理 [実装済み]
 
-### v0.49 候補以降 [未実装・将来機能]
+### 概要
 
-- v0.48.2: PaperView番組・世界観記事ラインナップ拡張
+ニューゲーム開始時に主人公の名前を入力できるようにし、  
+主人公と仲間4人を同じ「メンバー管理」画面から一覧確認できるようにする。
+
+### 主人公命名
+
+- `state.playerName` (文字列): 主人公の名前。永続保存（saveGame/loadGame対象）。
+- 初期値: `""` → `getPlayerDisplayName()` が `"冒険者"` を返す（フォールバック）
+- ニューゲーム時: 名前入力モーダル（`player-name-modal`）を表示し、名前を確定してからゲーム開始
+- 旧セーブ互換: `playerName` が欠損 / 空文字の場合は `"冒険者"` で補完し saveGame()
+- 名前変更: 実家モーダル・統合メンバー管理画面から `✏️ 名前を変更` ボタンで変更可能
+- 文字数: 1〜10文字（入力値を `normalizePlayerName()` で正規化）
+
+### 正規化ルール（`normalizePlayerName(value)`）
+
+- 文字列型以外 → `""` 扱い
+- 前後空白・改行・制御文字を除去
+- 正規化後の長さが 0 → 空文字（呼び出し元で "冒険者" フォールバックを適用）
+- 正規化後の長さが 11文字以上 → 10文字に切り詰め
+- 絵文字・ひらがな・カタカナ・漢字・英数字はすべて通過
+- HTML エスケープは `normalizePlayerName()` では行わない（表示時に文字列として textContent 等で扱う）
+
+### 関数一覧
+
+| 関数 | 役割 |
+|---|---|
+| `normalizePlayerName(value)` | 名前文字列を正規化して返す（副作用なし） |
+| `getPlayerDisplayName()` | playerName があれば返す。欠損なら "冒険者" |
+| `getCharacterDisplayName(characterId)` | "player" → getPlayerDisplayName() / cid → COMPANION_DATA[cid].name |
+| `getCharacterDisplayIcon(characterId)` | "player" → "🧙" / cid → COMPANION_DATA[cid].icon |
+| `getCharacterManagementData(characterId)` | 表示用アダプター。副作用なし・saveなし |
+| `renderMemberManagementBody()` | メンバー管理モーダル内 HTML を生成 |
+| `openPlayerNameModal(mode)` | mode: "newgame" | "change" |
+| `openMemberManagement()` | 統合メンバー管理モーダルを開く |
+| `closeMemberManagement()` | 統合メンバー管理モーダルを閉じる |
+
+### `getCharacterManagementData(characterId)` 戻り値
+
+```js
+{
+  id: "player",         // "player" or cid
+  name: "冒険者",       // getPlayerDisplayName() or COMPANION_DATA.name
+  icon: "🧙",          // "🧙" or COMPANION_DATA.icon
+  role: "主人公",       // "主人公" or COMPANION_DATA.feature
+  level: 52,
+  exp: 1240,
+  expToNext: 180,       // 次Lvまで (Lv99なら 0)
+  isPlayer: true,
+  isJoined: true,       // 主人公は常に true / 仲間は hasCompanionEverJoined()
+  isInParty: true,      // 主人公は常に true / 仲間は p.companions に含まれるか
+  equipmentSummary: [], // 装備情報の文字列配列
+  inventorySummary: []  // 持ち物情報の文字列配列
+}
+```
+
+### 統合メンバー管理画面（`member-management-modal`）
+
+- 表示順: 主人公 → ジュリタニ → シュリタニ → ノリオ → ハルミ
+- 主人公: 常に表示
+- 仲間: 加入済み（`hasCompanionEverJoined()`）のみ通常表示。未加入は非表示
+- 各キャラをカード形式で同列表示（アイコン・名前・役割・Lv・EXP・装備・持ち物・パーティ状態）
+- パーティ状態: 主人公=「リーダー」/ パーティ中仲間=「編成中」/ 待機中仲間=「待機中」
+- 「✏️ 名前を変更」ボタン（主人公カード）
+- 「⚔️ 装備を変更」ボタン → 既存装備画面を呼び出し
+- 「パーティ編成」ボタン → 既存酒場を呼び出し
+- Lv99 表示: `nextExp` を「―」と表示
+- EXPゲージ: シンプルな progress バー（0%〜100%、Lv99は100%固定）
+
+### アクセス場所
+
+- ステータス画面（`status-modal`）に「👥 メンバー管理」ボタンを追加
+- 実家モーダル（`home-modal`）に「✏️ 名前を変更」ボタンを追加（戦闘中は無効）
+
+### 物語 speaker 置換
+
+- `showCompanionSideStoryLine()` で `line.speaker === "あなた"` の場合のみ表示名を `getPlayerDisplayName()` に置換
+- 物語データ本文・storyId・セーブフラグ は変更しない
+
+### 今回は実装しない
+
+- 仲間用個人バッグ
+- キャラクター間アイテム受け渡し
+- 仲間の戦闘中アイテム使用
+- 名前による能力変化・隠しイベント
+- キャラクター作成・外見選択
+- 仲間の手動レベル変更
+- 第3話全話完了演出
+
+### セーブデータ
+
+- saveGame(): `playerName: state.playerName || ""`
+- loadGame(): `state.playerName = normalizePlayerName(data.playerName || ""); if (!state.playerName) state.playerName = "冒険者";`
+- newGame(): location.reload() 前にペンディング名 (`SAVE_KEY + "_pn"`) を localStorage に一時保存
+
+---
+
+## 将来の実装候補（v0.50〜）— プレイヤーフィードバックより [未実装・将来機能]
+
+### v0.50 候補以降 [未実装・将来機能]
+
+- v0.49.1: 主人公命名・統合管理安定化
+- v0.49.2: キャラクター別個人バッグ
+- v0.50: 仲間の戦闘中アイテム使用
+- v0.51: 第3話全話完了演出
+- PaperView番組・世界観記事ラインナップ拡張
 - 将来: 仲間物語と最終サイドストーリーの接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化

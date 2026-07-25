@@ -5,6 +5,33 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.49] - 2026-07-25 — 主人公命名・統合メンバー管理 (§126)
+
+### Added
+- **`state.playerName`** 追加: 主人公の名前（永続・saveGame/loadGame対応）。旧セーブは"冒険者"で補完
+- **`normalizePlayerName(value)`** 追加: 文字列検証・前後空白除去・改行除去・10文字上限（ES5 hoisting対応）
+- **`getPlayerDisplayName()`** 追加: playerNameが空または未設定の場合は"冒険者"を返す純粋関数
+- **`getCharacterDisplayName(characterId)` / `getCharacterDisplayIcon(characterId)`** 追加: キャラクターID→表示名・アイコン取得関数
+- **`getCharacterManagementData(characterId)`** 追加: 主人公・仲間を統一データ構造で返すアダプター（Lv/EXP/装備/持ち物/パーティ状態）
+- **`renderMemberManagementBody()`** 追加: 加入済みキャラ分のカード型HTML生成（EXPゲージ・装備サマリ・持ち物サマリ）
+- **`openMemberManagement()` / `closeMemberManagement()`** 追加: 統合メンバー管理モーダルの開閉制御
+- **`openPlayerNameModal(mode)`** 追加: mode="newgame"（キャンセル不可・ペンディング名経由リロード）/ mode="change"（即反映・saveGame・toast通知）
+- **`renderStatusBody_ifOpen()`** 追加: 名前変更後にステータス画面が開いていれば即時再描画
+- **`index.html`** 追加: `#player-name-modal`（主人公命名）・`#member-management-modal`（統合メンバー管理）の2モーダルHTML
+- **home-modal** 追加: 「✏️ 名前を変更」ボタン（`#btn-home-rename`）
+- **デバッグ10ボタン（§126）**: 命名モーダル（newgame/change）/ メンバー管理直接開く / 名前設定3種 / normalizePlayerName境界確認 / サイドストーリー名置換確認 / ステータス名前確認
+
+### Changed
+- **`renderStatusBody()` 名前表示**: `p.name`（固定値"勇者の子孫"）→ `getPlayerDisplayName()`（playerName or "冒険者"）に変更
+- **`renderStatusBody()` 末尾ボタン追加**: 「✏️ 名前を変更」「👥 メンバー管理」ショートカットボタンを追加
+- **ニューゲームハンドラ**: confirm+reload → 命名モーダル（mode="newgame"）を経由するフローに変更。ペンディング名（`SAVE_KEY+"_pn"`）を介してリロード後に名前を適用
+- **`showCompanionSideStoryLine()`**: speaker="あなた"の発言者表示を固定文字列→ `getPlayerDisplayName()` に変更
+- **`init()`**: ニューゲーム時にペンディング名キーから名前を取得・適用するブロックを追加
+- **`saveGame()`**: `playerName: state.playerName || ""` を追加
+- **`loadGame()`**: `playerName` 読み込み・旧セーブ補完（欠損→"冒険者"）・`_nameChanged` フラグで必要時にsaveGame()を呼び出し
+
+---
+
 ## [0.48.1] - 2026-07-21 — 冒険ナビゲーション安定化 (§125)
 
 ### Added

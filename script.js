@@ -1104,7 +1104,8 @@
     activeCompanionSideStoryLine: 0, // §113 v0.44: 現在の行インデックス（非永続）
     companionSideStoryAllCompleteCelebrated: false, // §115 v0.44.2: 全話完了演出済み（永続・saveする）
     companionSideStoryChapter2AllCompleteCelebrated: false, // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
-    companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false } // §122 v0.47: 第3話完了フラグ（永続・saveする）
+    companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
+    playerName: "" // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
   };
 
   // ---------------------------------------------------------
@@ -1140,6 +1141,19 @@
 
     // セーブデータがあれば読み込む(無ければ何も起きない)
     var loaded = loadGame();
+
+    // §126 v0.49: ニューゲーム命名フロー — ペンディング名をsaveKey+"_pn"から取得
+    if (!loaded) {
+      var _pn = "";
+      try { _pn = localStorage.getItem(SAVE_KEY + "_pn") || ""; } catch (e2) {}
+      if (_pn) {
+        try { localStorage.removeItem(SAVE_KEY + "_pn"); } catch (e3) {}
+        state.playerName = normalizePlayerName(_pn) || "冒険者";
+      } else {
+        state.playerName = "冒険者"; // ペンディング名なし → デフォルト
+      }
+      saveGame(); // 初回保存（playerNameを含む）
+    }
 
     // サウンド設定を読み込む(セーブデータとは別キー)
     loadSoundSettings();
@@ -3851,7 +3865,7 @@
     var nextBtn = document.getElementById("btn-cstory-next");
     if (titleEl) { titleEl.textContent = "📖 " + story.title; }
     if (speakerEl) {
-      speakerEl.textContent = line.speaker || "";
+      speakerEl.textContent = (line.speaker === "あなた") ? getPlayerDisplayName() : (line.speaker || ""); // §126 v0.49
       speakerEl.style.color = (line.speaker === "語り") ? "#adb5bd" : (line.speaker === "あなた") ? "#a0cfff" : "#ffd166";
     }
     if (textEl) { textEl.textContent = line.text || ""; }
@@ -6452,7 +6466,7 @@
     // §67 v0.18: getPlayerTitle() に一元化
     var playerTitle = getPlayerTitle();
     html += '<div class="shop-row"><span>称号</span><span style="font-size:0.85em;">' + playerTitle + "</span></div>";
-    html += '<div class="shop-row"><span>名前</span><span>' + p.name + "</span></div>";
+    html += '<div class="shop-row"><span>名前</span><span>' + getPlayerDisplayName() + "</span></div>"; // §126 v0.49
     html += '<div class="shop-row"><span>職業</span><span>' + p.job.name + "</span></div>";
     html += '<div class="shop-row"><span>レベル</span><span>Lv.' + p.level + "</span></div>";
     html += '<div class="shop-row"><span>HP</span><span>' + p.hp + "/" + p.maxHp + "</span></div>";
@@ -6792,7 +6806,21 @@
         '<span style="color:#ffd166;font-size:0.85em;">' + sideTitle + "</span></div>";
     }
 
+    // §126 v0.49: 名前変更・メンバー管理ショートカット
+    html += '<div style="display:flex;gap:8px;margin-top:14px;">';
+    html += '<button class="shop-menu-btn" id="btn-status-rename" style="flex:1;border-color:#74c0fc;color:#74c0fc;">✏️ 名前を変更</button>';
+    html += '<button class="shop-menu-btn" id="btn-status-member-management" style="flex:1;border-color:#a0cfff;color:#a0cfff;">👥 メンバー管理</button>';
+    html += '</div>';
     document.getElementById("status-body").innerHTML = html;
+    // §126 v0.49: 名前変更・メンバー管理ハンドラ
+    document.getElementById("btn-status-rename").onclick = function () {
+      closeModal("status-modal");
+      openPlayerNameModal("change");
+    };
+    document.getElementById("btn-status-member-management").onclick = function () {
+      closeModal("status-modal");
+      openMemberManagement();
+    };
     // §105 v0.40: 仲間装備ボタンのイベントバインド
     // §108 v0.41.1: 連打防止 - クリック直後にdisable（renderStatusBodyで再構築されるまで有効）
     var _cgBtns = document.querySelectorAll("[data-gear-action]");
@@ -8430,6 +8458,17 @@
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s5" style="border-color:#e64980;color:#e64980;">🧪 ステージ5ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-goal-s6" style="border-color:#e64980;color:#e64980;">🧪 ステージ6ゴールモーダル表示</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-modal-return-gate" style="border-color:#e64980;color:#e64980;">🧪 帰還ゲートモーダル表示</button>';
+      // §126 v0.49: 主人公命名・統合メンバー管理デバッグ
+      html += '<p class="small" style="color:#74c0fc;margin-top:8px;">🧙 主人公命名・統合メンバー管理 (§126 v0.49)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-open-naming" style="border-color:#74c0fc;color:#74c0fc;">🧙 命名モーダルを開く（newgameモード）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-open-rename" style="border-color:#a0cfff;color:#a0cfff;">✏️ 命名モーダルを開く（changeモード）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-open-member" style="border-color:#c8b4ff;color:#c8b4ff;">👥 メンバー管理モーダルを直接開く</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-name-kana" style="border-color:#06d6a0;color:#06d6a0;">🔤 名前を「テスト冒険者」に設定</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-name-long" style="border-color:#ffd166;color:#ffd166;">🔤 名前を10文字「スーパー勇者！！」に設定</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-name-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 名前をリセット（空文字→冒険者表示確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-name-check" style="border-color:#a0f0b4;color:#a0f0b4;">🧪 normalizePlayerName境界確認（PASS/FAIL）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-story-name-check" style="border-color:#e9c46a;color:#e9c46a;">📖 サイドストーリー「あなた」→主人公名置換確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v49-status-name-check" style="border-color:#ffd43b;color:#ffd43b;">📊 ステータス画面の名前表示確認</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -8454,10 +8493,8 @@
       };
     }
     document.getElementById("btn-new-game").onclick = function () {
-      if (confirm("本当に最初から始めますか？\n現在のセーブデータは削除されます。")) {
-        try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-        location.reload();
-      }
+      // §126 v0.49: 命名モーダルを介してニューゲーム開始
+      openPlayerNameModal("newgame");
     };
     document.getElementById("btn-toggle-sound").onclick = function () {
       soundEnabled = !soundEnabled;
@@ -9732,6 +9769,64 @@
       document.getElementById("btn-debug-v481-obj-match").onclick = function () {
         var _g = getCurrentAdventureGuide();
         showToast("[DEBUG v0.48.1] PaperView/NPC objective一致確認:\ncurrentAdventureGuide.objectiveId=" + _g.objectiveId + "\nnpcLastObjectiveId=" + (_adventureGuideLastObjectiveId || "未設定") + "\n一致=" + (_g.objectiveId === _adventureGuideLastObjectiveId || _adventureGuideLastObjectiveId === ""));
+      };
+      // §126 v0.49: 主人公命名・統合メンバー管理デバッグハンドラ
+      document.getElementById("btn-debug-v49-open-naming").onclick = function () {
+        closeModal("settings-modal");
+        openPlayerNameModal("newgame");
+      };
+      document.getElementById("btn-debug-v49-open-rename").onclick = function () {
+        closeModal("settings-modal");
+        openPlayerNameModal("change");
+      };
+      document.getElementById("btn-debug-v49-open-member").onclick = function () {
+        closeModal("settings-modal");
+        openMemberManagement();
+      };
+      document.getElementById("btn-debug-v49-name-kana").onclick = function () {
+        state.playerName = "テスト冒険者";
+        saveGame();
+        showToast("[DEBUG v0.49] 名前を「テスト冒険者」に設定: " + getPlayerDisplayName());
+      };
+      document.getElementById("btn-debug-v49-name-long").onclick = function () {
+        state.playerName = "スーパー勇者！！";
+        saveGame();
+        showToast("[DEBUG v0.49] 名前を「スーパー勇者！！」（8文字）に設定: " + getPlayerDisplayName());
+      };
+      document.getElementById("btn-debug-v49-name-reset").onclick = function () {
+        state.playerName = "";
+        saveGame();
+        showToast("[DEBUG v0.49] 名前をリセット→空文字。getPlayerDisplayName()=" + getPlayerDisplayName() + "（期待:冒険者）");
+      };
+      document.getElementById("btn-debug-v49-name-check").onclick = function () {
+        var _pass = true;
+        var _results = [];
+        var _cases = [
+          { in: "", expected: "" },
+          { in: "   ", expected: "" },
+          { in: "abc", expected: "abc" },
+          { in: "12345678901", expected: "1234567890" }, // 11文字→10文字切り詰め
+          { in: "  山田  ", expected: "山田" }
+        ];
+        for (var _ci = 0; _ci < _cases.length; _ci++) {
+          var _c = _cases[_ci];
+          var _r = normalizePlayerName(_c.in);
+          var _ok = (_r === _c.expected);
+          if (!_ok) { _pass = false; }
+          _results.push((_ok ? "✓" : "✗") + " in='" + _c.in + "' → '" + _r + "' (期待:'" + _c.expected + "')");
+        }
+        showToast("[DEBUG v0.49] normalizePlayerName境界確認:\n" + (_pass ? "PASS" : "FAIL") + "\n" + _results.slice(0, 3).join("\n"));
+      };
+      document.getElementById("btn-debug-v49-story-name-check").onclick = function () {
+        var _name = getPlayerDisplayName();
+        showToast("[DEBUG v0.49] サイドストーリー「あなた」→主人公名置換確認:\ncurrentPlayerName=" + _name + "\n（サイドストーリー中「あなた」発言が「" + _name + "」と表示されるか確認）");
+      };
+      document.getElementById("btn-debug-v49-status-name-check").onclick = function () {
+        var _stateName = state.playerName;
+        var _displayName = getPlayerDisplayName();
+        closeModal("settings-modal");
+        openStatusModal();
+        showToast("[DEBUG v0.49] ステータス名前確認:\nstate.playerName='" + _stateName + "'\ngetPlayerDisplayName()='" + _displayName + "'\n（ステータス画面の「名前」欄を確認）");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12100,7 +12195,8 @@
         companionSideStoryAllCompleteCelebrated: !!state.companionSideStoryAllCompleteCelebrated, // §115 v0.44.2
         companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {}, // §117 v0.45
         companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated, // §119 v0.45.2
-        companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {} // §122 v0.47
+        companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {}, // §122 v0.47
+        playerName: state.playerName || "" // §126 v0.49: 主人公名
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -12217,8 +12313,17 @@
       p.hp = Math.min(data.hp != null ? data.hp : p.maxHp, p.maxHp);
       p.mp = Math.min(data.mp != null ? data.mp : p.maxMp, p.maxMp);
       var _reconciled = reconcileCompanionGearRewards(); // §109 v0.42 / §110 v0.42.1: 過去クリア済み補完
+      // §126 v0.49: 主人公名ロード（旧セーブは欠損→"冒険者"で補完）
+      var _rawName = normalizePlayerName(data.playerName || "");
+      var _nameChanged = false;
+      if (_rawName) {
+        state.playerName = _rawName;
+      } else {
+        state.playerName = "冒険者"; // 旧セーブ・空欄補完
+        _nameChanged = true;
+      }
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
-      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued) { saveGame(); } // §114: storyFlag修復時 / §115: 旧セーブ救済時もsave
+      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged) { saveGame(); } // §114 / §115 / §126
       resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
       return true;
     } catch (e) {
@@ -12514,6 +12619,11 @@
     document.getElementById("btn-home-rest").addEventListener("click", doRest);
     document.getElementById("btn-home-cancel").addEventListener("click", function () {
       closeModal("home-modal");
+    });
+    // §126 v0.49: 実家から主人公命名モーダルを開く
+    document.getElementById("btn-home-rename").addEventListener("click", function () {
+      closeModal("home-modal");
+      openPlayerNameModal("change");
     });
 
     // フィールドアイテムモーダル(§5.8)
@@ -13697,6 +13807,309 @@
     saveGame();
     showToast("[DEBUG] 伝説装備フラグをリセットした");
     renderSettingsBody();
+  }
+
+  // ---------------------------------------------------------
+  // §126 v0.49: 主人公命名・統合メンバー管理
+  // ---------------------------------------------------------
+
+  // 名前文字列を正規化して返す（副作用なし）
+  function normalizePlayerName(value) {
+    if (typeof value !== "string") { return ""; }
+    // 改行・タブ・制御文字を除去してトリム
+    var s = value.replace(/[\r\n\t -]/g, "").trim();
+    if (s.length === 0) { return ""; }
+    if (s.length > 10) { s = s.slice(0, 10); } // 10文字上限
+    return s;
+  }
+
+  // 主人公表示名を返す（欠損時は "冒険者"）
+  function getPlayerDisplayName() {
+    var n = normalizePlayerName(state.playerName || "");
+    return n || "冒険者";
+  }
+
+  // キャラクターID → 表示名（副作用なし）
+  function getCharacterDisplayName(characterId) {
+    if (characterId === "player") { return getPlayerDisplayName(); }
+    var c = findById(COMPANION_DATA, characterId);
+    return c ? c.name : "";
+  }
+
+  // キャラクターID → 表示アイコン（副作用なし）
+  function getCharacterDisplayIcon(characterId) {
+    if (characterId === "player") { return "🧙"; }
+    var c = findById(COMPANION_DATA, characterId);
+    return (c && c.icon) ? c.icon : "❓";
+  }
+
+  // キャラクター管理データ取得アダプター（副作用なし・saveしない）
+  function getCharacterManagementData(characterId) {
+    var p = state.player;
+    if (characterId === "player") {
+      var _pNextExp = (p.level >= 99) ? 0 : p.nextExp;
+      var _pExpToNext = (p.level >= 99) ? 0 : Math.max(0, _pNextExp - p.exp);
+      // 主人公装備サマリ
+      var _eqSummary = [];
+      var _wpn = (findById(EQUIP_WEAPON_DATA, p.equipment.weapon) || {}).name;
+      var _arm = (findById(ARMOR_DATA, p.equipment.armor) || {}).name;
+      var _shd = (findById(SHIELD_DATA, p.equipment.shield) || {}).name;
+      var _hlm = (findById(HELMET_DATA, p.equipment.helmet) || {}).name;
+      if (_wpn) { _eqSummary.push("武器: " + _wpn); }
+      if (_arm) { _eqSummary.push("防具: " + _arm); }
+      if (_shd) { _eqSummary.push("盾: " + _shd); }
+      if (_hlm) { _eqSummary.push("兜: " + _hlm); }
+      // 主人公持ち物サマリ
+      var _invCount = (p.potionCount || 0) + (p.ropeCount || 0) + (p.coffeeCount || 0) +
+        (p.breadCount || 0) + (p.bentoCount || 0) + (p.ramenCount || 0) +
+        (p.coughsyrupCount || 0) + (p.deodorantCount || 0);
+      var _invSummary = ["アイテム合計: " + _invCount + "個"];
+      return {
+        id: "player", name: getPlayerDisplayName(), icon: "🧙", role: "主人公",
+        level: p.level, exp: p.exp, nextExp: _pNextExp, expToNext: _pExpToNext,
+        isPlayer: true, isJoined: true, isInParty: true,
+        equipmentSummary: _eqSummary, inventorySummary: _invSummary
+      };
+    }
+    // 仲間
+    var cData = findById(COMPANION_DATA, characterId);
+    if (!cData) {
+      return {
+        id: characterId, name: "", icon: "❓", role: "", level: 0, exp: 0,
+        nextExp: 0, expToNext: 0, isPlayer: false, isJoined: false, isInParty: false,
+        equipmentSummary: [], inventorySummary: []
+      };
+    }
+    var cl = getCompanionLevel(characterId);
+    var _cNextExp = (cl.level >= 99) ? 0 : cl.nextExp;
+    var _cExpToNext = (cl.level >= 99) ? 0 : Math.max(0, _cNextExp - cl.exp);
+    var _cInParty = (p.companions && p.companions.indexOf(characterId) >= 0);
+    var _cJoined = hasCompanionEverJoined(characterId);
+    // 仲間装備サマリ
+    var _cgSummary = [];
+    var _equippedGearId = state.companionEquipment && state.companionEquipment[characterId];
+    if (_equippedGearId) {
+      var _gd = findById(COMPANION_GEAR_DATA, _equippedGearId);
+      if (_gd) { _cgSummary.push("装備中: " + _gd.name); }
+    } else {
+      _cgSummary.push("装備中: なし");
+    }
+    // 仲間持ち物（入手済み装備）
+    var _cInvSummary = [];
+    var _ownedCount = 0;
+    if (state.companionGearInventory) {
+      COMPANION_GEAR_DATA.forEach(function (gd) {
+        if (!gd.targetCid || gd.targetCid === characterId) {
+          var cnt = state.companionGearInventory[gd.id] || 0;
+          if (cnt > 0) { _ownedCount++; }
+        }
+      });
+    }
+    _cInvSummary.push("仲間装備入手: " + _ownedCount + "種類");
+    return {
+      id: characterId, name: cData.name, icon: cData.icon || "❓", role: cData.feature || "",
+      level: cl.level, exp: cl.exp, nextExp: _cNextExp, expToNext: _cExpToNext,
+      isPlayer: false, isJoined: _cJoined, isInParty: _cInParty,
+      equipmentSummary: _cgSummary, inventorySummary: _cInvSummary
+    };
+  }
+
+  // メンバー管理モーダル本文 HTML 生成
+  function renderMemberManagementBody() {
+    var p = state.player;
+    var ids = ["player", "juritani", "shurittani", "norio", "harumi"];
+    var html = "";
+    for (var _i = 0; _i < ids.length; _i++) {
+      var cid = ids[_i];
+      if (cid !== "player" && !hasCompanionEverJoined(cid)) { continue; } // 未加入非表示
+      var d = getCharacterManagementData(cid);
+      var _partyLabel, _partyColor;
+      if (d.isPlayer) {
+        _partyLabel = "🌟 リーダー"; _partyColor = "#ffd166";
+      } else if (d.isInParty) {
+        _partyLabel = "✅ 編成中"; _partyColor = "#06d6a0";
+      } else if (d.isJoined) {
+        _partyLabel = "💤 待機中"; _partyColor = "#adb5bd";
+      } else {
+        _partyLabel = "未加入"; _partyColor = "#888";
+      }
+      // EXPゲージ計算
+      var _pct = 0;
+      if (d.level >= 99) {
+        _pct = 100;
+      } else if (d.nextExp > 0) {
+        _pct = Math.min(100, Math.max(0, Math.round((d.exp / d.nextExp) * 100)));
+      }
+      var _nextExpText = (d.level >= 99) ? "―" : ("+" + d.expToNext);
+      html += '<div style="border:1px solid #444;border-radius:10px;padding:12px;margin-bottom:12px;background:#1e1e2e;">';
+      // ヘッダー
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+      html += '<span style="font-size:1.6em;">' + d.icon + '</span>';
+      html += '<div style="flex:1;">';
+      html += '<div style="font-weight:bold;font-size:1em;">' + d.name + '</div>';
+      html += '<div style="font-size:0.78em;color:#adb5bd;">' + d.role + '</div>';
+      html += '</div>';
+      html += '<div style="font-size:0.8em;color:' + _partyColor + ';text-align:right;">' + _partyLabel + '</div>';
+      html += '</div>';
+      // Lv・EXP
+      html += '<div style="display:flex;gap:12px;font-size:0.85em;margin-bottom:6px;">';
+      html += '<span>Lv <strong>' + d.level + '</strong></span>';
+      html += '<span>EXP ' + d.exp + '</span>';
+      html += '<span>次Lvまで ' + _nextExpText + '</span>';
+      html += '</div>';
+      // EXPゲージ
+      html += '<div style="background:#333;border-radius:4px;height:6px;margin-bottom:8px;overflow:hidden;">';
+      html += '<div style="background:#74c0fc;height:100%;width:' + _pct + '%;border-radius:4px;"></div>';
+      html += '</div>';
+      // 装備
+      html += '<div style="font-size:0.82em;color:#adb5bd;margin-bottom:4px;"><strong>装備</strong></div>';
+      for (var _ei = 0; _ei < d.equipmentSummary.length; _ei++) {
+        html += '<div style="font-size:0.8em;padding-left:8px;color:#ccc;">・' + d.equipmentSummary[_ei] + '</div>';
+      }
+      // 持ち物
+      html += '<div style="font-size:0.82em;color:#adb5bd;margin:6px 0 4px;"><strong>持ち物</strong></div>';
+      for (var _ii = 0; _ii < d.inventorySummary.length; _ii++) {
+        html += '<div style="font-size:0.8em;padding-left:8px;color:#ccc;">・' + d.inventorySummary[_ii] + '</div>';
+      }
+      // アクションボタン
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">';
+      if (d.isPlayer) {
+        html += '<button class="shop-menu-btn" data-mm-action="rename" style="font-size:0.8em;padding:6px 10px;flex:1;">✏️ 名前を変更</button>';
+        html += '<button class="shop-menu-btn" data-mm-action="equip-player" style="font-size:0.8em;padding:6px 10px;flex:1;">⚔️ 装備を変更</button>';
+        html += '<button class="shop-menu-btn" data-mm-action="bag" style="font-size:0.8em;padding:6px 10px;flex:1;">🎒 バッグを開く</button>';
+      } else {
+        html += '<button class="shop-menu-btn" data-mm-action="equip-companion" data-mm-cid="' + cid + '" style="font-size:0.8em;padding:6px 10px;flex:1;">⚔️ 仲間装備</button>';
+      }
+      html += '</div>';
+      html += '</div>';
+    }
+    // パーティ編成ボタン
+    html += '<button class="shop-menu-btn" id="btn-mm-tavern" style="margin-top:4px;border-color:#ffd43b;color:#ffd43b;">🍺 パーティ編成（酒場を開く）</button>';
+    return html;
+  }
+
+  function openMemberManagement() {
+    document.getElementById("member-management-body").innerHTML = renderMemberManagementBody();
+    openModal("member-management-modal");
+    // ボタンハンドラを設定（毎回再バインド）
+    var body = document.getElementById("member-management-body");
+    var btns = body.querySelectorAll("[data-mm-action]");
+    for (var _bi = 0; _bi < btns.length; _bi++) {
+      (function (btn) {
+        btn.onclick = function () {
+          var action = btn.getAttribute("data-mm-action");
+          var mmCid = btn.getAttribute("data-mm-cid");
+          if (action === "rename") {
+            closeMemberManagement();
+            openPlayerNameModal("change");
+          } else if (action === "equip-player") {
+            closeMemberManagement();
+            openStatusModal(); // 既存ステータス画面（装備変更含む）
+          } else if (action === "bag") {
+            closeMemberManagement();
+            openBagModal();
+          } else if (action === "equip-companion" && mmCid) {
+            closeMemberManagement();
+            openCompanionGearModal(mmCid); // 既存仲間装備画面
+          }
+        };
+      })(btns[_bi]);
+    }
+    var btnTavern = document.getElementById("btn-mm-tavern");
+    if (btnTavern) {
+      btnTavern.onclick = function () {
+        closeMemberManagement();
+        openTavernModal();
+      };
+    }
+    var btnClose = document.getElementById("btn-member-management-close");
+    if (btnClose) {
+      btnClose.onclick = function () { closeMemberManagement(); };
+    }
+  }
+
+  function closeMemberManagement() {
+    closeModal("member-management-modal");
+  }
+
+  // 主人公命名モーダル（mode: "newgame" | "change"）
+  // §126 v0.49: _playerNameModalLock — 多重開き防止（非永続）
+  var _playerNameModalLock = false;
+  function openPlayerNameModal(mode) {
+    if (_playerNameModalLock) { return; }
+    var isNewGame = (mode === "newgame");
+    var titleEl = document.getElementById("player-name-modal-title");
+    var descEl = document.getElementById("player-name-modal-desc");
+    var inputEl = document.getElementById("input-player-name");
+    var errEl = document.getElementById("player-name-error");
+    var confirmBtn = document.getElementById("btn-player-name-confirm");
+    var cancelBtn = document.getElementById("btn-player-name-cancel");
+    if (!inputEl || !confirmBtn || !cancelBtn) { return; }
+    if (titleEl) { titleEl.textContent = isNewGame ? "主人公の名前" : "✏️ 名前を変更"; }
+    if (descEl) { descEl.textContent = isNewGame
+      ? "冒険へ出発する主人公の名前を入力してください。"
+      : "現在の名前: " + getPlayerDisplayName(); }
+    // 変更モードは現在の名前を初期値として表示
+    inputEl.value = isNewGame ? "" : getPlayerDisplayName();
+    if (errEl) { errEl.textContent = ""; }
+    confirmBtn.textContent = isNewGame ? "この名前で始める" : "変更する";
+    cancelBtn.style.display = isNewGame ? "none" : ""; // ニューゲームはキャンセル不可
+    // IME確定誤爆防止フラグ
+    var _composing = false;
+    inputEl.oncompositionstart = function () { _composing = true; };
+    inputEl.oncompositionend = function () { _composing = false; };
+    // Enter決定
+    inputEl.onkeydown = function (e) {
+      if (e.key === "Enter" && !_composing) { confirmBtn.click(); }
+    };
+    // confirm
+    var _confirming = false;
+    confirmBtn.onclick = function () {
+      if (_confirming) { return; }
+      var _name = normalizePlayerName(inputEl.value || "");
+      if (!_name) {
+        if (errEl) { errEl.textContent = "名前を入力してください（1〜10文字）"; }
+        return;
+      }
+      _confirming = true;
+      if (isNewGame) {
+        // ニューゲーム: ペンディング名保存→データ削除→リロード
+        try { localStorage.setItem(SAVE_KEY + "_pn", _name); } catch (e4) {}
+        try { localStorage.removeItem(SAVE_KEY); } catch (e5) {}
+        location.reload();
+      } else {
+        // 名前変更: 即反映
+        var _old = state.playerName;
+        if (_name !== _old) {
+          state.playerName = _name;
+          saveGame();
+          showToast("🧙 主人公の名前を「" + _name + "」に変更しました。");
+        } else {
+          showToast("名前は変わりませんでした。");
+        }
+        _confirming = false;
+        _playerNameModalLock = false;
+        closeModal("player-name-modal");
+        // 直前のモーダルを判断して適切に再描画（ステータス or 実家）
+        renderStatusBody_ifOpen();
+      }
+    };
+    cancelBtn.onclick = function () {
+      _playerNameModalLock = false;
+      closeModal("player-name-modal");
+    };
+    _playerNameModalLock = true;
+    openModal("player-name-modal");
+    // 少し遅延してフォーカス（IME初期化）
+    setTimeout(function () { if (inputEl) { inputEl.focus(); } }, 80);
+  }
+
+  // ステータス画面が開いていれば再描画（名前変更後の即時反映）
+  function renderStatusBody_ifOpen() {
+    var sm = document.getElementById("status-modal");
+    if (sm && !sm.classList.contains("hidden")) {
+      renderStatusBody();
+    }
   }
 
   // ---------------------------------------------------------

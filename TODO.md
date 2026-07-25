@@ -22,6 +22,28 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.49 — 主人公命名・統合メンバー管理 (§126)
+
+- **`state.playerName`** 追加: 主人公名（永続・saveGame/loadGame対応・旧セーブは"冒険者"補完） ✅
+- **`normalizePlayerName(value)`** 追加: 入力値検証・前後空白除去・10文字上限 ✅
+- **`getPlayerDisplayName()`** 追加: playerName未設定時は"冒険者"を返す ✅
+- **`getCharacterDisplayName(characterId)`** 追加: "player"→getPlayerDisplayName() / cid→COMPANION_DATA.name ✅
+- **`getCharacterDisplayIcon(characterId)`** 追加: "player"→"🧙" / cid→COMPANION_DATA.icon ✅
+- **`getCharacterManagementData(characterId)`** 追加: 主人公と仲間を統一データ構造で返すアダプター ✅
+- **`renderMemberManagementBody()`** 追加: 5キャラ分のカード型HTML生成（Lv/EXP/装備/持ち物/パーティ状態） ✅
+- **`openMemberManagement()` / `closeMemberManagement()`** 追加: 統合メンバー管理モーダル制御 ✅
+- **`openPlayerNameModal(mode)`** 追加: mode="newgame"（キャンセル不可）/"change"（即反映）両対応 ✅
+- **`renderStatusBody_ifOpen()`** 追加: 名前変更後のステータス画面即時再描画 ✅
+- **ニューゲームハンドラ修正**: confirm+reload → 命名モーダル（mode="newgame"）→ ペンディング名保存→reload ✅
+- **`showCompanionSideStoryLine()` 修正**: speaker="あなた"時に getPlayerDisplayName() で置換表示 ✅
+- **`renderStatusBody()` 修正**: 名前行を `p.name` → `getPlayerDisplayName()` に変更 ✅
+- **`renderStatusBody()` 追加**: 「✏️ 名前を変更」「👥 メンバー管理」ショートカットボタン ✅
+- **`index.html` 追加**: player-name-modal・member-management-modal の2モーダルHTML ✅
+- **home-modal 追加**: 「✏️ 名前を変更」ボタン ✅
+- **init() 更新**: ニューゲーム時のペンディング名（SAVE_KEY+"_pn"）取得・適用 ✅
+- **saveGame / loadGame 更新**: playerName 保存・ロード・旧セーブ補完 ✅
+- **デバッグ10ボタン（§126）**: 命名モーダル/変更モーダル/メンバー管理直接開く / 名前設定3種 / normalizePlayerName境界 / サイドストーリー名置換確認 / ステータス名前確認 ✅
+
 ### Version 0.48.1 — 冒険ナビゲーション安定化 (§125)
 
 - **`_adventureGuideTalkLock`** 追加: 接触会話多重起動防止フラグ（非永続・IIFEスコープ） ✅

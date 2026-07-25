@@ -287,6 +287,7 @@
       <p id="home-hint" class="small" style="color:#adb5bd;font-style:italic;margin-top:6px;"></p>
       <button id="btn-home-rest" class="modal-btn">休む</button>
       <button id="btn-home-cancel" class="modal-btn" style="background:#415a77;color:#fff;margin-left:10px;">やめる</button>
+      <button id="btn-home-rename" class="modal-btn" style="background:#2a3a4a;color:#74c0fc;border-color:#74c0fc;margin-top:8px;display:block;width:100%;">✏️ 名前を変更</button>
     </div>
   </div>
 
@@ -587,6 +588,30 @@
       <h2>ついにレベル99！</h2>
       <div id="lv99-body"></div>
       <button id="btn-lv99-close" class="modal-btn">冒険を続ける</button>
+    </div>
+  </div>
+
+  <!-- ===== 主人公命名モーダル (§126 v0.49) ===== -->
+  <div id="player-name-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="discovery-emoji">🧙</div>
+      <h2 id="player-name-modal-title">主人公の名前</h2>
+      <p id="player-name-modal-desc" class="small" style="color:#adb5bd;">冒険へ出発する主人公の名前を入力してください。</p>
+      <input id="input-player-name" type="text" maxlength="10"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;font-size:1.1em;background:#2a2a3a;color:#e0e0e0;border:2px solid #74c0fc;border-radius:8px;margin:10px 0;outline:none;-webkit-appearance:none;"
+        placeholder="1〜10文字" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <p id="player-name-error" class="small" style="color:#ff8c8c;min-height:1.2em;margin:0 0 8px;"></p>
+      <button id="btn-player-name-confirm" class="modal-btn" style="width:100%;margin-bottom:8px;">この名前で始める</button>
+      <button id="btn-player-name-cancel" class="modal-btn" style="width:100%;background:#3a3a4a;border-color:#555;color:#aaa;">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- ===== 統合メンバー管理モーダル (§126 v0.49) ===== -->
+  <div id="member-management-modal" class="modal hidden">
+    <div class="modal-box" style="max-height:85vh;overflow-y:auto;">
+      <h2>👥 メンバー管理</h2>
+      <div id="member-management-body"></div>
+      <button id="btn-member-management-close" class="modal-btn" style="width:100%;margin-top:12px;">閉じる</button>
     </div>
   </div>
 

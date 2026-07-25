@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.48.1** |
+| 現在バージョン | **v0.49** |
 | ブランチ | main |
 
 ---
@@ -50,7 +50,7 @@
 
 ---
 
-## 現在実装済みの主要機能（v0.43.1時点）
+## 現在実装済みの主要機能（v0.49時点）
 
 ### ゲームプレイ
 - フィールド移動（十字キー/スワイプ/キーボード）、ランダムエンカウント
@@ -79,6 +79,18 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.49] 主人公命名・統合メンバー管理**（§126）
+  - **`state.playerName`**: 主人公名（永続・saveGame/loadGame対応・旧セーブ"冒険者"補完）
+  - **`normalizePlayerName(value)`**: 文字列検証・前後空白除去・10文字上限（function宣言でhoisiting対応）
+  - **`getPlayerDisplayName()`**: playerName未設定時は"冒険者"を返す純粋関数
+  - **`getCharacterManagementData(characterId)`**: 主人公と仲間を統一データ構造で返すアダプター（Lv/EXP/装備/持ち物/パーティ状態）
+  - **`openPlayerNameModal(mode)`**: mode="newgame"（ペンディング名→リロード）/ mode="change"（即反映・saveGame）
+  - **`openMemberManagement()`**: 統合メンバー管理モーダル（加入済みキャラのカード表示）
+  - **ニューゲームハンドラ変更**: confirm+reload → 命名モーダルを経由するフローに変更
+  - **speaker="あなた" 置換**: サイドストーリーの発言者表示を `getPlayerDisplayName()` で代替
+  - **ステータス画面**: 名前行を `getPlayerDisplayName()` に変更・「✏️ 名前を変更」「👥 メンバー管理」ボタン追加
+  - **実家モーダル**: 「✏️ 名前を変更」ボタン追加
+  - **デバッグ10ボタン（§126）**
 - **[v0.48.1] 冒険ナビゲーション安定化**（§125）
   - **`_adventureGuideTalkLock`**: 接触会話多重起動防止フラグ（非永続）
   - **`isAdventureGuideSpawnTileSafe(x, y)`**: スポーン候補タイル安全判定ヘルパー

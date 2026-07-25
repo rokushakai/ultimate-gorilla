@@ -5,6 +5,22 @@
 
 ---
 
+## v0.49 (2026-07-25) — 主人公命名・統合メンバー管理 (§126)
+
+### 設計判断・確認事項
+
+- **`state.playerName` を `state.player.name` と別管理にした理由**: `state.player.name` は既存コードで "勇者の子孫" を格納しており、多数の既存関数が参照している。この値を変更するとエンディング・NPC会話・称号など広範な影響が生じる。新規 `state.playerName` を独立させることで、変更可能な「表示名」として切り出し、既存の `state.player.name` には一切触れない設計とした。
+
+- **`normalizePlayerName()` を function 宣言（var 代入でなく）にした理由**: `loadGame()` と `init()` の中で呼ばれるが、これらは IIFE の上部に配置されている。function 宣言（`function normalizePlayerName() {}`）は ES5 の hoisting でスコープ全体で有効になるため、呼び出しが定義より前に来ても動作する。`var normalizePlayerName = function(){}` 形式では hoisting されないためエラーになる。
+
+- **ニューゲームフローを「ペンディング名経由リロード」にした理由**: ニューゲーム処理は `localStorage.removeItem(SAVE_KEY)` → `location.reload()` でセーブデータを完全に消去した上でゲームを初期化する。この瞬間に `state.playerName` は消滅する。リロード後の `init()` が `loadGame()` を呼ぶが、セーブがないため `loadGame()` は false を返す。そこで一時キー `SAVE_KEY + "_pn"` にペンディング名を保存し、`init()` の中でこれを読み取って `state.playerName` に適用・保存する設計にした。
+
+- **`getCharacterManagementData()` を「副作用なし・saveしない」アダプターにした理由**: renderMemberManagementBody() から毎回呼ばれる描画ヘルパーなので、saveGame() を呼ぶと無限ループまたは不必要なストレージ書き込みが生じる可能性がある。この関数は「現在の state を読み取って構造化する」だけで、state を変更しない純粋アダプターとして設計した。
+
+- **`openPlayerNameModal` の `_playerNameModalLock` を IIFE スコープに置いた理由**: 命名モーダルは「newgame」「change」の2モードで呼ばれ、それぞれ異なるコールスタックから呼ばれる。モーダルが開いている間に再度呼ばれると二重表示になるため、ロックフラグで防護する。confirm/cancel ボタンの onclick ハンドラ内で `_playerNameModalLock = false` にリセットされる。
+
+---
+
 ## v0.48.1 (2026-07-21) — 冒険ナビゲーション安定化 (§125)
 
 ### 設計判断・確認事項
