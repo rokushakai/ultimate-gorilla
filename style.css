@@ -159,7 +159,16 @@ html, body {
   width: 100%;
   aspect-ratio: var(--cols) / var(--rows);
   background: #14532d;
+  transition: background-color 0.3s;
 }
+
+/* §129 v0.51: ステージ別テーマ背景色 */
+#field-viewport.stage-theme-1 { background: #1a3a1a; } /* はじまりの草原: 草原グリーン */
+#field-viewport.stage-theme-2 { background: #0d1a08; } /* あやしい森: 深い森 */
+#field-viewport.stage-theme-3 { background: #2a1e10; } /* 古びた町はずれ: 土色 */
+#field-viewport.stage-theme-4 { background: #1a1208; } /* ゴリラ山道: 岩褐色 */
+#field-viewport.stage-theme-5 { background: #080810; } /* 黒い城: 漆黒 */
+#field-viewport.stage-theme-6 { background: #0a1a0a; } /* チンパンジーの聖域: 聖なる緑 */
 
 .tile {
   display: flex;

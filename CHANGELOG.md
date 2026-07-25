@@ -5,6 +5,34 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.51] - 2026-07-25 — 拡張フィールド・ワープ広場・ステージ別敵強化 (§129)
+
+### Added
+- **フィールドマップ拡張** (§129): 13×18 → 26×36 タイル (2×2倍面積)。既存タイル配置を北西 0〜12,0〜17 に完全保持。南エリア (rows 18-35) と東通路 (cols 13-25, rows 9-17) を新設。接続路: (7,17) 南開放 / (12,9)(12,16) 東開放
+- **ワープ広場** (§129): row25 に ST1/ST2/ST3 (x=7/11/15)、row29 に ST4/ST5/ST6 (x=7/11/15) の6ワープを設置。タイル文字 "1"〜"6" で表現。RAW_MAP・TERRAIN_EMOJI・SAFE_TILE に追加
+- **`STAGE_WARP_DATA`** 追加: 6ワープの stageNum/x/y/label/icon を定義
+- **`STAGE_ENEMY_LEVEL_DATA`** 追加: ST1-6 の min/max レベル・bossBonus・stat倍率 (×3.0〜×13.0) を定義
+- **`STAGE_THEME_DATA`** 追加: ST1-6 の CSS クラス名マッピングを定義
+- **`getEnemyLevelForStage(stageNum, isBoss)`** 追加: ステージ別ランダムレベル取得
+- **`applyStageEnemyScaling(monster, stageNum)`** 追加: モンスターのコピーに倍率スケーリングを適用し stageLevel を付与
+- **`applyStageTheme(stageNum)` / `clearStageTheme()`** 追加: #field-viewport への CSS クラス付け外し
+- **`openStageWarpModal(stageNum)`** 追加: ワープ確認モーダル表示（未解放時は🔒表示・入るボタン非表示）
+- **ワープモーダル** (`#modal-stage-warp`) を index.html に追加: enter/cancel ボタン付き
+- **ワープ入るボタン** (`btn-stage-warp-enter`) イベント: `state.sideMap.stage` 設定・`normalReturnX/Y` にワープ座標+1 を設定・`switchToSideMap()` 呼び出し
+- **movePlayer() ワープ dispatch**: tile "1"〜"6" 踏み込みで `openStageWarpModal()` 呼び出し
+- **`state.normalReturnX/Y`** 追加 (既定値 2,4): ワープ帰還座標の永続管理。saveGame/loadGame/初期state に追加
+- **CSS**: `#field-viewport` に `transition: background-color 0.3s` 追加 / ステージテーマ6クラス追加 (stage-theme-1〜6)
+- **デバッグ6ボタン (§129)**: ワープ広場へ移動 / ST1/2/6モーダル / テーマCSSクリア / 全ワープ解放
+
+### Changed
+- **`actuallyStartBattle()`**: サイドマップ内戦闘で `applyStageEnemyScaling()` を適用。`state.enemy.stageLevel` フィールド追加
+- **`renderEnemy()`**: `e.stageLevel` がある場合、敵名に ` Lv.N` を付加表示
+- **`switchToSideMap()`**: 移行時に `applyStageTheme(state.sideMap.stage)` を呼び出し
+- **`switchToNormalMap()`**: `state.normalReturnX/Y` で帰還座標を動的決定。帰還後に座標を (2,4) にリセット。`clearStageTheme()` 呼び出し
+- **`getCurrentAdventureGuide()`**: ステージ2〜6の shortText/locationText を「ワープ広場ST○ or 🌀ゲート」に更新
+
+---
+
 ## [0.50.1] - 2026-07-25 — 4人パーティ安定化・王様会話自然化 (§128)
 
 ### Added

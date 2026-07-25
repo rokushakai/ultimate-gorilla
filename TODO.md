@@ -22,6 +22,21 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.51 — フィールド4倍拡張・ワープ広場・ステージ別敵レベル・テーマ (§129)
+
+- **RAW_MAP 拡張**: 13×18 → 26×36（NW 角の既存設備は座標変更なし）✅
+- **東壁・南壁開放**: row 9 / row 16 に東通路、col 7 に南通路を新設 ✅
+- **STAGE_WARP_DATA** 追加: 6 エントリ（stageNum / x / y / label / icon） ✅
+- **ワープタイル "1"〜"6"**: TERRAIN_EMOJI / SAFE_TILE に追加、movePlayer() ディスパッチ ✅
+- **openStageWarpModal()**: 確認モーダル・解放条件チェック ✅
+- **state.normalReturnX/Y**: 帰還座標保存、switchToNormalMap() で復帰 ✅
+- **STAGE_ENEMY_LEVEL_DATA** + **applyStageEnemyScaling()**: ステージ倍率スケーリング ✅
+- **renderEnemy()** 更新: 敵名に "Lv.XX" 表示 ✅
+- **STAGE_THEME_DATA** + **applyStageTheme() / clearStageTheme()**: CSS クラス付け替え ✅
+- **style.css** 追加: `.stage-theme-1` 〜 `.stage-theme-6` ✅
+- **getCurrentAdventureGuide()** 更新: ワープ広場への案内文 ✅
+- **デバッグボタン §129**: マップサイズ・ワープ確認・敵レベル確認 ✅
+
 ### Version 0.50.1 — 4人パーティ安定化・王様会話自然化 (§128)
 
 - **`normalizeCompanionParty()`** 追加: セーブ読み込み時に不正ID・重複・MAX超過を除去。変更があれば true 返却 ✅

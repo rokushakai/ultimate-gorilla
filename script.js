@@ -21,28 +21,49 @@
   //   'G' 神様の社(接触で転職メニュー)  'T' 酒場(接触で簡易メッセージ。§9.5)
   //   'W' 武器アイテム(初期配置・読み込み後は'.'に変換)
   //   'P' 回復アイテム(初期配置・読み込み後は'.'に変換)
+  // §129 v0.51: 通常マップ 26×36 (旧13×18の4倍) NW角に既存設備を保持
+  // row9/16でcol12開放(東通路)、row17でcol7開放(南通路)
+  // row25に1/2/3ワープ(col7/11/15)、row29に4/5/6ワープ(col7/11/15)
   var RAW_MAP = [
-    "#############",
-    "#,,,H,,,T,,S#",  // S=王様の使い(10,1)
-    "#,D,,,,M,,K,#",  // D=UMA博士(2,2), K=鍛冶屋(10,2)
-    "#,V,N,,,,G,,#",  // V=横スクロール入口ゲート(2,3) §52 v0.11.2, N=攻略ペーパービュー屋(4,3)
-    "#..........A#",  // A=ペガサスのよろい伝説宝箱(11,4) Lv50+
-    "#....R..B...#",  // R=旅人(5,5), B=宝箱(8,5)
-    "#...~~~..X..#",  // X=キグナスのかぶと伝説宝箱(9,6) Lv40+
-    "#...~~~.....#",
-    "#.........B.#",  // B=宝箱(10,8)
-    "#..W..E.....#",  // E=ゴリラ研究家(6,9)
-    "#....P......#",
-    "#.....#....C#",  // C=宇宙のかぶと伝説宝箱(11,11) ウクレレ所持
-    "#......W....#",
-    "#....P..B...#",  // B=宝箱(8,13)
-    "#........U..#",  // U=女神のウクレレ宝箱(9,14)
-    "#..#...J...##",  // J=如意棒伝説宝箱(7,15) Lv70+ジュリタニ同行
-    "#..B........#",  // B=宝箱(3,16)
-    "#############"
+    "##########################",                    // row 0
+    "#,,,H,,,T,,S##############",                   // row 1 H=start(4,1) T=tavern(8,1) S=king aide(11,1)
+    "#,D,,,,M,,K,##############",                   // row 2 D=UMADoc(2,2) M=merchant(7,2) K=smith(10,2)
+    "#,V,N,,,,G,,##############",                   // row 3 V=sideGate(2,3) N=paperView(4,3) G=shrine(9,3)
+    "#..........A##############",                   // row 4 A=pegasus chest(11,4)
+    "#....R..B...##############",                   // row 5 R=traveler(5,5) B=chest(8,5)
+    "#...~~~..X..##############",                   // row 6 X=cygnus chest(9,6) water(4-6,6)
+    "#...~~~.....##############",                   // row 7 water(4-6,7)
+    "#.........B.##############",                   // row 8 B=chest(10,8)
+    "#..W..E.........." + ",,,,,,,##",              // row 9 col12開放 東ウイング開始
+    "#....P......#" + "....,,,,,,,##",              // row 10
+    "#.....#....C#" + "....,,,,,,,##",              // row 11 C=cosmos chest(11,11)
+    "#......W....#" + "....,,,,,,,##",              // row 12
+    "#....P..B...#" + "....,,,,,,,##",              // row 13 B=chest(8,13)
+    "#........U..#" + "....,,,,,,,##",              // row 14 U=ukulele chest(9,14)
+    "#..#...J...##" + "....,,,,,,,##",              // row 15 J=nyoibo chest(7,15)
+    "#..B........." + "....,,,,,,,##",              // row 16 col12開放 B=chest(3,16)
+    "#######,#####" + ",,,,,,,,,,,,#",              // row 17 col7開放(南通路) 東ウイング南接続
+    "#####,,,,,,,,,,,,,,,,,,###",                   // row 18 南エリア開始
+    "#####.,,,,,,,,,,,,,,,,.####",                  // row 19
+    "#####..,,,,,,,,,,,,,..####",                   // row 20
+    "#####..,,,,,,,,,,,,,..####",                   // row 21
+    "#####,,,,,,,,,,,,,,,,,####",                   // row 22
+    "#####,,,,,,,,,,,,,,,,,####",                   // row 23
+    "#####,,,,,,,,,,,,,,,,#####",                   // row 24 ワープ広場へ
+    "#####,,1,,,2,,,3,,,,,#####",                   // row 25 ワープ1(7,25) 2(11,25) 3(15,25)
+    "#####,,,,,,,,,,,,,,,,,####",                   // row 26
+    "#####,,,,,,,,,,,,,,,,,####",                   // row 27 広場中央
+    "#####,,,,,,,,,,,,,,,,,####",                   // row 28
+    "#####,,4,,,5,,,6,,,,,#####",                   // row 29 ワープ4(7,29) 5(11,29) 6(15,29)
+    "#####,,,,,,,,,,,,,,,,#####",                   // row 30
+    "######,,,,,,,,,,,,,,######",                   // row 31
+    "#######,,,,,,,,,,,,#######",                   // row 32
+    "#########,,,,,,,,#########",                   // row 33
+    "###########,,,,###########",                   // row 34
+    "##########################"                    // row 35 南端壁
   ];
 
-  var MAP_W = 13;
+  var MAP_W = 26;
   var MAP_H = RAW_MAP.length;
 
   // 画面に同時に表示するタイル数(縦長スマホ向けに縦を多めに)
@@ -71,12 +92,20 @@
     "S": "👑",  // 王様の使い(§32 v0.8.2)
     "X": "✨",  // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
     "N": "📰",  // 攻略ペーパービュー屋(§37 v0.8.6)
-    "V": "🌀"   // 横スクロール入口ゲート(§52 v0.11.2)
+    "V": "🌀",  // 横スクロール入口ゲート(§52 v0.11.2)
+    // §129 v0.51: ステージワープタイル
+    "1": "🌱",  // ワープ1: はじまりの草原
+    "2": "🌲",  // ワープ2: あやしい森
+    "3": "🏚️", // ワープ3: 古びた町はずれ
+    "4": "⛰️", // ワープ4: ゴリラ山道
+    "5": "🏰",  // ワープ5: 黒い城
+    "6": "🌿"   // ワープ6: チンパンジーの聖域
   };
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true, "V": true };
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true, "V": true,
+    "1": true, "2": true, "3": true, "4": true, "5": true, "6": true }; // §129 v0.51: ワープタイル
 
   // ---------------------------------------------------------
   // 1.5  横スクロールマップデータ (§43 v0.9 / §44 v0.9.1)
@@ -264,6 +293,36 @@
     "6:13,2": "stranger",               // stage6 中央路 x=13,y=2: 異邦人
     "6:27,1": "wanderingman",           // stage6 上中路 x=27,y=1: さまようおやじ
     "6:23,3": "deathmatch"              // stage6 下中路 x=23,y=3: デスマッチレスラー
+  };
+
+  // §129 v0.51: ワープ広場データ (通常マップ上の座標・ステージ番号)
+  var STAGE_WARP_DATA = [
+    { stageNum: 1, x: 7,  y: 25, label: "はじまりの草原",     icon: "🌱" },
+    { stageNum: 2, x: 11, y: 25, label: "あやしい森",         icon: "🌲" },
+    { stageNum: 3, x: 15, y: 25, label: "古びた町はずれ",     icon: "🏚️" },
+    { stageNum: 4, x: 7,  y: 29, label: "ゴリラ山道",         icon: "⛰️" },
+    { stageNum: 5, x: 11, y: 29, label: "黒い城",             icon: "🏰" },
+    { stageNum: 6, x: 15, y: 29, label: "チンパンジーの聖域", icon: "🌿" }
+  ];
+
+  // §129 v0.51: ステージ別敵レベルデータ (min/max: ランダムレベル帯, bossBonus: ボス追加, mult: 倍率)
+  var STAGE_ENEMY_LEVEL_DATA = {
+    1: { min: 40, max: 46, bossBonus: 6,  mult: 3.0  },
+    2: { min: 48, max: 55, bossBonus: 7,  mult: 4.5  },
+    3: { min: 58, max: 65, bossBonus: 7,  mult: 6.0  },
+    4: { min: 68, max: 75, bossBonus: 7,  mult: 8.0  },
+    5: { min: 78, max: 86, bossBonus: 8,  mult: 10.0 },
+    6: { min: 88, max: 98, bossBonus: 10, mult: 13.0 }
+  };
+
+  // §129 v0.51: ステージ別テーマ CSS クラス
+  var STAGE_THEME_DATA = {
+    1: "stage-theme-1",
+    2: "stage-theme-2",
+    3: "stage-theme-3",
+    4: "stage-theme-4",
+    5: "stage-theme-5",
+    6: "stage-theme-6"
   };
 
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
@@ -1105,7 +1164,9 @@
     companionSideStoryAllCompleteCelebrated: false, // §115 v0.44.2: 全話完了演出済み（永続・saveする）
     companionSideStoryChapter2AllCompleteCelebrated: false, // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
     companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
-    playerName: "" // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
+    playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
+    normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
+    normalReturnY: 4  // §129 v0.51: ワープ帰還Y座標
   };
 
   // ---------------------------------------------------------
@@ -2638,6 +2699,26 @@
     openModal("npc-modal");
   }
 
+  // §129 v0.51: ステージ別テーマCSS適用
+  function applyStageTheme(stageNum) {
+    var cls = STAGE_THEME_DATA[stageNum];
+    if (!cls) return;
+    var vp = document.getElementById("field-viewport");
+    if (!vp) return;
+    clearStageTheme();
+    vp.classList.add(cls);
+  }
+
+  // §129 v0.51: ステージテーマCSS除去
+  function clearStageTheme() {
+    var vp = document.getElementById("field-viewport");
+    if (!vp) return;
+    var keys = Object.keys(STAGE_THEME_DATA);
+    for (var _i = 0; _i < keys.length; _i++) {
+      vp.classList.remove(STAGE_THEME_DATA[keys[_i]]);
+    }
+  }
+
   function switchToSideMap() {
     resetAdventureGuideNpcState(); // §125 v0.48.1: サイドマップ移行時に案内人状態リセット
     resetPartyTrail(); // §79 v0.26.1
@@ -2645,6 +2726,7 @@
     var stageData = SIDE_STAGE_DATA[state.sideMap.stage] || SIDE_STAGE_DATA[1];
     state.sideMap.x = stageData.startX;
     state.sideMap.y = stageData.startY;
+    applyStageTheme(state.sideMap.stage); // §129 v0.51
     saveGame();
     renderField();
     showToast("⬇️ 横スクロールマップへ移動！");
@@ -2659,10 +2741,13 @@
 
   function switchToNormalMap() {
     resetAdventureGuideNpcState(); // §125 v0.48.1: 通常マップ復帰時に案内人状態リセット
+    clearStageTheme(); // §129 v0.51
     state.mapMode = "normal";
-    // §53 v0.11.3: 🌀ゲート(2,3)の1マス下(2,4)へ戻す → 戻った直後の再接触ループを防止
-    state.player.x = 2;
-    state.player.y = 4;
+    // §129 v0.51: ワープ経由なら normalReturnX/Y を使用、それ以外は既定値(2,4)
+    state.player.x = state.normalReturnX || 2;
+    state.player.y = state.normalReturnY || 4;
+    state.normalReturnX = 2;
+    state.normalReturnY = 4;
     resetPartyTrail(); // §79 v0.26.1
     saveGame();
     renderField();
@@ -2703,6 +2788,41 @@
         "<p>横スクロールマップへ進みますか？</p>";
     }
     openModal("modal-side-gate");
+  }
+
+  // §129 v0.51: ワープ広場ステージ選択モーダル
+  var _pendingWarpStageNum = 0;
+  function openStageWarpModal(stageNum) {
+    var warpInfo = null;
+    for (var _wi = 0; _wi < STAGE_WARP_DATA.length; _wi++) {
+      if (STAGE_WARP_DATA[_wi].stageNum === stageNum) { warpInfo = STAGE_WARP_DATA[_wi]; break; }
+    }
+    if (!warpInfo) return;
+    var unlocked = (stageNum === 1);
+    if (!unlocked && state.sideMap && state.sideMap.stageCleared) {
+      unlocked = !!state.sideMap.stageCleared[String(stageNum - 1)];
+    }
+    var ld = STAGE_ENEMY_LEVEL_DATA[stageNum] || {};
+    var bodyEl = document.getElementById("modal-stage-warp-body");
+    if (!bodyEl) return;
+    var enterBtn = document.getElementById("btn-stage-warp-enter");
+    if (unlocked) {
+      bodyEl.innerHTML =
+        "<div style=\"font-size:40px;line-height:1.2;\">" + warpInfo.icon + "</div>" +
+        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">ステージ " + stageNum + ": " + warpInfo.label + "</div>" +
+        "<p>敵レベル: " + (ld.min || "?") + "〜" + (ld.max || "?") + "</p>" +
+        "<p>横スクロールステージへ入りますか？</p>";
+      if (enterBtn) { enterBtn.style.display = ""; }
+      _pendingWarpStageNum = stageNum;
+    } else {
+      bodyEl.innerHTML =
+        "<div style=\"font-size:40px;line-height:1.2;\">" + warpInfo.icon + "</div>" +
+        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">ステージ " + stageNum + ": " + warpInfo.label + "</div>" +
+        "<p>🔒 まだ解放されていない。<br>前のステージをクリアしよう！</p>";
+      if (enterBtn) { enterBtn.style.display = "none"; }
+      _pendingWarpStageNum = 0;
+    }
+    openModal("modal-stage-warp");
   }
 
   // ---------------------------------------------------------
@@ -2837,6 +2957,11 @@
       } else {
         openNpcModal("S");
       }
+      return;
+    }
+    // §129 v0.51: ワープ広場タイル
+    if (tile === "1" || tile === "2" || tile === "3" || tile === "4" || tile === "5" || tile === "6") {
+      openStageWarpModal(parseInt(tile, 10));
       return;
     }
 
@@ -3114,6 +3239,33 @@
   // ---------------------------------------------------------
   // 11. エンカウント・敵の抽選
   // ---------------------------------------------------------
+  // §129 v0.51: ステージ別敵レベル取得
+  function getEnemyLevelForStage(stageNum, isBoss) {
+    var ld = STAGE_ENEMY_LEVEL_DATA[stageNum];
+    if (!ld) return 1;
+    var base = ld.min + Math.floor(Math.random() * (ld.max - ld.min + 1));
+    if (isBoss) { base = Math.min(base + ld.bossBonus, ld.max + ld.bossBonus); }
+    return base;
+  }
+
+  // §129 v0.51: ステージ倍率スケーリング適用 (オリジナルデータを変更しないコピーを返す)
+  function applyStageEnemyScaling(monster, stageNum) {
+    var ld = STAGE_ENEMY_LEVEL_DATA[stageNum];
+    if (!ld) return monster;
+    var m = ld.mult;
+    var copy = {};
+    var k;
+    for (k in monster) {
+      if (monster.hasOwnProperty(k)) { copy[k] = monster[k]; }
+    }
+    copy.hp     = Math.max(1, Math.round((monster.hp     || 1) * m));
+    copy.attack = Math.max(1, Math.round((monster.attack || 1) * m));
+    copy.def    = Math.max(0, Math.round((monster.def    || 0) * m));
+    copy.exp    = Math.max(1, Math.round((monster.exp    || 1) * m));
+    copy.stageLevel = getEnemyLevelForStage(stageNum, !!(monster.canCapture === false));
+    return copy;
+  }
+
   function triggerEncounter() {
     var monster = chooseEnemy();
     startBattle(monster);
@@ -3209,6 +3361,10 @@
     state.inBattle = true;
     state.battleDamageReduction = 0; // §90 v0.32.1: 念のため戦闘開始時にもリセット
     resetCompanionTechniqueUsage(); // §112 v0.43.1: 戦闘開始時に仲間わざ使用状態を確実にリセット
+    // §129 v0.51: ステージ戦闘でモンスターを強化
+    if (state.mapMode === "side" && state.sideMap && state.sideMap.stage) {
+      monster = applyStageEnemyScaling(monster, state.sideMap.stage);
+    }
     state.enemy = {
       id: monster.id,
       name: monster.name,
@@ -3229,7 +3385,8 @@
       stealsGold: monster.stealsGold || null, // 攻撃時に所持金を盗む可能性(§6.2)
       ambush: !!monster.ambush,             // 戦闘開始時に不意打ちしてくるか(§6.2)
       customEscapeMsgs: monster.customEscapeMsgs || null, // §45 v0.9.2: ボス専用逃走メッセージ
-      canCapture: monster.canCapture !== false  // §46 v0.9.2.1: false なら捕獲コマンド封鎖
+      canCapture: monster.canCapture !== false,  // §46 v0.9.2.1: false なら捕獲コマンド封鎖
+      stageLevel: monster.stageLevel || 0  // §129 v0.51: ステージ敵レベル表示用
     };
 
     // UMAなら図鑑に「発見済み」を記録する(捕獲済みなら上書きしない)
@@ -3286,7 +3443,7 @@
     var e = state.enemy;
     document.getElementById("enemy-emoji").textContent = e.emoji;
     document.getElementById("enemy-name").textContent =
-      e.name + (e.isUMA ? "(UMA)" : "");
+      e.name + (e.isUMA ? "(UMA)" : "") + (e.stageLevel ? " Lv." + e.stageLevel : "");
     document.getElementById("enemy-hp-bar").style.width =
       Math.max(0, (e.hp / e.maxHp) * 100) + "%";
     document.getElementById("enemy-hp-text").textContent = "HP " + e.hp + "/" + e.maxHp; // §93 v0.34: "HP " プレフィックス追加
@@ -8497,6 +8654,14 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v501-king-nat" style="border-color:#ffa94d;color:#ffa94d;">👑 王様会話自然さ確認（Lv60・使い視点）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v501-king-dbl-esc" style="border-color:#ffa94d;color:#ffa94d;">🧪 王様会話XSS名前テスト（&lt;&gt;&amp;名前）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v501-trail-residue" style="border-color:#adb5bd;color:#adb5bd;">🐾 trail残留テスト（4人→0人後 resetPartyTrail）</button>';
+      // §129 v0.51: 拡張フィールド・ワープ広場
+      html += '<p class="small" style="color:#80ffb0;margin-top:8px;">🗺️ 拡張フィールド・ワープ広場 (§129 v0.51)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-warp-to-plaza" style="border-color:#80ffb0;color:#80ffb0;">🗺️ ワープ広場へ移動 (7,25)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-warp-stage1" style="border-color:#80ffb0;color:#80ffb0;">🌱 ワープST1モーダル（はじまりの草原）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-warp-stage2" style="border-color:#c3a4ff;color:#c3a4ff;">🌲 ワープST2モーダル（あやしい森）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-warp-stage6" style="border-color:#98d8c8;color:#98d8c8;">🌿 ワープST6モーダル（チンパンジーの聖域）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-theme-clear" style="border-color:#adb5bd;color:#adb5bd;">🎨 ステージテーマCSSをクリア</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v51-unlock-all-warps" style="border-color:#ffd166;color:#ffd166;">🔓 全ワープ解放（ST1-6クリア済みに）</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -10086,6 +10251,41 @@
         state.player.companions = _prevComps501i;
         resetPartyTrail();
         showToast("[DEBUG v0.50.1] trail残留確認\n4人時trail=" + _trBefore + "エントリ\n0人+reset後=" + _trAfter + "エントリ(期待:0)\n" + (_trAfter === 0 ? "PASS ✅" : "FAIL ❌"));
+      };
+      // §129 v0.51: 拡張フィールド・ワープ広場デバッグ
+      document.getElementById("btn-debug-v51-warp-to-plaza").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (state.mapMode === "side") { switchToNormalMap(); }
+        closeModal("settings-modal");
+        state.player.x = 7; state.player.y = 25;
+        renderField();
+        showToast("[DEBUG v0.51] ワープ広場(7,25)へ移動\n南エリア探索・ワープタイル確認");
+      };
+      document.getElementById("btn-debug-v51-warp-stage1").onclick = function () {
+        closeModal("settings-modal");
+        openStageWarpModal(1);
+      };
+      document.getElementById("btn-debug-v51-warp-stage2").onclick = function () {
+        closeModal("settings-modal");
+        openStageWarpModal(2);
+      };
+      document.getElementById("btn-debug-v51-warp-stage6").onclick = function () {
+        closeModal("settings-modal");
+        openStageWarpModal(6);
+      };
+      document.getElementById("btn-debug-v51-theme-clear").onclick = function () {
+        clearStageTheme();
+        showToast("[DEBUG v0.51] ステージテーマCSSクリア");
+      };
+      document.getElementById("btn-debug-v51-unlock-all-warps").onclick = function () {
+        if (!state.sideMap.stageCleared) { state.sideMap.stageCleared = {}; }
+        state.sideMap.stageCleared["1"] = true;
+        state.sideMap.stageCleared["2"] = true;
+        state.sideMap.stageCleared["3"] = true;
+        state.sideMap.stageCleared["4"] = true;
+        state.sideMap.stageCleared["5"] = true;
+        saveGame();
+        showToast("[DEBUG v0.51] ST1-5クリア済み → 全ワープ(ST1-6)解放\nワープ広場(7,25)へ移動して確認");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12455,7 +12655,9 @@
         companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {}, // §117 v0.45
         companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated, // §119 v0.45.2
         companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {}, // §122 v0.47
-        playerName: state.playerName || "" // §126 v0.49: 主人公名
+        playerName: state.playerName || "", // §126 v0.49: 主人公名
+        normalReturnX: state.normalReturnX || 2, // §129 v0.51
+        normalReturnY: state.normalReturnY || 4  // §129 v0.51
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -12582,6 +12784,9 @@
         state.playerName = "冒険者"; // 旧セーブ・空欄補完
         _nameChanged = true;
       }
+      // §129 v0.51: ワープ帰還座標（旧セーブは既定値で補完）
+      state.normalReturnX = data.normalReturnX || 2;
+      state.normalReturnY = data.normalReturnY || 4;
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
       if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged || _partyChanged) { saveGame(); } // §114 / §115 / §126 / §128
       resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
@@ -12796,6 +13001,27 @@
     });
     document.getElementById("btn-side-gate-cancel").addEventListener("click", function () {
       closeModal("modal-side-gate");
+    });
+
+    // §129 v0.51: ワープ広場ステージ選択モーダル
+    document.getElementById("btn-stage-warp-enter").addEventListener("click", function () {
+      if (!_pendingWarpStageNum) { closeModal("modal-stage-warp"); return; }
+      var warpInfo = null;
+      for (var _wi2 = 0; _wi2 < STAGE_WARP_DATA.length; _wi2++) {
+        if (STAGE_WARP_DATA[_wi2].stageNum === _pendingWarpStageNum) { warpInfo = STAGE_WARP_DATA[_wi2]; break; }
+      }
+      closeModal("modal-stage-warp");
+      state.sideMap.stage = _pendingWarpStageNum;
+      if (warpInfo) {
+        state.normalReturnX = warpInfo.x;
+        state.normalReturnY = warpInfo.y + 1;
+      }
+      _pendingWarpStageNum = 0;
+      switchToSideMap();
+    });
+    document.getElementById("btn-stage-warp-cancel").addEventListener("click", function () {
+      _pendingWarpStageNum = 0;
+      closeModal("modal-stage-warp");
     });
 
     // §53 v0.11.3: 横スクロール内帰還ゲートモーダル
@@ -13311,28 +13537,28 @@
     } else if (s5C) {
       obj.objectiveId = "stage6_challenge";
       obj.title = "第6ステージ「チンパンジーの聖域」へ";
-      obj.shortText = "🌀ゲートからステージ6「チンパンジーの聖域」へ。最後のステージだ！";
-      obj.locationText = "横スクロール：チンパンジーの聖域";
+      obj.shortText = "ワープ広場のST6ワープか🌀ゲートからステージ6「チンパンジーの聖域」へ。最後のステージだ！";
+      obj.locationText = "ワープ広場ST6 or 🌀ゲート → チンパンジーの聖域";
     } else if (s4C) {
       obj.objectiveId = "stage5_challenge";
       obj.title = "第5ステージ「黒い城」へ";
-      obj.shortText = "🌀ゲートからステージ5「黒い城」に挑もう。強敵が多い。";
-      obj.locationText = "横スクロール：黒い城";
+      obj.shortText = "ワープ広場のST5ワープか🌀ゲートからステージ5「黒い城」に挑もう。強敵が多い。";
+      obj.locationText = "ワープ広場ST5 or 🌀ゲート → 黒い城";
     } else if (s3C) {
       obj.objectiveId = "stage4_challenge";
       obj.title = "第4ステージ「ゴリラ山道」へ";
-      obj.shortText = "🌀ゲートからステージ4「ゴリラ山道」に挑もう。";
-      obj.locationText = "横スクロール：ゴリラ山道";
+      obj.shortText = "ワープ広場のST4ワープか🌀ゲートからステージ4「ゴリラ山道」に挑もう。";
+      obj.locationText = "ワープ広場ST4 or 🌀ゲート → ゴリラ山道";
     } else if (s2C) {
       obj.objectiveId = "stage3_challenge";
       obj.title = "第3ステージ「古びた町はずれ」へ";
-      obj.shortText = "🌀ゲートからステージ3「古びた町はずれ」に挑もう。";
-      obj.locationText = "横スクロール：古びた町はずれ";
+      obj.shortText = "ワープ広場のST3ワープか🌀ゲートからステージ3「古びた町はずれ」に挑もう。";
+      obj.locationText = "ワープ広場ST3 or 🌀ゲート → 古びた町はずれ";
     } else if (s1C) {
       obj.objectiveId = "stage2_challenge";
       obj.title = "第2ステージ「あやしい森」へ";
-      obj.shortText = "🌀ゲートからステージ2「あやしい森」に挑もう。";
-      obj.locationText = "横スクロール：あやしい森";
+      obj.shortText = "ワープ広場のST2ワープか🌀ゲートからステージ2「あやしい森」に挑もう。";
+      obj.locationText = "ワープ広場ST2 or 🌀ゲート → あやしい森";
     } else if (sideVisited) {
       obj.objectiveId = "stage1_explore";
       obj.title = "第1ステージ「はじまりの草原」を進もう";
