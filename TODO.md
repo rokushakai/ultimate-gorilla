@@ -22,6 +22,14 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.50.1 — 4人パーティ安定化・王様会話自然化 (§128)
+
+- **`normalizeCompanionParty()`** 追加: セーブ読み込み時に不正ID・重複・MAX超過を除去。変更があれば true 返却 ✅
+- **`loadGame()`** 修正: `resetPartyTrail()` 直後に `normalizeCompanionParty()` を呼び出し。`_partyChanged` を saveGame 判定条件に追加 ✅
+- **NPC_DATA.S Lv50+セリフ修正**: `"王様は、勇者よ、…"` → `"勇者殿、王様はそなたの旅を見守っておられます。"` — 使い視点の自然な文章に修正 ✅
+- **戦闘システム4人対応確認**: startCompanionCommands/showCompanionCommandForIdx/executeCompanionCommand/gainCompanionExp — 全て `companions.length` ベースで動作済みを確認 ✅
+- **デバッグ11ボタン（§128）**: 正規化テスト3本 / 4人手動/AI戦闘 / 4人EXP付与 / わざ独立性 / 戦闘リセット / 王様会話自然さ / XSSテスト / trail残留 ✅
+
 ### Version 0.50 — 王様名呼び・仲間4人パーティ・設定UI改善 (§127)
 
 - **`formatKingDialogueText(text)`** 追加: 王様NPC会話文の「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" に置換。XSS防止エスケープ込み ✅

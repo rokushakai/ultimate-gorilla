@@ -5,6 +5,22 @@
 
 ---
 
+## v0.50.1 (2026-07-25) — 4人パーティ安定化・王様会話自然化 (§128)
+
+### 設計判断・確認事項
+
+- **`normalizeCompanionParty()` を `loadGame()` 内の `resetPartyTrail()` 直後に呼ぶ理由**: `companionLevels`（`hasCompanionEverJoined` が参照する）は `resetPartyTrail()` より前の行でロード済み。`ensureCompanionGearState()` も完了済み。この位置が「全関連データがロードされ、かつ座標計算（`recomputeStats()` 等）より前」という最適タイミング。
+
+- **`normalizeCompanionParty()` が `saveGame()` を直接呼ばない設計にした理由**: 既存の `loadGame()` は `_reconciled` / `_storyFlagChanged` / `_nameChanged` を OR でまとめて saveGame() を1回だけ呼ぶパターンを採用している。`_partyChanged` を同じ条件に追加することで、複数の正規化が同時に発生しても saveGame は1回で済む。
+
+- **王様NPC会話文（Lv50+）を「勇者殿、王様は～」に変更した理由**: NPC_DATA.S の name は「王様の使い」（伝令役）。v0.50 で追加した「王様は、勇者よ、～」は「王様は」（三人称）と「勇者よ」（直接呼びかけ）が同一文内に混在し、伝令が自分の主人（王様）と相手を同時に語る不自然な構造になっていた。修正後は呼びかけ（「勇者殿」→名前+殿）を先頭に置き、王様を三人称で述べる伝令らしい文章にした。「おられます」への変更は伝令としての丁寧語として自然。
+
+- **`normalizeCompanionParty()` で `hasCompanionEverJoined` チェックを含める理由**: 現実的には companions 配列に含まれる ID は全て `hasCompanion()` が true（配列に存在するから）であり、このチェックは通常何も除去しない。ただしセーブデータ改竄や将来のデータ構造変更で「配列にあるが実際には未加入」な状態が生じた場合のフェイルセーフとして保持する。
+
+- **戦闘システムの4人対応は修正不要だった理由の記録**: 調査の結果、`startCompanionCommands` は `companions.slice()`、`showCompanionCommandForIdx` は `queue.length`、`executeCompanionCommand` は `companionCommandIndex++` でカウントアップ、`runCompanionAutoActions` は `companions.length` ループ、`gainCompanionExp` は `forEach` — 全て可変長で実装済みだった。v0.50 で `COMPANION_MAX=4` に変更した時点で自動的に4人対応になっていた。
+
+---
+
 ## v0.50 (2026-07-25) — 王様名呼び・仲間4人パーティ・設定UI改善 (§127)
 
 ### 設計判断・確認事項

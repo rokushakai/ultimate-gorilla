@@ -5,6 +5,18 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.50.1] - 2026-07-25 — 4人パーティ安定化・王様会話自然化 (§128)
+
+### Added
+- **`normalizeCompanionParty()`** 追加: セーブ読み込み時のパーティ配列正規化。不正ID・重複・MAX超過を除去し、変更があれば true を返す。saveGame は呼ばない
+- **デバッグ11ボタン（§128）**: 正規化テスト3本（不正ID/重複/MAX超過）/ 4人手動コマンド戦闘 / 4人AIまかせる戦闘 / 4人EXP付与 / わざ独立性 / 戦闘リセット / 王様会話自然さ / XSS名前テスト / trail残留テスト
+
+### Changed
+- **NPC_DATA.S Lv50+セリフ**: `"王様は、勇者よ、そなたの旅を見守っておられる。"` → `"勇者殿、王様はそなたの旅を見守っておられます。"` — 王様の使い（伝令）として自然な文章に修正
+- **`loadGame()`**: `resetPartyTrail()` 直後に `normalizeCompanionParty()` を呼び出し。`_partyChanged` を既存 saveGame 判定条件（`_reconciled` / `_storyFlagChanged` 等）に OR で追加
+
+---
+
 ## [0.50] - 2026-07-25 — 王様名呼び・仲間4人パーティ・設定UI改善 (§127)
 
 ### Added

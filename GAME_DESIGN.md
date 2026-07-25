@@ -7144,6 +7144,82 @@ v0.48で実装した冒険ナビゲーションシステムの安定化。進行
 
 ---
 
+## v0.50.1 — 4人パーティ安定化・王様会話自然化 (§128) [実装済み]
+
+### 調査・確認事項
+
+- `startCompanionCommands()` は `companions.slice()` でキューを作成 → 4人対応済み
+- `showCompanionCommandForIdx(idx)` は `queue.length` でループ終端判定 → 4人対応済み
+- `executeCompanionCommand()` は `companionCommandIndex++` → 4人対応済み
+- `runCompanionAutoActions()` は `companions.length` でループ → 4人対応済み
+- `gainCompanionExp()` は `p.companions.forEach()` → 4人対応済み
+- `clearCompanionCommandState()` は全状態クリア + `resetCompanionTechniqueUsage()` → 4人対応済み
+- `state.companionTechniqueUsed` はオブジェクト (`{cid: bool}`) で仲間ごとに独立 → 4人対応済み
+- `battleDamageReduction` は max-value-wins のまま変更しない
+
+### 王様会話の自然化
+
+NPC「王様の使い」（NPC_DATA.S）はあくまで王様の**使い**（伝令役）であり、王様本人ではない。
+
+v0.50 で追加した Lv50+ のセリフ：  
+`"王様は、勇者よ、そなたの旅を見守っておられる。"`  
+→ 「王様は」（三人称）と「勇者よ」（直接呼びかけ）が同一文内に混在し、話者（使い）として不自然。
+
+**修正後：** `"勇者殿、王様はそなたの旅を見守っておられます。"`  
+→ `formatKingDialogueText` 適用後: `"カイ殿、王様はそなたの旅を見守っておられます。"`  
+→ 使いが主人公を「殿」で呼びかけ、王様を三人称で述べる自然な形式。  
+→ 丁寧形「おられます」は使いの格式ある話し方として適切。
+
+早期セリフ（Lv50未満）:  
+`"勇者殿、王様は究極ゴリラの報告を待っておられる。"` は既に自然 → 変更しない。
+
+### パーティ正規化 `normalizeCompanionParty()`
+
+新規関数を §128 に追加する。
+
+```
+normalizeCompanionParty() → bool (changed)
+```
+
+処理内容（順番通りに適用）:
+1. `p.companions` が配列でない → `[]` にして `true` 返却
+2. COMPANION_DATA に存在しない ID を除去
+3. `hasCompanionEverJoined` が false のエントリを除去（セーブ破損対策）
+4. 重複 ID を除去（先着優先）
+5. `COMPANION_MAX` を超えるぶんを除去（先着優先）
+6. 変更があれば `p.companions` を更新して `true` 返却、変更なしは `false`
+7. `saveGame()` は呼ばない（呼び出し側で判定する）
+
+### `loadGame()` との統合
+
+- `p.companions` セット後、`ensureCompanionGearState()` / `resetPartyTrail()` の直後に `normalizeCompanionParty()` を呼ぶ
+- 返値 `_partyChanged` を既存の save 判定条件 (`_reconciled`, `_storyFlagChanged` 等) と OR でまとめて `saveGame()` を一回だけ呼ぶ
+
+### §128 デバッグボタン（最低10個）
+
+1. 正規化: 不正ID除去テスト
+2. 正規化: 重複除去テスト
+3. 正規化: MAX超過+重複除去テスト
+4. 4人手動コマンド戦闘（のらいぬ）
+5. 4人AIまかせる戦闘（のらいぬHP調整）
+6. 4人EXP付与テスト（gainCompanionExp(100)）
+7. 仲間わざ独立性テスト（4人個別フラグ確認）
+8. 戦闘終了リセットテスト（clearCompanionCommandState）
+9. 王様会話自然さ確認（Lv60・使い視点）
+10. 王様会話XSS名前テスト（`<>&` 含む名前）
+11. trail残留テスト（4人→0人後 resetPartyTrail）
+
+### 今回は実装しない
+
+- 仲間個人バッグ・キャラ間アイテム受け渡し・仲間の戦闘中アイテム使用
+- 名前による能力変化・隠しイベント
+- 報酬追加（Gold・アイテム付与）
+- 仲間戦闘能力・装備効果・捕獲率・EXP倍率・AI比率の変更
+- BGM関連コードへの変更
+- 究極ゴリラ捕獲条件への変更
+
+---
+
 ## 将来の実装候補（v0.51〜）— プレイヤーフィードバックより [未実装・将来機能]
 
 ### v0.51 候補以降 [未実装・将来機能]

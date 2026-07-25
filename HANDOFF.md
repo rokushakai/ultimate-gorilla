@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.50** |
+| 現在バージョン | **v0.50.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.50.1] 4人パーティ安定化・王様会話自然化**（§128）
+  - **`normalizeCompanionParty()`**: セーブ読み込み時のパーティ正規化（不正ID・重複・MAX超過除去）
+  - **NPC_DATA.S Lv50+セリフ修正**: 「使い」視点で自然な文章に変更（`"勇者殿、王様はそなたの旅を見守っておられます。"`）
+  - **loadGame() 統合**: `normalizeCompanionParty()` 呼び出し追加・`_partyChanged` を saveGame 条件に追加
+  - **戦闘4人対応確認**: 全コマンドフロー・EXP付与・リセットが `companions.length` ベースで動作済みを確認
+  - **デバッグ11ボタン（§128）**
 - **[v0.50] 王様名呼び・仲間4人パーティ・設定UI改善**（§127）
   - **`formatKingDialogueText(text)`**: 「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" 置換（XSSエスケープ込み）
   - **`joinAllCompanions()`**: 加入済みで未パーティ仲間を一括追加

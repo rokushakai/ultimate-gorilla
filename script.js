@@ -7798,7 +7798,7 @@
             lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
           }
         } else if (p.level >= 50) {
-          lines.push("王様は、勇者よ、そなたの旅を見守っておられる。"); // §127 v0.50: "勇者よ" 追加
+          lines.push("勇者殿、王様はそなたの旅を見守っておられます。"); // §128 v0.50.1: 「使い」視点で自然な文章に修正（§127での直接呼びかけ混在を解消）
           lines.push("まずは力をつけ、女神のウクレレを探すのです。");
           lines.push("しっかり準備を整えてから究極ゴリラに挑むように、とのことじゃ。");
         } else {
@@ -8484,6 +8484,19 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v50-party-max-check" style="border-color:#88d8b0;color:#88d8b0;">🧪 COMPANION_MAX=4 確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v50-backdrop-help" style="border-color:#adb5bd;color:#adb5bd;">⚙️ バックドロップclose確認（このモーダル外をタップ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v50-trail-check" style="border-color:#ffa94d;color:#ffa94d;">🧪 partyTrail上限4確認</button>';
+      // §128 v0.50.1: パーティ正規化・4人戦闘安定化
+      html += '<p class="small" style="color:#88d8ff;margin-top:8px;">🛠 パーティ正規化・4人戦闘 (§128 v0.50.1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-norm-invalid" style="border-color:#88d8ff;color:#88d8ff;">🧪 正規化:不正ID除去テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-norm-dup" style="border-color:#88d8ff;color:#88d8ff;">🧪 正規化:重複除去テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-norm-max" style="border-color:#88d8ff;color:#88d8ff;">🧪 正規化:MAX超過+重複除去テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-battle4-cmd" style="border-color:#c77dff;color:#c77dff;">⚔️ 4人手動コマンド戦闘（のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-battle4-ai" style="border-color:#c77dff;color:#c77dff;">🤖 4人AIまかせる戦闘（のらいぬ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-exp4" style="border-color:#ffd166;color:#ffd166;">📊 4人EXP付与テスト（gainCompanionExp(100)）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-tech-indep" style="border-color:#ffd166;color:#ffd166;">⚡ 仲間わざ独立性テスト（4人個別フラグ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-battle-reset" style="border-color:#06d6a0;color:#06d6a0;">🔄 戦闘終了リセットテスト（clearCompanionCommandState）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-king-nat" style="border-color:#ffa94d;color:#ffa94d;">👑 王様会話自然さ確認（Lv60・使い視点）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-king-dbl-esc" style="border-color:#ffa94d;color:#ffa94d;">🧪 王様会話XSS名前テスト（&lt;&gt;&amp;名前）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v501-trail-residue" style="border-color:#adb5bd;color:#adb5bd;">🐾 trail残留テスト（4人→0人後 resetPartyTrail）</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -9912,6 +9925,167 @@
       document.getElementById("btn-debug-v50-trail-check").onclick = function () {
         var _trail = state.partyTrail || [];
         showToast("[DEBUG v0.50] partyTrail確認\n現在=" + _trail.length + "エントリ（上限=4）\n仲間=" + state.player.companions.length + "人\n歩くとtrailが増える");
+      };
+      // §128 v0.50.1: パーティ正規化・4人戦闘安定化
+      document.getElementById("btn-debug-v501-norm-invalid").onclick = function () {
+        var _prevComps = state.player.companions.slice();
+        state.player.companions = ["juritani", "INVALID_ID_999", "harumi", "FAKE_COMPANION"];
+        var _before = state.player.companions.slice();
+        var _changed = normalizeCompanionParty();
+        var _after = state.player.companions.slice();
+        state.player.companions = _prevComps;
+        showToast("[DEBUG v0.50.1] 正規化:不正ID除去\n前=" + _before.join(",") + "\n後=" + _after.join(",") + "\n変更=" + _changed + " (期待:true)");
+      };
+      document.getElementById("btn-debug-v501-norm-dup").onclick = function () {
+        var _prevComps = state.player.companions.slice();
+        state.player.companions = ["juritani", "juritani", "harumi", "harumi"];
+        var _before = state.player.companions.slice();
+        var _changed = normalizeCompanionParty();
+        var _after = state.player.companions.slice();
+        state.player.companions = _prevComps;
+        showToast("[DEBUG v0.50.1] 正規化:重複除去\n前=" + _before.join(",") + "\n後=" + _after.join(",") + "\n変更=" + _changed + " (期待:true)");
+      };
+      document.getElementById("btn-debug-v501-norm-max").onclick = function () {
+        var _prevComps = state.player.companions.slice();
+        var _all501 = ["juritani", "shurittani", "norio", "harumi"];
+        _all501.forEach(function (cid) {
+          if (!state.companionLevels[cid]) { state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 }; }
+          if (state.companionLevels[cid].exp === 0 && state.companionLevels[cid].level < 2) { state.companionLevels[cid].exp = 1; }
+        });
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi", "juritani"];
+        var _before = state.player.companions.slice();
+        var _changed = normalizeCompanionParty();
+        var _after = state.player.companions.slice();
+        state.player.companions = _prevComps;
+        showToast("[DEBUG v0.50.1] 正規化:MAX超過+重複\n前=" + _before.join(",") + "(" + _before.length + "人)\n後=" + _after.join(",") + "(" + _after.length + "人)\n変更=" + _changed + " (期待:true,4人)");
+      };
+      document.getElementById("btn-debug-v501-battle4-cmd").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var _all501b = ["juritani", "shurittani", "norio", "harumi"];
+        _all501b.forEach(function (cid) {
+          if (!state.companionLevels[cid]) { state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 }; }
+          if (state.companionLevels[cid].exp === 0 && state.companionLevels[cid].level < 2) { state.companionLevels[cid].exp = 1; }
+        });
+        state.player.companions = _all501b.slice();
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var _dog501 = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog501) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog501);
+        showToast("[DEBUG v0.50.1] 4人全員でのらいぬ戦闘\n4人分コマンド選択→敵ターンを確認！");
+      };
+      document.getElementById("btn-debug-v501-battle4-ai").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var _all501c = ["juritani", "shurittani", "norio", "harumi"];
+        _all501c.forEach(function (cid) {
+          if (!state.companionLevels[cid]) { state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 }; }
+          if (state.companionLevels[cid].exp === 0 && state.companionLevels[cid].level < 2) { state.companionLevels[cid].exp = 1; }
+        });
+        state.player.companions = _all501c.slice();
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var _dog501c = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog501c) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog501c);
+        state.enemy.hp = 40;
+        renderEnemy();
+        showToast("[DEBUG v0.50.1] 4人AIまかせる戦闘\n「まかせる」で4人分の行動ログ確認！");
+      };
+      document.getElementById("btn-debug-v501-exp4").onclick = function () {
+        var _prevComps501 = state.player.companions.slice();
+        var _all501d = ["juritani", "shurittani", "norio", "harumi"];
+        _all501d.forEach(function (cid) {
+          if (!state.companionLevels[cid]) { state.companionLevels[cid] = { level: 1, exp: 0, nextExp: 25 }; }
+        });
+        state.player.companions = _all501d.slice();
+        var _before501d = {};
+        _all501d.forEach(function (cid) { _before501d[cid] = state.companionLevels[cid].exp; });
+        gainCompanionExp(100);
+        var _after501d = {};
+        _all501d.forEach(function (cid) { _after501d[cid] = state.companionLevels[cid].exp; });
+        state.player.companions = _prevComps501;
+        var msg501d = "[DEBUG v0.50.1] 4人EXP+100\n";
+        _all501d.forEach(function (cid) { msg501d += cid + ": " + _before501d[cid] + "→" + _after501d[cid] + "\n"; });
+        showToast(msg501d);
+      };
+      document.getElementById("btn-debug-v501-tech-indep").onclick = function () {
+        ensureCompanionTechniqueUsageState();
+        var _prevUsed501e = JSON.parse(JSON.stringify(state.companionTechniqueUsed));
+        state.companionTechniqueUsed["juritani"] = true;
+        state.companionTechniqueUsed["shurittani"] = false;
+        state.companionTechniqueUsed["norio"] = true;
+        state.companionTechniqueUsed["harumi"] = false;
+        var _j501 = !!state.companionTechniqueUsed["juritani"];
+        var _s501 = !!state.companionTechniqueUsed["shurittani"];
+        var _n501 = !!state.companionTechniqueUsed["norio"];
+        var _h501 = !!state.companionTechniqueUsed["harumi"];
+        var _pass501e = (_j501 && !_s501 && _n501 && !_h501);
+        state.companionTechniqueUsed = _prevUsed501e;
+        showToast("[DEBUG v0.50.1] わざ独立性\njuritani=" + _j501 + " shurittani=" + _s501 + "\nnorio=" + _n501 + " harumi=" + _h501 + "\n(期待:T,F,T,F) " + (_pass501e ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v501-battle-reset").onclick = function () {
+        var _prevQ501 = (state.companionCommandQueue || []).slice();
+        var _prevIdx501 = state.companionCommandIndex;
+        var _prevAct501 = state.companionCommandActive;
+        var _prevLk501 = state.companionCommandLocked;
+        var _prevDr501 = state.battleDamageReduction;
+        state.companionCommandQueue = ["juritani", "shurittani", "norio", "harumi"];
+        state.companionCommandIndex = 3;
+        state.companionCommandActive = true;
+        state.companionCommandLocked = true;
+        state.battleDamageReduction = 0.5;
+        clearCompanionCommandState();
+        var _pQ = (state.companionCommandQueue.length === 0);
+        var _pI = (state.companionCommandIndex === 0);
+        var _pA = (!state.companionCommandActive);
+        var _pL = (!state.companionCommandLocked);
+        var _pD = (state.battleDamageReduction === 0);
+        var _passAll501f = (_pQ && _pI && _pA && _pL && _pD);
+        state.companionCommandQueue = _prevQ501;
+        state.companionCommandIndex = _prevIdx501;
+        state.companionCommandActive = _prevAct501;
+        state.companionCommandLocked = _prevLk501;
+        state.battleDamageReduction = _prevDr501;
+        showToast("[DEBUG v0.50.1] 戦闘リセット\nqueue空=" + _pQ + " idx=0=" + _pI + "\nactive=false=" + _pA + " locked=false=" + _pL + "\ndr=0=" + _pD + "\n" + (_passAll501f ? "全PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v501-king-nat").onclick = function () {
+        var _prevLv501g = state.player.level;
+        var _prevClr501g = state.gameCleared;
+        state.player.level = 60;
+        state.gameCleared = false;
+        closeModal("settings-modal");
+        openNpcModal("S");
+        state.player.level = _prevLv501g;
+        state.gameCleared = _prevClr501g;
+        showToast("[DEBUG v0.50.1] Lv60王様会話(使い視点)\n「" + getPlayerDisplayName() + "殿、王様は～」の形式か確認");
+      };
+      document.getElementById("btn-debug-v501-king-dbl-esc").onclick = function () {
+        var _prevName501h = state.playerName;
+        state.playerName = "<test>&名前";
+        var _text501h = "勇者殿、テスト文です。";
+        var _result501h = formatKingDialogueText(_text501h);
+        state.playerName = _prevName501h;
+        var _hasRaw = (_result501h.indexOf("<test>") >= 0);
+        var _hasEsc = (_result501h.indexOf("&lt;") >= 0 || _result501h.indexOf("&amp;") >= 0);
+        showToast("[DEBUG v0.50.1] XSS名前エスケープ\n名前=<test>&名前\n結果=" + _result501h.slice(0, 35) + "\n生HTML混入=" + _hasRaw + "(期待:false)\nエスケープ済=" + _hasEsc + "(期待:true)");
+      };
+      document.getElementById("btn-debug-v501-trail-residue").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var _prevComps501i = state.player.companions.slice();
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        resetPartyTrail();
+        for (var _ti501 = 0; _ti501 < 5; _ti501++) {
+          if (!state.partyTrail) { state.partyTrail = []; }
+          state.partyTrail.unshift({ x: state.player.x + _ti501, y: state.player.y });
+          if (state.partyTrail.length > 4) { state.partyTrail.pop(); }
+        }
+        var _trBefore = (state.partyTrail || []).length;
+        state.player.companions = [];
+        resetPartyTrail();
+        var _trAfter = (state.partyTrail || []).length;
+        state.player.companions = _prevComps501i;
+        resetPartyTrail();
+        showToast("[DEBUG v0.50.1] trail残留確認\n4人時trail=" + _trBefore + "エントリ\n0人+reset後=" + _trAfter + "エントリ(期待:0)\n" + (_trAfter === 0 ? "PASS ✅" : "FAIL ❌"));
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12389,6 +12563,7 @@
       var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
+      var _partyChanged = normalizeCompanionParty(); // §128 v0.50.1: 不正ID・重複・MAX超過を修正
       // §48 v0.10: v0.9.1互換補正 — クリア済みなのにstage1RewardLevelが0の古いセーブを補正
       if (state.sideMap.stageCleared["1"] && !data.sideMapStage1Reward) {
         state.sideMap.stage1RewardLevel = state.sideMap.defeatedEnemies["36,1"] ? 2 : 1;
@@ -12408,7 +12583,7 @@
         _nameChanged = true;
       }
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
-      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged) { saveGame(); } // §114 / §115 / §126
+      if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged || _partyChanged) { saveGame(); } // §114 / §115 / §126 / §128
       resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
       return true;
     } catch (e) {
@@ -14236,6 +14411,44 @@
       showToast("合流できる仲間がいません。");
     }
     renderTavernMain();
+  }
+
+  // ---------------------------------------------------------
+  // §128 v0.50.1: パーティ正規化・4人戦闘安定化
+  // ---------------------------------------------------------
+
+  // セーブ読み込み時にパーティ配列を正規化する。
+  // 不正ID・重複・MAX超過を除去し、変更があれば true を返す。
+  // saveGame() は呼ばない（呼び出し側で判定すること）。
+  function normalizeCompanionParty() {
+    var p = state.player;
+    if (!Array.isArray(p.companions)) {
+      p.companions = [];
+      return true;
+    }
+    var _validIds128 = [];
+    for (var _vi128 = 0; _vi128 < COMPANION_DATA.length; _vi128++) {
+      _validIds128.push(COMPANION_DATA[_vi128].id);
+    }
+    var _seen128 = {};
+    var _result128 = [];
+    for (var _i128 = 0; _i128 < p.companions.length; _i128++) {
+      var _cid128 = p.companions[_i128];
+      if (_validIds128.indexOf(_cid128) < 0) { continue; }   // 未知のID
+      if (_seen128[_cid128]) { continue; }                    // 重複
+      if (!hasCompanionEverJoined(_cid128)) { continue; }     // 未加入
+      if (_result128.length >= COMPANION_MAX) { break; }      // MAX超過
+      _seen128[_cid128] = true;
+      _result128.push(_cid128);
+    }
+    var _changed128 = (_result128.length !== p.companions.length);
+    if (!_changed128) {
+      for (var _j128 = 0; _j128 < _result128.length; _j128++) {
+        if (_result128[_j128] !== p.companions[_j128]) { _changed128 = true; break; }
+      }
+    }
+    if (_changed128) { p.companions = _result128; }
+    return _changed128;
   }
 
   // ---------------------------------------------------------
