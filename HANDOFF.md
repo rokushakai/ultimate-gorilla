@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.49** |
+| 現在バージョン | **v0.50** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,14 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.50] 王様名呼び・仲間4人パーティ・設定UI改善**（§127）
+  - **`formatKingDialogueText(text)`**: 「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" 置換（XSSエスケープ込み）
+  - **`joinAllCompanions()`**: 加入済みで未パーティ仲間を一括追加
+  - **`COMPANION_MAX`**: `2` → `4`（仲間4人パーティ対応）
+  - **partyTrail 上限**: `> 2` → `> 4`（4人追従）
+  - **酒場「全員合流」ボタン追加**
+  - **設定モーダルバックドロップclose**
+  - **デバッグ10ボタン（§127）**
 - **[v0.49] 主人公命名・統合メンバー管理**（§126）
   - **`state.playerName`**: 主人公名（永続・saveGame/loadGame対応・旧セーブ"冒険者"補完）
   - **`normalizePlayerName(value)`**: 文字列検証・前後空白除去・10文字上限（function宣言でhoisiting対応）

@@ -546,7 +546,7 @@
   // --- 仲間データ(§10。GAME_DESIGN.md §10 参照) ---
   // critBonus: doFight()の会心確率加算  captureMod: attemptCapture()加算
   // fleeMod: doRun()加算  spellMod: castSpell()の威力/回復倍率加算
-  var COMPANION_MAX = 2; // パーティー上限
+  var COMPANION_MAX = 4; // パーティー上限 §127 v0.50: 2→4
   var COMPANION_DATA = [
     { id: "juritani",   name: "ジュリタニ", emoji: "💪", icon: "🧑", // §121 v0.46: 人型識別アイコン
       feature: "会心の一撃の確率が高い",
@@ -1091,7 +1091,7 @@
       stage6RewardLevel: 0,  // §59 v0.14: ステージ6報酬受取レベル (0=未, 1=300G, 2=全取得)
       gateExplained: false   // §52 v0.11.2: ゲートから初めて横スクロールへ入ったか
     },
-    partyTrail: [],            // §78 v0.26: 仲間追従軌跡（最大2エントリ {x,y}）
+    partyTrail: [],            // §78 v0.26: 仲間追従軌跡（最大4エントリ {x,y} §127 v0.50）
     companionLevels: {},       // §99 v0.37: 仲間Lv/EXP { cid: {level, exp, nextExp} }
     companionEquipment: {},    // §105 v0.40: 仲間装備スロット { cid: gearId|null }
     companionGearInventory: {},// §105 v0.40: 仲間装備所持 { gearId: count }
@@ -2751,10 +2751,10 @@
     if (nx < 0 || nx >= MAP_W || ny < 0 || ny >= MAP_H) return;
     if (BLOCKED[state.terrain[ny][nx]]) return;
 
-    // §78 v0.26 / §79 v0.26.1: 移動前の位置を仲間追従軌跡に追加（最大2エントリ）
+    // §78 v0.26 / §79 v0.26.1: 移動前の位置を仲間追従軌跡に追加（最大4エントリ §127 v0.50）
     if (!state.partyTrail) { state.partyTrail = []; }
     state.partyTrail.unshift({ x: p.x, y: p.y });
-    if (state.partyTrail.length > 2) { state.partyTrail.pop(); }
+    if (state.partyTrail.length > 4) { state.partyTrail.pop(); } // §127 v0.50: 2→4
     p.x = nx;
     p.y = ny;
 
@@ -6880,11 +6880,13 @@
     html += '<button class="shop-menu-btn" id="t-view">👥 仲間を見る</button>';
     html += '<button class="shop-menu-btn" id="t-leave">👋 仲間を外す</button>';
     html += '<button class="shop-menu-btn" id="t-stories" style="border-color:#a0cfff;color:#a0cfff;">📖 仲間の物語</button>'; // §113 v0.44
+    html += '<button class="shop-menu-btn" id="t-join-all" style="border-color:#ffd166;color:#ffd166;">👥 加入済み全員合流</button>'; // §127 v0.50
     body.innerHTML = html;
     document.getElementById("t-recruit").onclick = renderTavernRecruit;
     document.getElementById("t-view").onclick = renderTavernViewParty;
     document.getElementById("t-leave").onclick = renderTavernLeave;
     document.getElementById("t-stories").onclick = renderTavernStories; // §113 v0.44
+    document.getElementById("t-join-all").onclick = joinAllCompanions; // §127 v0.50
   }
 
   // §113 v0.44 / §117 v0.45: 酒場「仲間の物語」一覧（第1話・第2話カード）
@@ -7796,11 +7798,11 @@
             lines.push("王様から褒美があるそうだ。実家で休んでみるとよい。");
           }
         } else if (p.level >= 50) {
-          lines.push("王様は、勇者の子孫の旅を見守っておられる。");
+          lines.push("王様は、勇者よ、そなたの旅を見守っておられる。"); // §127 v0.50: "勇者よ" 追加
           lines.push("まずは力をつけ、女神のウクレレを探すのです。");
           lines.push("しっかり準備を整えてから究極ゴリラに挑むように、とのことじゃ。");
         } else {
-          lines.push("王様は、究極ゴリラの報告を待っておられる。");
+          lines.push("勇者殿、王様は究極ゴリラの報告を待っておられる。"); // §127 v0.50: "勇者殿" 追加
           lines.push("まずはレベルを上げ、装備を整えることです。");
           lines.push("強敵に勝てない時は、逃げても恥ではありません。生きて戻ることも、勇者の務めです。");
           // §52 v0.11.2: 横スクロール未訪問時のゲート案内
@@ -7826,7 +7828,8 @@
     document.getElementById("npc-header").innerHTML = header;
     var speechHtml = "";
     for (var i = 0; i < lines.length; i++) {
-      speechHtml += "<p>「" + lines[i] + "」</p>";
+      var _npcLine = (tileChar === "S") ? formatKingDialogueText(lines[i]) : lines[i]; // §127 v0.50
+      speechHtml += "<p>「" + _npcLine + "」</p>";
     }
     document.getElementById("npc-speech").innerHTML = speechHtml;
     openModal("npc-modal");
@@ -8469,6 +8472,18 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v49-name-check" style="border-color:#a0f0b4;color:#a0f0b4;">🧪 normalizePlayerName境界確認（PASS/FAIL）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v49-story-name-check" style="border-color:#e9c46a;color:#e9c46a;">📖 サイドストーリー「あなた」→主人公名置換確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v49-status-name-check" style="border-color:#ffd43b;color:#ffd43b;">📊 ステータス画面の名前表示確認</button>';
+      // §127 v0.50: 王様名呼び・4人パーティ・設定バックドロップ
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">👑 王様名呼び・4人パーティ (§127 v0.50)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-king-early" style="border-color:#ffd166;color:#ffd166;">👑 王様会話（Lv10・早期「勇者殿」）を確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-king-lv50" style="border-color:#ffd166;color:#ffd166;">👑 王様会話（Lv50+「勇者よ」）を確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-king-cleared" style="border-color:#06d6a0;color:#06d6a0;">👑 王様会話（クリア後）を確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-format-test" style="border-color:#a0cfff;color:#a0cfff;">🧪 formatKingDialogueText 置換確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-party4" style="border-color:#c77dff;color:#c77dff;">👥 4人フルパーティ追従確認（全員合流）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-party0" style="border-color:#ff8c8c;color:#ff8c8c;">👥 パーティ全解除</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-join-all-tavern" style="border-color:#ffd166;color:#ffd166;">👥 全員合流ボタン動作確認（酒場を開く）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-party-max-check" style="border-color:#88d8b0;color:#88d8b0;">🧪 COMPANION_MAX=4 確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-backdrop-help" style="border-color:#adb5bd;color:#adb5bd;">⚙️ バックドロップclose確認（このモーダル外をタップ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v50-trail-check" style="border-color:#ffa94d;color:#ffa94d;">🧪 partyTrail上限4確認</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -9827,6 +9842,76 @@
         closeModal("settings-modal");
         openStatusModal();
         showToast("[DEBUG v0.49] ステータス名前確認:\nstate.playerName='" + _stateName + "'\ngetPlayerDisplayName()='" + _displayName + "'\n（ステータス画面の「名前」欄を確認）");
+      };
+      // §127 v0.50: 王様名呼び・4人パーティ・設定バックドロップ
+      document.getElementById("btn-debug-v50-king-early").onclick = function () {
+        var _prev = state.player.level;
+        state.player.level = 10;
+        closeModal("settings-modal");
+        openNpcModal("S");
+        state.player.level = _prev;
+        showToast("[DEBUG v0.50] 王様会話（Lv10）:「勇者殿」が " + getPlayerDisplayName() + " 殿に置換されているか確認");
+      };
+      document.getElementById("btn-debug-v50-king-lv50").onclick = function () {
+        var _prev = state.player.level;
+        var _prevCleared = state.gameCleared;
+        state.player.level = 60;
+        state.gameCleared = false;
+        closeModal("settings-modal");
+        openNpcModal("S");
+        state.player.level = _prev;
+        state.gameCleared = _prevCleared;
+        showToast("[DEBUG v0.50] 王様会話（Lv60）:「勇者よ」が " + getPlayerDisplayName() + " よ に置換されているか確認");
+      };
+      document.getElementById("btn-debug-v50-king-cleared").onclick = function () {
+        var _prevCleared = state.gameCleared;
+        state.gameCleared = true;
+        closeModal("settings-modal");
+        openNpcModal("S");
+        state.gameCleared = _prevCleared;
+        showToast("[DEBUG v0.50] 王様会話（クリア後）を確認");
+      };
+      document.getElementById("btn-debug-v50-format-test").onclick = function () {
+        var _name = getPlayerDisplayName();
+        var _testYo = formatKingDialogueText("王様は、勇者よ、そなたの旅を見守っておられる。");
+        var _testDono = formatKingDialogueText("勇者殿、王様は究極ゴリラの報告を待っておられる。");
+        var _testBoth = formatKingDialogueText("勇者よ vs 勇者殿のテスト");
+        showToast("[DEBUG v0.50] formatKingDialogueText確認\n名前=" + _name + "\n「勇者よ」→" + _testYo.slice(0, 20) + "...\n「勇者殿」→" + _testDono.slice(0, 20) + "...\n両方→" + _testBoth);
+      };
+      document.getElementById("btn-debug-v50-party4").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _i50 = 0; _i50 < _cids.length; _i50++) {
+          if (state.player.companions.indexOf(_cids[_i50]) < 0) {
+            state.player.companions.push(_cids[_i50]);
+          }
+        }
+        resetPartyTrail();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG v0.50] 4人フルパーティ。歩いて4人追従を確認！");
+      };
+      document.getElementById("btn-debug-v50-party0").onclick = function () {
+        state.player.companions = [];
+        resetPartyTrail();
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG v0.50] パーティ全解除完了");
+      };
+      document.getElementById("btn-debug-v50-join-all-tavern").onclick = function () {
+        closeModal("settings-modal");
+        openTavernModal();
+        showToast("[DEBUG v0.50] 酒場を開いた。「全員合流」ボタンを確認");
+      };
+      document.getElementById("btn-debug-v50-party-max-check").onclick = function () {
+        showToast("[DEBUG v0.50] COMPANION_MAX=" + COMPANION_MAX + " (期待値:4)\n現在パーティ人数=" + state.player.companions.length + "/" + COMPANION_MAX);
+      };
+      document.getElementById("btn-debug-v50-backdrop-help").onclick = function () {
+        showToast("[DEBUG v0.50] このボタンはダミー。\n設定モーダルの外側（半透明背景）をタップ/クリックして閉じることを確認してください。");
+      };
+      document.getElementById("btn-debug-v50-trail-check").onclick = function () {
+        var _trail = state.partyTrail || [];
+        showToast("[DEBUG v0.50] partyTrail確認\n現在=" + _trail.length + "エントリ（上限=4）\n仲間=" + state.player.companions.length + "人\n歩くとtrailが増える");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12579,6 +12664,9 @@
     document.getElementById("btn-settings-close").addEventListener("click", function () {
       closeModal("settings-modal");
     });
+    document.getElementById("settings-modal").addEventListener("click", function (ev) { // §127 v0.50
+      if (ev.target.id === "settings-modal") { closeModal("settings-modal"); }
+    });
 
     // 装備モーダル
     document.getElementById("btn-equip").addEventListener("click", openEquipModal);
@@ -14110,6 +14198,44 @@
     if (sm && !sm.classList.contains("hidden")) {
       renderStatusBody();
     }
+  }
+
+  // ---------------------------------------------------------
+  // §127 v0.50: 王様名呼び・4人パーティ・全員合流
+  // ---------------------------------------------------------
+
+  // 王様NPC会話文の「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" に置換。
+  // innerHTML注入前に主人公名をHTMLエスケープしてXSSを防止する。
+  function formatKingDialogueText(text) {
+    var name = getPlayerDisplayName();
+    var safe = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    text = text.replace(/勇者よ/g, safe + "よ");
+    text = text.replace(/勇者殿/g, safe + "殿");
+    return text;
+  }
+
+  // 加入済み（hasCompanionEverJoined）でパーティ未参加の仲間を一括追加する。
+  // COMPANION_MAX を超えるぶんはスキップ。
+  function joinAllCompanions() {
+    var p = state.player;
+    var added = 0;
+    for (var _jac = 0; _jac < COMPANION_DATA.length; _jac++) {
+      if (p.companions.length >= COMPANION_MAX) { break; }
+      var _jacId = COMPANION_DATA[_jac].id;
+      if (p.companions.indexOf(_jacId) >= 0) { continue; }
+      if (!hasCompanionEverJoined(_jacId)) { continue; }
+      p.companions.push(_jacId);
+      added++;
+    }
+    if (added > 0) {
+      resetPartyTrail();
+      updateStatusBar();
+      saveGame();
+      showToast("👥 " + added + "人が合流した！");
+    } else {
+      showToast("合流できる仲間がいません。");
+    }
+    renderTavernMain();
   }
 
   // ---------------------------------------------------------

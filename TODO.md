@@ -22,6 +22,18 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.50 — 王様名呼び・仲間4人パーティ・設定UI改善 (§127)
+
+- **`formatKingDialogueText(text)`** 追加: 王様NPC会話文の「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" に置換。XSS防止エスケープ込み ✅
+- **`joinAllCompanions()`** 追加: 加入済みで未パーティ仲間を一括追加、トースト通知 ✅
+- **`COMPANION_MAX`** を `2` → `4` に変更（仲間4人パーティ対応） ✅
+- **`movePlayer()` partyTrail 上限** を `> 2` → `> 4` に変更（4人追従対応） ✅
+- **`renderTavernMain()`** に「👥 加入済み全員合流」ボタン追加 ✅
+- **`openNpcModal()`** 修正: 王様NPC（tileChar="S"）のみ `formatKingDialogueText` を適用 ✅
+- **王様NPC会話行 2本修正**: Lv50未満→「勇者殿」追加、Lv50+→「勇者の子孫」→「勇者よ」 ✅
+- **設定モーダルバックドロップ**: `bindEvents()` 内でクリックイベント1回登録（ev.target.id==="settings-modal"で閉じる） ✅
+- **デバッグ10ボタン（§127）**: 王様セリフ確認3本 / formatKingDialogue確認 / 4人追従 / パーティ解除 / 全員合流 / 上限確認 / trail確認 ✅
+
 ### Version 0.49 — 主人公命名・統合メンバー管理 (§126)
 
 - **`state.playerName`** 追加: 主人公名（永続・saveGame/loadGame対応・旧セーブは"冒険者"補完） ✅

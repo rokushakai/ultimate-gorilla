@@ -5,6 +5,24 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.50] - 2026-07-25 — 王様名呼び・仲間4人パーティ・設定UI改善 (§127)
+
+### Added
+- **`formatKingDialogueText(text)`** 追加: 王様NPC会話文の「勇者よ」→主人公名+"よ"、「勇者殿」→主人公名+"殿" に置換。innerHTML注入前に主人公名をHTMLエスケープしてXSS防止
+- **`joinAllCompanions()`** 追加: 加入済みで未パーティの仲間を一括追加。追加数をトースト通知。`resetPartyTrail()` + `updateStatusBar()` + `saveGame()` 呼び出し
+- **酒場「👥 加入済み全員合流」ボタン** (`id="t-join-all"`) 追加: `renderTavernMain()` に追加
+- **設定モーダルバックドロップclose**: `bindEvents()` 内で `settings-modal` に click リスナーを1回登録。`ev.target.id === "settings-modal"` 時に `closeModal` を呼び出し
+- **デバッグ10ボタン（§127）**: 王様会話確認3本（早期/Lv50+/クリア後）/ formatKingDialogueText確認 / 4人追従 / パーティ解除 / 全員合流酒場 / COMPANION_MAX確認 / バックドロップ説明 / trail確認
+
+### Changed
+- **`COMPANION_MAX`** を `2` → `4` に変更（主人公＋仲間4人＝最大5人編成）
+- **`movePlayer()` partyTrail 上限** を `> 2` → `> 4` に変更（4人分の追従軌跡）
+- **state.partyTrail コメント** 更新: 「最大2エントリ」→「最大4エントリ」
+- **王様NPC会話行 2本修正**: Lv50未満→「勇者殿、王様は…」追加、Lv50+→「勇者の子孫」→「勇者よ、そなた」
+- **`openNpcModal()`**: 王様NPC（tileChar="S"）のみ `formatKingDialogueText` を適用
+
+---
+
 ## [0.49] - 2026-07-25 — 主人公命名・統合メンバー管理 (§126)
 
 ### Added
