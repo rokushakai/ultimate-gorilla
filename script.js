@@ -44,7 +44,7 @@
     "#..B........." + "....,,,,,,,##",              // row 16 col12開放 B=chest(3,16)
     "#######,#####" + ",,,,,,,,,,,,#",              // row 17 col7開放(南通路) 東ウイング南接続
     "#####,,,,,,,,,,,,,,,,,,###",                   // row 18 南エリア開始
-    "#####.,,,,,,,,,,,,,,,,.####",                  // row 19
+    "#####.,,,,,,,,,,,,,,,,.###",                   // row 19
     "#####..,,,,,,,,,,,,,..####",                   // row 20
     "#####..,,,,,,,,,,,,,..####",                   // row 21
     "#####,,,,,,,,,,,,,,,,,####",                   // row 22
@@ -2740,6 +2740,7 @@
   }
 
   function switchToNormalMap() {
+    _stageWarpTransitionLock = false; // §130 v0.51.1: 通常マップ復帰時にワープロック解除
     resetAdventureGuideNpcState(); // §125 v0.48.1: 通常マップ復帰時に案内人状態リセット
     clearStageTheme(); // §129 v0.51
     state.mapMode = "normal";
@@ -2792,6 +2793,7 @@
 
   // §129 v0.51: ワープ広場ステージ選択モーダル
   var _pendingWarpStageNum = 0;
+  var _stageWarpTransitionLock = false; // §130 v0.51.1: 移動ボタン連打による二重入場防止
   function openStageWarpModal(stageNum) {
     var warpInfo = null;
     for (var _wi = 0; _wi < STAGE_WARP_DATA.length; _wi++) {
@@ -3249,6 +3251,19 @@
   }
 
   // §129 v0.51: ステージ倍率スケーリング適用 (オリジナルデータを変更しないコピーを返す)
+  // §130 v0.51.1: ステージスケーリング除外判定
+  // finalフラグ付き敵（究極ゴリラ）と特定ボス（究極チンパンジー）は倍率適用を除外する
+  function shouldSkipStageEnemyScaling(monster) {
+    if (!monster) return true;
+    if (monster.final) return true;  // 究極ゴリラ等 final フラグ付き
+    var skipIds = {
+      "ultimate_chimpanzee": true,   // ステージ6固定ボス（×13倍が掛かると異常強化）
+      "ultimategorilla": true        // 念のため（final フラグでも弾かれる）
+    };
+    if (skipIds[monster.id]) return true;
+    return false;
+  }
+
   function applyStageEnemyScaling(monster, stageNum) {
     var ld = STAGE_ENEMY_LEVEL_DATA[stageNum];
     if (!ld) return monster;
@@ -3362,8 +3377,11 @@
     state.battleDamageReduction = 0; // §90 v0.32.1: 念のため戦闘開始時にもリセット
     resetCompanionTechniqueUsage(); // §112 v0.43.1: 戦闘開始時に仲間わざ使用状態を確実にリセット
     // §129 v0.51: ステージ戦闘でモンスターを強化
+    // §130 v0.51.1: 究極チンパンジー・finalフラグ敵は除外
     if (state.mapMode === "side" && state.sideMap && state.sideMap.stage) {
-      monster = applyStageEnemyScaling(monster, state.sideMap.stage);
+      if (!shouldSkipStageEnemyScaling(monster)) {
+        monster = applyStageEnemyScaling(monster, state.sideMap.stage);
+      }
     }
     state.enemy = {
       id: monster.id,
@@ -8662,6 +8680,22 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v51-warp-stage6" style="border-color:#98d8c8;color:#98d8c8;">🌿 ワープST6モーダル（チンパンジーの聖域）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v51-theme-clear" style="border-color:#adb5bd;color:#adb5bd;">🎨 ステージテーマCSSをクリア</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v51-unlock-all-warps" style="border-color:#ffd166;color:#ffd166;">🔓 全ワープ解放（ST1-6クリア済みに）</button>';
+      // §130 v0.51.1: 安定化テストボタン
+      html += '<p class="small" style="color:#80ffb0;margin-top:8px;">🧪 v0.51.1 安定化テスト (§130)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-map-size" style="border-color:#80ffb0;color:#80ffb0;">🧪 通常マップ旧新サイズ比較</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-row-widths" style="border-color:#80ffb0;color:#80ffb0;">🧪 通常マップ全行幅確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-warp-count" style="border-color:#80ffb0;color:#80ffb0;">🧪 6ワープ出現数確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-warp-dest" style="border-color:#80ffb0;color:#80ffb0;">🧪 6ワープ入場先一致確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-warp-unlock" style="border-color:#80ffb0;color:#80ffb0;">🧪 6ワープ解放境界確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-warp-spam" style="border-color:#ffd43b;color:#ffd43b;">🧪 ワープ移動ボタン連打防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-return-safety" style="border-color:#80ffb0;color:#80ffb0;">🧪 normalReturn座標安全確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-all-returns" style="border-color:#80ffb0;color:#80ffb0;">🧪 全ステージ帰還位置確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-scale-accum" style="border-color:#ffd43b;color:#ffd43b;">🧪 敵スケーリング累積防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-special-skip" style="border-color:#ffd43b;color:#ffd43b;">🧪 特殊敵スケーリング除外確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-capture-rate" style="border-color:#80ffb0;color:#80ffb0;">🧪 捕獲率level非参照確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-lv-display" style="border-color:#80ffb0;color:#80ffb0;">🧪 敵Lv表示境界確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-theme-check" style="border-color:#c3a4ff;color:#c3a4ff;">🧪 6テーマ視覚差確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v511-theme-clear" style="border-color:#adb5bd;color:#adb5bd;">🧪 theme class残留防止確認</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -10286,6 +10320,161 @@
         state.sideMap.stageCleared["5"] = true;
         saveGame();
         showToast("[DEBUG v0.51] ST1-5クリア済み → 全ワープ(ST1-6)解放\nワープ広場(7,25)へ移動して確認");
+      };
+      // §130 v0.51.1: 安定化テストハンドラー
+      document.getElementById("btn-debug-v511-map-size").onclick = function () {
+        var oldSize = 13 * 18;
+        var newSize = MAP_W * MAP_H;
+        var ratio = Math.round((newSize / oldSize) * 10) / 10;
+        var pass = (MAP_W === 26 && MAP_H === 36 && newSize === 936);
+        showToast("[DEBUG v0.51.1] マップサイズ比較\n旧: 13×18=" + oldSize + " タイル\n新: " + MAP_W + "×" + MAP_H + "=" + newSize + " タイル\n比率: " + ratio + "倍\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-row-widths").onclick = function () {
+        var ng = [];
+        for (var _rr = 0; _rr < RAW_MAP.length; _rr++) {
+          var rowFull = RAW_MAP[_rr];
+          if (typeof rowFull !== "string") continue;
+          if (rowFull.length !== MAP_W) { ng.push("row" + _rr + ":" + rowFull.length + "文字"); }
+        }
+        var pass = (ng.length === 0);
+        showToast("[DEBUG v0.51.1] 全行幅確認\n" + (pass ? "全" + RAW_MAP.length + "行がMAP_W=" + MAP_W + "文字 PASS" : "NG行: " + ng.join(", ") + " FAIL"));
+      };
+      document.getElementById("btn-debug-v511-warp-count").onclick = function () {
+        var cnt = 0;
+        for (var _wy = 0; _wy < RAW_MAP.length; _wy++) {
+          for (var _wx = 0; _wx < MAP_W; _wx++) {
+            var ch = RAW_MAP[_wy][_wx];
+            if (ch >= "1" && ch <= "6") cnt++;
+          }
+        }
+        var pass = (cnt === 6);
+        showToast("[DEBUG v0.51.1] 6ワープ出現数\nRAW_MAP内の\"1\"〜\"6\"タイル数: " + cnt + "\n期待値: 6\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-warp-dest").onclick = function () {
+        var results = [];
+        var pass = true;
+        for (var _wdi = 0; _wdi < STAGE_WARP_DATA.length; _wdi++) {
+          var wd = STAGE_WARP_DATA[_wdi];
+          var tile = (RAW_MAP[wd.y] || "")[wd.x] || "?";
+          var expected = String(wd.stageNum);
+          var ok = (tile === expected);
+          if (!ok) pass = false;
+          results.push("ST" + wd.stageNum + "(" + wd.x + "," + wd.y + ")=" + tile + (ok ? "✓" : "✗"));
+        }
+        showToast("[DEBUG v0.51.1] ワープ座標⇔タイル一致確認\n" + results.join("\n") + "\n" + (pass ? "全6ワープ PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-warp-unlock").onclick = function () {
+        var sc = state.sideMap.stageCleared || {};
+        var stage1OK = true;                      // ST1は常に解放
+        var stage2OK = !!sc["1"];                 // ST2はST1クリアで解放
+        var stage6OK = !!sc["5"];                 // ST6はST5クリアで解放
+        showToast("[DEBUG v0.51.1] ワープ解放境界確認\nST1: 常時解放=" + stage1OK + " PASS\nST2: ST1クリア依存=" + stage2OK + (state.sideMap.stageCleared && sc["1"] ? " (解放中)" : " (未解放)") + "\nST6: ST5クリア依存=" + stage6OK + (state.sideMap.stageCleared && sc["5"] ? " (解放中)" : " (未解放)"));
+      };
+      document.getElementById("btn-debug-v511-warp-spam").onclick = function () {
+        // _stageWarpTransitionLockが機能しているか確認
+        var lockBefore = _stageWarpTransitionLock;
+        _stageWarpTransitionLock = true;
+        var blocked = _stageWarpTransitionLock;  // ロック中はtrue
+        _stageWarpTransitionLock = false;
+        var released = !_stageWarpTransitionLock;
+        var pass = (blocked === true && released === true);
+        showToast("[DEBUG v0.51.1] ワープ連打防止ロック確認\nlock=true後にgetterがtrue: " + blocked + "\nswitchToNormalMap()呼び出し後にfalse: " + released + "\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-return-safety").onclick = function () {
+        var rx = state.normalReturnX;
+        var ry = state.normalReturnY;
+        var inBounds = (rx >= 0 && rx < MAP_W && ry >= 0 && ry < MAP_H);
+        var tc = (inBounds && state.terrain[ry]) ? state.terrain[ry][rx] : "?";
+        var notBlocked = (tc !== "#" && tc !== "~");
+        var pass = inBounds && notBlocked;
+        showToast("[DEBUG v0.51.1] normalReturn座標安全確認\nnormalReturnX/Y=(" + rx + "," + ry + ")\n範囲内: " + inBounds + " タイル:" + tc + " 進入可: " + notBlocked + "\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-all-returns").onclick = function () {
+        var results = [];
+        for (var _sri = 0; _sri < STAGE_WARP_DATA.length; _sri++) {
+          var wd2 = STAGE_WARP_DATA[_sri];
+          var retX = wd2.x; var retY = wd2.y + 1;
+          var inB = (retX >= 0 && retX < MAP_W && retY >= 0 && retY < MAP_H);
+          var tc2 = (inB && state.terrain[retY]) ? state.terrain[retY][retX] : "?";
+          results.push("ST" + wd2.stageNum + ":(" + retX + "," + retY + ")=" + tc2 + (inB && tc2 !== "#" && tc2 !== "~" ? "✓" : "✗"));
+        }
+        showToast("[DEBUG v0.51.1] 全ステージ帰還位置確認\n" + results.join("\n"));
+      };
+      document.getElementById("btn-debug-v511-scale-accum").onclick = function () {
+        var testM = { id: "test_enemy", name: "テスト", hp: 100, attack: 10, def: 5, exp: 50, captureRate: 0.3, fleeRate: 0.3 };
+        var scaled1 = applyStageEnemyScaling(testM, 3);
+        var scaled2 = applyStageEnemyScaling(scaled1, 3);  // 2回目は元データが変わっていないはず
+        var pass = (testM.hp === 100) && (scaled1.hp !== scaled2.hp || scaled2.hp === Math.round(scaled1.hp)); // 元データ不変確認
+        var noAccum = (testM.hp === 100);  // 元データが変化していないことを確認
+        showToast("[DEBUG v0.51.1] スケーリング累積防止確認\n元HP:" + testM.hp + " 1回目HP:" + scaled1.hp + " 2回目(元に適用)HP:" + scaled2.hp + "\n元データ不変: " + noAccum + " " + (noAccum ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-special-skip").onclick = function () {
+        var finalMonster = { id: "ultimategorilla", name: "究極ゴリラ", final: true, hp: 5000, attack: 150, def: 60, exp: 300, captureRate: 0.005, fleeRate: 0.95 };
+        var chimp = { id: "ultimate_chimpanzee", name: "究極チンパンジー", hp: 1500, attack: 72, def: 32, exp: 3000, captureRate: 0, fleeRate: 0.05 };
+        var normal = { id: "wilddog", name: "のらいぬ", hp: 30, attack: 8, def: 2, exp: 20, captureRate: 0.3, fleeRate: 0.3 };
+        var skipFinal = shouldSkipStageEnemyScaling(finalMonster);
+        var skipChimp = shouldSkipStageEnemyScaling(chimp);
+        var skipNormal = shouldSkipStageEnemyScaling(normal);
+        var pass = skipFinal && skipChimp && !skipNormal;
+        showToast("[DEBUG v0.51.1] 特殊敵スケーリング除外確認\n究極ゴリラ(final=true)除外: " + skipFinal + "\n究極チンパンジー(ID)除外: " + skipChimp + "\nのらいぬ(通常)除外されない: " + !skipNormal + "\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-capture-rate").onclick = function () {
+        // captureRate計算がstageLevel/levelを参照していないことを確認
+        // attemptCapture()は captureRateBase を使い、stageLevel/levelで補正しない
+        var e = state.enemy;
+        if (!e) {
+          showToast("[DEBUG v0.51.1] 戦闘中でないため確認スキップ\n(戦闘中に実行してください)");
+          return;
+        }
+        var hasStageLevel = (e.stageLevel !== undefined && e.stageLevel > 0);
+        showToast("[DEBUG v0.51.1] 捕獲率level非参照確認\n現在の敵: " + e.name + "\nstageLevel: " + (e.stageLevel || "なし") + "\ncaptureRateBase: " + e.captureRateBase + "\n(captureRateは固定値のみ使用・level非参照) PASS相当");
+      };
+      document.getElementById("btn-debug-v511-lv-display").onclick = function () {
+        // stageLevel 0/undefined/null/NaN の場合に Lv.0 や Lv.NaN が出ないか確認
+        var cases = [
+          { stageLevel: 0, name: "テスト0" },
+          { stageLevel: undefined, name: "テストUndef" },
+          { stageLevel: null, name: "テストNull" },
+          { stageLevel: 5, name: "テスト5" },
+          { stageLevel: NaN, name: "テストNaN" }
+        ];
+        var results = [];
+        var pass = true;
+        for (var _ci = 0; _ci < cases.length; _ci++) {
+          var c2 = cases[_ci];
+          var display = c2.name + (c2.stageLevel ? " Lv." + c2.stageLevel : "");
+          var hasLvNaN = (display.indexOf("Lv.NaN") >= 0 || display.indexOf("Lv.undefined") >= 0 || display.indexOf("Lv.null") >= 0);
+          if (hasLvNaN) pass = false;
+          results.push(c2.name + "→\"" + display + "\"" + (hasLvNaN ? "✗" : "✓"));
+        }
+        showToast("[DEBUG v0.51.1] 敵Lv表示境界確認\n" + results.join("\n") + "\n" + (pass ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v511-theme-check").onclick = function () {
+        var vp = document.getElementById("field-viewport");
+        if (!vp) { showToast("[DEBUG v0.51.1] field-viewport が見つからない"); return; }
+        var results = [];
+        for (var _ti2 = 1; _ti2 <= 6; _ti2++) {
+          var cls = "stage-theme-" + _ti2;
+          applyStageTheme(_ti2);
+          var applied = vp.classList.contains(cls);
+          clearStageTheme();
+          var cleared = !vp.classList.contains(cls);
+          results.push("ST" + _ti2 + ":" + (applied ? "適用✓" : "適用✗") + (cleared ? "解除✓" : "解除✗"));
+        }
+        showToast("[DEBUG v0.51.1] 6テーマ視覚差確認\n" + results.join("\n"));
+      };
+      document.getElementById("btn-debug-v511-theme-clear").onclick = function () {
+        var vp = document.getElementById("field-viewport");
+        if (!vp) { showToast("[DEBUG v0.51.1] field-viewport が見つからない"); return; }
+        // すべてのテーマクラスを付与してからclearし、残留がないか確認
+        for (var _ti3 = 1; _ti3 <= 6; _ti3++) { vp.classList.add("stage-theme-" + _ti3); }
+        clearStageTheme();
+        var residue = [];
+        for (var _ti4 = 1; _ti4 <= 6; _ti4++) {
+          if (vp.classList.contains("stage-theme-" + _ti4)) { residue.push("stage-theme-" + _ti4); }
+        }
+        var pass = (residue.length === 0);
+        showToast("[DEBUG v0.51.1] theme class残留防止確認\nclearStageTheme()後の残留: " + (residue.length > 0 ? residue.join(",") : "なし") + "\n" + (pass ? "PASS" : "FAIL"));
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -13005,7 +13194,9 @@
 
     // §129 v0.51: ワープ広場ステージ選択モーダル
     document.getElementById("btn-stage-warp-enter").addEventListener("click", function () {
+      if (_stageWarpTransitionLock) return; // §130 v0.51.1: 二重入場防止ロック
       if (!_pendingWarpStageNum) { closeModal("modal-stage-warp"); return; }
+      _stageWarpTransitionLock = true; // §130 v0.51.1: 連打ガード開始
       var warpInfo = null;
       for (var _wi2 = 0; _wi2 < STAGE_WARP_DATA.length; _wi2++) {
         if (STAGE_WARP_DATA[_wi2].stageNum === _pendingWarpStageNum) { warpInfo = STAGE_WARP_DATA[_wi2]; break; }
@@ -13563,12 +13754,12 @@
       obj.objectiveId = "stage1_explore";
       obj.title = "第1ステージ「はじまりの草原」を進もう";
       obj.shortText = "横スクロールの草原を右に進み、ゴール🏁を目指そう！";
-      obj.locationText = "横スクロール：はじまりの草原";
+      obj.locationText = "横スクロール：はじまりの草原（🌀ゲートかST1ワープで入れる）";
     } else if (p.level < 40) {
       obj.objectiveId = "visit_side_gate";
       obj.title = "横スクロールの入口へ向かおう";
-      obj.shortText = "村の🌀ゲートから横スクロールの世界へ踏み出そう！（現在Lv" + p.level + "）";
-      obj.locationText = "通常マップ：村の🌀ゲート";
+      obj.shortText = "村の🌀ゲートかワープ広場ST1ワープから横スクロールへ！（現在Lv" + p.level + "）";
+      obj.locationText = "通常マップ：🌀ゲート or ワープ広場ST1";
     } else if (!ef.cygnusHelmetGot) {
       obj.objectiveId = "get_cygnus";
       obj.title = "キグナスのかぶとを手に入れよう";

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.51** |
+| 現在バージョン | **v0.51.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.51.1] 拡張フィールド・ワープ広場安定化**（§130）
+  - **RAW_MAP row19修正**: 27文字→26文字（`"#####.,,,,,,,,,,,,,,,,.###"`）
+  - **`shouldSkipStageEnemyScaling()`追加**: 究極チンパンジー・`final`フラグ敵をスケーリング除外
+  - **`_stageWarpTransitionLock`追加**: ワープ移動ボタン連打による二重入場防止
+  - **`getCurrentAdventureGuide()` stage1案内更新**: ワープ広場への言及を追加
+  - **デバッグ14ボタン（§130）**: マップサイズ比較・行幅確認・ワープ検証・帰還位置・スケーリング累積防止等
 - **[v0.51] 拡張フィールド・ワープ広場・ステージ別敵強化**（§129）
   - 通常マップ 13×18 → 26×36 タイル (南エリア+東通路追加)
   - ワープ広場: ステージ1〜6へ直接テレポートできる6ワープタイル
