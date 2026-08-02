@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.51.1** |
+| 現在バージョン | **v0.51.2** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,21 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.51.2] ワープ広場の視認性・案内導線強化**（§131）
+  - **`getStageWarpStatus(stageNum)`**: 純粋関数。locked/available/current/cleared の4状態を返す
+  - **`getCurrentObjectiveStageNumber()`**: objectiveId→ステージ番号変換
+  - **`ADVENTURE_OBJECTIVE_STAGE_MAP`**: objectiveId→ステージ番号対応表（8エントリ）
+  - **`FIELD_SIGN_DATA`**: フィールド案内板データ3件（座標は "," タイル上）
+  - **`STAGE_WARP_PLAZA_BOUNDS`**: ワープ広場範囲定義
+  - **`state.stageWarpPlazaIntroduced`**: 初回説明永続フラグ（saveGame/loadGame/never demote対応）
+  - **`checkStageWarpPlazaIntro()`**: 広場初回到達チェック・説明モーダル表示
+  - **`openFieldSignModal()`**: 案内板モーダル表示（有効移動カウント非加算）
+  - **`STAGE_WARP_DATA` 拡張**: returnX/returnY/themeLabel/themeDesc/positionLabel フィールド追加
+  - **`openStageWarpModal()` 更新**: getStageWarpStatus()統合・敵Lv目安・テーマ名・説明・状態ラベル表示
+  - **`renderField()` 更新**: ワープタイル状態別絵文字（locked=🔒/current=▶+icon/cleared=✅/available=icon）
+  - **`renderAdventureGuideSection()` 更新**: getStageWarpStatus()・getStageEnemyLevelRange()統合
+  - **`modal-field-sign`** / **`modal-warp-plaza-intro`**: 案内板・初回説明モーダル追加（index.html）
+  - **デバッグ12ボタン（§131）**
 - **[v0.51.1] 拡張フィールド・ワープ広場安定化**（§130）
   - **RAW_MAP row19修正**: 27文字→26文字（`"#####.,,,,,,,,,,,,,,,,.###"`）
   - **`shouldSkipStageEnemyScaling()`追加**: 究極チンパンジー・`final`フラグ敵をスケーリング除外

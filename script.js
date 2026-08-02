@@ -296,13 +296,26 @@
   };
 
   // §129 v0.51: ワープ広場データ (通常マップ上の座標・ステージ番号)
+  // §131 v0.51.2: returnX/returnY/themeLabel/themeDesc/positionLabel フィールド追加
   var STAGE_WARP_DATA = [
-    { stageNum: 1, x: 7,  y: 25, label: "はじまりの草原",     icon: "🌱" },
-    { stageNum: 2, x: 11, y: 25, label: "あやしい森",         icon: "🌲" },
-    { stageNum: 3, x: 15, y: 25, label: "古びた町はずれ",     icon: "🏚️" },
-    { stageNum: 4, x: 7,  y: 29, label: "ゴリラ山道",         icon: "⛰️" },
-    { stageNum: 5, x: 11, y: 29, label: "黒い城",             icon: "🏰" },
-    { stageNum: 6, x: 15, y: 29, label: "チンパンジーの聖域", icon: "🌿" }
+    { stageNum: 1, x: 7,  y: 25, returnX: 7,  returnY: 26, label: "はじまりの草原",     icon: "🌱",
+      themeLabel: "草原と森",    themeDesc: "草木が広がる、最初の試練の地域です。",
+      positionLabel: "上段左" },
+    { stageNum: 2, x: 11, y: 25, returnX: 11, returnY: 26, label: "あやしい森",         icon: "🌲",
+      themeLabel: "あやしい森",  themeDesc: "妖しい霧と木々が行く手を遮る地域です。",
+      positionLabel: "上段中央" },
+    { stageNum: 3, x: 15, y: 25, returnX: 15, returnY: 26, label: "古びた町はずれ",     icon: "🏚️",
+      themeLabel: "廃墟と荒れ地", themeDesc: "朽ちた建物が点在する、荒れた地域です。",
+      positionLabel: "上段右" },
+    { stageNum: 4, x: 7,  y: 29, returnX: 7,  returnY: 30, label: "ゴリラ山道",         icon: "⛰️",
+      themeLabel: "険しい山道",  themeDesc: "険しい岩場と急坂が続く山の地域です。",
+      positionLabel: "下段左" },
+    { stageNum: 5, x: 11, y: 29, returnX: 11, returnY: 30, label: "黒い城",             icon: "🏰",
+      themeLabel: "黒い城",     themeDesc: "闇に覆われた城で、強敵が待ち構えています。",
+      positionLabel: "下段中央" },
+    { stageNum: 6, x: 15, y: 29, returnX: 15, returnY: 30, label: "チンパンジーの聖域", icon: "🌿",
+      themeLabel: "古代の聖域",  themeDesc: "古代の力が宿る、聖なる地域です。",
+      positionLabel: "下段右" }
   ];
 
   // §129 v0.51: ステージ別敵レベルデータ (min/max: ランダムレベル帯, bossBonus: ボス追加, mult: 倍率)
@@ -324,6 +337,33 @@
     5: "stage-theme-5",
     6: "stage-theme-6"
   };
+
+  // §131 v0.51.2: objectiveId → ステージ番号対応表
+  var ADVENTURE_OBJECTIVE_STAGE_MAP = {
+    "visit_side_gate":   1,
+    "stage1_explore":    1,
+    "stage2_challenge":  2,
+    "stage3_challenge":  3,
+    "stage4_challenge":  4,
+    "stage5_challenge":  5,
+    "stage6_challenge":  6,
+    "defeat_chimp":      6,
+    "stage6_boss":       6
+  };
+
+  // §131 v0.51.2: 案内板データ一元管理 (座標は RAW_MAP 確認済み: すべて "," タイル)
+  // row17 col7 = "," / row22 col7 = "," / row27 col11 = ","
+  var FIELD_SIGN_DATA = [
+    { id: "south_route",  x: 7,  y: 17, icon: "🪧", title: "道しるべ",
+      text: "南へ進むとワープ広場です。\n六つのステージへの入口が並んでいます。" },
+    { id: "north_return", x: 7,  y: 22, icon: "🪧", title: "道しるべ",
+      text: "北へ戻ると、町・酒場・実家があります。" },
+    { id: "plaza_guide",  x: 11, y: 27, icon: "🪧", title: "🪧 ワープ広場案内",
+      text: "六つのステージへ続くワープ広場です。\n\n上段左：第1ステージ\n上段中央：第2ステージ\n上段右：第3ステージ\n下段左：第4ステージ\n下段中央：第5ステージ\n下段右：第6ステージ\n\n🔒 未解放　▶ 現在の目的　✅ クリア済み\n\n各ワープを調べると詳細が確認できます。" }
+  ];
+
+  // §131 v0.51.2: ワープ広場範囲定義
+  var STAGE_WARP_PLAZA_BOUNDS = { minX: 5, maxX: 20, minY: 23, maxY: 31 };
 
   // §44 v0.9.1: 固定敵の撃破確定待ちキー (finishBattle でセット)
   var sideMapPendingFixedKey = "";
@@ -1166,7 +1206,8 @@
     companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
-    normalReturnY: 4  // §129 v0.51: ワープ帰還Y座標
+    normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
+    stageWarpPlazaIntroduced: false // §131 v0.51.2: ワープ広場初回到達フラグ（永続・never demote）
   };
 
   // ---------------------------------------------------------
@@ -1460,6 +1501,18 @@
             emoji = trailMap[key];
           } else {
             emoji = TERRAIN_EMOJI[tileChar] || "🟩";
+            // §131 v0.51.2: ワープタイルはステータスに応じて絵文字を動的変更
+            if (tileChar >= "1" && tileChar <= "6") {
+              var _warpSt = getStageWarpStatus(parseInt(tileChar, 10));
+              if (_warpSt.status === "locked") {
+                emoji = "🔒";
+              } else if (_warpSt.status === "cleared") {
+                emoji = "✅";
+              } else if (_warpSt.status === "current") {
+                emoji = "▶" + (STAGE_WARP_DATA[parseInt(tileChar, 10) - 1].icon || "");
+              }
+              // "available" はそのまま TERRAIN_EMOJI を使用
+            }
           }
         }
         html += '<div class="tile">' + emoji + "</div>";
@@ -2791,6 +2844,96 @@
     openModal("modal-side-gate");
   }
 
+  // §131 v0.51.2: ワープ広場初回説明モーダル表示防止フラグ（非永続）
+  var _stageWarpPlazaIntroShown = false;
+
+  // §131 v0.51.2: objectiveId からステージ番号を導出（純粋関数）
+  function getCurrentObjectiveStageNumber() {
+    var guide = getCurrentAdventureGuide();
+    if (!guide || !guide.objectiveId) return null;
+    var n = ADVENTURE_OBJECTIVE_STAGE_MAP[guide.objectiveId];
+    return n || null;
+  }
+
+  // §131 v0.51.2: ワープ状態を返す純粋関数（4状態: locked/available/current/cleared）
+  function getStageWarpStatus(stageNum) {
+    var isUnlocked = (stageNum === 1);
+    if (!isUnlocked && state.sideMap && state.sideMap.stageCleared) {
+      isUnlocked = !!state.sideMap.stageCleared[String(stageNum - 1)];
+    }
+    var isCleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared[String(stageNum)]);
+    var isCurrentObjective = (getCurrentObjectiveStageNumber() === stageNum);
+    var warpInfo = null;
+    for (var _gwi = 0; _gwi < STAGE_WARP_DATA.length; _gwi++) {
+      if (STAGE_WARP_DATA[_gwi].stageNum === stageNum) { warpInfo = STAGE_WARP_DATA[_gwi]; break; }
+    }
+    var status;
+    if (!isUnlocked) {
+      status = "locked";
+    } else if (isCleared) {
+      status = "cleared";
+    } else if (isCurrentObjective) {
+      status = "current";
+    } else {
+      status = "available";
+    }
+    var displayIcon;
+    if (status === "locked") { displayIcon = "🔒"; }
+    else if (status === "cleared") { displayIcon = "✅"; }
+    else if (status === "current") { displayIcon = "▶" + (warpInfo ? warpInfo.icon : ""); }
+    else { displayIcon = warpInfo ? warpInfo.icon : ""; }
+    return {
+      stageNum: stageNum,
+      isUnlocked: isUnlocked,
+      isCleared: isCleared,
+      isCurrentObjective: isCurrentObjective,
+      status: status,
+      displayIcon: displayIcon
+    };
+  }
+
+  // §131 v0.51.2: ステージの敵Lvテキストを返す純粋関数
+  function getStageEnemyLevelRange(stageNum) {
+    var ld = STAGE_ENEMY_LEVEL_DATA[stageNum];
+    if (!ld) return { min: 0, max: 0, text: "不明" };
+    return { min: ld.min, max: ld.max, text: "Lv" + ld.min + "〜" + ld.max };
+  }
+
+  // §131 v0.51.2: ステージの配置ラベルを返す
+  function getStageWarpPositionLabel(stageNum) {
+    var positions = { 1: "上段左", 2: "上段中央", 3: "上段右", 4: "下段左", 5: "下段中央", 6: "下段右" };
+    return positions[stageNum] || "";
+  }
+
+  // §131 v0.51.2: ワープ広場初回到達チェック（初回のみ説明モーダル表示）
+  function checkStageWarpPlazaIntro() {
+    if (state.stageWarpPlazaIntroduced) return;
+    if (_stageWarpPlazaIntroShown) return;
+    if (state.inBattle) return;
+    if (state.modalOpen) return;
+    if (state.mapMode !== "normal") return;
+    var px = state.player.x, py = state.player.y;
+    var b = STAGE_WARP_PLAZA_BOUNDS;
+    if (px >= b.minX && px <= b.maxX && py >= b.minY && py <= b.maxY) {
+      _stageWarpPlazaIntroShown = true;
+      state.stageWarpPlazaIntroduced = true;
+      saveGame();
+      openModal("modal-warp-plaza-intro");
+    }
+  }
+
+  // §131 v0.51.2: 案内板モーダル表示（有効移動非加算）
+  function openFieldSignModal(sign) {
+    var bodyEl = document.getElementById("modal-field-sign-body");
+    if (!bodyEl) return;
+    var textHtml = sign.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    bodyEl.innerHTML =
+      "<div style=\"font-size:32px;\">" + sign.icon + "</div>" +
+      "<div style=\"font-weight:bold;margin-bottom:8px;\">" + sign.title + "</div>" +
+      "<p style=\"text-align:left;white-space:pre-line;\">" + sign.text + "</p>";
+    openModal("modal-field-sign");
+  }
+
   // §129 v0.51: ワープ広場ステージ選択モーダル
   var _pendingWarpStageNum = 0;
   var _stageWarpTransitionLock = false; // §130 v0.51.1: 移動ボタン連打による二重入場防止
@@ -2800,26 +2943,30 @@
       if (STAGE_WARP_DATA[_wi].stageNum === stageNum) { warpInfo = STAGE_WARP_DATA[_wi]; break; }
     }
     if (!warpInfo) return;
-    var unlocked = (stageNum === 1);
-    if (!unlocked && state.sideMap && state.sideMap.stageCleared) {
-      unlocked = !!state.sideMap.stageCleared[String(stageNum - 1)];
-    }
-    var ld = STAGE_ENEMY_LEVEL_DATA[stageNum] || {};
+    // §131 v0.51.2: getStageWarpStatus で統合管理
+    var warpSt = getStageWarpStatus(stageNum);
+    var lvRange = getStageEnemyLevelRange(stageNum);
+    var posLabel = getStageWarpPositionLabel(stageNum);
+    var statusLabel = { locked: "未解放", available: "挑戦可能", current: "現在の目的", cleared: "クリア済み（再挑戦可能）" }[warpSt.status] || "";
     var bodyEl = document.getElementById("modal-stage-warp-body");
     if (!bodyEl) return;
     var enterBtn = document.getElementById("btn-stage-warp-enter");
-    if (unlocked) {
+    if (warpSt.isUnlocked) {
       bodyEl.innerHTML =
         "<div style=\"font-size:40px;line-height:1.2;\">" + warpInfo.icon + "</div>" +
-        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">ステージ " + stageNum + ": " + warpInfo.label + "</div>" +
-        "<p>敵レベル: " + (ld.min || "?") + "〜" + (ld.max || "?") + "</p>" +
+        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:4px;\">第" + stageNum + "ステージ: " + warpInfo.label + "</div>" +
+        "<div style=\"font-size:0.78em;color:#adb5bd;margin-bottom:6px;\">" + posLabel + " 【" + statusLabel + "】</div>" +
+        "<p style=\"font-size:0.9em;margin-bottom:4px;\">敵Lv目安: " + lvRange.text + "</p>" +
+        "<p style=\"font-size:0.85em;color:#b0c4b0;margin-bottom:4px;\">テーマ: " + (warpInfo.themeLabel || "") + "</p>" +
+        "<p style=\"font-size:0.82em;color:#9ab3a0;margin-bottom:8px;\">" + (warpInfo.themeDesc || "") + "</p>" +
         "<p>横スクロールステージへ入りますか？</p>";
       if (enterBtn) { enterBtn.style.display = ""; }
       _pendingWarpStageNum = stageNum;
     } else {
       bodyEl.innerHTML =
-        "<div style=\"font-size:40px;line-height:1.2;\">" + warpInfo.icon + "</div>" +
-        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:6px;\">ステージ " + stageNum + ": " + warpInfo.label + "</div>" +
+        "<div style=\"font-size:40px;line-height:1.2;\">🔒</div>" +
+        "<div style=\"font-weight:bold;font-size:1em;margin-bottom:4px;\">第" + stageNum + "ステージ: " + warpInfo.label + "</div>" +
+        "<div style=\"font-size:0.78em;color:#adb5bd;margin-bottom:6px;\">" + posLabel + " 【" + statusLabel + "】</div>" +
         "<p>🔒 まだ解放されていない。<br>前のステージをクリアしよう！</p>";
       if (enterBtn) { enterBtn.style.display = "none"; }
       _pendingWarpStageNum = 0;
@@ -2967,6 +3114,18 @@
       return;
     }
 
+    // §131 v0.51.2: 案内板タイル接触（座標一致で判定）
+    var _foundSign = null;
+    for (var _si = 0; _si < FIELD_SIGN_DATA.length; _si++) {
+      if (FIELD_SIGN_DATA[_si].x === nx && FIELD_SIGN_DATA[_si].y === ny) {
+        _foundSign = FIELD_SIGN_DATA[_si]; break;
+      }
+    }
+    if (_foundSign) {
+      openFieldSignModal(_foundSign);
+      return; // 有効移動非加算・エンカウントなし
+    }
+
     // 安全地形でなければエンカウント判定
     if (!SAFE_TILE[tile]) {
       state.stepsSinceEncounter++;
@@ -2983,6 +3142,8 @@
       _adventureGuideStepCount++;
       if (_adventureGuideStepCount >= 15) { trySpawnAdventureGuideNpc(); }
     }
+    // §131 v0.51.2: ワープ広場初回到達チェック（有効移動確定後・案内板/ワープ非接触時のみ）
+    checkStageWarpPlazaIntro();
   }
 
   function pickupItem(type) {
@@ -8696,6 +8857,20 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v511-lv-display" style="border-color:#80ffb0;color:#80ffb0;">🧪 敵Lv表示境界確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v511-theme-check" style="border-color:#c3a4ff;color:#c3a4ff;">🧪 6テーマ視覚差確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v511-theme-clear" style="border-color:#adb5bd;color:#adb5bd;">🧪 theme class残留防止確認</button>';
+      // §131 v0.51.2: ワープ広場案内導線テストボタン
+      html += '<p class="small" style="color:#a0e8ff;margin-top:8px;">🪧 v0.51.2 案内導線テスト (§131)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-warp-status" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 ワープ状態4種表示確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-current-unique" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 currentワープ一意性確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-objective-map" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 objectiveId・ワープ対応確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-sign-safety" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 案内板座標安全確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-plaza-intro" style="border-color:#ffd700;color:#ffd700;">🧪 ワープ広場初回説明確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-intro-reshow" style="border-color:#ffd700;color:#ffd700;">🧪 初回説明再表示防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-never-demote" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 初回フラグnever-demote確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-modal-info" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 ワープモーダル情報整合確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-paperview-sync" style="border-color:#a0e8ff;color:#a0e8ff;">🧪 PaperView・ワープ状態一致確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-current-switch" style="border-color:#ffd700;color:#ffd700;">🧪 進行変更時current切替確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-plaza-teleport" style="border-color:#80ffb0;color:#80ffb0;">🗺️ ワープ広場中央へ移動(11,27)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v512-intro-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 初回説明フラグリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -10475,6 +10650,137 @@
         }
         var pass = (residue.length === 0);
         showToast("[DEBUG v0.51.1] theme class残留防止確認\nclearStageTheme()後の残留: " + (residue.length > 0 ? residue.join(",") : "なし") + "\n" + (pass ? "PASS" : "FAIL"));
+      };
+      // §131 v0.51.2: ワープ広場案内導線テストハンドラー
+      document.getElementById("btn-debug-v512-warp-status").onclick = function () {
+        var _prevCleared = state.sideMap.stageCleared ? JSON.parse(JSON.stringify(state.sideMap.stageCleared)) : {};
+        var results = [];
+        state.sideMap.stageCleared = {};
+        var st1locked = getStageWarpStatus(2);
+        results.push("ST2 locked: " + (st1locked.status === "locked" ? "PASS" : "FAIL(" + st1locked.status + ")"));
+        state.sideMap.stageCleared = { "1": true };
+        var st2avail = getStageWarpStatus(2);
+        results.push("ST2 available(cleared={}): " + (st2avail.status !== "locked" ? "PASS" : "FAIL"));
+        state.sideMap.stageCleared = { "1": true, "2": true };
+        var st2cleared = getStageWarpStatus(2);
+        results.push("ST2 cleared: " + (st2cleared.status === "cleared" ? "PASS" : "FAIL(" + st2cleared.status + ")"));
+        var st1cur = getStageWarpStatus(1);
+        results.push("ST1 unlocked: " + (st1cur.isUnlocked ? "PASS" : "FAIL"));
+        state.sideMap.stageCleared = _prevCleared;
+        showToast("[v0.51.2] ワープ状態4種\n" + results.join("\n"));
+      };
+      document.getElementById("btn-debug-v512-current-unique").onclick = function () {
+        var count = 0;
+        for (var _n = 1; _n <= 6; _n++) {
+          if (getStageWarpStatus(_n).status === "current") count++;
+        }
+        showToast("[v0.51.2] currentワープ数=" + count + " " + (count <= 1 ? "PASS" : "FAIL(2件以上)"));
+      };
+      document.getElementById("btn-debug-v512-objective-map").onclick = function () {
+        var guide = getCurrentAdventureGuide();
+        var stageNum = getCurrentObjectiveStageNumber();
+        var results = [];
+        var ids = ["visit_side_gate","stage1_explore","stage2_challenge","stage3_challenge","stage4_challenge","stage5_challenge","stage6_challenge","defeat_chimp"];
+        var pass = true;
+        for (var _oi = 0; _oi < ids.length; _oi++) {
+          var expected = ADVENTURE_OBJECTIVE_STAGE_MAP[ids[_oi]];
+          results.push(ids[_oi] + "→" + (expected || "なし"));
+          if (!expected) pass = false;
+        }
+        showToast("[v0.51.2] objectiveId対応確認\n現在id=" + (guide ? guide.objectiveId : "null") + " stage=" + stageNum + "\n全件マッピング: " + (pass ? "PASS" : "FAIL") + "\n" + results.join("\n"));
+      };
+      document.getElementById("btn-debug-v512-sign-safety").onclick = function () {
+        var results = [];
+        var pass = true;
+        for (var _sis = 0; _sis < FIELD_SIGN_DATA.length; _sis++) {
+          var _s = FIELD_SIGN_DATA[_sis];
+          var inBounds = (_s.x >= 0 && _s.x < MAP_W && _s.y >= 0 && _s.y < MAP_H);
+          var tc = (inBounds && state.terrain[_s.y]) ? state.terrain[_s.y][_s.x] : "?";
+          var notBlocked = (tc !== "#" && tc !== "~");
+          var ok = inBounds && notBlocked;
+          if (!ok) pass = false;
+          results.push(_s.id + "(" + _s.x + "," + _s.y + ")=" + tc + (ok ? " PASS" : " FAIL"));
+        }
+        showToast("[v0.51.2] 案内板座標安全確認\n" + results.join("\n") + "\n" + (pass ? "全件PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v512-plaza-intro").onclick = function () {
+        var _prev = state.stageWarpPlazaIntroduced;
+        state.stageWarpPlazaIntroduced = false;
+        _stageWarpPlazaIntroShown = false;
+        closeModal("settings-modal");
+        state.stageWarpPlazaIntroduced = false;
+        _stageWarpPlazaIntroShown = true;
+        state.stageWarpPlazaIntroduced = true;
+        saveGame();
+        openModal("modal-warp-plaza-intro");
+        showToast("[v0.51.2] ワープ広場初回説明モーダルを直接表示");
+      };
+      document.getElementById("btn-debug-v512-intro-reshow").onclick = function () {
+        var _prev = state.stageWarpPlazaIntroduced;
+        state.stageWarpPlazaIntroduced = true;
+        _stageWarpPlazaIntroShown = false;
+        checkStageWarpPlazaIntro();
+        var opened = !document.getElementById("modal-warp-plaza-intro").classList.contains("hidden");
+        var resultText = opened ? "開いた(FAIL:再表示されてしまった)" : "開かない(PASS:再表示防止OK)";
+        state.stageWarpPlazaIntroduced = _prev;
+        if (opened) { closeModal("modal-warp-plaza-intro"); }
+        showToast("[v0.51.2] 初回説明再表示防止\nintroduced=true時→" + resultText);
+      };
+      document.getElementById("btn-debug-v512-never-demote").onclick = function () {
+        var _prev = state.stageWarpPlazaIntroduced;
+        state.stageWarpPlazaIntroduced = true;
+        saveGame();
+        loadGame();
+        var result = !!state.stageWarpPlazaIntroduced;
+        showToast("[v0.51.2] never-demote確認\ntrue→save→load→" + result + " " + (result ? "PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v512-modal-info").onclick = function () {
+        var results = [];
+        var pass = true;
+        for (var _mi = 1; _mi <= 6; _mi++) {
+          var _ws = getStageWarpStatus(_mi);
+          var _lr = getStageEnemyLevelRange(_mi);
+          var wd = STAGE_WARP_DATA[_mi - 1] || {};
+          var ok = _ws.status !== undefined && _lr.text !== "" && wd.label;
+          if (!ok) pass = false;
+          results.push("ST" + _mi + " " + _ws.status + " " + _lr.text + (ok ? " ✅" : " ❌"));
+        }
+        showToast("[v0.51.2] ワープモーダル情報整合確認\n" + results.join("\n") + "\n" + (pass ? "全件PASS" : "FAIL"));
+      };
+      document.getElementById("btn-debug-v512-paperview-sync").onclick = function () {
+        var results = [];
+        for (var _pi = 1; _pi <= 6; _pi++) {
+          var _ws2 = getStageWarpStatus(_pi);
+          var _lr2 = getStageEnemyLevelRange(_pi);
+          results.push("ST" + _pi + ": " + _ws2.status + " " + _ws2.displayIcon + " " + _lr2.text);
+        }
+        showToast("[v0.51.2] PaperView・ワープ状態一覧\n" + results.join("\n"));
+      };
+      document.getElementById("btn-debug-v512-current-switch").onclick = function () {
+        var _prevCleared2 = state.sideMap.stageCleared ? JSON.parse(JSON.stringify(state.sideMap.stageCleared)) : {};
+        state.sideMap.stageCleared = { "1": true };
+        var st2bef = getStageWarpStatus(2).status;
+        var st3bef = getStageWarpStatus(3).status;
+        state.sideMap.stageCleared = { "1": true, "2": true };
+        var st2aft = getStageWarpStatus(2).status;
+        var st3aft = getStageWarpStatus(3).status;
+        state.sideMap.stageCleared = _prevCleared2;
+        var msg = "ST2: " + st2bef + "→" + st2aft + "\nST3: " + st3bef + "→" + st3aft;
+        showToast("[v0.51.2] 進行変更時current切替確認\n" + msg);
+      };
+      document.getElementById("btn-debug-v512-plaza-teleport").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (state.mapMode === "side") { switchToNormalMap(); }
+        closeModal("settings-modal");
+        state.player.x = 11; state.player.y = 27;
+        renderField();
+        showToast("[DEBUG v0.51.2] ワープ広場中央(11,27)へ移動");
+      };
+      document.getElementById("btn-debug-v512-intro-reset").onclick = function () {
+        state.stageWarpPlazaIntroduced = false;
+        _stageWarpPlazaIntroShown = false;
+        saveGame();
+        showToast("[DEBUG v0.51.2] 初回説明フラグリセット\n再度ワープ広場へ入ると説明が表示されます");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -12846,7 +13152,8 @@
         companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {}, // §122 v0.47
         playerName: state.playerName || "", // §126 v0.49: 主人公名
         normalReturnX: state.normalReturnX || 2, // §129 v0.51
-        normalReturnY: state.normalReturnY || 4  // §129 v0.51
+        normalReturnY: state.normalReturnY || 4, // §129 v0.51
+        stageWarpPlazaIntroduced: !!state.stageWarpPlazaIntroduced // §131 v0.51.2: ワープ広場初回到達フラグ
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -12976,6 +13283,8 @@
       // §129 v0.51: ワープ帰還座標（旧セーブは既定値で補完）
       state.normalReturnX = data.normalReturnX || 2;
       state.normalReturnY = data.normalReturnY || 4;
+      // §131 v0.51.2: ワープ広場初回到達フラグ（旧セーブは false で補完・never demote）
+      state.stageWarpPlazaIntroduced = !!data.stageWarpPlazaIntroduced;
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
       if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged || _partyChanged) { saveGame(); } // §114 / §115 / §126 / §128
       resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
@@ -13213,6 +13522,14 @@
     document.getElementById("btn-stage-warp-cancel").addEventListener("click", function () {
       _pendingWarpStageNum = 0;
       closeModal("modal-stage-warp");
+    });
+
+    // §131 v0.51.2: 案内板モーダル・ワープ広場初回説明モーダル
+    document.getElementById("btn-field-sign-close").addEventListener("click", function () {
+      closeModal("modal-field-sign");
+    });
+    document.getElementById("btn-warp-plaza-intro-close").addEventListener("click", function () {
+      closeModal("modal-warp-plaza-intro");
     });
 
     // §53 v0.11.3: 横スクロール内帰還ゲートモーダル
@@ -13905,13 +14222,17 @@
     html += "<p class=\"small\" style=\"color:#06d6a0;font-weight:bold;margin-bottom:6px;\">🧭 冒険ガイド</p>";
     html += "<p class=\"small\" style=\"color:#e0e0e0;margin-bottom:3px;font-weight:bold;\">" + guide.title + "</p>";
     html += "<p class=\"small\" style=\"color:#b0c4b0;margin-bottom:8px;\">" + guide.shortText + "</p>";
+    // §131 v0.51.2: ワープ状態をgetStageWarpStatus()で動的表示
     for (var si = 0; si < guide.stages.length; si++) {
       var s = guide.stages[si];
+      var _warpSt2 = getStageWarpStatus(si + 1);
+      var _lvR = getStageEnemyLevelRange(si + 1);
       html += "<div style=\"display:flex;justify-content:space-between;align-items:center;font-size:0.78em;color:#ccc;margin-bottom:2px;\">";
-      html += "<span>第" + (si + 1) + "ステージ " + s.name + "</span>";
-      html += "<span>" + s.status + "</span>";
+      html += "<span>" + _warpSt2.displayIcon + " 第" + (si + 1) + "ステージ " + s.name + "</span>";
+      html += "<span style=\"color:#9ab3a0;\">" + (_warpSt2.isUnlocked ? _lvR.text : "🔒") + "</span>";
       html += "</div>";
     }
+    html += "<div style=\"font-size:0.72em;color:#6b8a6b;margin-top:4px;\">🔒未解放 ▶現在の目的 ✅クリア済み</div>";
     if (guide.locationText) {
       html += "<p style=\"font-size:0.78em;color:#74c0fc;margin-top:6px;margin-bottom:0;\">📍 " + guide.locationText + "</p>";
     }

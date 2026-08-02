@@ -22,6 +22,23 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.51.2 — ワープ広場の視認性・案内導線強化 (§131)
+
+- **`getStageWarpStatus(stageNum)`**: 4状態純粋関数（locked/available/current/cleared） ✅
+- **`getCurrentObjectiveStageNumber()`**: objectiveId→ステージ番号変換 ✅
+- **`ADVENTURE_OBJECTIVE_STAGE_MAP`**: objectiveId→ステージ番号対応表 ✅
+- **`FIELD_SIGN_DATA`**: フィールド案内板3件（座標は "," タイル上） ✅
+- **`STAGE_WARP_PLAZA_BOUNDS`**: ワープ広場範囲定義 ✅
+- **`state.stageWarpPlazaIntroduced`**: 初回説明永続フラグ（saveGame/loadGame/never demote） ✅
+- **`checkStageWarpPlazaIntro()`**: 広場初回到達チェック ✅
+- **`openFieldSignModal()`**: 案内板モーダル（有効移動カウント非加算） ✅
+- **`STAGE_WARP_DATA` 拡張**: returnX/returnY/themeLabel/themeDesc/positionLabel ✅
+- **`openStageWarpModal()` 更新**: getStageWarpStatus()統合・情報拡充 ✅
+- **`renderField()` 更新**: ワープタイル状態別絵文字 ✅
+- **`renderAdventureGuideSection()` 更新**: getStageWarpStatus()統合 ✅
+- **`modal-field-sign` / `modal-warp-plaza-intro`**: index.htmlにモーダル追加 ✅
+- **デバッグ12ボタン（§131）** ✅
+
 ### Version 0.51 — フィールド4倍拡張・ワープ広場・ステージ別敵レベル・テーマ (§129)
 
 - **RAW_MAP 拡張**: 13×18 → 26×36（NW 角の既存設備は座標変更なし）✅

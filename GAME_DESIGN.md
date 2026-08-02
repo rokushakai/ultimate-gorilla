@@ -7313,6 +7313,72 @@ v0.51で追加した通常フィールド拡張、6ステージワープ、ス�
 - 通常マップ復帰時（switchToNormalMap）に必ず clearStageTheme() を呼び出し
 - 旅の案内人NPC（🧭）のスポーン判定: "." と "," のみ許可 → ワープタイル上には出現しない
 
+## v0.51.2 ワープ広場の視認性・案内導線強化（§131）
+
+拡張通常マップのワープ広場への案内導線を強化する。
+
+### 案内板（FIELD_SIGN_DATA）
+
+旧エリアとワープ広場の間の主要分岐に道しるべ看板を3か所設置する。
+座標はすべて "," タイル（道）上に配置（既存タイルと重複しない安全位置）。
+
+| id | 座標 | タイトル |
+|---|---|---|
+| south_route | (7, 17) | 道しるべ（南へ進むとワープ広場） |
+| north_return | (7, 22) | 道しるべ（北へ戻ると町・酒場・実家） |
+| plaza_guide | (11, 27) | ワープ広場案内（6ステージ配置説明） |
+
+- 看板への接触は有効移動15歩カウントへ加算しない（movePlayer内でreturn）
+- 看板座標タイルは "," タイルのため、旅の案内人（🧭）は自動的にスポーンしない
+- 案内板モーダル（`modal-field-sign`）：閉じると案内板から再読可能
+
+### ワープ状態（getStageWarpStatus）
+
+4状態: `locked` / `available` / `current` / `cleared`
+
+| 状態 | 条件 | フィールド表示 |
+|---|---|---|
+| locked | 前ステージ未クリア | 🔒 |
+| current | 現在objectiveIdが対応ステージ | ▶+icon |
+| cleared | stageCleared済み | ✅ |
+| available | 解放済み・未クリア・非current | icon |
+
+- `currentは最大1件。gameCleared後は通常currentなし（defeat_chimp=ST6）
+- `getStageWarpStatus()` は純粋関数（副作用なし）
+- PaperView・旅の案内人・フィールドワープ描画はすべて `getStageWarpStatus()` を使用
+
+### ADVENTURE_OBJECTIVE_STAGE_MAP
+
+objectiveId → ステージ番号の対応表：
+`visit_side_gate`/`stage1_explore`→1, `stage2_challenge`→2, ..., `stage6_challenge`/`defeat_chimp`/`stage6_boss`→6
+
+### ワープ広場初回説明（stageWarpPlazaIntroduced）
+
+- `STAGE_WARP_PLAZA_BOUNDS` = { minX:5, maxX:20, minY:23, maxY:31 }
+- プレイヤーが初めて広場範囲に入った時、`stageWarpPlazaIntroduced=false` なら初回モーダルを1回だけ表示
+- `stageWarpPlazaIntroduced` は永続フラグ（saveGame/loadGame/never demote対応）
+- 非永続フラグ `_stageWarpPlazaIntroShown` でセッション内二重表示を防止
+
+### ワープモーダル情報拡充（openStageWarpModal）
+
+- 解放済み: ステージアイコン・名前・positionLabel・statusLabel・敵Lv目安・テーマ名・テーマ説明を表示
+- 未解放: 🔒表示・「入る」ボタン非表示
+
+### STAGE_WARP_DATA 拡張フィールド
+
+既存フィールド（stageNum/x/y/label/icon）に追加：
+- `returnX/returnY`: ワープ帰還座標
+- `themeLabel`: テーマ名
+- `themeDesc`: テーマ説明文
+- `positionLabel`: "上段左"〜"下段右"
+
+### 変更しないもの
+
+- BGM関連コード（stopBGMHard / BGMセッション / BGMタイマー）
+- 究極ゴリラ捕獲条件（Lv99+ウクレレ+HP1-10+うたう）
+- 究極チンパンジーの捕獲不可フラグ
+- ワープ座標・ステージ報酬・解放条件・捕獲率計算式
+
 ### v0.52 候補以降 [未実装・将来機能]
 
 - v0.52: 第3話全話完了演出

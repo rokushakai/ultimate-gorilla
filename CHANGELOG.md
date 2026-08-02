@@ -5,6 +5,42 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.51.2] - 2026-08-02 — ワープ広場の視認性・案内導線強化 (§131)
+
+### Added
+- **`ADVENTURE_OBJECTIVE_STAGE_MAP`** 追加: objectiveId→ステージ番号対応表（8エントリ）
+- **`FIELD_SIGN_DATA`** 追加: フィールド案内板データ3件（south_route/north_return/plaza_guide）。座標は "," タイル上（RAW_MAP確認済み）
+- **`STAGE_WARP_PLAZA_BOUNDS`** 追加: ワープ広場範囲定義 `{ minX:5, maxX:20, minY:23, maxY:31 }`
+- **`_stageWarpPlazaIntroShown`** 追加: セッション内二重表示防止フラグ（非永続）
+- **`getCurrentObjectiveStageNumber()`** 追加: objectiveId→ステージ番号変換（純粋関数）
+- **`getStageWarpStatus(stageNum)`** 追加: locked/available/current/clearedの4状態を返す純粋関数
+- **`getStageEnemyLevelRange(stageNum)`** 追加: 敵Lv目安テキストを返す純粋関数
+- **`getStageWarpPositionLabel(stageNum)`** 追加: "上段左"〜"下段右" の位置説明
+- **`checkStageWarpPlazaIntro()`** 追加: ワープ広場初回到達チェック（初回のみ説明モーダル表示）
+- **`openFieldSignModal(sign)`** 追加: 案内板モーダル表示（XSSエスケープ済み）
+- **`state.stageWarpPlazaIntroduced`** 追加: 初回説明永続フラグ（saveGame/loadGame/never demote対応）
+- **`modal-field-sign`** (index.html) 追加: 案内板モーダル
+- **`modal-warp-plaza-intro`** (index.html) 追加: ワープ広場初回説明モーダル
+- **デバッグ12ボタン（§131）**: ワープ状態4種・current一意性・objectiveId対応・案内板座標安全・初回説明・再表示防止・never-demote・モーダル情報整合・PaperView一致・進行変更切替・広場テレポート・フラグリセット
+
+### Changed
+- **`STAGE_WARP_DATA`** 拡張: 各ワープに `returnX/returnY/themeLabel/themeDesc/positionLabel` フィールドを追加
+- **`openStageWarpModal()`** 更新: `getStageWarpStatus()` を使用して状態・敵Lv目安・テーマ名・説明・位置ラベル・statusLabelを表示。未解放時は「入る」ボタン非表示
+- **`renderField()`** 更新: ワープタイル("1"〜"6")の描画を `getStageWarpStatus()` で動的変更（locked=🔒 / current=▶+icon / cleared=✅ / available=icon）
+- **`renderAdventureGuideSection()`** 更新: 各ステージを `getStageWarpStatus()` / `getStageEnemyLevelRange()` で表示（displayIcon・Lv目安統合）
+- **`movePlayer()`** 更新: FIELD_SIGN_DATA座標一致で案内板モーダル表示（return・歩数カウント非加算）。有効移動確定後に `checkStageWarpPlazaIntro()` 呼び出し
+- **`bindEvents()`** 更新: `btn-field-sign-close` / `btn-warp-plaza-intro-close` のイベントリスナー追加
+- **`saveGame()`** 更新: `stageWarpPlazaIntroduced` を保存
+- **`loadGame()`** 更新: `stageWarpPlazaIntroduced` 読み込み・never demote（旧セーブはfalse補完）
+
+### 変更しなかったもの
+- BGM関連コード（stopBGMHard / BGMセッション / BGMタイマー）一切変更なし
+- 究極ゴリラ捕獲条件（Lv99+ウクレレ+HP1-10+うたう）変更なし
+- 究極チンパンジーの捕獲不可フラグ変更なし
+- ワープ座標・ステージ報酬・解放条件・敵レベルデータ・捕獲率計算式変更なし
+
+---
+
 ## [0.51.1] - 2026-07-26 — 拡張マップ・6ステージワープ安定化 (§130)
 
 ### Fixed
