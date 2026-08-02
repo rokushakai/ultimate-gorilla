@@ -22,6 +22,29 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.54 — 仲間サイドストーリー第3話・全員完了演出 (§133)
+
+- **`areAllCompanionSideStoryChapter3Complete()`**: 4/4完了判定（純粋関数） ✅
+- **`normalizeCompanionSideStoryChapter3AllCompleteFlag()`**: never-demote保証 ✅
+- **`checkCompanionSideStoryChapter3AllComplete(origin)`**: 全員完了確認・pending登録（初回のみtrue） ✅
+- **`showCompanionStoryChapter3AllCompleteCelebration(origin)`**: 演出モーダル開閉 ✅
+- **`closeCompanionStoryChapter3AllCompleteCelebration()`**: 安全クローズ・残存pending再消費 ✅
+- **`consumePendingCompanionStoryChapter3AllCompleteNotice()`**: pending消費（ガード付き） ✅
+- **`state.companionSideStoryChapter3AllCompleteCelebrated`**: 表示済み永続フラグ（saveGame/loadGame/never-demote） ✅
+- **非永続変数5本**: pending・visible・origin・pendingOrigin・timer ✅
+- **`#companion-story-chapter3-all-complete-modal`** (index.html): 演出モーダル（🌅「四つの灯り、その先へ」・7行ダイアログ） ✅
+- **旧セーブ4/4修復**: loadGame() で4/4完了済み・未表示の旧セーブを検出してpending登録 ✅
+- **`consumePendingCompanionStoryCompletionNotices()` 更新**: 第3話pending消費統合（ch1→ch2→ch3の順序） ✅
+- **`closeCompanionSideStoryModal()` 更新**: 第3話origin登録・timer追加 ✅
+- **ESCキー更新**: 第3話演出を最前面優先に ✅
+- **`renderTavernStories()` 更新**: 第3話全員完了バナー（🌅 橙色）追加 ✅
+- **デバッグ12本（§133）**: 判定境界 / 直接表示 / フラグ正規化 / 旧セーブ修復 / 再読防止 / close連打防止 / 通知順序 / 同時表示防止 / 他モーダル中延期 / render×10防止 / save回数 / フラグリセット ✅
+- **GAME_DESIGN.md** 更新: §133 v0.54仕様追記 ✅
+- **CHANGELOG.md / TODO.md / HANDOFF.md**: v0.54へ更新 ✅
+- **BGMコード一切変更なし / 究極ゴリラ捕獲条件・究極チンパンジー変更なし** ✅
+
+---
+
 ### Version 0.53 — ワープ広場案内・進行同期・初回説明安定化 (§132a)
 
 - **`getStageWarpStatus()` 優先順位修正**: `isCurrentObjective` を `isCleared` より先にチェック（クリア済みステージが現在目的の場合 "current" を返すよう修正）✅

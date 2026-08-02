@@ -1204,6 +1204,7 @@
     companionSideStoryAllCompleteCelebrated: false, // §115 v0.44.2: 全話完了演出済み（永続・saveする）
     companionSideStoryChapter2AllCompleteCelebrated: false, // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
     companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
+    companionSideStoryChapter3AllCompleteCelebrated: false, // §133 v0.54: 第3話全話完了演出済み（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -3781,6 +3782,13 @@
   var _companionStoryChapter2AllCompleteNoticeTimer = null;
   var _companionStoryCompletionNoticeQueueTimer = null; // §120 v0.45.3: 共通キュータイマー（非永続）
 
+  // §133 v0.54: 第3話全話完了演出専用状態（非永続・IIFEスコープ・saveしない）
+  var _pendingCompanionStoryChapter3AllCompleteNotice = false;
+  var _companionStoryChapter3AllCompleteNoticeVisible = false;
+  var _companionStoryChapter3AllCompleteOrigin = null;
+  var _pendingCompanionStoryChapter3AllCompleteOrigin = null;
+  var _companionStoryChapter3AllCompleteNoticeTimer = null;
+
   // §117 v0.45: 第2話閲覧中chapter追跡（非永続・saveしない）
   var _cstoryActiveChapter = 1;  // 現在閲覧中のchapter（1, 2 or 3）
 
@@ -3968,6 +3976,40 @@
     return true;
   }
 
+  // §133 v0.54: 第3話4人全完了判定（副作用なし）
+  function areAllCompanionSideStoryChapter3Complete() {
+    var _cids133 = ["juritani", "shurittani", "norio", "harumi"];
+    if (!state.companionSideStoryChapter3Flags || typeof state.companionSideStoryChapter3Flags !== "object") return false;
+    for (var _i133 = 0; _i133 < _cids133.length; _i133++) {
+      if (state.companionSideStoryChapter3Flags[_cids133[_i133]] !== true) return false;
+    }
+    return true;
+  }
+
+  // §133 v0.54: Chapter3 celebratedをboolean保証（never demote）
+  // 変更があればtrueを返す
+  function normalizeCompanionSideStoryChapter3AllCompleteFlag() {
+    if (state.companionSideStoryChapter3AllCompleteCelebrated === true) return false;
+    if (state.companionSideStoryChapter3AllCompleteCelebrated !== false) {
+      state.companionSideStoryChapter3AllCompleteCelebrated = false;
+      return true;
+    }
+    return false;
+  }
+
+  // §133 v0.54: 第3話全話完了を確認し、未祝賀なら演出を予約する
+  // 新規達成ならtrueを返す（saveGame()は呼び出し側で行う）
+  function checkCompanionSideStoryChapter3AllComplete(origin) {
+    normalizeCompanionSideStoryChapter3Flags();
+    if (!areAllCompanionSideStoryChapter3Complete()) return false;
+    normalizeCompanionSideStoryChapter3AllCompleteFlag();
+    if (state.companionSideStoryChapter3AllCompleteCelebrated === true) return false;
+    state.companionSideStoryChapter3AllCompleteCelebrated = true;
+    _pendingCompanionStoryChapter3AllCompleteNotice = true;
+    if (origin) { _pendingCompanionStoryChapter3AllCompleteOrigin = origin; }
+    return true;
+  }
+
   // §119 v0.45.2: 第2話全話完了演出モーダルを開く
   function showCompanionStoryChapter2AllCompleteCelebration(origin) {
     if (_companionStoryChapter2AllCompleteNoticeVisible) return;
@@ -3998,8 +4040,8 @@
     if (_tavernEl119 && !_tavernEl119.classList.contains("hidden")) {
       state.modalOpen = true;
     }
-    // §120 v0.45.3: 残存pendingの安全確認（通常ch2後にch1は残らないが、debug・破損状態対策）
-    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice) {
+    // §120 v0.45.3 / §133 v0.54: 残存pendingの安全確認（debug・破損状態対策）
+    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
       schedulePendingCompanionStoryCompletionNotices(50);
     }
   }
@@ -4028,6 +4070,72 @@
     showCompanionStoryChapter2AllCompleteCelebration(_origin119);
   }
 
+  // §133 v0.54: 第3話全話完了演出モーダルを開く
+  function showCompanionStoryChapter3AllCompleteCelebration(origin) {
+    if (_companionStoryChapter3AllCompleteNoticeVisible) return;
+    if (_companionStoryChapter2AllCompleteNoticeVisible) return; // ch2表示中は開かない（同時表示防止）
+    if (_companionStoryAllCompleteNoticeVisible) return; // ch1表示中は開かない（同時表示防止）
+    var _el133 = document.getElementById("companion-story-chapter3-all-complete-modal");
+    if (!_el133) return;
+    _companionStoryChapter3AllCompleteNoticeVisible = true;
+    _companionStoryChapter3AllCompleteOrigin = origin || "field";
+
+    // 演出本文を生成
+    var _pName133 = getPlayerDisplayName();
+    var _safeName133 = _pName133.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    var _lines133 = [
+      { speaker: "ナレーション", text: "四人の物語を聞き終えた夜、酒場には静かな灯りがともっていた。" },
+      { speaker: "ジュリタニ",   text: "受け取った力は、自分だけのものにしちゃいけねえんだな。" },
+      { speaker: "シュリタニ",   text: "帰る場所があるなら、迷っている誰かにも印を残せる気がする。" },
+      { speaker: "ノリオ",       text: "記録は、過去を閉じ込めるためではなく、未来へ渡すためにあるんだな。" },
+      { speaker: "ハルミ",       text: "もらった灯りを次の人へ渡したら、きっと朝はもっと明るくなるよ。" },
+      { speaker: _pName133,      text: "みんなから受け取ったものを、俺も次へ渡していきたい。" },
+      { speaker: "ナレーション", text: "四つの灯りは一つの輪となり、まだ見ぬ誰かへ続く道を照らしていた。" }
+    ];
+    var _html133 = "";
+    for (var _li133 = 0; _li133 < _lines133.length; _li133++) {
+      var _ln133 = _lines133[_li133];
+      var _spRaw133 = _ln133.speaker;
+      var _spSafe133 = _spRaw133.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      var _txtSafe133 = _ln133.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      var _spColor133 = (_spRaw133 === "ナレーション") ? "#adb5bd" :
+                        (_spRaw133 === _pName133) ? "#a0cfff" : "#ffd166";
+      _html133 += "<div style=\"margin-bottom:10px;\">" +
+        "<div style=\"font-size:0.8em;color:" + _spColor133 + ";\">" + _spSafe133 + "</div>" +
+        "<div style=\"padding-left:8px;\">" + _txtSafe133 + "</div>" +
+        "</div>";
+    }
+    _html133 += "<div style=\"text-align:center;margin-top:12px;font-size:0.85em;color:#aaa;\">✨ 仲間の第3話が全て完了しました</div>";
+    var _bodyEl133 = document.getElementById("companion-story-chapter3-all-complete-body");
+    if (_bodyEl133) { _bodyEl133.innerHTML = _html133; }
+
+    openModal("companion-story-chapter3-all-complete-modal");
+    var _closeBtn133 = document.getElementById("btn-cstory-chapter3-all-complete-close");
+    if (_closeBtn133) { _closeBtn133.focus(); }
+  }
+
+  // §133 v0.54: 第3話全話完了演出モーダルを安全に閉じる（origin別後処理）
+  function closeCompanionStoryChapter3AllCompleteCelebration() {
+    _companionStoryChapter3AllCompleteNoticeVisible = false;
+    _pendingCompanionStoryChapter3AllCompleteNotice = false;
+    closeModal("companion-story-chapter3-all-complete-modal");
+    _companionStoryChapter3AllCompleteOrigin = null;
+    _pendingCompanionStoryChapter3AllCompleteOrigin = null;
+    if (_companionStoryChapter3AllCompleteNoticeTimer) {
+      clearTimeout(_companionStoryChapter3AllCompleteNoticeTimer);
+      _companionStoryChapter3AllCompleteNoticeTimer = null;
+    }
+    // 酒場がまだ開いている場合: closeModalがstate.modalOpen=falseにするのを戻す
+    var _tavernEl133 = document.getElementById("tavern-modal");
+    if (_tavernEl133 && !_tavernEl133.classList.contains("hidden")) {
+      state.modalOpen = true;
+    }
+    // 残存pendingの安全確認（破損状態対策）
+    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
+      schedulePendingCompanionStoryCompletionNotices(50);
+    }
+  }
+
   // §116 v0.44.3: 全話完了演出モーダルを開く（origin引数・フォーカス管理）
   function showCompanionStoryAllCompleteCelebration(origin) {
     if (_companionStoryAllCompleteNoticeVisible) return;
@@ -4049,12 +4157,37 @@
       state.modalOpen = true;
     }
     _companionStoryAllCompleteOrigin = null;
-    // §120 v0.45.3: 第1話close後に第2話pendingがあれば短い遅延後に再消費
+    // §120 v0.45.3 / §133 v0.54: 第1話close後に第2話・第3話pendingがあれば短い遅延後に再消費
     // state.modalOpen=trueを維持して演出間の隙間で背景操作不可を保証
-    if (_pendingCompanionStoryChapter2AllCompleteNotice) {
+    if (_pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
       state.modalOpen = true;
       schedulePendingCompanionStoryCompletionNotices(50);
     }
+  }
+
+  // §133 v0.54: 第3話全話完了演出pending消費（ガード付き）
+  function consumePendingCompanionStoryChapter3AllCompleteNotice() {
+    if (!_pendingCompanionStoryChapter3AllCompleteNotice) return;
+    if (_companionStoryChapter3AllCompleteNoticeVisible) return;
+    if (!state.companionSideStoryChapter3AllCompleteCelebrated) return;
+    if (!areAllCompanionSideStoryChapter3Complete()) return;
+    // 物語モーダルが開いていれば待機
+    var _storyEl133 = document.getElementById("companion-story-modal");
+    if (_storyEl133 && !_storyEl133.classList.contains("hidden")) return;
+    // 戦闘中は待機
+    if (state.inBattle) return;
+    // 第1話・第2話演出表示中は待機（二枚重ね防止）
+    if (_companionStoryAllCompleteNoticeVisible) return;
+    if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    // 前の遅延タイマーをキャンセル
+    if (_companionStoryChapter3AllCompleteNoticeTimer) {
+      clearTimeout(_companionStoryChapter3AllCompleteNoticeTimer);
+      _companionStoryChapter3AllCompleteNoticeTimer = null;
+    }
+    var _origin133 = _pendingCompanionStoryChapter3AllCompleteOrigin || "field";
+    _pendingCompanionStoryChapter3AllCompleteNotice = false;
+    _pendingCompanionStoryChapter3AllCompleteOrigin = null;
+    showCompanionStoryChapter3AllCompleteCelebration(_origin133);
   }
 
   // §116 v0.44.3: ガード強化・タイマー管理・origin引数対応
@@ -4079,18 +4212,23 @@
     showCompanionStoryAllCompleteCelebration(_origin116);
   }
 
-  // §120 v0.45.3: 共通キュー調整関数 — 第1話優先で安全にpendingを消費する
-  // 第1話または第2話の演出表示中なら何もしない
-  // 第1話pendingが存在する限り第2話を追い越して表示しない
+  // §120 v0.45.3 / §133 v0.54: 共通キュー調整関数 — 第1話→第2話→第3話の順で安全にpendingを消費する
+  // いずれかの演出表示中なら何もしない
+  // 上位pendingが存在する限り下位話を追い越して表示しない
   function consumePendingCompanionStoryCompletionNotices() {
     if (_companionStoryAllCompleteNoticeVisible) return;
     if (_companionStoryChapter2AllCompleteNoticeVisible) return;
+    if (_companionStoryChapter3AllCompleteNoticeVisible) return; // §133 v0.54
     if (_pendingCompanionStoryAllCompleteNotice) {
       consumePendingCompanionStoryAllCompleteNotice();
       return;
     }
     if (_pendingCompanionStoryChapter2AllCompleteNotice) {
       consumePendingCompanionStoryChapter2AllCompleteNotice();
+      return;
+    }
+    if (_pendingCompanionStoryChapter3AllCompleteNotice) { // §133 v0.54
+      consumePendingCompanionStoryChapter3AllCompleteNotice();
       return;
     }
   }
@@ -4287,7 +4425,9 @@
         return; // 既に完了済み: 追加save・通知なし
       }
       state.companionSideStoryChapter3Flags[cid] = true;
-      saveGame(); // ch3 flags を保存（初回完了時のみ）
+      // §133 v0.54: 第3話全員完了チェック（4人目完了時にcelebrated=true + pending登録）
+      checkCompanionSideStoryChapter3AllComplete();
+      saveGame(); // ch3 flags + chapter3AllCompleteCelebrated を1回で保存
       var _story3 = getCompanionSideStoryData(cid, 3);
       var _title3 = _story3 ? _story3.title : cid;
       var _c3 = findById(COMPANION_DATA, cid);
@@ -4344,9 +4484,10 @@
       openModal("tavern-modal");
       renderTavernStories();
     }
-    // §120 v0.45.3: 両話のoriginを先に設定（個別consume関数が参照）
+    // §120 v0.45.3 / §133 v0.54: 全話のoriginを先に設定（個別consume関数が参照）
     _pendingCompanionStoryAllCompleteOrigin = _fromTavern ? "tavern" : "field";
     _pendingCompanionStoryChapter2AllCompleteOrigin = _fromTavern ? "tavern" : "field";
+    _pendingCompanionStoryChapter3AllCompleteOrigin = _fromTavern ? "tavern" : "field"; // §133 v0.54
     // §120 v0.45.3: 個別timerをクリアし共通キューで一本化（競合防止・表示順保証）
     if (_companionStoryAllCompleteNoticeTimer) {
       clearTimeout(_companionStoryAllCompleteNoticeTimer);
@@ -4356,7 +4497,11 @@
       clearTimeout(_companionStoryChapter2AllCompleteNoticeTimer);
       _companionStoryChapter2AllCompleteNoticeTimer = null;
     }
-    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice) {
+    if (_companionStoryChapter3AllCompleteNoticeTimer) { // §133 v0.54
+      clearTimeout(_companionStoryChapter3AllCompleteNoticeTimer);
+      _companionStoryChapter3AllCompleteNoticeTimer = null;
+    }
+    if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
       schedulePendingCompanionStoryCompletionNotices(250);
     }
   }
@@ -7318,6 +7463,10 @@
       if (!_hasBanner) { html += '<div style="border-top:1px solid #2a3a5a;padding-top:8px;margin-top:6px;margin-bottom:4px;">'; _hasBanner = true; }
       html += '<div style="text-align:center;margin:0 0 4px;color:#c8b4ff;font-weight:bold;font-size:0.88em;">🌟 4人の第2話をすべて読み終えました</div>';
     }
+    if (areAllCompanionSideStoryChapter3Complete()) { // §133 v0.54
+      if (!_hasBanner) { html += '<div style="border-top:1px solid #2a3a5a;padding-top:8px;margin-top:6px;margin-bottom:4px;">'; _hasBanner = true; }
+      html += '<div style="text-align:center;margin:0 0 4px;color:#f4a261;font-weight:bold;font-size:0.88em;">🌅 4人の第3話をすべて読み終えました</div>';
+    }
     if (_hasBanner) { html += '</div>'; }
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
     body.innerHTML = html;
@@ -8886,6 +9035,20 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v53-reread-flag">🧪 再読時フラグ不変確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v53-paperview-sync">🧪 フィールド・PaperView同期確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v53-modal-stress">🧪 3モーダル10回開閉確認</button>';
+      // §133 v0.54: 第3話全員完了演出テストボタン
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">🎭 v0.54 第3話全員完了テスト (§133)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-boundary">🧪 第3話全員完了判定境界</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-direct">🧪 第3話完了演出直接表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-normalize">🧪 第3話表示済みフラグ正規化</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-old-save">🧪 第3話旧セーブ4/4修復</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-reread">🧪 第3話再読時再表示なし</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-close-spam">🧪 第3話close連打防止</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-order">🧪 第1→第2→第3通知順序確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-simultaneous">🧪 3通知同時表示防止</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-modal-delay">🧪 他モーダル中pending維持</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-render-spam">🧪 render×10多重表示防止</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-save-count">🧪 saveGame回数確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-reset">🔄 第3話全員完了フラグリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -10984,6 +11147,236 @@
             " " + (errors.length === 0 && !lock && !modalOpen2 ? "PASS ✅" : "FAIL ❌") +
             (errors.length > 0 ? "\n" + errors[0] : ""));
         } catch(e) { showToast("[v0.53] 3モーダルストレスエラー: " + e.message); }
+      };
+      // §133 v0.54: 第3話全員完了演出テストハンドラー
+      document.getElementById("btn-debug-v54-ch3-boundary").onclick = function () {
+        var _prevFlags54 = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _keys54 = ["juritani", "shurittani", "norio", "harumi"];
+        var _results54 = [];
+        // 0/4テスト
+        var _tf54 = {}; _keys54.forEach(function(k) { _tf54[k] = false; });
+        state.companionSideStoryChapter3Flags = _tf54;
+        _results54.push("0/4:" + (areAllCompanionSideStoryChapter3Complete() === false ? "PASS" : "FAIL"));
+        // 3/4テスト
+        var _i54 = 0; _keys54.forEach(function(k) { _tf54[k] = (_i54++ < 3); });
+        state.companionSideStoryChapter3Flags = _tf54;
+        _results54.push("3/4:" + (areAllCompanionSideStoryChapter3Complete() === false ? "PASS" : "FAIL"));
+        // 4/4テスト
+        _keys54.forEach(function(k) { _tf54[k] = true; });
+        state.companionSideStoryChapter3Flags = _tf54;
+        _results54.push("4/4:" + (areAllCompanionSideStoryChapter3Complete() === true ? "PASS" : "FAIL"));
+        // 欠損キーテスト
+        var _pf54 = {}; _keys54.slice(0, 3).forEach(function(k) { _pf54[k] = true; });
+        state.companionSideStoryChapter3Flags = _pf54;
+        _results54.push("欠損:" + (areAllCompanionSideStoryChapter3Complete() === false ? "PASS" : "FAIL"));
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevFlags54;
+        showToast("[v0.54] 判定境界\n" + _results54.join("\n"));
+      };
+      document.getElementById("btn-debug-v54-ch3-direct").onclick = function () {
+        var _prevFlag54 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = false;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        closeModal("settings-modal");
+        showCompanionStoryChapter3AllCompleteCelebration("debug");
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54;
+      };
+      document.getElementById("btn-debug-v54-ch3-normalize").onclick = function () {
+        var _prevFlag54n = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _tests54 = [true, false, undefined, null, "true", 0, 1];
+        var _results54n = [];
+        _tests54.forEach(function(v) {
+          state.companionSideStoryChapter3AllCompleteCelebrated = v;
+          var _normalized = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+          var _demote = (v === true && _normalized === false) ? "DEMOTE" : "OK";
+          _results54n.push(String(v) + "→" + _normalized + " " + _demote);
+        });
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54n;
+        showToast("[v0.54] フラグ正規化\n" + _results54n.join("\n"));
+      };
+      document.getElementById("btn-debug-v54-ch3-old-save").onclick = function () {
+        var _prevFlag54o = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevFlags54o = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevPend54o = _pendingCompanionStoryChapter3AllCompleteNotice;
+        var _keys54o = ["juritani", "shurittani", "norio", "harumi"];
+        var _all54o = {}; _keys54o.forEach(function(k) { _all54o[k] = true; });
+        state.companionSideStoryChapter3Flags = _all54o;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = false;
+        // 修復チェック
+        var _rescued54 = checkCompanionSideStoryChapter3AllComplete("field");
+        var _pendAfter54 = _pendingCompanionStoryChapter3AllCompleteNotice;
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevFlags54o;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54o;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54o;
+        showToast("[v0.54] 旧セーブ4/4修復\nrescued=" + _rescued54 + " pending=" + _pendAfter54 +
+          " " + (_rescued54 && _pendAfter54 ? "PASS ✅" : "FAIL ❌") +
+          "\n（load中はモーダルを開かない仕様）");
+      };
+      document.getElementById("btn-debug-v54-ch3-reread").onclick = function () {
+        var _prevFlag54r = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevPend54r = _pendingCompanionStoryChapter3AllCompleteNotice;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        _pendingCompanionStoryChapter3AllCompleteNotice = false;
+        // check → celebrated=trueなのでpendingが追加されないことを確認
+        checkCompanionSideStoryChapter3AllComplete("field");
+        var _pendAfter54r = _pendingCompanionStoryChapter3AllCompleteNotice;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54r;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54r;
+        showToast("[v0.54] 再読時再表示なし\npending=" + _pendAfter54r +
+          " " + (_pendAfter54r === false ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-close-spam").onclick = function () {
+        var _prevFlag54c = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevPend54c = _pendingCompanionStoryChapter3AllCompleteNotice;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = true;
+        _companionStoryChapter3AllCompleteNoticeVisible = true;
+        var _saveCount54 = 0;
+        var _origSave54 = saveGame;
+        saveGame = function() { _saveCount54++; _origSave54(); };
+        for (var _ci54 = 0; _ci54 < 10; _ci54++) {
+          closeCompanionStoryChapter3AllCompleteCelebration();
+        }
+        saveGame = _origSave54;
+        var _flagAfter54c = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54c;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54c;
+        saveGame();
+        showToast("[v0.54] close連打\nsave回数=" + _saveCount54 + " flagTrue=" + _flagAfter54c +
+          " " + (_saveCount54 <= 1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-order").onclick = function () {
+        var _snap54ord = {
+          celeb1: state.companionSideStoryAllCompleteCelebrated,
+          celeb2: state.companionSideStoryChapter2AllCompleteCelebrated,
+          celeb3: state.companionSideStoryChapter3AllCompleteCelebrated,
+          p1: _pendingCompanionStoryAllCompleteNotice,
+          p2: _pendingCompanionStoryChapter2AllCompleteNotice,
+          p3: _pendingCompanionStoryChapter3AllCompleteNotice
+        };
+        // 3話全pending設定
+        state.companionSideStoryAllCompleteCelebrated = true;
+        state.companionSideStoryChapter2AllCompleteCelebrated = true;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        _pendingCompanionStoryAllCompleteNotice = true;
+        _pendingCompanionStoryChapter2AllCompleteNotice = true;
+        _pendingCompanionStoryChapter3AllCompleteNotice = true;
+        _companionStoryAllCompleteNoticeVisible = false;
+        _companionStoryChapter2AllCompleteNoticeVisible = false;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        // 消費→ch1が開く（ch2/ch3は待機）
+        consumePendingCompanionStoryCompletionNotices();
+        var _ch1Open = _companionStoryAllCompleteNoticeVisible;
+        var _ch2Wait = _pendingCompanionStoryChapter2AllCompleteNotice;
+        var _ch3Wait = _pendingCompanionStoryChapter3AllCompleteNotice;
+        // 復元
+        closeCompanionStoryAllCompleteCelebration();
+        closeModal("companion-story-chapter2-all-complete-modal");
+        closeModal("companion-story-chapter3-all-complete-modal");
+        state.companionSideStoryAllCompleteCelebrated = _snap54ord.celeb1;
+        state.companionSideStoryChapter2AllCompleteCelebrated = _snap54ord.celeb2;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _snap54ord.celeb3;
+        _pendingCompanionStoryAllCompleteNotice = _snap54ord.p1;
+        _pendingCompanionStoryChapter2AllCompleteNotice = _snap54ord.p2;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _snap54ord.p3;
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        showToast("[v0.54] 通知順序\nch1open=" + _ch1Open + " ch2wait=" + _ch2Wait + " ch3wait=" + _ch3Wait +
+          " " + (_ch1Open && _ch2Wait && _ch3Wait ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-simultaneous").onclick = function () {
+        var _modals54 = [
+          document.getElementById("companion-story-all-complete-modal"),
+          document.getElementById("companion-story-chapter2-all-complete-modal"),
+          document.getElementById("companion-story-chapter3-all-complete-modal")
+        ];
+        var _openCount54 = 0;
+        _modals54.forEach(function(el) {
+          if (el && !el.classList.contains("hidden")) { _openCount54++; }
+        });
+        showToast("[v0.54] 同時表示防止\n現在open=" + _openCount54 +
+          " " + (_openCount54 <= 1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-modal-delay").onclick = function () {
+        var _prevPend54m = _pendingCompanionStoryChapter3AllCompleteNotice;
+        var _prevFlag54m = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = true;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        var _prevModalOpen = state.modalOpen;
+        state.modalOpen = true;
+        // modalOpen=true時はconsume内でstateチェックしないためDOM確認で代用
+        var _storyEl54m = document.getElementById("companion-story-modal");
+        if (_storyEl54m) { _storyEl54m.classList.remove("hidden"); }
+        consumePendingCompanionStoryChapter3AllCompleteNotice();
+        var _stillPend = _pendingCompanionStoryChapter3AllCompleteNotice;
+        if (_storyEl54m) { _storyEl54m.classList.add("hidden"); }
+        state.modalOpen = _prevModalOpen;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54m;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54m;
+        closeModal("companion-story-chapter3-all-complete-modal");
+        showToast("[v0.54] 他モーダル中延期\n物語モーダル中はpending維持: " +
+          (_stillPend ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-render-spam").onclick = function () {
+        var _prevPend54s = _pendingCompanionStoryChapter3AllCompleteNotice;
+        var _prevFlag54s = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = true;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        var _openCount54s = 0;
+        var _origOpen54 = showCompanionStoryChapter3AllCompleteCelebration;
+        showCompanionStoryChapter3AllCompleteCelebration = function(o) { _openCount54s++; _origOpen54(o); };
+        for (var _ri54 = 0; _ri54 < 10; _ri54++) {
+          if (!_companionStoryChapter3AllCompleteNoticeVisible) {
+            showCompanionStoryChapter3AllCompleteCelebration("render_test");
+          }
+        }
+        showCompanionStoryChapter3AllCompleteCelebration = _origOpen54;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54s;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54s;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        closeModal("companion-story-chapter3-all-complete-modal");
+        showToast("[v0.54] render×10多重表示\nopen回数=" + _openCount54s +
+          " " + (_openCount54s <= 1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-save-count").onclick = function () {
+        var _prevFlag54sv = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevPend54sv = _pendingCompanionStoryChapter3AllCompleteNotice;
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _companionStoryChapter3AllCompleteNoticeVisible = true;
+        var _saveCount54sv = 0;
+        var _origSave54sv = saveGame;
+        saveGame = function() { _saveCount54sv++; _origSave54sv(); };
+        closeCompanionStoryChapter3AllCompleteCelebration();
+        saveGame = _origSave54sv;
+        var _flagAfter54sv = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevFlag54sv;
+        _pendingCompanionStoryChapter3AllCompleteNotice = _prevPend54sv;
+        saveGame();
+        showToast("[v0.54] save回数\nclose時save=" + _saveCount54sv + " flag変化なし（限定おせず）" +
+          " " + (_saveCount54sv === 0 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v54-ch3-reset").onclick = function () {
+        if (_companionStoryChapter3AllCompleteNoticeTimer) {
+          clearTimeout(_companionStoryChapter3AllCompleteNoticeTimer);
+          _companionStoryChapter3AllCompleteNoticeTimer = null;
+        }
+        if (_companionStoryCompletionNoticeQueueTimer) {
+          clearTimeout(_companionStoryCompletionNoticeQueueTimer);
+          _companionStoryCompletionNoticeQueueTimer = null;
+        }
+        closeModal("companion-story-chapter3-all-complete-modal");
+        state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _pendingCompanionStoryChapter3AllCompleteNotice = false;
+        _companionStoryChapter3AllCompleteNoticeVisible = false;
+        saveGame();
+        showToast("[v0.54] 第3話全員完了フラグリセット ✅");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -13353,6 +13746,7 @@
         companionSideStoryChapter2Flags: state.companionSideStoryChapter2Flags || {}, // §117 v0.45
         companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated, // §119 v0.45.2
         companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {}, // §122 v0.47
+        companionSideStoryChapter3AllCompleteCelebrated: !!state.companionSideStoryChapter3AllCompleteCelebrated, // §133 v0.54
         playerName: state.playerName || "", // §126 v0.49: 主人公名
         normalReturnX: state.normalReturnX || 2, // §129 v0.51
         normalReturnY: state.normalReturnY || 4, // §129 v0.51
@@ -13461,6 +13855,13 @@
       state.companionSideStoryChapter3Flags = data.companionSideStoryChapter3Flags || {};
       var _story3FlagChanged = normalizeCompanionSideStoryChapter3Flags();
       if (_story3FlagChanged) { _storyFlagChanged = true; }
+      // §133 v0.54: 第3話全話完了演出済みフラグ（旧セーブはundefined→false補完）
+      state.companionSideStoryChapter3AllCompleteCelebrated = !!data.companionSideStoryChapter3AllCompleteCelebrated;
+      var _ch3CelebFlagChanged = normalizeCompanionSideStoryChapter3AllCompleteFlag();
+      if (_ch3CelebFlagChanged) { _storyFlagChanged = true; }
+      // §133 v0.54: 旧セーブ救済 — 第3話4/4完了済みだがchapter3AllCompleteCelebrated未設定
+      var _story3Rescued = checkCompanionSideStoryChapter3AllComplete("field");
+      if (_story3Rescued) { _storyFlagChanged = true; }
       var _prevGearVer = state.companionGearVersion;                    // §106 v0.40.1: 昇格検出用
       ensureCompanionGearState();                                        // §105 v0.40: 初期化・スターター配布
       resetPartyTrail();  // §79 v0.26.1: 軌跡はロード時にリセット
@@ -13541,8 +13942,12 @@
         updateBGM(getFieldBgmType());
         if (state.mapMode === "side") { moveSidePlayer(1, 0); } else { movePlayer(1, 0); }
       } else if (ev.key === "Escape") {
+        // §133 v0.54: 第3話全話完了演出が最前面なら先に閉じる
+        if (_companionStoryChapter3AllCompleteNoticeVisible) {
+          ev.preventDefault();
+          closeCompanionStoryChapter3AllCompleteCelebration();
         // §119 v0.45.2: 第2話全話完了演出が最前面なら先に閉じる
-        if (_companionStoryChapter2AllCompleteNoticeVisible) {
+        } else if (_companionStoryChapter2AllCompleteNoticeVisible) {
           ev.preventDefault();
           closeCompanionStoryChapter2AllCompleteCelebration();
         // §116 v0.44.3: 第1話全話完了演出のみ閉じる。酒場は閉じない
@@ -13689,6 +14094,14 @@
       closeCompanionStoryChapter2AllCompleteCelebration();
     });
     document.getElementById("companion-story-chapter2-all-complete-modal").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+
+    // §133 v0.54: 第3話全話完了演出モーダル
+    document.getElementById("btn-cstory-chapter3-all-complete-close").addEventListener("click", function () {
+      closeCompanionStoryChapter3AllCompleteCelebration();
+    });
+    document.getElementById("companion-story-chapter3-all-complete-modal").addEventListener("click", function (ev) {
       ev.stopPropagation();
     });
 

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.53** |
+| 現在バージョン | **v0.54** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,14 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.54] 仲間サイドストーリー第3話・全員完了演出**（§133）
+  - **`areAllCompanionSideStoryChapter3Complete()`**: 4/4完了判定（純粋関数）
+  - **`state.companionSideStoryChapter3AllCompleteCelebrated`**: 表示済み永続フラグ（saveGame/loadGame/never-demote）
+  - **演出モーダル「🌅 四つの灯り、その先へ」**: 7行ダイアログ・主人公名対応
+  - **旧セーブ4/4修復**: loadGame() で未表示の旧セーブを検出してpending登録
+  - **通知キュー統合**: ch1→ch2→ch3の順序で消費（`consumePendingCompanionStoryCompletionNotices()` 更新）
+  - **デバッグ12本（§133）**: 判定境界 / 直接表示 / フラグ正規化 / 旧セーブ修復 / 再読防止 / close連打防止 / 通知順序 / 同時表示防止 / 他モーダル中延期 / render×10防止 / save回数 / フラグリセット
+  - **BGM・捕獲条件・チンパンジー・第1話第2話演出: 一切変更なし**
 - **[v0.53] ワープ広場案内・進行同期・初回説明安定化**（§132a）
   - **`getStageWarpStatus()` 優先順位修正**: `isCurrentObjective` を `isCleared` より先にチェック（クリア済みステージが現在目的の場合 "current" を返す）
   - **`renderField()` currentワープ表示幅修正**: "▶"+icon の2文字 → "▶" の1文字（セル幅崩れ防止）
@@ -865,10 +873,10 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 ## 次の推奨実装順
 
 1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
-2. **v0.53 仲間物語クリア後イベント** — 全仲間第3話完了後の特別な接続イベント。工数中〜大。
+2. **v0.55 4人第3話完了後の最終サイドストーリー接続** — 全仲間第3話完了後の次のエピソードへの導線。工数中〜大。
 3. **仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
 
-> v0.52（§132 BGM導入準備）実装済み。BGM_ASSET_GUIDE.md・assets/audio/bgm/uranawanaii/を追加。script.jsコード変更なし。
+> v0.54（§133 仲間サイドストーリー第3話・全員完了演出）実装済み。演出モーダル「四つの灯り、その先へ」追加。通知キューch1→ch2→ch3統合。旧セーブ修復対応。BGM/捕獲条件/チンパンジー/第1話第2話演出変更なし。
 > v0.47（§122 仲間サイドストーリー第3話）実装済み。4人×3話の12枚カード、デバッグ8ボタン対応。
 
 > プレイヤーフィードバック (v0.25 時点): 「仲間をフィールドで後ろに並べたい」「仲間も戦闘に参加してほしい」

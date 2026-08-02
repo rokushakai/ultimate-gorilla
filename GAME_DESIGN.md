@@ -7517,3 +7517,50 @@ stageWarpPlazaIntroducedは一度trueになった後はfalseへ戻さない。
 - 究極ゴリラ捕獲条件・究極チンパンジー変更なし
 - 最終サイドストーリー・エンディング変更なし
 - 通常マップ26×36・ワープ広場・道しるべ座標変更なし（安全確認済み）
+
+---
+
+## v0.54 仲間サイドストーリー第3話・全員完了演出（§133）
+
+**[実装済み]**
+
+仲間4人のサイドストーリー第3話をすべて完了した場合に、
+第3話全員完了演出を1回だけ表示する。
+
+対象4話：
+- ジュリタニ「託された一撃」
+- シュリタニ「帰る場所のしるし」
+- ノリオ「未来へ渡す記録」
+- ハルミ「灯りをつなぐ朝」
+
+共通テーマ：受け取った力や想いを、次の誰かへ渡していく。
+
+### 全員完了判定
+
+`areAllCompanionSideStoryChapter3Complete()`: 副作用なし・純粋関数。
+`state.companionSideStoryChapter3Flags` の juritani/shurittani/norio/harumi 全キーが
+`true` の場合のみ `true` を返す。
+
+### 永続フラグ
+
+- `state.companionSideStoryChapter3AllCompleteCelebrated`: 表示済み永続フラグ（never-demote）
+- saveGame / loadGame 対応。newGame は localStorage削除→リロードのため state 初期値での制御。
+- 旧セーブ（4/4完了済み・表示未済）は loadGame() で `_pendingCompanionStoryChapter3AllCompleteNotice = true` に遷移。
+- load中は直接モーダルを開かない。pendingに積んで renderField() または schedulePendingCompanionStoryCompletionNotices() で消費。
+
+### 表示順序
+
+第1話→第2話→第3話の順で1枚ずつ表示。同時表示なし。
+`consumePendingCompanionStoryCompletionNotices()` で統合管理。
+
+### 報酬・機能追加なし
+
+報酬・能力・装備・アイテム・ステージ進行条件追加なし。
+BGM制御・捕獲率・仲間能力・AI比率変更なし。
+
+### 演出
+
+タイトル「🌅 四つの灯り、その先へ」
+副題「仲間サイドストーリー第3話・全員完了」
+7行ダイアログ（ナレーション2行 + キャラ4行 + 主人公1行、主人公名表示対応）
+閉じるボタン「物語を胸に刻む」

@@ -5,6 +5,36 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.54] - 2026-08-02 — 仲間サイドストーリー第3話・全員完了演出 (§133)
+
+### Added
+- **`areAllCompanionSideStoryChapter3Complete()`**: 第3話4/4完了判定（純粋関数・副作用なし）
+- **`normalizeCompanionSideStoryChapter3AllCompleteFlag()`**: never-demote保証（bool以外→false）
+- **`checkCompanionSideStoryChapter3AllComplete(origin)`**: 全員完了確認・pending登録（初回のみtrue返却）
+- **`showCompanionStoryChapter3AllCompleteCelebration(origin)`**: 第3話完了演出モーダルを開く
+- **`closeCompanionStoryChapter3AllCompleteCelebration()`**: 演出モーダルを安全に閉じる・残存pending再消費
+- **`consumePendingCompanionStoryChapter3AllCompleteNotice()`**: pending消費（ガード付き）
+- **`state.companionSideStoryChapter3AllCompleteCelebrated`**: 表示済み永続フラグ（saveGame/loadGame/never-demote対応）
+- **非永続変数5本**: `_pendingCompanionStoryChapter3AllCompleteNotice` / `_companionStoryChapter3AllCompleteNoticeVisible` / `_companionStoryChapter3AllCompleteOrigin` / `_pendingCompanionStoryChapter3AllCompleteOrigin` / `_companionStoryChapter3AllCompleteNoticeTimer`
+- **`#companion-story-chapter3-all-complete-modal`** (index.html): 第3話全員完了演出モーダル（🌅タイトル「四つの灯り、その先へ」・7行ダイアログ・主人公名対応）
+- **旧セーブ4/4修復**: `loadGame()` で第3話4/4完了済み・未表示の旧セーブを検出してpending登録
+- **`consumePendingCompanionStoryCompletionNotices()` 更新**: 第3話pending消費を統合（第1話→第2話→第3話の順序）
+- **`closeCompanionSideStoryModal()` 更新**: 第3話originと第3話timerクリアを追加
+- **ESCキー更新**: 第3話演出が最前面なら先に閉じる（第3話→第2話→第1話の優先順位）
+- **`renderTavernStories()` 更新**: 第3話全員完了バナー追加（🌅 橙色）
+- **デバッグ12本（§133）**: 判定境界 / 直接表示 / フラグ正規化 / 旧セーブ修復 / 再読防止 / close連打防止 / 通知順序 / 同時表示防止 / 他モーダル中延期 / render×10多重防止 / save回数確認 / フラグリセット
+
+### Not Changed
+- 第1話・第2話全員完了演出（本文・フラグ名・条件）一切変更なし
+- 第3話個別本文変更なし
+- 解放条件・報酬・能力・仲間能力・AI比率変更なし
+- BGM再生コード・`stopBGMHard()`・`AudioContext`・BGMタイマー・BGMノード一切変更なし
+- 通常マップ・ワープ座標・敵レベル・捕獲率変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー変更なし
+- 最終サイドストーリー・エンディング変更なし
+
+---
+
 ## [0.53] - 2026-08-02 — ワープ広場案内・進行同期・初回説明安定化 (§132a)
 
 ### Fixed
