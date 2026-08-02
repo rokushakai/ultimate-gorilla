@@ -7381,8 +7381,66 @@ objectiveId → ステージ番号の対応表：
 
 ### v0.52 候補以降 [未実装・将来機能]
 
-- v0.52: 第3話全話完了演出
+- v0.52: BGM音源導入準備（uranawanaii） ← 今回
+- v0.52.1: BGMファイル再生基盤実装
 - PaperView番組・世界観記事ラインナップ拡張
 - 将来: 仲間物語と最終サイドストーリーの接続
 - 仲間装備の商人販売
 - 仲間節目セリフ演出強化
+
+---
+
+## v0.52 — uranawanaii BGM導入準備 (§132) [実装済み]
+
+### 概要
+
+外部楽曲「uranawanaii」をゲームBGMとして使用するための準備フェーズ。
+BGM再生コードは一切変更しない。調査・設計・フォルダ・ドキュメント作成のみ。
+
+### 現行BGM構造
+
+**方式 A: JavaScript生成音（Web Audio API + OscillatorNode）のみ**
+- 外部音源ファイルは一切使用していない
+- BGM_DATA 定数（script.js line 13770付近）で音符列を定義し、AudioContext で逐次生成する
+
+### BGM cue一覧
+
+| cue名 | 使用場面 | ループ | 開始 | 停止 |
+|---|---|---|---|---|
+| `field` | 通常フィールド（クリア前） | 有 | Dパッド/キーボード最初の操作 | `stopBGMHard()` |
+| `fieldClear` | フィールド（クリア後） | 有 | `getFieldBgmType()` が "fieldClear" を返す時 | `stopBGMHard()` |
+| `battle` | 全戦闘（通常・ボス共通） | 有 | `actuallyStartBattle()` | `finishBattle()` |
+| `ending` | エンディング演出 | 有 | `openEndingModal()` | エンディング終了 |
+
+### 最小構成（3ファイル）
+
+- `uranawanaii_field.mp3` → `field` + `fieldClear` 兼用
+- `uranawanaii_battle.mp3` → `battle`
+- `uranawanaii_ending.mp3` → `ending`
+
+### 推奨構成（4ファイル）
+
+- `uranawanaii_field.mp3` → `field`
+- `uranawanaii_field_clear.mp3` → `fieldClear`
+- `uranawanaii_battle.mp3` → `battle`
+- `uranawanaii_ending.mp3` → `ending`
+
+### 格納先・ファイル名
+
+- Windows: `C:\projects\ultimate-gorilla\assets\audio\bgm\uranawanaii\`
+- GitHub Pages相対パス: `./assets/audio/bgm/uranawanaii/`
+- 詳細仕様: `BGM_ASSET_GUIDE.md` / `assets/audio/bgm/uranawanaii/README.md`
+
+### 次回 v0.52.1 の実装方針
+
+- `startBGM(type)` にファイル再生分岐を追加（ファイル読込済みなら `audio.play()`、未読込なら既存BGM_DATA生成音）
+- `HTMLAudioElement` または `AudioBuffer` でのループ再生基盤を実装
+- 読み込み失敗時は既存 `BGM_DATA` 生成音にフォールバック
+- ES5前提で実装する
+
+### 変更しなかったもの（v0.52）
+
+- script.js: BGMコード全件（stopBGMHard/startBGM/stopBGM/updateBGM/_scheduleBGMLoop等）
+- index.html: BGM関連要素一切
+- 既存BGM挙動（タイミング・切替先）一切
+- ゲーム進行・マップ・敵・仲間・捕獲率に変更なし

@@ -22,6 +22,34 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.52 — uranawanaii BGM仕様確定・音源フォルダ準備 (§132)
+
+- **BGM方式調査**: 現行は JavaScript生成音（Web Audio API + OscillatorNode）のみ。ファイル再生なし ✅
+- **BGM cue一覧確定**: `field` / `fieldClear` / `battle` / `ending` の4cue ✅
+- **stopBGMHard()仕様確認**: セッションID・タイマー・ノード・マスターゲインの完全停止仕様を文書化 ✅
+- **格納先決定**: `assets/audio/bgm/uranawanaii/` ✅
+- **`assets/audio/bgm/uranawanaii/` フォルダ作成** ✅
+- **`assets/audio/bgm/uranawanaii/.gitkeep`** ✅
+- **`assets/audio/bgm/uranawanaii/README.md`**: 音源コピー手順・仕様 ✅
+- **`assets/audio/bgm/uranawanaii/bgm-manifest.example.json`**: BGM cue対応表 ✅
+- **`BGM_ASSET_GUIDE.md`**: 現行BGM構造・音源仕様・楽曲割当表を網羅したガイド ✅
+- **GAME_DESIGN.md** 更新: v0.52仕様追記 (§132) ✅
+- **HANDOFF.md** 更新: v0.52へ更新 ✅
+- **script.js: BGMコード一切変更なし** ✅
+
+---
+
+## 🔲 次の実装
+
+### Version 0.52.1 — uranawanaii BGMファイル再生基盤
+
+- `startBGM(type)` にファイル再生分岐を追加
+- HTMLAudioElement または AudioBuffer でのループ再生基盤を実装
+- 読み込み失敗時は既存 BGM_DATA 生成音にフォールバック
+- 音源ファイル配置後に着手
+
+---
+
 ### Version 0.51.2 — ワープ広場の視認性・案内導線強化 (§131)
 
 - **`getStageWarpStatus(stageNum)`**: 4状態純粋関数（locked/available/current/cleared） ✅

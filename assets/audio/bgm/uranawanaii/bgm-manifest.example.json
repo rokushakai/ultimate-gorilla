@@ -1,0 +1,59 @@
+{
+  "version": "0.52",
+  "note": "このファイルはBGM cueとファイルの対応表サンプルです。script.jsからはまだ読み込みません。v0.52.1で実装します。",
+  "cues": {
+    "field": {
+      "file": "uranawanaii_field.mp3",
+      "loop": true,
+      "loopStart": 0,
+      "loopEnd": null,
+      "scenes": ["通常フィールド（ゲームクリア前）"],
+      "trigger": "updateBGM('field') via Dパッド/キーボード/finishBattle()",
+      "stop": "stopBGMHard() via actuallyStartBattle()",
+      "sharedWith": null,
+      "vol": 1.0
+    },
+    "fieldClear": {
+      "file": "uranawanaii_field_clear.mp3",
+      "loop": true,
+      "loopStart": 0,
+      "loopEnd": null,
+      "scenes": ["フィールド（ゲームクリア後）"],
+      "trigger": "updateBGM('fieldClear') via getFieldBgmType() when state.gameCleared=true",
+      "stop": "stopBGMHard() via actuallyStartBattle()",
+      "sharedWith": null,
+      "vol": 1.0,
+      "note": "最小構成では 'field' と同じファイルを使用可能"
+    },
+    "battle": {
+      "file": "uranawanaii_battle.mp3",
+      "loop": true,
+      "loopStart": 0,
+      "loopEnd": null,
+      "scenes": ["全戦闘（通常戦闘・ボス戦・ステージボス戦共通）"],
+      "trigger": "updateBGM('battle') via actuallyStartBattle()",
+      "stop": "updateBGM(getFieldBgmType()) via finishBattle()",
+      "sharedWith": null,
+      "vol": 1.0,
+      "note": "ボス戦も通常戦闘も同じcueを使用（ボス専用BGMは現行なし）"
+    },
+    "ending": {
+      "file": "uranawanaii_ending.mp3",
+      "loop": true,
+      "loopStart": 0,
+      "loopEnd": null,
+      "scenes": ["エンディング（5ページ演出中）"],
+      "trigger": "updateBGM('ending') via openEndingModal()",
+      "stop": "updateBGM(getFieldBgmType()) via btn-ending-next 最終ページ",
+      "sharedWith": null,
+      "vol": 1.0
+    }
+  },
+  "minimumConfig": {
+    "note": "最小3ファイル構成の場合のcue割当",
+    "field": "uranawanaii_field.mp3",
+    "fieldClear": "uranawanaii_field.mp3",
+    "battle": "uranawanaii_battle.mp3",
+    "ending": "uranawanaii_ending.mp3"
+  }
+}

@@ -5,6 +5,56 @@
 
 ---
 
+## v0.52 (2026-08-02) — uranawanaii BGM導入準備 (§132)
+
+### BGMシステム調査結果
+
+**BGM方式**: A（JavaScript生成音のみ）
+- Web Audio API + OscillatorNode + GainNode で音符を逐次生成する
+- HTMLAudioElement / mp3 / ogg / wav 等のファイル再生は一切使用していない
+- 外部音源ファイル参照なし
+
+**BGM_DATA の cue 4種（script.js line 13770付近）**:
+- `field`: square波, vol=0.05, Cメジャー, 約8秒ループ
+- `fieldClear`: triangle波, vol=0.05, Cメジャー穏やか, 約7.75秒ループ（v0.23追加）
+- `battle`: square波, vol=0.06, Aマイナー, 約6.4秒ループ
+- `ending`: sine波, vol=0.06, Fメジャー, 約12秒ループ
+
+**重要な発見**:
+- サイドマップ（ステージ1〜6）専用BGMは存在しない。ステージ内でもフィールドBGMまたはバトルBGMのみ
+- ボス戦は通常戦闘と同一のバトルBGM（ボス専用BGMなし）
+- `soundEnabled = false` がデフォルト。ユーザーが設定画面でONにするまでBGMは鳴らない
+- `visibilitychange` / `pagehide` / `beforeunload` イベントリスナーは存在しない
+
+**stopBGMHard() の設計理由（v0.8.6.3 §39で確立）**:
+- `osc.stop(t+dur)` で予約済みの止め方が確定しているため、`osc.stop()` の二重呼び出しは `InvalidStateError` になる
+- そのため stopBGMHard は osc.stop() を呼ばず、`gain.gain.setValueAtTime(0)` + `gain.disconnect()` で消音する
+- `bgmMasterGain.disconnect()` で全ノードを一括切断する三重消音構造
+
+**BGMセッション/タイマー/ノード追跡の設計**:
+- `bgmSessionId` と `bgmGeneration` は両方カウントアップする（二重保護）
+- `activeBgmTimers` で全 setTimeout をIDで追跡し、stopBGMHard で全 clearTimeout
+- `activeBgmNodes` で {osc, gain} ペアを追跡し、stopBGMHard で全消音
+
+### 設計判断
+
+**フォルダを `assets/audio/bgm/uranawanaii/` にした理由**:
+- 既存の `assets/` フォルダがないため、今回から新設する
+- ゲーム用アセットは `assets/` 以下に集約する方針
+- `audio/` でサウンド種別を分け、`bgm/` でBGM専用、`uranawanaii/` で楽曲別に管理
+- 将来的にSEファイルや別楽曲を追加しても同一ルールで整理できる
+
+**推奨Web形式をMP3にした理由**:
+- iOS Safari の WebView でも対応済み（OGGはiOS非対応）
+- このゲームはfile://直接起動とGitHub Pages両対応が必要
+- 単一形式で全プラットフォームをカバーできる
+
+**LUFS目安を -16〜-14 に設定した理由**:
+- ゲームBGMは効果音より少し低め、Spotifyの-14 LUFSに近い水準
+- 現行の vol=0.05〜0.06 の JavaScript生成音と音量感が揃うよう考慮
+
+---
+
 ## v0.50.1 (2026-07-25) — 4人パーティ安定化・王様会話自然化 (§128)
 
 ### 設計判断・確認事項

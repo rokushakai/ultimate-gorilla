@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.52] - 2026-08-02 — uranawanaii BGM導入準備 (§132)
+
+### Added
+- **`BGM_ASSET_GUIDE.md`**: 現行BGM構造・音源仕様・楽曲割当表・自動再生対策・権利確認欄を網羅したガイド（34項目）
+- **`assets/audio/bgm/uranawanaii/`** フォルダ（音源未配置）
+- **`assets/audio/bgm/uranawanaii/.gitkeep`**: 空フォルダ維持用
+- **`assets/audio/bgm/uranawanaii/README.md`**: 音源コピー手順・仕様・確認PowerShellコマンド
+- **`assets/audio/bgm/uranawanaii/bgm-manifest.example.json`**: BGM cue → ファイル名対応表（4cue全件・最小/推奨構成両対応）
+
+### Changed
+- **`GAME_DESIGN.md`**: v0.52仕様追記 (§132) — 現行BGM方式・cue一覧・格納先・v0.52.1方針
+- **`TODO.md`**: v0.52エントリ追加（§132完了）/ v0.52.1エントリ追加（次の実装）
+- **`HANDOFF.md`**: v0.52へ更新、v0.52の内容追記
+- **`DEV_LOG.md`**: v0.52調査メモ追記
+
+### Not Changed
+- **`script.js`**: BGM再生コード・`stopBGMHard()` / `AudioContext` / BGMタイマー / BGMノード 一切変更なし
+- **`index.html`**: BGM関連変更なし
+- 既存BGM挙動（フィールド/バトル/エンディング/クリア後の切替タイミング）に変更なし
+- ゲーム進行・マップ・敵・仲間・捕獲率に変更なし
+
+---
+
 ## [0.51.2] - 2026-08-02 — ワープ広場の視認性・案内導線強化 (§131)
 
 ### Added

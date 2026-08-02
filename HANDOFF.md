@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.51.2** |
+| 現在バージョン | **v0.52** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,13 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.52] uranawanaii BGM導入準備**（§132）
+  - **BGMシステム調査**: 現行は JavaScript生成音（Web Audio API + OscillatorNode）のみ。BGM cue 4種（field/fieldClear/battle/ending）
+  - **`BGM_ASSET_GUIDE.md`** 追加: 現行BGM構造・音源仕様・楽曲割当表・権利確認欄を網羅した34項目ガイド
+  - **`assets/audio/bgm/uranawanaii/`** フォルダ作成（音源未配置）
+  - **`README.md` / `.gitkeep` / `bgm-manifest.example.json`** 追加
+  - **script.js・index.html: 変更なし**（BGMコード一切変更なし）
+  - **次のステップ**: 音源ファイル配置後 → v0.52.1 で BGMファイル再生基盤を実装
 - **[v0.51.2] ワープ広場の視認性・案内導線強化**（§131）
   - **`getStageWarpStatus(stageNum)`**: 純粋関数。locked/available/current/cleared の4状態を返す
   - **`getCurrentObjectiveStageNumber()`**: objectiveId→ステージ番号変換
@@ -851,10 +858,11 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.48 仲間物語クリア後イベント** — 全仲間第3話完了後の特別な接続イベント。工数中〜大。v0.47完了済み。
-2. **v0.49 仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
-3. **仲間わざ習得演出強化** — Lv25到達時の仲間わざ習得に演出追加。工数小。
+1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
+2. **v0.53 仲間物語クリア後イベント** — 全仲間第3話完了後の特別な接続イベント。工数中〜大。
+3. **仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
 
+> v0.52（§132 BGM導入準備）実装済み。BGM_ASSET_GUIDE.md・assets/audio/bgm/uranawanaii/を追加。script.jsコード変更なし。
 > v0.47（§122 仲間サイドストーリー第3話）実装済み。4人×3話の12枚カード、デバッグ8ボタン対応。
 
 > プレイヤーフィードバック (v0.25 時点): 「仲間をフィールドで後ろに並べたい」「仲間も戦闘に参加してほしい」
