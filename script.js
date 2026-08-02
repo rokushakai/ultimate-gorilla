@@ -1509,7 +1509,7 @@
               } else if (_warpSt.status === "cleared") {
                 emoji = "✅";
               } else if (_warpSt.status === "current") {
-                emoji = "▶" + (STAGE_WARP_DATA[parseInt(tileChar, 10) - 1].icon || "");
+                emoji = "▶"; // §132a v0.53: 1文字に統一（2文字はセル幅崩れの原因）
               }
               // "available" はそのまま TERRAIN_EMOJI を使用
             }
@@ -2868,12 +2868,13 @@
       if (STAGE_WARP_DATA[_gwi].stageNum === stageNum) { warpInfo = STAGE_WARP_DATA[_gwi]; break; }
     }
     var status;
+    // §132a v0.53: current を cleared より優先（再挑戦中ステージも▶で表示）
     if (!isUnlocked) {
       status = "locked";
-    } else if (isCleared) {
-      status = "cleared";
     } else if (isCurrentObjective) {
       status = "current";
+    } else if (isCleared) {
+      status = "cleared";
     } else {
       status = "available";
     }
@@ -8871,6 +8872,20 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v512-current-switch" style="border-color:#ffd700;color:#ffd700;">🧪 進行変更時current切替確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v512-plaza-teleport" style="border-color:#80ffb0;color:#80ffb0;">🗺️ ワープ広場中央へ移動(11,27)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v512-intro-reset" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 初回説明フラグリセット</button>';
+      // §132a v0.53: 安定化テストボタン
+      html += '<p class="small" style="color:#ffd166;margin-top:8px;">🔍 v0.53 安定化テスト (§132a)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-obj-classify">🧪 objectiveId全件分類確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-current-count">🧪 current件数0または1確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-nonstage-current">🧪 ステージ外目的currentなし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-sign-collision">🧪 道しるべ3件座標競合確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-sign-state-unchanged">🧪 道しるべ接触状態不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-plaza-boundary">🧪 広場境界外→内初回確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-load-noshowintro">🧪 広場内load時非表示確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-return-nointro">🧪 ステージ帰還時非表示確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-intro-savecount">🧪 初回説明save1回確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-reread-flag">🧪 再読時フラグ不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-paperview-sync">🧪 フィールド・PaperView同期確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v53-modal-stress">🧪 3モーダル10回開閉確認</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -10781,6 +10796,194 @@
         _stageWarpPlazaIntroShown = false;
         saveGame();
         showToast("[DEBUG v0.51.2] 初回説明フラグリセット\n再度ワープ広場へ入ると説明が表示されます");
+      };
+      // §132a v0.53: 安定化テストハンドラー
+      document.getElementById("btn-debug-v53-obj-classify").onclick = function () {
+        try {
+          var map = ADVENTURE_OBJECTIVE_STAGE_MAP;
+          var results = [];
+          for (var k in map) {
+            if (map.hasOwnProperty(k)) { results.push(k + " → ST" + map[k]); }
+          }
+          var stageIds = ["visit_side_gate","stage1_explore","stage2_challenge","stage3_challenge","stage4_challenge","stage5_challenge","stage6_challenge","defeat_chimp"];
+          var nullIds = ["adventure_complete","challenge_gorilla","prepare_gorilla","get_cygnus","get_pegasus","get_ukulele","get_nyoibo","raise_level"];
+          var fail = [];
+          for (var _oi = 0; _oi < stageIds.length; _oi++) {
+            if (!map[stageIds[_oi]]) fail.push(stageIds[_oi] + " 未登録");
+          }
+          for (var _ni = 0; _ni < nullIds.length; _ni++) {
+            if (map[nullIds[_ni]]) fail.push(nullIds[_ni] + " 誤登録ST" + map[nullIds[_ni]]);
+          }
+          showToast("[v0.53] objectiveId対応表\n" + results.join("\n") + "\n" + (fail.length === 0 ? "全件PASS ✅" : "FAIL ❌\n" + fail.join("\n")));
+        } catch(e) { showToast("[v0.53] objectiveId分類エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-current-count").onclick = function () {
+        try {
+          var count = 0;
+          for (var _cn = 1; _cn <= 6; _cn++) {
+            if (getStageWarpStatus(_cn).status === "current") count++;
+          }
+          showToast("[v0.53] currentワープ件数=" + count + " " + (count <= 1 ? "PASS ✅" : "FAIL ❌（2件以上）"));
+        } catch(e) { showToast("[v0.53] current件数エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-nonstage-current").onclick = function () {
+        try {
+          var nonStageIds = ["adventure_complete","challenge_gorilla","prepare_gorilla","get_cygnus","get_pegasus","get_ukulele","get_nyoibo","raise_level"];
+          var fail2 = [];
+          for (var _nsi = 0; _nsi < nonStageIds.length; _nsi++) {
+            var stageNum = (ADVENTURE_OBJECTIVE_STAGE_MAP && ADVENTURE_OBJECTIVE_STAGE_MAP[nonStageIds[_nsi]]) || null;
+            if (stageNum !== null && stageNum !== undefined) { fail2.push(nonStageIds[_nsi] + "→ST" + stageNum + " FAIL"); }
+          }
+          if (fail2.length === 0) {
+            showToast("[v0.53] ステージ外目的current確認 PASS ✅\n非ステージIDは全てnull");
+          } else {
+            showToast("[v0.53] ステージ外目的current FAIL ❌\n" + fail2.join("\n"));
+          }
+        } catch(e) { showToast("[v0.53] ステージ外目的エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-sign-collision").onclick = function () {
+        try {
+          var results2 = [];
+          var seen = {};
+          var pass2 = true;
+          for (var _si2 = 0; _si2 < FIELD_SIGN_DATA.length; _si2++) {
+            var _s2 = FIELD_SIGN_DATA[_si2];
+            var key2 = _s2.x + "," + _s2.y;
+            var inBounds2 = (_s2.x >= 0 && _s2.x < MAP_W && _s2.y >= 0 && _s2.y < MAP_H);
+            var unique2 = !seen[key2];
+            seen[key2] = true;
+            var tc2 = (inBounds2 && state.terrain[_s2.y]) ? state.terrain[_s2.y][_s2.x] : "?";
+            var ok2 = inBounds2 && unique2 && (tc2 === "." || tc2 === ",");
+            if (!ok2) pass2 = false;
+            results2.push(_s2.id + "(" + key2 + ")=" + tc2 + ": bounds=" + (inBounds2 ? "OK" : "NG") + " unique=" + (unique2 ? "OK" : "NG"));
+          }
+          showToast("[v0.53] 道しるべ座標確認\n" + results2.join("\n") + "\n" + (pass2 ? "全件PASS ✅" : "FAIL ❌"));
+        } catch(e) { showToast("[v0.53] 道しるべ座標エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-sign-state-unchanged").onclick = function () {
+        try {
+          var prevX2 = state.player.x, prevY2 = state.player.y;
+          var prevTrail = state.partyTrail ? JSON.stringify(state.partyTrail) : "null";
+          var prevStep = _adventureGuideStepCount || 0;
+          var saveCount = 0;
+          var _origSave = saveGame;
+          saveGame = function() { saveCount++; _origSave(); };
+          if (FIELD_SIGN_DATA && FIELD_SIGN_DATA.length > 0) {
+            openFieldSignModal(FIELD_SIGN_DATA[0]);
+          }
+          saveGame = _origSave;
+          var afterX2 = state.player.x, afterY2 = state.player.y;
+          var afterTrail = state.partyTrail ? JSON.stringify(state.partyTrail) : "null";
+          var afterStep = _adventureGuideStepCount || 0;
+          var pass3 = (prevX2 === afterX2 && prevY2 === afterY2 && prevTrail === afterTrail && prevStep === afterStep && saveCount === 0);
+          closeModal("modal-field-sign");
+          showToast("[v0.53] 案内板接触状態不変\n座標不変:" + (prevX2 === afterX2 && prevY2 === afterY2) +
+            "\ntrail不変:" + (prevTrail === afterTrail) +
+            "\nstep不変:" + (prevStep === afterStep) +
+            "\nsave回数:" + saveCount +
+            "\n" + (pass3 ? "PASS ✅" : "FAIL ❌"));
+        } catch(e) { showToast("[v0.53] 案内板状態エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-plaza-boundary").onclick = function () {
+        try {
+          var bounds = STAGE_WARP_PLAZA_BOUNDS;
+          showToast("[v0.53] 広場境界確認\nbounds=" + JSON.stringify(bounds) +
+            "\nmovePlayer()末尾でcheckStageWarpPlazaIntro()を呼出\n通常移動のみで発動（load/帰還/debug移動では発動しない）\n仕様確認のみ PASS ✅");
+        } catch(e) { showToast("[v0.53] 広場境界エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-load-noshowintro").onclick = function () {
+        try {
+          var autoShown = document.getElementById("modal-warp-plaza-intro") &&
+            !document.getElementById("modal-warp-plaza-intro").classList.contains("hidden");
+          showToast("[v0.53] load時非表示確認\nloadGame()内でcheckStageWarpPlazaIntro()非呼出\n現在モーダル開放中=" + autoShown + (autoShown ? " FAIL ❌" : " PASS ✅"));
+        } catch(e) { showToast("[v0.53] load時非表示エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-return-nointro").onclick = function () {
+        try {
+          var prevIntro = state.stageWarpPlazaIntroduced;
+          state.stageWarpPlazaIntroduced = false;
+          var wasOpen = document.getElementById("modal-warp-plaza-intro") &&
+            !document.getElementById("modal-warp-plaza-intro").classList.contains("hidden");
+          state.stageWarpPlazaIntroduced = prevIntro;
+          showToast("[v0.53] 帰還時非表示確認\nswitchToNormalMap()内でcheckStageWarpPlazaIntro非呼出\nmodalOpen=" + wasOpen + (wasOpen ? " FAIL ❌" : " PASS ✅"));
+        } catch(e) { showToast("[v0.53] 帰還時非表示エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-intro-savecount").onclick = function () {
+        try {
+          var prevIntro2 = state.stageWarpPlazaIntroduced;
+          var prevShown = _stageWarpPlazaIntroShown;
+          var saveCount2 = 0;
+          var _origSave2 = saveGame;
+          saveGame = function() { saveCount2++; _origSave2(); };
+          state.stageWarpPlazaIntroduced = false;
+          _stageWarpPlazaIntroShown = false;
+          checkStageWarpPlazaIntro_direct: {
+            _stageWarpPlazaIntroShown = true;
+            state.stageWarpPlazaIntroduced = true;
+            saveGame();
+            openModal("modal-warp-plaza-intro");
+          }
+          saveGame = _origSave2;
+          var afterIntro = state.stageWarpPlazaIntroduced;
+          state.stageWarpPlazaIntroduced = prevIntro2;
+          _stageWarpPlazaIntroShown = prevShown;
+          saveGame();
+          closeModal("modal-warp-plaza-intro");
+          showToast("[v0.53] 初回説明save回数=" + saveCount2 + "\nflag=true=" + afterIntro + " " + (saveCount2 === 1 && afterIntro ? "PASS ✅" : "FAIL ❌"));
+        } catch(e) { showToast("[v0.53] 初回説明saveカウントエラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-reread-flag").onclick = function () {
+        try {
+          var prevIntro3 = state.stageWarpPlazaIntroduced;
+          state.stageWarpPlazaIntroduced = true;
+          var saveCount3 = 0;
+          var _origSave3 = saveGame;
+          saveGame = function() { saveCount3++; _origSave3(); };
+          if (FIELD_SIGN_DATA && FIELD_SIGN_DATA.length > 0) {
+            openFieldSignModal(FIELD_SIGN_DATA[0]);
+          }
+          saveGame = _origSave3;
+          var afterIntro3 = state.stageWarpPlazaIntroduced;
+          state.stageWarpPlazaIntroduced = prevIntro3;
+          saveGame();
+          closeModal("modal-field-sign");
+          showToast("[v0.53] 再読フラグ不変確認\nflag=" + afterIntro3 + " save=" + saveCount3 +
+            " " + (afterIntro3 === true && saveCount3 === 0 ? "PASS ✅" : "FAIL ❌"));
+        } catch(e) { showToast("[v0.53] 再読フラグエラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-paperview-sync").onclick = function () {
+        try {
+          var results3 = [];
+          for (var _pn = 1; _pn <= 6; _pn++) {
+            var ws3 = getStageWarpStatus(_pn);
+            var lr3 = getStageEnemyLevelRange(_pn);
+            results3.push("ST" + _pn + ": " + ws3.status + " " + ws3.displayIcon + " " + lr3.text);
+          }
+          showToast("[v0.53] ワープ状態6件（PaperViewも同関数使用）\n" + results3.join("\n"));
+        } catch(e) { showToast("[v0.53] PaperView同期エラー: " + e.message); }
+      };
+      document.getElementById("btn-debug-v53-modal-stress").onclick = function () {
+        try {
+          var errors = [];
+          for (var _iter = 0; _iter < 10; _iter++) {
+            try {
+              if (FIELD_SIGN_DATA && FIELD_SIGN_DATA[0]) openFieldSignModal(FIELD_SIGN_DATA[0]);
+              closeModal("modal-field-sign");
+              var prevI = state.stageWarpPlazaIntroduced;
+              openModal("modal-warp-plaza-intro");
+              closeModal("modal-warp-plaza-intro");
+              state.stageWarpPlazaIntroduced = prevI;
+              openStageWarpModal(1);
+              closeModal("modal-stage-warp");
+            } catch(e2) { errors.push("iter" + _iter + ": " + e2.message); }
+          }
+          var lock = !!_stageWarpTransitionLock;
+          var modalOpen2 = !!state.modalOpen;
+          showToast("[v0.53] 3モーダル10回開閉確認\nerrors=" + errors.length +
+            "\nlockResidual=" + lock + "\nmodalOpenResidual=" + modalOpen2 +
+            " " + (errors.length === 0 && !lock && !modalOpen2 ? "PASS ✅" : "FAIL ❌") +
+            (errors.length > 0 ? "\n" + errors[0] : ""));
+        } catch(e) { showToast("[v0.53] 3モーダルストレスエラー: " + e.message); }
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -14123,6 +14326,10 @@
     var trail = state.partyTrail || [];
     for (var _ti = 0; _ti < trail.length; _ti++) {
       if (trail[_ti] && trail[_ti].x === x && trail[_ti].y === y) return false;
+    }
+    // §132a v0.53: 案内板座標には案内人をスポーンしない（タイル文字が同じ","のため座標比較で除外）
+    for (var _fsj = 0; _fsj < FIELD_SIGN_DATA.length; _fsj++) {
+      if (FIELD_SIGN_DATA[_fsj].x === x && FIELD_SIGN_DATA[_fsj].y === y) return false;
     }
     return true;
   }

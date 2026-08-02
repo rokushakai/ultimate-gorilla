@@ -5,6 +5,47 @@
 
 ---
 
+## v0.53 (2026-08-02) — ワープ広場案内・進行同期・初回説明安定化 (§132a)
+
+### 調査結果
+
+**objectiveId全件分類**:
+- ステージ対応（ADVENTURE_OBJECTIVE_STAGE_MAP登録済み）: visit_side_gate→1, stage1_explore→1, stage2_challenge→2, stage3_challenge→3, stage4_challenge→4, stage5_challenge→5, stage6_challenge→6, defeat_chimp→6, stage6_boss→6（実際には返されない予備エントリ）
+- ステージ外（null返却）: adventure_complete, challenge_gorilla, prepare_gorilla, get_cygnus, get_pegasus, get_ukulele, get_nyoibo, raise_level
+
+**getStageWarpStatus()の問題**:
+- 旧実装: `!isUnlocked → isCleared → isCurrentObjective → available`
+- `defeat_chimp`（stage6が既クリア済みで現在目的）の場合、isCleared=true が先に評価され "cleared" を返していた
+- これはST6に戻る必要があるのに"クリア済み"として表示される誤り
+- 修正: `isCurrentObjective` を `isCleared` より先にチェック
+
+**FIELD_SIGN_DATA座標安全確認**:
+- (7,17): RAW_MAP row17 `"#######,#####..."` の col7 → "," タイル ✓（南通路の唯一の通路マス）
+- (7,22): RAW_MAP row22 `"#####,,,,,,,,,,,,,,,,,####"` の col7 → "," タイル ✓
+- (11,27): RAW_MAP row27 `"#####,,,,,,,,,,,,,,,,,####"` の col11 → "," タイル ✓
+- 全件: 範囲内・重複なし・","タイル上 ✓
+
+**isAdventureGuideSpawnTileSafe()の問題**:
+- 案内板は","タイルに設置されており、タイル文字のみでは除外できない
+- 旅の案内人NPC（🧭）が案内板座標にスポーンし得た
+- 修正: FIELD_SIGN_DATA座標との一致を座標比較で確認・除外
+
+**renderField()currentワープ表示**:
+- 旧: `"▶" + warpInfo.icon`（例: "▶🌿"の2文字絵文字）
+- 2文字表示はCSSのtile幅（おそらく1文字分）に収まらずレイアウト崩れの原因
+- 修正: "▶"（1文字のみ）に変更
+
+**checkStageWarpPlazaIntro()の動作確認**:
+- movePlayer()の末尾（line 3146）からのみ呼ばれる（load/帰還/debug移動では呼ばれない）✓
+- `_stageWarpPlazaIntroShown` でセッション内二重表示防止 ✓
+- `state.stageWarpPlazaIntroduced` の never-demote確認: saveGame では `!!state.stageWarpPlazaIntroduced`, loadGame では `!!data.stageWarpPlazaIntroduced` ✓
+
+**修正した項目**: 上記3箇所（getStageWarpStatus優先順位/renderFieldアイコン/isAdventureGuideSpawnTileSafe除外）
+
+**修正なしだった項目**: ADVENTURE_OBJECTIVE_STAGE_MAP完全性, FIELD_SIGN_DATA座標安全性, stageWarpPlazaIntroduced正規化, 初回説明境界チェック, PaperView同期, ワープモーダル同期, モーダル管理
+
+---
+
 ## v0.52 (2026-08-02) — uranawanaii BGM導入準備 (§132)
 
 ### BGMシステム調査結果

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.52** |
+| 現在バージョン | **v0.53** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.53] ワープ広場案内・進行同期・初回説明安定化**（§132a）
+  - **`getStageWarpStatus()` 優先順位修正**: `isCurrentObjective` を `isCleared` より先にチェック（クリア済みステージが現在目的の場合 "current" を返す）
+  - **`renderField()` currentワープ表示幅修正**: "▶"+icon の2文字 → "▶" の1文字（セル幅崩れ防止）
+  - **`isAdventureGuideSpawnTileSafe()` 案内板座標除外**: FIELD_SIGN_DATA 3件を座標比較で除外
+  - **デバッグ12ボタン（§132a）**: 安定化テスト一式（objectiveId分類/current件数/道しるべ/広場初回説明/PaperView同期/3モーダルストレス等）
+  - **BGM・ワープ座標・捕獲条件・敵・報酬: 一切変更なし**
 - **[v0.52] uranawanaii BGM導入準備**（§132）
   - **BGMシステム調査**: 現行は JavaScript生成音（Web Audio API + OscillatorNode）のみ。BGM cue 4種（field/fieldClear/battle/ending）
   - **`BGM_ASSET_GUIDE.md`** 追加: 現行BGM構造・音源仕様・楽曲割当表・権利確認欄を網羅した34項目ガイド

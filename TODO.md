@@ -22,6 +22,18 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.53 — ワープ広場案内・進行同期・初回説明安定化 (§132a)
+
+- **`getStageWarpStatus()` 優先順位修正**: `isCurrentObjective` を `isCleared` より先にチェック（クリア済みステージが現在目的の場合 "current" を返すよう修正）✅
+- **`renderField()` currentワープ表示幅修正**: "▶"+icon の2文字 → "▶" の1文字（セル幅崩れ防止）✅
+- **`isAdventureGuideSpawnTileSafe()` 案内板座標除外**: FIELD_SIGN_DATA 3件の座標を座標比較で除外 ✅
+- **デバッグ12ボタン（§132a）**: 安定化テスト一式 ✅
+- **GAME_DESIGN.md** 更新: v0.53仕様追記 (§132a) ✅
+- **CHANGELOG.md / TODO.md / HANDOFF.md**: v0.53へ更新 ✅
+- **BGMコード一切変更なし** ✅
+
+---
+
 ### Version 0.52 — uranawanaii BGM仕様確定・音源フォルダ準備 (§132)
 
 - **BGM方式調査**: 現行は JavaScript生成音（Web Audio API + OscillatorNode）のみ。ファイル再生なし ✅
@@ -41,7 +53,7 @@
 
 ## 🔲 次の実装
 
-### Version 0.52.1 — uranawanaii BGMファイル再生基盤
+### Version 0.52.1 — uranawanaii BGMファイル再生基盤（音源配置後に着手）
 
 - `startBGM(type)` にファイル再生分岐を追加
 - HTMLAudioElement または AudioBuffer でのループ再生基盤を実装

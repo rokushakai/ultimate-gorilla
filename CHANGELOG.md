@@ -5,6 +5,40 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.53] - 2026-08-02 — ワープ広場案内・進行同期・初回説明安定化 (§132a)
+
+### Fixed
+- **`getStageWarpStatus()` 優先順位修正**: `isCleared` より `isCurrentObjective` を先にチェックするよう変更。クリア済みステージが「defeat_chimp」等で現在の目的になった場合に "cleared" ではなく "current" を返すよう修正
+- **`renderField()` currentワープ表示幅修正**: `"▶" + icon`（2文字・セル幅崩れの原因）→ `"▶"`（1文字）に変更
+- **`isAdventureGuideSpawnTileSafe()` 案内板座標除外追加**: FIELD_SIGN_DATA 3件の座標 (7,17)(7,22)(11,27) が","タイルのためNPCスポーン対象になっていた問題を座標比較で除外
+
+### Added
+- **デバッグ12ボタン（§132a）**: objectiveId全件分類確認 / current件数0または1確認 / ステージ外目的currentなし確認 / 道しるべ3件座標競合確認 / 道しるべ接触状態不変確認 / 広場境界確認 / 広場内load時非表示確認 / ステージ帰還時非表示確認 / 初回説明save1回確認 / 再読時フラグ不変確認 / フィールド・PaperView同期確認 / 3モーダル10回開閉確認
+
+### 確認済み（修正不要だった項目）
+- `getStageWarpStatus()` は純粋関数（state変更・saveGame・renderField・toast・modal一切なし）✓
+- `ADVENTURE_OBJECTIVE_STAGE_MAP` 全件登録済み（ステージ対応8件・余分なstage6_boss除く）✓
+- current件数は修正後0または1件が保証される（getCurrentObjectiveStageNumber()の単一返値から）✓
+- FIELD_SIGN_DATA座標すべて","タイル上・範囲内・主通路非完全塞ぎ ✓
+- 方角記述正確（south_route/north_return/plaza_guide）✓
+- 案内板接触でstepCount・saveGame不変（openFieldSignModalは副作用なし）✓
+- `stageWarpPlazaIntroduced` never-demote実装済み（saveGame: `!!state.stageWarpPlazaIntroduced`）✓
+- `checkStageWarpPlazaIntro()` は `movePlayer()` 末尾からのみ呼ばれる（load/帰還/debug移動では呼ばれない）✓
+- `_stageWarpPlazaIntroShown` でセッション内二重表示防止済み ✓
+- PaperView（renderAdventureGuideSection）は`getStageWarpStatus()`を使用 ✓
+- ワープモーダル（openStageWarpModal）は`getStageWarpStatus()`を使用 ✓
+- `_stageWarpTransitionLock` はモジュールスコープvar定義済み ✓
+
+### Not Changed
+- BGM再生コード・`stopBGMHard()`・`AudioContext`・BGMタイマー・BGMノード 一切変更なし
+- ワープ座標・ステージ進行条件・報酬・敵レベル・敵能力 一切変更なし
+- 捕獲率・仲間能力・AI比率変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー変更なし
+- 最終サイドストーリー・エンディング変更なし
+- 通常マップ26×36・ワープ広場・道しるべ座標変更なし
+
+---
+
 ## [0.52] - 2026-08-02 — uranawanaii BGM導入準備 (§132)
 
 ### Added

@@ -7444,3 +7444,76 @@ BGM再生コードは一切変更しない。調査・設計・フォルダ・�
 - index.html: BGM関連要素一切
 - 既存BGM挙動（タイミング・切替先）一切
 - ゲーム進行・マップ・敵・仲間・捕獲率に変更なし
+
+---
+
+## v0.53 — ワープ広場案内・進行同期・初回説明安定化 (§132a) [実装済み]
+
+### 概要
+
+v0.51.2で追加したワープ状態表示・道しるべ・ワープ広場初回説明・冒険案内との同期を安定化する。
+
+ワープ状態はlocked/available/current/clearedの4種類。
+状態は既存のステージ解放条件・ステージクリア条件・現在の冒険目的から毎回導出する。
+状態判定ではstateを変更しない。
+
+currentは常に0件または1件とし、ステージ外の目的では0件とする。
+
+初回説明は通常移動によってワープ広場へ初めて到着した場合だけ表示する。
+ロード直後・座標補正直後・ステージ帰還直後・debug移動では自動表示しない。
+
+stageWarpPlazaIntroducedは一度trueになった後はfalseへ戻さない。
+
+道しるべ接触では主人公座標・partyTrail・案内人出現歩数を変更しない。
+
+フィールド・PaperView・旅の案内人・ワープモーダルは同じワープ状態判定を使用する。
+
+既存の解放条件・報酬・敵レベル・捕獲率・仲間能力・BGM制御は変更しない。
+
+### 修正内容
+
+**getStageWarpStatus()優先順位修正**:
+- 旧: `!isUnlocked → isCleared → isCurrentObjective → available`
+- 新: `!isUnlocked → isCurrentObjective → isCleared → available`
+- クリア済みステージが現在の目的（defeat_chimp等）になった場合に"current"を返すよう修正
+
+**renderField()currentワープ表示幅修正**:
+- 旧: `"▶" + icon`（2文字でセル幅崩れの原因）
+- 新: `"▶"`（1文字のみ、情報はワープモーダルで確認）
+
+**isAdventureGuideSpawnTileSafe()に案内板座標除外追加**:
+- FIELD_SIGN_DATA 3件の座標（7,17）(7,22)(11,27)は","タイルのため除外できていなかった
+- 座標比較による除外を追加
+
+### 4状態優先順位
+
+1. !isUnlocked → "locked"（前提・最優先）
+2. isCurrentObjective → "current"（cleared状態でも現在目的はcurrentを返す）
+3. isCleared → "cleared"
+4. それ以外 → "available"
+
+### objectiveId分類
+
+ステージ対応（ADVENTURE_OBJECTIVE_STAGE_MAP登録済み）:
+- visit_side_gate → ST1
+- stage1_explore → ST1
+- stage2_challenge → ST2
+- stage3_challenge → ST3
+- stage4_challenge → ST4
+- stage5_challenge → ST5
+- stage6_challenge → ST6
+- defeat_chimp → ST6
+- stage6_boss → ST6（registerのみ、現時点では返されない）
+
+ステージ外（null返却・currentワープなし）:
+- adventure_complete / challenge_gorilla / prepare_gorilla
+- get_cygnus / get_pegasus / get_ukulele / get_nyoibo / raise_level
+
+### 変更しなかったもの（v0.53）
+
+- BGM再生コード・stopBGMHard()・AudioContext・BGMタイマー・BGMノード一切変更なし
+- ワープ座標・ステージ進行条件・報酬・敵レベル・敵能力一切変更なし
+- 捕獲率・仲間能力・AI比率変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー変更なし
+- 最終サイドストーリー・エンディング変更なし
+- 通常マップ26×36・ワープ広場・道しるべ座標変更なし（安全確認済み）
