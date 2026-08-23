@@ -5,6 +5,26 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.55] - 2026-08-23 — PaperView番組拡張・仲間の物語進捗セクション (§134)
+
+### Added
+- **`renderCompanionStoryProgressSection()`** (§134): 攻略ペーパービュー屋モーダルに「📖 仲間の物語」セクションを追加
+  - 4人（ジュリタニ/シュリタニ/ノリオ/ハルミ）の第1話〜第3話進捗を一覧表示
+  - ✅（読了）/ ・（未読・解放済み）/ 🔒（未解放）の3状態でアイコン表示
+  - 第1話/第2話/第3話の全員完了バナーを下部に表示（🌟）
+  - 凡例（✅読了 ・未読 🔒未解放）を下部に表示
+- **`renderHintShopMenu()` 更新**: `renderAdventureGuideSection()` の直後に `renderCompanionStoryProgressSection()` の呼び出しを追加
+
+### Not Changed
+- ヒント購入ロジック（10G/50G/100G）・`getHintPriority()`・`getProgressHint()` 変更なし
+- 冒険ガイドセクション（`renderAdventureGuideSection()`）変更なし
+- セーブデータ・既存フラグ変更なし（新規永続フラグなし）
+- 仲間の解放条件・物語本文・報酬変更なし
+- BGM再生コード・`stopBGMHard()`・BGMタイマー変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー変更なし
+
+---
+
 ## [0.54] - 2026-08-02 — 仲間サイドストーリー第3話・全員完了演出 (§133)
 
 ### Added

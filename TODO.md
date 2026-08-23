@@ -22,6 +22,16 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.55 — PaperView番組拡張・仲間の物語進捗セクション (§134)
+
+- **`renderCompanionStoryProgressSection()`**: 仲間の物語進捗を一覧表示するHTML生成関数 ✅
+  - 4人 × 3話の状態（✅読了 / ・未読 / 🔒未解放）を2行レイアウトで表示 ✅
+  - 全員完了バナー（🌟）を各章ごとに表示 ✅
+  - 凡例（✅読了 ・未読 🔒未解放）表示 ✅
+- **`renderHintShopMenu()` 更新**: 冒険ガイドセクションの直後に仲間の物語セクションを挿入 ✅
+
+---
+
 ### Version 0.54 — 仲間サイドストーリー第3話・全員完了演出 (§133)
 
 - **`areAllCompanionSideStoryChapter3Complete()`**: 4/4完了判定（純粋関数） ✅

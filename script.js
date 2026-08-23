@@ -14835,6 +14835,52 @@
     openModal("npc-modal");
   }
 
+  // §134 v0.55: 仲間サイドストーリー進捗セクション（PaperView用・純粋関数）
+  function renderCompanionStoryProgressSection() {
+    var cids = ["juritani", "shurittani", "norio", "harumi"];
+    var cnames = { juritani: "ジュリタニ", shurittani: "シュリタニ", norio: "ノリオ", harumi: "ハルミ" };
+    var html = "";
+    html += "<div style=\"border:1px solid #5a3a6a;border-radius:6px;padding:8px 10px;margin-bottom:12px;background:#1a1a2a;\">";
+    html += "<p class=\"small\" style=\"color:#c084fc;font-weight:bold;margin-bottom:6px;\">📖 仲間の物語</p>";
+    for (var ci = 0; ci < cids.length; ci++) {
+      var cid = cids[ci];
+      var cname = cnames[cid];
+      var cd = null;
+      for (var di = 0; di < COMPANION_DATA.length; di++) {
+        if (COMPANION_DATA[di].id === cid) { cd = COMPANION_DATA[di]; break; }
+      }
+      var ever = hasCompanionEverJoined(cid);
+      var ch1done = isCompanionSideStoryCompleted(cid, 1);
+      var ch1unlock = isCompanionSideStoryUnlocked(cid, 1);
+      var ch2done = isCompanionSideStoryCompleted(cid, 2);
+      var ch2unlock = isCompanionSideStoryUnlocked(cid, 2);
+      var ch3done = isCompanionSideStoryCompleted(cid, 3);
+      var ch3unlock = isCompanionSideStoryUnlocked(cid, 3);
+      var iconStr = cd ? (cd.icon + " ") : "";
+      html += "<div style=\"display:flex;justify-content:space-between;align-items:center;font-size:0.8em;margin-bottom:3px;\">";
+      html += "<span style=\"color:#d0b0e0;\">" + iconStr + cname + "</span>";
+      html += "<span style=\"letter-spacing:2px;\">";
+      html += "<span title=\"第1話\" style=\"color:" + (ch1done ? "#c084fc" : (ch1unlock ? "#888" : "#555")) + ";\">" + (ch1done ? "✅" : (ch1unlock ? "・" : "🔒")) + "</span>";
+      html += "<span title=\"第2話\" style=\"color:" + (ch2done ? "#c084fc" : (ch2unlock ? "#888" : "#555")) + ";\">" + (ch2done ? "✅" : (ch2unlock ? "・" : "🔒")) + "</span>";
+      html += "<span title=\"第3話\" style=\"color:" + (ch3done ? "#c084fc" : (ch3unlock ? "#888" : "#555")) + ";\">" + (ch3done ? "✅" : (ch3unlock ? "・" : "🔒")) + "</span>";
+      html += "</span></div>";
+    }
+    // 全員完了ステータス
+    var ch1all = !!state.companionSideStoryAllCompleteCelebrated;
+    var ch2all = !!state.companionSideStoryChapter2AllCompleteCelebrated;
+    var ch3all = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+    if (ch1all || ch2all || ch3all) {
+      html += "<div style=\"font-size:0.75em;color:#a370c8;margin-top:5px;border-top:1px solid #4a2a5a;padding-top:4px;\">";
+      if (ch1all) html += "🌟 第1話全員完了　";
+      if (ch2all) html += "🌟 第2話全員完了　";
+      if (ch3all) html += "🌟 第3話全員完了";
+      html += "</div>";
+    }
+    html += "<div style=\"font-size:0.72em;color:#6b5a7b;margin-top:4px;\">✅読了 ・未読 🔒未解放</div>";
+    html += "</div>";
+    return html;
+  }
+
   function renderAdventureGuideSection() {
     var guide = getCurrentAdventureGuide();
     var html = "";
@@ -15106,6 +15152,7 @@
     html += "<p class=\"small\" style=\"margin-bottom:4px;\">「今の君に必要な情報を売っているよ。</p>";
     html += "<p class=\"small\" style=\"margin-bottom:12px;\">情報にも価値がある。払える者だけが知れる。」</p>";
     html += renderAdventureGuideSection(); // §124 v0.48: 🧭 冒険ガイド（無料）
+    html += renderCompanionStoryProgressSection(); // §134 v0.55: 📖 仲間の物語進捗（無料）
     html += "<p class=\"small\" style=\"color:#ffd166;margin-bottom:10px;\">所持金: 💰 " + p.gold + "G</p>";
     var tiers = [
       { tier: 1, cost: 10,  label: "ぼんやりヒント",  color: "#adb5bd" },
