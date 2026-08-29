@@ -7753,3 +7753,65 @@ v0.56.1追加12本（`btn-debug-v561-*`）も同様。
 - 最終ストーリー本文・究極チンパンジー・最終戦・エンディング 変更なし
 - BGM関連コード一切変更なし
 - 究極ゴリラ捕獲条件変更なし
+
+---
+
+## v0.57 仲間装備商人販売・安全なショップ基盤（§137）
+
+### 概要
+
+既存の商人モーダルに「🎽 仲間装備を買う」メニューを追加し、仲間用装備をゴールドで購入できる機能を実装する。
+購入した装備は自動装備せず、既存の仲間装備画面から手動で装備する。
+
+### 販売品目
+
+| gearId | 名前 | 対象仲間 | 価格 | 備考 |
+|---|---|---|---|---|
+| hotblood_bandana | 熱血バンダナ | ジュリたに | 80G | スターター・購入可 |
+| capture_gloves | 捕獲グローブ | シュリたに | 80G | スターター・購入可 |
+| observation_glasses | 観察メガネ | のりお | 80G | スターター・購入可 |
+| healing_ribbon | 癒しのリボン | はるみ | 80G | スターター・購入可 |
+| critical_bracelet | 会心の腕輪 | ジュリたに | — | ST2初回クリア報酬・購入不可 |
+| net_master_belt | 網師のベルト | シュリたに | — | ST3初回クリア報酬・購入不可 |
+| research_notebook | 研究ノート | のりお | — | ST4初回クリア報酬・購入不可 |
+| prayer_brooch | 祈りのブローチ | はるみ | — | ST5初回クリア報酬・購入不可 |
+
+### 新規定数
+
+- `COMPANION_GEAR_SHOP_ITEMS` — 販売品gearId+価格の配列（スターター4種のみ）
+
+### 新規関数
+
+- `canBuyCompanionGear(gearId)` — 純粋関数。購入可否を返す。副作用なし。
+  - 条件: COMPANION_GEAR_SHOP_ITEMSに存在 AND COMPANION_GEAR_REWARD_DATAに存在しない AND 未所持 AND 所持金>=価格
+  - 戻り値: `{ ok: true/false, reason: string, price: number }`
+- `buyCompanionGear(gearId)` — 購入処理。canBuyCompanionGearを呼び、OKならgold減算・inventory+1・saveGame・toast
+- `renderCompanionGearShop()` — ショップUI描画。ensureCompanionGearState()を呼んだ後にmerchan-body更新
+
+### renderMerchantMain() 変更
+
+- 「🎽 仲間装備を買う」ボタンを追加
+- onclick = renderCompanionGearShop
+
+### セーブデータ変更なし
+
+- companionGearInventory・player.goldはすでにsaveGame/loadGameに存在
+- 新規フラグ追加なし
+
+### 制約（変更禁止）
+
+- BGM関連コード（stopBGMHard、BGMセッション管理）変更なし
+- 究極ゴリラ捕獲条件変更なし
+- 究極チンパンジー・最終サイドストーリー解放条件変更なし
+- 報酬装備4種はショップで購入不可（`canBuyCompanionGear` でfalseを返す）
+- 自動装備なし（既存装備画面から手動装備）
+- ES5のみ: var、function、文字列結合
+
+### デバッグ（§137・4本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v57-shop-state | 全8装備の所持状態・購入可否一覧 |
+| btn-debug-v57-buy-test | 購入テスト（G付与→熱血バンダナ購入→復元） |
+| btn-debug-v57-reward-lock | 報酬装備4種canBuy=falseを確認 |
+| btn-debug-v57-no-gold | G不足時の購入ブロック確認（G=0でfalse） |

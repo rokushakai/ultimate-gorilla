@@ -16,11 +16,23 @@
 
 ### Version 0.49 候補以降
 
-将来: 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み（最新）
+
+### Version 0.57 — 仲間装備商人販売・安全なショップ基盤 (§137)
+
+- **`COMPANION_GEAR_SHOP_ITEMS`**: スターター4種の販売品定数（gearId+price） ✅
+- **`canBuyCompanionGear(gearId)`**: 購入可否純粋関数（販売対象・未所持・所持金チェック） ✅
+- **`buyCompanionGear(gearId)`**: 購入処理（gold減算・inventory+1・saveGame・toast） ✅
+- **`renderCompanionGearShop()`**: ショップUI（スターター4種+報酬4種🔒表示） ✅
+- **`renderMerchantMain()` 拡張**: 「🎽 仲間装備を買う」ボタン追加 ✅
+- **報酬装備4種ロック**: canBuyCompanionGearで「販売対象外」を返す ✅
+- **デバッグ4本** (§137): `btn-debug-v57-*` ✅
+
+---
 
 ### Version 0.56.1 — 最終サイドストーリー接続・実動作監査 (§136)
 

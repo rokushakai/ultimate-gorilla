@@ -5,6 +5,23 @@
 
 ---
 
+## v0.57 (2026-08-29) — 仲間装備商人販売・安全なショップ基盤 (§137)
+
+### 設計判断
+
+- **スターター4種のみ販売**: 報酬装備（critical_bracelet/net_master_belt/research_notebook/prayer_brooch）は `COMPANION_GEAR_REWARD_DATA` に存在するため `canBuyCompanionGear` で「要ステージ報酬」を返してブロック。shop-eligibilityを別定数で管理し COMPANION_GEAR_DATA に手を加えない。
+- **新規セーブフラグなし**: companionGearInventory（所持数管理）と player.gold（所持金）はすでにsaveGame/loadGameに存在するため、saveData変更ゼロ。
+- **既存auto-giveを維持**: `ensureCompanionGearState()` でgearVersion<1の場合スターターを自動付与する既存ロジックは変更しない。既存プレイヤーは「所持済み」としてショップに表示される。
+- **自動装備なし**: 購入後は companionGearInventory のカウントが増えるのみ。既存の仲間装備画面から手動で装備する（既存仕様と整合）。
+- **renderMerchantMain にボタン追加**: 既存 renderMerchantBuy と同パターン。`m-buy-companion-gear` → `renderCompanionGearShop()`。
+
+### 注意点
+
+- スターター4種はgearVersion<1の新規ゲームで自動付与されるため、ゲーム開始直後にショップを開くと「所持済み」になる可能性がある（ensureCompanionGearStateが先に走るため）。これは仕様通り（二重取得防止の目的と一致）。
+- 購入ボタンのdata属性名を `data-buy-cg` とした（既存の `data-buy` や `data-buy-equip-slot` と衝突しないため）。
+
+---
+
 ## v0.56.1 (2026-08-29) — 最終サイドストーリー接続・実動作監査 (§136)
 
 ### 監査動機

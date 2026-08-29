@@ -5,6 +5,26 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.57] - 2026-08-29 — 仲間装備商人販売・安全なショップ基盤 (§137)
+
+### Added
+- **`COMPANION_GEAR_SHOP_ITEMS`**: 仲間装備ショップ販売品定数（スターター4種: 各80G）
+- **`canBuyCompanionGear(gearId)`**: 購入可否確認（純粋関数・副作用なし）
+  - 販売対象外・要ステージ報酬・所持済み・G不足の4パターンをガード
+- **`buyCompanionGear(gearId)`**: 購入処理（gold減算・inventory+1・saveGame・toast・re-render）
+- **`renderCompanionGearShop()`**: ショップUI（スターター4種+報酬4種🔒表示、所持済み表示付き）
+- **`renderMerchantMain()` 拡張**: 「🎽 仲間装備を買う」ボタン追加 → `renderCompanionGearShop()`
+- **デバッグ4本** (§137): `btn-debug-v57-*` — ショップ状態一覧 / 購入テスト / 報酬ロック確認 / G不足ブロック確認
+
+### Not Changed
+- BGMコード（stopBGMHard・BGMセッション管理）変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー・最終サイドストーリー解放条件変更なし
+- 報酬装備4種はショップ購入不可（`canBuyCompanionGear`で「要ステージ報酬」を返す）
+- saveGame/loadGame変更なし（companionGearInventory・player.goldはすでに保存済み）
+- 自動装備なし（既存仲間装備画面から手動装備）
+
+---
+
 ## [0.56.1] - 2026-08-29 — 最終サイドストーリー接続・実動作監査 (§136)
 
 ### Audited
