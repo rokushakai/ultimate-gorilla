@@ -5,6 +5,31 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.56] - 2026-08-29 — 最終サイドストーリー接続・解放導線 (§135)
+
+### Added
+- **`isFinalCompanionSideStoryUnlocked()`**: 最終サイドストーリー解放判定（純粋関数・副作用なし）
+  - 条件: 第3話4/4完了 AND 第3話全員完了演出済み AND ステージ5クリア済み
+- **`isFinalCompanionSideStoryCompleted()`**: 最終サイドストーリー完了判定（`isSideStoryCleared()`の委譲）
+- **`scheduleFinalCompanionSideStoryUnlockNotice(delayMs)`**: 解放通知スケジュール（pending最大1・ガード付き）
+- **`consumePendingFinalCompanionStoryUnlockNotice()`**: pending消費（戦闘中・モーダル中は遅延・1回限り）
+- **`state.finalCompanionSideStoryUnlockNotified`**: 解放通知済み永続フラグ（saveGame/loadGame対応）
+- **非永続変数3本**: `_pendingFinalCompanionStoryUnlockNotice` / `_finalCompanionStoryUnlockNoticeVisible` / `_finalCompanionStoryUnlockNoticeTimer`
+- **`closeCompanionStoryChapter3AllCompleteCelebration()` 更新**: 演出close後に解放通知をスケジュール（条件満たす場合のみ・1回限り）
+- **`renderTavernStories()` 更新** (§135): 最終サイドストーリー導線カードを5状態で表示（完了済み/解放済み/演出前/演出済み既存条件未達/未解放）
+- **`renderCompanionStoryProgressSection()` 更新** (§135): PaperView最終物語欄を5状態で表示（border-top区切り・末尾追加）
+- **`getCurrentAdventureGuide()` 更新** (§135): `final_companion_story` objectiveIdを追加（解放条件満たす場合のみ表示・stage6_challengeより優先）
+- **旧セーブ修復** (§135): loadGame()でケースA（解放済み+未通知→pending登録）・ケースB（完了済み+未通知→notified=true補正）を処理
+- **デバッグボタン17本** (§135): `btn-debug-v56-*` — 解放条件確認・境界値テスト・通知制御・PaperView5状態・酒場状態・objective同期・ワープcurrentなし確認等
+
+### Not Changed
+- BGM関連コード・`stopBGMHard()`・BGMタイマー 変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー・既存最終サイドストーリー解放条件 変更なし
+- Gold・アイテム付与・戦闘能力・装備効果・捕獲率・EXP倍率 変更なし
+- `ADVENTURE_OBJECTIVE_STAGE_MAP`に `final_companion_story` は追加しない（ワープcurrentなし）
+
+---
+
 ## [0.55] - 2026-08-23 — PaperView番組拡張・仲間の物語進捗セクション (§134)
 
 ### Added

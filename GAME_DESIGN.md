@@ -7564,3 +7564,94 @@ BGM制御・捕獲率・仲間能力・AI比率変更なし。
 副題「仲間サイドストーリー第3話・全員完了」
 7行ダイアログ（ナレーション2行 + キャラ4行 + 主人公1行、主人公名表示対応）
 閉じるボタン「物語を胸に刻む」
+
+---
+
+## v0.55 PaperView番組拡張・仲間の物語進捗セクション（§134）
+
+**[実装済み]**
+
+攻略ペーパービュー屋モーダルに「📖 仲間の物語」セクションを追加。
+
+### 仕様
+
+- **`renderCompanionStoryProgressSection()`**: 4人×3話の進捗をHTML生成して返す純粋関数
+- 表示状態: ✅（読了）/ ・（未読・解放済み）/ 🔒（未解放）の3状態
+- 全員完了バナー（🌟）: 各章で4/4完了時に表示
+- 凡例: ✅読了 ・未読 🔒未解放
+- `renderHintShopMenu()` 内の `renderAdventureGuideSection()` 直後に呼び出し
+
+### 変更しなかったもの
+
+- ヒント購入ロジック（10G/50G/100G）・`getHintPriority()`・`getProgressHint()` 変更なし
+- 冒険ガイドセクション変更なし
+- セーブデータ・既存フラグ変更なし（新規永続フラグなし）
+- BGM・捕獲条件・チンパンジー変更なし
+
+---
+
+## v0.56 最終サイドストーリー接続・解放導線（§135）
+
+**[実装済み]**
+
+仲間4人の第3話完了演出後、既存の最終サイドストーリー（横スクロールステージ6「チンパンジーの聖域」）への自然な導線を追加する。
+
+### 解放条件
+
+```
+isFinalCompanionSideStoryUnlocked() = true
+  ⟺ areAllCompanionSideStoryChapter3Complete()       // 第3話4/4完了
+  AND state.companionSideStoryChapter3AllCompleteCelebrated  // 演出済み
+  AND state.sideMap.stageCleared["5"]                // ステージ5クリア済み
+```
+
+### 完了判定
+
+```
+isFinalCompanionSideStoryCompleted() = isSideStoryCleared()
+  ⟺ sideMap.stageCleared["6"] AND sideMap.defeatedEnemies["6:34,2"]
+```
+
+### 解放通知（1回限り）
+
+- `state.finalCompanionSideStoryUnlockNotified`: 通知済み永続フラグ（saveGame/loadGame）
+- `scheduleFinalCompanionSideStoryUnlockNotice(delayMs)`: pending最大1・ガード付きスケジュール
+- `consumePendingFinalCompanionStoryUnlockNotice()`: 戦闘中/モーダル中は遅延、通常状態で即消費
+- `closeCompanionStoryChapter3AllCompleteCelebration()` close後に800ms遅延でスケジュール
+
+### 非永続変数（IIFEスコープ）
+
+- `_pendingFinalCompanionStoryUnlockNotice`: pending状態（boolean）
+- `_finalCompanionStoryUnlockNoticeVisible`: toast表示中フラグ（boolean）
+- `_finalCompanionStoryUnlockNoticeTimer`: delayタイマーID（nullable）
+
+### 酒場・PaperView 5状態表示
+
+| 状態 | 条件 | 酒場表示 | PaperView表示 |
+|---|---|---|---|
+| 1: 未解放 | ch3 4/4未完了 | 🔒 その先の物語 | 🔒 その先の物語 |
+| 2: 演出前 | 4/4完了・演出未実施 | 🌅 四つの灯り...まず演出を | 🌅 四つの灯り...まず演出を |
+| 3: 演出済み既存条件未達 | 演出済み・S5未クリア | 🌅 その先の物語...冒険を進めて | 🌅 その先の物語...冒険を進めて |
+| 4: 解放済み・未完了 | isFinalCompanionSideStoryUnlocked() | 🌅 チンパンジーの聖域へ (button) | ▶ 最終サイドストーリー |
+| 5: 完了済み | isFinalCompanionSideStoryCompleted() | 🌟 完了 (button:もう一度) | 🌟 完了 |
+
+### adventure guide
+
+- objectiveId `final_companion_story`: S5クリア済み AND 解放条件満たす場合に表示（`stage6_challenge`より優先）
+- `ADVENTURE_OBJECTIVE_STAGE_MAP` には追加しない（currentワープなし）
+- title: 「仲間たちの物語、その先へ」
+- shortText: 「四人の物語を見届けました。酒場で仲間たちに話を聞いてから、チンパンジーの聖域へ向かいましょう。」
+- locationText: 「目的地：酒場 → チンパンジーの聖域（ST6）」
+
+### 旧セーブ互換
+
+- ケースA: ch3演出済み+S5クリア済み+最終未完了+通知未設定 → loadGame()で `_pendingFinalCompanionStoryUnlockNotice = true`
+- ケースB: 最終ストーリー完了済み+通知未設定 → loadGame()で `state.finalCompanionSideStoryUnlockNotified = true`（通知不要補正）
+- ケースC: 条件未達 → 何もしない（既存動作を維持）
+
+### 変更しなかったもの
+
+- BGM関連コード・`stopBGMHard()`・BGMタイマー 一切変更なし
+- 究極ゴリラ捕獲条件・究極チンパンジー・既存最終サイドストーリー解放条件 変更なし
+- Gold・アイテム付与・戦闘能力・装備効果・捕獲率・EXP倍率 変更なし
+- 自動開始なし（`openStageWarpModal(6)` はユーザー操作が必要）

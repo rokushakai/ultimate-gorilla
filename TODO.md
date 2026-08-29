@@ -16,11 +16,28 @@
 
 ### Version 0.49 候補以降
 
-将来: 4人第3話完了後の最終サイドストーリー接続 / 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 仲間装備商人販売 / 仲間わざ習得演出 / 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み（最新）
+
+### Version 0.56 — 最終サイドストーリー接続・解放導線 (§135)
+
+- **`isFinalCompanionSideStoryUnlocked()`**: 解放判定（純粋関数・ch3 4/4+演出済み+S5クリア） ✅
+- **`isFinalCompanionSideStoryCompleted()`**: 完了判定（`isSideStoryCleared()`委譲） ✅
+- **`scheduleFinalCompanionSideStoryUnlockNotice(delayMs)`**: 通知スケジュール（pending最大1） ✅
+- **`consumePendingFinalCompanionStoryUnlockNotice()`**: pending消費（ガード付き・1回限り） ✅
+- **`state.finalCompanionSideStoryUnlockNotified`**: 通知済み永続フラグ（saveGame/loadGame） ✅
+- **非永続変数3本**: pending / visible / timer ✅
+- **`closeCompanionStoryChapter3AllCompleteCelebration()` 更新**: close後に通知スケジュール ✅
+- **`renderTavernStories()` 更新**: 最終ストーリー導線カード（5状態） ✅
+- **`renderCompanionStoryProgressSection()` 更新**: PaperView最終物語欄（5状態） ✅
+- **`getCurrentAdventureGuide()` 更新**: `final_companion_story` objective追加 ✅
+- **旧セーブ修復**: ケースA（pending登録）・ケースB（通知不要補正） ✅
+- **デバッグボタン17本** (§135): `btn-debug-v56-*` ✅
+
+---
 
 ### Version 0.55 — PaperView番組拡張・仲間の物語進捗セクション (§134)
 

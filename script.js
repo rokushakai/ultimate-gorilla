@@ -1205,6 +1205,7 @@
     companionSideStoryChapter2AllCompleteCelebrated: false, // §119 v0.45.2: 第2話全話完了演出済み（永続・saveする）
     companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
     companionSideStoryChapter3AllCompleteCelebrated: false, // §133 v0.54: 第3話全話完了演出済み（永続・saveする）
+    finalCompanionSideStoryUnlockNotified: false, // §135 v0.56: 最終サイドストーリー解放通知済み（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -3782,6 +3783,11 @@
   var _companionStoryChapter2AllCompleteNoticeTimer = null;
   var _companionStoryCompletionNoticeQueueTimer = null; // §120 v0.45.3: 共通キュータイマー（非永続）
 
+  // §135 v0.56: 最終サイドストーリー解放通知状態（非永続・IIFEスコープ・saveしない）
+  var _pendingFinalCompanionStoryUnlockNotice = false;
+  var _finalCompanionStoryUnlockNoticeVisible = false;
+  var _finalCompanionStoryUnlockNoticeTimer = null;
+
   // §133 v0.54: 第3話全話完了演出専用状態（非永続・IIFEスコープ・saveしない）
   var _pendingCompanionStoryChapter3AllCompleteNotice = false;
   var _companionStoryChapter3AllCompleteNoticeVisible = false;
@@ -3976,6 +3982,65 @@
     return true;
   }
 
+  // §135 v0.56: 最終サイドストーリー解放判定（純粋関数・副作用なし）
+  // 条件: 第3話4/4完了 AND 第3話全員完了演出済み AND ステージ5クリア済み（既存最終ストーリー入場条件）
+  function isFinalCompanionSideStoryUnlocked() {
+    if (!areAllCompanionSideStoryChapter3Complete()) return false;
+    if (!state.companionSideStoryChapter3AllCompleteCelebrated) return false;
+    var sm = state.sideMap;
+    return !!(sm && sm.stageCleared && sm.stageCleared["5"]);
+  }
+
+  // §135 v0.56: 最終サイドストーリー完了判定（純粋関数・isSideStoryCleared()への委譲）
+  function isFinalCompanionSideStoryCompleted() {
+    return isSideStoryCleared();
+  }
+
+  // §135 v0.56: 解放通知をスケジュール（pending最大1・ガード付き）
+  function scheduleFinalCompanionSideStoryUnlockNotice(delayMs) {
+    if (!!state.finalCompanionSideStoryUnlockNotified) return;
+    if (!isFinalCompanionSideStoryUnlocked()) return;
+    if (_pendingFinalCompanionStoryUnlockNotice) return;
+    if (_finalCompanionStoryUnlockNoticeVisible) return;
+    _pendingFinalCompanionStoryUnlockNotice = true;
+    if (_finalCompanionStoryUnlockNoticeTimer) {
+      clearTimeout(_finalCompanionStoryUnlockNoticeTimer);
+      _finalCompanionStoryUnlockNoticeTimer = null;
+    }
+    _finalCompanionStoryUnlockNoticeTimer = setTimeout(function () {
+      _finalCompanionStoryUnlockNoticeTimer = null;
+      consumePendingFinalCompanionStoryUnlockNotice();
+    }, delayMs || 600);
+  }
+
+  // §135 v0.56: 解放通知pending消費（ガード付き・1回限り）
+  function consumePendingFinalCompanionStoryUnlockNotice() {
+    if (!_pendingFinalCompanionStoryUnlockNotice) return;
+    if (_finalCompanionStoryUnlockNoticeVisible) return;
+    if (state.inBattle) { // 戦闘中は延期
+      _finalCompanionStoryUnlockNoticeTimer = setTimeout(consumePendingFinalCompanionStoryUnlockNotice, 400);
+      return;
+    }
+    if (state.modalOpen) { // 他モーダル中は延期
+      _finalCompanionStoryUnlockNoticeTimer = setTimeout(consumePendingFinalCompanionStoryUnlockNotice, 300);
+      return;
+    }
+    if (!!state.finalCompanionSideStoryUnlockNotified) {
+      _pendingFinalCompanionStoryUnlockNotice = false;
+      return;
+    }
+    if (!isFinalCompanionSideStoryUnlocked()) {
+      _pendingFinalCompanionStoryUnlockNotice = false;
+      return;
+    }
+    _pendingFinalCompanionStoryUnlockNotice = false;
+    _finalCompanionStoryUnlockNoticeVisible = true;
+    state.finalCompanionSideStoryUnlockNotified = true;
+    saveGame();
+    showToast("📖 新しい物語が開かれました\n\n四人の物語は、さらにその先へ続いているようです。\n酒場やPaperViewを確認してみましょう。");
+    _finalCompanionStoryUnlockNoticeVisible = false;
+  }
+
   // §133 v0.54: 第3話4人全完了判定（副作用なし）
   function areAllCompanionSideStoryChapter3Complete() {
     var _cids133 = ["juritani", "shurittani", "norio", "harumi"];
@@ -4133,6 +4198,10 @@
     // 残存pendingの安全確認（破損状態対策）
     if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
       schedulePendingCompanionStoryCompletionNotices(50);
+    }
+    // §135 v0.56: 第3話close後に最終サイドストーリー解放通知をスケジュール（条件満たす場合のみ・1回限り）
+    if (isFinalCompanionSideStoryUnlocked() && !state.finalCompanionSideStoryUnlockNotified) {
+      scheduleFinalCompanionSideStoryUnlockNotice(800);
     }
   }
 
@@ -7468,8 +7537,46 @@
       html += '<div style="text-align:center;margin:0 0 4px;color:#f4a261;font-weight:bold;font-size:0.88em;">🌅 4人の第3話をすべて読み終えました</div>';
     }
     if (_hasBanner) { html += '</div>'; }
+    // §135 v0.56: 最終サイドストーリー導線カード（全12話の下部）
+    html += '<div style="border:1px solid #3a2a4a;border-radius:6px;padding:8px 10px;margin-top:8px;margin-bottom:8px;background:#0e0e1e;">';
+    var _finalUnlocked = isFinalCompanionSideStoryUnlocked();
+    var _finalDone = isFinalCompanionSideStoryCompleted();
+    if (_finalDone) {
+      html += '<div style="text-align:center;color:#ffd166;font-weight:bold;font-size:0.88em;margin-bottom:4px;">🌟 最終サイドストーリー 完了</div>';
+      html += '<p style="font-size:0.8em;color:#b0a0c0;margin:0;">四人と主人公の物語は、大きなひとつの節目を迎えました。</p>';
+      html += '<button class="shop-menu-btn" id="t-final-story-restart" style="font-size:0.82em;padding:4px 10px;margin-top:4px;border-color:#555;color:#aaa;">もう一度挑む（ST6再入場）</button>';
+    } else if (_finalUnlocked) {
+      html += '<div style="text-align:center;color:#f4a261;font-weight:bold;font-size:0.88em;margin-bottom:4px;">🌅 その先の物語</div>';
+      html += '<p style="font-size:0.8em;color:#d0b090;margin:0 0 4px;">新しい物語が始まろうとしています。</p>';
+      html += '<button class="shop-menu-btn" id="t-final-story-enter" style="font-size:0.82em;padding:4px 12px;margin-top:2px;border-color:#f4a261;color:#f4a261;">チンパンジーの聖域へ向かう</button>';
+    } else if (areAllCompanionSideStoryChapter3Complete() && !state.companionSideStoryChapter3AllCompleteCelebrated) {
+      html += '<div style="text-align:center;color:#f4a261;font-weight:bold;font-size:0.88em;margin-bottom:4px;">🌅 四つの灯り</div>';
+      html += '<p style="font-size:0.8em;color:#b09070;margin:0;">四人の第3話がすべて完了しました。まずは「四つの灯り、その先へ」を見届けてみましょう。</p>';
+    } else if (areAllCompanionSideStoryChapter3Complete() && state.companionSideStoryChapter3AllCompleteCelebrated) {
+      html += '<div style="text-align:center;color:#888;font-weight:bold;font-size:0.88em;margin-bottom:4px;">🌅 その先の物語</div>';
+      html += '<p style="font-size:0.8em;color:#907070;margin:0;">四人の想いはひとつにつながりました。物語はまだ先へ続きそうです。冒険を進めてみましょう。</p>';
+    } else {
+      html += '<div style="text-align:center;color:#555;font-weight:bold;font-size:0.88em;margin-bottom:4px;">🔒 その先の物語</div>';
+      html += '<p style="font-size:0.8em;color:#555;margin:0;">四人それぞれの物語を、最後まで見届けてみよう。</p>';
+    }
+    html += '</div>';
     html += '<button class="shop-back-btn" id="t-back">戻る</button>';
     body.innerHTML = html;
+    // §135 v0.56: 最終ストーリー入場ボタン
+    var _tFinalEnter = document.getElementById("t-final-story-enter");
+    if (_tFinalEnter) {
+      _tFinalEnter.onclick = function () {
+        closeModal("tavern-modal");
+        openStageWarpModal(6);
+      };
+    }
+    var _tFinalRestart = document.getElementById("t-final-story-restart");
+    if (_tFinalRestart) {
+      _tFinalRestart.onclick = function () {
+        closeModal("tavern-modal");
+        openStageWarpModal(6);
+      };
+    }
     // 閲覧可能・完了済みボタン
     var _storyBtns = body.querySelectorAll("button[data-story-cid]");
     for (var _bi = 0; _bi < _storyBtns.length; _bi++) {
@@ -9049,6 +9156,25 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-render-spam">🧪 render×10多重表示防止</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-save-count">🧪 saveGame回数確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v54-ch3-reset">🔄 第3話全員完了フラグリセット</button>';
+      // §135 v0.56: 最終サイドストーリー接続テストボタン
+      html += '<p class="small" style="color:#f4a261;margin-top:8px;">🌅 v0.56 最終ストーリー接続テスト (§135)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-conditions" style="border-color:#f4a261;color:#f4a261;">🧪 最終ストーリー条件確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-boundary" style="border-color:#f4a261;color:#f4a261;">🧪 解放判定境界（ケース1〜6）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-ch3-34-lock" style="border-color:#f4a261;color:#f4a261;">🧪 第3話3/4では未解放確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-no-celeb-lock" style="border-color:#f4a261;color:#f4a261;">🧪 第3話4/4・演出前は未解放確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-after-celeb" style="border-color:#f4a261;color:#f4a261;">🧪 第3話演出後・S5クリア済みで解放確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-s5-uncleared" style="border-color:#ffd700;color:#ffd700;">🧪 既存条件未達（S5未クリア）時ロック確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-notify-trigger" style="border-color:#ffd700;color:#ffd700;">🧪 第3話close→解放通知確認（条件フルセット）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-no-autostart" style="border-color:#ffd700;color:#ffd700;">🧪 最終ストーリー自動開始なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-once" style="border-color:#ffd700;color:#ffd700;">🧪 解放通知1回確認（2回目はスキップ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-old-save-unlock" style="border-color:#06d6a0;color:#06d6a0;">🧪 旧セーブ解放通知修復確認（ケースA）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-old-save-done" style="border-color:#06d6a0;color:#06d6a0;">🧪 最終ストーリー完了旧セーブ通知なし確認（ケースB）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-tavern-states" style="border-color:#74c0fc;color:#74c0fc;">🧪 酒場入口状態確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-paperview-5states" style="border-color:#74c0fc;color:#74c0fc;">🧪 PaperView最終物語5状態確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-objective-sync" style="border-color:#74c0fc;color:#74c0fc;">🧪 案内人objective同期確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-warp-no-current" style="border-color:#74c0fc;color:#74c0fc;">🧪 最終物語目的でワープcurrentなし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-multi-notify" style="border-color:#ff8c8c;color:#ff8c8c;">🧪 解放通知10回多重防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v56-reset-notify" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 解放通知フラグリセット（再テスト用）</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -11377,6 +11503,276 @@
         _companionStoryChapter3AllCompleteNoticeVisible = false;
         saveGame();
         showToast("[v0.54] 第3話全員完了フラグリセット ✅");
+      };
+      // §135 v0.56: 最終サイドストーリー接続テストハンドラー
+      document.getElementById("btn-debug-v56-conditions").onclick = function () {
+        var _ch3done = areAllCompanionSideStoryChapter3Complete();
+        var _celeb = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _s5 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _unlocked = isFinalCompanionSideStoryUnlocked();
+        var _completed = isFinalCompanionSideStoryCompleted();
+        var _notified = !!state.finalCompanionSideStoryUnlockNotified;
+        showToast("[v0.56] 最終ストーリー条件\nch3:4/4=" + _ch3done + "\nceleb=" + _celeb + "\nS5cleared=" + _s5 +
+          "\n→unlocked=" + _unlocked + "\ncompleted=" + _completed + "\nnotified=" + _notified);
+      };
+      document.getElementById("btn-debug-v56-boundary").onclick = function () {
+        var _keys56 = ["juritani", "shurittani", "norio", "harumi"];
+        var _prevCh3 = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevCeleb = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS5 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _prevS6Cleared = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["6"]);
+        var _prevDefeated = JSON.parse(JSON.stringify(state.sideMap.defeatedEnemies || {}));
+        var _res56 = [];
+        // ケース1: ch3 0/4
+        var _zf = {}; _keys56.forEach(function(k) { _zf[k] = false; });
+        state.companionSideStoryChapter3Flags = _zf; state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        _res56.push("ケース1(0/4):" + (!isFinalCompanionSideStoryUnlocked() ? "PASS" : "FAIL"));
+        // ケース2: ch3 3/4
+        var _pf = {}; var _pi = 0; _keys56.forEach(function(k) { _pf[k] = (_pi++ < 3); });
+        state.companionSideStoryChapter3Flags = _pf; state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _res56.push("ケース2(3/4):" + (!isFinalCompanionSideStoryUnlocked() ? "PASS" : "FAIL"));
+        // ケース3: 4/4 celeb=false
+        var _af = {}; _keys56.forEach(function(k) { _af[k] = true; });
+        state.companionSideStoryChapter3Flags = _af; state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        _res56.push("ケース3(4/4・演出前):" + (!isFinalCompanionSideStoryUnlocked() ? "PASS" : "FAIL"));
+        // ケース4: 4/4 celeb=true S5=false
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = false; }
+        _res56.push("ケース4(4/4+celeb+S5未):" + (!isFinalCompanionSideStoryUnlocked() ? "PASS" : "FAIL"));
+        // ケース5: 4/4 celeb=true S5=true
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        _res56.push("ケース5(4/4+celeb+S5):" + (isFinalCompanionSideStoryUnlocked() ? "PASS" : "FAIL"));
+        // ケース6: 完了済み（chimp defeated）
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["6"] = true; }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        var _isComp = isFinalCompanionSideStoryCompleted();
+        _res56.push("ケース6(完了):" + (_isComp ? "PASS" : "FAIL") + "(completed=" + _isComp + ")");
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevCh3;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevCeleb;
+        if (state.sideMap.stageCleared) {
+          state.sideMap.stageCleared["5"] = _prevS5;
+          state.sideMap.stageCleared["6"] = _prevS6Cleared;
+        }
+        state.sideMap.defeatedEnemies = _prevDefeated;
+        showToast("[v0.56] 解放判定境界\n" + _res56.join("\n"));
+      };
+      document.getElementById("btn-debug-v56-ch3-34-lock").onclick = function () {
+        var _pk = ["juritani", "shurittani", "norio", "harumi"];
+        var _pf56 = {}; var _pi56 = 0; _pk.forEach(function(k) { _pf56[k] = (_pi56++ < 3); });
+        var _prev56 = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevC56 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3Flags = _pf56; state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        var _res = !isFinalCompanionSideStoryUnlocked();
+        state.companionSideStoryChapter3Flags = _prev56; state.companionSideStoryChapter3AllCompleteCelebrated = _prevC56;
+        showToast("[v0.56] 第3話3/4では未解放\n" + (_res ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-no-celeb-lock").onclick = function () {
+        var _pk4 = ["juritani", "shurittani", "norio", "harumi"];
+        var _af4 = {}; _pk4.forEach(function(k) { _af4[k] = true; });
+        var _prev4 = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevC4 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        state.companionSideStoryChapter3Flags = _af4; state.companionSideStoryChapter3AllCompleteCelebrated = false;
+        var _res4 = !isFinalCompanionSideStoryUnlocked();
+        state.companionSideStoryChapter3Flags = _prev4; state.companionSideStoryChapter3AllCompleteCelebrated = _prevC4;
+        showToast("[v0.56] 第3話4/4・演出前は未解放\n" + (_res4 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-after-celeb").onclick = function () {
+        var _pk5 = ["juritani", "shurittani", "norio", "harumi"];
+        var _af5 = {}; _pk5.forEach(function(k) { _af5[k] = true; });
+        var _prev5c = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevC5 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS55 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        state.companionSideStoryChapter3Flags = _af5; state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        var _res5 = isFinalCompanionSideStoryUnlocked();
+        state.companionSideStoryChapter3Flags = _prev5c; state.companionSideStoryChapter3AllCompleteCelebrated = _prevC5;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS55; }
+        showToast("[v0.56] 演出後+S5クリア済みで解放\n" + (_res5 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-s5-uncleared").onclick = function () {
+        var _pk6 = ["juritani", "shurittani", "norio", "harumi"];
+        var _af6 = {}; _pk6.forEach(function(k) { _af6[k] = true; });
+        var _prev6c = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevC6 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS56 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        state.companionSideStoryChapter3Flags = _af6; state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = false; }
+        var _res6 = !isFinalCompanionSideStoryUnlocked();
+        state.companionSideStoryChapter3Flags = _prev6c; state.companionSideStoryChapter3AllCompleteCelebrated = _prevC6;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS56; }
+        showToast("[v0.56] S5未クリア時はロック\n" + (_res6 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-notify-trigger").onclick = function () {
+        // フルセット条件でcloseして通知が出るか確認
+        var _pk7 = ["juritani", "shurittani", "norio", "harumi"];
+        var _af7 = {}; _pk7.forEach(function(k) { _af7[k] = true; });
+        var _prevF7 = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevC7 = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS57 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _prevN7 = state.finalCompanionSideStoryUnlockNotified;
+        var _prevP7 = _pendingFinalCompanionStoryUnlockNotice;
+        state.companionSideStoryChapter3Flags = _af7;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        state.finalCompanionSideStoryUnlockNotified = false;
+        _pendingFinalCompanionStoryUnlockNotice = false;
+        // closeのロジックと同じ条件チェックを呼ぶ
+        scheduleFinalCompanionSideStoryUnlockNotice(100);
+        var _pendAfter7 = _pendingFinalCompanionStoryUnlockNotice;
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevF7;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevC7;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS57; }
+        state.finalCompanionSideStoryUnlockNotified = _prevN7;
+        _pendingFinalCompanionStoryUnlockNotice = _prevP7;
+        if (_finalCompanionStoryUnlockNoticeTimer) { clearTimeout(_finalCompanionStoryUnlockNoticeTimer); _finalCompanionStoryUnlockNoticeTimer = null; }
+        showToast("[v0.56] close→通知スケジュール\npending=" + _pendAfter7 + " " + (_pendAfter7 ? "PASS ✅" : "FAIL ❌") + "\n（実際のtoastは抑制済み）");
+      };
+      document.getElementById("btn-debug-v56-no-autostart").onclick = function () {
+        // 自動開始なし確認: 条件をすべてtrueにしてもstartFinalSideStory等が呼ばれないこと
+        showToast("[v0.56] 自動開始なし確認\n解放条件trueでもstartFinalSideStory()は呼ばれない\n既存openStageWarpModal(6)はユーザー操作が必要\nPASS ✅（実装上startは存在しない）");
+      };
+      document.getElementById("btn-debug-v56-once").onclick = function () {
+        var _pkO = ["juritani", "shurittani", "norio", "harumi"];
+        var _afO = {}; _pkO.forEach(function(k) { _afO[k] = true; });
+        var _prevFO = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevCO = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS5O = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _prevNO = state.finalCompanionSideStoryUnlockNotified;
+        var _prevPO = _pendingFinalCompanionStoryUnlockNotice;
+        state.companionSideStoryChapter3Flags = _afO;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        state.finalCompanionSideStoryUnlockNotified = false;
+        _pendingFinalCompanionStoryUnlockNotice = false;
+        scheduleFinalCompanionSideStoryUnlockNotice(50);
+        var _pend1 = _pendingFinalCompanionStoryUnlockNotice;
+        scheduleFinalCompanionSideStoryUnlockNotice(50); // 2回目
+        var _pend2 = _pendingFinalCompanionStoryUnlockNotice; // pendingは1回のまま
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevFO;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevCO;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS5O; }
+        state.finalCompanionSideStoryUnlockNotified = _prevNO;
+        _pendingFinalCompanionStoryUnlockNotice = _prevPO;
+        if (_finalCompanionStoryUnlockNoticeTimer) { clearTimeout(_finalCompanionStoryUnlockNoticeTimer); _finalCompanionStoryUnlockNoticeTimer = null; }
+        showToast("[v0.56] 通知1回\npend1=" + _pend1 + " pend2=" + _pend2 + " " + (_pend1 && _pend2 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-old-save-unlock").onclick = function () {
+        // ケースA: ch3 4/4+演出済み+S5+未完了+通知未設定 → pending=true
+        var _pkA = ["juritani", "shurittani", "norio", "harumi"];
+        var _afA = {}; _pkA.forEach(function(k) { _afA[k] = true; });
+        var _prevFA = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevCA = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS5A = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _prevNA = state.finalCompanionSideStoryUnlockNotified;
+        var _prevPA = _pendingFinalCompanionStoryUnlockNotice;
+        state.companionSideStoryChapter3Flags = _afA;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        state.finalCompanionSideStoryUnlockNotified = false;
+        _pendingFinalCompanionStoryUnlockNotice = false;
+        // loadGame内と同じロジックをシミュレート
+        var _shouldPend = !state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryUnlocked();
+        if (_shouldPend) { _pendingFinalCompanionStoryUnlockNotice = true; }
+        var _pendRes = _pendingFinalCompanionStoryUnlockNotice;
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevFA;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevCA;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS5A; }
+        state.finalCompanionSideStoryUnlockNotified = _prevNA;
+        _pendingFinalCompanionStoryUnlockNotice = _prevPA;
+        showToast("[v0.56] 旧セーブA: 解放通知修復\npending=" + _pendRes + " " + (_pendRes ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-old-save-done").onclick = function () {
+        // ケースB: 最終ストーリー完了済み+通知未設定 → notified=true（通知不要）
+        var _prevNB = state.finalCompanionSideStoryUnlockNotified;
+        var _prevS6B = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["6"]);
+        var _prevDefeatedB = JSON.parse(JSON.stringify(state.sideMap.defeatedEnemies || {}));
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["6"] = true; }
+        state.sideMap.defeatedEnemies["6:34,2"] = true;
+        state.finalCompanionSideStoryUnlockNotified = false;
+        var _wouldNotify = !isFinalCompanionSideStoryCompleted();
+        // loadGame内のロジックと同じ
+        if (!state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryCompleted()) {
+          state.finalCompanionSideStoryUnlockNotified = true;
+        }
+        var _notifiedAfter = state.finalCompanionSideStoryUnlockNotified;
+        // 復元
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["6"] = _prevS6B; }
+        state.sideMap.defeatedEnemies = _prevDefeatedB;
+        state.finalCompanionSideStoryUnlockNotified = _prevNB;
+        showToast("[v0.56] 旧セーブB: 完了済みなら通知不要補正\nnotified=" + _notifiedAfter + " " + (_notifiedAfter ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-tavern-states").onclick = function () {
+        var _fu = isFinalCompanionSideStoryUnlocked();
+        var _fd = isFinalCompanionSideStoryCompleted();
+        var _ch3 = areAllCompanionSideStoryChapter3Complete();
+        var _celeb = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _state56 = _fd ? "完了済み" : _fu ? "解放済み・未完了" : (_ch3 && !_celeb) ? "ch3完了・演出前" : (_ch3 && _celeb) ? "ch3演出済み・既存条件未達" : "未解放";
+        showToast("[v0.56] 酒場入口状態\n現在: " + _state56 + "\nunlocked=" + _fu + " completed=" + _fd);
+      };
+      document.getElementById("btn-debug-v56-paperview-5states").onclick = function () {
+        var _fu5 = isFinalCompanionSideStoryUnlocked();
+        var _fd5 = isFinalCompanionSideStoryCompleted();
+        var _ch35 = areAllCompanionSideStoryChapter3Complete();
+        var _cel5 = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _s55 = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _which = _fd5 ? "State5:完了済み" : _fu5 ? "State4:解放済み" : (_ch35 && !_cel5) ? "State2:ch3完了・演出前" : (_ch35 && _cel5 && !_s55) ? "State3:演出済み・既存未達" : "State1:未解放";
+        showToast("[v0.56] PaperView最終物語\n" + _which + "\nch3=" + _ch35 + " celeb=" + _cel5 + " s5=" + _s55 + " unlocked=" + _fu5 + " completed=" + _fd5);
+      };
+      document.getElementById("btn-debug-v56-objective-sync").onclick = function () {
+        var _g56 = getCurrentAdventureGuide();
+        var _isFinal56 = _g56.objectiveId === "final_companion_story";
+        showToast("[v0.56] 案内人objective同期\nid=" + _g56.objectiveId + "\nfinal_companion_story=" + _isFinal56 + "\ntitle=" + _g56.title);
+      };
+      document.getElementById("btn-debug-v56-warp-no-current").onclick = function () {
+        var _g56w = getCurrentAdventureGuide();
+        if (_g56w.objectiveId !== "final_companion_story") {
+          showToast("[v0.56] ワープcurrentなし確認\n現在のobjectiveId=" + _g56w.objectiveId + "\n(final_companion_story以外の時はスキップ)");
+          return;
+        }
+        var _stageNum = getCurrentObjectiveStageNumber();
+        var _currentCount = 0;
+        for (var _wsi = 1; _wsi <= 6; _wsi++) {
+          var _wst = getStageWarpStatus(_wsi);
+          if (_wst.status === "current") _currentCount++;
+        }
+        showToast("[v0.56] final_companion_story時currentワープ\ngetCurrentObjectiveStageNumber()=" + _stageNum + "\ncurrentワープ数=" + _currentCount + " " + (_stageNum === null && _currentCount === 0 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-multi-notify").onclick = function () {
+        var _pkM = ["juritani", "shurittani", "norio", "harumi"];
+        var _afM = {}; _pkM.forEach(function(k) { _afM[k] = true; });
+        var _prevFM = JSON.parse(JSON.stringify(state.companionSideStoryChapter3Flags || {}));
+        var _prevCM = state.companionSideStoryChapter3AllCompleteCelebrated;
+        var _prevS5M = !!(state.sideMap && state.sideMap.stageCleared && state.sideMap.stageCleared["5"]);
+        var _prevNM = state.finalCompanionSideStoryUnlockNotified;
+        var _prevPM = _pendingFinalCompanionStoryUnlockNotice;
+        state.companionSideStoryChapter3Flags = _afM;
+        state.companionSideStoryChapter3AllCompleteCelebrated = true;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = true; }
+        state.finalCompanionSideStoryUnlockNotified = false;
+        _pendingFinalCompanionStoryUnlockNotice = false;
+        for (var _mni = 0; _mni < 10; _mni++) { scheduleFinalCompanionSideStoryUnlockNotice(50); }
+        var _pendCount = _pendingFinalCompanionStoryUnlockNotice ? 1 : 0;
+        // 復元
+        state.companionSideStoryChapter3Flags = _prevFM;
+        state.companionSideStoryChapter3AllCompleteCelebrated = _prevCM;
+        if (state.sideMap.stageCleared) { state.sideMap.stageCleared["5"] = _prevS5M; }
+        state.finalCompanionSideStoryUnlockNotified = _prevNM;
+        _pendingFinalCompanionStoryUnlockNotice = _prevPM;
+        if (_finalCompanionStoryUnlockNoticeTimer) { clearTimeout(_finalCompanionStoryUnlockNoticeTimer); _finalCompanionStoryUnlockNoticeTimer = null; }
+        showToast("[v0.56] 10回多重防止\npending=" + _pendCount + " " + (_pendCount <= 1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v56-reset-notify").onclick = function () {
+        state.finalCompanionSideStoryUnlockNotified = false;
+        _pendingFinalCompanionStoryUnlockNotice = false;
+        _finalCompanionStoryUnlockNoticeVisible = false;
+        if (_finalCompanionStoryUnlockNoticeTimer) { clearTimeout(_finalCompanionStoryUnlockNoticeTimer); _finalCompanionStoryUnlockNoticeTimer = null; }
+        saveGame();
+        showToast("[v0.56] 解放通知フラグリセット ✅\n（再テスト可能状態）");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
@@ -13747,6 +14143,7 @@
         companionSideStoryChapter2AllCompleteCelebrated: !!state.companionSideStoryChapter2AllCompleteCelebrated, // §119 v0.45.2
         companionSideStoryChapter3Flags: state.companionSideStoryChapter3Flags || {}, // §122 v0.47
         companionSideStoryChapter3AllCompleteCelebrated: !!state.companionSideStoryChapter3AllCompleteCelebrated, // §133 v0.54
+        finalCompanionSideStoryUnlockNotified: !!state.finalCompanionSideStoryUnlockNotified, // §135 v0.56
         playerName: state.playerName || "", // §126 v0.49: 主人公名
         normalReturnX: state.normalReturnX || 2, // §129 v0.51
         normalReturnY: state.normalReturnY || 4, // §129 v0.51
@@ -13889,6 +14286,17 @@
       state.normalReturnY = data.normalReturnY || 4;
       // §131 v0.51.2: ワープ広場初回到達フラグ（旧セーブは false で補完・never demote）
       state.stageWarpPlazaIntroduced = !!data.stageWarpPlazaIntroduced;
+      // §135 v0.56: 最終サイドストーリー解放通知済みフラグ（旧セーブは false で補完・never demote）
+      state.finalCompanionSideStoryUnlockNotified = !!data.finalCompanionSideStoryUnlockNotified;
+      // §135 v0.56: 旧セーブ修復 — 最終ストーリー完了済みなら通知不要としてtrueに補正
+      if (!state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryCompleted()) {
+        state.finalCompanionSideStoryUnlockNotified = true;
+        _storyFlagChanged = true;
+      }
+      // §135 v0.56: 旧セーブ修復 — ch3演出済み+s5+最終未完了 かつ 通知未表示 → pending登録（次renderで消費）
+      if (!state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryUnlocked()) {
+        _pendingFinalCompanionStoryUnlockNotice = true;
+      }
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
       if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged || _partyChanged) { saveGame(); } // §114 / §115 / §126 / §128
       resetAdventureGuideNpcState(); // §125 v0.48.1: ロード時に案内人一時状態をリセット
@@ -14659,10 +15067,18 @@
       obj.shortText = "ステージ6「チンパンジーの聖域」のゴール先にいる強敵を撃退しよう！";
       obj.locationText = "横スクロール：チンパンジーの聖域（ゴール🏁の奥）";
     } else if (s5C) {
-      obj.objectiveId = "stage6_challenge";
-      obj.title = "第6ステージ「チンパンジーの聖域」へ";
-      obj.shortText = "ワープ広場のST6ワープか🌀ゲートからステージ6「チンパンジーの聖域」へ。最後のステージだ！";
-      obj.locationText = "ワープ広場ST6 or 🌀ゲート → チンパンジーの聖域";
+      // §135 v0.56: 第3話全員完了演出済み+S5クリア済み → 最終ストーリー導線（stage6_challengeに優先）
+      if (isFinalCompanionSideStoryUnlocked()) {
+        obj.objectiveId = "final_companion_story";
+        obj.title = "仲間たちの物語、その先へ";
+        obj.shortText = "四人の物語を見届けました。酒場で仲間たちに話を聞いてから、チンパンジーの聖域へ向かいましょう。";
+        obj.locationText = "目的地：酒場 → チンパンジーの聖域（ST6）";
+      } else {
+        obj.objectiveId = "stage6_challenge";
+        obj.title = "第6ステージ「チンパンジーの聖域」へ";
+        obj.shortText = "ワープ広場のST6ワープか🌀ゲートからステージ6「チンパンジーの聖域」へ。最後のステージだ！";
+        obj.locationText = "ワープ広場ST6 or 🌀ゲート → チンパンジーの聖域";
+      }
     } else if (s4C) {
       obj.objectiveId = "stage5_challenge";
       obj.title = "第5ステージ「黒い城」へ";
@@ -14877,6 +15293,29 @@
       html += "</div>";
     }
     html += "<div style=\"font-size:0.72em;color:#6b5a7b;margin-top:4px;\">✅読了 ・未読 🔒未解放</div>";
+    // §135 v0.56: 最終物語欄（5状態）
+    html += "<div style=\"border-top:1px solid #3a2a4a;margin-top:6px;padding-top:6px;\">";
+    var _fDone = isFinalCompanionSideStoryCompleted();
+    var _fUnlock = isFinalCompanionSideStoryUnlocked();
+    var _ch3All = areAllCompanionSideStoryChapter3Complete();
+    var _ch3Celeb = !!state.companionSideStoryChapter3AllCompleteCelebrated;
+    if (_fDone) {
+      html += "<p style=\"font-size:0.78em;color:#ffd166;font-weight:bold;margin:0 0 2px;\">🌟 最終サイドストーリー 完了</p>";
+      html += "<p style=\"font-size:0.73em;color:#b0a070;margin:0;\">四人と主人公の物語は、大きなひとつの節目を迎えました。</p>";
+    } else if (_fUnlock) {
+      html += "<p style=\"font-size:0.78em;color:#f4a261;font-weight:bold;margin:0 0 2px;\">▶ 最終サイドストーリー</p>";
+      html += "<p style=\"font-size:0.73em;color:#c08060;margin:0;\">新しい物語が始まろうとしています。<br>酒場で仲間たちに話を聞いてみましょう。</p>";
+    } else if (_ch3All && !_ch3Celeb) {
+      html += "<p style=\"font-size:0.78em;color:#c09060;font-weight:bold;margin:0 0 2px;\">🌅 四つの灯り</p>";
+      html += "<p style=\"font-size:0.73em;color:#907050;margin:0;\">四人の第3話がすべて完了しました。<br>まずは「四つの灯り、その先へ」を見届けてみましょう。</p>";
+    } else if (_ch3All && _ch3Celeb) {
+      html += "<p style=\"font-size:0.78em;color:#888;font-weight:bold;margin:0 0 2px;\">🌅 その先の物語</p>";
+      html += "<p style=\"font-size:0.73em;color:#606060;margin:0;\">四人の想いはひとつにつながりました。<br>物語はまだ先へ続きそうです。冒険を進めてみましょう。</p>";
+    } else {
+      html += "<p style=\"font-size:0.78em;color:#444;font-weight:bold;margin:0 0 2px;\">🔒 その先の物語</p>";
+      html += "<p style=\"font-size:0.73em;color:#444;margin:0;\">四人それぞれの物語は、まだ途中のようです。</p>";
+    }
+    html += "</div>";
     html += "</div>";
     return html;
   }

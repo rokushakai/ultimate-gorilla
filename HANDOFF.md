@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.55** |
+| 現在バージョン | **v0.56** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,19 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.56] 最終サイドストーリー接続・解放導線**（§135）
+  - **`isFinalCompanionSideStoryUnlocked()`**: 解放判定（純粋関数・ch3 4/4+演出済み+S5クリア）
+  - **`isFinalCompanionSideStoryCompleted()`**: 完了判定（`isSideStoryCleared()`委譲）
+  - **`scheduleFinalCompanionSideStoryUnlockNotice()`** / **`consumePendingFinalCompanionStoryUnlockNotice()`**: 解放通知（1回限り・戦闘中/モーダル中は遅延）
+  - **`state.finalCompanionSideStoryUnlockNotified`**: 通知済み永続フラグ（saveGame/loadGame）
+  - **酒場・PaperViewに最終ストーリー導線（5状態）**: 未解放/演出前/演出済み既存未達/解放済み/完了済み
+  - **`getCurrentAdventureGuide()` 更新**: `final_companion_story` objective追加（S5クリア後・解放条件満たす場合）
+  - **旧セーブ修復**: ケースA（pending登録）・ケースB（完了済み→通知不要補正）
+  - **デバッグ17本（§135）**: 条件確認 / 境界値 / 通知制御 / PaperView5状態 / 酒場状態 / objective同期 / ワープcurrentなし等
+  - **BGM・捕獲条件・チンパンジー・既存最終サイドストーリー解放条件・報酬: 一切変更なし**
+- **[v0.55] PaperView番組拡張・仲間の物語進捗セクション**（§134）
+  - **`renderCompanionStoryProgressSection()`**: 4人×3話の✅/・/🔒一覧（PaperView追加）
+  - **BGM・フラグ・ヒント購入: 一切変更なし**
 - **[v0.54] 仲間サイドストーリー第3話・全員完了演出**（§133）
   - **`areAllCompanionSideStoryChapter3Complete()`**: 4/4完了判定（純粋関数）
   - **`state.companionSideStoryChapter3AllCompleteCelebrated`**: 表示済み永続フラグ（saveGame/loadGame/never-demote）
@@ -873,9 +886,9 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 ## 次の推奨実装順
 
 1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
-2. **v0.56 4人第3話完了後の最終サイドストーリー接続** — 全仲間第3話完了後の次のエピソードへの導線。工数中〜大。
-3. **仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
+2. **仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
 
+> v0.56（§135 最終サイドストーリー接続）実装済み。`isFinalCompanionSideStoryUnlocked()` / 解放通知 / 酒場+PaperView 5状態導線 / objective追加 / 旧セーブ修復 / デバッグ17本。BGM/捕獲条件/チンパンジー/報酬変更なし。
 > v0.55（§134 PaperView番組拡張）実装済み。攻略ペーパービュー屋モーダルに「📖 仲間の物語」進捗セクション追加。4人×3話を✅/・/🔒でビジュアル表示。永続フラグ変更なし。
 > v0.54（§133 仲間サイドストーリー第3話・全員完了演出）実装済み。演出モーダル「四つの灯り、その先へ」追加。通知キューch1→ch2→ch3統合。旧セーブ修復対応。BGM/捕獲条件/チンパンジー/第1話第2話演出変更なし。
 > v0.47（§122 仲間サイドストーリー第3話）実装済み。4人×3話の12枚カード、デバッグ8ボタン対応。
