@@ -5,6 +5,23 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.56.1] - 2026-08-29 — 最終サイドストーリー接続・実動作監査 (§136)
+
+### Audited
+- **v0.56本体18項目すべてA（通常プレイ本体実装済み）** — debugボタンのみでなく通常プレイ経路で成立していることを確認
+- **通常プレイ経路確認**: 第3話4/4完了 → 演出 → close → unlock再評価 → toast → 酒場 → ボタン → `openStageWarpModal(6)` → 既存最終ストーリー
+- **既存最終サイドストーリー確認**: 横スクロールステージ6「チンパンジーの聖域」/ 開始関数 `openStageWarpModal(6)` / 完了判定 `isSideStoryCleared()`
+- **debug17本監査**: すべてproduction関数使用・snapshot restore付き・debug専用判定なし
+
+### Added
+- **デバッグ12本** (§136): `btn-debug-v561-*` — 18項目A/B/C監査レポート / 通常フローシミュレート / close後unlock再評価 / 酒場render確認 / PaperView5状態 / 冒険案内objective確認 / 自動開始0回確認 / 旧セーブA/B/C / render×10多重防止 / 酒場ボタン連打確認
+
+### Not Changed
+- 最終ストーリー本文・究極チンパンジー・最終戦・エンディング 変更なし
+- BGMコード・捕獲条件・報酬・仲間能力 変更なし
+
+---
+
 ## [0.56] - 2026-08-29 — 最終サイドストーリー接続・解放導線 (§135)
 
 ### Added

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.56** |
+| 現在バージョン | **v0.56.1** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,12 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.56.1] 最終サイドストーリー接続・実動作監査**（§136）
+  - **18項目すべてA**: 通常プレイ本体で成立確認（debug専用ロジックなし）
+  - **既存最終サイドストーリー**: 横スクロールST6「チンパンジーの聖域」/ `openStageWarpModal(6)` / `isSideStoryCleared()`
+  - **通常プレイ経路**: 第3話close → unlock再評価 → toast → 酒場 → 開始ボタン → openStageWarpModal(6)
+  - **デバッグ12本（§136）**: `btn-debug-v561-*`（すべてproduction関数使用）
+  - **最終ストーリー本文・チンパンジー・最終戦・エンディング・BGM: 変更なし**
 - **[v0.56] 最終サイドストーリー接続・解放導線**（§135）
   - **`isFinalCompanionSideStoryUnlocked()`**: 解放判定（純粋関数・ch3 4/4+演出済み+S5クリア）
   - **`isFinalCompanionSideStoryCompleted()`**: 完了判定（`isSideStoryCleared()`委譲）
@@ -888,6 +894,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
 2. **仲間装備商人販売** — 仲間装備を商人から購入可能に。工数小〜中。
 
+> v0.56.1（§136 実動作監査）実装済み。18項目全A（通常プレイ本体確認）。既存最終サイドストーリー=ST6「チンパンジーの聖域」。debug12本追加。本体・BGM・捕獲条件変更なし。
 > v0.56（§135 最終サイドストーリー接続）実装済み。`isFinalCompanionSideStoryUnlocked()` / 解放通知 / 酒場+PaperView 5状態導線 / objective追加 / 旧セーブ修復 / デバッグ17本。BGM/捕獲条件/チンパンジー/報酬変更なし。
 > v0.55（§134 PaperView番組拡張）実装済み。攻略ペーパービュー屋モーダルに「📖 仲間の物語」進捗セクション追加。4人×3話を✅/・/🔒でビジュアル表示。永続フラグ変更なし。
 > v0.54（§133 仲間サイドストーリー第3話・全員完了演出）実装済み。演出モーダル「四つの灯り、その先へ」追加。通知キューch1→ch2→ch3統合。旧セーブ修復対応。BGM/捕獲条件/チンパンジー/第1話第2話演出変更なし。

@@ -7655,3 +7655,101 @@ isFinalCompanionSideStoryCompleted() = isSideStoryCleared()
 - 究極ゴリラ捕獲条件・究極チンパンジー・既存最終サイドストーリー解放条件 変更なし
 - Gold・アイテム付与・戦闘能力・装備効果・捕獲率・EXP倍率 変更なし
 - 自動開始なし（`openStageWarpModal(6)` はユーザー操作が必要）
+
+---
+
+## v0.56.1 最終サイドストーリー接続・実動作監査（§136）
+
+**[実装済み]**
+
+v0.56で追加した最終サイドストーリー導線が、debugボタンだけでなく通常プレイ本体で成立していることを監査・確認する。
+
+### 監査結果（18項目すべてA）
+
+| # | 項目 | 分類 | 確認箇所 |
+|---|---|---|---|
+| 1 | 最終ストーリー共通解放判定 | **A** | `isFinalCompanionSideStoryUnlocked()` production関数 |
+| 2 | 第3話4/4条件 | **A** | `areAllCompanionSideStoryChapter3Complete()` in unlock |
+| 3 | 第3話全員完了演出済み条件 | **A** | `state.companionSideStoryChapter3AllCompleteCelebrated` in unlock |
+| 4 | 既存最終ストーリー条件とのAND | **A** | `isSideStoryCleared()` = S6+chimp / unlock条件はS5 |
+| 5 | 解放通知 | **A** | `consumePendingFinalCompanionStoryUnlockNotice()` → `showToast()` |
+| 6 | 通知1回制御 | **A** | pending+visible+timer+notifiedフラグ |
+| 7 | save/load/newGame | **A** | saveGame line 14146 / loadGame line 14290 / state初期値 |
+| 8 | 旧セーブ修復 | **A** | loadGame ケースA pending登録 / ケースB notified=true補正 |
+| 9 | 第3話close後の再評価 | **A** | `closeCompanionStoryChapter3AllCompleteCelebration()` 末尾 |
+| 10 | 自動開始防止 | **A** | `startFinalSideStory()`は存在しない。`openStageWarpModal(6)`はボタンonclick専用 |
+| 11 | 酒場入口 | **A** | `renderTavernStories()` 5状態カード + t-final-story-enter/restart onclick |
+| 12 | PaperView 5状態 | **A** | `renderCompanionStoryProgressSection()` 末尾5状態ブロック |
+| 13 | 冒険案内 | **A** | `getCurrentAdventureGuide()` `final_companion_story` branch |
+| 14 | 旅の案内人 | **A** | 同上（案内人もgetCurrentAdventureGuide()を使用） |
+| 15 | objectiveId | **A** | `"final_companion_story"` |
+| 16 | ワープcurrentなし | **A** | `ADVENTURE_OBJECTIVE_STAGE_MAP` に未登録 |
+| 17 | 完了後表示 | **A** | 全5状態UIで `isFinalCompanionSideStoryCompleted()` 参照 |
+| 18 | 最終ストーリー開始関数の再利用 | **A** | `openStageWarpModal(6)` 既存関数を再利用 |
+
+### 通常プレイ経路（実装確認済み）
+
+```
+第3話4人分完了（completeCompanionSideStory）
+↓ checkCompanionSideStoryChapter3AllComplete() → celebrated=true, pending=true
+↓ consumePendingCompanionStoryChapter3AllCompleteNotice()
+「🌅 四つの灯り、その先へ」モーダル表示
+↓ ユーザーが「物語を胸に刻む」クリック
+↓ closeCompanionStoryChapter3AllCompleteCelebration()
+↓ isFinalCompanionSideStoryUnlocked()チェック
+（S5クリア済みなら） scheduleFinalCompanionSideStoryUnlockNotice(800)
+↓ 800ms後 consumePendingFinalCompanionStoryUnlockNotice()
+「📖 新しい物語が開かれました」showToast表示
+↓ ユーザーが酒場へ
+↓ renderTavernStories() → 「🌅 その先の物語」カード + 「チンパンジーの聖域へ向かう」ボタン
+↓ ユーザーがボタンクリック → closeModal("tavern-modal") + openStageWarpModal(6)
+↓ 既存最終サイドストーリー（チンパンジーの聖域）開始
+↓ 既存処理（究極チンパンジー・最終戦・エンディング）
+```
+
+### 既存最終サイドストーリー確認
+
+- **正式名称**: 横スクロールステージ6「チンパンジーの聖域」
+- **開始関数**: `openStageWarpModal(6)` → ワープモーダル経由
+- **開始場所**: 酒場の「チンパンジーの聖域へ向かう」ボタン / ワープ広場ST6
+- **解放条件**: ステージ5クリア済み（`sideMap.stageCleared["5"]`）
+- **完了判定**: `isSideStoryCleared()` = `sideMap.stageCleared["6"] && defeatedEnemies["6:34,2"]`
+- **再挑戦**: `openStageWarpModal(6)` で再入場可能（「もう一度挑む」ボタン）
+- **新ストーリー本文**: 追加なし（既存ステージ6そのもの）
+
+### debug専用ロジックなし
+
+17本の `btn-debug-v56-*` ハンドラはすべて production関数を使用:
+- `isFinalCompanionSideStoryUnlocked()` / `isFinalCompanionSideStoryCompleted()`
+- `areAllCompanionSideStoryChapter3Complete()`
+- `scheduleFinalCompanionSideStoryUnlockNotice()`
+- `checkCompanionSideStoryChapter3AllComplete()`
+- `closeCompanionStoryChapter3AllCompleteCelebration()`
+- `renderCompanionStoryProgressSection()` / `renderTavernStories()`
+- `getCurrentAdventureGuide()` / `getStageWarpStatus()`
+- state snapshot + restore パターン（副作用なし）
+
+v0.56.1追加12本（`btn-debug-v561-*`）も同様。
+
+### v0.56.1追加デバッグ（§136・12本）
+
+| ID | 検証対象 |
+|---|---|
+| btn-debug-v561-audit | 18項目A/B/C監査レポート |
+| btn-debug-v561-normal-flow | 通常プレイ第3話→最終導線シミュレート |
+| btn-debug-v561-close-reeval | 第3話close後unlock再評価確認 |
+| btn-debug-v561-tavern-check | 通常酒場render最終物語入口確認 |
+| btn-debug-v561-paperview-render | PaperView通常描画5状態確認 |
+| btn-debug-v561-guide-check | 冒険案内final_companion_story+currentワープ0確認 |
+| btn-debug-v561-no-autostart | 自動開始0回確認（openStageWarpModal監視） |
+| btn-debug-v561-old-save-a | 旧セーブA通常経路確認（loadGame相当） |
+| btn-debug-v561-old-save-b | 旧セーブB完了済み通知なし確認 |
+| btn-debug-v561-old-save-c | 旧セーブC通知順確認（演出→unlock） |
+| btn-debug-v561-render-multi | render×10多重防止（通知0回確認） |
+| btn-debug-v561-tavern-double | 酒場ボタン連打openStageWarpModal動作確認 |
+
+### 変更しなかったもの
+
+- 最終ストーリー本文・究極チンパンジー・最終戦・エンディング 変更なし
+- BGM関連コード一切変更なし
+- 究極ゴリラ捕獲条件変更なし

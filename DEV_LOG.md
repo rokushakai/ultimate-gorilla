@@ -5,6 +5,53 @@
 
 ---
 
+## v0.56.1 (2026-08-29) — 最終サイドストーリー接続・実動作監査 (§136)
+
+### 監査動機
+
+v0.56完了報告では主にdebugハンドラとドキュメント更新が報告されており、通常プレイ経路の本体実装がすべて入っているかが報告上では明確ではなかったため実コードを精査した。
+
+### 調査結果
+
+**v0.56本体18項目 — すべてA（通常プレイ本体実装済み）**
+
+- `isFinalCompanionSideStoryUnlocked()` — production関数として実装済み（§135, line ~3987）
+- `closeCompanionStoryChapter3AllCompleteCelebration()` — 末尾に `scheduleFinalCompanionSideStoryUnlockNotice(800)` 呼び出し済み（§135, line ~4202）
+- `renderTavernStories()` — 5状態カード + t-final-story-enter/restart onclickボタン実装済み（§135, line ~7565）
+- `renderCompanionStoryProgressSection()` — 末尾5状態ブロック実装済み（§135, line ~15296）
+- `getCurrentAdventureGuide()` — `final_companion_story` branch実装済み（§135, line ~15071）
+- `saveGame()` line 14146 / `loadGame()` line 14290 — flag追加済み
+- `ADVENTURE_OBJECTIVE_STAGE_MAP` — `final_companion_story` 未登録（正しい）→ currentワープなし
+
+**既存最終サイドストーリーの確認**
+
+- 正式名称: 横スクロールステージ6「チンパンジーの聖域」
+- 開始関数: `openStageWarpModal(6)`
+- 完了判定: `isSideStoryCleared()` = `sideMap.stageCleared["6"] && defeatedEnemies["6:34,2"]`
+- 解放条件: `sideMap.stageCleared["5"]`（既存のまま）
+- v0.56はこれに「ch3 4/4 AND celebration済み」を追加解放条件として重ねた（AND条件、既存を弱めない）
+
+**debug17本専用ロジック確認**
+
+全17本 (`btn-debug-v56-*`) が production関数を呼び出しており、debug内だけで独自判定してPASSにしていない。state snapshot + restore パターンを使用。
+
+**潜在的な動作の微細な考慮**
+
+- S5クリアより前にch3が完了した場合（稀なケース）: close時にはunlocked=falseのため通知タイマーは立たないが、次回ロード時に `loadGame()` の修復ロジックでpending=trueになり通知が届く。酒場・PaperViewは常にcurrentを参照するので表示は即正しい。
+
+### 追加デバッグ（§136・12本）
+
+`btn-debug-v561-*` — production関数を順番に呼び出して通常経路を検証。state restoration付き。
+
+### 変更なし確認
+
+- `stopBGMHard()`, `startBGM()`, `AudioContext`, `bgmSession`, `bgmTimer`, `bgmNodes` — 変更なし
+- 究極ゴリラ条件 (Lv99+ウクレレ+HP1-10+うたう) — 変更なし
+- 究極チンパンジー (id="ultimate_chimpanzee", 捕獲不可, final=true) — 変更なし
+- 最終戦 / エンディング — 変更なし
+
+---
+
 ## v0.53 (2026-08-02) — ワープ広場案内・進行同期・初回説明安定化 (§132a)
 
 ### 調査結果
