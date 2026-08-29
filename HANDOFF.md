@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.59** |
+| 現在バージョン | **v0.60** |
 | ブランチ | main |
 
 ---
@@ -92,6 +92,16 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.60] 仲間サイドストーリー思い出アルバム**（§141）
+  - **`_cstoryRereadMode`**: 再読モードフラグ（非永続・IIFEスコープ）
+  - **`getCompanionStoryArchiveData()`**: 12話の完了状況を返す純粋関数
+  - **`startCompanionSideStoryReread(cid, chapter)`**: 完了済み物語の再読（unlock check なし・saveなし・フラグ変更なし）
+  - **`renderTavernAlbum()`**: 4人×3話グリッドUI（完了済み→読むボタン、未読→グレーアウト、完了数カウンタ）
+  - **酒場メイン「📚 思い出アルバム」ボタン追加**（id: `t-album`）
+  - **`completeCompanionSideStory()` ガード追加**: `_cstoryRereadMode` 中は先頭でreturn
+  - **`closeCompanionSideStoryModal()` リセット追加**: `_cstoryRereadMode = false`
+  - **デバッグ16本（§141）**: `btn-debug-v60-*`
+  - **既存ストーリーデータ・フラグ・解放条件・BGM: 変更なし**
 - **[v0.58] 仲間わざ習得演出**（§139）
   - **`state.companionTechniqueLearnedNotices`**: 4人分の演出済み永続フラグ（never-demote・saveGame/loadGame）
   - **`normalizeCompanionTechniqueLearnedNotices()`**: 旧セーブ補完（never-demote）

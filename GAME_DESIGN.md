@@ -8155,3 +8155,77 @@ startBGM(type)
 | btn-debug-v59-audio-count | Audio instance増殖なし確認 |
 | btn-debug-v59-fallback-restore | generated fallback後復帰確認 |
 | btn-debug-v59-backend | バックエンド確認（file/generated/none） |
+
+## §141 v0.60: 思い出アルバム（仲間サイドストーリー回想一覧）
+
+### 概要
+
+仲間の物語メニューに加え、酒場メインに「📚 思い出アルバム」ボタンを追加。
+読み終えた12話（4人×3章）をコンパクトなグリッドUIで一覧表示し、いつでも読み返せる。
+
+### 設計原則
+
+- **再読モードは副作用ゼロ**: `_cstoryRereadMode = true` 中は `completeCompanionSideStory()` が先頭で即return
+- **未完了物語は表示するが操作不可**: グレーアウト + 「未読」ラベル
+- **既存の物語表示機能を完全流用**: `showCompanionSideStoryLine()` / `companion-story-modal` を再利用
+- **解放条件チェックをスキップ**: 完了済み=閲覧資格確定。`startCompanionSideStoryReread()` は unlock check なし
+
+### 新規変数
+
+| 変数名 | 型 | 初期値 | 永続 | 説明 |
+|---|---|---|---|---|
+| `_cstoryRereadMode` | boolean | false | なし | 再読モード中フラグ |
+
+### 新規関数
+
+#### `getCompanionStoryArchiveData()` → Array
+
+純粋関数。12話分のオブジェクトを返す（フラグ変更なし・saveなし）。
+
+```javascript
+// 各要素の形状
+{ cid, chapter, companionName, companionIcon, title, completed }
+```
+
+#### `startCompanionSideStoryReread(cid, chapter)`
+
+1. chapter正規化・cid検証・データ存在確認
+2. `isCompanionSideStoryCompleted(cid, chapter)` がfalse → showToast+return
+3. `_cstoryRereadMode = true`
+4. `startCompanionSideStory()` の内部処理を再現（unlock checkなし）
+5. `companion-story-modal` を開く
+
+#### `renderTavernAlbum()`
+
+- 4人×3話のグリッドを `tavern-body` に描画
+- 完了済み: 「📖」ボタン → `startCompanionSideStoryReread()` 呼び出し
+- 未読: グレーアウト + 「未読」ラベル
+- 下部に「N / 12 話を読み終えました」カウンタ表示
+- 「戻る」ボタン → `renderTavernMain()`
+
+### 変更した関数
+
+- `completeCompanionSideStory()`: 先頭に `if (_cstoryRereadMode) { return; }` 追加
+- `closeCompanionSideStoryModal()`: `_cstoryRereadMode = false` 追加（リセット）
+- `renderTavernMain()`: 「📚 思い出アルバム」ボタン追加（id: `t-album`）
+
+### デバッグ（§141・16本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v60-reread-mode | _cstoryRereadMode現在値確認 |
+| btn-debug-v60-archive-data | getCompanionStoryArchiveData()結果確認（完了数） |
+| btn-debug-v60-reread-juritani-1 | juritani第1話再読テスト |
+| btn-debug-v60-reread-juritani-2 | juritani第2話再読テスト |
+| btn-debug-v60-reread-juritani-3 | juritani第3話再読テスト |
+| btn-debug-v60-reread-harumi-1 | harumi第1話再読テスト |
+| btn-debug-v60-reread-norio-3 | norio第3話再読テスト |
+| btn-debug-v60-reread-unfinished | 未完了ストーリー再読拒否確認 |
+| btn-debug-v60-complete-in-reread | 再読中complete呼出しでフラグ不変確認 |
+| btn-debug-v60-mode-reset | closeで_cstoryRereadMode=false確認 |
+| btn-debug-v60-all-completed-juritani | juritani全3話完了状態に |
+| btn-debug-v60-all-completed-all | 全12話完了状態に（フル表示テスト） |
+| btn-debug-v60-reset-ch1 | ch1フラグ全リセット |
+| btn-debug-v60-reset-ch2 | ch2フラグ全リセット |
+| btn-debug-v60-reset-ch3 | ch3フラグ全リセット |
+| btn-debug-v60-album-open | 酒場を開いてアルバム表示 |

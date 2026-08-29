@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.60] - 2026-08-30 — 仲間サイドストーリー思い出アルバム (§141)
+
+### Added
+- `_cstoryRereadMode`: 再読モードフラグ（非永続・IIFEスコープ）
+- `getCompanionStoryArchiveData()`: 12話の完了状況を返す純粋関数（フラグ変更なし）
+- `startCompanionSideStoryReread(cid, chapter)`: 完了済み物語の再読開始（saveなし・フラグ変更なし）
+- 酒場メインに「📚 思い出アルバム」ボタン追加
+- `renderTavernAlbum()`: 4人×3話グリッドUI（完了済み→読む、未読→グレーアウト、完了数カウント表示）
+- デバッグ16本（§141）: 再読モード確認・アーカイブデータ確認・各話再読テスト・フラグリセット等
+
+### Changed
+- `completeCompanionSideStory()`: 再読モード中は先頭で即returnするガード追加
+- `closeCompanionSideStoryModal()`: 閉じ時に `_cstoryRereadMode = false` リセット追加
+
 ## [0.59] - 2026-08-29 — uranawanaii ファイルBGM再生基盤 (§140)
 
 ### Added

@@ -22,6 +22,17 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.60 — 仲間サイドストーリー思い出アルバム (§141)
+
+- **`_cstoryRereadMode`**: 再読モードフラグ（非永続） ✅
+- **`getCompanionStoryArchiveData()`**: 12話完了状況を返す純粋関数 ✅
+- **`startCompanionSideStoryReread(cid, chapter)`**: 完了済み物語の再読（副作用ゼロ） ✅
+- **酒場メイン「📚 思い出アルバム」ボタン** ✅
+- **`renderTavernAlbum()`**: 4人×3話グリッドUI ✅
+- **`completeCompanionSideStory()` ガード**: 再読モード中はreturn ✅
+- **`closeCompanionSideStoryModal()` リセット**: `_cstoryRereadMode = false` ✅
+- **デバッグ16本（§141）**: `btn-debug-v60-*` ✅
+
 ### Version 0.59 — uranawanaii ファイルBGM再生基盤 (§140)
 
 - **`BGM_FILE_DATA`**: cue→MP3ファイルパスの中央定義（4件） ✅

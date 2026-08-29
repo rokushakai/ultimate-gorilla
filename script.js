@@ -3843,6 +3843,9 @@
   // §123 v0.47.1: 完了処理中の多重実行を防ぐフラグ（非永続・IIFEスコープ・saveしない）
   var _cstoryCompleting = false;
 
+  // §141 v0.60: 思い出アルバム再読モード（非永続・IIFEスコープ・saveしない）
+  var _cstoryRereadMode = false;
+
   // §124 v0.48 / §125 v0.48.1: 旅の案内人NPC 一時状態（非永続・IIFEスコープ・saveしない）
   var _adventureGuideStepCount = 0;         // 有効移動カウント（NPC未表示・草地道歩行のみ加算）
   var _adventureGuideNpcVisible = false;    // 案内人表示中フラグ
@@ -4509,6 +4512,7 @@
 
   // 仲間サイドストーリー完了処理（§117 v0.45: chapter引数追加 / §118 v0.45.1: 安定化 / §122 v0.47: ch3対応）
   function completeCompanionSideStory(cid, chapter) {
+    if (_cstoryRereadMode) { return; } // §141 v0.60: 再読モード中は完了処理をスキップ（フラグ変更なし・saveなし）
     var _ch = normalizeCompanionSideStoryChapter(chapter);
     if (_ch === null) { return; }
     // §118 v0.45.1: アクティブセッションと一致しない呼び出しを棄却
@@ -4586,6 +4590,7 @@
     _cstoryAdvanceLock = false;
     _cstoryActiveChapter = 1; // §117 v0.45: chapterリセット
     _cstoryActiveStoryId = null; // §118 v0.45.1: storyIdクリア
+    _cstoryRereadMode = false; // §141 v0.60: 再読モードリセット
     if (_cstoryAdvanceTimer) { clearTimeout(_cstoryAdvanceTimer); _cstoryAdvanceTimer = null; }
     closeModal("companion-story-modal");
     if (_fromTavern) {
@@ -4612,6 +4617,61 @@
     if (_pendingCompanionStoryAllCompleteNotice || _pendingCompanionStoryChapter2AllCompleteNotice || _pendingCompanionStoryChapter3AllCompleteNotice) {
       schedulePendingCompanionStoryCompletionNotices(250);
     }
+  }
+
+  // §141 v0.60: 思い出アルバム用データ取得（純粋関数・フラグ変更なし・saveなし）
+  function getCompanionStoryArchiveData() {
+    var _cids = ["juritani", "shurittani", "norio", "harumi"];
+    var _chNums = [1, 2, 3];
+    var _result = [];
+    for (var _ai = 0; _ai < _cids.length; _ai++) {
+      var _cid = _cids[_ai];
+      var _c = findById(COMPANION_DATA, _cid);
+      if (!_c) { continue; }
+      for (var _aj = 0; _aj < _chNums.length; _aj++) {
+        var _ch = _chNums[_aj];
+        var _story = getCompanionSideStoryData(_cid, _ch);
+        if (!_story) { continue; }
+        _result.push({
+          cid: _cid,
+          chapter: _ch,
+          companionName: _c.name,
+          companionIcon: _c.icon,
+          title: _story.title,
+          completed: isCompanionSideStoryCompleted(_cid, _ch)
+        });
+      }
+    }
+    return _result;
+  }
+
+  // §141 v0.60: 思い出アルバムから再読開始（完了済みのみ・フラグ変更なし・saveなし）
+  function startCompanionSideStoryReread(cid, chapter) {
+    var _ch = normalizeCompanionSideStoryChapter(chapter);
+    if (_ch === null) { showToast("不正なchapter引数です。"); return; }
+    if (typeof cid !== "string" || !cid) { showToast("不正なcid引数です。"); return; }
+    var story = getCompanionSideStoryData(cid, _ch);
+    if (!story || !story.lines || !Array.isArray(story.lines) || story.lines.length === 0) {
+      showToast("この物語のデータを読み込めなかった。");
+      return;
+    }
+    if (!isCompanionSideStoryCompleted(cid, _ch)) {
+      showToast("この物語はまだ読み終えていない。");
+      return;
+    }
+    _cstoryRereadMode = true; // §141: 再読モードON（completeCompanionSideStoryをスキップさせる）
+    _cstoryActiveChapter = _ch;
+    var _tavernEl = document.getElementById("tavern-modal");
+    _cstoryFromTavern = _tavernEl ? !_tavernEl.classList.contains("hidden") : false;
+    _cstorySessionId++;
+    _cstoryAdvanceLock = false;
+    if (_cstoryAdvanceTimer) { clearTimeout(_cstoryAdvanceTimer); _cstoryAdvanceTimer = null; }
+    state.activeCompanionSideStory = cid;
+    state.activeCompanionSideStoryLine = 0;
+    _cstoryActiveStoryId = story.id || null;
+    if (_cstoryFromTavern) { closeModal("tavern-modal"); }
+    showCompanionSideStoryLine();
+    openModal("companion-story-modal");
   }
 
   // §111 v0.43: 仲間わざ習得済みか判定（Lv25以上 + rewardFlag=true）
@@ -7613,12 +7673,14 @@
     html += '<button class="shop-menu-btn" id="t-view">👥 仲間を見る</button>';
     html += '<button class="shop-menu-btn" id="t-leave">👋 仲間を外す</button>';
     html += '<button class="shop-menu-btn" id="t-stories" style="border-color:#a0cfff;color:#a0cfff;">📖 仲間の物語</button>'; // §113 v0.44
+    html += '<button class="shop-menu-btn" id="t-album" style="border-color:#c8b4ff;color:#c8b4ff;">📚 思い出アルバム</button>'; // §141 v0.60
     html += '<button class="shop-menu-btn" id="t-join-all" style="border-color:#ffd166;color:#ffd166;">👥 加入済み全員合流</button>'; // §127 v0.50
     body.innerHTML = html;
     document.getElementById("t-recruit").onclick = renderTavernRecruit;
     document.getElementById("t-view").onclick = renderTavernViewParty;
     document.getElementById("t-leave").onclick = renderTavernLeave;
     document.getElementById("t-stories").onclick = renderTavernStories; // §113 v0.44
+    document.getElementById("t-album").onclick = renderTavernAlbum; // §141 v0.60
     document.getElementById("t-join-all").onclick = joinAllCompanions; // §127 v0.50
   }
 
@@ -7781,6 +7843,65 @@
       })(_lockBtns[_li]);
     }
     document.getElementById("t-back").onclick = renderTavernMain;
+  }
+
+  // §141 v0.60: 思い出アルバム（読み終えた仲間の物語を一覧表示・再読可能）
+  function renderTavernAlbum() {
+    var body = document.getElementById("tavern-body");
+    normalizeCompanionSideStoryFlags();
+    normalizeCompanionSideStoryChapter2Flags();
+    normalizeCompanionSideStoryChapter3Flags();
+    var archiveData = getCompanionStoryArchiveData();
+    var html = '<p style="margin:0 0 2px;font-weight:bold;color:#c8b4ff;">📚 思い出アルバム</p>';
+    html += '<p style="font-size:0.78em;color:#888;margin:0 0 8px;">読み終えた仲間の物語をいつでも読み返せます。</p>';
+    var _cids = ["juritani", "shurittani", "norio", "harumi"];
+    var _chColors = ["#6090c0", "#9070c0", "#c0a060"];
+    var _chLabels = ["第1話", "第2話", "第3話"];
+    for (var _i = 0; _i < _cids.length; _i++) {
+      var _cid = _cids[_i];
+      var _c = findById(COMPANION_DATA, _cid);
+      if (!_c) { continue; }
+      html += '<div style="border:1px solid #2a2a4a;border-radius:6px;padding:6px 10px;margin-bottom:8px;">';
+      html += '<div style="font-size:0.9em;font-weight:bold;margin-bottom:4px;">' + _c.icon + " " + _c.name + '</div>';
+      for (var _j = 0; _j < 3; _j++) {
+        var _ch = _j + 1;
+        var _story = getCompanionSideStoryData(_cid, _ch);
+        if (!_story) { continue; }
+        var _done = isCompanionSideStoryCompleted(_cid, _ch);
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;border-left:2px solid ' + _chColors[_j] + ';padding-left:6px;">';
+        html += '<span style="font-size:0.74em;color:' + _chColors[_j] + ';min-width:32px;">' + _chLabels[_j] + '</span>';
+        if (_done) {
+          html += '<span style="font-size:0.78em;color:#e0e0e0;flex:1;">「' + _story.title + '」</span>';
+          html += '<button class="shop-menu-btn" data-album-cid="' + _cid + '" data-album-chapter="' + _ch + '" style="font-size:0.74em;padding:2px 8px;border-color:#c8b4ff;color:#c8b4ff;margin:0;min-width:unset;">&#x1F4D6;</button>';
+        } else {
+          html += '<span style="font-size:0.78em;color:#444;flex:1;">「' + _story.title + '」</span>';
+          html += '<span style="font-size:0.72em;color:#444;padding:2px 8px;">未読</span>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    var _completedCount = 0;
+    for (var _ai = 0; _ai < archiveData.length; _ai++) {
+      if (archiveData[_ai].completed) { _completedCount++; }
+    }
+    if (_completedCount === 0) {
+      html += '<p style="font-size:0.8em;color:#555;text-align:center;margin:4px 0;">まだ読み終えた物語がありません。</p>';
+    } else {
+      html += '<p style="font-size:0.76em;color:#888;text-align:center;margin:4px 0;">&#x1F4D6; ' + _completedCount + ' / 12 話を読み終えました</p>';
+    }
+    html += '<button class="shop-back-btn" id="t-album-back">戻る</button>';
+    body.innerHTML = html;
+    var _albumBtns = body.querySelectorAll("button[data-album-cid]");
+    for (var _bi = 0; _bi < _albumBtns.length; _bi++) {
+      (function (_btn) {
+        _btn.onclick = function () {
+          var _bc = parseInt(_btn.getAttribute("data-album-chapter"), 10) || 1;
+          startCompanionSideStoryReread(_btn.getAttribute("data-album-cid"), _bc);
+        };
+      })(_albumBtns[_bi]);
+    }
+    document.getElementById("t-album-back").onclick = renderTavernMain;
   }
 
   function renderTavernRecruit() {
@@ -9551,6 +9672,24 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v59-audio-count" style="border-color:#55efc4;color:#55efc4;">&#x1F522; Audio instance増殖なし確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v59-fallback-restore" style="border-color:#55efc4;color:#55efc4;">&#x1F504; generated fallback後復帰確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v59-backend" style="border-color:#74b9ff;color:#74b9ff;">&#x1F4BB; バックエンド確認（file/generated/none）</button>';
+      // §141 v0.60: 思い出アルバム デバッグ（16本）
+      html += '<p class="small" style="color:#c8b4ff;margin-top:8px;">&#x1F4DA; v0.60 思い出アルバム (§141)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-mode" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F4CB; _cstoryRereadMode現在値確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-archive-data" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F4DA; アーカイブデータ確認（完了数）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-juritani-1" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4D6; juritani第1話再読テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-juritani-2" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4D6; juritani第2話再読テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-juritani-3" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4D6; juritani第3話再読テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-harumi-1" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4D6; harumi第1話再読テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-norio-3" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4D6; norio第3話再読テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reread-unfinished" style="border-color:#e17055;color:#e17055;">&#x1F6AB; 未完了ストーリー再読拒否確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-complete-in-reread" style="border-color:#e17055;color:#e17055;">&#x1F512; 再読中complete呼出しでフラグ不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-mode-reset" style="border-color:#55efc4;color:#55efc4;">&#x1F504; closeで_cstoryRereadMode=false確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-all-completed-juritani" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; juritani全3話完了状態に（アルバムテスト用）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-all-completed-all" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; 全12話完了状態に（フル表示テスト）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reset-ch1" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ch1フラグ全リセット（再テスト用）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reset-ch2" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ch2フラグ全リセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-reset-ch3" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ch3フラグ全リセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v60-album-open" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F3E0; 酒場を開いてアルバム表示</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -13512,6 +13651,117 @@
       };
       document.getElementById("btn-debug-v59-backend").onclick = function () {
         showToast("[v0.59] バックエンド\n_bgmBackend=" + _bgmBackend + "\nbgmCurrentType=" + (bgmCurrentType || "none") + "\n_bgmFileType=" + (_bgmFileType || "none") + "\n_bgmFileGeneration=" + _bgmFileGeneration);
+      };
+      // §141 v0.60: 思い出アルバム デバッグハンドラ
+      document.getElementById("btn-debug-v60-reread-mode").onclick = function () {
+        showToast("[v0.60] _cstoryRereadMode=" + _cstoryRereadMode + "\n（再読中のみtrue。通常・完了後はfalse）");
+      };
+      document.getElementById("btn-debug-v60-archive-data").onclick = function () {
+        var _ad = getCompanionStoryArchiveData();
+        var _count = 0;
+        var _lines = "";
+        for (var _i = 0; _i < _ad.length; _i++) {
+          if (_ad[_i].completed) { _count++; }
+          _lines += "\n" + _ad[_i].companionName + " ch" + _ad[_i].chapter + ": " + (_ad[_i].completed ? "完了" : "未読");
+        }
+        showToast("[v0.60] アーカイブデータ (" + _count + "/12 完了)" + _lines);
+      };
+      document.getElementById("btn-debug-v60-reread-juritani-1").onclick = function () {
+        closeModal("settings-modal");
+        startCompanionSideStoryReread("juritani", 1);
+      };
+      document.getElementById("btn-debug-v60-reread-juritani-2").onclick = function () {
+        closeModal("settings-modal");
+        startCompanionSideStoryReread("juritani", 2);
+      };
+      document.getElementById("btn-debug-v60-reread-juritani-3").onclick = function () {
+        closeModal("settings-modal");
+        startCompanionSideStoryReread("juritani", 3);
+      };
+      document.getElementById("btn-debug-v60-reread-harumi-1").onclick = function () {
+        closeModal("settings-modal");
+        startCompanionSideStoryReread("harumi", 1);
+      };
+      document.getElementById("btn-debug-v60-reread-norio-3").onclick = function () {
+        closeModal("settings-modal");
+        startCompanionSideStoryReread("norio", 3);
+      };
+      document.getElementById("btn-debug-v60-reread-unfinished").onclick = function () {
+        var _f1 = state.companionSideStoryFlags ? !!state.companionSideStoryFlags["shurittani"] : false;
+        if (_f1) {
+          showToast("[v0.60] shurittaniのch1が完了済みのため拒否確認不可。先にch1フラグをリセットしてください。");
+          return;
+        }
+        var _before = _cstoryRereadMode;
+        startCompanionSideStoryReread("shurittani", 1);
+        showToast("[v0.60] 未完了再読拒否確認\n事前_cstoryRereadMode=" + _before + "\n事後_cstoryRereadMode=" + _cstoryRereadMode + "\n（falseのまま＝拒否成功）");
+      };
+      document.getElementById("btn-debug-v60-complete-in-reread").onclick = function () {
+        normalizeCompanionSideStoryFlags();
+        if (!state.companionSideStoryFlags["juritani"]) {
+          showToast("[v0.60] juritani ch1が未完了です。先に完了させてください。");
+          return;
+        }
+        var _before = !!state.companionSideStoryFlags["juritani"];
+        _cstoryRereadMode = true;
+        completeCompanionSideStory("juritani", 1);
+        var _after = !!state.companionSideStoryFlags["juritani"];
+        _cstoryRereadMode = false;
+        showToast("[v0.60] 再読中complete呼出しテスト\n事前フラグ=" + _before + " / 事後フラグ=" + _after + "\n（どちらもtrueのまま＝saveなし・通知なし）");
+      };
+      document.getElementById("btn-debug-v60-mode-reset").onclick = function () {
+        _cstoryRereadMode = true;
+        closeCompanionSideStoryModal();
+        showToast("[v0.60] closeCompanionSideStoryModal後\n_cstoryRereadMode=" + _cstoryRereadMode + "\n（falseになっていれば正常）");
+      };
+      document.getElementById("btn-debug-v60-all-completed-juritani").onclick = function () {
+        normalizeCompanionSideStoryFlags();
+        normalizeCompanionSideStoryChapter2Flags();
+        normalizeCompanionSideStoryChapter3Flags();
+        state.companionSideStoryFlags["juritani"] = true;
+        state.companionSideStoryChapter2Flags["juritani"] = true;
+        state.companionSideStoryChapter3Flags["juritani"] = true;
+        saveGame();
+        showToast("[v0.60] juritani ch1/2/3 を完了状態に設定しました。アルバムで確認してください。");
+      };
+      document.getElementById("btn-debug-v60-all-completed-all").onclick = function () {
+        normalizeCompanionSideStoryFlags();
+        normalizeCompanionSideStoryChapter2Flags();
+        normalizeCompanionSideStoryChapter3Flags();
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _i = 0; _i < _cids.length; _i++) {
+          state.companionSideStoryFlags[_cids[_i]] = true;
+          state.companionSideStoryChapter2Flags[_cids[_i]] = true;
+          state.companionSideStoryChapter3Flags[_cids[_i]] = true;
+        }
+        saveGame();
+        showToast("[v0.60] 全12話を完了状態にしました。アルバムで12/12表示を確認してください。");
+      };
+      document.getElementById("btn-debug-v60-reset-ch1").onclick = function () {
+        normalizeCompanionSideStoryFlags();
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _i = 0; _i < _cids.length; _i++) { state.companionSideStoryFlags[_cids[_i]] = false; }
+        saveGame();
+        showToast("[v0.60] ch1フラグ全リセット完了。");
+      };
+      document.getElementById("btn-debug-v60-reset-ch2").onclick = function () {
+        normalizeCompanionSideStoryChapter2Flags();
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _i = 0; _i < _cids.length; _i++) { state.companionSideStoryChapter2Flags[_cids[_i]] = false; }
+        saveGame();
+        showToast("[v0.60] ch2フラグ全リセット完了。");
+      };
+      document.getElementById("btn-debug-v60-reset-ch3").onclick = function () {
+        normalizeCompanionSideStoryChapter3Flags();
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _i = 0; _i < _cids.length; _i++) { state.companionSideStoryChapter3Flags[_cids[_i]] = false; }
+        saveGame();
+        showToast("[v0.60] ch3フラグ全リセット完了。");
+      };
+      document.getElementById("btn-debug-v60-album-open").onclick = function () {
+        closeModal("settings-modal");
+        openModal("tavern-modal");
+        renderTavernAlbum();
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
