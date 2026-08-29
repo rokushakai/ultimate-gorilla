@@ -7930,3 +7930,132 @@ v0.57では「🔒 ショップ購入不可」として表示していたが、�
 | btn-debug-v571-reconcile | reconcile後shop gear維持確認 |
 | btn-debug-v571-render10 | render×10副作用なし |
 | btn-debug-v571-open10 | shopモーダル10回開閉 |
+
+---
+
+## v0.58 仲間わざ習得演出（§139）
+
+### 目的
+
+仲間わざが「いつの間にか使えるようになっている」のではなく、
+unlock条件を満たした瞬間にプレイヤーへ明確に伝える習得演出を追加する。
+
+### 解放条件（変更なし）
+
+既存のunlock条件を維持する:
+
+- 仲間 Lv25 以上
+- 対応する specialized reward flag = true（ステージ2〜5初回クリア報酬）
+
+AND条件。装備を現在装備している必要はない（rewardFlagさえtrueであればよい）。
+
+### 4わざ正式データ
+
+| cid | 仲間名 | 技名 | type | ダメージ/回復 | 特記 |
+|---|---|---|---|---|---|
+| juritani | ジュリタニ | 超会心ラッシュ | damage | 32〜46+growth | — |
+| shurittani | シュリタニ | 絶対包囲網 | damage_leave_one | 22〜34+growth | 敵HP最低1残す / HP1時使用不可 |
+| norio | ノリオ | 完全解析レポート | damage | 26〜38+growth | — |
+| harumi | ハルミ | 大いなる祈り | heal_protect | HP40〜55+growth回復 | +次攻撃15%軽減 / 全快+軽減15%以上なら使用不可 |
+
+### Specialized reward対応
+
+| cid | reward gearId | 取得ステージ |
+|---|---|---|
+| juritani | critical_bracelet | ST2初回クリア |
+| shurittani | net_master_belt | ST3初回クリア |
+| norio | research_notebook | ST4初回クリア |
+| harumi | prayer_brooch | ST5初回クリア |
+
+### 永続状態: companionTechniqueLearnedNotices
+
+```
+state.companionTechniqueLearnedNotices = {
+  juritani: false,    // 習得演出を見せたか（通知UI専用・技解放とは別管理）
+  shurittani: false,
+  norio: false,
+  harumi: false
+}
+```
+
+- never-demote: false→true のみ。true→false は debug経路のみ。
+- normalizeCompanionTechniqueLearnedNotices(): 欠損補完・bool正規化・changed返値。save/modal/pending禁止。
+- saveGame / loadGame / newGame対応。
+
+### unlock判定: isCompanionTechniqueUnlocked(cid) （既存・変更なし）
+
+- 純粋関数。Lv>=25 AND rewardFlag=true を返す。
+- notice flagを参照しない（noticeとunlockは完全分離）。
+
+### unlock検出経路
+
+**パターンA**: gainCompanionExp() → Lv24→25 到達 → isCompanionTechniqueUnlocked=true → queueCompanionTechniqueLearnNotice(cid)
+
+**パターンB**: grantCompanionGearReward(gearId) → 付与前unlocked=false → 付与後unlocked=true → queueCompanionTechniqueLearnNotice(cid)
+
+### 非永続pending変数
+
+```
+var _companionTechniqueLearnPending = [];      // pending cid配列
+var _companionTechniqueLearnVisible = false;   // 表示中フラグ
+var _companionTechniqueLearnTimer = null;      // 延期タイマーID
+var _companionTechniqueLearnCloseLock = false; // close連打防止
+```
+
+### 表示ルール
+
+- 戦闘中: 延期（戦闘終了後フィールドで表示）
+- 他モーダル中: 延期（300ms後再試行）
+- 複数pending: 1枚ずつ順番に（close → 400ms後 → 次の仲間）
+- 4人同時: juritani→shurittani→norio→harumi の順
+
+### 習得演出モーダル（#modal-companion-technique-learn）
+
+表示内容:
+```
+✨ 仲間わざ習得！
+[人物emoji] [仲間名]
+⚡ 「[技名]」を覚えた！
+[description]
+仲間わざは戦闘中、1戦につき1回だけ使用できます。
+[閉じる]
+```
+
+### 表示済み記録タイミング
+
+close押下 → state.companionTechniqueLearnedNotices[cid] = true → saveGame() 1回 → pendingから除去 → 次へ
+
+### 旧セーブ修復
+
+unlock済み + notice key欠損 → loadGame内pending登録 → renderField()で消費（load中はmodal禁止）
+
+### 変更禁止
+
+- isCompanionTechniqueUnlocked()の条件
+- 技の威力・回復量・使用条件・AI・gear bonus・growth bonus
+- 1戦1回リセット
+- 捕獲率・EXP倍率
+- 最終ストーリー・究極ゴリラ・BGM
+
+### デバッグ（§139・18本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v58-tech-data | 4わざ正式データ一覧 |
+| btn-debug-v58-unlock-boundary | unlock条件境界確認 |
+| btn-debug-v58-lv24-to-25 | Lv24→25習得演出確認 |
+| btn-debug-v58-lv25-to-26 | Lv25→26再通知なし確認 |
+| btn-debug-v58-reward-unlock | reward取得→unlock→演出確認 |
+| btn-debug-v58-lv25-only | Lv25のみ未解放確認 |
+| btn-debug-v58-reward-only | rewardのみ未解放確認 |
+| btn-debug-v58-gear-not-needed | gear装備不要unlock確認 |
+| btn-debug-v58-old-save-rescue | 旧セーブunlock済み通知修復 |
+| btn-debug-v58-4-pending | 4人同時pending順序確認 |
+| btn-debug-v58-modal-delay | 他モーダル中延期確認 |
+| btn-debug-v58-notice-not-needed | notice未確認でも技使用可確認 |
+| btn-debug-v58-save-count | saveGame回数確認 |
+| btn-debug-v58-close-10 | close10連打1回確認 |
+| btn-debug-v58-render-10 | render×10多重表示なし確認 |
+| btn-debug-v58-newgame-state | newGame初期状態確認 |
+| btn-debug-v58-show-direct | 習得演出直接表示（ジュリタニ） |
+| btn-debug-v58-reset-notices | notice全リセット（再テスト用） |

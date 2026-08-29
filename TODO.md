@@ -16,11 +16,28 @@
 
 ### Version 0.49 候補以降
 
-将来: 仲間わざ習得演出 / 仲間わざ2種類目
+将来: 仲間わざ2種類目
 
 ---
 
 ## ✅ 実装済み（最新）
+
+### Version 0.58 — 仲間わざ習得演出 (§139)
+
+- **`state.companionTechniqueLearnedNotices`** 永続フラグ（4キー・never-demote・save/load） ✅
+- **`normalizeCompanionTechniqueLearnedNotices()`** 旧セーブ補完 ✅
+- **`queueCompanionTechniqueLearnNotice(cid)`** 演出キュー（重複・演出済み・unlock条件ガード） ✅
+- **`consumePendingCompanionTechniqueLearnNotice()`** 戦闘中・他modal中延期 ✅
+- **`showCompanionTechniqueLearnModal(cid)` / `closeCompanionTechniqueLearnModal()`** 演出モーダル ✅
+- **gainCompanionExp()**: Lv24→25+unlock=true → queue（パターンA） ✅
+- **grantCompanionGearReward()**: false→true transition → queue（パターンB） ✅
+- **renderField()**: consumePendingCompanionTechniqueLearnNotice() 追加 ✅
+- **旧セーブ修復**: loadGame内pending登録（4人同時 → juritani→shurittani→norio→harumi順） ✅
+- **モーダル #modal-companion-technique-learn** (index.html) ✅
+- **デバッグ18本 §139**: btn-debug-v58-* ✅
+- **isCompanionTechniqueUnlocked() / 技能力 / BGM: 変更なし** ✅
+
+---
 
 ### Version 0.57.1 — 仲間装備商人・仕様整合／購入安全性監査 (§138)
 

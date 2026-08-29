@@ -5,6 +5,27 @@
 
 ---
 
+## v0.58 (2026-08-29) — 仲間わざ習得演出 (§139)
+
+### 設計判断: unlock-notice分離
+
+`isCompanionTechniqueUnlocked(cid)` は変更なし。`state.companionTechniqueLearnedNotices` は「UIモーダルを表示したか」のみを追跡。技の使用可否・威力・AI はすべて unlock フラグのみに依存し、notice フラグには依存しない。
+
+### 遷移検出（2パターン）
+
+- **パターンA**: gainCompanionExp() で oldLevel < 25 && cl.level >= 25 && isCompanionTechniqueUnlocked() → queue
+- **パターンB**: grantCompanionGearReward() で付与前の before を保存し、付与後に false→true transition を検出 → queue
+
+### reconcile/loadGame 呼び出し順序の注意
+
+`reconcileCompanionGearRewards()` は loadGame 内で `companionTechniqueLearnedNotices` のロード前に呼ばれる。reconcile 中に queueCompanionTechniqueLearnNotice が呼ばれても、consumePendingCompanionTechniqueLearnNotice() が「notice=true なら shift して捨てる」ガードを持つため、spurious modal は表示されない。
+
+### never-demote 保証
+
+`normalizeCompanionTechniqueLearnedNotices()` で `=== true` なら return（降格なし）。closeCompanionTechniqueLearnModal() で `!== true` のときのみ true にセット。
+
+---
+
 ## v0.57.1 (2026-08-29) — 仲間装備商人・仕様整合／購入安全性監査 (§138)
 
 ### スターター4種監査結果

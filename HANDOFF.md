@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.57.1** |
+| 現在バージョン | **v0.58** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,19 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.58] 仲間わざ習得演出**（§139）
+  - **`state.companionTechniqueLearnedNotices`**: 4人分の演出済み永続フラグ（never-demote・saveGame/loadGame）
+  - **`normalizeCompanionTechniqueLearnedNotices()`**: 旧セーブ補完（never-demote）
+  - **`queueCompanionTechniqueLearnNotice(cid)`**: 演出キュー追加（重複・演出済み・unlock未成立ガード）
+  - **`consumePendingCompanionTechniqueLearnNotice()`**: 戦闘中・他modal中は400ms/300ms延期
+  - **`showCompanionTechniqueLearnModal(cid)` / `closeCompanionTechniqueLearnModal()`**: 演出モーダル表示・close時save1回
+  - **gainCompanionExp() パターンA**: Lv24→25+unlock=true → queueCompanionTechniqueLearnNotice
+  - **grantCompanionGearReward() パターンB**: before/after比較 false→true transition → queue
+  - **renderField()**: consumePendingCompanionTechniqueLearnNotice() 追加
+  - **旧セーブ修復**: loadGame() で unlock=true+notice=false → pending登録（4人juritani→harumi順）
+  - **`#modal-companion-technique-learn`** (index.html) 追加
+  - **デバッグ18本（§139）**: `btn-debug-v58-*`
+  - **isCompanionTechniqueUnlocked() / 技能力 / BGM: 変更なし**
 - **[v0.57.1] 仲間装備商人・仕様整合／購入安全性監査**（§138）
   - **スターター4種=分類A確認**: ensureCompanionGearState()で自動付与 → ショップ廃止
   - **ショップ専用装備4種追加**: training_wristband(🥊+3)/tracking_shoes(👟+2)/recording_pen(🖊️+2)/herbal_pouch(🌿heal+3)・各60G

@@ -5,6 +5,36 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.58] - 2026-08-29 — 仲間わざ習得演出 (§139)
+
+### Added
+- **`state.companionTechniqueLearnedNotices`** `{ juritani/shurittani/norio/harumi: bool }`: 習得演出済み永続フラグ（saveGame/loadGame対応・never-demote）
+- **`normalizeCompanionTechniqueLearnedNotices()`**: 旧セーブ補完・bool正規化・changed返値（save/modal/pending禁止）
+- **`queueCompanionTechniqueLearnNotice(cid)`**: 演出キュー追加（unlock済み+notice false+重複なし）
+- **`consumePendingCompanionTechniqueLearnNotice()`**: pending消費（戦闘中・他modal中は延期）
+- **`showCompanionTechniqueLearnModal(cid)`**: 習得演出モーダル表示（#modal-companion-technique-learn）
+- **`closeCompanionTechniqueLearnModal()`**: close連打防止・save1回・次の仲間へ
+- **`_companionTechniqueLearnPending/Visible/Timer/CloseLock`**: 非永続制御変数4本
+- **モーダル `#modal-companion-technique-learn`** (index.html): ✨習得！ + 人物絵文字 + 技名 + 説明 + 1戦1回説明 + [閉じる]
+- **デバッグ18本 (§139)**: btn-debug-v58-* (tech-data/unlock-boundary/lv24-to-25/lv25-to-26/reward-unlock/lv25-only/reward-only/gear-not-needed/old-save-rescue/4-pending/modal-delay/notice-not-needed/save-count/close-10/render-10/newgame-state/show-direct/reset-notices)
+
+### Changed
+- **`gainCompanionExp()`**: Lv24→25到達 + unlock成立時 → `queueCompanionTechniqueLearnNotice(cid)`（パターンA）
+- **`grantCompanionGearReward(gearId)`**: 付与前後のunlock状態比較 → false→true transitionで `queueCompanionTechniqueLearnNotice(cid)`（パターンB）
+- **`renderField()`**: `consumePendingCompanionTechniqueLearnNotice()` を追加（既存consumeの後）
+- **`saveGame()`**: `companionTechniqueLearnedNotices` 追加
+- **`loadGame()`**: `companionTechniqueLearnedNotices` ロード・normalize・旧セーブ修復pending登録
+
+### Fixed
+- 旧セーブ（unlock済み・notice key欠損）: loadGame内pending登録 → renderField()で演出表示（load中modal禁止遵守）
+
+### Not Changed
+- `isCompanionTechniqueUnlocked()` の判定条件（Lv25+rewardFlag、noticeは参照しない）
+- 技の威力・回復量・使用条件・1戦1回・AI・gear bonus・growth bonus・捕獲率・EXP倍率
+- 最終ストーリー・究極ゴリラ・究極チンパンジー・BGM・stopBGMHard()
+
+---
+
 ## [0.57.1] - 2026-08-29 — 仲間装備商人・仕様整合／購入安全性監査 (§138)
 
 ### Changed

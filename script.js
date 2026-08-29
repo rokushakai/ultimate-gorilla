@@ -1229,6 +1229,7 @@
     companionSideStoryChapter3Flags: { juritani: false, shurittani: false, norio: false, harumi: false }, // §122 v0.47: 第3話完了フラグ（永続・saveする）
     companionSideStoryChapter3AllCompleteCelebrated: false, // §133 v0.54: 第3話全話完了演出済み（永続・saveする）
     finalCompanionSideStoryUnlockNotified: false, // §135 v0.56: 最終サイドストーリー解放通知済み（永続・saveする）
+    companionTechniqueLearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §139 v0.58: 仲間わざ習得演出済みフラグ（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -1470,6 +1471,8 @@
     }
     // §120 v0.45.3: 全話完了演出フォールバック（共通キューで順序制御・二枚重ね防止）
     consumePendingCompanionStoryCompletionNotices();
+    // §139 v0.58: 仲間わざ習得演出（pending→safe timing表示）
+    consumePendingCompanionTechniqueLearnNotice();
 
     var p = state.player;
 
@@ -4628,6 +4631,125 @@
     return gearName + "を入手で習得" + (gearSrc ? "（" + gearSrc.source + "）" : "");
   }
 
+  // §139 v0.58: 仲間わざ習得演出（非永続・IIFEスコープ・saveしない）
+  var _companionTechniqueLearnPending = [];      // 表示待ちcid配列（順序保証）
+  var _companionTechniqueLearnVisible = false;   // 演出表示中フラグ（二重表示防止）
+  var _companionTechniqueLearnTimer = null;      // 延期タイマーID
+  var _companionTechniqueLearnCloseLock = false; // close連打防止
+
+  // §139 v0.58: 習得演出済みフラグを正規化（never-demote・changed返値）
+  // saveGame禁止・modal禁止・pending禁止・render禁止
+  function normalizeCompanionTechniqueLearnedNotices() {
+    if (!state.companionTechniqueLearnedNotices ||
+        typeof state.companionTechniqueLearnedNotices !== "object" ||
+        Array.isArray(state.companionTechniqueLearnedNotices)) {
+      state.companionTechniqueLearnedNotices = {};
+    }
+    var _ncids = ["juritani", "shurittani", "norio", "harumi"];
+    var _nchanged = false;
+    for (var _ni = 0; _ni < _ncids.length; _ni++) {
+      var _ncid = _ncids[_ni];
+      if (state.companionTechniqueLearnedNotices[_ncid] === true) { continue; } // never demote
+      if (typeof state.companionTechniqueLearnedNotices[_ncid] !== "boolean") {
+        state.companionTechniqueLearnedNotices[_ncid] = false;
+        _nchanged = true;
+      }
+    }
+    return _nchanged;
+  }
+
+  // §139 v0.58: 習得通知をキューに追加（重複・演出済み・条件ガード付き）
+  // ここではsaveしない。pending追加のみ。
+  function queueCompanionTechniqueLearnNotice(cid) {
+    if (!COMPANION_TECHNIQUE_DATA[cid]) { return; }
+    if (!isCompanionTechniqueUnlocked(cid)) { return; }
+    normalizeCompanionTechniqueLearnedNotices();
+    if (state.companionTechniqueLearnedNotices[cid] === true) { return; } // 演出済みならスキップ
+    // 既にpending中なら追加しない（重複防止）
+    for (var _pi = 0; _pi < _companionTechniqueLearnPending.length; _pi++) {
+      if (_companionTechniqueLearnPending[_pi] === cid) { return; }
+    }
+    // 表示中の先頭cidと同じなら追加しない
+    if (_companionTechniqueLearnVisible && _companionTechniqueLearnPending.length > 0 &&
+        _companionTechniqueLearnPending[0] === cid) { return; }
+    _companionTechniqueLearnPending.push(cid);
+  }
+
+  // §139 v0.58: pending習得演出を消費（戦闘中・他モーダル中は延期）
+  function consumePendingCompanionTechniqueLearnNotice() {
+    if (_companionTechniqueLearnVisible) { return; }
+    if (_companionTechniqueLearnPending.length === 0) { return; }
+    if (state.inBattle) { // 戦闘中は延期（戦闘終了後のフィールドで表示）
+      if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); }
+      _companionTechniqueLearnTimer = setTimeout(consumePendingCompanionTechniqueLearnNotice, 400);
+      return;
+    }
+    if (state.modalOpen) { // 他モーダル中は延期
+      if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); }
+      _companionTechniqueLearnTimer = setTimeout(consumePendingCompanionTechniqueLearnNotice, 300);
+      return;
+    }
+    var _qcid = _companionTechniqueLearnPending[0];
+    // 演出済みになっていたらpendingから除去してスキップ
+    normalizeCompanionTechniqueLearnedNotices();
+    if (state.companionTechniqueLearnedNotices[_qcid] === true) {
+      _companionTechniqueLearnPending.shift();
+      if (_companionTechniqueLearnPending.length > 0) {
+        if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); }
+        _companionTechniqueLearnTimer = setTimeout(consumePendingCompanionTechniqueLearnNotice, 200);
+      }
+      return;
+    }
+    showCompanionTechniqueLearnModal(_qcid);
+  }
+
+  // §139 v0.58: 仲間わざ習得演出モーダルを表示（1人ずつ）
+  function showCompanionTechniqueLearnModal(cid) {
+    if (_companionTechniqueLearnVisible) { return; }
+    var _std = COMPANION_TECHNIQUE_DATA[cid];
+    if (!_std) { return; }
+    var _scd = findById(COMPANION_DATA, cid);
+    if (!_scd) { return; }
+    _companionTechniqueLearnVisible = true;
+    var _personEmoji = _scd.icon || "&#x1F9D1;";
+    var _bodyEl = document.getElementById("companion-technique-learn-body");
+    if (_bodyEl) {
+      _bodyEl.innerHTML =
+        '<h3 style="margin:0 0 10px;font-size:1.15em;">&#x2728; 仲間わざ習得！</h3>' +
+        '<p style="font-size:1.1em;margin-bottom:6px;">' + _personEmoji + ' ' + _scd.name + '</p>' +
+        '<p style="font-size:1.0em;font-weight:bold;margin-bottom:10px;color:#ffd166;">&#x26A1; &#x300C;' + _std.name + '&#x300D;を覚えた！</p>' +
+        '<div style="font-size:0.88em;color:#adb5bd;text-align:left;padding:8px;background:#1a2a3a;border-radius:6px;margin-bottom:10px;">' + _std.description + '</div>' +
+        '<p style="font-size:0.82em;color:#6c757d;margin-bottom:16px;">仲間わざは戦闘中、1戦につき1回だけ使用できます。</p>' +
+        '<button class="modal-btn" id="btn-tech-learn-close" style="width:100%;">閉じる</button>';
+    }
+    openModal("modal-companion-technique-learn");
+    var _closeBtn = document.getElementById("btn-tech-learn-close");
+    if (_closeBtn) { _closeBtn.onclick = closeCompanionTechniqueLearnModal; }
+  }
+
+  // §139 v0.58: 仲間わざ習得演出モーダルを閉じる（close連打防止・save1回・次の通知へ）
+  function closeCompanionTechniqueLearnModal() {
+    if (_companionTechniqueLearnCloseLock) { return; }
+    _companionTechniqueLearnCloseLock = true;
+    var _ccid = (_companionTechniqueLearnPending.length > 0) ? _companionTechniqueLearnPending[0] : null;
+    closeModal("modal-companion-technique-learn");
+    _companionTechniqueLearnVisible = false;
+    if (_ccid) {
+      normalizeCompanionTechniqueLearnedNotices();
+      if (state.companionTechniqueLearnedNotices[_ccid] !== true) {
+        state.companionTechniqueLearnedNotices[_ccid] = true;
+        saveGame(); // 表示済みをtrueにするタイミング: close時。save1回。
+      }
+      _companionTechniqueLearnPending.shift();
+    }
+    _companionTechniqueLearnCloseLock = false;
+    // 複数pending時は次の仲間へ（400ms後）
+    if (_companionTechniqueLearnPending.length > 0) {
+      if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); }
+      _companionTechniqueLearnTimer = setTimeout(consumePendingCompanionTechniqueLearnNotice, 400);
+    }
+  }
+
   // §82 v0.28: 仲間コマンドシーケンスを開始する
   function startCompanionCommands() {
     var e = state.enemy;
@@ -5963,6 +6085,13 @@
       // §103 v0.39: 節目セリフチェック（Lvアップ後に実行）
       if (cl.level > oldLevel) {
         checkCompanionLevelMilestones(cid, oldLevel, cl.level);
+        // §139 v0.58: Lv24→25でunlock成立したとき習得演出キュー（パターンA）
+        // unlock条件: Lv>=25 AND rewardFlag=true（isCompanionTechniqueUnlocked内で評価）
+        if (oldLevel < 25 && cl.level >= 25) {
+          if (isCompanionTechniqueUnlocked(cid)) {
+            queueCompanionTechniqueLearnNotice(cid);
+          }
+        }
       }
     });
   }
@@ -6123,12 +6252,29 @@
     if (!COMPANION_GEAR_REWARD_DATA[gearId]) { return; } // 不正gearId拒否
     if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
     if (state.companionGearRewardFlags[gearId]) { return; } // 既取得
+    // §139 v0.58: 付与前のunlock状態を記録（パターンB: reward取得でunlock成立時の検出用）
+    var _g139cid = null;
+    var _g139cids = ["juritani", "shurittani", "norio", "harumi"];
+    for (var _g139i = 0; _g139i < _g139cids.length; _g139i++) {
+      var _g139td = COMPANION_TECHNIQUE_DATA[_g139cids[_g139i]];
+      if (_g139td && _g139td.requiredGearId === gearId) { _g139cid = _g139cids[_g139i]; break; }
+    }
+    var _g139before = _g139cid ? isCompanionTechniqueUnlocked(_g139cid) : false;
     // flag=false でも所持数>0なら追加配布せずflagだけ補完
     if ((state.companionGearInventory[gearId] || 0) > 0) {
-      state.companionGearRewardFlags[gearId] = true; return;
+      state.companionGearRewardFlags[gearId] = true;
+      // §139 v0.58: flag補完でunlock成立したなら演出キュー
+      if (_g139cid && !_g139before && isCompanionTechniqueUnlocked(_g139cid)) {
+        queueCompanionTechniqueLearnNotice(_g139cid);
+      }
+      return;
     }
     state.companionGearInventory[gearId] = 1;
     state.companionGearRewardFlags[gearId] = true;
+    // §139 v0.58: 通常付与でunlock成立（false→true transition）したなら演出キュー
+    if (_g139cid && !_g139before && isCompanionTechniqueUnlocked(_g139cid)) {
+      queueCompanionTechniqueLearnNotice(_g139cid);
+    }
   }
   // §109 v0.42 / §110 v0.42.1: ロード時補完・冪等性保証・遅延通知
   function reconcileCompanionGearRewards() {
@@ -9350,6 +9496,26 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v571-reconcile" style="border-color:#06d6a0;color:#06d6a0;">&#x1F504; reconcile後shop gear維持確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v571-render10" style="border-color:#a9e34b;color:#a9e34b;">&#x1F504; render×10副作用なし</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v571-open10" style="border-color:#a9e34b;color:#a9e34b;">&#x1F6D2; shopモーダル10回開閉</button>';
+      // §139 v0.58: 仲間わざ習得演出デバッグ（18本）
+      html += '<p class="small" style="color:#fd79a8;margin-top:8px;">&#x26A1; v0.58 仲間わざ習得演出 (§139)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-tech-data" style="border-color:#fd79a8;color:#fd79a8;">&#x1F9EA; 4わざ正式データ一覧</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-unlock-boundary" style="border-color:#fd79a8;color:#fd79a8;">&#x1F50D; unlock条件境界確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-lv24-to-25" style="border-color:#fd79a8;color:#fd79a8;">&#x1F4C8; Lv24&#x2192;25習得演出確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-lv25-to-26" style="border-color:#fd79a8;color:#fd79a8;">&#x1F6AB; Lv25&#x2192;26再通知なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-reward-unlock" style="border-color:#fd79a8;color:#fd79a8;">&#x1F381; reward取得&#x2192;unlock&#x2192;演出確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-lv25-only" style="border-color:#fd79a8;color:#fd79a8;">&#x1F512; Lv25のみ未解放確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-reward-only" style="border-color:#fd79a8;color:#fd79a8;">&#x1F512; rewardのみ未解放確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-gear-not-needed" style="border-color:#fd79a8;color:#fd79a8;">&#x1F45A; gear装備不要unlock確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-old-save-rescue" style="border-color:#a29bfe;color:#a29bfe;">&#x1F4DC; 旧セーブunlock済み通知修復</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-4-pending" style="border-color:#a29bfe;color:#a29bfe;">&#x1F46B; 4人同時pending順序確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-modal-delay" style="border-color:#a29bfe;color:#a29bfe;">&#x23F3; 他モーダル中延期確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-notice-not-needed" style="border-color:#55efc4;color:#55efc4;">&#x26A1; notice未確認でも技使用可確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-save-count" style="border-color:#55efc4;color:#55efc4;">&#x1F4BE; saveGame回数確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-close-10" style="border-color:#55efc4;color:#55efc4;">&#x1F504; close10連打1回確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-render-10" style="border-color:#55efc4;color:#55efc4;">&#x1F504; render&#xD7;10多重表示なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-newgame-state" style="border-color:#55efc4;color:#55efc4;">&#x1F195; newGame初期状態確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-show-direct" style="border-color:#e17055;color:#e17055;">&#x2728; 習得演出直接表示（ジュリタニ）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v58-reset-notices" style="border-color:#e17055;color:#e17055;">&#x1F504; notice全リセット（再テスト用）</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -12722,6 +12888,383 @@
         _lines16.push(_mainBtn16 && state.player.gold === _prevGold16 && !_companionGearPurchaseLock ? "PASS ✅" : "要確認");
         showToast(_lines16.join("\n"));
       };
+      // §139 v0.58: 仲間わざ習得演出デバッグハンドラ
+      document.getElementById("btn-debug-v58-tech-data").onclick = function () {
+        var _tcids = ["juritani", "shurittani", "norio", "harumi"];
+        var _lines = ["[v0.58] 4わざ正式データ一覧"];
+        for (var _tdi = 0; _tdi < _tcids.length; _tdi++) {
+          var _tcid = _tcids[_tdi];
+          var _td = COMPANION_TECHNIQUE_DATA[_tcid];
+          if (!_td) { _lines.push(_tcid + ": データなし"); continue; }
+          var _cdat = findById(COMPANION_DATA, _tcid);
+          _lines.push((_cdat ? _cdat.icon + _cdat.name : _tcid) + ": " + _td.name +
+            " / " + _td.type + " / " + _td.minValue + "-" + _td.maxValue +
+            " / Lv" + _td.unlockLevel + " + " + _td.requiredGearId +
+            " / unlock=" + isCompanionTechniqueUnlocked(_tcid));
+        }
+        showToast(_lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v58-unlock-boundary").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevLv = (state.companionLevels["juritani"] || {}).level || 1;
+        var _prevFlag = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _results = [];
+        // Lv24+reward false → false
+        state.companionLevels["juritani"] = { level: 24, exp: 0, nextExp: 255 };
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        _results.push("Lv24+reward=false: " + (isCompanionTechniqueUnlocked("juritani") === false ? "false ✅" : "FAIL ❌"));
+        // Lv24+reward true → false
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        _results.push("Lv24+reward=true: " + (isCompanionTechniqueUnlocked("juritani") === false ? "false ✅" : "FAIL ❌"));
+        // Lv25+reward false → false
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        _results.push("Lv25+reward=false: " + (isCompanionTechniqueUnlocked("juritani") === false ? "false ✅" : "FAIL ❌"));
+        // Lv25+reward true → true
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        _results.push("Lv25+reward=true: " + (isCompanionTechniqueUnlocked("juritani") === true ? "true ✅" : "FAIL ❌"));
+        // Lv99+reward true → true
+        state.companionLevels["juritani"] = { level: 99, exp: 0, nextExp: 1005 };
+        _results.push("Lv99+reward=true: " + (isCompanionTechniqueUnlocked("juritani") === true ? "true ✅" : "FAIL ❌"));
+        // 装備未装備でもunlock不変
+        var _prevEq = (state.companionEquipment || {})["juritani"];
+        if (!state.companionEquipment) { state.companionEquipment = {}; }
+        state.companionEquipment["juritani"] = null;
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        _results.push("gear未装備: " + (isCompanionTechniqueUnlocked("juritani") === true ? "unlock=true ✅" : "FAIL ❌"));
+        state.companionEquipment["juritani"] = _prevEq;
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag;
+        showToast("[v0.58] unlock境界\n" + _results.join("\n"));
+      };
+      document.getElementById("btn-debug-v58-lv24-to-25").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // 事前条件: reward true + Lv24 + notice false
+        var _prevLv1 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag1 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevNotice1 = (state.companionTechniqueLearnedNotices || {})["juritani"];
+        state.companionLevels["juritani"] = { level: 24, exp: 0, nextExp: 255 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = [];
+        // gainCompanionExpをシミュレート（EXP=255でLv25）
+        var _prevCompanions = state.player.companions;
+        state.player.companions = ["juritani"];
+        gainCompanionExp(255);
+        state.player.companions = _prevCompanions;
+        var _afterLv = (state.companionLevels["juritani"] || {}).level;
+        var _pendLen = _companionTechniqueLearnPending.length;
+        var _unlocked = isCompanionTechniqueUnlocked("juritani");
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv1 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag1;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNotice1 || false;
+        _companionTechniqueLearnPending = [];
+        var _pass1 = (_afterLv >= 25 && _unlocked && _pendLen >= 1);
+        showToast("[v0.58] Lv24→25習得演出\nafterLv=" + _afterLv + " unlock=" + _unlocked + " pending=" + _pendLen + "\n" + (_pass1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-lv25-to-26").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // Lv25→26: 既にLv25通過済みなので追加通知なし
+        var _prevLv2 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag2 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevNotice2 = (state.companionTechniqueLearnedNotices || {})["juritani"];
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = true; // 既に演出済み
+        _companionTechniqueLearnPending = [];
+        var _prevCompanions2 = state.player.companions;
+        state.player.companions = ["juritani"];
+        gainCompanionExp(265); // Lv26へ
+        state.player.companions = _prevCompanions2;
+        var _pendLen2 = _companionTechniqueLearnPending.length;
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv2 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag2;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNotice2;
+        _companionTechniqueLearnPending = [];
+        var _pass2 = (_pendLen2 === 0);
+        showToast("[v0.58] Lv25→26再通知\npending=" + _pendLen2 + "\n" + (_pass2 ? "PASS ✅ 再通知なし" : "FAIL ❌ 再通知あり"));
+      };
+      document.getElementById("btn-debug-v58-reward-unlock").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // Lv25+reward未取得→reward付与→unlock成立
+        var _prevLv3 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag3 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevInv3 = state.companionGearInventory["critical_bracelet"] || 0;
+        var _prevNotice3 = (state.companionTechniqueLearnedNotices || {})["juritani"];
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        state.companionGearInventory["critical_bracelet"] = 0;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = [];
+        var _beforeUnlock3 = isCompanionTechniqueUnlocked("juritani"); // false
+        grantCompanionGearReward("critical_bracelet");
+        var _afterUnlock3 = isCompanionTechniqueUnlocked("juritani"); // true
+        var _pendLen3 = _companionTechniqueLearnPending.length;
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv3 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag3;
+        state.companionGearInventory["critical_bracelet"] = _prevInv3;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNotice3;
+        _companionTechniqueLearnPending = [];
+        var _pass3 = (!_beforeUnlock3 && _afterUnlock3 && _pendLen3 >= 1);
+        showToast("[v0.58] reward→unlock→演出\nbefore=" + _beforeUnlock3 + " after=" + _afterUnlock3 + " pending=" + _pendLen3 + "\n" + (_pass3 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-lv25-only").onclick = function () {
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevLv4 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag4 = !!state.companionGearRewardFlags["critical_bracelet"];
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = false;
+        var _unlock4 = isCompanionTechniqueUnlocked("juritani");
+        state.companionLevels["juritani"].level = _prevLv4 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag4;
+        showToast("[v0.58] Lv25+reward=false\nunlock=" + _unlock4 + "\n" + (_unlock4 === false ? "PASS ✅ 未解放" : "FAIL ❌ 解放されてしまった"));
+      };
+      document.getElementById("btn-debug-v58-reward-only").onclick = function () {
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevLv5 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag5 = !!state.companionGearRewardFlags["critical_bracelet"];
+        state.companionLevels["juritani"] = { level: 24, exp: 0, nextExp: 255 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        var _unlock5 = isCompanionTechniqueUnlocked("juritani");
+        state.companionLevels["juritani"].level = _prevLv5 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag5;
+        showToast("[v0.58] Lv24+reward=true\nunlock=" + _unlock5 + "\n" + (_unlock5 === false ? "PASS ✅ 未解放" : "FAIL ❌ 解放されてしまった"));
+      };
+      document.getElementById("btn-debug-v58-gear-not-needed").onclick = function () {
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        if (!state.companionEquipment) { state.companionEquipment = {}; }
+        var _prevLv6 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag6 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevEq6 = state.companionEquipment["juritani"];
+        // 装備未装備（equipment=null）でもunlock成立するか確認
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        state.companionEquipment["juritani"] = null; // 装備しない
+        var _unlock6 = isCompanionTechniqueUnlocked("juritani");
+        state.companionEquipment["juritani"] = "critical_bracelet"; // 装備している
+        var _unlock6eq = isCompanionTechniqueUnlocked("juritani");
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv6 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag6;
+        state.companionEquipment["juritani"] = _prevEq6;
+        var _pass6 = (_unlock6 === true && _unlock6eq === true);
+        showToast("[v0.58] gear装備不要確認\n未装備unlock=" + _unlock6 + " 装備中unlock=" + _unlock6eq + "\n" + (_pass6 ? "PASS ✅ 装備不要" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-old-save-rescue").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        // unlock済みだがnotice keyが欠損している旧セーブをシミュレート
+        var _prevLv7 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag7 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevNotices7 = JSON.parse(JSON.stringify(state.companionTechniqueLearnedNotices || {}));
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        state.companionTechniqueLearnedNotices = {}; // key欠損を模擬
+        _companionTechniqueLearnPending = [];
+        // loadGame内ロジックと同じ
+        normalizeCompanionTechniqueLearnedNotices();
+        var _noticeVal7 = state.companionTechniqueLearnedNotices["juritani"];
+        if (isCompanionTechniqueUnlocked("juritani") && !state.companionTechniqueLearnedNotices["juritani"]) {
+          queueCompanionTechniqueLearnNotice("juritani");
+        }
+        var _pendLen7 = _companionTechniqueLearnPending.length;
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv7 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag7;
+        state.companionTechniqueLearnedNotices = _prevNotices7;
+        _companionTechniqueLearnPending = [];
+        var _pass7 = (_noticeVal7 === false && _pendLen7 >= 1);
+        showToast("[v0.58] 旧セーブ修復\nnotice初期=" + _noticeVal7 + " pending=" + _pendLen7 + "\n" + (_pass7 ? "PASS ✅ pending登録" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-4-pending").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _cids8 = ["juritani", "shurittani", "norio", "harumi"];
+        var _gids8 = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
+        var _prevLvs8 = {}, _prevFlags8 = {}, _prevNotices8 = JSON.parse(JSON.stringify(state.companionTechniqueLearnedNotices || {}));
+        for (var _k8 = 0; _k8 < _cids8.length; _k8++) {
+          _prevLvs8[_cids8[_k8]] = (state.companionLevels[_cids8[_k8]] || {}).level || 1;
+          _prevFlags8[_gids8[_k8]] = !!state.companionGearRewardFlags[_gids8[_k8]];
+          state.companionLevels[_cids8[_k8]] = { level: 25, exp: 0, nextExp: 265 };
+          state.companionGearRewardFlags[_gids8[_k8]] = true;
+          state.companionTechniqueLearnedNotices[_cids8[_k8]] = false;
+        }
+        _companionTechniqueLearnPending = [];
+        for (var _q8 = 0; _q8 < _cids8.length; _q8++) {
+          queueCompanionTechniqueLearnNotice(_cids8[_q8]);
+        }
+        var _pendOrder8 = _companionTechniqueLearnPending.slice();
+        // 復元
+        for (var _r8 = 0; _r8 < _cids8.length; _r8++) {
+          state.companionLevels[_cids8[_r8]].level = _prevLvs8[_cids8[_r8]];
+          state.companionGearRewardFlags[_gids8[_r8]] = _prevFlags8[_gids8[_r8]];
+        }
+        state.companionTechniqueLearnedNotices = _prevNotices8;
+        _companionTechniqueLearnPending = [];
+        var _pass8 = (_pendOrder8.length === 4 &&
+          _pendOrder8[0] === "juritani" && _pendOrder8[1] === "shurittani" &&
+          _pendOrder8[2] === "norio" && _pendOrder8[3] === "harumi");
+        showToast("[v0.58] 4人同時pending順序\n" + _pendOrder8.join(" → ") + "\n" + (_pass8 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-modal-delay").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevLv9 = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlag9 = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevNotice9 = (state.companionTechniqueLearnedNotices || {})["juritani"];
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = [];
+        queueCompanionTechniqueLearnNotice("juritani");
+        var _wasModalOpen9 = state.modalOpen;
+        state.modalOpen = true; // 他モーダル中を模擬
+        consumePendingCompanionTechniqueLearnNotice();
+        var _visibleWhileModal9 = _companionTechniqueLearnVisible; // falseであるべき
+        state.modalOpen = _wasModalOpen9;
+        // 復元
+        state.companionLevels["juritani"].level = _prevLv9 || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlag9;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNotice9;
+        _companionTechniqueLearnPending = [];
+        if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); _companionTechniqueLearnTimer = null; }
+        var _pass9 = !_visibleWhileModal9;
+        showToast("[v0.58] 他モーダル中延期\nmodalOpen中visible=" + _visibleWhileModal9 + "\n" + (_pass9 ? "PASS ✅ 延期" : "FAIL ❌ 強制表示"));
+      };
+      document.getElementById("btn-debug-v58-notice-not-needed").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        var _prevLvA = (state.companionLevels["juritani"] || {}).level;
+        var _prevFlagA = !!state.companionGearRewardFlags["critical_bracelet"];
+        var _prevNoticeA = (state.companionTechniqueLearnedNotices || {})["juritani"];
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = false; // 演出未確認
+        // unlock=true, notice=false でもisCompanionTechniqueUnlockedはtrueを返すことを確認
+        var _unlockA = isCompanionTechniqueUnlocked("juritani");
+        // 復元
+        state.companionLevels["juritani"].level = _prevLvA || 1;
+        state.companionGearRewardFlags["critical_bracelet"] = _prevFlagA;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNoticeA;
+        var _passA = (_unlockA === true);
+        showToast("[v0.58] notice未確認でも技使用可\nnotice=false + unlock=" + _unlockA + "\n" + (_passA ? "PASS ✅ 技使用可能" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-save-count").onclick = function () {
+        var _saveCount = 0;
+        var _origSave = saveGame;
+        saveGame = function () { _saveCount++; _origSave(); };
+        // close時に1回だけ: 演出済みをtrueにしてsave
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        var _prevNoticeSC = state.companionTechniqueLearnedNotices["juritani"];
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = ["juritani"];
+        _companionTechniqueLearnVisible = true;
+        closeCompanionTechniqueLearnModal();
+        var _finalCount = _saveCount;
+        saveGame = _origSave;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNoticeSC;
+        _companionTechniqueLearnPending = [];
+        _companionTechniqueLearnVisible = false;
+        showToast("[v0.58] saveGame回数\nclose時save=" + _finalCount + "\n" + (_finalCount === 1 ? "PASS ✅ 1回" : "FAIL ❌ " + _finalCount + "回"));
+      };
+      document.getElementById("btn-debug-v58-close-10").onclick = function () {
+        var _closeCount = 0;
+        var _saveCountB = 0;
+        var _origSaveB = saveGame;
+        saveGame = function () { _saveCountB++; _origSaveB(); };
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        var _prevNoticeB = state.companionTechniqueLearnedNotices["juritani"];
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = ["juritani"];
+        _companionTechniqueLearnVisible = true;
+        for (var _cb = 0; _cb < 10; _cb++) {
+          closeCompanionTechniqueLearnModal();
+          _closeCount++;
+        }
+        var _finalSaveB = _saveCountB;
+        var _finalNoticeB = !!(state.companionTechniqueLearnedNotices["juritani"]);
+        saveGame = _origSaveB;
+        state.companionTechniqueLearnedNotices["juritani"] = _prevNoticeB;
+        _companionTechniqueLearnPending = [];
+        _companionTechniqueLearnVisible = false;
+        var _passB = (_finalSaveB === 1 && _finalNoticeB === true);
+        showToast("[v0.58] close10連打\nclose=" + _closeCount + " save=" + _finalSaveB + " notice=" + _finalNoticeB + "\n" + (_passB ? "PASS ✅ save1回" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v58-render-10").onclick = function () {
+        var _saveCountC = 0;
+        var _origSaveC = saveGame;
+        saveGame = function () { _saveCountC++; _origSaveC(); };
+        var _prevVisibleC = _companionTechniqueLearnVisible;
+        var _prevPendingC = _companionTechniqueLearnPending.slice();
+        for (var _rc = 0; _rc < 10; _rc++) {
+          consumePendingCompanionTechniqueLearnNotice();
+        }
+        saveGame = _origSaveC;
+        _companionTechniqueLearnVisible = _prevVisibleC;
+        _companionTechniqueLearnPending = _prevPendingC;
+        showToast("[v0.58] render×10多重表示\nsave=" + _saveCountC + " visible=" + _companionTechniqueLearnVisible + "\n" + (_saveCountC === 0 ? "PASS ✅ save0回" : "FAIL ❌ save=" + _saveCountC));
+      };
+      document.getElementById("btn-debug-v58-newgame-state").onclick = function () {
+        var _notices = state.companionTechniqueLearnedNotices || {};
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        var _allFalse = true;
+        for (var _ng = 0; _ng < _cids.length; _ng++) {
+          if (_notices[_cids[_ng]] !== false) { _allFalse = false; }
+        }
+        var _pendEmpty = (_companionTechniqueLearnPending.length === 0);
+        var _notVisible = !_companionTechniqueLearnVisible;
+        showToast("[v0.58] newGame初期状態\nnotices全false=" + _allFalse + " pending空=" + _pendEmpty + " visible=false=" + _notVisible + "\n" + (_allFalse && _pendEmpty && _notVisible ? "PASS ✅" : "要確認"));
+      };
+      document.getElementById("btn-debug-v58-show-direct").onclick = function () {
+        ensureCompanionGearState();
+        if (!state.companionLevels) { state.companionLevels = {}; }
+        if (!state.companionGearRewardFlags) { state.companionGearRewardFlags = {}; }
+        state.companionLevels["juritani"] = { level: 25, exp: 0, nextExp: 265 };
+        state.companionGearRewardFlags["critical_bracelet"] = true;
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices["juritani"] = false;
+        _companionTechniqueLearnPending = [];
+        _companionTechniqueLearnVisible = false;
+        queueCompanionTechniqueLearnNotice("juritani");
+        closeModal("settings-modal");
+        setTimeout(function () { consumePendingCompanionTechniqueLearnNotice(); }, 200);
+        showToast("[v0.58] ジュリタニ習得演出を表示中...");
+      };
+      document.getElementById("btn-debug-v58-reset-notices").onclick = function () {
+        if (!state.companionTechniqueLearnedNotices) { state.companionTechniqueLearnedNotices = {}; }
+        state.companionTechniqueLearnedNotices = { juritani: false, shurittani: false, norio: false, harumi: false };
+        _companionTechniqueLearnPending = [];
+        _companionTechniqueLearnVisible = false;
+        if (_companionTechniqueLearnTimer) { clearTimeout(_companionTechniqueLearnTimer); _companionTechniqueLearnTimer = null; }
+        _companionTechniqueLearnCloseLock = false;
+        saveGame();
+        showToast("[v0.58] notice全リセット ✅\n4人 false / pending空 / visible=false\n（再テスト可能状態）");
+      };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -15095,7 +15638,8 @@
         playerName: state.playerName || "", // §126 v0.49: 主人公名
         normalReturnX: state.normalReturnX || 2, // §129 v0.51
         normalReturnY: state.normalReturnY || 4, // §129 v0.51
-        stageWarpPlazaIntroduced: !!state.stageWarpPlazaIntroduced // §131 v0.51.2: ワープ広場初回到達フラグ
+        stageWarpPlazaIntroduced: !!state.stageWarpPlazaIntroduced, // §131 v0.51.2: ワープ広場初回到達フラグ
+        companionTechniqueLearnedNotices: state.companionTechniqueLearnedNotices || {} // §139 v0.58: 仲間わざ習得演出済みフラグ
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -15244,6 +15788,19 @@
       // §135 v0.56: 旧セーブ修復 — ch3演出済み+s5+最終未完了 かつ 通知未表示 → pending登録（次renderで消費）
       if (!state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryUnlocked()) {
         _pendingFinalCompanionStoryUnlockNotice = true;
+      }
+      // §139 v0.58: 仲間わざ習得演出済みフラグ（旧セーブはundefined→{}補完・never-demote）
+      state.companionTechniqueLearnedNotices = data.companionTechniqueLearnedNotices || {};
+      var _techLearnFlagChanged = normalizeCompanionTechniqueLearnedNotices();
+      if (_techLearnFlagChanged) { _storyFlagChanged = true; }
+      // §139 v0.58: 旧セーブ修復 — unlock済み+notice false → load後safe timingで演出表示
+      // （load中にモーダル表示禁止のためpending登録のみ。renderField()で消費する）
+      var _techNoticeOrder = ["juritani", "shurittani", "norio", "harumi"];
+      for (var _tno = 0; _tno < _techNoticeOrder.length; _tno++) {
+        var _tnocid = _techNoticeOrder[_tno];
+        if (isCompanionTechniqueUnlocked(_tnocid) && !state.companionTechniqueLearnedNotices[_tnocid]) {
+          queueCompanionTechniqueLearnNotice(_tnocid);
+        }
       }
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）
       if ((_prevGearVer < 3 && state.companionGearVersion >= 3) || _reconciled || _storyFlagChanged || _storyRescued || _nameChanged || _partyChanged) { saveGame(); } // §114 / §115 / §126 / §128
