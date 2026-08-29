@@ -283,5 +283,6 @@ https://rokushakai.github.io/ultimate-gorilla/?debug=1
 - **v0.57 追加**: 仲間装備ショップデバッグ（ショップ状態一覧・購入テスト・報酬ロック確認・G不足ブロック確認）
 - **v0.57.1 追加**: ショップ監査デバッグ（スターター経路監査・whitelist DOM・報酬除外確認・境界値・連打・save/load・reconcile等16本）
 - **v0.58 追加**: 仲間わざ習得演出デバッグ（データ確認・解放境界値・パターンA/B・旧セーブ修復・4件同時queue・モーダル遅延・save回数・close連打・render連打・newgame状態・直接表示・フラグリセット等18本）
+- **v0.59 追加**: ファイルBGMデバッグ（BGM状態確認・4cue各MP3再生・切替確認・stopBGMHard×10・cue10連打・file失敗fallback・stale race・二重fallback防止・mute・volume・Audio instance増殖確認・fallback後復帰・バックエンド確認等20本）
 
 通常URLでは表示されません。詳細は [GAME_DESIGN.md §26](GAME_DESIGN.md) を参照。

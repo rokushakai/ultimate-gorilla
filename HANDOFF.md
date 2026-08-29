@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.58** |
+| 現在バージョン | **v0.59** |
 | ブランチ | main |
 
 ---
@@ -79,6 +79,19 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.59] uranawanaii ファイルBGM再生基盤**（§140）
+  - **`BGM_FILE_DATA`**: cue→MP3パス中央定義（4件）
+  - **`_bgmFileAudio`**: HTMLAudioElement 1個再利用（preload="none"・loop=true・vol=0.45）
+  - **`_bgmFileGeneration`**: stale callback防止世代カウンタ（stopBGMHardで増加）
+  - **`_bgmBackend`**: 現在バックエンド（"file"/"generated"/"none"）
+  - **`_startFileBGM(type, capturedFileGen)`**: ファイルBGM再生試行。onerror+play().catch()両対応。fallback1回限り
+  - **`_doGeneratedFallback(type, capturedFileGen)`**: 生成BGMへのfallback（stale・cue変更チェック付き）
+  - **`startBGM(type)` 変更**: BGM_FILE_DATAにあるcueはファイルBGM優先。なければ生成BGM
+  - **`stopBGMHard()` 拡張**: `_bgmFileAudio.pause()` / `_bgmFileGeneration++` / `_bgmBackend="none"` 追加（既存責務維持）
+  - **4MP3 Git追加**: field(3.67MB) / field_clear(3.96MB) / battle(2.85MB) / ending(4.32MB) 合計14.8MB
+  - **デバッグ20本（§140）**: `btn-debug-v59-*`
+  - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
+  - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
 - **[v0.58] 仲間わざ習得演出**（§139）
   - **`state.companionTechniqueLearnedNotices`**: 4人分の演出済み永続フラグ（never-demote・saveGame/loadGame）
   - **`normalizeCompanionTechniqueLearnedNotices()`**: 旧セーブ補完（never-demote）

@@ -79,4 +79,4 @@ Get-ChildItem "C:\projects\ultimate-gorilla\assets\audio\bgm\uranawanaii" | Sele
 指定フォルダへ全音源を配置しました
 ```
 
-v0.52.1 で実際の BGM 再生基盤（HTMLAudioElement または AudioBuffer による再生）を実装します。
+v0.59 (§140) で BGM 再生基盤（HTMLAudioElement による再生）を実装済み。4ファイルすべてGit管理対象。

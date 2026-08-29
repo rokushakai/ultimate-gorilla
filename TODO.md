@@ -22,6 +22,25 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.59 — uranawanaii ファイルBGM再生基盤 (§140)
+
+- **`BGM_FILE_DATA`**: cue→MP3ファイルパスの中央定義（4件） ✅
+- **`_bgmFileAudio`**: HTMLAudioElement 1個再利用 ✅
+- **`_bgmFileGeneration`**: stale callback防止世代カウンタ ✅
+- **`_bgmBackend`**: バックエンド状態（"file"/"generated"/"none"） ✅
+- **`BGM_FILE_BASE_VOLUME = 0.45`**: ファイルBGM初期音量定数 ✅
+- **`_startFileBGM()`**: ファイルBGM再生試行・fallback統合 ✅
+- **`_doGeneratedFallback()`**: 生成BGMへのfallback ✅
+- **`startBGM()`**: ファイルBGM優先・失敗時生成BGMへfallback ✅
+- **`stopBGMHard()`**: ファイルBGM停止追加（既存責務維持） ✅
+- **4MP3 Git追加**: field/field_clear/battle/ending 合計14.8MB ✅
+- **デバッグ20本（§140）**: btn-debug-v59-* ✅
+- **生成BGM・BGM切替条件・save schema: 変更なし** ✅
+
+旧 v0.52.1「uranawanaii BGMファイル再生基盤」は v0.59 で実装済み。
+
+---
+
 ### Version 0.58 — 仲間わざ習得演出 (§139)
 
 - **`state.companionTechniqueLearnedNotices`** 永続フラグ（4キー・never-demote・save/load） ✅
@@ -155,13 +174,6 @@
 ---
 
 ## 🔲 次の実装
-
-### Version 0.52.1 — uranawanaii BGMファイル再生基盤（音源配置後に着手）
-
-- `startBGM(type)` にファイル再生分岐を追加
-- HTMLAudioElement または AudioBuffer でのループ再生基盤を実装
-- 読み込み失敗時は既存 BGM_DATA 生成音にフォールバック
-- 音源ファイル配置後に着手
 
 ---
 

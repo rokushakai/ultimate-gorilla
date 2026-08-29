@@ -8059,3 +8059,99 @@ unlock済み + notice key欠損 → loadGame内pending登録 → renderField()�
 | btn-debug-v58-newgame-state | newGame初期状態確認 |
 | btn-debug-v58-show-direct | 習得演出直接表示（ジュリタニ） |
 | btn-debug-v58-reset-notices | notice全リセット（再テスト用） |
+
+---
+
+## §140 v0.59 — uranawanaii ファイルBGM再生基盤
+
+**[実装済み v0.59]**
+
+### 目的
+
+ゲームの4種BGM cueについて、uranawanaii既存楽曲のMP3音源を優先再生する。
+MP3の読み込み・再生に失敗した場合は、既存JavaScript生成BGMへ自動fallback。
+
+### BGM cue → ファイル対応
+
+| cue名 | ファイル名 | 場面 | loop |
+|---|---|---|---|
+| `field` | `uranawanaii_field.mp3` | 通常フィールド（クリア前） | あり |
+| `fieldClear` | `uranawanaii_field_clear.mp3` | クリア後フィールド | あり |
+| `battle` | `uranawanaii_battle.mp3` | 全戦闘共通 | あり |
+| `ending` | `uranawanaii_ending.mp3` | エンディング5ページ中 | あり |
+
+### 格納場所
+
+Windows: `C:\projects\ultimate-gorilla\assets\audio\bgm\uranawanaii\`
+相対パス: `./assets/audio/bgm/uranawanaii/`（GitHub Pages基準）
+
+### 実装方針
+
+- HTMLAudioElement 1個（`_bgmFileAudio`）を再利用。cue切替時はsrcを差し替える
+- `preload="none"`: 必要時のみload。4曲同時DL禁止
+- `loop=true`: 4cueすべて
+- `BGM_FILE_BASE_VOLUME = 0.45`: 初期音量
+- `BGM_FILE_DATA`: cue→srcの中央定義（script.js内定数）
+
+### startBGM拡張（§140）
+
+```
+startBGM(type)
+→ BGM_FILE_DATA[type]が存在する → _startFileBGM(type, capturedFileGen)
+  → play成功 → _bgmBackend = "file"
+  → play/load失敗 → _doGeneratedFallback → _bgmBackend = "generated"
+→ BGM_FILE_DATA[type]なし → 既存生成BGMを直接使用
+```
+
+### stopBGMHard拡張（§140）
+
+既存責務（session invalidate・timer clear・node stop）をすべて維持したうえで追加:
+- `_bgmFileGeneration++`: stale callback防止
+- `_bgmFileAudio.pause()` / `currentTime=0`: file BGM停止
+- `_bgmBackend = "none"` / `_bgmFileType = null`: backend reset
+
+### race condition防止
+
+- `capturedFileGen`: startBGM時点の`_bgmFileGeneration`をキャプチャ
+- 非同期callback内で `capturedFileGen !== _bgmFileGeneration` をチェックし古いsessionを棄却
+- `bgmCurrentType !== type` チェックで切替後のcueへの影響を防止
+
+### fallback設計
+
+- 1 start attempt = 最大1 fallback（`_fbDone`フラグ）
+- `onerror` + `play().catch()` 両方対応（iOSではどちらかのみ発火する場合あり）
+- ファイルBGMと生成BGMを同時再生しない
+
+### 変更しなかったもの
+
+- `BGM_DATA`（生成BGM音程・vol・waveType）
+- `updateBGM()`のcall site（戦闘/フィールド/ending各切替タイミング）
+- `getFieldBgmType()`
+- BGM cue切替条件
+- save data schema（BGM backend状態は永続化しない）
+- crossfade・intro+loop・ステージ別BGM・boss専用BGM
+
+### デバッグ（§140・20本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v59-bgm-status | BGM現在状態確認（cue/backend/fileGen/nodes等） |
+| btn-debug-v59-file-mapping | cue→file mapping確認 |
+| btn-debug-v59-file-field | field MP3再生確認 |
+| btn-debug-v59-file-field-clear | fieldClear MP3再生確認 |
+| btn-debug-v59-file-battle | battle MP3再生確認 |
+| btn-debug-v59-file-ending | ending MP3再生確認 |
+| btn-debug-v59-field-battle-field | field→battle→field切替確認 |
+| btn-debug-v59-fieldclear-path | fieldClear→battle→fieldClear確認 |
+| btn-debug-v59-ending-field | ending→field切替確認 |
+| btn-debug-v59-stop-hard-10 | stopBGMHard×10確認 |
+| btn-debug-v59-rapid-switch-10 | cue切替10連打確認 |
+| btn-debug-v59-file-failure | file失敗→generated fallback確認 |
+| btn-debug-v59-stale-race | stale error無視確認 |
+| btn-debug-v59-double-fallback | 二重fallback防止確認 |
+| btn-debug-v59-mute-off | BGM OFF確認 |
+| btn-debug-v59-mute-on | BGM OFF→ON再開確認 |
+| btn-debug-v59-volume-sync | volume同期確認 |
+| btn-debug-v59-audio-count | Audio instance増殖なし確認 |
+| btn-debug-v59-fallback-restore | generated fallback後復帰確認 |
+| btn-debug-v59-backend | バックエンド確認（file/generated/none） |

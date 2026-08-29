@@ -1078,6 +1078,19 @@
   var activeBgmTimers = []; // 追跡中BGMタイマーID配列。stopBGMHardで全clearTimeout(v0.8.6.3 §39)
   var bgmMasterGain = null; // 全BGMノードの共通出力先GainNode。stopBGMで切断→即消音(v0.8.6.2 §38)
 
+  // §140 v0.59: ファイルBGM再生基盤 — HTMLAudioElement 1個再利用でMP3を管理
+  var _bgmFileAudio = null;        // BGM専用HTMLAudioElement（1個・cue切替でsrcを差し替え再利用）
+  var _bgmFileType = null;         // 現在ファイル再生を試みているcue名
+  var _bgmFileGeneration = 0;      // ファイルBGM世代カウンタ（stopBGMHardで増加→stale callback防止）
+  var _bgmBackend = "none";        // 現在有効なバックエンド: "file" | "generated" | "none"
+  var BGM_FILE_BASE_VOLUME = 0.45; // ファイルBGM初期音量（0〜1）
+  var BGM_FILE_DATA = {
+    field:      { src: "./assets/audio/bgm/uranawanaii/uranawanaii_field.mp3",       loop: true },
+    fieldClear: { src: "./assets/audio/bgm/uranawanaii/uranawanaii_field_clear.mp3", loop: true },
+    battle:     { src: "./assets/audio/bgm/uranawanaii/uranawanaii_battle.mp3",       loop: true },
+    ending:     { src: "./assets/audio/bgm/uranawanaii/uranawanaii_ending.mp3",       loop: true }
+  };
+
   // 設定画面の「歩く速度」: 十字キーを押しっぱなしにした時の移動間隔(ms)
   var WALK_SPEED_MS = { slow: 380, normal: 220, fast: 120 };
 
@@ -9516,6 +9529,28 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v58-newgame-state" style="border-color:#55efc4;color:#55efc4;">&#x1F195; newGame初期状態確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v58-show-direct" style="border-color:#e17055;color:#e17055;">&#x2728; 習得演出直接表示（ジュリタニ）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v58-reset-notices" style="border-color:#e17055;color:#e17055;">&#x1F504; notice全リセット（再テスト用）</button>';
+      // §140 v0.59: ファイルBGM再生基盤デバッグ（20本）
+      html += '<p class="small" style="color:#74b9ff;margin-top:8px;">&#x1F3B5; v0.59 ファイルBGM再生基盤 (§140)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-bgm-status" style="border-color:#74b9ff;color:#74b9ff;">&#x1F4CA; BGM現在状態確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-mapping" style="border-color:#74b9ff;color:#74b9ff;">&#x1F5C2; cue&#x2192;file mapping確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-field" style="border-color:#74b9ff;color:#74b9ff;">&#x1F3B5; field MP3再生確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-field-clear" style="border-color:#ffd166;color:#ffd166;">&#x1F31F; fieldClear MP3再生確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-battle" style="border-color:#ff7675;color:#ff7675;">&#x2694;&#xFE0F; battle MP3再生確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-ending" style="border-color:#a29bfe;color:#a29bfe;">&#x1F3AC; ending MP3再生確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-field-battle-field" style="border-color:#74b9ff;color:#74b9ff;">&#x1F501; field&#x2192;battle&#x2192;field切替確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-fieldclear-path" style="border-color:#ffd166;color:#ffd166;">&#x1F501; fieldClear&#x2192;battle&#x2192;fieldClear確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-ending-field" style="border-color:#a29bfe;color:#a29bfe;">&#x1F3AC; ending&#x2192;field切替確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-stop-hard-10" style="border-color:#ff7675;color:#ff7675;">&#x1F534; stopBGMHard&#xD7;10確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-rapid-switch-10" style="border-color:#ff7675;color:#ff7675;">&#x1F504; cue切替10連打確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-file-failure" style="border-color:#e17055;color:#e17055;">&#x1F4A5; file失敗&#x2192;generated fallback確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-stale-race" style="border-color:#e17055;color:#e17055;">&#x23F1; stale error無視確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-double-fallback" style="border-color:#e17055;color:#e17055;">&#x1F6AB; 二重fallback防止確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-mute-off" style="border-color:#b2bec3;color:#b2bec3;">&#x1F507; BGM OFF確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-mute-on" style="border-color:#b2bec3;color:#b2bec3;">&#x1F50A; BGM OFF&#x2192;ON再開確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-volume-sync" style="border-color:#55efc4;color:#55efc4;">&#x1F4CA; volume同期確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-audio-count" style="border-color:#55efc4;color:#55efc4;">&#x1F522; Audio instance増殖なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-fallback-restore" style="border-color:#55efc4;color:#55efc4;">&#x1F504; generated fallback後復帰確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v59-backend" style="border-color:#74b9ff;color:#74b9ff;">&#x1F4BB; バックエンド確認（file/generated/none）</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -13265,6 +13300,219 @@
         saveGame();
         showToast("[v0.58] notice全リセット ✅\n4人 false / pending空 / visible=false\n（再テスト可能状態）");
       };
+      // §140 v0.59: ファイルBGM再生基盤デバッグonclick（20本）
+      document.getElementById("btn-debug-v59-bgm-status").onclick = function () {
+        var fi = _bgmFileAudio;
+        var lines = [
+          "[v0.59] BGM現在状態",
+          "cue: " + (bgmCurrentType || "none"),
+          "backend: " + _bgmBackend,
+          "fileGen: " + _bgmFileGeneration,
+          "sessionId: " + bgmSessionId,
+          "generation: " + bgmGeneration,
+          "stopFlag: " + bgmStopFlag,
+          "generatedNodes: " + activeBgmNodes.length,
+          "generatedTimers: " + activeBgmTimers.length,
+          "file.src: " + (fi ? (fi.src ? fi.src.split("/").pop() : "none") : "null"),
+          "file.paused: " + (fi ? fi.paused : "null"),
+          "file.currentTime: " + (fi ? fi.currentTime.toFixed(2) : "null"),
+          "file.duration: " + (fi ? (isNaN(fi.duration) ? "NaN" : fi.duration.toFixed(2)) : "null"),
+          "file.readyState: " + (fi ? fi.readyState : "null"),
+          "file.loop: " + (fi ? fi.loop : "null"),
+          "file.volume: " + (fi ? fi.volume.toFixed(2) : "null")
+        ];
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v59-file-mapping").onclick = function () {
+        var keys = ["field", "fieldClear", "battle", "ending"];
+        var lines = ["[v0.59] BGM_FILE_DATA 4件"];
+        for (var _ki = 0; _ki < keys.length; _ki++) {
+          var _k = keys[_ki];
+          var _d = BGM_FILE_DATA[_k];
+          lines.push(_k + ": " + (_d ? _d.src.split("/").pop() + " loop=" + _d.loop : "undefined"));
+        }
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v59-file-field").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("field");
+        setTimeout(function () {
+          showToast("[v0.59] field MP3\nbackend=" + _bgmBackend + " cue=" + bgmCurrentType);
+          renderSettingsBody();
+        }, 800);
+      };
+      document.getElementById("btn-debug-v59-file-field-clear").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("fieldClear");
+        setTimeout(function () {
+          showToast("[v0.59] fieldClear MP3\nbackend=" + _bgmBackend + " cue=" + bgmCurrentType);
+          renderSettingsBody();
+        }, 800);
+      };
+      document.getElementById("btn-debug-v59-file-battle").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("battle");
+        setTimeout(function () {
+          showToast("[v0.59] battle MP3\nbackend=" + _bgmBackend + " cue=" + bgmCurrentType);
+          renderSettingsBody();
+        }, 800);
+      };
+      document.getElementById("btn-debug-v59-file-ending").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("ending");
+        setTimeout(function () {
+          showToast("[v0.59] ending MP3\nbackend=" + _bgmBackend + " cue=" + bgmCurrentType);
+          renderSettingsBody();
+        }, 800);
+      };
+      document.getElementById("btn-debug-v59-field-battle-field").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("field");
+        setTimeout(function () {
+          var _fb1 = _bgmBackend + "/" + bgmCurrentType;
+          startBGM("battle");
+          setTimeout(function () {
+            var _fb2 = _bgmBackend + "/" + bgmCurrentType;
+            startBGM("field");
+            setTimeout(function () {
+              var _fb3 = _bgmBackend + "/" + bgmCurrentType;
+              showToast("[v0.59] field->battle->field\n1: " + _fb1 + "\n2: " + _fb2 + "\n3: " + _fb3 + "\nnodes=" + activeBgmNodes.length + " timers=" + activeBgmTimers.length);
+              renderSettingsBody();
+            }, 600);
+          }, 400);
+        }, 400);
+      };
+      document.getElementById("btn-debug-v59-fieldclear-path").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        var _origCleared = state.gameCleared;
+        state.gameCleared = true;
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("fieldClear");
+        setTimeout(function () {
+          var _fb1 = _bgmBackend + "/" + bgmCurrentType;
+          startBGM("battle");
+          setTimeout(function () {
+            var _fb2 = _bgmBackend + "/" + bgmCurrentType;
+            updateBGM(getFieldBgmType());
+            setTimeout(function () {
+              var _fb3 = _bgmBackend + "/" + bgmCurrentType;
+              showToast("[v0.59] fieldClear->battle->fieldClear\n1: " + _fb1 + "\n2: " + _fb2 + "\n3: " + _fb3 + "\nPASS: " + (bgmCurrentType === "fieldClear" ? "YES" : "NO(got:" + bgmCurrentType + ")"));
+              state.gameCleared = _origCleared;
+              renderSettingsBody();
+            }, 600);
+          }, 400);
+        }, 400);
+      };
+      document.getElementById("btn-debug-v59-ending-field").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        stopBGMHard(); startBGM("ending");
+        setTimeout(function () {
+          var _fb1 = _bgmBackend + "/" + bgmCurrentType;
+          updateBGM(getFieldBgmType());
+          setTimeout(function () {
+            showToast("[v0.59] ending->field\nending: " + _fb1 + "\nfield: " + _bgmBackend + "/" + bgmCurrentType);
+            renderSettingsBody();
+          }, 600);
+        }, 400);
+      };
+      document.getElementById("btn-debug-v59-stop-hard-10").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        startBGM("field");
+        var _ex = 0;
+        for (var _si = 0; _si < 10; _si++) { try { stopBGMHard(); } catch (e) { _ex++; } }
+        var _fi = _bgmFileAudio;
+        showToast("[v0.59] stopBGMHard×10\nexceptions=" + _ex + "\nfile.paused=" + (_fi ? _fi.paused : "null") + "\nbackend=" + _bgmBackend + "\nnodes=" + activeBgmNodes.length + "\nPASS: " + (_ex === 0 ? "YES" : "NO"));
+      };
+      document.getElementById("btn-debug-v59-rapid-switch-10").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        var _cues = ["field", "battle", "fieldClear", "ending", "field", "battle", "field", "ending", "battle", "field"];
+        for (var _ci = 0; _ci < _cues.length; _ci++) { updateBGM(_cues[_ci]); }
+        setTimeout(function () {
+          showToast("[v0.59] cue10連打\nfinal cue=" + bgmCurrentType + "\nbackend=" + _bgmBackend + "\nnodes=" + activeBgmNodes.length + "\ntimers=" + activeBgmTimers.length);
+          renderSettingsBody();
+        }, 800);
+      };
+      document.getElementById("btn-debug-v59-file-failure").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        var _origSrc = BGM_FILE_DATA.field.src;
+        BGM_FILE_DATA.field.src = "./assets/audio/bgm/uranawanaii/NOTEXIST_test_v59.mp3";
+        stopBGMHard(); startBGM("field");
+        setTimeout(function () {
+          BGM_FILE_DATA.field.src = _origSrc;
+          showToast("[v0.59] file失敗fallback\nbackend=" + _bgmBackend + "\nnodes=" + activeBgmNodes.length + " timers=" + activeBgmTimers.length + "\nPASS: " + (_bgmBackend === "generated" ? "YES(generated)" : "backend=" + _bgmBackend + " (none=ロード中の可能性)"));
+          renderSettingsBody();
+        }, 2000);
+      };
+      document.getElementById("btn-debug-v59-stale-race").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        startBGM("field");
+        startBGM("battle"); // 即切替（fieldのstale→battleに影響しないことを確認）
+        setTimeout(function () {
+          showToast("[v0.59] stale race確認\ncue=" + bgmCurrentType + "\nbackend=" + _bgmBackend + "\nPASS: " + (bgmCurrentType === "battle" ? "YES" : "NO(cue=" + bgmCurrentType + ")"));
+          renderSettingsBody();
+        }, 1000);
+      };
+      document.getElementById("btn-debug-v59-double-fallback").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        var _origSrc2 = BGM_FILE_DATA.battle.src;
+        BGM_FILE_DATA.battle.src = "./assets/audio/bgm/NOTEXIST_v59.mp3";
+        stopBGMHard(); startBGM("battle");
+        setTimeout(function () {
+          BGM_FILE_DATA.battle.src = _origSrc2;
+          showToast("[v0.59] 二重fallback防止\nbackend=" + _bgmBackend + "\nnodes=" + activeBgmNodes.length + " timers=" + activeBgmTimers.length + "\nPASS: " + (activeBgmTimers.length <= 1 ? "YES(timers<=" + activeBgmTimers.length + ")" : "NO(timers=" + activeBgmTimers.length + ")"));
+          renderSettingsBody();
+        }, 2000);
+      };
+      document.getElementById("btn-debug-v59-mute-off").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        startBGM("field");
+        setTimeout(function () {
+          bgmEnabled = false;
+          updateBGM(getFieldBgmType());
+          saveSoundSettings();
+          var _fi2 = _bgmFileAudio;
+          showToast("[v0.59] BGM OFF\nbackend=" + _bgmBackend + "\ncue=" + bgmCurrentType + "\nfile.paused=" + (_fi2 ? _fi2.paused : "null") + "\nnodes=" + activeBgmNodes.length);
+          renderSettingsBody();
+        }, 500);
+      };
+      document.getElementById("btn-debug-v59-mute-on").onclick = function () {
+        soundEnabled = true; bgmEnabled = false; stopBGMHard(); saveSoundSettings();
+        setTimeout(function () {
+          bgmEnabled = true;
+          updateBGM(getFieldBgmType());
+          saveSoundSettings();
+          setTimeout(function () {
+            showToast("[v0.59] BGM OFF->ON\nbackend=" + _bgmBackend + "\ncue=" + bgmCurrentType + "\nnodes=" + activeBgmNodes.length);
+            renderSettingsBody();
+          }, 600);
+        }, 300);
+      };
+      document.getElementById("btn-debug-v59-volume-sync").onclick = function () {
+        var _fi3 = _bgmFileAudio;
+        showToast("[v0.59] volume同期\nBGM_FILE_BASE_VOLUME=" + BGM_FILE_BASE_VOLUME + "\nfile.volume=" + (_fi3 ? _fi3.volume.toFixed(3) : "null") + "\nsoundEnabled=" + soundEnabled + "\nbgmEnabled=" + bgmEnabled);
+      };
+      document.getElementById("btn-debug-v59-audio-count").onclick = function () {
+        var _allAudio = document.querySelectorAll("audio");
+        showToast("[v0.59] Audio instances\n_bgmFileAudio: " + (_bgmFileAudio ? "1個(OK)" : "null(未作成)") + "\ndocument audio: " + _allAudio.length + "件\nPASS: " + (_bgmFileAudio ? "1個のみ" : "まだ未作成"));
+      };
+      document.getElementById("btn-debug-v59-fallback-restore").onclick = function () {
+        soundEnabled = true; bgmEnabled = true; saveSoundSettings();
+        var _origSrc3 = BGM_FILE_DATA.field.src;
+        BGM_FILE_DATA.field.src = "./NOTEXIST_v59.mp3";
+        stopBGMHard(); startBGM("field");
+        setTimeout(function () {
+          var _fb1 = _bgmBackend;
+          BGM_FILE_DATA.field.src = _origSrc3;
+          stopBGMHard(); startBGM("field");
+          setTimeout(function () {
+            showToast("[v0.59] fallback後復帰\n失敗時: " + _fb1 + "\n復帰後: " + _bgmBackend + "\nPASS: " + (_bgmBackend === "file" || _bgmBackend === "none" ? "YES(file play非同期確認中)" : "NO(backend=" + _bgmBackend + ")"));
+            renderSettingsBody();
+          }, 1000);
+        }, 1500);
+      };
+      document.getElementById("btn-debug-v59-backend").onclick = function () {
+        showToast("[v0.59] バックエンド\n_bgmBackend=" + _bgmBackend + "\nbgmCurrentType=" + (bgmCurrentType || "none") + "\n_bgmFileType=" + (_bgmFileType || "none") + "\n_bgmFileGeneration=" + _bgmFileGeneration);
+      };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -16403,6 +16651,15 @@
       } catch (e) {}
       bgmMasterGain = null;
     }
+    // §140 v0.59: ファイルBGMも停止（既存責務を維持したうえで追加。idempotent）
+    _bgmFileGeneration++;
+    _bgmBackend = "none";
+    _bgmFileType = null;
+    if (_bgmFileAudio) {
+      try { _bgmFileAudio.onerror = null; } catch (e) {}
+      try { _bgmFileAudio.pause(); } catch (e) {}
+      try { _bgmFileAudio.currentTime = 0; } catch (e) {}
+    }
     if (DEBUG_MODE) console.log('[BGM] stop hard complete, active nodes after:', activeBgmNodes.length);
   }
 
@@ -16411,17 +16668,92 @@
     stopBGMHard();
   }
 
+  // §140 v0.59: ファイルBGM再生試行。成功→_bgmBackend="file"。失敗→生成BGMへfallback。
+  // capturedFileGen: startBGM呼出し時点の_bgmFileGenerationをキャプチャして渡す（stale check用）
+  function _startFileBGM(type, capturedFileGen) {
+    var fileData = BGM_FILE_DATA[type];
+    if (!fileData) { _doGeneratedFallback(type, capturedFileGen); return; }
+    if (!_bgmFileAudio) {
+      try { _bgmFileAudio = new Audio(); } catch (e) { _doGeneratedFallback(type, capturedFileGen); return; }
+      _bgmFileAudio.preload = "none";
+    }
+    // 前cueのonerrorをクリア（古いsrcの遅延エラーを遮断）
+    try { _bgmFileAudio.onerror = null; } catch (e) {}
+    var _safeVol = (typeof BGM_FILE_BASE_VOLUME === "number" && BGM_FILE_BASE_VOLUME > 0 && BGM_FILE_BASE_VOLUME <= 1) ? BGM_FILE_BASE_VOLUME : 0.45;
+    try {
+      _bgmFileAudio.src = fileData.src;
+      _bgmFileAudio.loop = !!fileData.loop;
+      _bgmFileAudio.volume = _safeVol;
+    } catch (e) { _doGeneratedFallback(type, capturedFileGen); return; }
+    var _fbDone = false; // fallback多重起動防止（1 start attempt = 最大1 fallback）
+    function _onFileError() {
+      if (capturedFileGen !== _bgmFileGeneration) { return; } // stale: 古いセッションのエラー
+      if (bgmCurrentType !== type) { return; }               // cue変更済み
+      if (_fbDone) { return; }                               // 多重起動防止
+      _fbDone = true;
+      if (DEBUG_MODE) { console.warn("[BGM] file load/play error, fallback to generated:", type); }
+      _bgmBackend = "none";
+      try { _bgmFileAudio.onerror = null; } catch (e) {}
+      _doGeneratedFallback(type, capturedFileGen);
+    }
+    try { _bgmFileAudio.onerror = _onFileError; } catch (e) {}
+    var playResult;
+    try { playResult = _bgmFileAudio.play(); } catch (e) { _onFileError(); return; }
+    if (playResult && typeof playResult.then === "function") {
+      playResult.then(function () {
+        if (capturedFileGen !== _bgmFileGeneration) { return; }
+        if (bgmCurrentType !== type) { return; }
+        _bgmBackend = "file";
+        _bgmFileType = type;
+        if (DEBUG_MODE) { console.log("[BGM] file play OK:", type); }
+      });
+      if (typeof playResult["catch"] === "function") {
+        playResult["catch"](function () {
+          if (capturedFileGen !== _bgmFileGeneration) { return; } // stale
+          if (bgmCurrentType !== type) { return; }
+          _onFileError();
+        });
+      }
+    } else {
+      // Promiseなし（旧ブラウザ）: 同期的に成功とみなす
+      if (capturedFileGen === _bgmFileGeneration && bgmCurrentType === type) {
+        _bgmBackend = "file";
+        _bgmFileType = type;
+      }
+    }
+  }
+
+  // §140 v0.59: 生成BGMへfallback（stale確認済みの _onFileError から呼ぶ）
+  function _doGeneratedFallback(type, capturedFileGen) {
+    if (capturedFileGen !== _bgmFileGeneration) { return; }
+    if (bgmCurrentType !== type) { return; }
+    if (!initAudioContext()) { return; }
+    bgmStopFlag = false;
+    _bgmBackend = "generated";
+    var _gs = bgmSessionId;
+    var _gg = bgmGeneration;
+    _scheduleBGMLoop(type, audioCtx.currentTime, _gg, _gs);
+  }
+
   function startBGM(type) {
     if (!soundEnabled || !bgmEnabled) return;
-    if (!initAudioContext()) return;
     if (bgmCurrentType === type) return;
-    if (DEBUG_MODE) console.log('[BGM] play request:', type);
-    stopBGMHard();
+    if (DEBUG_MODE) { console.log("[BGM] play request:", type); }
+    stopBGMHard(); // §140: ファイルBGMも停止（stopBGMHard拡張済み）
     bgmCurrentType = type;
     bgmStopFlag = false;
+    // §140 v0.59: ファイルBGMを優先再生。失敗時は _startFileBGM 内で生成BGMへfallback
+    if (BGM_FILE_DATA[type]) {
+      var capturedFileGen = _bgmFileGeneration;
+      _startFileBGM(type, capturedFileGen);
+      return;
+    }
+    // ファイルBGMが定義されていないcue用（現在は全4cueにファイルあり・将来の追加cue用予備）
+    if (!initAudioContext()) return;
     var session = bgmSessionId;
     var gen = bgmGeneration;
-    if (DEBUG_MODE) console.log('[BGM] new session:', session, type);
+    if (DEBUG_MODE) { console.log("[BGM] new session (generated):", session, type); }
+    _bgmBackend = "generated";
     _scheduleBGMLoop(type, audioCtx.currentTime, gen, session);
   }
 

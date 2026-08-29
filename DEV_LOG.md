@@ -5,6 +5,30 @@
 
 ---
 
+## v0.59 (2026-08-29) — uranawanaii ファイルBGM再生基盤 (§140)
+
+### 設計判断: HTMLAudioElement 1個再利用
+
+4個同時保持ではなく1個のインスタンスを再利用。cue切替時はsrcを差し替える。理由: iPhoneメモリ節約・同時再生防止・stop処理単純化。
+
+### stale race防止
+
+startBGM呼出し時点の `_bgmFileGeneration` をキャプチャ（`capturedFileGen`）。非同期callback内で `capturedFileGen !== _bgmFileGeneration` をチェックし、stopBGMHardが挟まった古いcallbackを棄却。`bgmCurrentType !== type` チェックで別cueへの影響も防止。
+
+### fallback1回限り
+
+`_fbDone` フラグで `onerror` と `play().catch()` の両方が発火しても生成BGMを2重起動しない。iPhoneではどちらか一方のみ発火する場合があるため両方対応。
+
+### stopBGMHard責務維持
+
+既存の session invalidate・timer clear・node stop/disconnect・masterGain処理をすべて維持し、末尾に file audio停止処理を追加。何度呼んでも安全なidempotent関数を維持。
+
+### visibilitychange・autoplay
+
+visibilitychangeハンドラを追加しない（BGM_ASSET_GUIDE.md §22の方針通り。ブラウザの自動suspend委任）。autoplay rejectionはplay().catchで受け取り生成BGMへfallback。ゲーム自体は停止しない。
+
+---
+
 ## v0.58 (2026-08-29) — 仲間わざ習得演出 (§139)
 
 ### 設計判断: unlock-notice分離

@@ -5,6 +5,33 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.59] - 2026-08-29 — uranawanaii ファイルBGM再生基盤 (§140)
+
+### Added
+- `BGM_FILE_DATA`: cue→MP3ファイルパスの中央定義定数（field/fieldClear/battle/ending 各4件）
+- `_bgmFileAudio`: BGM専用HTMLAudioElement（1個再利用）
+- `_bgmFileGeneration`: stale callback防止用世代カウンタ
+- `_bgmBackend`: 現在のバックエンド状態（"file" / "generated" / "none"）
+- `BGM_FILE_BASE_VOLUME = 0.45`: ファイルBGM初期音量定数
+- `_startFileBGM(type, capturedFileGen)`: ファイルBGM再生試行。成功→"file"、失敗→生成BGMへfallback
+- `_doGeneratedFallback(type, capturedFileGen)`: 生成BGMへのfallback処理（stale check付き）
+- `assets/audio/bgm/uranawanaii/` の4MP3をGit管理対象に追加
+- デバッグ20本（§140）: BGM状態確認・各cue再生・切替・fallback・連打・mute・volume等
+
+### Changed
+- `startBGM(type)`: BGM_FILE_DATAが存在するcueはファイルBGMを優先。失敗時は生成BGMへfallback
+- `stopBGMHard()`: ファイルBGMも停止対象に追加（`_bgmFileAudio.pause()`・`_bgmFileGeneration++`）。既存責務は変更なし
+
+### Not Changed
+- `BGM_DATA`・生成BGM音程・oscillator・gain・ループ処理
+- `updateBGM()` / `getFieldBgmType()` / BGM切替タイミング
+- 戦闘開始/終了/ending/フィールドの切替条件
+- save data schema（BGM backend状態は永続化しない）
+- 究極ゴリラ捕獲条件・究極チンパンジー・仲間AI・technique・gear shop・final side story
+- crossfade・intro+loop・ステージ別BGM・boss専用BGM（未実装のまま）
+
+---
+
 ## [0.58] - 2026-08-29 — 仲間わざ習得演出 (§139)
 
 ### Added
