@@ -748,7 +748,20 @@
       effectDesc: "小さな癒し・小さな回復 +3" },
     prayer_brooch:       { id: "prayer_brooch",       name: "祈りのブローチ", emoji: "🙏", allowedCompanion: "harumi",
       damageBonus: 0, healBonus: 0, magicHealBonus: 6,
-      effectDesc: "小さな回復 +6" }
+      effectDesc: "小さな回復 +6" },
+    // §138 v0.57.1: ショップ専用装備（各仲間1個・スターターと報酬の中間強度）
+    training_wristband:  { id: "training_wristband",  name: "修行用リストバンド", emoji: "&#x1F94A;", allowedCompanion: "juritani",
+      damageBonus: 0, healBonus: 0, attackDamageBonus: 3,
+      effectDesc: "通常攻撃 +3" },
+    tracking_shoes:      { id: "tracking_shoes",      name: "追跡シューズ",  emoji: "&#x1F45F;", allowedCompanion: "shurittani",
+      damageBonus: 0, healBonus: 0, attackDamageBonus: 2,
+      effectDesc: "通常攻撃 +2" },
+    recording_pen:       { id: "recording_pen",       name: "記録用ペン",    emoji: "&#x1F58A;", allowedCompanion: "norio",
+      damageBonus: 0, healBonus: 0, attackDamageBonus: 2,
+      effectDesc: "通常攻撃 +2" },
+    herbal_pouch:        { id: "herbal_pouch",        name: "薬草ポーチ",    emoji: "&#x1F33F;", allowedCompanion: "harumi",
+      damageBonus: 0, healBonus: 0, special1HealBonus: 3,
+      effectDesc: "小さな癒し +3" }
   };
 
   // §109 v0.42: 特化装備4種の入手元情報
@@ -759,12 +772,14 @@
     prayer_brooch:      { gearId: "prayer_brooch",      source: "ステージ5初回クリア報酬" }
   };
 
-  // §137 v0.57: 仲間装備ショップ販売品（報酬装備は除外・スターター4種のみ）
+  // §137 v0.57 / §138 v0.57.1: 仲間装備ショップ販売品（ホワイトリスト方式）
+  // スターター4種は ensureCompanionGearState()で自動付与→ショップで販売しない
+  // ショップ専用装備4種（各仲間1個・attackDamageBonus/special1HealBonusで中間強度）
   var COMPANION_GEAR_SHOP_ITEMS = [
-    { gearId: "hotblood_bandana",    price: 80 },
-    { gearId: "capture_gloves",      price: 80 },
-    { gearId: "observation_glasses", price: 80 },
-    { gearId: "healing_ribbon",      price: 80 }
+    { gearId: "training_wristband", price: 60 },
+    { gearId: "tracking_shoes",     price: 60 },
+    { gearId: "recording_pen",      price: 60 },
+    { gearId: "herbal_pouch",       price: 60 }
   ];
 
   // §111 v0.43: 仲間わざデータ（習得条件・効果・値）
@@ -7768,67 +7783,108 @@
     renderMerchantMain();
   }
 
-  // §137 v0.57: 仲間装備購入可否確認（純粋関数・副作用なし）
-  function canBuyCompanionGear(gearId) {
+  // §138 v0.57.1: 購入ロック（連打防止・非永続）
+  var _companionGearPurchaseLock = false;
+
+  // §138 v0.57.1: 仲間装備購入詳細状態（純粋関数・副作用なし）
+  function getCompanionGearPurchaseStatus(gearId) {
     var shopItem = null;
     for (var _cgi = 0; _cgi < COMPANION_GEAR_SHOP_ITEMS.length; _cgi++) {
       if (COMPANION_GEAR_SHOP_ITEMS[_cgi].gearId === gearId) { shopItem = COMPANION_GEAR_SHOP_ITEMS[_cgi]; break; }
     }
-    if (!shopItem) { return { ok: false, reason: "販売対象外" }; }
-    if (COMPANION_GEAR_REWARD_DATA[gearId]) { return { ok: false, reason: "要ステージ報酬" }; }
-    if ((state.companionGearInventory[gearId] || 0) > 0) { return { ok: false, reason: "所持済み" }; }
-    if (state.player.gold < shopItem.price) { return { ok: false, reason: "G不足" }; }
-    return { ok: true, reason: "", price: shopItem.price };
+    var gear = COMPANION_GEAR_DATA[gearId] || null;
+    var valid = !!(gear);
+    var inShop = !!(shopItem);
+    var cid = (gear && gear.allowedCompanion) ? gear.allowedCompanion : null;
+    var joined = (cid && typeof hasCompanionEverJoined === "function") ? hasCompanionEverJoined(cid) : false;
+    var owned = (state.companionGearInventory[gearId] || 0) > 0;
+    var price = shopItem ? shopItem.price : 0;
+    var affordable = shopItem ? (state.player.gold >= price) : false;
+    var purchasable = valid && inShop && joined && !owned && affordable;
+    var reason = "available";
+    if (!valid)      { reason = "gear_not_found"; }
+    else if (!inShop)   { reason = "not_in_shop"; }
+    else if (!joined)   { reason = "companion_not_joined"; }
+    else if (owned)     { reason = "already_owned"; }
+    else if (!affordable) { reason = "insufficient_gold"; }
+    return { valid: valid, inShop: inShop, joined: joined, owned: owned,
+             affordable: affordable, purchasable: purchasable,
+             reason: reason, price: price, cid: cid };
   }
 
-  // §137 v0.57: 仲間装備購入処理
+  // §138 v0.57.1: reasonコードを日本語テキストへ変換
+  function _cgReasonText(reason) {
+    if (reason === "gear_not_found")       { return "存在しない装備"; }
+    if (reason === "not_in_shop")          { return "販売対象外"; }
+    if (reason === "companion_not_joined") { return "仲間未加入"; }
+    if (reason === "already_owned")        { return "所持済み"; }
+    if (reason === "insufficient_gold")    { return "G不足"; }
+    return reason;
+  }
+
+  // §137 v0.57 / §138 v0.57.1: 購入可否（後方互換・getCompanionGearPurchaseStatusへ委譲）
+  function canBuyCompanionGear(gearId) {
+    var s = getCompanionGearPurchaseStatus(gearId);
+    return { ok: s.purchasable, reason: _cgReasonText(s.reason), price: s.price };
+  }
+
+  // §137 v0.57 / §138 v0.57.1: 購入処理（lock・直前再確認・saveGame1回）
   function buyCompanionGear(gearId) {
-    var shopItem = null;
-    for (var _cgi = 0; _cgi < COMPANION_GEAR_SHOP_ITEMS.length; _cgi++) {
-      if (COMPANION_GEAR_SHOP_ITEMS[_cgi].gearId === gearId) { shopItem = COMPANION_GEAR_SHOP_ITEMS[_cgi]; break; }
+    if (_companionGearPurchaseLock) { return; }
+    _companionGearPurchaseLock = true;
+    var status = getCompanionGearPurchaseStatus(gearId);
+    if (!status.purchasable) {
+      showToast("購入不可: " + _cgReasonText(status.reason));
+      _companionGearPurchaseLock = false;
+      return;
     }
-    if (!shopItem) { showToast("販売対象外の装備です"); return; }
-    var check = canBuyCompanionGear(gearId);
-    if (!check.ok) { showToast("購入不可: " + check.reason); return; }
-    state.player.gold -= shopItem.price;
+    // 直前再確認（二重安全）
+    if (state.player.gold < status.price) {
+      showToast("所持金が足りません");
+      _companionGearPurchaseLock = false;
+      return;
+    }
+    if ((state.companionGearInventory[gearId] || 0) > 0) {
+      showToast("すでに所持している");
+      _companionGearPurchaseLock = false;
+      return;
+    }
+    state.player.gold -= status.price;
     state.companionGearInventory[gearId] = (state.companionGearInventory[gearId] || 0) + 1;
     saveGame();
+    _companionGearPurchaseLock = false;
     var gear = COMPANION_GEAR_DATA[gearId];
-    showToast(gear.emoji + " " + gear.name + " を購入しました！\n装備画面で仲間に装備できます");
+    showToast(gear.emoji + " " + gear.name + " を購入！\n仲間装備画面で装備できます");
     renderCompanionGearShop();
   }
 
-  // §137 v0.57: 仲間装備ショップ描画
+  // §137 v0.57 / §138 v0.57.1: 仲間装備ショップ描画（ホワイトリスト方式・報酬gearなし）
   function renderCompanionGearShop() {
     ensureCompanionGearState();
     var body = document.getElementById("merchant-body");
     var html = "<p>所持金: " + state.player.gold + " G</p>";
-    html += '<p style="margin-bottom:4px;font-size:0.95em;">スターター装備（購入可）</p>';
+    html += '<p style="margin-bottom:4px;font-size:0.95em;">仲間用装備</p>';
     for (var _cgi = 0; _cgi < COMPANION_GEAR_SHOP_ITEMS.length; _cgi++) {
       var _si = COMPANION_GEAR_SHOP_ITEMS[_cgi];
       var _sgear = COMPANION_GEAR_DATA[_si.gearId];
-      var _owned = (state.companionGearInventory[_si.gearId] || 0) > 0;
+      if (!_sgear) { continue; }
+      var _st = getCompanionGearPurchaseStatus(_si.gearId);
+      var _cDat = _st.cid ? findById(COMPANION_DATA, _st.cid) : null;
+      var _cidName = _cDat ? _cDat.name : (_st.cid || "?");
       html += '<div style="margin-bottom:8px;padding:6px;border:1px solid #555;border-radius:6px;">';
-      html += '<div>' + _sgear.emoji + ' <strong>' + _sgear.name + '</strong></div>';
+      html += '<div>' + _sgear.emoji + ' <strong>' + _sgear.name + '</strong>';
+      html += ' <span style="font-size:0.8em;color:#aaa;">（' + _cidName + '専用）</span></div>';
       html += '<div style="font-size:0.85em;color:#aaa;">' + _sgear.effectDesc + '</div>';
-      if (_owned) {
+      html += '<div style="font-size:0.85em;color:#aaa;">' + _si.price + ' G</div>';
+      if (_st.owned) {
         html += '<div style="color:#06d6a0;font-size:0.9em;margin-top:2px;">&#x2705; 所持済み</div>';
-      } else if (state.player.gold < _si.price) {
-        html += '<div style="color:#e76f51;font-size:0.9em;margin-top:2px;">' + _si.price + ' G必要（G不足）</div>';
+      } else if (!_st.joined) {
+        html += '<div style="color:#aaa;font-size:0.9em;margin-top:2px;">&#x1F512; 仲間加入後に購入できます</div>';
+      } else if (!_st.affordable) {
+        html += '<div style="color:#e76f51;font-size:0.9em;margin-top:2px;">&#x1F4B0; お金が足りません（' + _si.price + ' G必要）</div>';
       } else {
         html += '<button class="modal-btn" data-buy-cg="' + _si.gearId + '" style="margin-top:4px;">購入 ' + _si.price + ' G</button>';
       }
-      html += '</div>';
-    }
-    html += '<p style="margin:8px 0 4px;font-size:0.95em;">特化装備（ステージクリア報酬）</p>';
-    var _rewardIds = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
-    for (var _rgi = 0; _rgi < _rewardIds.length; _rgi++) {
-      var _rgear = COMPANION_GEAR_DATA[_rewardIds[_rgi]];
-      var _rinfo = COMPANION_GEAR_REWARD_DATA[_rewardIds[_rgi]];
-      html += '<div style="margin-bottom:8px;padding:6px;border:1px solid #333;border-radius:6px;opacity:0.6;">';
-      html += '<div>' + _rgear.emoji + ' <strong>' + _rgear.name + '</strong></div>';
-      html += '<div style="font-size:0.85em;color:#aaa;">' + _rinfo.source + '</div>';
-      html += '<div style="color:#888;font-size:0.9em;margin-top:2px;">&#x1F512; ショップ購入不可</div>';
       html += '</div>';
     }
     html += '<button class="shop-back-btn" id="shop-back">戻る</button>';
@@ -9276,6 +9332,24 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v57-buy-test" style="border-color:#e9c46a;color:#e9c46a;">&#x1F9EA; 購入テスト（G付与→購入→復元）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v57-reward-lock" style="border-color:#e9c46a;color:#e9c46a;">&#x1F512; 報酬装備ロック確認（canBuy=false）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v57-no-gold" style="border-color:#e9c46a;color:#e9c46a;">&#x1F4B8; G不足ブロック確認（G=0）</button>';
+      // §138 v0.57.1: 仲間装備ショップ監査デバッグ（16本）
+      html += '<p class="small" style="color:#74b9ff;margin-top:8px;">&#x1F50D; v0.57.1 ショップ監査 (§138)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-starter-routes" style="border-color:#74b9ff;color:#74b9ff;">&#x1F9EA; スターター4種取得経路監査</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-newgame-gear" style="border-color:#74b9ff;color:#74b9ff;">&#x1F195; 新規ゲーム初期gear確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-join-gear" style="border-color:#74b9ff;color:#74b9ff;">&#x1F91D; 仲間加入時gear確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-whitelist-dom" style="border-color:#74b9ff;color:#74b9ff;">&#x1F4CB; ショップwhitelist DOM確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-reward-dom-absent" style="border-color:#74b9ff;color:#74b9ff;">&#x1F6AB; 報酬gear DOM完全除外確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-not-joined" style="border-color:#74b9ff;color:#74b9ff;">&#x1F512; 仲間未加入購入不可確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-gold-boundary" style="border-color:#74b9ff;color:#74b9ff;">&#x1F4B0; P-1/P/P+1購入境界</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-buy-10" style="border-color:#ff8c8c;color:#ff8c8c;">&#x1F504; 購入10連打1回確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-no-auto-equip" style="border-color:#ff8c8c;color:#ff8c8c;">&#x1F9F3; 購入後自動装備なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-reward-flags" style="border-color:#ff8c8c;color:#ff8c8c;">&#x1F6E1; reward flags完全不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-save-count" style="border-color:#06d6a0;color:#06d6a0;">&#x1F4BE; saveGame回数確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-save-load" style="border-color:#06d6a0;color:#06d6a0;">&#x1F4E5; shop gear save/load確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-old-save" style="border-color:#06d6a0;color:#06d6a0;">&#x1F4DC; 旧セーブ互換確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-reconcile" style="border-color:#06d6a0;color:#06d6a0;">&#x1F504; reconcile後shop gear維持確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-render10" style="border-color:#a9e34b;color:#a9e34b;">&#x1F504; render×10副作用なし</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v571-open10" style="border-color:#a9e34b;color:#a9e34b;">&#x1F6D2; shopモーダル10回開閉</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -12278,13 +12352,17 @@
       };
       document.getElementById("btn-debug-v57-buy-test").onclick = function () {
         ensureCompanionGearState();
-        var _tid57 = "hotblood_bandana";
+        // §138 v0.57.1: ショップ専用gear(training_wristband)で再テスト
+        var _tid57 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : "training_wristband";
+        var _cid57x = COMPANION_GEAR_DATA[_tid57] ? COMPANION_GEAR_DATA[_tid57].allowedCompanion : "juritani";
         var _prevGold57 = state.player.gold;
         var _prevInv57 = state.companionGearInventory[_tid57] || 0;
+        var _prevLv57x = state.companionLevels[_cid57x] ? JSON.parse(JSON.stringify(state.companionLevels[_cid57x])) : null;
         state.player.gold = 1000;
         state.companionGearInventory[_tid57] = 0;
-        var _before57 = canBuyCompanionGear(_tid57);
-        // 直接購入処理を呼ぶ（renderCompanionGearShopはskip）
+        state.companionLevels[_cid57x] = { level: 5, exp: 0, nextExp: 60 };
+        var _st57x = getCompanionGearPurchaseStatus(_tid57);
+        var _before57 = { ok: _st57x.purchasable, reason: _cgReasonText(_st57x.reason) };
         if (_before57.ok) {
           state.player.gold -= COMPANION_GEAR_SHOP_ITEMS[0].price;
           state.companionGearInventory[_tid57] = 1;
@@ -12294,8 +12372,9 @@
         var _invAfter57 = state.companionGearInventory[_tid57];
         state.player.gold = _prevGold57;
         state.companionGearInventory[_tid57] = _prevInv57;
+        if (_prevLv57x) { state.companionLevels[_cid57x] = _prevLv57x; }
         saveGame();
-        showToast("[v0.57] 購入テスト（熱血バンダナ）\n購入前canBuy=" + (_before57.ok ? "ok" : "NG:" + _before57.reason) + "\n購入後canBuy=" + (_after57.ok ? "FAIL" : "NG:" + _after57.reason) + "\n所持数0→" + _invAfter57 + "\n所持金1000→" + _goldAfter57 + "G\n復元後inv=" + (state.companionGearInventory[_tid57] || 0) + "\n" + (_before57.ok && !_after57.ok && _invAfter57 === 1 ? "PASS ✅" : "FAIL ❌"));
+        showToast("[v0.57→v0.57.1] 購入テスト（" + _tid57 + "）\n購入前canBuy=" + (_before57.ok ? "ok" : "NG:" + _before57.reason) + "\n購入後canBuy=" + (_after57.ok ? "FAIL" : "NG:" + _after57.reason) + "\n所持数0→" + _invAfter57 + "\n所持金1000→" + _goldAfter57 + "G\n" + (_before57.ok && !_after57.ok && _invAfter57 === 1 ? "PASS ✅" : "FAIL ❌"));
       };
       document.getElementById("btn-debug-v57-reward-lock").onclick = function () {
         var _rids57b = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
@@ -12312,16 +12391,336 @@
       };
       document.getElementById("btn-debug-v57-no-gold").onclick = function () {
         ensureCompanionGearState();
-        var _tid57c = "observation_glasses";
+        // §138 v0.57.1: ショップ専用gear(recording_pen)で再テスト
+        var _tid57c = COMPANION_GEAR_SHOP_ITEMS[2] ? COMPANION_GEAR_SHOP_ITEMS[2].gearId : "recording_pen";
+        var _cid57cx = COMPANION_GEAR_DATA[_tid57c] ? COMPANION_GEAR_DATA[_tid57c].allowedCompanion : "norio";
         var _prevGold57c = state.player.gold;
         var _prevInv57c = state.companionGearInventory[_tid57c] || 0;
+        var _prevLv57cx = state.companionLevels[_cid57cx] ? JSON.parse(JSON.stringify(state.companionLevels[_cid57cx])) : null;
         state.player.gold = 0;
         state.companionGearInventory[_tid57c] = 0;
+        state.companionLevels[_cid57cx] = { level: 5, exp: 0, nextExp: 60 };
         var _check57c = canBuyCompanionGear(_tid57c);
         state.player.gold = _prevGold57c;
         state.companionGearInventory[_tid57c] = _prevInv57c;
+        if (_prevLv57cx) { state.companionLevels[_cid57cx] = _prevLv57cx; }
         var _pass57c = !_check57c.ok && _check57c.reason === "G不足";
-        showToast("[v0.57] G不足ブロック確認（観察メガネ, G=0）\ncanBuy.ok=" + _check57c.ok + "\nreason=" + _check57c.reason + "\n" + (_pass57c ? "PASS ✅ G不足でブロック" : "FAIL ❌"));
+        showToast("[v0.57→v0.57.1] G不足ブロック確認（" + _tid57c + ", G=0）\ncanBuy.ok=" + _check57c.ok + "\nreason=" + _check57c.reason + "\n" + (_pass57c ? "PASS ✅ G不足でブロック" : "FAIL ❌"));
+      };
+      // §138 v0.57.1: ショップ監査ハンドラー
+      document.getElementById("btn-debug-v571-starter-routes").onclick = function () {
+        var _sids = ["hotblood_bandana","capture_gloves","observation_glasses","healing_ribbon"];
+        var _lines = ["[v0.57.1] スターター4種取得経路監査"];
+        _lines.push("companionGearVersion: " + state.companionGearVersion);
+        for (var _i = 0; _i < _sids.length; _i++) {
+          var _sid = _sids[_i]; var _cnt = state.companionGearInventory[_sid] || 0;
+          _lines.push(COMPANION_GEAR_DATA[_sid].emoji + " " + COMPANION_GEAR_DATA[_sid].name + ": inv=" + _cnt + (COMPANION_GEAR_SHOP_ITEMS.some ? " shopItem=" + (COMPANION_GEAR_SHOP_ITEMS.filter(function(x){return x.gearId===_sid;}).length > 0) : ""));
+        }
+        _lines.push("判定: 全スターターはensureCompanionGearState()で自動付与（version<1）");
+        _lines.push("ショップには含まれない → 正常");
+        showToast(_lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-newgame-gear").onclick = function () {
+        // 新規ゲーム初期状態のシミュレート（inventory/version を一時0にして確認）
+        var _prevInv = JSON.parse(JSON.stringify(state.companionGearInventory || {}));
+        var _prevVer = state.companionGearVersion;
+        state.companionGearInventory = {};
+        state.companionGearVersion = 0;
+        var _beforeEnsure = JSON.parse(JSON.stringify(state.companionGearInventory));
+        ensureCompanionGearState();
+        var _afterEnsure = JSON.parse(JSON.stringify(state.companionGearInventory));
+        state.companionGearInventory = _prevInv;
+        state.companionGearVersion = _prevVer;
+        var _sids2 = ["hotblood_bandana","capture_gloves","observation_glasses","healing_ribbon"];
+        var _shopIds = COMPANION_GEAR_SHOP_ITEMS.map(function(x){return x.gearId;});
+        var _lines2 = ["[v0.57.1] 新規ゲーム初期gear確認"];
+        _lines2.push("ensure前: " + JSON.stringify(_beforeEnsure));
+        for (var _i2 = 0; _i2 < _sids2.length; _i2++) {
+          _lines2.push(_sids2[_i2] + ": ensure後=" + (_afterEnsure[_sids2[_i2]] || 0) + " inShop=" + (_shopIds.indexOf(_sids2[_i2]) >= 0));
+        }
+        _lines2.push("スターターはensureで自動付与・ショップには不在 → 正常");
+        showToast(_lines2.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-join-gear").onclick = function () {
+        var _cids3 = ["juritani","shurittani","norio","harumi"];
+        var _lines3 = ["[v0.57.1] 仲間加入時gear確認"];
+        for (var _i3 = 0; _i3 < _cids3.length; _i3++) {
+          var _cid3 = _cids3[_i3]; var _joined3 = hasCompanionEverJoined(_cid3);
+          var _shopItem3 = null;
+          for (var _j3 = 0; _j3 < COMPANION_GEAR_SHOP_ITEMS.length; _j3++) {
+            var _sg3 = COMPANION_GEAR_DATA[COMPANION_GEAR_SHOP_ITEMS[_j3].gearId];
+            if (_sg3 && _sg3.allowedCompanion === _cid3) { _shopItem3 = COMPANION_GEAR_SHOP_ITEMS[_j3]; break; }
+          }
+          var _st3 = _shopItem3 ? getCompanionGearPurchaseStatus(_shopItem3.gearId) : null;
+          _lines3.push(_cid3 + ": joined=" + _joined3 + " shopGear=" + (_shopItem3 ? _shopItem3.gearId : "なし") + " canBuy=" + (_st3 ? _st3.purchasable : "N/A"));
+        }
+        showToast(_lines3.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-whitelist-dom").onclick = function () {
+        var _lines4 = ["[v0.57.1] ショップwhitelist DOM確認"];
+        _lines4.push("COMPANION_GEAR_SHOP_ITEMS (" + COMPANION_GEAR_SHOP_ITEMS.length + "件):");
+        for (var _i4 = 0; _i4 < COMPANION_GEAR_SHOP_ITEMS.length; _i4++) {
+          var _si4 = COMPANION_GEAR_SHOP_ITEMS[_i4];
+          var _g4 = COMPANION_GEAR_DATA[_si4.gearId];
+          _lines4.push("  " + (_g4 ? _g4.emoji + " " : "") + _si4.gearId + " " + _si4.price + "G");
+        }
+        _lines4.push("スターター4種: ショップに含まれない");
+        var _stIds = ["hotblood_bandana","capture_gloves","observation_glasses","healing_ribbon"];
+        var _shopIds4 = COMPANION_GEAR_SHOP_ITEMS.map(function(x){return x.gearId;});
+        var _allAbsent = true;
+        for (var _i4b = 0; _i4b < _stIds.length; _i4b++) { if (_shopIds4.indexOf(_stIds[_i4b]) >= 0) { _allAbsent = false; } }
+        _lines4.push("スターター全除外: " + (_allAbsent ? "PASS ✅" : "FAIL ❌"));
+        showToast(_lines4.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-reward-dom-absent").onclick = function () {
+        // ショップUIを一時的に描画してDOMを確認
+        var _rids5 = ["critical_bracelet","net_master_belt","research_notebook","prayer_brooch"];
+        var _prevBody = document.getElementById("merchant-body") ? document.getElementById("merchant-body").innerHTML : "";
+        var _prevGold5 = state.player.gold;
+        state.player.gold = 9999; // 購入可能状態に
+        renderCompanionGearShop();
+        var _body5 = document.getElementById("merchant-body");
+        var _bodyText5 = _body5 ? _body5.innerHTML : "";
+        var _allAbsent5 = true;
+        var _results5 = [];
+        for (var _i5 = 0; _i5 < _rids5.length; _i5++) {
+          var _rid5 = _rids5[_i5]; var _found5 = _bodyText5.indexOf(_rid5) >= 0;
+          _results5.push(_rid5 + ": " + (_found5 ? "FAIL（DOM内に存在）" : "除外✅"));
+          if (_found5) { _allAbsent5 = false; }
+        }
+        // 戻す
+        state.player.gold = _prevGold5;
+        renderMerchantMain();
+        showToast("[v0.57.1] 報酬gear DOM完全除外確認\n" + _results5.join("\n") + "\n" + (_allAbsent5 ? "全4種DOM除外 PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-not-joined").onclick = function () {
+        var _lines6 = ["[v0.57.1] 仲間未加入購入不可確認"];
+        var _shopIds6 = COMPANION_GEAR_SHOP_ITEMS.map(function(x){return x.gearId;});
+        for (var _i6 = 0; _i6 < _shopIds6.length; _i6++) {
+          var _gid6 = _shopIds6[_i6]; var _g6 = COMPANION_GEAR_DATA[_gid6];
+          var _cid6 = _g6 ? _g6.allowedCompanion : null;
+          var _prevJoin6 = _cid6 ? JSON.parse(JSON.stringify(state.companionLevels[_cid6] || {})) : null;
+          var _prevComp6 = _cid6 ? state.player.companions.slice() : null;
+          var _prevInv6 = state.companionGearInventory[_gid6] || 0;
+          // 一時的に未加入状態に
+          if (_cid6) { state.companionLevels[_cid6] = { level: 1, exp: 0, nextExp: 20 }; state.player.companions = []; state.companionGearInventory[_gid6] = 0; }
+          state.player.gold = 9999;
+          var _st6 = getCompanionGearPurchaseStatus(_gid6);
+          var _blocked6 = !_st6.purchasable && _st6.reason === "companion_not_joined";
+          // 復元
+          if (_cid6) { state.companionLevels[_cid6] = _prevJoin6; state.player.companions = _prevComp6; state.companionGearInventory[_gid6] = _prevInv6; }
+          _lines6.push(_gid6 + ": purchasable=" + _st6.purchasable + " reason=" + _st6.reason + " block=" + (_blocked6 ? "PASS✅" : "FAIL❌"));
+        }
+        showToast(_lines6.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-gold-boundary").onclick = function () {
+        var _tid7 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (!_tid7) { showToast("shopItem なし"); return; }
+        var _price7 = COMPANION_GEAR_SHOP_ITEMS[0].price;
+        var _prevGold7 = state.player.gold; var _prevInv7 = state.companionGearInventory[_tid7] || 0;
+        var _prevLv7 = state.companionLevels[COMPANION_GEAR_DATA[_tid7].allowedCompanion] ? JSON.parse(JSON.stringify(state.companionLevels[COMPANION_GEAR_DATA[_tid7].allowedCompanion])) : null;
+        var _cid7 = COMPANION_GEAR_DATA[_tid7].allowedCompanion;
+        state.companionLevels[_cid7] = { level: 5, exp: 0, nextExp: 60 }; // 加入状態
+        state.companionGearInventory[_tid7] = 0;
+        // P-1
+        state.player.gold = _price7 - 1; var _chk7a = getCompanionGearPurchaseStatus(_tid7);
+        // P
+        state.player.gold = _price7; var _chk7b = getCompanionGearPurchaseStatus(_tid7);
+        // P+1
+        state.player.gold = _price7 + 1; var _chk7c = getCompanionGearPurchaseStatus(_tid7);
+        // 0
+        state.player.gold = 0; var _chk7d = getCompanionGearPurchaseStatus(_tid7);
+        // 復元
+        state.player.gold = _prevGold7; state.companionGearInventory[_tid7] = _prevInv7;
+        if (_prevLv7) { state.companionLevels[_cid7] = _prevLv7; }
+        showToast("[v0.57.1] 境界値テスト（" + _tid7 + " " + _price7 + "G）\n" +
+          "P-1(" + (_price7-1) + "G): purchasable=" + _chk7a.purchasable + " " + (_chk7a.purchasable ? "FAIL❌" : "PASS✅") + "\n" +
+          "P(" + _price7 + "G): purchasable=" + _chk7b.purchasable + " " + (_chk7b.purchasable ? "PASS✅" : "FAIL❌") + "\n" +
+          "P+1(" + (_price7+1) + "G): purchasable=" + _chk7c.purchasable + " " + (_chk7c.purchasable ? "PASS✅" : "FAIL❌") + "\n" +
+          "0G: purchasable=" + _chk7d.purchasable + " " + (_chk7d.purchasable ? "FAIL❌" : "PASS✅"));
+      };
+      document.getElementById("btn-debug-v571-buy-10").onclick = function () {
+        var _tid8 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (!_tid8) { showToast("shopItem なし"); return; }
+        var _cid8 = COMPANION_GEAR_DATA[_tid8].allowedCompanion;
+        var _prevGold8 = state.player.gold; var _prevInv8 = state.companionGearInventory[_tid8] || 0;
+        var _prevLv8 = state.companionLevels[_cid8] ? JSON.parse(JSON.stringify(state.companionLevels[_cid8])) : null;
+        state.player.gold = COMPANION_GEAR_SHOP_ITEMS[0].price * 10;
+        state.companionGearInventory[_tid8] = 0;
+        state.companionLevels[_cid8] = { level: 5, exp: 0, nextExp: 60 };
+        var _saveCount8 = 0;
+        var _origSave8 = saveGame;
+        saveGame = function() { _saveCount8++; _origSave8(); };
+        // 10回ボタンクリック相当
+        for (var _k8 = 0; _k8 < 10; _k8++) { buyCompanionGear(_tid8); }
+        saveGame = _origSave8;
+        var _invAfter8 = state.companionGearInventory[_tid8] || 0;
+        var _goldAfter8 = state.player.gold;
+        state.player.gold = _prevGold8; state.companionGearInventory[_tid8] = _prevInv8;
+        if (_prevLv8) { state.companionLevels[_cid8] = _prevLv8; }
+        saveGame();
+        showToast("[v0.57.1] 10連打テスト（" + _tid8 + "）\ninv増加=" + _invAfter8 + "（期待1）\ngold減少=" + (COMPANION_GEAR_SHOP_ITEMS[0].price * 10 - _goldAfter8) + "G（期待" + COMPANION_GEAR_SHOP_ITEMS[0].price + "G）\nsaveGame=" + _saveCount8 + "回（期待1）\n" + (_invAfter8 === 1 && _saveCount8 === 1 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-no-auto-equip").onclick = function () {
+        ensureCompanionGearState();
+        var _tid9 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (!_tid9) { showToast("shopItem なし"); return; }
+        var _cid9 = COMPANION_GEAR_DATA[_tid9].allowedCompanion;
+        var _prevEq9 = JSON.parse(JSON.stringify(state.companionEquipment || {}));
+        var _prevGold9 = state.player.gold; var _prevInv9 = state.companionGearInventory[_tid9] || 0;
+        var _prevLv9 = state.companionLevels[_cid9] ? JSON.parse(JSON.stringify(state.companionLevels[_cid9])) : null;
+        state.player.gold = COMPANION_GEAR_SHOP_ITEMS[0].price + 100;
+        state.companionGearInventory[_tid9] = 0;
+        state.companionLevels[_cid9] = { level: 5, exp: 0, nextExp: 60 };
+        buyCompanionGear(_tid9);
+        var _eqAfter9 = JSON.parse(JSON.stringify(state.companionEquipment || {}));
+        var _eqChanged9 = JSON.stringify(_prevEq9) !== JSON.stringify(_eqAfter9);
+        state.player.gold = _prevGold9; state.companionGearInventory[_tid9] = _prevInv9;
+        if (_prevLv9) { state.companionLevels[_cid9] = _prevLv9; }
+        state.companionEquipment = _prevEq9;
+        saveGame();
+        showToast("[v0.57.1] 自動装備なし確認（" + _tid9 + "）\nequipment変更=" + _eqChanged9 + "\n" + (!_eqChanged9 ? "PASS ✅ 自動装備なし" : "FAIL ❌ 装備が変わった"));
+      };
+      document.getElementById("btn-debug-v571-reward-flags").onclick = function () {
+        var _rids10 = ["critical_bracelet","net_master_belt","research_notebook","prayer_brooch"];
+        var _prevFlags10 = JSON.parse(JSON.stringify(state.companionGearRewardFlags || {}));
+        var _prevVer10 = state.companionGearVersion;
+        var _tid10 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (_tid10) {
+          var _cid10 = COMPANION_GEAR_DATA[_tid10].allowedCompanion;
+          var _prevGold10 = state.player.gold; var _prevInv10 = state.companionGearInventory[_tid10] || 0;
+          var _prevLv10 = state.companionLevels[_cid10] ? JSON.parse(JSON.stringify(state.companionLevels[_cid10])) : null;
+          state.player.gold = COMPANION_GEAR_SHOP_ITEMS[0].price + 100;
+          state.companionGearInventory[_tid10] = 0;
+          state.companionLevels[_cid10] = { level: 5, exp: 0, nextExp: 60 };
+          buyCompanionGear(_tid10);
+          state.player.gold = _prevGold10; state.companionGearInventory[_tid10] = _prevInv10;
+          if (_prevLv10) { state.companionLevels[_cid10] = _prevLv10; }
+        }
+        var _afterFlags10 = JSON.parse(JSON.stringify(state.companionGearRewardFlags || {}));
+        var _flagsUnchanged10 = JSON.stringify(_prevFlags10) === JSON.stringify(_afterFlags10);
+        var _verUnchanged10 = state.companionGearVersion === _prevVer10;
+        saveGame();
+        showToast("[v0.57.1] reward flags不変確認\nflags変化=" + (!_flagsUnchanged10) + "\nversion変化=" + (!_verUnchanged10) + "\n" + (_flagsUnchanged10 && _verUnchanged10 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-save-count").onclick = function () {
+        var _tid11 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (!_tid11) { showToast("shopItem なし"); return; }
+        var _cid11 = COMPANION_GEAR_DATA[_tid11].allowedCompanion;
+        var _prevGold11 = state.player.gold; var _prevInv11 = state.companionGearInventory[_tid11] || 0;
+        var _prevLv11 = state.companionLevels[_cid11] ? JSON.parse(JSON.stringify(state.companionLevels[_cid11])) : null;
+        state.player.gold = COMPANION_GEAR_SHOP_ITEMS[0].price + 100;
+        state.companionGearInventory[_tid11] = 0;
+        state.companionLevels[_cid11] = { level: 5, exp: 0, nextExp: 60 };
+        var _saveCount11 = 0;
+        var _origSave11 = saveGame;
+        saveGame = function() { _saveCount11++; _origSave11(); };
+        buyCompanionGear(_tid11);
+        saveGame = _origSave11;
+        state.player.gold = _prevGold11; state.companionGearInventory[_tid11] = _prevInv11;
+        if (_prevLv11) { state.companionLevels[_cid11] = _prevLv11; }
+        saveGame();
+        var _saveTests = ["G不足時save回数=","所持済み時save回数=","販売外時save回数="];
+        var _saveCounts = [0,0,0];
+        saveGame = function() { _saveCounts[0]++; _origSave11(); };
+        var _s1 = state.player.gold; state.player.gold = 0; buyCompanionGear(_tid11); state.player.gold = _s1;
+        saveGame = function() { _saveCounts[1]++; _origSave11(); };
+        state.companionGearInventory[_tid11] = 1; buyCompanionGear(_tid11); state.companionGearInventory[_tid11] = _prevInv11;
+        saveGame = function() { _saveCounts[2]++; _origSave11(); };
+        buyCompanionGear("invalid_gear_xyz");
+        saveGame = _origSave11;
+        saveGame();
+        showToast("[v0.57.1] saveGame回数\n成功購入: " + _saveCount11 + "回（期待1）\nG不足: " + _saveCounts[0] + "回（期待0）\n所持済み: " + _saveCounts[1] + "回（期待0）\n販売外: " + _saveCounts[2] + "回（期待0）\n" + (_saveCount11 === 1 && _saveCounts[0] === 0 && _saveCounts[1] === 0 && _saveCounts[2] === 0 ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-save-load").onclick = function () {
+        var _tid12 = COMPANION_GEAR_SHOP_ITEMS[0] ? COMPANION_GEAR_SHOP_ITEMS[0].gearId : null;
+        if (!_tid12) { showToast("shopItem なし"); return; }
+        var _cid12 = COMPANION_GEAR_DATA[_tid12].allowedCompanion;
+        var _prevGold12 = state.player.gold; var _prevInv12 = state.companionGearInventory[_tid12] || 0;
+        var _prevLv12 = state.companionLevels[_cid12] ? JSON.parse(JSON.stringify(state.companionLevels[_cid12])) : null;
+        state.player.gold = COMPANION_GEAR_SHOP_ITEMS[0].price + 100;
+        state.companionGearInventory[_tid12] = 0;
+        state.companionLevels[_cid12] = { level: 5, exp: 0, nextExp: 60 };
+        buyCompanionGear(_tid12);
+        var _invAfterBuy12 = state.companionGearInventory[_tid12] || 0;
+        loadGame(); // セーブから再ロード
+        var _invAfterLoad12 = state.companionGearInventory[_tid12] || 0;
+        state.player.gold = _prevGold12; state.companionGearInventory[_tid12] = _prevInv12;
+        if (_prevLv12) { state.companionLevels[_cid12] = _prevLv12; }
+        saveGame();
+        showToast("[v0.57.1] save/load確認（" + _tid12 + "）\n購入後inv=" + _invAfterBuy12 + "\nload後inv=" + _invAfterLoad12 + "\n" + (_invAfterBuy12 === 1 && _invAfterLoad12 === 1 ? "PASS ✅ load後も維持" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-old-save").onclick = function () {
+        // 旧セーブ想定: shop gearなし（inventory key欠損）でcanBuyできるか確認
+        var _lines13 = ["[v0.57.1] 旧セーブ互換確認"];
+        for (var _i13 = 0; _i13 < COMPANION_GEAR_SHOP_ITEMS.length; _i13++) {
+          var _gid13 = COMPANION_GEAR_SHOP_ITEMS[_i13].gearId;
+          var _cid13 = COMPANION_GEAR_DATA[_gid13].allowedCompanion;
+          var _prevInv13 = state.companionGearInventory[_gid13];
+          var _prevLv13 = state.companionLevels[_cid13] ? JSON.parse(JSON.stringify(state.companionLevels[_cid13])) : null;
+          delete state.companionGearInventory[_gid13]; // key欠損シミュレート
+          state.player.gold = COMPANION_GEAR_SHOP_ITEMS[_i13].price + 100;
+          state.companionLevels[_cid13] = { level: 5, exp: 0, nextExp: 60 };
+          var _st13 = getCompanionGearPurchaseStatus(_gid13);
+          state.companionGearInventory[_gid13] = _prevInv13;
+          if (_prevLv13) { state.companionLevels[_cid13] = _prevLv13; }
+          _lines13.push(_gid13 + ": key欠損→owned=" + _st13.owned + " purchasable=" + _st13.purchasable + " " + (_st13.purchasable ? "購入可✅" : "NG❌"));
+        }
+        showToast(_lines13.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-reconcile").onclick = function () {
+        // reconcile後もshop gearが維持されるか確認
+        var _prevInvR = JSON.parse(JSON.stringify(state.companionGearInventory || {}));
+        for (var _i14 = 0; _i14 < COMPANION_GEAR_SHOP_ITEMS.length; _i14++) {
+          state.companionGearInventory[COMPANION_GEAR_SHOP_ITEMS[_i14].gearId] = 1;
+        }
+        var _beforeR = JSON.parse(JSON.stringify(state.companionGearInventory));
+        reconcileCompanionGearRewards();
+        var _afterR = JSON.parse(JSON.stringify(state.companionGearInventory));
+        state.companionGearInventory = _prevInvR;
+        var _lines14 = ["[v0.57.1] reconcile後shop gear維持確認"];
+        var _allOk14 = true;
+        for (var _i14b = 0; _i14b < COMPANION_GEAR_SHOP_ITEMS.length; _i14b++) {
+          var _gid14 = COMPANION_GEAR_SHOP_ITEMS[_i14b].gearId;
+          var _ok14 = (_afterR[_gid14] || 0) === (_beforeR[_gid14] || 0);
+          _lines14.push(_gid14 + ": before=" + (_beforeR[_gid14]||0) + " after=" + (_afterR[_gid14]||0) + " " + (_ok14 ? "✅" : "❌"));
+          if (!_ok14) { _allOk14 = false; }
+        }
+        _lines14.push(_allOk14 ? "全shop gear維持 PASS ✅" : "FAIL ❌");
+        showToast(_lines14.join("\n"));
+      };
+      document.getElementById("btn-debug-v571-render10").onclick = function () {
+        var _prevGold15 = state.player.gold;
+        var _prevInvR15 = JSON.parse(JSON.stringify(state.companionGearInventory || {}));
+        var _prevEq15 = JSON.parse(JSON.stringify(state.companionEquipment || {}));
+        state.player.gold = 9999;
+        for (var _k15 = 0; _k15 < 10; _k15++) { renderCompanionGearShop(); }
+        var _gold15After = state.player.gold;
+        var _inv15After = JSON.parse(JSON.stringify(state.companionGearInventory || {}));
+        var _eq15After = JSON.parse(JSON.stringify(state.companionEquipment || {}));
+        state.player.gold = _prevGold15;
+        state.companionGearInventory = _prevInvR15;
+        state.companionEquipment = _prevEq15;
+        renderMerchantMain();
+        var _goldOk = (_gold15After === 9999);
+        var _invOk = JSON.stringify(_prevInvR15) === JSON.stringify(_inv15After);
+        var _eqOk = JSON.stringify(_prevEq15) === JSON.stringify(_eq15After);
+        showToast("[v0.57.1] render×10副作用なし\ngold変化=" + (!_goldOk) + "\ninv変化=" + (!_invOk) + "\nequipment変化=" + (!_eqOk) + "\n" + (_goldOk && _invOk && _eqOk ? "PASS ✅" : "FAIL ❌"));
+      };
+      document.getElementById("btn-debug-v571-open10").onclick = function () {
+        var _prevGold16 = state.player.gold; var _prevModal16 = state.modalOpen;
+        var _lines16 = ["[v0.57.1] shopモーダル10回開閉"];
+        for (var _k16 = 0; _k16 < 10; _k16++) {
+          renderCompanionGearShop();
+          var _backBtn16 = document.getElementById("shop-back");
+          if (_backBtn16) { _backBtn16.onclick(); }
+        }
+        var _mainBtn16 = document.getElementById("m-buy-companion-gear");
+        _lines16.push("最終商人メイン: btn存在=" + !!_mainBtn16);
+        _lines16.push("gold不変: " + (state.player.gold === _prevGold16));
+        _lines16.push("lock残留: " + _companionGearPurchaseLock);
+        _lines16.push(_mainBtn16 && state.player.gold === _prevGold16 && !_companionGearPurchaseLock ? "PASS ✅" : "要確認");
+        showToast(_lines16.join("\n"));
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {

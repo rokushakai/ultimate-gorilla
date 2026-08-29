@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.57** |
+| 現在バージョン | **v0.57.1** |
 | ブランチ | main |
 
 ---
@@ -79,14 +79,20 @@
   - **遅延トースト**: `_pendingGearRewardNotices` を `renderField()` 初回描画で消費（loadGame直後DOM未構築対策）
   - **UI**: flag=true+所持0 → 「入手済み(現在未所持)」（仲間装備リスト・装備袋の両セクション）
   - **デバッグ2本 (§110)**: Stage2初回・再クリア確認 / reconcile×2確認
+- **[v0.57.1] 仲間装備商人・仕様整合／購入安全性監査**（§138）
+  - **スターター4種=分類A確認**: ensureCompanionGearState()で自動付与 → ショップ廃止
+  - **ショップ専用装備4種追加**: training_wristband(🥊+3)/tracking_shoes(👟+2)/recording_pen(🖊️+2)/herbal_pouch(🌿heal+3)・各60G
+  - **COMPANION_GEAR_SHOP_ITEMS更新**: スターター→専用4種（各60G）
+  - **報酬gear DOM完全除外**: renderCompanionGearShopはCOMPANION_GEAR_SHOP_ITEMSのみ描画
+  - **`getCompanionGearPurchaseStatus(gearId)`**: 詳細状態純粋関数（joined/owned/affordable/reason等）
+  - **`_companionGearPurchaseLock`**: 連打防止変数（全出口でfalseリセット）
+  - **`buyCompanionGear()` 強化**: lock・status最終再確認・saveGame1回
+  - **`renderCompanionGearShop()` 更新**: ホワイトリスト・未加入🔒表示
+  - **デバッグ16本（§138）**: `btn-debug-v571-*`
+  - **BGM・捕獲条件・既存8gear効果・saveGame/loadGame: 変更なし**
 - **[v0.57] 仲間装備商人販売・安全なショップ基盤**（§137）
-  - **`COMPANION_GEAR_SHOP_ITEMS`**: スターター4種の販売品定数（各80G）
-  - **`canBuyCompanionGear(gearId)`**: 購入可否確認（純粋関数・4パターンガード）
-  - **`buyCompanionGear(gearId)`**: 購入処理（gold減算・inventory+1・saveGame・toast・re-render）
-  - **`renderCompanionGearShop()`**: ショップUI（スターター4種購入可+報酬4種🔒）
   - **`renderMerchantMain()` 拡張**: 「🎽 仲間装備を買う」ボタン追加
-  - **デバッグ4本（§137）**: `btn-debug-v57-*`
-  - **BGM・捕獲条件・報酬装備・saveGame/loadGame: 変更なし**
+  - **デバッグ4本（§137）**: `btn-debug-v57-*`（§138で参照更新済み）
 - **[v0.56.1] 最終サイドストーリー接続・実動作監査**（§136）
   - **18項目すべてA**: 通常プレイ本体で成立確認（debug専用ロジックなし）
   - **既存最終サイドストーリー**: 横スクロールST6「チンパンジーの聖域」/ `openStageWarpModal(6)` / `isSideStoryCleared()`
@@ -902,7 +908,8 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
 2. **仲間わざ習得演出** — 仲間わざ解放時の演出強化。工数小〜中。
 
-> v0.57（§137 仲間装備商人販売）実装済み。canBuyCompanionGear/buyCompanionGear/renderCompanionGearShop追加。renderMerchantMainに「🎽 仲間装備を買う」追加。debug4本。BGM/捕獲条件/報酬装備/saveGame変更なし。
+> v0.57.1（§138 仕様整合監査）実装済み。スターター4種分類A確認→ショップ廃止、ショップ専用4種追加（各60G）。getCompanionGearPurchaseStatus追加。lock・joined確認・報酬DOM除外・debug16本。BGM/捕獲条件変更なし。
+> v0.57（§137 仲間装備商人販売）実装済み。renderMerchantMainに「仲間装備を買う」追加。
 > v0.56.1（§136 実動作監査）実装済み。18項目全A（通常プレイ本体確認）。既存最終サイドストーリー=ST6「チンパンジーの聖域」。debug12本追加。本体・BGM・捕獲条件変更なし。
 > v0.56（§135 最終サイドストーリー接続）実装済み。`isFinalCompanionSideStoryUnlocked()` / 解放通知 / 酒場+PaperView 5状態導線 / objective追加 / 旧セーブ修復 / デバッグ17本。BGM/捕獲条件/チンパンジー/報酬変更なし。
 > v0.55（§134 PaperView番組拡張）実装済み。攻略ペーパービュー屋モーダルに「📖 仲間の物語」進捗セクション追加。4人×3話を✅/・/🔒でビジュアル表示。永続フラグ変更なし。

@@ -7815,3 +7815,118 @@ v0.56.1追加12本（`btn-debug-v561-*`）も同様。
 | btn-debug-v57-buy-test | 購入テスト（G付与→熱血バンダナ購入→復元） |
 | btn-debug-v57-reward-lock | 報酬装備4種canBuy=falseを確認 |
 | btn-debug-v57-no-gold | G不足時の購入ブロック確認（G=0でfalse） |
+
+---
+
+## v0.57.1 仲間装備商人・仕様整合／購入安全性監査（§138）
+
+### 監査結論
+
+**スターター4種はすべて「A：通常プレイで必ず無料取得」**
+
+`ensureCompanionGearState()` が `companionGearVersion < 1` の時点でstarter4種を自動付与する（§105 v0.40）。  
+`companionGearVersion` は newGame() で0から始まる。  
+→ ショップ開放時には必ず「所持済み」→ スターター販売は意味なし。
+
+### スターター4種分類
+
+| gearId | 名前 | 分類 | 取得経路 |
+|---|---|---|---|
+| hotblood_bandana | 熱血バンダナ | A | ensureCompanionGearState() version<1自動付与 |
+| capture_gloves | 捕獲グローブ | A | 同上 |
+| observation_glasses | 観察メガネ | A | 同上 |
+| healing_ribbon | 癒しのリボン | A | 同上 |
+
+### 対応: ショップ専用装備4種を追加
+
+スターター4種はショップから廃止。代わりに、各仲間1個ずつのショップ専用装備を追加。
+
+| gearId | 名前 | emoji | allowedCompanion | 効果 | 価格 |
+|---|---|---|---|---|---|
+| training_wristband | 修行用リストバンド | 🥊 | juritani | 通常攻撃 +3（attackDamageBonus） | 60G |
+| tracking_shoes | 追跡シューズ | 👟 | shurittani | 通常攻撃 +2（attackDamageBonus） | 60G |
+| recording_pen | 記録用ペン | 🖊️ | norio | 通常攻撃 +2（attackDamageBonus） | 60G |
+| herbal_pouch | 薬草ポーチ | 🌿 | harumi | 小さな癒し +3（special1HealBonus） | 60G |
+
+**強度位置付け**: スターター（damageBonus汎用 +1〜2）の次の段階。報酬装備（specialDamage +4〜6）より明確に弱い。  
+**価格根拠**: 序盤敵の平均goldドロップ約60G（30〜90Gレンジ）と同等。1〜2戦で購入可能。
+
+### 報酬装備をショップ画面から完全除外
+
+v0.57では「🔒 ショップ購入不可」として表示していたが、これを廃止。  
+報酬装備4種（critical_bracelet / net_master_belt / research_notebook / prayer_brooch）はショップDOMに一切表示しない。  
+→ COMPANION_GEAR_SHOP_ITEMS（ホワイトリスト）にのみ存在するgearをDOMへ生成する。
+
+### 新規関数
+
+- `getCompanionGearPurchaseStatus(gearId)` — 詳細状態取得（純粋関数）
+  - 確認項目: gear存在 / shop whitelist / 仲間加入済み / 未所持 / 所持金
+  - 戻り値: `{ valid, inShop, joined, owned, affordable, purchasable, reason, price, cid }`
+- `canBuyCompanionGear(gearId)` — `getCompanionGearPurchaseStatus()` への委譲（後方互換維持）
+
+### 変更: buyCompanionGear()
+
+- `_companionGearPurchaseLock` を追加（連打10回→購入1回保証）
+- 購入直前に `getCompanionGearPurchaseStatus()` で最終再確認
+- gold, inventory, companionEquipment, rewardFlags 変更なし（金減算+inventory+1のみ）
+- saveGame() 1回のみ
+
+### 変更: renderCompanionGearShop()
+
+- COMPANION_GEAR_SHOP_ITEMSのみからDOMを生成（ホワイトリスト方式）
+- 報酬装備セクション完全削除
+- 各商品に仲間加入状態を表示（未加入 → 🔒 仲間加入後に購入できます）
+- `getCompanionGearPurchaseStatus()` で状態を判定
+
+### COMPANION_GEAR_SHOP_ITEMS最終内容
+
+スターター4種を廃止し、ショップ専用4種に変更:
+```
+{ gearId: "training_wristband", price: 60 },
+{ gearId: "tracking_shoes",     price: 60 },
+{ gearId: "recording_pen",      price: 60 },
+{ gearId: "herbal_pouch",       price: 60 }
+```
+
+### save/load
+
+- saveGame/loadGame変更なし（companionGearInventoryにshop gear countが自動保存される）
+- newGame: companionGearInventory = {} → 購入前はshop gearなし（正常）
+- 旧セーブ: inventory key欠損 → 0扱い → 購入可能（正常）
+
+### normalize/reconcile互換
+
+- `normalizeCompanionGearRewardFlags()` — 特化装備4種のみ操作。shop gear不変。
+- `reconcileCompanionGearRewards()` — 特化装備4種のみ付与。shop gear削除なし。
+- shop gearはrewardFlagsに登録されない（正常・独立）
+
+### 制約（変更禁止）
+
+- BGM関連コード変更なし
+- 究極ゴリラ捕獲条件変更なし
+- 究極チンパンジー変更なし
+- 最終サイドストーリー変更なし
+- 仲間戦闘能力・AI・捕獲率・EXP倍率変更なし
+- 既存8装備の効果数値変更なし
+- ES5のみ: var / function / 文字列結合
+
+### デバッグ（§138・16本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v571-starter-routes | スターター4種取得経路監査 |
+| btn-debug-v571-newgame-gear | 新規ゲーム初期gear確認 |
+| btn-debug-v571-join-gear | 仲間加入時gear確認 |
+| btn-debug-v571-whitelist-dom | ショップwhitelist DOM確認 |
+| btn-debug-v571-reward-dom-absent | 報酬gear DOM完全除外確認 |
+| btn-debug-v571-not-joined | 仲間未加入購入不可確認 |
+| btn-debug-v571-gold-boundary | P-1/P/P+1購入境界 |
+| btn-debug-v571-buy-10 | 購入10連打1回確認 |
+| btn-debug-v571-no-auto-equip | 購入後自動装備なし確認 |
+| btn-debug-v571-reward-flags | reward flags完全不変確認 |
+| btn-debug-v571-save-count | saveGame1回確認 |
+| btn-debug-v571-save-load | shop gear save/load確認 |
+| btn-debug-v571-old-save | 旧セーブ互換確認 |
+| btn-debug-v571-reconcile | reconcile後shop gear維持確認 |
+| btn-debug-v571-render10 | render×10副作用なし |
+| btn-debug-v571-open10 | shopモーダル10回開閉 |

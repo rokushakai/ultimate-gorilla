@@ -22,6 +22,20 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.57.1 — 仲間装備商人・仕様整合／購入安全性監査 (§138)
+
+- **スターター4種分類A確認**: すべて ensureCompanionGearState() 自動付与 → ショップ廃止 ✅
+- **ショップ専用装備4種追加**: training_wristband/tracking_shoes/recording_pen/herbal_pouch（各60G） ✅
+- **COMPANION_GEAR_SHOP_ITEMS更新**: スターター4種→専用4種 ✅
+- **報酬gear DOM完全除外**: renderCompanionGearShopはホワイトリストのみ描画 ✅
+- **`getCompanionGearPurchaseStatus(gearId)`**: 詳細状態純粋関数（joined/owned/affordable等） ✅
+- **`_companionGearPurchaseLock`**: 連打防止ロック変数 ✅
+- **`buyCompanionGear()` 強化**: lock・status再確認・saveGame1回 ✅
+- **`renderCompanionGearShop()` 更新**: ホワイトリスト方式・未加入表示 ✅
+- **デバッグ16本 (§138)**: `btn-debug-v571-*` ✅
+
+---
+
 ### Version 0.57 — 仲間装備商人販売・安全なショップ基盤 (§137)
 
 - **`COMPANION_GEAR_SHOP_ITEMS`**: スターター4種の販売品定数（gearId+price） ✅

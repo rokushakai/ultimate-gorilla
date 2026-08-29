@@ -5,6 +5,32 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.57.1] - 2026-08-29 — 仲間装備商人・仕様整合／購入安全性監査 (§138)
+
+### Changed
+- **スターター4種をショップから廃止**: hotblood_bandana/capture_gloves/observation_glasses/healing_ribbon はensureCompanionGearState()で自動付与される（分類A）。ショップに販売しても常に「所持済み」になるため廃止。
+- **ショップ専用装備4種を新規追加** (COMPANION_GEAR_DATA): training_wristband/tracking_shoes/recording_pen/herbal_pouch（各60G・attackDamageBonus/special1HealBonus）
+- **COMPANION_GEAR_SHOP_ITEMS更新**: 旧スターター4種→新ショップ専用4種（各60G）
+- **報酬装備をショップDOMから完全除外**: v0.57の「🔒 ショップ購入不可」セクション削除。renderCompanionGearShopはホワイトリストのみ描画。
+- **`getCompanionGearPurchaseStatus(gearId)` 追加**: 詳細状態（valid/inShop/joined/owned/affordable/purchasable/reason/price）を返す純粋関数
+- **`canBuyCompanionGear()` を委譲方式に変更**: getCompanionGearPurchaseStatusへ委譲（後方互換維持）
+- **`_companionGearPurchaseLock` 追加**: 連打防止。購入開始→lock=true、成功/失敗すべての出口でfalse
+- **`buyCompanionGear()` 強化**: lock+status再確認+gold再確認+owned再確認+saveGame1回
+- **`renderCompanionGearShop()` 更新**: ホワイトリスト方式・報酬gearなし・仲間加入状態表示（未加入🔒）
+- **仲間加入ガード追加**: `hasCompanionEverJoined()` で加入済み確認（パーティ不在でも加入済みなら購入可）
+- **デバッグ§137ハンドラー修正**: 旧スターターID→新ショップgearIDへ参照更新
+
+### Added
+- **デバッグ16本 (§138)**: `btn-debug-v571-*` — スターター経路監査/新規gear確認/join確認/whitelist DOM/報酬DOM除外/未加入ブロック/境界値/連打/自動装備なし/flags不変/save回数/save-load/旧セーブ/reconcile/render×10/モーダル10回開閉
+
+### Not Changed
+- BGMコード変更なし、究極ゴリラ捕獲条件変更なし
+- 既存8装備の効果数値変更なし
+- saveGame/loadGame変更なし（companionGearInventoryは既存で保存済み）
+- 報酬装備4種の取得経路変更なし（normalizeCompanionGearRewardFlags/reconcileCompanionGearRewardsはshop gearに影響しない）
+
+---
+
 ## [0.57] - 2026-08-29 — 仲間装備商人販売・安全なショップ基盤 (§137)
 
 ### Added

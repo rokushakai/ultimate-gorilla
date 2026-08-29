@@ -5,6 +5,40 @@
 
 ---
 
+## v0.57.1 (2026-08-29) — 仲間装備商人・仕様整合／購入安全性監査 (§138)
+
+### スターター4種監査結果
+
+全スターター4種を**分類A（通常プレイで必ず無料取得）**と確定。
+
+`ensureCompanionGearState()` 内 `companionGearVersion < 1` 分岐（§105 v0.40）で自動付与。
+`companionGearVersion` は state 初期値で `0`（newGame/state定義）。
+→ ショップを開く前に必ずensureCompanionGearState()が走り、starters は inv=1 になる。
+→ ショップで販売しても常に「所持済み」→ 機能しない。
+
+### ショップ専用装備4種の設計判断
+
+- attackDamageBonus フィールドを採用（getCompanionEquipmentBonus の line 6174 で対応済み）
+- special1HealBonus フィールドを採用（line 6180 で対応済み）
+- 強度：スターター（damageBonus全体 +1〜2）の次。報酬（specialDamage +4〜6）より明確に弱い
+- 価格：60G ≒ 序盤1戦ドロップ（regular enemy 30〜90G 平均 60G）
+
+### 報酬gear DOM除外
+
+v0.57の「🔒 ショップ購入不可」セクションはコード管理の観点で問題あり（将来gear追加時に誤ってhardcodeが残る可能性）。renderCompanionGearShop をCOMPANION_GEAR_SHOP_ITEMS のwhitelistのみで描画するよう変更。
+
+### normalize/reconcile安全性確認
+
+- normalizeCompanionGearRewardFlags: 対象は固定4種(critical_bracelet等)のみ。shop gear に影響なし。
+- reconcileCompanionGearRewards: 報酬gear のみ grantCompanionGearReward を呼ぶ。shop gear を削除する処理なし。
+- → shop gear は save/load/reconcile 後も維持される。
+
+### debug §137更新
+
+btn-debug-v57-buy-test と btn-debug-v57-no-gold が旧スターター ID を参照していたため、新ショップ gear ID（COMPANION_GEAR_SHOP_ITEMS[0/2].gearId）を参照するよう修正。
+
+---
+
 ## v0.57 (2026-08-29) — 仲間装備商人販売・安全なショップ基盤 (§137)
 
 ### 設計判断
