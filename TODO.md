@@ -22,6 +22,28 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.61 — 仲間個人バッグ・アイテム受け渡し基盤 (§142)
+
+- **`COMPANION_BAG_CAPACITY = 3`** 容量定数 ✅
+- **`COMPANION_BAG_ALLOWED_ITEM_IDS`** 受け渡しホワイトリスト（ITEM_DATA 8種） ✅
+- **`state.companionBags`** 4仲間分バッグ状態（saveGame/loadGame対応） ✅
+- **`_companionBagTransferLock`** 連打防止ロック ✅
+- **`normalizeCompanionBags()`** バッグ構造検証・無効エントリ除去 ✅
+- **`getCompanionBagUsedCapacity(cid)`** 使用済み容量 ✅
+- **`getCompanionBagRemainingCapacity(cid)`** 残り容量 ✅
+- **`getCompanionBagItemQuantity(cid, itemId)`** バッグ内個数 ✅
+- **`getCompanionBagTransferStatus(cid, itemId, direction)`** 受け渡し可否（ES5・副作用なし） ✅
+- **`transferItemToCompanionBag(cid, itemId)`** player→bag atomic移動 ✅
+- **`transferItemFromCompanionBag(cid, itemId)`** bag→player atomic返却 ✅
+- **`renderCompanionBagModalBody(cid)`** バッグUI（容量バー・一覧・ボタン） ✅
+- **`openCompanionBagModal(cid)`** バッグモーダル表示 ✅
+- **`openBagModal()`** プレイヤーアイテム一覧（companion-bag-modal再利用） ✅
+- **メンバー管理「🎒 バッグ」ボタン**（各仲間行） ✅
+- **`companion-bag-modal`** (index.html) モーダル追加 ✅
+- **`getCharacterManagementData()`** バッグ使用量表示追加 ✅
+- **デバッグ22本（§142）**: `btn-debug-v61-*` ✅
+- **戦闘中アイテム使用は非実装（v0.62候補）** ✅
+
 ### Version 0.60 — 仲間サイドストーリー思い出アルバム (§141)
 
 - **`_cstoryRereadMode`**: 再読モードフラグ（非永続） ✅

@@ -5,6 +5,33 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.61] - 2026-08-30 — 仲間個人バッグ・アイテム受け渡し基盤 (§142)
+
+### Added
+- `COMPANION_BAG_CAPACITY = 3`: バッグ容量定数（個数合計）
+- `COMPANION_BAG_ALLOWED_ITEM_IDS`: 受け渡し可能アイテムホワイトリスト（ITEM_DATA 8種）
+- `state.companionBags`: 4仲間分バッグ状態 `{ cid: { itemId: qty } }` — saveGame/loadGame/newGame対応
+- `_companionBagTransferLock`: 受け渡し連打防止ロック（非永続）
+- `normalizeCompanionBags()`: バッグ構造検証・無効エントリ除去（超過容量はそのまま保存）
+- `getCompanionBagUsedCapacity(cid)`: 使用済み容量合計（クランプなし）
+- `getCompanionBagRemainingCapacity(cid)`: 残り容量（max 0）
+- `getCompanionBagItemQuantity(cid, itemId)`: バッグ内アイテム数（純粋）
+- `getCompanionBagTransferStatus(cid, itemId, direction)`: 受け渡し可否判定（副作用なし・ES5準拠）
+- `transferItemToCompanionBag(cid, itemId)`: player→bag 1個移動（lock→検証→atomic→save→toast→render）
+- `transferItemFromCompanionBag(cid, itemId)`: bag→player 1個返却（lock→検証→atomic→save→toast→render）
+- `renderCompanionBagModalBody(cid)`: 容量バー・バッグ内容・playerアイテム一覧UI
+- `openCompanionBagModal(cid)`: バッグモーダル表示（加入チェック付き）
+- `openBagModal()`: プレイヤーアイテム一覧（companion-bag-modal 再利用）
+- メンバー管理UI「🎒 バッグ」ボタン追加（各仲間行）
+- `companion-bag-modal` (index.html): バッグ専用モーダル追加
+- `getCharacterManagementData()`: インベントリ概要に「バッグ: n/3」追加
+- デバッグ22本（§142）: `btn-debug-v61-*`
+
+### Changed
+- `saveGame()`: `companionBags` フィールド追加
+- `loadGame()`: `companionBags` 復元 + `normalizeCompanionBags()` 呼び出し
+- `openMemberManagement()`: `companion-bag` アクション処理追加
+
 ## [0.60] - 2026-08-30 — 仲間サイドストーリー思い出アルバム (§141)
 
 ### Added

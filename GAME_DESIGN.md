@@ -8229,3 +8229,89 @@ startBGM(type)
 | btn-debug-v60-reset-ch2 | ch2フラグ全リセット |
 | btn-debug-v60-reset-ch3 | ch3フラグ全リセット |
 | btn-debug-v60-album-open | 酒場を開いてアルバム表示 |
+
+
+---
+
+## §142 v0.61 — 仲間個人バッグ・アイテム受け渡し基盤 **[実装済み]**
+
+### 概要
+
+仲間4人それぞれが個人バッグを持つ。プレイヤーはメンバー管理UIからアイテムを渡したり返してもらったりできる。戦闘中の使用は v0.62 候補。
+
+### バッグ仕様
+
+| 項目 | 内容 |
+|---|---|
+| 容量 | 個数合計 3個まで（アイテム種類数ではなく合計個数） |
+| バッグ対象仲間 | juritani / shurittani / norio / harumi |
+| アクセス条件 | `hasCompanionEverJoined(cid)` = true（現在パーティ不在でも操作可） |
+| 受け渡し単位 | 1回1個（atomic） |
+| ホワイトリスト | ITEM_DATA 8種（potion/rope/coffee/bread/bento/ramen/coughsyrup/deodorant） |
+| 女神のウクレレ | バッグに入れられない（ホワイトリスト外） |
+| 超過容量 | normalizeCompanionBags()はカットしない。返却のみ許可（追加不可） |
+
+### セーブデータ
+
+```javascript
+state.companionBags = {
+  juritani:   { itemId: qty, ... },
+  shurittani: {},
+  norio:      {},
+  harumi:     {}
+};
+// localStorage "ultimateGorillaSaveV2" の companionBags フィールド
+```
+
+### 主要関数
+
+| 関数 | 説明 |
+|---|---|
+| `normalizeCompanionBags()` | 構造検証・無効エントリ除去（超過保存・カットなし） |
+| `getCompanionBagUsedCapacity(cid)` | 使用済み個数合計 |
+| `getCompanionBagRemainingCapacity(cid)` | 残り容量（max 0） |
+| `getCompanionBagItemQuantity(cid, itemId)` | バッグ内個数（純粋） |
+| `getCompanionBagTransferStatus(cid, itemId, direction)` | 可否判定（副作用なし） |
+| `transferItemToCompanionBag(cid, itemId)` | player→bag 1個（atomic・lock・save） |
+| `transferItemFromCompanionBag(cid, itemId)` | bag→player 1個（atomic・lock・save） |
+| `renderCompanionBagModalBody(cid)` | 容量バー・バッグ内容・player一覧UI |
+| `openCompanionBagModal(cid)` | バッグモーダル表示 |
+| `openBagModal()` | playerアイテム一覧（companion-bag-modal再利用） |
+
+### UI
+
+- メンバー管理画面の各仲間行に「🎒 バッグ」ボタン追加
+- `companion-bag-modal`（index.html）: 容量バー / バッグ内アイテム「1個返す」/ playerアイテム「1個渡す」or「いっぱい」
+- `getCharacterManagementData()`: インベントリ概要に「バッグ: n/3」追加
+
+### 変更禁止（引き継ぎ用）
+
+- BGM関連コード・究極ゴリラ捕獲条件・究極チンパンジー・最終サイドストーリー変更禁止
+- 思い出アルバム関連（_cstoryRereadMode / getCompanionStoryArchiveData / startCompanionSideStoryReread / renderTavernAlbum）変更禁止
+- 仲間戦闘能力・AI・捕獲率・EXP倍率変更禁止
+- 戦闘中バッグアイテム使用は実装しない（v0.62候補）
+
+### デバッグ（§142・22本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v61-item-list | ITEM_DATA全種と所持数一覧 |
+| btn-debug-v61-show-bags | 全仲間バッグ内容表示 |
+| btn-debug-v61-add-potion5 | ポーション+5 |
+| btn-debug-v61-add-rope5 | ロープ+5 |
+| btn-debug-v61-add-bread5 | パン+5 |
+| btn-debug-v61-add-bento5 | 弁当+5 |
+| btn-debug-v61-add-ramen5 | ラーメン+5 |
+| btn-debug-v61-open-bag-juritani | じゅりたにバッグ表示 |
+| btn-debug-v61-open-bag-shurittani | しゅりったにバッグ表示 |
+| btn-debug-v61-open-bag-norio | のりおバッグ表示 |
+| btn-debug-v61-open-bag-harumi | はるみバッグ表示 |
+| btn-debug-v61-fill-juritani-bag | じゅりたに満杯（ポーション2+パン1） |
+| btn-debug-v61-fill-shurittani-bag | しゅりったに満杯（ロープ3） |
+| btn-debug-v61-fill-norio-bag | のりお満杯（弁当1+ラーメン1+コーヒー1） |
+| btn-debug-v61-fill-harumi-bag | はるみ満杯（ポーション1+せき止め1+消臭剤1） |
+| btn-debug-v61-over-capacity | じゅりたに超過容量（5/3）テスト |
+| btn-debug-v61-join-all | 全仲間加入フラグON |
+| btn-debug-v61-unlock-juritani | じゅりたに加入フラグON |
+| btn-debug-v61-transfer-status-check | potion→juritani受け渡し可否確認 |
+| btn-debug-v61-reset-all-bags | 全仲間バッグリセット |

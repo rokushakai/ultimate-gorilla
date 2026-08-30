@@ -5,6 +5,34 @@
 
 ---
 
+## v0.61 (2026-08-30) — 仲間個人バッグ (§142)
+
+### 設計判断: 個数合計3・ホワイトリスト方式
+
+アイテム種類数ではなく「個数合計」でキャップ。種類制限は不要（ポーション×3でも異種×3でも同価値）。ホワイトリストは ITEM_DATA 8種固定（女神のウクレレはキー項目のため除外）。
+
+### 超過容量の保存
+
+`normalizeCompanionBags()` は超過容量をカットしない。バグや旧セーブで容量超過データが存在してもデータを保全する。`getCompanionBagRemainingCapacity()` が 0 を返すことで自然に追加不可・返却のみ許可になる。
+
+### atomic 移動
+
+1関数内で player→bag の加減算と saveGame() を同期的に1回実行。中断するポイントなし。`_companionBagTransferLock` で連打防止（全出口でリセット）。
+
+### ES5 準拠: Object.assign 除去
+
+`getCompanionBagTransferStatus()` の初期実装で `Object.assign()` を使用したが ES6 のため除去。内部ヘルパー `_ret(valid, transferable, reason)` でオブジェクトを直接構築するように修正。
+
+### hasCompanionEverJoined の活用
+
+バッグアクセス条件は「現在パーティにいる」ではなく「一度でも加入したことがある」。外れている仲間にもアイテムを預けられる設計。
+
+### 戦闘中使用は非実装
+
+バッグアイテムの戦闘中使用は v0.62 以降に持ち越し。今回は基盤（保存・UI・受け渡し）のみ。
+
+---
+
 ## v0.59 (2026-08-29) — uranawanaii ファイルBGM再生基盤 (§140)
 
 ### 設計判断: HTMLAudioElement 1個再利用

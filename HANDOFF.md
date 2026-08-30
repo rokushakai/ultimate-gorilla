@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.60** |
+| 現在バージョン | **v0.61** |
 | ブランチ | main |
 
 ---
@@ -92,6 +92,13 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.61] 仲間個人バッグ・アイテム受け渡し基盤**（§142）
+  - `state.companionBags` / `normalizeCompanionBags()` / 容量3・ホワイトリスト8種
+  - `transferItemToCompanionBag()` / `transferItemFromCompanionBag()` atomic移動
+  - `openCompanionBagModal(cid)` / `renderCompanionBagModalBody(cid)`
+  - メンバー管理「🎒 バッグ」ボタン / `companion-bag-modal` (index.html)
+  - デバッグ22本（§142）: `btn-debug-v61-*`
+  - 戦闘中アイテム使用は非実装（v0.62候補）
 - **[v0.60] 仲間サイドストーリー思い出アルバム**（§141）
   - **`_cstoryRereadMode`**: 再読モードフラグ（非永続・IIFEスコープ）
   - **`getCompanionStoryArchiveData()`**: 12話の完了状況を返す純粋関数
