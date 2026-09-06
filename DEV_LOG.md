@@ -5,6 +5,30 @@
 
 ---
 
+## v0.62 (2026-09-06) — 仲間戦闘中アイテム使用 (§143)
+
+### 仲間HPなし設計
+
+仲間は戦闘中HPを持たない（COMPANION_DATAにhpフィールドなし）。そのためアイテム効果はすべてプレイヤーへ適用する。heal→p.hp回復、cure→p.statusAilments治癒。バッグ所持者（仲間）≠効果対象（プレイヤー）の二分離構造。
+
+### battle whitelist vs bag whitelist
+
+bag whitelist（COMPANION_BAG_ALLOWED_ITEM_IDS）は8種（rope含む）。battle whitelist（COMPANION_BATTLE_ITEM_DATA）は7種（rope除外）。ropeは捕獲処理が複雑（attemptCapture・captureBonus・ログ連鎖）なため今回除外。battleAllowed⊆bagAllowed の関係を維持。
+
+### atomic消費
+
+`runCompanionBattleItemAction`: getCompanionBattleItemStatus()で使用可否確認→効果量計算→効果適用→バッグ消費の順。cure itemはhasAilmentをrace condition用に直前再確認。「アイテムだけ減って効果なし」を禁止。
+
+### saveGame戦闘中不呼出
+
+既存のusePotion/useFoodItem/useCureItemが戦闘中にsaveGame()しない方針に合わせる。finishBattle()のsaveGame()でバッグ消費が保存される。
+
+### §142デバッグHTMLボタンID修正
+
+v0.61実装時、HTMLボタン生成と onclick ハンドラでIDセットが不一致のまま commit されていた。v0.62でHTML側を修正（旧21本→新20本、ハンドラと一致）。
+
+---
+
 ## v0.61 (2026-08-30) — 仲間個人バッグ (§142)
 
 ### 設計判断: 個数合計3・ホワイトリスト方式

@@ -5,6 +5,31 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.62] - 2026-09-06 — 仲間の戦闘中アイテム使用・手動操作 (§143)
+
+### Added
+- `COMPANION_BATTLE_ITEM_DATA`: 戦闘使用可能アイテムホワイトリスト（7種・effectType/target定義）
+- `_companionBattleItemLock`: 連打防止ロック（非永続）
+- `getCompanionBattleItemStatus(cid, itemId)`: 使用可否純粋判定（副作用なし・8種のreason）
+- `runCompanionBattleItemAction(cid, itemId)`: 効果適用＋バッグ消費atomic（null=失敗/false=成功）
+- `showCompanionBattleItemMenu(cid)`: アイテム選択UI（companion-item-menu内・使う/戻る）
+- `companion-item-menu` (index.html): バッグアイテム選択用submenu div追加
+- 仲間コマンドメニューに「🎒 アイテム」ボタン追加（バッグに戦闘可能item0件→disabled）
+- `executeCompanionCommand(cid, "item", itemId)`: itemモード追加（null→メニュー戻り、false→turn消費）
+- デバッグ26本（§143）: `btn-debug-v62-*`
+
+### Changed
+- `showCompanionCommandForIdx()`: 🎒 アイテムボタン追加（grid-column:1/-1、bag状態で有効/無効）
+- `executeCompanionCommand()`: 第3引数 `itemId` 追加、"item"モード分岐追加
+- §142 デバッグHTMLボタン修正: 旧IDセット→onclickハンドラと一致する正しいIDセットに修正（20本）
+
+### Notes
+- アイテム効果は常にプレイヤーへ適用（仲間はHPを持たないため）
+- 戦闘中はsaveGame()不呼出（finishBattle()のsaveで保存される・既存player item方針と同一）
+- AIの4択（attack/special/special2/magic）変更なし
+- companionTechniqueUsed: アイテム使用時に変更しない
+- gear bonus・growth bonus: アイテム効果量に加算しない
+
 ## [0.61] - 2026-08-30 — 仲間個人バッグ・アイテム受け渡し基盤 (§142)
 
 ### Added

@@ -734,6 +734,19 @@
     "rope"        // 捕獲ロープ（捕獲ボーナス）
   ];
 
+  // §143 v0.62: 仲間バッグ→戦闘使用可能アイテム（COMPANION_BAG_ALLOWED_ITEM_IDSのサブセット）
+  // target: "player"（仲間はHPを持たないため、効果は常にプレイヤーへ）
+  // ropeは捕獲処理が複雑なため除外。
+  var COMPANION_BATTLE_ITEM_DATA = {
+    "potion":     { target: "player", effectType: "heal" },
+    "coffee":     { target: "player", effectType: "heal" },
+    "bread":      { target: "player", effectType: "heal" },
+    "bento":      { target: "player", effectType: "heal" },
+    "ramen":      { target: "player", effectType: "heal" },
+    "coughsyrup": { target: "player", effectType: "cure" },
+    "deodorant":  { target: "player", effectType: "cure" }
+  };
+
   // §105 v0.40: 仲間装備データ（スターター4種）
   // §105 v0.40: スターター4種 / §107 v0.41: 特化装備4種追加（合計8種）
   // damageBonus/healBonus = 全行動汎用。actionKey別ボーナスは special1/special2/magicDamageBonus等
@@ -3862,6 +3875,8 @@
 
   // §142 v0.61: 仲間バッグtransfer連打防止ロック（非永続・IIFEスコープ・saveしない）
   var _companionBagTransferLock = false;
+  // §143 v0.62: 仲間バッグ戦闘使用連打防止ロック（非永続・IIFEスコープ）
+  var _companionBattleItemLock = false;
 
   // §124 v0.48 / §125 v0.48.1: 旅の案内人NPC 一時状態（非永続・IIFEスコープ・saveしない）
   var _adventureGuideStepCount = 0;         // 有効移動カウント（NPC未表示・草地道歩行のみ加算）
@@ -4873,6 +4888,129 @@
     renderCompanionBagModalBody(cid);
   }
 
+  // §143 v0.62: 仲間バッグ戦闘使用可否判定（副作用禁止：state変更・save・toast・modal・render一切なし）
+  // reason: "not_in_battle" / "not_companion" / "invalid_item" / "not_battle_allowed"
+  //         / "not_in_bag" / "full_hp" / "no_ailment" / "available"
+  function getCompanionBattleItemStatus(cid, itemId) {
+    var _battleDef = COMPANION_BATTLE_ITEM_DATA[itemId];
+    var _itemDef = findById(ITEM_DATA, itemId);
+    var _bagQty = getCompanionBagItemQuantity(cid, itemId);
+    function _ret(usable, reason) {
+      return { usable: usable, reason: reason, effectType: _battleDef ? _battleDef.effectType : null, quantity: _bagQty };
+    }
+    if (!state.inBattle) { return _ret(false, "not_in_battle"); }
+    if (!findById(COMPANION_DATA, cid)) { return _ret(false, "not_companion"); }
+    if (!_itemDef) { return _ret(false, "invalid_item"); }
+    if (!_battleDef) { return _ret(false, "not_battle_allowed"); }
+    if (_bagQty <= 0) { return _ret(false, "not_in_bag"); }
+    var _p = state.player;
+    if (_battleDef.effectType === "heal" && _p.hp >= _p.maxHp) { return _ret(false, "full_hp"); }
+    if (_battleDef.effectType === "cure") {
+      var _ailment = _itemDef.cures;
+      if (!hasAilment(_ailment)) { return _ret(false, "no_ailment"); }
+    }
+    return _ret(true, "available");
+  }
+
+  // §143 v0.62: 仲間バッグアイテムの戦闘使用実行（効果適用＋バッグ消費。atomic。）
+  // 返値: false=成功（敵を倒さない）、null=失敗（ターン消費しない）
+  function runCompanionBattleItemAction(cid, itemId) {
+    var _st = getCompanionBattleItemStatus(cid, itemId);
+    if (!_st.usable) { return null; }
+    var _itemDef = findById(ITEM_DATA, itemId);
+    var _cd = findById(COMPANION_DATA, cid);
+    var _cname = _cd ? _cd.name : cid;
+    var _p = state.player;
+    if (_st.effectType === "heal") {
+      var _before = _p.hp;
+      _p.hp = Math.min(_p.maxHp, _p.hp + _itemDef.healAmount);
+      var _actual = _p.hp - _before;
+      // atomic: 効果確認後にバッグ消費
+      state.companionBags[cid][itemId] = (state.companionBags[cid][itemId] || 1) - 1;
+      if (state.companionBags[cid][itemId] <= 0) { delete state.companionBags[cid][itemId]; }
+      log(_cname + "は「" + _itemDef.name + "」を使った！ HPが" + _actual + "回復した！");
+      updateBattlePlayerStatus();
+      updateStatusBar();
+    } else if (_st.effectType === "cure") {
+      var _ailment = _itemDef.cures;
+      if (!hasAilment(_ailment)) { return null; } // 直前に状態異常が消えた場合（race condition）
+      // atomic: 効果確認後にバッグ消費
+      state.companionBags[cid][itemId] = (state.companionBags[cid][itemId] || 1) - 1;
+      if (state.companionBags[cid][itemId] <= 0) { delete state.companionBags[cid][itemId]; }
+      clearAilment(_ailment, true);
+      var _cureMsg = _ailment === "allergy" ? "アレルギーが治った！" : "においが消えた！";
+      log(_cname + "は「" + _itemDef.name + "」を使った！ " + _cureMsg);
+      updateStatusBar();
+    } else {
+      return null; // 未知の effectType
+    }
+    return false; // 成功（敵を倒さない）
+  }
+
+  // §143 v0.62: 仲間バッグアイテム選択メニューを表示（戦闘中手動コマンド用）
+  function showCompanionBattleItemMenu(cid) {
+    if (!state.companionCommandActive) { return; }
+    if (!state.inBattle) { return; }
+    var _itemMenuEl = document.getElementById("companion-item-menu");
+    if (!_itemMenuEl) { return; }
+    var _cd = findById(COMPANION_DATA, cid);
+    var _cname = _cd ? (_cd.icon + " " + _cd.name) : cid;
+    var _ITEM_EMOJI = { potion: "🧪", coffee: "☕", bread: "🍞", bento: "🍱", ramen: "🍜", coughsyrup: "🍯", deodorant: "🧴" };
+    var html = '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">&#x1F392; ' + _cname + 'のバッグアイテム</p>';
+    var _hasBattleItem = false;
+    for (var _bi = 0; _bi < ITEM_DATA.length; _bi++) {
+      var _idef = ITEM_DATA[_bi];
+      var _iid = _idef.id;
+      if (!COMPANION_BATTLE_ITEM_DATA[_iid]) { continue; }
+      var _qty = getCompanionBagItemQuantity(cid, _iid);
+      if (_qty <= 0) { continue; }
+      _hasBattleItem = true;
+      var _st = getCompanionBattleItemStatus(cid, _iid);
+      var _emoji = _ITEM_EMOJI[_iid] || "🎒";
+      var _effectLabel = (_idef.type === "heal") ? ("HP+" + _idef.healAmount) : ((_idef.cures === "allergy") ? "アレルギー治癒" : "におい治癒");
+      var _reasonLabel = "";
+      if (!_st.usable) {
+        if (_st.reason === "full_hp") { _reasonLabel = "（HPが満タン）"; }
+        else if (_st.reason === "no_ailment") { _reasonLabel = "（今は不要）"; }
+      }
+      html += '<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:6px 8px;margin-bottom:4px;background:#1e2a3a;border-radius:6px;gap:6px;">';
+      html += '<span style="font-size:0.85em;color:#e0e0e0;">' + _emoji + ' ' + _idef.name + ' \xD7' + _qty + '<br><span style="color:#888;font-size:0.82em;">' + _effectLabel + _reasonLabel + '</span></span>';
+      html += '<button id="btn-companion-item-use-' + _iid + '" data-cbag-cid="' + cid + '" data-cbag-item="' + _iid + '"' + (_st.usable ? '' : ' disabled') + ' style="font-size:0.8em;padding:6px 10px;min-width:50px;">使う</button>';
+      html += '</div>';
+    }
+    if (!_hasBattleItem) {
+      html += '<p style="grid-column:1/-1;color:#888;font-size:0.85em;">バッグに使えるアイテムがありません</p>';
+    }
+    html += '<button id="btn-companion-item-back" class="submenu-back">&#x21A9; 戻る</button>';
+    _itemMenuEl.innerHTML = html;
+    _itemMenuEl.classList.remove("hidden");
+    document.getElementById("companion-command-menu").classList.add("hidden");
+    // ボタンハンドラ登録（クロージャでcid/itemIdをキャプチャ）
+    for (var _bj = 0; _bj < ITEM_DATA.length; _bj++) {
+      (function(_capturedItemId, _capturedCid) {
+        var _btn = document.getElementById("btn-companion-item-use-" + _capturedItemId);
+        if (!_btn) { return; }
+        _btn.onclick = function() {
+          if (_companionBattleItemLock) { return; }
+          _companionBattleItemLock = true;
+          var _m = document.getElementById("companion-item-menu");
+          if (_m) {
+            var _allBtns = _m.querySelectorAll("button");
+            for (var _k = 0; _k < _allBtns.length; _k++) { _allBtns[_k].disabled = true; }
+            _m.classList.add("hidden");
+          }
+          _companionBattleItemLock = false;
+          executeCompanionCommand(_capturedCid, "item", _capturedItemId);
+        };
+      })(ITEM_DATA[_bj].id, cid);
+    }
+    document.getElementById("btn-companion-item-back").onclick = function() {
+      var _m = document.getElementById("companion-item-menu");
+      if (_m) { _m.classList.add("hidden"); }
+      showCompanionCommandForIdx(state.companionCommandIndex);
+    };
+  }
+
   // §142 v0.61: 仲間バッグモーダル本文レンダリング
   function renderCompanionBagModalBody(cid) {
     var _titleEl = document.getElementById("companion-bag-title");
@@ -5148,12 +5286,28 @@
     var techBtn = _hasTech
       ? '<button id="btn-companion-tech"' + _techDisabled + ' style="' + _techStyle + '">' + _techLabel + '</button>'
       : '<button id="btn-companion-tech" disabled style="color:#555;border-color:#555;">⚡ わざ</button>';
+    // §143 v0.62: 🎒 アイテムボタン（バッグに戦闘使用可能itemがあれば有効）
+    var _hasBattleItem = false;
+    var _bagData = state.companionBags && state.companionBags[cid];
+    if (_bagData) {
+      var _battleItemIds = Object.keys ? Object.keys(COMPANION_BATTLE_ITEM_DATA) : [];
+      if (!Object.keys) { // ES5 fallback
+        for (var _bk in COMPANION_BATTLE_ITEM_DATA) { if (COMPANION_BATTLE_ITEM_DATA.hasOwnProperty(_bk)) { _battleItemIds.push(_bk); } }
+      }
+      for (var _bki = 0; _bki < _battleItemIds.length; _bki++) {
+        if (getCompanionBagItemQuantity(cid, _battleItemIds[_bki]) > 0) { _hasBattleItem = true; break; }
+      }
+    }
+    var _itemBtnStyle = _hasBattleItem ? "color:#a0cfff;border-color:#a0cfff;" : "color:#555;border-color:#555;";
+    var _itemBtnDisabled = _hasBattleItem ? "" : " disabled";
+    var itemBtn = '<button id="btn-companion-item"' + _itemBtnDisabled + ' style="grid-column:1/-1;' + _itemBtnStyle + '">&#x1F392; アイテム</button>';
     menu.innerHTML =
       '<p style="margin:2px 0 6px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">' + label + "の行動は？ " + progress + '</p>' +
       '<button id="btn-companion-fight">⚔️ たたかう</button>' +
       '<button id="btn-companion-special">⭐ 固有</button>' +
       '<button id="btn-companion-magic">✨ まほう</button>' +
       techBtn +
+      itemBtn +
       '<button id="btn-companion-auto" style="grid-column:1/-1;">🤝 まかせる</button>';
     menu.classList.remove("hidden");
     document.getElementById("battle-menu").classList.add("hidden");
@@ -5170,6 +5324,9 @@
     };
     document.getElementById("btn-companion-tech").onclick = function() { // §111 v0.43: わざ
       executeCompanionCommand(cid, "technique");
+    };
+    document.getElementById("btn-companion-item").onclick = function() { // §143 v0.62: アイテム
+      showCompanionBattleItemMenu(cid);
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
@@ -5254,7 +5411,8 @@
   }
 
   // §82 v0.28 / §83 v0.28.1 / §84 v0.29: 仲間コマンドボタン押下 → 行動実行 → 次の仲間 or 敵ターン
-  function executeCompanionCommand(cid, mode) {
+  // §143 v0.62: mode="item" 追加（第3引数 itemId はitem mode専用）
+  function executeCompanionCommand(cid, mode, itemId) {
     // §83 v0.28.1: 二重押し・二重実行を companionCommandLocked で防止
     if (state.companionCommandLocked) { return; }
     state.companionCommandLocked = true;
@@ -5297,6 +5455,15 @@
         return;
       }
       killed = techResult;
+    } else if (mode === "item") { // §143 v0.62: バッグアイテム使用
+      var itemResult = runCompanionBattleItemAction(cid, itemId);
+      if (itemResult === null) {
+        // アイテム使用不可（HP満タン・状態異常なし等）→ ターン消費なし・メニューへ戻る
+        state.companionCommandLocked = false;
+        showCompanionCommandForIdx(state.companionCommandIndex);
+        return;
+      }
+      killed = itemResult;
     } else if (mode === "auto") { // §85 v0.29.1: まかせる → ランダム行動
       killed = runCompanionAutoCommand(cid);
     } else { // たたかう
@@ -9962,29 +10129,55 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v60-reset-ch2" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ch2フラグ全リセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v60-reset-ch3" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ch3フラグ全リセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v60-album-open" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F3E0; 酒場を開いてアルバム表示</button>';
-      // §142 v0.61: 仲間個人バッグ デバッグ（22本）
+      // §142 v0.61: 仲間個人バッグ デバッグ（20本）
       html += '<p class="small" style="color:#a0cfff;margin-top:8px;">&#x1F392; v0.61 仲間個人バッグ (§142)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v61-item-list" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4CB; 全item分類一覧</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-whitelist" style="border-color:#a0cfff;color:#a0cfff;">&#x2705; bag whitelist確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-key-item-reject" style="border-color:#e17055;color:#e17055;">&#x1F512; key item（女神のウクレレ）拒否確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-4bags-init" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4C5; 4人初期bag確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-unjoined-reject" style="border-color:#e17055;color:#e17055;">&#x1F6AB; 未加入bag操作不可確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-give-juritani" style="border-color:#55efc4;color:#55efc4;">&#x2795; juritaniにやくそう1個渡す</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-return-juritani" style="border-color:#ffd166;color:#ffd166;">&#x2796; juritaniからやくそう返却</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-capacity-03" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4E6; 容量0/3境界確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-capacity-full" style="border-color:#e17055;color:#e17055;">&#x1F534; 3/3満杯→追加不可確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-player-qty0" style="border-color:#e17055;color:#e17055;">&#x1F6AB; player在庫0→渡し不可確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-bag-qty0" style="border-color:#e17055;color:#e17055;">&#x1F6AB; bag在庫0→返却不可確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-total-count" style="border-color:#55efc4;color:#55efc4;">&#x1F522; item総数不変確認（やくそう）</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-4bags-independent" style="border-color:#a0cfff;color:#a0cfff;">&#x1F465; 4人bag独立確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-party-remove-bag" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4BE; party離脱後bag維持確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-save-load" style="border-color:#55efc4;color:#55efc4;">&#x1F4BE; save/load bag維持確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-old-save" style="border-color:#ffd166;color:#ffd166;">&#x1F4DC; old save empty bag補正確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-over-capacity" style="border-color:#ffd166;color:#ffd166;">&#x26A0; over-capacity没収なし確認</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-juritani-bag" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; juritaniバッグUIを開く</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-player-bag" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F9D9; プレイヤーバッグUIを開く</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v61-fill-juritani" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; juritaniバッグ3/3に（テスト用）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-show-bags" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4E6; 全仲間バッグ内容表示</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-add-potion5" style="border-color:#55efc4;color:#55efc4;">&#x2795; ポーション+5</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-add-rope5" style="border-color:#55efc4;color:#55efc4;">&#x2795; ロープ+5</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-add-bread5" style="border-color:#55efc4;color:#55efc4;">&#x2795; パン+5</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-add-bento5" style="border-color:#55efc4;color:#55efc4;">&#x2795; 弁当+5</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-add-ramen5" style="border-color:#55efc4;color:#55efc4;">&#x2795; ラーメン+5</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-bag-juritani" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; じゅりたにバッグ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-bag-shurittani" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; しゅりったにバッグ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-bag-norio" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; のりおバッグ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-open-bag-harumi" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; はるみバッグ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-fill-juritani-bag" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; じゅりたに満杯(ポーション2+パン1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-fill-shurittani-bag" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; しゅりったに満杯(ロープ3)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-fill-norio-bag" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; のりお満杯(弁当1+ラーメン1+コーヒー1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-fill-harumi-bag" style="border-color:#ffd166;color:#ffd166;">&#x1F4A1; はるみ満杯(ポーション1+せき止め1+消臭剤1)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-over-capacity" style="border-color:#ffd166;color:#ffd166;">&#x26A0; じゅりたに超過容量(5/3)テスト</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-join-all" style="border-color:#55efc4;color:#55efc4;">&#x2714; 全仲間加入フラグON</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-unlock-juritani" style="border-color:#55efc4;color:#55efc4;">&#x2714; じゅりたに加入フラグON</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v61-transfer-status-check" style="border-color:#a0cfff;color:#a0cfff;">&#x1F50D; transfer可否確認(potion→juritani)</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v61-reset-all-bags" style="border-color:#e17055;color:#e17055;">&#x1F9F9; 全仲間バッグリセット</button>';
+      // §143 v0.62: 仲間戦闘中アイテム使用 デバッグ（26本）
+      html += '<p class="small" style="color:#ffb3c6;margin-top:8px;">&#x1F9EA; v0.62 仲間戦闘アイテム (§143)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-battle-item-whitelist" style="border-color:#ffb3c6;color:#ffb3c6;">&#x1F4CB; COMPANION_BATTLE_ITEM_DATA一覧</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-bag-vs-battle" style="border-color:#ffb3c6;color:#ffb3c6;">&#x2699; bag vs battleAllowed比較</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-rope-battle-reject" style="border-color:#e17055;color:#e17055;">&#x1F6AB; rope戦闘使用拒否確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-key-item-reject" style="border-color:#e17055;color:#e17055;">&#x1F6AB; 無効itemId拒否確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-status-juritani-potion" style="border-color:#a0cfff;color:#a0cfff;">&#x1F50D; getCompanionBattleItemStatus(juritani,potion)</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-setup-battle-juritani" style="border-color:#55efc4;color:#55efc4;">&#x2694; じゅりたに満杯+のらいぬ戦闘開始</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-setup-battle-all" style="border-color:#55efc4;color:#55efc4;">&#x2694; 全4人バッグ満杯+4人party+のらいぬ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-setup-hp-low" style="border-color:#ffd166;color:#ffd166;">&#x2764; HP10まで下げる（item menu確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-fullhp-reject" style="border-color:#e17055;color:#e17055;">&#x1F6AB; HP満タン heal使用不可確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-hp1-heal" style="border-color:#55efc4;color:#55efc4;">&#x2764; HP1セット（heal確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-maxhp-clamp" style="border-color:#55efc4;color:#55efc4;">&#x2764; maxHp-1セット（clamp確認）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-bag-qty-before" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4E6; じゅりたにbag数量確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-technique-flag-check" style="border-color:#a0cfff;color:#a0cfff;">&#x26A1; techniqueUsed不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-cure-allergy-setup" style="border-color:#ffd166;color:#ffd166;">&#x1F92E; allergy付与+せき止め確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-cure-smell-setup" style="border-color:#ffd166;color:#ffd166;">&#x1F9B4; smell付与+デオドラント確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-no-ailment-reject" style="border-color:#e17055;color:#e17055;">&#x1F6AB; 状態異常なし cure不可確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-total-count-before" style="border-color:#a0cfff;color:#a0cfff;">&#x1F522; player+全bags合計確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-ai-item-check" style="border-color:#a0cfff;color:#a0cfff;">&#x1F916; AIにitem行動なし確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-item-menu-open-juritani" style="border-color:#c8b4ff;color:#c8b4ff;">&#x1F392; じゅりたにアイテムmenu表示（戦闘中）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-cancel-check" style="border-color:#a0cfff;color:#a0cfff;">&#x2716; cancel→turn不変・bag不変確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-4person-party" style="border-color:#55efc4;color:#55efc4;">&#x1F465; 4人party全員item確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-0qty-item-absent" style="border-color:#e17055;color:#e17055;">&#x1F6AB; qty0のitemが選択肢に出ないこと確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-save-timing" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4BE; 戦闘中save不呼出確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-battle-item-status-all" style="border-color:#a0cfff;color:#a0cfff;">&#x1F50D; 全item status確認（じゅりたに）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v62-bag-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; 全bag+セットアップリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -14172,6 +14365,220 @@
         state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} };
         saveGame();
         showToast("[DEBUG] 全仲間バッグをリセット");
+      };
+      // §143 v0.62: 仲間戦闘中アイテム使用 デバッグ
+      document.getElementById("btn-debug-v62-battle-item-whitelist").onclick = function () {
+        var lines = ["[DEBUG] COMPANION_BATTLE_ITEM_DATA:"];
+        for (var k in COMPANION_BATTLE_ITEM_DATA) {
+          if (COMPANION_BATTLE_ITEM_DATA.hasOwnProperty(k)) {
+            var d = COMPANION_BATTLE_ITEM_DATA[k];
+            lines.push(k + ": effectType=" + d.effectType + " target=" + d.target);
+          }
+        }
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v62-bag-vs-battle").onclick = function () {
+        var lines = ["[DEBUG] bag vs battleAllowed:"];
+        for (var i = 0; i < ITEM_DATA.length; i++) {
+          var id = ITEM_DATA[i].id;
+          var bagOK = (COMPANION_BAG_ALLOWED_ITEM_IDS.indexOf(id) >= 0);
+          var battleOK = !!(COMPANION_BATTLE_ITEM_DATA[id]);
+          lines.push(id + ": bag=" + bagOK + " battle=" + battleOK);
+        }
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v62-rope-battle-reject").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "rope": 1 };
+        var status = getCompanionBattleItemStatus("juritani", "rope");
+        showToast("[DEBUG] rope戦闘use status:\nusable=" + status.usable + "\nreason=" + status.reason + "\n期待: not_battle_allowed");
+        state.companionBags["juritani"] = {};
+      };
+      document.getElementById("btn-debug-v62-key-item-reject").onclick = function () {
+        var status = getCompanionBattleItemStatus("juritani", "ukulele");
+        showToast("[DEBUG] ukulele戦闘use status:\nusable=" + status.usable + "\nreason=" + status.reason + "\n期待: invalid_item or not_battle_allowed");
+      };
+      document.getElementById("btn-debug-v62-status-juritani-potion").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        if (!state.companionBags["juritani"]) { state.companionBags["juritani"] = {}; }
+        state.companionBags["juritani"]["potion"] = 2;
+        var status = getCompanionBattleItemStatus("juritani", "potion");
+        showToast("[DEBUG] status(juritani,potion):\nusable=" + status.usable + "\nreason=" + status.reason + "\neffectType=" + status.effectType + "\nquantity=" + status.quantity);
+      };
+      document.getElementById("btn-debug-v62-setup-battle-juritani").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.juritaniJoined = true;
+        state.player.companions = ["juritani"];
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "potion": 2, "bread": 1 };
+        saveGame();
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] じゅりたに(バッグ満杯)+のらいぬ戦闘。🎒アイテムを試して！");
+      };
+      document.getElementById("btn-debug-v62-setup-battle-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        state.player.juritaniJoined = true; state.player.shurittaniJoined = true;
+        state.player.norioJoined = true; state.player.harumiJoined = true;
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "potion": 2, "bread": 1 };
+        state.companionBags["shurittani"] = { "coffee": 1, "bento": 1 };
+        state.companionBags["norio"] = { "ramen": 1, "coughsyrup": 1 };
+        state.companionBags["harumi"] = { "deodorant": 1, "bread": 1 };
+        saveGame();
+        resetPartyTrail();
+        closeModal("settings-modal");
+        var dog = findById(NON_UMA_DATA, "wilddog");
+        if (!dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(dog);
+        showToast("[DEBUG] 全4人バッグ付き+4人+のらいぬ戦闘！");
+      };
+      document.getElementById("btn-debug-v62-setup-hp-low").onclick = function () {
+        state.player.hp = 10;
+        updateBattlePlayerStatus();
+        updateStatusBar();
+        saveGame();
+        showToast("[DEBUG] HP10に設定。heal itemが使えるはず");
+      };
+      document.getElementById("btn-debug-v62-fullhp-reject").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "potion": 1 };
+        state.player.hp = state.player.maxHp;
+        var status = getCompanionBattleItemStatus("juritani", "potion");
+        showToast("[DEBUG] HP満タン時 potion status:\nusable=" + status.usable + "\nreason=" + status.reason + "\n期待: full_hp");
+        state.companionBags["juritani"] = {};
+      };
+      document.getElementById("btn-debug-v62-hp1-heal").onclick = function () {
+        state.player.hp = 1;
+        updateBattlePlayerStatus();
+        updateStatusBar();
+        saveGame();
+        showToast("[DEBUG] HP1に設定。heal itemが使えるはず");
+      };
+      document.getElementById("btn-debug-v62-maxhp-clamp").onclick = function () {
+        state.player.hp = state.player.maxHp - 1;
+        updateBattlePlayerStatus();
+        updateStatusBar();
+        saveGame();
+        showToast("[DEBUG] HP maxHp-1=" + (state.player.maxHp - 1) + "に設定。heal後にmaxHpでclampされるはず");
+      };
+      document.getElementById("btn-debug-v62-bag-qty-before").onclick = function () {
+        var cid = "juritani";
+        var lines = ["[DEBUG] じゅりたにbag現在値:"];
+        var bag = (state.companionBags && state.companionBags[cid]) || {};
+        for (var k2 in bag) {
+          if (bag.hasOwnProperty(k2)) { lines.push(k2 + ": " + bag[k2]); }
+        }
+        if (lines.length === 1) { lines.push("(空)"); }
+        lines.push("使用量: " + getCompanionBagUsedCapacity(cid) + "/3");
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v62-technique-flag-check").onclick = function () {
+        var before = !!(state.companionTechniqueUsed && state.companionTechniqueUsed["juritani"]);
+        showToast("[DEBUG] じゅりたにtechniqueUsed=" + before + "\nアイテム使用後もこの値が変わらないことを確認してください");
+      };
+      document.getElementById("btn-debug-v62-cure-allergy-setup").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "coughsyrup": 1 };
+        if (!state.player.statusAilments) { state.player.statusAilments = {}; }
+        state.player.statusAilments.allergy = 5;
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] allergy付与+coughsyrup1個→じゅりたにで治療可能状態にしました");
+      };
+      document.getElementById("btn-debug-v62-cure-smell-setup").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "deodorant": 1 };
+        if (!state.player.statusAilments) { state.player.statusAilments = {}; }
+        state.player.statusAilments.smell = 5;
+        saveGame();
+        updateStatusBar();
+        showToast("[DEBUG] smell付与+deodorant1個→じゅりたにで治療可能状態にしました");
+      };
+      document.getElementById("btn-debug-v62-no-ailment-reject").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "coughsyrup": 1 };
+        if (state.player.statusAilments) { state.player.statusAilments.allergy = 0; }
+        var status = getCompanionBattleItemStatus("juritani", "coughsyrup");
+        showToast("[DEBUG] アレルギーなし coughsyrup status:\nusable=" + status.usable + "\nreason=" + status.reason + "\n期待: no_ailment");
+        state.companionBags["juritani"] = {};
+      };
+      document.getElementById("btn-debug-v62-total-count-before").onclick = function () {
+        var total = 0;
+        for (var i2 = 0; i2 < ITEM_DATA.length; i2++) {
+          var tid = ITEM_DATA[i2].id;
+          total += getItemCount(tid);
+          var cids2 = ["juritani", "shurittani", "norio", "harumi"];
+          for (var j = 0; j < cids2.length; j++) {
+            total += getCompanionBagItemQuantity(cids2[j], tid);
+          }
+        }
+        showToast("[DEBUG] player+全bags 全item合計=" + total + "\nアイテム使用後は-1になるはず");
+      };
+      document.getElementById("btn-debug-v62-ai-item-check").onclick = function () {
+        showToast("[DEBUG] AI4択=attack/special/special2/magic\nmode=itemはAIに追加されていない\nrunCompanionAutoCommand()内にitem分岐なし\n確認: COMPANION_BATTLE_ITEM_DATA使用はUIのみ");
+      };
+      document.getElementById("btn-debug-v62-item-menu-open-juritani").onclick = function () {
+        if (!state.inBattle) { showToast("[DEBUG] 戦闘中のみ使用可。先にバトル開始してください"); return; }
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        if (!state.companionBags["juritani"]) { state.companionBags["juritani"] = {}; }
+        if (!state.companionBags["juritani"]["potion"]) { state.companionBags["juritani"]["potion"] = 1; }
+        state.companionCommandActive = true;
+        state.companionCommandQueue = ["juritani"];
+        state.companionCommandIndex = 0;
+        closeModal("settings-modal");
+        showCompanionBattleItemMenu("juritani");
+      };
+      document.getElementById("btn-debug-v62-cancel-check").onclick = function () {
+        var beforeIdx = state.companionCommandIndex;
+        var beforeBag = JSON.stringify((state.companionBags && state.companionBags["juritani"]) || {});
+        showToast("[DEBUG] cancel前 index=" + beforeIdx + " bag=" + beforeBag + "\n戻るを押してもindexが変わらないことを確認");
+      };
+      document.getElementById("btn-debug-v62-4person-party").onclick = function () {
+        showToast("[DEBUG] 4人party全員item確認は btn-debug-v62-setup-battle-all で戦闘を開始し\n各仲間のターンで🎒アイテムを選んで確認してください");
+      };
+      document.getElementById("btn-debug-v62-0qty-item-absent").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "potion": 0, "bread": 1 };
+        normalizeCompanionBags();
+        var qty0 = getCompanionBagItemQuantity("juritani", "potion");
+        var qty1 = getCompanionBagItemQuantity("juritani", "bread");
+        showToast("[DEBUG] qty0セット後normalize:\npotion(0→削除): " + qty0 + " 期待=0\nbread(1→維持): " + qty1 + " 期待=1");
+        state.companionBags["juritani"] = {};
+      };
+      document.getElementById("btn-debug-v62-save-timing").onclick = function () {
+        showToast("[DEBUG] 戦闘中アイテム使用はsaveGame()を呼ばない\n(既存player item使用と同方針)\nfinishBattle()のsaveGame()でバッグ消費が保存される");
+      };
+      document.getElementById("btn-debug-v62-battle-item-status-all").onclick = function () {
+        state.player.juritaniJoined = true;
+        if (!state.companionBags) { state.companionBags = {}; }
+        state.companionBags["juritani"] = { "potion": 1, "coffee": 1, "bread": 1, "bento": 1, "ramen": 1, "coughsyrup": 1, "deodorant": 1, "rope": 1 };
+        var lines = ["[DEBUG] じゅりたに全item battleStatus(bag1個ずつ):"];
+        for (var i3 = 0; i3 < ITEM_DATA.length; i3++) {
+          var id3 = ITEM_DATA[i3].id;
+          var st3 = getCompanionBattleItemStatus("juritani", id3);
+          lines.push(id3 + ": usable=" + st3.usable + " reason=" + st3.reason);
+        }
+        showToast(lines.join("\n"));
+        state.companionBags["juritani"] = {};
+      };
+      document.getElementById("btn-debug-v62-bag-reset").onclick = function () {
+        state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} };
+        state.player.companions = [];
+        saveGame();
+        showToast("[DEBUG] 全bag+party リセット");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {

@@ -22,6 +22,20 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.62 — 仲間の戦闘中アイテム使用・手動操作 (§143)
+
+- **`COMPANION_BATTLE_ITEM_DATA`** 戦闘使用可能アイテムホワイトリスト（7種） ✅
+- **`getCompanionBattleItemStatus(cid, itemId)`** 使用可否純粋判定（副作用なし） ✅
+- **`runCompanionBattleItemAction(cid, itemId)`** 効果適用＋バッグ消費atomic ✅
+- **`showCompanionBattleItemMenu(cid)`** アイテム選択UI（使う/戻る） ✅
+- **`companion-item-menu`** (index.html) submenu div追加 ✅
+- **仲間コマンドメニュー「🎒 アイテム」ボタン** ✅
+- **`executeCompanionCommand` "item"モード追加** ✅
+- **§142デバッグHTMLボタンID修正** （旧IDと不一致→修正） ✅
+- **デバッグ26本（§143）**: `btn-debug-v62-*` ✅
+- **AIの4択変更なし・gear/growth bonus非適用・saveGame戦闘中不呼出** ✅
+- **戦闘中アイテム使用はプレイヤーHP/状態異常へ適用（仲間HPなし）** ✅
+
 ### Version 0.61 — 仲間個人バッグ・アイテム受け渡し基盤 (§142)
 
 - **`COMPANION_BAG_CAPACITY = 3`** 容量定数 ✅

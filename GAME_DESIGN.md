@@ -8315,3 +8315,95 @@ state.companionBags = {
 | btn-debug-v61-unlock-juritani | じゅりたに加入フラグON |
 | btn-debug-v61-transfer-status-check | potion→juritani受け渡し可否確認 |
 | btn-debug-v61-reset-all-bags | 全仲間バッグリセット |
+
+
+---
+
+## §143 v0.62 — 仲間の戦闘中アイテム使用・手動操作 **[実装済み]**
+
+### 概要
+
+仲間の手動コマンド選択中に「🎒 アイテム」を選ぶと、その仲間のバッグにある戦闘使用可能なアイテムを1個使用できる。使用に成功するとその仲間の1ターンを消費する。キャンセルはアイテムもターンも消費しない。仲間AIはアイテムを使用しない（v0.63候補）。
+
+### 使用対象
+
+アイテム効果は常にプレイヤー本人（主人公）に適用される。仲間はHPを持たないため。
+
+- **heal系**: プレイヤーHPを回復（maxHpで上限clamp）
+- **cure系**: プレイヤーの状態異常を治癒
+
+### 戦闘使用ホワイトリスト（COMPANION_BATTLE_ITEM_DATA）
+
+| itemId | 名称 | 効果 | 使用不可条件 |
+|---|---|---|---|
+| potion | やくそう | HP+15 | HP満タン |
+| coffee | コーヒー | HP+10 | HP満タン |
+| bread | パン | HP+20 | HP満タン |
+| bento | お弁当 | HP+40 | HP満タン |
+| ramen | ラーメン | HP+9999（実質全回復） | HP満タン |
+| coughsyrup | せき止めシロップ | アレルギー治癒 | アレルギーなし |
+| deodorant | デオドラントスプレー | におい治癒 | においなし |
+
+**非対象**: rope（捕獲特殊処理のため除外）
+
+### フロー
+
+```
+仲間コマンドメニュー
+└─ 🎒 アイテム（バッグに戦闘使用可能アイテムなし→disabled）
+   └─ アイテム選択画面（companion-item-menu）
+      ├─ [使う] → 効果適用 → バッグ-1 → ターン消費 → 次の仲間
+      └─ [戻る] → アイテム消費0・ターン消費0 → 仲間コマンドへ
+```
+
+### 主要関数
+
+| 関数 | 説明 |
+|---|---|
+| `getCompanionBattleItemStatus(cid, itemId)` | 使用可否判定（副作用なし） |
+| `runCompanionBattleItemAction(cid, itemId)` | 効果適用+バッグ消費（null=失敗/false=成功） |
+| `showCompanionBattleItemMenu(cid)` | アイテム選択UI表示 |
+| `executeCompanionCommand(cid, "item", itemId)` | ターン消費・次仲間へ進行 |
+
+### 変更禁止継続
+
+- BGM・究極ゴリラ捕獲条件・究極チンパンジー・最終サイドストーリー変更禁止
+- 思い出アルバム・バッグ転送（v0.61）変更禁止
+- 仲間AI（attack/special1/special2/magic 4択比率）変更禁止
+- gear bonus・growth bonus・EXP・捕獲率変更禁止
+- companionTechniqueUsed: アイテム使用時に変更しない
+
+### saveGame タイミング
+
+戦闘中はsaveしない（既存player item使用と同方針）。finishBattle()のsaveGame()でバッグ消費が保存される。
+
+### デバッグ（§143・26本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v62-battle-item-whitelist | COMPANION_BATTLE_ITEM_DATA一覧表示 |
+| btn-debug-v62-bag-vs-battle | bagAllowed vs battleAllowed比較 |
+| btn-debug-v62-rope-battle-reject | rope戦闘使用拒否確認 |
+| btn-debug-v62-key-item-reject | 無効itemId拒否確認 |
+| btn-debug-v62-status-juritani-potion | getCompanionBattleItemStatus(juritani,potion)確認 |
+| btn-debug-v62-setup-battle-juritani | じゅりたにバッグ満杯+のらいぬ戦闘開始 |
+| btn-debug-v62-setup-battle-all | 全仲間バッグ満杯+4人+のらいぬ戦闘 |
+| btn-debug-v62-setup-hp-low | HP10まで下げてアイテムmenu確認 |
+| btn-debug-v62-fullhp-reject | HP満タン時heal使用不可確認 |
+| btn-debug-v62-hp1-heal | HP1→heal確認 |
+| btn-debug-v62-maxhp-clamp | maxHp-1からheal→clamp確認 |
+| btn-debug-v62-bag-qty-before | 使用前bag qty確認 |
+| btn-debug-v62-bag-qty-after | 使用後bag qty確認（-1） |
+| btn-debug-v62-technique-flag-check | アイテム使用後techniqueUsed不変確認 |
+| btn-debug-v62-cure-allergy-setup | allergy付与→せき止め使用確認 |
+| btn-debug-v62-cure-smell-setup | smell付与→デオドラント使用確認 |
+| btn-debug-v62-no-ailment-reject | 状態異常なし cure使用不可確認 |
+| btn-debug-v62-total-count-before | player+4bags合計確認 |
+| btn-debug-v62-total-count-after | 使用後合計-1確認 |
+| btn-debug-v62-ai-item-check | AI行動にitemが含まれないこと確認 |
+| btn-debug-v62-item-menu-open-juritani | じゅりたにアイテムmenu表示（戦闘中） |
+| btn-debug-v62-cancel-check | cancelでturn不変・bag不変確認 |
+| btn-debug-v62-4person-party | 4人party全員item確認 |
+| btn-debug-v62-0qty-item-absent | qty0のitemが選択肢に出ないこと確認 |
+| btn-debug-v62-save-timing | 戦闘中save不呼出確認 |
+| btn-debug-v62-bag-reset | 全bag+アイテム追加セットアップリセット |
