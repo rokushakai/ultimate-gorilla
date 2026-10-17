@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.62** |
+| 現在バージョン | **v0.63** |
 | ブランチ | main |
 
 ---
@@ -92,6 +92,11 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.63] 仲間AIのバッグアイテム自動使用**（§144）
+  - `COMPANION_AI_HEAL_ITEM_PRIORITY` / `COMPANION_AI_HEAL_HP_THRESHOLD` 定数追加
+  - `getCompanionAiItemDecision(cid)` AI判断純粋関数（cure優先→heal判断）
+  - `runCompanionAutoCommand` 冒頭にAI判断追加（4択ロジック変更なし）
+  - デバッグ12本（§144）: `btn-debug-v63-*`
 - **[v0.62] 仲間の戦闘中アイテム使用・手動操作**（§143）
   - `COMPANION_BATTLE_ITEM_DATA` 戦闘ホワイトリスト7種（rope除外）
   - `getCompanionBattleItemStatus()` / `runCompanionBattleItemAction()` 純粋判定＋atomic実行
@@ -99,7 +104,7 @@
   - 仲間コマンドメニューに「🎒 アイテム」ボタン追加
   - AIの4択変更なし / 戦闘中saveGame不呼出 / gear/growth bonus非適用
   - デバッグ26本（§143）: `btn-debug-v62-*`
-  - 今後候補: v0.63 仲間AIのバッグアイテム自動使用
+  - ✅ v0.63 仲間AIのバッグアイテム自動使用（実装済み）
 - **[v0.61] 仲間個人バッグ・アイテム受け渡し基盤**（§142）
   - `state.companionBags` / `normalizeCompanionBags()` / 容量3・ホワイトリスト8種
   - `transferItemToCompanionBag()` / `transferItemFromCompanionBag()` atomic移動

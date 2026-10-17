@@ -747,6 +747,11 @@
     "deodorant":  { target: "player", effectType: "cure" }
   };
 
+  // §144 v0.63: AIがhealアイテムを選ぶ優先順（左が最優先）
+  var COMPANION_AI_HEAL_ITEM_PRIORITY = ["potion", "coffee", "bread", "bento", "ramen"];
+  // §144 v0.63: AIがhealを使うHPしきい値（player.hp/player.maxHp <= これ）
+  var COMPANION_AI_HEAL_HP_THRESHOLD = 0.40;
+
   // §105 v0.40: 仲間装備データ（スターター4種）
   // §105 v0.40: スターター4種 / §107 v0.41: 特化装備4種追加（合計8種）
   // damageBonus/healBonus = 全行動汎用。actionKey別ボーナスは special1/special2/magicDamageBonus等
@@ -4912,6 +4917,32 @@
     return _ret(true, "available");
   }
 
+  // §144 v0.63: AI判断純粋関数。バッグと状態から使うべきアイテムを決定。副作用なし。
+  // 戻り値: { shouldUse: bool, itemId: string|null }
+  function getCompanionAiItemDecision(cid) {
+    var _no = { shouldUse: false, itemId: null };
+    if (!state.inBattle || !state.companionBags || !state.companionBags[cid]) { return _no; }
+    var _p = state.player;
+    // cure優先1: アレルギー
+    if (_p.allergySick && getCompanionBagItemQuantity(cid, "coughsyrup") > 0) {
+      return { shouldUse: true, itemId: "coughsyrup" };
+    }
+    // cure優先2: におい
+    if (_p.smellSick && getCompanionBagItemQuantity(cid, "deodorant") > 0) {
+      return { shouldUse: true, itemId: "deodorant" };
+    }
+    // heal判断: HP低下時
+    if (_p.maxHp > 0 && (_p.hp / _p.maxHp) <= COMPANION_AI_HEAL_HP_THRESHOLD) {
+      for (var _hi = 0; _hi < COMPANION_AI_HEAL_ITEM_PRIORITY.length; _hi++) {
+        var _hid = COMPANION_AI_HEAL_ITEM_PRIORITY[_hi];
+        if (getCompanionBagItemQuantity(cid, _hid) > 0 && getCompanionBattleItemStatus(cid, _hid).usable) {
+          return { shouldUse: true, itemId: _hid };
+        }
+      }
+    }
+    return _no;
+  }
+
   // §143 v0.62: 仲間バッグアイテムの戦闘使用実行（効果適用＋バッグ消費。atomic。）
   // 返値: false=成功（敵を倒さない）、null=失敗（ターン消費しない）
   function runCompanionBattleItemAction(cid, itemId) {
@@ -5774,6 +5805,20 @@
     var e = state.enemy;
     var cData = findById(COMPANION_DATA, cid);
     var name = cData ? cData.name : cid;
+
+    // §144 v0.63: アイテム使用優先判断（4択ロジック変更なし）
+    var _aiItemDecision = getCompanionAiItemDecision(cid);
+    if (_aiItemDecision.shouldUse) {
+      log("🤝 " + name + "にまかせた！");
+      log("🎒 アイテム使用を選んだ！");
+      var _aiItemResult = runCompanionBattleItemAction(cid, _aiItemDecision.itemId);
+      if (_aiItemResult !== null) {
+        if (!state.lastCompanionAutoAction) { state.lastCompanionAutoAction = {}; }
+        state.lastCompanionAutoAction[cid] = "item";
+        return _aiItemResult; // false固定（アイテムで敵は倒せない）
+      }
+      // null = 失敗（稀）→ fall through to 4択
+    }
 
     // §97 v0.36: 仲間別基本ウェイト（wA / wS1 / wS2 / wM）
     var wA = 0.35, wS1 = 0.35, wS2 = 0.15, wM = 0.15; // デフォルト（未知cid用）
@@ -10178,6 +10223,20 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v62-save-timing" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4BE; 戦闘中save不呼出確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v62-battle-item-status-all" style="border-color:#a0cfff;color:#a0cfff;">&#x1F50D; 全item status確認（じゅりたに）</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v62-bag-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; 全bag+セットアップリセット</button>';
+      // §144 v0.63: 仲間AIのバッグアイテム自動使用テスト（12本）
+      html += '<p style="color:#aaffcc;margin:8px 0 2px;">§144 v0.63 仲間AIアイテム自動使用</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-ai-decision-juritani" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4CA; じゅりたにAI判断確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-ai-decision-all" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4CB; 4人全員AI判断一覧</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-setup-heal-juritani" style="border-color:#55efc4;color:#55efc4;">&#x1F489; じゅりたにpotion+HP低下→auto heal</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-setup-heal-all" style="border-color:#55efc4;color:#55efc4;">&#x1F48A; 4人potion+HP低下→まかせる確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-setup-allergy-cure" style="border-color:#fdcb6e;color:#fdcb6e;">&#x1F927; allergy+coughsyrup→auto cure</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-setup-smell-cure" style="border-color:#fdcb6e;color:#fdcb6e;">&#x1F9F4; smell+deodorant→auto cure</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-fullhp-no-heal" style="border-color:#e17055;color:#e17055;">&#x274C; HP満タン・異常なし→item不使用確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-empty-bag-skip" style="border-color:#e17055;color:#e17055;">&#x1F9F9; バッグ空→item skip→4択確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-heal-priority" style="border-color:#a0cfff;color:#a0cfff;">&#x1F522; potion>coffee>bread優先順確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-4choice-ratio-unchanged" style="border-color:#a0cfff;color:#a0cfff;">&#x2696; AI item後の次ターン4択比率確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-ai-log-format" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4DD; AIログ形式確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v63-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; v63デバッグリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -14579,6 +14638,131 @@
         state.player.companions = [];
         saveGame();
         showToast("[DEBUG] 全bag+party リセット");
+      };
+      // §144 v0.63: 仲間AIアイテム自動使用テスト
+      document.getElementById("btn-debug-v63-ai-decision-juritani").onclick = function () {
+        var d = getCompanionAiItemDecision("juritani");
+        showToast("[DEBUG] juritani AI判断: shouldUse=" + d.shouldUse + " itemId=" + d.itemId + "\nHP=" + state.player.hp + "/" + state.player.maxHp + " allergy=" + state.player.allergySick + " smell=" + state.player.smellSick);
+      };
+      document.getElementById("btn-debug-v63-ai-decision-all").onclick = function () {
+        var ids = ["juritani", "shurittani", "norio", "harumi"];
+        var lines = ["[DEBUG] 4人AI判断:"];
+        for (var _i = 0; _i < ids.length; _i++) {
+          var _cid = ids[_i];
+          var _d = getCompanionAiItemDecision(_cid);
+          lines.push(_cid + ": " + (_d.shouldUse ? "USE " + _d.itemId : "skip"));
+        }
+        showToast(lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v63-setup-heal-juritani").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = { potion: 2 };
+        state.player.companions = ["juritani"];
+        state.player.hp = Math.floor(state.player.maxHp * 0.25);
+        resetPartyTrail();
+        saveGame();
+        closeModal("settings-modal");
+        var _dog = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog);
+        showToast("[DEBUG] じゅりたにHP低下+potion→まかせるでauto heal確認");
+      };
+      document.getElementById("btn-debug-v63-setup-heal-all").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = { potion: 2 };
+        state.companionBags["shurittani"] = { coffee: 2 };
+        state.companionBags["norio"] = { bread: 2 };
+        state.companionBags["harumi"] = { bento: 2 };
+        state.player.companions = ["juritani", "shurittani", "norio", "harumi"];
+        state.player.hp = Math.floor(state.player.maxHp * 0.25);
+        resetPartyTrail();
+        saveGame();
+        closeModal("settings-modal");
+        var _dog2 = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog2) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog2);
+        showToast("[DEBUG] 4人バッグheal+HP低下→まかせるでauto heal確認");
+      };
+      document.getElementById("btn-debug-v63-setup-allergy-cure").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = { coughsyrup: 2 };
+        state.player.companions = ["juritani"];
+        state.player.allergySick = true;
+        state.player.smellSick = false;
+        resetPartyTrail();
+        saveGame();
+        closeModal("settings-modal");
+        var _dog3 = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog3) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog3);
+        showToast("[DEBUG] allergy+coughsyrup→まかせるでauto cure確認");
+      };
+      document.getElementById("btn-debug-v63-setup-smell-cure").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = { deodorant: 2 };
+        state.player.companions = ["juritani"];
+        state.player.allergySick = false;
+        state.player.smellSick = true;
+        resetPartyTrail();
+        saveGame();
+        closeModal("settings-modal");
+        var _dog4 = findById(NON_UMA_DATA, "wilddog");
+        if (!_dog4) { showToast("[DEBUG] のらいぬが見つからない"); return; }
+        actuallyStartBattle(_dog4);
+        showToast("[DEBUG] smell+deodorant→まかせるでauto cure確認");
+      };
+      document.getElementById("btn-debug-v63-fullhp-no-heal").onclick = function () {
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = { potion: 2 };
+        state.player.hp = state.player.maxHp;
+        state.player.allergySick = false;
+        state.player.smellSick = false;
+        var _d = getCompanionAiItemDecision("juritani");
+        showToast("[DEBUG] HP満タン・異常なし→ shouldUse=" + _d.shouldUse + " (falseなら正常)");
+      };
+      document.getElementById("btn-debug-v63-empty-bag-skip").onclick = function () {
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags["juritani"] = {};
+        state.player.hp = Math.floor(state.player.maxHp * 0.20);
+        var _d = getCompanionAiItemDecision("juritani");
+        showToast("[DEBUG] バッグ空+HP低下→ shouldUse=" + _d.shouldUse + " (falseなら正常)");
+      };
+      document.getElementById("btn-debug-v63-heal-priority").onclick = function () {
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.player.allergySick = false;
+        state.player.smellSick = false;
+        state.player.hp = Math.floor(state.player.maxHp * 0.20);
+        var _lines = ["[DEBUG] heal優先順テスト:"];
+        var _orders = ["potion", "coffee", "bread", "bento", "ramen"];
+        for (var _oi = 0; _oi < _orders.length; _oi++) {
+          state.companionBags["juritani"] = {};
+          for (var _oj = _oi; _oj < _orders.length; _oj++) {
+            state.companionBags["juritani"][_orders[_oj]] = 1;
+          }
+          var _od = getCompanionAiItemDecision("juritani");
+          _lines.push("残" + (5 - _oi) + "種→選択: " + _od.itemId);
+        }
+        showToast(_lines.join("\n"));
+      };
+      document.getElementById("btn-debug-v63-4choice-ratio-unchanged").onclick = function () {
+        showToast("[DEBUG] 既存4択ウェイト確認: juritani wA=0.30 wS1=0.35 wS2=0.15 wM=0.20\nAI item使用後はlastAction='item'→次ターンのpenalty対象外→4択比率そのまま適用");
+      };
+      document.getElementById("btn-debug-v63-ai-log-format").onclick = function () {
+        showToast("[DEBUG] AIログ確認: 「まかせた！」→「🎒 アイテム使用を選んだ！」→効果ログ の順で出力される");
+      };
+      document.getElementById("btn-debug-v63-reset").onclick = function () {
+        if (!state.companionBags) { state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} }; }
+        state.companionBags = { juritani: {}, shurittani: {}, norio: {}, harumi: {} };
+        state.player.companions = [];
+        state.player.hp = state.player.maxHp;
+        state.player.allergySick = false;
+        state.player.smellSick = false;
+        saveGame();
+        showToast("[DEBUG] v63テスト用データをリセット");
       };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {

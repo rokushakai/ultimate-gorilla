@@ -8407,3 +8407,89 @@ state.companionBags = {
 | btn-debug-v62-0qty-item-absent | qty0のitemが選択肢に出ないこと確認 |
 | btn-debug-v62-save-timing | 戦闘中save不呼出確認 |
 | btn-debug-v62-bag-reset | 全bag+アイテム追加セットアップリセット |
+
+---
+
+## §144 v0.63 — 仲間AIのバッグアイテム自動使用
+
+### 概要
+
+「まかせる」選択時、一定条件下でバッグのアイテムを自動使用する。
+既存4択ロジック（attack/special1/special2/magic の比率・状況判断・前回行動記憶）は**一切変更しない**。
+アイテム使用は`runCompanionAutoCommand`の冒頭に優先判断を追加し、条件を満たす場合のみ4択をスキップする。
+
+### 新定数
+
+```javascript
+// v0.63 §144: AI heal判断の優先順（左が最優先）
+var COMPANION_AI_HEAL_ITEM_PRIORITY = ["potion", "coffee", "bread", "bento", "ramen"];
+// v0.63 §144: AIがhealを使うHPしきい値（player.hp/player.maxHp <= これ）
+var COMPANION_AI_HEAL_HP_THRESHOLD = 0.40;
+```
+
+### 新関数
+
+#### `getCompanionAiItemDecision(cid)`
+
+純粋関数（副作用なし）。バッグと現在の状態を見て使うべきアイテムを判断する。
+
+戻り値: `{ shouldUse: true/false, itemId: string|null }`
+
+判断ロジック（優先順位順）:
+1. ガード: `!state.inBattle || !state.companionBags || !state.companionBags[cid]` → `{ shouldUse: false, itemId: null }`
+2. **cure優先1**: `state.player.allergySick` && `getCompanionBagItemQuantity(cid, "coughsyrup") > 0` → `{ shouldUse: true, itemId: "coughsyrup" }`
+3. **cure優先2**: `state.player.smellSick` && `getCompanionBagItemQuantity(cid, "deodorant") > 0` → `{ shouldUse: true, itemId: "deodorant" }`
+4. **heal判断**: `state.player.hp / state.player.maxHp <= COMPANION_AI_HEAL_HP_THRESHOLD`:
+   - `COMPANION_AI_HEAL_ITEM_PRIORITY` 順にループ
+   - `getCompanionBagItemQuantity(cid, id) > 0` && `getCompanionBattleItemStatus(cid, id).usable === true` の最初のもの → `{ shouldUse: true, itemId: id }`
+5. 該当なし → `{ shouldUse: false, itemId: null }`
+
+#### `runCompanionAutoCommand(cid)` 変更
+
+既存のガード + name取得直後（`var p = state.player;` の前）に追記:
+
+```javascript
+// §144 v0.63: アイテム使用優先判断（4択ロジック変更なし）
+var _aiItemDecision = getCompanionAiItemDecision(cid);
+if (_aiItemDecision.shouldUse) {
+  log("🤝 " + name + "にまかせた！");
+  log("🎒 アイテム使用を選んだ！");
+  var _aiItemResult = runCompanionBattleItemAction(cid, _aiItemDecision.itemId);
+  if (_aiItemResult !== null) {
+    if (!state.lastCompanionAutoAction) { state.lastCompanionAutoAction = {}; }
+    state.lastCompanionAutoAction[cid] = "item";
+    return _aiItemResult; // false固定（アイテムで敵は倒せない）
+  }
+  // null = 失敗（稀）→ fall through to 4択
+}
+```
+
+### 不変制約
+
+- 既存4択（attack/special1/special2/magic）の比率・状況判断コード変更禁止
+- BGM・究極ゴリラ捕獲条件・究極チンパンジー・最終サイドストーリー変更禁止
+- 思い出アルバム・バッグ転送（v0.61）・手動アイテム使用（v0.62）変更禁止
+- gear bonus・growth bonus・EXP・捕獲率変更禁止
+- companionTechniqueUsed: アイテム使用時に変更しない
+- `executeCompanionCommand`の"item"モード変更禁止
+
+### saveGameタイミング
+
+戦闘中はsaveしない（v0.62と同方針）。finishBattle()でバッグ消費が保存される。
+
+### デバッグ（§144・12本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v63-ai-decision-juritani | getCompanionAiItemDecision(juritani)確認 |
+| btn-debug-v63-ai-decision-all | 4人全員のAI判断一覧 |
+| btn-debug-v63-setup-heal-juritani | じゅりたにバッグにpotion+HP低下→auto heal確認 |
+| btn-debug-v63-setup-heal-all | 4人バッグにpotion+HP低下→まかせる→auto heal確認 |
+| btn-debug-v63-setup-allergy-cure | allergy付与+coughsyrup in bag→auto cure確認 |
+| btn-debug-v63-setup-smell-cure | smell付与+deodorant in bag→auto cure確認 |
+| btn-debug-v63-fullhp-no-heal | HP満タン・異常なし→4択使用（item不使用）確認 |
+| btn-debug-v63-empty-bag-skip | バッグ空→item判断skip→4択確認 |
+| btn-debug-v63-heal-priority | potion優先→coffee→bread順を確認 |
+| btn-debug-v63-4choice-ratio-unchanged | AI item使用後の次ターン4択比率変化なし確認 |
+| btn-debug-v63-ai-log-format | AIログ「まかせた！」「🎒アイテム使用を選んだ！」確認 |
+| btn-debug-v63-reset | デバッグ用セットアップリセット |

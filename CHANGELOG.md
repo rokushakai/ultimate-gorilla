@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.63] - 2026-10-17 — 仲間AIのバッグアイテム自動使用 (§144)
+
+### Added
+- `COMPANION_AI_HEAL_ITEM_PRIORITY`: AI heal優先順定数（potion>coffee>bread>bento>ramen）
+- `COMPANION_AI_HEAL_HP_THRESHOLD`: heal発動HP閾値（0.40 = 40%以下）
+- `getCompanionAiItemDecision(cid)`: AI判断純粋関数（cure優先→heal判断。副作用なし）
+- `runCompanionAutoCommand`: 冒頭にAI判断を追加（条件満たす場合4択をスキップしてitem使用）
+- デバッグ12本（§144）: `btn-debug-v63-*`
+
+### Notes
+- 既存4択ロジック（attack/special1/special2/magic の比率・状況判断）は変更なし
+- アイテム使用後 `lastCompanionAutoAction[cid] = "item"` → 次ターンの4択penaltyは無適用（比率変化なし）
+- 戦闘中saveGame不呼出（finishBattle()で保存）
+
 ## [0.62] - 2026-09-06 — 仲間の戦闘中アイテム使用・手動操作 (§143)
 
 ### Added

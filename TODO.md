@@ -22,6 +22,15 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.63 — 仲間AIのバッグアイテム自動使用 (§144)
+
+- **`COMPANION_AI_HEAL_ITEM_PRIORITY`** / **`COMPANION_AI_HEAL_HP_THRESHOLD`** 定数追加 ✅
+- **`getCompanionAiItemDecision(cid)`** AI判断純粋関数（cure優先→heal判断） ✅
+- **`runCompanionAutoCommand` 先頭に優先判断追加**（4択ロジック変更なし） ✅
+- **デバッグ12本（§144）**: `btn-debug-v63-*` ✅
+
+---
+
 ### Version 0.62 — 仲間の戦闘中アイテム使用・手動操作 (§143)
 
 - **`COMPANION_BATTLE_ITEM_DATA`** 戦闘使用可能アイテムホワイトリスト（7種） ✅
