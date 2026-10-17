@@ -8493,3 +8493,107 @@ if (_aiItemDecision.shouldUse) {
 | btn-debug-v63-4choice-ratio-unchanged | AI item使用後の次ターン4択比率変化なし確認 |
 | btn-debug-v63-ai-log-format | AIログ「まかせた！」「🎒アイテム使用を選んだ！」確認 |
 | btn-debug-v63-reset | デバッグ用セットアップリセット |
+
+---
+
+## §145 v0.64 — 仲間わざ2種類目
+
+### 概要
+
+各仲間に第2のわざを追加する。解放条件はわざ1解放済み（Lv25+reward gear）かつLv50以上。
+わざ1・わざ2はそれぞれ1戦闘に1回使用可能（独立カウンタ）。
+⚡わざボタン押下でサブメニュー（わざ1/わざ2/戻る）を表示。AIの4択には追加しない（手動のみ）。
+
+### 新定数
+
+```javascript
+var COMPANION_TECHNIQUE2_DATA = {
+  juritani:   { id: "juritani_technique2",   name: "剛烈強打",   unlockLevel: 50, requiredGearId: "critical_bracelet",
+                type: "damage_crit",     description: "50%で会心が必ず発動する強打。1戦闘に1回。",
+                minValue: 38, maxValue: 52, critChance: 0.50, critMultiplier: 1.6 },
+  shurittani: { id: "shurittani_technique2", name: "超絶包囲網", unlockLevel: 50, requiredGearId: "net_master_belt",
+                type: "damage_leave_one", description: "より強力な包囲で追い詰める。絶対にHP0にしない。1戦闘に1回。",
+                minValue: 30, maxValue: 44 },
+  norio:      { id: "norio_technique2",      name: "究極解析",   unlockLevel: 50, requiredGearId: "research_notebook",
+                type: "damage",          description: "完璧な弱点分析で強烈なダメージを与える。1戦闘に1回。",
+                minValue: 40, maxValue: 56 },
+  harumi:     { id: "harumi_technique2",     name: "聖なる癒し", unlockLevel: 50, requiredGearId: "prayer_brooch",
+                type: "heal_cure",       description: "HPを大きく回復し、状態異常をすべて治療する。1戦闘に1回。",
+                minValue: 45, maxValue: 62 }
+};
+```
+
+### 新しい type: "damage_crit"（juritani）
+
+- ダメージ: `randInt(minValue, maxValue) + growthBonus`
+- `Math.random() < critChance` なら `Math.floor(dmg * critMultiplier)` に増加
+- 会心時ログ: 「必殺の一撃！！」、通常: 「渾身の強打！」
+- 敵HP0以下で勝利（return true）
+
+### 新しい type: "heal_cure"（harumi）
+
+- 不発条件: `p.hp >= p.maxHp && !p.allergySick && !p.smellSick` → null（ターン消費なし）
+- heal: `randInt(minValue, maxValue) + growthBonus`（p.maxHpクランプ）
+- cure: `if p.allergySick → clearAilment("allergy", true)` / `if p.smellSick → clearAilment("smell", true)`
+- updateBattlePlayerStatus() + updateStatusBar()
+
+### type "damage_leave_one"・"damage"
+
+既存わざ1のロジックと同様（COMPANION_TECHNIQUE2_DATA参照、growthBonus適用）。
+
+### 解放条件
+
+`isCompanionTechnique2Unlocked(cid)`: `isCompanionTechniqueUnlocked(cid) && getCompanionLevel(cid).level >= td2.unlockLevel`
+
+### 状態管理
+
+- `state.companionTechnique2Used` — transient（非永続）。`resetCompanionTechniqueUsage()`でfalseリセット
+- `state.companionTechnique2LearnedNotices` — persistent（saveGame/loadGame対象・never-demote）
+
+### UI
+
+`⚡わざ`ボタン押下 → `showCompanionTechniqueMenu(cid)`:
+- `companion-technique-menu` submenu div
+- わざ1ボタン + わざ2ボタン（解放/使用済み状態に応じてスタイル） + 戻るボタン
+- `executeCompanionCommand(cid, "technique")` / `executeCompanionCommand(cid, "technique2")`
+
+`executeCompanionCommand` "technique2" モード: `runCompanionTechnique2Action(cid)` 呼び出し。null → メニューへ戻る。
+
+### 習得演出通知
+
+- `normalizeCompanionTechnique2LearnedNotices()`: never-demote保証
+- `queueCompanionTechnique2LearnNotice(cid)`: pending配列追加（重複防止）
+- `consumePendingCompanionTechnique2LearnNotice()`: 戦闘中・modal中は延期
+- `showCompanionTechnique2LearnModal(cid)` / `closeCompanionTechnique2LearnModal()`: modal表示
+- `modal-companion-technique2-learn` (index.html)
+- `gainCompanionExp()` でLv49→50かつわざ1解放済み → queue
+
+### 旧セーブ修復
+
+`loadGame()` で `isCompanionTechnique2Unlocked(cid) && !state.companionTechnique2LearnedNotices[cid]` → queue追加
+
+### 不変制約
+
+- 既存わざ1（COMPANION_TECHNIQUE_DATA）の威力・使用条件・ロジック変更禁止
+- AI 4択変更禁止（technique2は手動コマンドのみ）
+- gear bonus・growth bonus・BGM・捕獲条件変更禁止
+- `runCompanionTechniqueAction(cid)` 変更禁止
+
+### デバッグ（§145・14本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v64-technique2-data | COMPANION_TECHNIQUE2_DATA一覧確認 |
+| btn-debug-v64-unlock-all | 4人全員Lv50+わざ1解放でわざ2解放確認 |
+| btn-debug-v64-unlock-juritani | じゅりたにわざ2解放（Lv50+critical_bracelet） |
+| btn-debug-v64-unlock-harumi | はるみわざ2解放（Lv50+prayer_brooch） |
+| btn-debug-v64-battle-damage-crit | juritaniわざ2の会心判定確認（戦闘中） |
+| btn-debug-v64-battle-heal-cure | harumiわざ2のheal+cure確認（ailment付与+HP低下+戦闘） |
+| btn-debug-v64-technique2-used | technique2Used=true後の再使用不可確認 |
+| btn-debug-v64-independent-counters | わざ1使用後もわざ2使用可確認 |
+| btn-debug-v64-lock-reason | 未解放時のlockReason確認 |
+| btn-debug-v64-notice-queue | 習得演出キュー確認（4人全員queue） |
+| btn-debug-v64-notice-show-juritani | じゅりたに習得モーダル直接表示 |
+| btn-debug-v64-notice-flag-check | noticed=trueのsave確認 |
+| btn-debug-v64-old-save-repair | 旧セーブ修復確認（unlock済み+noticed=false→queue） |
+| btn-debug-v64-reset | v64テスト用セットアップリセット |

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.63** |
+| 現在バージョン | **v0.64** |
 | ブランチ | main |
 
 ---
@@ -92,6 +92,13 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.64] 仲間わざ2種類目**（§145）
+  - `COMPANION_TECHNIQUE2_DATA` 4人分わざ2定数（剛烈強打/超絶包囲網/究極解析/聖なる癒し）
+  - `isCompanionTechnique2Unlocked(cid)` / `runCompanionTechnique2Action(cid)` 実装
+  - わざ2習得演出システム（queue/consume/modal + save/load統合）
+  - わざサブメニュー（`showCompanionTechniqueMenu`）/ ⚡ボタン → サブメニュー誘導
+  - ステータス画面にわざ2解放状況セクション追加
+  - デバッグ14本（§145）: `btn-debug-v64-*`
 - **[v0.63] 仲間AIのバッグアイテム自動使用**（§144）
   - `COMPANION_AI_HEAL_ITEM_PRIORITY` / `COMPANION_AI_HEAL_HP_THRESHOLD` 定数追加
   - `getCompanionAiItemDecision(cid)` AI判断純粋関数（cure優先→heal判断）
@@ -961,8 +968,10 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-1. **v0.52.1 BGMファイル再生基盤** — 音源ファイル配置後に実装。`startBGM(type)` にファイル再生分岐追加。工数小〜中。**音源配置待ち**。
-2. **仲間わざ習得演出** — 仲間わざ解放時の演出強化。工数小〜中。
+1. **v0.65 仲間の夢・目標管理** — 仲間ごとの個人目標設定・達成演出（§146）。仲間システム深化の次ステップ。工数中。
+2. **v0.66 ステージ探索UI改善** — フィールド上の宝箱・ポイント発見演出強化。工数小〜中。
+
+> v0.64（§145 仲間わざ2種類目）実装済み。COMPANION_TECHNIQUE2_DATA 4人分、わざサブメニュー、習得演出、Lv50解放、status画面更新。デバッグ14本。
 
 > v0.57.1（§138 仕様整合監査）実装済み。スターター4種分類A確認→ショップ廃止、ショップ専用4種追加（各60G）。getCompanionGearPurchaseStatus追加。lock・joined確認・報酬DOM除外・debug16本。BGM/捕獲条件変更なし。
 > v0.57（§137 仲間装備商人販売）実装済み。renderMerchantMainに「仲間装備を買う」追加。

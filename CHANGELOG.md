@@ -5,6 +5,30 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.64] - 2026-10-17 — 仲間わざ2種類目 (§145)
+
+### Added
+- `COMPANION_TECHNIQUE2_DATA`: わざ2定数（4人分: 剛烈強打/超絶包囲網/究極解析/聖なる癒し）
+- `state.companionTechnique2Used`: 1戦闘1回フラグ（わざ1と独立）
+- `state.companionTechnique2LearnedNotices`: 習得演出済みフラグ（永続・save対象）
+- `isCompanionTechnique2Unlocked(cid)`: 解放判定（わざ1解放済み AND Lv50以上）
+- `getCompanionTechnique2LockReason(cid)`: UI用ロック理由文字列
+- `runCompanionTechnique2Action(cid)`: わざ2実行（damage_crit/damage_leave_one/damage/heal_cure 4タイプ）
+- わざ2習得演出システム（queue/consume/show/close + save/load統合）
+- `showCompanionTechniqueMenu(cid)`: わざサブメニュー（わざ1/わざ2/戻る）
+- `gainCompanionExp`: Lv49→50でわざ2習得演出キュー
+- 仲間戦闘コマンド: ⚡わざボタンからサブメニューへ誘導
+- `executeCompanionCommand`: "technique2"モード追加
+- ステータス画面: わざ2解放状況セクション追加（0/4〜4/4）
+- `index.html`: `companion-technique-menu`サブメニューdiv、わざ2習得モーダル追加
+- デバッグ14本（§145）: `btn-debug-v64-*`
+
+### Notes
+- わざ1とわざ2は同一戦闘内で両方使用可（各1回）
+- はるみわざ2（heal_cure）: HP回復＋全状態異常治療。HP満+異常なし → null不発
+- しゅりったにわざ2: HP絶対0にしない（enemyHP1以下のとき不発）
+- じゅりたにわざ2（damage_crit）: 50%で会心×1.6追加
+
 ## [0.63] - 2026-10-17 — 仲間AIのバッグアイテム自動使用 (§144)
 
 ### Added

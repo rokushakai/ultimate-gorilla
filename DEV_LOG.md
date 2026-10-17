@@ -5,6 +5,26 @@
 
 ---
 
+## v0.64 (2026-10-17) — 仲間わざ2種類目 (§145)
+
+### わざ1との独立カウンタ設計
+
+わざ1（`companionTechniqueUsed`）とわざ2（`companionTechnique2Used`）は独立した1戦闘1回フラグ。同一戦闘内でわざ1とわざ2の両方を使用可能。`resetCompanionTechniqueUsage()` で両方リセット。
+
+### サブメニュー誘導
+
+既存の⚡わざボタンの直接実行をサブメニュー（showCompanionTechniqueMenu）経由に変更。わざ1ボタン→executeCompanionCommand("technique")、わざ2ボタン→executeCompanionCommand("technique2")で各わざを実行。
+
+### heal_cure型（はるみわざ2）のno-op判定
+
+HP満タン AND 状態異常なし → null返値（ターン消費なし）。HP回復量はwandInt(45,62)+growthBonus。clearAilment機能により両状態異常を同時治療。
+
+### わざ2解放条件
+
+「わざ1解放済み（Lv25+reportGear）AND Lv50以上」を採用。わざ2をわざ1マスタリーの先として設計。旧セーブ修復はloadGame時にisCompanionTechnique2Unlocked確認→pending追加で対応。
+
+---
+
 ## v0.63 (2026-10-17) — 仲間AIアイテム自動使用 (§144)
 
 ### 4択比率変更禁止との両立

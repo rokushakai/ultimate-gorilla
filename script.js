@@ -825,6 +825,23 @@
                   type: "heal_protect",    description: "HPを大きく回復し、次の敵攻撃を15%軽減する。1戦闘に1回。",  minValue: 40, maxValue: 55, damageReduction: 0.15 }
   };
 
+  // §145 v0.64: 仲間わざ2種類目データ（解放条件: わざ1解放済み AND Lv>=unlockLevel）
+  // damage_crit: 50%会心あり強打 / heal_cure: HP回復+状態異常全治療
+  var COMPANION_TECHNIQUE2_DATA = {
+    juritani:   { id: "juritani_technique2",   name: "剛烈強打",   unlockLevel: 50, requiredGearId: "critical_bracelet",
+                  type: "damage_crit",     description: "50%で会心が必ず発動する強打。1戦闘に1回。",
+                  minValue: 38, maxValue: 52, critChance: 0.50, critMultiplier: 1.6 },
+    shurittani: { id: "shurittani_technique2", name: "超絶包囲網", unlockLevel: 50, requiredGearId: "net_master_belt",
+                  type: "damage_leave_one", description: "より強力な包囲で追い詰める。絶対にHP0にしない。1戦闘に1回。",
+                  minValue: 30, maxValue: 44 },
+    norio:      { id: "norio_technique2",      name: "究極解析",   unlockLevel: 50, requiredGearId: "research_notebook",
+                  type: "damage",          description: "完璧な弱点分析で強烈なダメージを与える。1戦闘に1回。",
+                  minValue: 40, maxValue: 56 },
+    harumi:     { id: "harumi_technique2",     name: "聖なる癒し", unlockLevel: 50, requiredGearId: "prayer_brooch",
+                  type: "heal_cure",       description: "HPを大きく回復し、状態異常をすべて治療する。1戦闘に1回。",
+                  minValue: 45, maxValue: 62 }
+  };
+
   // §113 v0.44: 仲間サイドストーリーデータ（4人×1話、今後拡張可能）
   var COMPANION_SIDE_STORY_DATA = {
     juritani: {
@@ -1274,6 +1291,7 @@
     companionSideStoryChapter3AllCompleteCelebrated: false, // §133 v0.54: 第3話全話完了演出済み（永続・saveする）
     finalCompanionSideStoryUnlockNotified: false, // §135 v0.56: 最終サイドストーリー解放通知済み（永続・saveする）
     companionTechniqueLearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §139 v0.58: 仲間わざ習得演出済みフラグ（永続・saveする）
+    companionTechnique2LearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §145 v0.64: わざ2習得演出済みフラグ（永続・saveする）
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
@@ -1518,6 +1536,8 @@
     consumePendingCompanionStoryCompletionNotices();
     // §139 v0.58: 仲間わざ習得演出（pending→safe timing表示）
     consumePendingCompanionTechniqueLearnNotice();
+    // §145 v0.64: 仲間わざ2習得演出（pending→safe timing表示）
+    consumePendingCompanionTechnique2LearnNotice();
 
     var p = state.player;
 
@@ -3805,24 +3825,35 @@
     if (csMenu) { csMenu.classList.add("hidden"); }
     var cmMenu = document.getElementById("companion-magic-menu"); // §95 v0.35
     if (cmMenu) { cmMenu.classList.add("hidden"); }
+    var ctMenu = document.getElementById("companion-technique-menu"); // §145 v0.64
+    if (ctMenu) { ctMenu.classList.add("hidden"); }
     updateBattleStatusBadges(); // §93 v0.34: 戦闘終了時にバッジをクリア
   }
 
   // §111 v0.43: 仲間わざ使用状態を全リセット（戦闘開始時・戦闘終了時共用）
+  // §145 v0.64: わざ2使用状態も同時リセット
   function resetCompanionTechniqueUsage() {
     state.companionTechniqueUsed = { juritani: false, shurittani: false, norio: false, harumi: false };
+    state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
   }
 
   // §112 v0.43.1: companionTechniqueUsedが壊れていたら修復（全リセットせず欠損キーだけ補完する）
+  // §145 v0.64: companionTechnique2Usedも同様に補完
   function ensureCompanionTechniqueUsageState() {
     if (!state.companionTechniqueUsed || typeof state.companionTechniqueUsed !== "object") {
       resetCompanionTechniqueUsage();
       return;
     }
+    if (!state.companionTechnique2Used || typeof state.companionTechnique2Used !== "object") {
+      state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
+    }
     var _ids112 = ["juritani", "shurittani", "norio", "harumi"];
     for (var _ei112 = 0; _ei112 < _ids112.length; _ei112++) {
       if (state.companionTechniqueUsed[_ids112[_ei112]] === undefined) {
         state.companionTechniqueUsed[_ids112[_ei112]] = false;
+      }
+      if (state.companionTechnique2Used[_ids112[_ei112]] === undefined) {
+        state.companionTechnique2Used[_ids112[_ei112]] = false;
       }
     }
   }
@@ -5264,6 +5295,117 @@
     }
   }
 
+  // §145 v0.64: わざ2習得演出（非永続・IIFEスコープ）
+  var _companionTechnique2LearnPending = [];
+  var _companionTechnique2LearnVisible = false;
+  var _companionTechnique2LearnTimer = null;
+  var _companionTechnique2LearnCloseLock = false;
+
+  // §145 v0.64: わざ2習得演出済みフラグを正規化（never-demote）
+  function normalizeCompanionTechnique2LearnedNotices() {
+    if (!state.companionTechnique2LearnedNotices ||
+        typeof state.companionTechnique2LearnedNotices !== "object" ||
+        Array.isArray(state.companionTechnique2LearnedNotices)) {
+      state.companionTechnique2LearnedNotices = {};
+    }
+    var _n2cids = ["juritani", "shurittani", "norio", "harumi"];
+    var _n2changed = false;
+    for (var _n2i = 0; _n2i < _n2cids.length; _n2i++) {
+      var _n2cid = _n2cids[_n2i];
+      if (state.companionTechnique2LearnedNotices[_n2cid] === true) { continue; }
+      if (typeof state.companionTechnique2LearnedNotices[_n2cid] !== "boolean") {
+        state.companionTechnique2LearnedNotices[_n2cid] = false;
+        _n2changed = true;
+      }
+    }
+    return _n2changed;
+  }
+
+  // §145 v0.64: わざ2習得演出キュー追加（重複防止・演出済みガード）
+  function queueCompanionTechnique2LearnNotice(cid) {
+    if (!COMPANION_TECHNIQUE2_DATA[cid]) { return; }
+    if (!isCompanionTechnique2Unlocked(cid)) { return; }
+    normalizeCompanionTechnique2LearnedNotices();
+    if (state.companionTechnique2LearnedNotices[cid] === true) { return; }
+    for (var _p2i = 0; _p2i < _companionTechnique2LearnPending.length; _p2i++) {
+      if (_companionTechnique2LearnPending[_p2i] === cid) { return; }
+    }
+    _companionTechnique2LearnPending.push(cid);
+  }
+
+  // §145 v0.64: わざ2習得演出を消費（戦闘中・他モーダル中は延期）
+  function consumePendingCompanionTechnique2LearnNotice() {
+    if (_companionTechnique2LearnVisible) { return; }
+    if (_companionTechnique2LearnPending.length === 0) { return; }
+    if (state.inBattle) {
+      if (_companionTechnique2LearnTimer) { clearTimeout(_companionTechnique2LearnTimer); }
+      _companionTechnique2LearnTimer = setTimeout(consumePendingCompanionTechnique2LearnNotice, 400);
+      return;
+    }
+    if (state.modalOpen) {
+      if (_companionTechnique2LearnTimer) { clearTimeout(_companionTechnique2LearnTimer); }
+      _companionTechnique2LearnTimer = setTimeout(consumePendingCompanionTechnique2LearnNotice, 300);
+      return;
+    }
+    var _q2cid = _companionTechnique2LearnPending[0];
+    normalizeCompanionTechnique2LearnedNotices();
+    if (state.companionTechnique2LearnedNotices[_q2cid] === true) {
+      _companionTechnique2LearnPending.shift();
+      if (_companionTechnique2LearnPending.length > 0) {
+        if (_companionTechnique2LearnTimer) { clearTimeout(_companionTechnique2LearnTimer); }
+        _companionTechnique2LearnTimer = setTimeout(consumePendingCompanionTechnique2LearnNotice, 200);
+      }
+      return;
+    }
+    showCompanionTechnique2LearnModal(_q2cid);
+  }
+
+  // §145 v0.64: わざ2習得演出モーダルを表示
+  function showCompanionTechnique2LearnModal(cid) {
+    if (_companionTechnique2LearnVisible) { return; }
+    var _std2 = COMPANION_TECHNIQUE2_DATA[cid];
+    if (!_std2) { return; }
+    var _scd2 = findById(COMPANION_DATA, cid);
+    if (!_scd2) { return; }
+    _companionTechnique2LearnVisible = true;
+    var _personEmoji2 = _scd2.icon || "&#x1F9D1;";
+    var _bodyEl2 = document.getElementById("companion-technique2-learn-body");
+    if (_bodyEl2) {
+      _bodyEl2.innerHTML =
+        '<h3 style="margin:0 0 10px;font-size:1.15em;">&#x2728; 仲間わざ2習得！</h3>' +
+        '<p style="font-size:1.1em;margin-bottom:6px;">' + _personEmoji2 + ' ' + _scd2.name + '</p>' +
+        '<p style="font-size:1.0em;font-weight:bold;margin-bottom:10px;color:#ffd166;">&#x26A1; &#x300C;' + _std2.name + '&#x300D;を覚えた！</p>' +
+        '<div style="font-size:0.88em;color:#adb5bd;text-align:left;padding:8px;background:#1a2a3a;border-radius:6px;margin-bottom:10px;">' + _std2.description + '</div>' +
+        '<p style="font-size:0.82em;color:#6c757d;margin-bottom:16px;">仲間わざ2は戦闘中、1戦につき1回だけ使用できます。</p>' +
+        '<button class="modal-btn" id="btn-tech2-learn-close" style="width:100%;">閉じる</button>';
+    }
+    openModal("modal-companion-technique2-learn");
+    var _closeBtn2 = document.getElementById("btn-tech2-learn-close");
+    if (_closeBtn2) { _closeBtn2.onclick = closeCompanionTechnique2LearnModal; }
+  }
+
+  // §145 v0.64: わざ2習得演出モーダルを閉じる（close連打防止・save1回）
+  function closeCompanionTechnique2LearnModal() {
+    if (_companionTechnique2LearnCloseLock) { return; }
+    _companionTechnique2LearnCloseLock = true;
+    var _c2cid = (_companionTechnique2LearnPending.length > 0) ? _companionTechnique2LearnPending[0] : null;
+    closeModal("modal-companion-technique2-learn");
+    _companionTechnique2LearnVisible = false;
+    if (_c2cid) {
+      normalizeCompanionTechnique2LearnedNotices();
+      if (state.companionTechnique2LearnedNotices[_c2cid] !== true) {
+        state.companionTechnique2LearnedNotices[_c2cid] = true;
+        saveGame();
+      }
+      _companionTechnique2LearnPending.shift();
+    }
+    _companionTechnique2LearnCloseLock = false;
+    if (_companionTechnique2LearnPending.length > 0) {
+      if (_companionTechnique2LearnTimer) { clearTimeout(_companionTechnique2LearnTimer); }
+      _companionTechnique2LearnTimer = setTimeout(consumePendingCompanionTechnique2LearnNotice, 400);
+    }
+  }
+
   // §82 v0.28: 仲間コマンドシーケンスを開始する
   function startCompanionCommands() {
     var e = state.enemy;
@@ -5353,14 +5495,59 @@
     document.getElementById("btn-companion-magic").onclick = function() { // §95 v0.35: まほうサブメニューへ
       showCompanionMagicMenu(cid);
     };
-    document.getElementById("btn-companion-tech").onclick = function() { // §111 v0.43: わざ
-      executeCompanionCommand(cid, "technique");
+    document.getElementById("btn-companion-tech").onclick = function() { // §145 v0.64: わざサブメニューへ
+      showCompanionTechniqueMenu(cid);
     };
     document.getElementById("btn-companion-item").onclick = function() { // §143 v0.62: アイテム
       showCompanionBattleItemMenu(cid);
     };
     document.getElementById("btn-companion-auto").onclick = function() {
       executeCompanionCommand(cid, "auto");
+    };
+  }
+
+  // §145 v0.64: わざサブメニューを表示する（わざ1 / わざ2 / 戻る）
+  function showCompanionTechniqueMenu(cid) {
+    if (!state.companionCommandActive) return;
+    var cData = findById(COMPANION_DATA, cid);
+    if (!cData) return;
+    var td1 = COMPANION_TECHNIQUE_DATA[cid];
+    var td2 = COMPANION_TECHNIQUE2_DATA[cid];
+    if (!td1) return; // わざ1すらない仲間は出ない
+    var menu = document.getElementById("companion-technique-menu");
+    if (!menu) return;
+    var _t1Unlocked = isCompanionTechniqueUnlocked(cid);
+    var _t1Used = !!(state.companionTechniqueUsed && state.companionTechniqueUsed[cid]);
+    var _t2Unlocked = isCompanionTechnique2Unlocked(cid);
+    var _t2Used = !!(state.companionTechnique2Used && state.companionTechnique2Used[cid]);
+    var _t1Style = _t1Unlocked ? (_t1Used ? "color:#555;border-color:#555;" : "color:#ffd166;border-color:#ffd166;") : "color:#888;border-color:#666;";
+    var _t1Disabled = (!_t1Unlocked || _t1Used) ? " disabled" : "";
+    var _t1Label = (td1 ? td1.name : "わざ1") + (_t1Used ? "（使用済）" : (_t1Unlocked ? "" : "🔒"));
+    var _t2Style = _t2Unlocked ? (_t2Used ? "color:#555;border-color:#555;" : "color:#e879f9;border-color:#e879f9;") : "color:#888;border-color:#666;";
+    var _t2Disabled = (!_t2Unlocked || _t2Used) ? " disabled" : "";
+    var _t2Label = (td2 ? td2.name : "わざ2") + (_t2Used ? "（使用済）" : (_t2Unlocked ? "" : "🔒"));
+    var _t1LockReason = _t1Unlocked ? "" : ('<p style="font-size:0.78em;color:#888;margin:0 0 2px;">' + getCompanionTechniqueLockReason(cid) + '</p>');
+    var _t2LockReason = _t2Unlocked ? "" : ('<p style="font-size:0.78em;color:#888;margin:0 0 2px;">' + getCompanionTechnique2LockReason(cid) + '</p>');
+    menu.innerHTML =
+      '<p style="margin:2px 0 4px;font-size:0.85em;color:#aaffcc;grid-column:1/-1;">⚡ ' + cData.name + 'のわざ</p>' +
+      _t1LockReason +
+      '<button id="btn-tech-sub1"' + _t1Disabled + ' style="grid-column:1/-1;' + _t1Style + '">⚡ ' + _t1Label + '</button>' +
+      _t2LockReason +
+      '<button id="btn-tech-sub2"' + _t2Disabled + ' style="grid-column:1/-1;' + _t2Style + '">⚡⚡ ' + _t2Label + '</button>' +
+      '<button id="btn-tech-back" style="grid-column:1/-1;color:#adb5bd;border-color:#555;">← 戻る</button>';
+    document.getElementById("companion-command-menu").classList.add("hidden");
+    menu.classList.remove("hidden");
+    document.getElementById("btn-tech-sub1").onclick = function() {
+      menu.classList.add("hidden");
+      executeCompanionCommand(cid, "technique");
+    };
+    document.getElementById("btn-tech-sub2").onclick = function() {
+      menu.classList.add("hidden");
+      executeCompanionCommand(cid, "technique2");
+    };
+    document.getElementById("btn-tech-back").onclick = function() {
+      menu.classList.add("hidden");
+      document.getElementById("companion-command-menu").classList.remove("hidden");
     };
   }
 
@@ -5466,6 +5653,8 @@
     if (csMenu) { csMenu.classList.add("hidden"); }
     var cmMenu2 = document.getElementById("companion-magic-menu"); // §95 v0.35
     if (cmMenu2) { cmMenu2.classList.add("hidden"); }
+    var ctMenu = document.getElementById("companion-technique-menu"); // §145 v0.64
+    if (ctMenu) { ctMenu.classList.add("hidden"); }
     document.getElementById("battle-menu").classList.remove("hidden");
     if (!state.inBattle) return;
     var e = state.enemy;
@@ -5486,6 +5675,14 @@
         return;
       }
       killed = techResult;
+    } else if (mode === "technique2") { // §145 v0.64: 仲間わざ2
+      var tech2Result = runCompanionTechnique2Action(cid);
+      if (tech2Result === null) {
+        state.companionCommandLocked = false;
+        showCompanionCommandForIdx(state.companionCommandIndex);
+        return;
+      }
+      killed = tech2Result;
     } else if (mode === "item") { // §143 v0.62: バッグアイテム使用
       var itemResult = runCompanionBattleItemAction(cid, itemId);
       if (itemResult === null) {
@@ -5646,6 +5843,121 @@
       }
       updateBattlePlayerStatus();
       return false; // 回復わざは撃破なし
+    }
+
+    return null;
+  }
+
+  // §145 v0.64: わざ2解放判定（わざ1解放済み AND Lv>=unlockLevel）
+  function isCompanionTechnique2Unlocked(cid) {
+    var td2 = COMPANION_TECHNIQUE2_DATA[cid];
+    if (!td2) return false;
+    if (!isCompanionTechniqueUnlocked(cid)) return false;
+    var cl = getCompanionLevel(cid);
+    return cl.level >= td2.unlockLevel;
+  }
+
+  // §145 v0.64: わざ2未解放理由を返す（UI表示用）
+  function getCompanionTechnique2LockReason(cid) {
+    var td2 = COMPANION_TECHNIQUE2_DATA[cid];
+    if (!td2) return "";
+    if (!isCompanionTechniqueUnlocked(cid)) { return "わざ1未習得（先に「" + (COMPANION_TECHNIQUE_DATA[cid] ? COMPANION_TECHNIQUE_DATA[cid].name : "わざ") + "」を習得してください）"; }
+    var cl = getCompanionLevel(cid);
+    if (cl.level < td2.unlockLevel) { return "Lv" + td2.unlockLevel + "以上が必要（現在Lv" + cl.level + "）"; }
+    return "";
+  }
+
+  // §145 v0.64: わざ2実行（damage_crit/damage_leave_one/damage/heal_cure）
+  // 返値: true=敵HP0、false=成功（敵生存）、null=失敗（ターン消費なし）
+  function runCompanionTechnique2Action(cid) {
+    var p = state.player, e = state.enemy;
+    if (!state.inBattle || !e) return null;
+    var td2 = COMPANION_TECHNIQUE2_DATA[cid];
+    if (!td2) { log("このわざは存在しない。"); return null; }
+    ensureCompanionTechniqueUsageState();
+    if (!isCompanionTechnique2Unlocked(cid)) {
+      var _lr2 = getCompanionTechnique2LockReason(cid);
+      log("🔒 " + td2.name + "はまだ習得していない。");
+      if (_lr2) { log("習得条件：" + _lr2); }
+      return null;
+    }
+    if (state.companionTechnique2Used[cid]) {
+      log("この戦闘では、すでに「" + td2.name + "」を使っている。");
+      return null;
+    }
+    var _cd2 = findById(COMPANION_DATA, cid);
+    var _cname2 = _cd2 ? _cd2.name : cid;
+    var _growthBonus2 = getCompanionGrowthBonus(cid);
+
+    if (td2.type === "damage_crit") {
+      if (e.hp <= 0) return null;
+      var _dmgCrit = randInt(td2.minValue, td2.maxValue) + _growthBonus2;
+      var _isCrit = Math.random() < td2.critChance;
+      if (_isCrit) { _dmgCrit = Math.floor(_dmgCrit * td2.critMultiplier); }
+      state.companionTechnique2Used[cid] = true;
+      log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+      if (_isCrit) { log("必殺の一撃！！"); } else { log("渾身の強打！"); }
+      e.hp = Math.max(0, e.hp - _dmgCrit);
+      log(e.name + "に" + _dmgCrit + "ダメージ！");
+      renderEnemy();
+      return e.hp <= 0;
+    }
+
+    if (td2.type === "damage_leave_one") {
+      if (e.hp <= 0) return null;
+      if (e.hp <= 1) {
+        log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+        log("しかし、これ以上追い詰めることはできない。");
+        return null;
+      }
+      var _dmgShu2 = randInt(td2.minValue, td2.maxValue) + _growthBonus2;
+      var _actShu2 = Math.max(0, Math.min(_dmgShu2, e.hp - 1));
+      state.companionTechnique2Used[cid] = true;
+      log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+      log("完璧な包囲でとどめを封じた！");
+      e.hp = Math.max(1, e.hp - _actShu2);
+      log(e.name + "に" + _actShu2 + "ダメージ！");
+      if (e.hp <= 1) { log(e.name + "をHP1まで追い詰めた！"); }
+      renderEnemy();
+      return false;
+    }
+
+    if (td2.type === "damage") {
+      if (e.hp <= 0) return null;
+      var _dmgNorio2 = randInt(td2.minValue, td2.maxValue) + _growthBonus2;
+      state.companionTechnique2Used[cid] = true;
+      log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+      log("あらゆる弱点を完全に解析した！");
+      e.hp = Math.max(0, e.hp - _dmgNorio2);
+      log(e.name + "に" + _dmgNorio2 + "ダメージ！");
+      renderEnemy();
+      return e.hp <= 0;
+    }
+
+    if (td2.type === "heal_cure") {
+      var _hpFull2 = (p.hp >= p.maxHp);
+      var _noAilment2 = (!p.allergySick && !p.smellSick);
+      if (_hpFull2 && _noAilment2) {
+        log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+        log("しかし、HPは満タンで状態異常もない。");
+        return null;
+      }
+      state.companionTechnique2Used[cid] = true;
+      log("⚡ " + _cname2 + "の「" + td2.name + "」！");
+      log("聖なる光が溢れた！");
+      if (p.hp < p.maxHp) {
+        var _healAmt2 = randInt(td2.minValue, td2.maxValue) + _growthBonus2;
+        var _beforeH2 = p.hp;
+        p.hp = Math.min(p.maxHp, p.hp + _healAmt2);
+        log("HPが" + (p.hp - _beforeH2) + "回復した！");
+      } else {
+        log("HPは満タンのまま。");
+      }
+      if (p.allergySick) { clearAilment("allergy", true); log("アレルギーが治った！"); }
+      if (p.smellSick)   { clearAilment("smell",   true); log("においが消えた！"); }
+      updateBattlePlayerStatus();
+      updateStatusBar();
+      return false;
     }
 
     return null;
@@ -6649,6 +6961,12 @@
             queueCompanionTechniqueLearnNotice(cid);
           }
         }
+        // §145 v0.64: Lv49→50でわざ2 unlock成立したとき習得演出キュー
+        if (oldLevel < 50 && cl.level >= 50) {
+          if (isCompanionTechnique2Unlocked(cid)) {
+            queueCompanionTechnique2LearnNotice(cid);
+          }
+        }
       }
     });
   }
@@ -7308,6 +7626,30 @@
       html += '<div class="record-row"><span>' + (_tcUnlocked111 ? "✅ " : "・") + _tcName111 +
         '　<span style="color:#888;font-size:0.82em;">' + (_td111r ? _td111r.name : "") + '</span></span>' +
         chk(_tcUnlocked111) + (_tcUnlocked111 ? "習得済み" : "未習得") + '</span></div>';
+    }
+    html += '</div>';
+
+    // §145 v0.64: 仲間わざ2習得セクション
+    normalizeCompanionTechnique2LearnedNotices();
+    var _tech2Cids = ["juritani", "shurittani", "norio", "harumi"];
+    var _tech2Count = 0;
+    for (var _t2ci = 0; _t2ci < _tech2Cids.length; _t2ci++) {
+      if (isCompanionTechnique2Unlocked(_tech2Cids[_t2ci])) { _tech2Count++; }
+    }
+    html += '<div class="record-section">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+    html += '<h4 style="margin:0;">⚡⚡ 仲間わざ2習得</h4>';
+    html += '<span style="font-size:0.82em;color:' + (_tech2Count === 4 ? "#e879f9" : "#adb5bd") + ';">' + _tech2Count + ' / 4</span>';
+    html += '</div>';
+    for (var _t2ci2 = 0; _t2ci2 < _tech2Cids.length; _t2ci2++) {
+      var _t2cid2 = _tech2Cids[_t2ci2];
+      var _td2r = COMPANION_TECHNIQUE2_DATA[_t2cid2];
+      var _t2Unlocked2 = isCompanionTechnique2Unlocked(_t2cid2);
+      var _t2CDat = findById(COMPANION_DATA, _t2cid2);
+      var _t2Name = _t2CDat ? _t2CDat.name : _t2cid2;
+      html += '<div class="record-row"><span>' + (_t2Unlocked2 ? "✅ " : "・") + _t2Name +
+        '　<span style="color:#888;font-size:0.82em;">' + (_td2r ? _td2r.name : "") + '</span></span>' +
+        chk(_t2Unlocked2) + (_t2Unlocked2 ? "習得済み" : "未習得") + '</span></div>';
     }
     html += '</div>';
 
@@ -10237,6 +10579,22 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v63-4choice-ratio-unchanged" style="border-color:#a0cfff;color:#a0cfff;">&#x2696; AI item後の次ターン4択比率確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v63-ai-log-format" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4DD; AIログ形式確認</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v63-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; v63デバッグリセット</button>';
+      // §145 v0.64: 仲間わざ2テスト（14本）
+      html += '<p style="color:#e879f9;margin:8px 0 2px;">§145 v0.64 仲間わざ2</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-unlock-all" style="border-color:#e879f9;color:#e879f9;">&#x26A1;&#x26A1; 全員わざ2解放（Lv50+ギア）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-lock-all" style="border-color:#e17055;color:#e17055;">&#x1F512; 全員わざ2ロック（Lv49に戻す）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-exec-juritani" style="border-color:#e879f9;color:#e879f9;">&#x26A1; じゅりたにわざ2「剛烈強打」実行</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-exec-shurittani" style="border-color:#e879f9;color:#e879f9;">&#x26A1; しゅりったにわざ2「超絶包囲網」実行</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-exec-norio" style="border-color:#e879f9;color:#e879f9;">&#x26A1; のりおわざ2「究極解析」実行</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-exec-harumi" style="border-color:#e879f9;color:#e879f9;">&#x26A1; はるみわざ2「聖なる癒し」実行</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-used-reset" style="border-color:#a0f0b4;color:#a0f0b4;">&#x1F504; わざ2使用済みフラグリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-notice-queue" style="border-color:#a0cfff;color:#a0cfff;">&#x1F514; じゅりたにわざ2習得演出キュー</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-notice-all" style="border-color:#a0cfff;color:#a0cfff;">&#x1F514; 4人全員わざ2習得演出キュー</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-notice-clear" style="border-color:#a0cfff;color:#a0cfff;">&#x1F515; わざ2習得フラグリセット（再演出可）</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-lock-reason-check" style="border-color:#a0cfff;color:#a0cfff;">&#x1F50D; わざ2ロック理由一覧確認</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-status-check" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4CA; わざ2解放状態サマリ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-harumi-lowHP" style="border-color:#55efc4;color:#55efc4;">&#x1F489; はるみわざ2 HP低下+状態異常セット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v64-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; v64デバッグリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -14764,6 +15122,130 @@
         saveGame();
         showToast("[DEBUG] v63テスト用データをリセット");
       };
+      // §145 v0.64: 仲間わざ2テストハンドラ（14本）
+      var _v64cids = ["juritani", "shurittani", "norio", "harumi"];
+      document.getElementById("btn-debug-v64-unlock-all").onclick = function () {
+        var _cids = ["juritani", "shurittani", "norio", "harumi"];
+        var _gearIds = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
+        for (var _ui = 0; _ui < _cids.length; _ui++) {
+          var _uc = findById(state.player.companionLevels || [], _cids[_ui]) || {};
+          if (_uc.level === undefined) {
+            if (!state.player.companionLevels) { state.player.companionLevels = []; }
+            state.player.companionLevels.push({ id: _cids[_ui], level: 50, exp: 0 });
+          } else { if (_uc.level < 50) { _uc.level = 50; } }
+          if (!state.player.companions) { state.player.companions = []; }
+          if (state.player.companions.indexOf(_cids[_ui]) < 0) { state.player.companions.push(_cids[_ui]); }
+          // わざ1 rewardGear も付与
+          var _td1g = COMPANION_TECHNIQUE_DATA[_cids[_ui]];
+          if (_td1g && _td1g.requiredGearId) {
+            var _gk1 = _td1g.requiredGearId + "Count";
+            if (!state.player[_gk1] || state.player[_gk1] < 1) { state.player[_gk1] = 1; }
+          }
+        }
+        saveGame();
+        showToast("[DEBUG] 全員Lv50+わざ1ギア付与 → わざ2解放");
+      };
+      document.getElementById("btn-debug-v64-lock-all").onclick = function () {
+        var _cids2 = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _li = 0; _li < _cids2.length; _li++) {
+          var _lc = findById(state.player.companionLevels || [], _cids2[_li]);
+          if (_lc) { _lc.level = Math.min(_lc.level || 0, 49); }
+        }
+        state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
+        saveGame();
+        showToast("[DEBUG] 全員Lv49以下 → わざ2ロック");
+      };
+      document.getElementById("btn-debug-v64-exec-juritani").onclick = function () {
+        if (!state.inBattle) { showToast("[DEBUG] 戦闘中のみ使用可"); return; }
+        state.companionTechnique2Used["juritani"] = false;
+        var _r = runCompanionTechnique2Action("juritani");
+        showToast("[DEBUG] じゅりたにわざ2 → " + (_r === null ? "null(不発)" : _r ? "敵HP0" : "生存"));
+      };
+      document.getElementById("btn-debug-v64-exec-shurittani").onclick = function () {
+        if (!state.inBattle) { showToast("[DEBUG] 戦闘中のみ使用可"); return; }
+        state.companionTechnique2Used["shurittani"] = false;
+        var _r = runCompanionTechnique2Action("shurittani");
+        showToast("[DEBUG] しゅりったにわざ2 → " + (_r === null ? "null(不発)" : _r ? "敵HP0" : "生存"));
+      };
+      document.getElementById("btn-debug-v64-exec-norio").onclick = function () {
+        if (!state.inBattle) { showToast("[DEBUG] 戦闘中のみ使用可"); return; }
+        state.companionTechnique2Used["norio"] = false;
+        var _r = runCompanionTechnique2Action("norio");
+        showToast("[DEBUG] のりおわざ2 → " + (_r === null ? "null(不発)" : _r ? "敵HP0" : "生存"));
+      };
+      document.getElementById("btn-debug-v64-exec-harumi").onclick = function () {
+        if (!state.inBattle) { showToast("[DEBUG] 戦闘中のみ使用可"); return; }
+        state.companionTechnique2Used["harumi"] = false;
+        var _r = runCompanionTechnique2Action("harumi");
+        showToast("[DEBUG] はるみわざ2 → " + (_r === null ? "null(不発)" : _r ? "true" : "false"));
+      };
+      document.getElementById("btn-debug-v64-used-reset").onclick = function () {
+        state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
+        showToast("[DEBUG] わざ2使用済みフラグリセット");
+      };
+      document.getElementById("btn-debug-v64-notice-queue").onclick = function () {
+        normalizeCompanionTechnique2LearnedNotices();
+        state.companionTechnique2LearnedNotices["juritani"] = false;
+        queueCompanionTechnique2LearnNotice("juritani");
+        closeModal("settings-modal");
+        showToast("[DEBUG] じゅりたにわざ2習得演出キュー追加 → フィールドへ");
+        renderField();
+      };
+      document.getElementById("btn-debug-v64-notice-all").onclick = function () {
+        normalizeCompanionTechnique2LearnedNotices();
+        var _nCids = ["juritani", "shurittani", "norio", "harumi"];
+        for (var _ni = 0; _ni < _nCids.length; _ni++) {
+          state.companionTechnique2LearnedNotices[_nCids[_ni]] = false;
+          queueCompanionTechnique2LearnNotice(_nCids[_ni]);
+        }
+        closeModal("settings-modal");
+        showToast("[DEBUG] 4人全員わざ2習得演出キュー → フィールドへ");
+        renderField();
+      };
+      document.getElementById("btn-debug-v64-notice-clear").onclick = function () {
+        state.companionTechnique2LearnedNotices = { juritani: false, shurittani: false, norio: false, harumi: false };
+        saveGame();
+        showToast("[DEBUG] わざ2習得演出フラグをリセット（再演出可）");
+      };
+      document.getElementById("btn-debug-v64-lock-reason-check").onclick = function () {
+        var _lrCids = ["juritani", "shurittani", "norio", "harumi"];
+        var _msg = "わざ2ロック理由：\n";
+        for (var _lri = 0; _lri < _lrCids.length; _lri++) {
+          var _lrcid = _lrCids[_lri];
+          var _cd = findById(COMPANION_DATA, _lrcid);
+          var _cn = _cd ? _cd.name : _lrcid;
+          _msg += _cn + ": " + (isCompanionTechnique2Unlocked(_lrcid) ? "解放済み" : getCompanionTechnique2LockReason(_lrcid)) + "\n";
+        }
+        showToast(_msg);
+      };
+      document.getElementById("btn-debug-v64-status-check").onclick = function () {
+        var _scCids = ["juritani", "shurittani", "norio", "harumi"];
+        var _smsg = "わざ2状態：\n";
+        for (var _sci = 0; _sci < _scCids.length; _sci++) {
+          var _sccid = _scCids[_sci];
+          var _scd = findById(COMPANION_DATA, _sccid);
+          var _scn = _scd ? _scd.name : _sccid;
+          var _scl = findById(state.player.companionLevels || [], _sccid);
+          var _lv = _scl ? _scl.level : 0;
+          var _unlocked = isCompanionTechnique2Unlocked(_sccid);
+          var _used = !!(state.companionTechnique2Used && state.companionTechnique2Used[_sccid]);
+          var _noticed = !!(state.companionTechnique2LearnedNotices && state.companionTechnique2LearnedNotices[_sccid]);
+          _smsg += _scn + " Lv" + _lv + " " + (_unlocked ? "解放" : "ロック") + (_used ? " 使用済" : "") + (_noticed ? " 演出済" : "") + "\n";
+        }
+        showToast(_smsg);
+      };
+      document.getElementById("btn-debug-v64-harumi-lowHP").onclick = function () {
+        state.player.hp = Math.floor(state.player.maxHp * 0.3);
+        state.player.allergySick = true;
+        state.player.smellSick = true;
+        showToast("[DEBUG] HP30%+アレルギー+臭い → はるみわざ2で全回復テスト");
+      };
+      document.getElementById("btn-debug-v64-reset").onclick = function () {
+        state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
+        state.companionTechnique2LearnedNotices = { juritani: false, shurittani: false, norio: false, harumi: false };
+        saveGame();
+        showToast("[DEBUG] v64テスト用データをリセット");
+      };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -17139,6 +17621,7 @@
         normalReturnY: state.normalReturnY || 4, // §129 v0.51
         stageWarpPlazaIntroduced: !!state.stageWarpPlazaIntroduced, // §131 v0.51.2: ワープ広場初回到達フラグ
         companionTechniqueLearnedNotices: state.companionTechniqueLearnedNotices || {}, // §139 v0.58: 仲間わざ習得演出済みフラグ
+        companionTechnique2LearnedNotices: state.companionTechnique2LearnedNotices || {}, // §145 v0.64: 仲間わざ2習得演出済みフラグ
         companionBags: state.companionBags || {} // §142 v0.61: 仲間個人バッグ
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -17303,6 +17786,18 @@
         var _tnocid = _techNoticeOrder[_tno];
         if (isCompanionTechniqueUnlocked(_tnocid) && !state.companionTechniqueLearnedNotices[_tnocid]) {
           queueCompanionTechniqueLearnNotice(_tnocid);
+        }
+      }
+      // §145 v0.64: 仲間わざ2習得演出済みフラグ（旧セーブはundefined→{}補完・never-demote）
+      state.companionTechnique2LearnedNotices = data.companionTechnique2LearnedNotices || {};
+      var _tech2LearnFlagChanged = normalizeCompanionTechnique2LearnedNotices();
+      if (_tech2LearnFlagChanged) { _storyFlagChanged = true; }
+      // §145 v0.64: 旧セーブ修復 — わざ2 unlock済み+notice false → load後safe timingで演出表示
+      var _tech2NoticeOrder = ["juritani", "shurittani", "norio", "harumi"];
+      for (var _t2no = 0; _t2no < _tech2NoticeOrder.length; _t2no++) {
+        var _t2nocid = _tech2NoticeOrder[_t2no];
+        if (isCompanionTechnique2Unlocked(_t2nocid) && !state.companionTechnique2LearnedNotices[_t2nocid]) {
+          queueCompanionTechnique2LearnNotice(_t2nocid);
         }
       }
       // §106 v0.40.1 / §110 v0.42.1: 昇格またはreconcile付与があれば即座に保存（増殖防止）

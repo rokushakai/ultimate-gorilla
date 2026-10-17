@@ -22,6 +22,21 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.64 — 仲間わざ2種類目 (§145)
+
+- **`COMPANION_TECHNIQUE2_DATA`** 4人×わざ2定数（damage_crit/damage_leave_one/damage/heal_cure） ✅
+- **`isCompanionTechnique2Unlocked(cid)`** 解放判定（わざ1解放済み AND Lv50以上） ✅
+- **`runCompanionTechnique2Action(cid)`** わざ2実行（damage_crit/damage_leave_one/damage/heal_cure） ✅
+- **`showCompanionTechniqueMenu(cid)`** わざ1/わざ2/戻るサブメニュー ✅
+- **`state.companionTechnique2Used`** 非永続1回制限 ✅
+- **`state.companionTechnique2LearnedNotices`** 永続演出済みフラグ（saveGame/loadGame） ✅
+- **習得演出通知システム**: normalize/queue/consume/show/close ✅
+- **`companion-technique-menu`** submenu div (index.html) ✅
+- **`modal-companion-technique2-learn`** 習得モーダル (index.html) ✅
+- **デバッグ14本（§145）**: `btn-debug-v64-*` ✅
+
+---
+
 ### Version 0.63 — 仲間AIのバッグアイテム自動使用 (§144)
 
 - **`COMPANION_AI_HEAL_ITEM_PRIORITY`** / **`COMPANION_AI_HEAL_HP_THRESHOLD`** 定数追加 ✅
