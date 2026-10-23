@@ -23,6 +23,9 @@
 - `index.html`: `companion-technique-menu`サブメニューdiv、わざ2習得モーダル追加
 - デバッグ14本（§145）: `btn-debug-v64-*`
 
+### Fixed
+- デバッグ `btn-debug-v64-unlock-all` / `lock-all` / `status-check`: 存在しない `state.player.companionLevels` 配列を参照していたのを `getCompanionLevel(cid)` に修正。わざ1ギアは `grantCompanionGearReward()` で報酬フラグごと付与するよう修正（解放判定は報酬フラグ基準）
+
 ### Notes
 - わざ1とわざ2は同一戦闘内で両方使用可（各1回）
 - はるみわざ2（heal_cure）: HP回復＋全状態異常治療。HP満+異常なし → null不発

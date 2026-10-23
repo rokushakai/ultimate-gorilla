@@ -15128,19 +15128,10 @@
         var _cids = ["juritani", "shurittani", "norio", "harumi"];
         var _gearIds = ["critical_bracelet", "net_master_belt", "research_notebook", "prayer_brooch"];
         for (var _ui = 0; _ui < _cids.length; _ui++) {
-          var _uc = findById(state.player.companionLevels || [], _cids[_ui]) || {};
-          if (_uc.level === undefined) {
-            if (!state.player.companionLevels) { state.player.companionLevels = []; }
-            state.player.companionLevels.push({ id: _cids[_ui], level: 50, exp: 0 });
-          } else { if (_uc.level < 50) { _uc.level = 50; } }
-          if (!state.player.companions) { state.player.companions = []; }
-          if (state.player.companions.indexOf(_cids[_ui]) < 0) { state.player.companions.push(_cids[_ui]); }
-          // わざ1 rewardGear も付与
+          var _uc = getCompanionLevel(_cids[_ui]);
+          if (_uc.level < 50) { _uc.level = 50; _uc.exp = 0; _uc.nextExp = 50 * 10 + 15; }
           var _td1g = COMPANION_TECHNIQUE_DATA[_cids[_ui]];
-          if (_td1g && _td1g.requiredGearId) {
-            var _gk1 = _td1g.requiredGearId + "Count";
-            if (!state.player[_gk1] || state.player[_gk1] < 1) { state.player[_gk1] = 1; }
-          }
+          if (_td1g && _td1g.requiredGearId) { grantCompanionGearReward(_td1g.requiredGearId); }
         }
         saveGame();
         showToast("[DEBUG] 全員Lv50+わざ1ギア付与 → わざ2解放");
@@ -15148,8 +15139,8 @@
       document.getElementById("btn-debug-v64-lock-all").onclick = function () {
         var _cids2 = ["juritani", "shurittani", "norio", "harumi"];
         for (var _li = 0; _li < _cids2.length; _li++) {
-          var _lc = findById(state.player.companionLevels || [], _cids2[_li]);
-          if (_lc) { _lc.level = Math.min(_lc.level || 0, 49); }
+          var _lc = getCompanionLevel(_cids2[_li]);
+          if (_lc.level > 49) { _lc.level = 49; _lc.exp = 0; _lc.nextExp = 49 * 10 + 15; }
         }
         state.companionTechnique2Used = { juritani: false, shurittani: false, norio: false, harumi: false };
         saveGame();
@@ -15225,8 +15216,7 @@
           var _sccid = _scCids[_sci];
           var _scd = findById(COMPANION_DATA, _sccid);
           var _scn = _scd ? _scd.name : _sccid;
-          var _scl = findById(state.player.companionLevels || [], _sccid);
-          var _lv = _scl ? _scl.level : 0;
+          var _lv = getCompanionLevel(_sccid).level;
           var _unlocked = isCompanionTechnique2Unlocked(_sccid);
           var _used = !!(state.companionTechnique2Used && state.companionTechnique2Used[_sccid]);
           var _noticed = !!(state.companionTechnique2LearnedNotices && state.companionTechnique2LearnedNotices[_sccid]);
