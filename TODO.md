@@ -24,6 +24,19 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 0.65 — ゲームセンター（レトロミニゲーム） (§146)
+
+- **`arcade.js`** 新規: `window.UGArcade`（list/start/stop/isRunning）・canvasループ・タッチ/キー操作 ✅
+- **🧱 ゴリラブロック**（落ちものパズル） ✅
+- **👾 UMAシューター**（インベーダー風） ✅
+- **🎯 ゴリラピンボール** ✅
+- **マップタイル `Q` 🕹️ (20,12)** / SAFE_TILE / movePlayer 接触 → `openArcadeModal()` ✅
+- **`state.arcadeHighScores`** saveGame/loadGame/normalize（never-demote） ✅
+- **`modal-arcade`** (index.html) ✅
+- **デバッグ4本（§146）**: `btn-debug-v65-*` ✅
+
+---
+
 ### Version 0.64 — 仲間わざ2種類目 (§145)
 
 - **`COMPANION_TECHNIQUE2_DATA`** 4人×わざ2定数（damage_crit/damage_leave_one/damage/heal_cure） ✅

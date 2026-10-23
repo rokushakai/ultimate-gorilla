@@ -37,7 +37,7 @@
     "#..W..E.........." + ",,,,,,,##",              // row 9 col12開放 東ウイング開始
     "#....P......#" + "....,,,,,,,##",              // row 10
     "#.....#....C#" + "....,,,,,,,##",              // row 11 C=cosmos chest(11,11)
-    "#......W....#" + "....,,,,,,,##",              // row 12
+    "#......W....#" + "....,,,Q,,,##",              // row 12 Q=game center(20,12) §146 v0.65
     "#....P..B...#" + "....,,,,,,,##",              // row 13 B=chest(8,13)
     "#........U..#" + "....,,,,,,,##",              // row 14 U=ukulele chest(9,14)
     "#..#...J...##" + "....,,,,,,,##",              // row 15 J=nyoibo chest(7,15)
@@ -93,6 +93,7 @@
     "X": "✨",  // キグナスのかぶと伝説宝箱(§33 v0.8.3。開封後は📦)
     "N": "📰",  // 攻略ペーパービュー屋(§37 v0.8.6)
     "V": "🌀",  // 横スクロール入口ゲート(§52 v0.11.2)
+    "Q": "🕹️", // ゲームセンター(§146 v0.65)
     // §129 v0.51: ステージワープタイル
     "1": "🌱",  // ワープ1: はじまりの草原
     "2": "🌲",  // ワープ2: あやしい森
@@ -104,7 +105,7 @@
   // 進入不可の地形
   var BLOCKED = { "#": true, "~": true };
   // エンカウントが起きない安全地形(村・道・施設・宝箱・NPC上)
-  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true, "V": true,
+  var SAFE_TILE = { ",": true, "H": true, "M": true, "G": true, "T": true, "B": true, "U": true, "A": true, "C": true, "J": true, "X": true, "D": true, "R": true, "K": true, "E": true, "S": true, "N": true, "V": true, "Q": true, // §146 v0.65: Q=ゲームセンター
     "1": true, "2": true, "3": true, "4": true, "5": true, "6": true }; // §129 v0.51: ワープタイル
 
   // ---------------------------------------------------------
@@ -1293,6 +1294,7 @@
     companionTechniqueLearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §139 v0.58: 仲間わざ習得演出済みフラグ（永続・saveする）
     companionTechnique2LearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §145 v0.64: わざ2習得演出済みフラグ（永続・saveする）
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
+    arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0 }, // §146 v0.65: ゲームセンターのハイスコア（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -3192,6 +3194,10 @@
     }
     if (tile === "V") {
       openSideGateModal();
+      return;
+    }
+    if (tile === "Q") { // §146 v0.65: ゲームセンター
+      openArcadeModal();
       return;
     }
     if (tile === "S") {
@@ -10595,6 +10601,12 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v64-status-check" style="border-color:#a0cfff;color:#a0cfff;">&#x1F4CA; わざ2解放状態サマリ</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v64-harumi-lowHP" style="border-color:#55efc4;color:#55efc4;">&#x1F489; はるみわざ2 HP低下+状態異常セット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v64-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; v64デバッグリセット</button>';
+      // §146 v0.65: ゲームセンターテスト（4本）
+      html += '<p style="color:#74b9ff;margin:8px 0 2px;">§146 v0.65 ゲームセンター</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v65-open-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F579;&#xFE0F; ゲームセンターを開く</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v65-warp-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F6B6; ゲームセンター横(19,12)へワープ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v65-scores" style="border-color:#a0cfff;color:#a0cfff;">&#x1F3C6; ハイスコア一覧</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v65-reset-scores" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ハイスコアリセット</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -15236,6 +15248,31 @@
         saveGame();
         showToast("[DEBUG] v64テスト用データをリセット");
       };
+      // §146 v0.65: ゲームセンターテストハンドラ（4本）
+      document.getElementById("btn-debug-v65-open-arcade").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        closeModal("settings-modal");
+        openArcadeModal();
+      };
+      document.getElementById("btn-debug-v65-warp-arcade").onclick = function () {
+        if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
+        if (state.mapMode === "side") { showToast("[DEBUG] 通常マップで使ってください"); return; }
+        state.player.x = 19;
+        state.player.y = 12;
+        closeModal("settings-modal");
+        renderField();
+        showToast("[DEBUG] ゲームセンター横へワープ（→で入店）");
+      };
+      document.getElementById("btn-debug-v65-scores").onclick = function () {
+        normalizeArcadeHighScores();
+        var _hs = state.arcadeHighScores;
+        showToast("[DEBUG] HI ブロック:" + _hs.blocks + " / シューター:" + _hs.shooter + " / ピンボール:" + _hs.pinball);
+      };
+      document.getElementById("btn-debug-v65-reset-scores").onclick = function () {
+        state.arcadeHighScores = { blocks: 0, shooter: 0, pinball: 0 };
+        saveGame();
+        showToast("[DEBUG] ハイスコアを0にリセット");
+      };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -17612,6 +17649,7 @@
         stageWarpPlazaIntroduced: !!state.stageWarpPlazaIntroduced, // §131 v0.51.2: ワープ広場初回到達フラグ
         companionTechniqueLearnedNotices: state.companionTechniqueLearnedNotices || {}, // §139 v0.58: 仲間わざ習得演出済みフラグ
         companionTechnique2LearnedNotices: state.companionTechnique2LearnedNotices || {}, // §145 v0.64: 仲間わざ2習得演出済みフラグ
+        arcadeHighScores: state.arcadeHighScores || {}, // §146 v0.65: ゲームセンターのハイスコア
         companionBags: state.companionBags || {} // §142 v0.61: 仲間個人バッグ
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -17778,6 +17816,9 @@
           queueCompanionTechniqueLearnNotice(_tnocid);
         }
       }
+      // §146 v0.65: ゲームセンターのハイスコア（旧セーブはundefined→0補完）
+      state.arcadeHighScores = data.arcadeHighScores || {};
+      normalizeArcadeHighScores();
       // §145 v0.64: 仲間わざ2習得演出済みフラグ（旧セーブはundefined→{}補完・never-demote）
       state.companionTechnique2LearnedNotices = data.companionTechnique2LearnedNotices || {};
       var _tech2LearnFlagChanged = normalizeCompanionTechnique2LearnedNotices();
@@ -19151,6 +19192,96 @@
     ];
     var arr = h[priority] || h[8];
     return arr[tier - 1] || arr[0];
+  }
+
+  // ---------------------------------------------------------
+  // §146 v0.65: ゲームセンター（ミニゲーム本体は arcade.js / window.UGArcade）
+  // ---------------------------------------------------------
+  var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball"];
+
+  // ハイスコアを正規化（欠損・数値以外・負数→0。値は下げない）
+  function normalizeArcadeHighScores() {
+    if (!state.arcadeHighScores || typeof state.arcadeHighScores !== "object" || Array.isArray(state.arcadeHighScores)) {
+      state.arcadeHighScores = {};
+    }
+    for (var i = 0; i < ARCADE_GAME_IDS.length; i++) {
+      var v = state.arcadeHighScores[ARCADE_GAME_IDS[i]];
+      if (typeof v !== "number" || isNaN(v) || v < 0) { v = 0; }
+      state.arcadeHighScores[ARCADE_GAME_IDS[i]] = Math.floor(v);
+    }
+  }
+
+  function getArcadeHighScore(gameId) {
+    normalizeArcadeHighScores();
+    return state.arcadeHighScores[gameId] || 0;
+  }
+
+  function openArcadeModal() {
+    if (state.inBattle) { return; }
+    openModal("modal-arcade");
+    renderArcadeMenu();
+  }
+
+  function closeArcadeModal() {
+    if (window.UGArcade && window.UGArcade.isRunning()) { window.UGArcade.stop(); }
+    closeModal("modal-arcade");
+    renderField();
+  }
+
+  function renderArcadeMenu() {
+    var menuEl = document.getElementById("arcade-menu");
+    var stageEl = document.getElementById("arcade-stage");
+    if (!menuEl || !stageEl) { return; }
+    stageEl.innerHTML = "";
+    stageEl.classList.add("hidden");
+    menuEl.classList.remove("hidden");
+    var html = '<h3 style="margin:0 0 6px;">&#x1F579;&#xFE0F; ゲームセンター</h3>' +
+      '<p class="small" style="color:#adb5bd;margin:0 0 10px;">なつかしのミニゲームで一息つこう。ハイスコアは記録されるよ。</p>';
+    if (!window.UGArcade) {
+      html += '<p style="color:#ff7675;">ゲーム機の電源が入っていないようだ…（arcade.js を読み込めませんでした）</p>';
+    } else {
+      var games = window.UGArcade.list();
+      for (var i = 0; i < games.length; i++) {
+        var g = games[i];
+        html += '<div class="arcade-game-row">' +
+          '<div class="arcade-game-info"><b>' + g.icon + ' ' + g.name + '</b>' +
+          '<span class="small" style="color:#adb5bd;">' + g.desc + '</span>' +
+          '<span class="small" style="color:#ffd166;">HI ' + getArcadeHighScore(g.id) + '</span></div>' +
+          '<button class="modal-btn" data-arcade-game="' + g.id + '">あそぶ</button>' +
+          '</div>';
+      }
+    }
+    html += '<button class="modal-btn" id="btn-arcade-close" style="width:100%;margin-top:10px;">でる</button>';
+    menuEl.innerHTML = html;
+    var btns = menuEl.querySelectorAll("button[data-arcade-game]");
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].onclick = function (ev) { startArcadeGame(ev.currentTarget.getAttribute("data-arcade-game")); };
+    }
+    document.getElementById("btn-arcade-close").onclick = closeArcadeModal;
+  }
+
+  function startArcadeGame(gameId) {
+    if (!window.UGArcade) { return; }
+    var menuEl = document.getElementById("arcade-menu");
+    var stageEl = document.getElementById("arcade-stage");
+    menuEl.classList.add("hidden");
+    stageEl.classList.remove("hidden");
+    window.UGArcade.start(gameId, stageEl, {
+      hiScore: getArcadeHighScore(gameId),
+      onEnd: onArcadeGameEnd,
+      onExit: renderArcadeMenu
+    });
+  }
+
+  // ゲーム終了（ゲームオーバー or やめる）時に1回だけ呼ばれる
+  function onArcadeGameEnd(gameId, score) {
+    if (ARCADE_GAME_IDS.indexOf(gameId) < 0) { return; }
+    score = Math.floor(score) || 0;
+    if (score > getArcadeHighScore(gameId)) {
+      state.arcadeHighScores[gameId] = score;
+      saveGame();
+      showToast("🏆 ハイスコア更新！ " + score + "点");
+    }
   }
 
   function openHintShopModal() {

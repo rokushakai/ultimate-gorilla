@@ -722,3 +722,93 @@ html, body {
 .hidden {
   display: none !important;
 }
+
+/* ===== §146 v0.65: ゲームセンター ===== */
+.arcade-box {
+  width: 92%;
+  max-height: 94%;
+  padding: 10px;
+}
+.arcade-game-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #1a2a3a;
+  border-radius: 8px;
+  text-align: left;
+}
+.arcade-game-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.arcade-game-row .modal-btn {
+  margin-top: 0;
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+.arcade-hud {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: #ffd166;
+  margin-bottom: 4px;
+}
+.arcade-hud b { color: #ffffff; }
+.arcade-hud-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arcade-canvas {
+  display: block;
+  width: min(100%, calc(52vh * 0.75));
+  aspect-ratio: 3 / 4;
+  margin: 0 auto;
+  background: #05060f;
+  border: 2px solid #3d3d5c;
+  border-radius: 6px;
+  touch-action: none;
+}
+.arcade-controls {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  touch-action: none;
+}
+.arcade-btn {
+  min-height: 50px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: 2px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.arcade-btn.pressed {
+  background: #74b9ff;
+  color: #05060f;
+}
+.arcade-sys {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.arcade-sys .modal-btn {
+  margin-top: 8px;
+  padding: 8px 14px;
+  flex: 1;
+}
+.arcade-help {
+  font-size: 10px;
+  color: #6c757d;
+  margin: 6px 0 0;
+}

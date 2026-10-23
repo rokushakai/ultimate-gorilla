@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.64** |
+| 現在バージョン | **v0.65** |
 | ブランチ | main |
 
 ---
@@ -36,6 +36,7 @@
 |---|---|
 | `index.html` | UI構造（モーダル・フィールド・ボタン） |
 | `script.js` | ゲームロジック全体（ES5 IIFE パターン） |
+| `arcade.js` | ゲームセンターのミニゲーム集（§146。`window.UGArcade` のみ公開。script.js より先に読み込む） |
 | `style.css` | スタイル（スマホ縦画面優先） |
 | `GAME_DESIGN.md` | 正式仕様書（Single Source of Truth） |
 | `TODO.md` | 実装予定一覧（実装済みも記録） |
@@ -92,6 +93,12 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.65] ゲームセンター（レトロミニゲーム）**（§146）
+  - `arcade.js` 新規: 🧱ゴリラブロック / 👾UMAシューター / 🎯ゴリラピンボール
+  - マップ (20,12) に `Q` 🕹️ タイル → `openArcadeModal()`
+  - `state.arcadeHighScores` save/load（報酬なし・ハイスコアのみ）
+  - ゲーム追加は `arcade.js` の `register({...})` を1つ増やし、script.js の `ARCADE_GAME_IDS` と state 初期値に id を足す
+  - デバッグ4本（§146）: `btn-debug-v65-*`
 - **[v0.64] 仲間わざ2種類目**（§145）
   - `COMPANION_TECHNIQUE2_DATA` 4人分わざ2定数（剛烈強打/超絶包囲網/究極解析/聖なる癒し）
   - `isCompanionTechnique2Unlocked(cid)` / `runCompanionTechnique2Action(cid)` 実装
@@ -968,7 +975,11 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 
 ## 次の推奨実装順
 
-TODO.md の実装候補はすべて完了。**次の機能はプロデューサー判断待ち**（新しいアイデアを GAME_DESIGN.md に書いてから着手）。
+1. **ゲームセンターの実機プレイ確認・調整**（v0.65。スマホでの操作感・ピンボールの難易度・シューターの速度）
+2. **ゲームセンターのゲーム追加候補**: ブロックくずし、スネーク、もぐらたたき 等（プロデューサー判断）
+3. **ゲームセンターの景品・メダル交換**（経済バランスに影響するため要判断）
+
+> v0.65（§146 ゲームセンター）実装済み。arcade.js 新規・3ゲーム・ハイスコア保存。BGM/捕獲条件/仲間能力変更なし。
 
 > v0.64（§145 仲間わざ2種類目）実装済み。COMPANION_TECHNIQUE2_DATA 4人分、わざサブメニュー、習得演出、Lv50解放、status画面更新。デバッグ14本。
 

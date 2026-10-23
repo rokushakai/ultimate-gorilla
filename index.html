@@ -193,6 +193,14 @@
     </div>
   </div>
 
+  <!-- ===== ゲームセンターモーダル(§146 v0.65) ===== -->
+  <div id="modal-arcade" class="modal hidden">
+    <div class="modal-box arcade-box">
+      <div id="arcade-menu"></div>
+      <div id="arcade-stage" class="hidden"></div>
+    </div>
+  </div>
+
   <!-- ===== 仲間わざ2習得演出モーダル(§145 v0.64) ===== -->
   <div id="modal-companion-technique2-learn" class="modal hidden">
     <div class="modal-box" style="width:min(88vw,380px);max-height:80vh;overflow-y:auto;text-align:center;">
@@ -688,6 +696,7 @@
 </div>
 
 <!-- type="module" は file:// では動かないブラウザがあるため使わない -->
+<script src="arcade.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

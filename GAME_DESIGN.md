@@ -8583,17 +8583,102 @@ var COMPANION_TECHNIQUE2_DATA = {
 
 | id | 内容 |
 |---|---|
-| btn-debug-v64-technique2-data | COMPANION_TECHNIQUE2_DATA一覧確認 |
-| btn-debug-v64-unlock-all | 4人全員Lv50+わざ1解放でわざ2解放確認 |
-| btn-debug-v64-unlock-juritani | じゅりたにわざ2解放（Lv50+critical_bracelet） |
-| btn-debug-v64-unlock-harumi | はるみわざ2解放（Lv50+prayer_brooch） |
-| btn-debug-v64-battle-damage-crit | juritaniわざ2の会心判定確認（戦闘中） |
-| btn-debug-v64-battle-heal-cure | harumiわざ2のheal+cure確認（ailment付与+HP低下+戦闘） |
-| btn-debug-v64-technique2-used | technique2Used=true後の再使用不可確認 |
-| btn-debug-v64-independent-counters | わざ1使用後もわざ2使用可確認 |
-| btn-debug-v64-lock-reason | 未解放時のlockReason確認 |
-| btn-debug-v64-notice-queue | 習得演出キュー確認（4人全員queue） |
-| btn-debug-v64-notice-show-juritani | じゅりたに習得モーダル直接表示 |
-| btn-debug-v64-notice-flag-check | noticed=trueのsave確認 |
-| btn-debug-v64-old-save-repair | 旧セーブ修復確認（unlock済み+noticed=false→queue） |
-| btn-debug-v64-reset | v64テスト用セットアップリセット |
+| btn-debug-v64-unlock-all | 4人全員Lv50＋わざ1報酬ギア付与 → わざ2解放 |
+| btn-debug-v64-lock-all | 4人全員Lv49以下 → わざ2ロック |
+| btn-debug-v64-exec-juritani | じゅりたにわざ2「剛烈強打」実行（戦闘中） |
+| btn-debug-v64-exec-shurittani | しゅりったにわざ2「超絶包囲網」実行（戦闘中） |
+| btn-debug-v64-exec-norio | のりおわざ2「究極解析」実行（戦闘中） |
+| btn-debug-v64-exec-harumi | はるみわざ2「聖なる癒し」実行（戦闘中） |
+| btn-debug-v64-used-reset | わざ2使用済みフラグリセット |
+| btn-debug-v64-notice-queue | じゅりたにわざ2習得演出キュー |
+| btn-debug-v64-notice-all | 4人全員わざ2習得演出キュー |
+| btn-debug-v64-notice-clear | わざ2習得演出フラグリセット（再演出可） |
+| btn-debug-v64-lock-reason-check | わざ2ロック理由一覧 |
+| btn-debug-v64-status-check | わざ2解放状態サマリ（Lv/解放/使用済/演出済） |
+| btn-debug-v64-harumi-lowHP | HP30%＋アレルギー＋におい付与（はるみわざ2テスト用） |
+| btn-debug-v64-reset | v64テスト用データリセット |
+
+---
+
+## §146 v0.65 — ゲームセンター（レトロミニゲーム）
+
+### 目的
+
+村の東ウイングに「ゲームセンター」を置き、レトロなミニゲームを遊べるようにする。RPG本編とは独立した息抜き要素。ハイスコアだけを記録し、ゲームバランス（G・EXP・アイテム）には影響させない。
+
+### 施設
+
+- タイル文字: `Q`（絵文字 🕹️）
+- 位置: 通常マップ (20,12)（東ウイングの道エリア。既存設備の座標は変更しない）
+- `SAFE_TILE` に追加（エンカウントなし）
+- 接触すると `openArcadeModal()` でゲームセンターモーダルを開く
+- マップは毎回 `RAW_MAP` から生成されるため、旧セーブでも自動的に出現する
+
+### 収録ゲーム（v0.65 時点・3本）
+
+ゲーム内では商標名を使わず、オリジナル名で表記する。
+
+| id | 名前 | ジャンル | 操作（タッチ） | 操作（キーボード） |
+|---|---|---|---|---|
+| `blocks` | 🧱 ゴリラブロック | 落ちものパズル（テトリス風） | ◀ ▶ ↻回転 ▼ソフトドロップ ⤓ハードドロップ | ←→ / ↑回転 / ↓ / Space |
+| `shooter` | 👾 UMAシューター | 固定画面シューティング（インベーダー風） | ◀ ▶（長押し） 🔫発射 | ←→ / Space |
+| `pinball` | 🎯 ゴリラピンボール | ピンボール | 左フリッパー / 右フリッパー / 発射（長押しでため） | Z or ← / M or → / Space or ↓ |
+
+#### ゴリラブロック
+- 盤面 10×20、7種ミノ、次ミノ表示
+- 回転は簡易ウォールキック（横 0/-1/+1/-2/+2 を順に試す）
+- ライン消去得点: 1/2/3/4ライン = 100/300/500/800 × レベル。ハードドロップは落下距離×2点
+- 10ライン毎にレベル+1、落下速度アップ
+- 出現位置に置けなければゲームオーバー
+
+#### UMAシューター
+- UMA 5段×8列が左右に行進し、端で1段下がる。数が減るほど速くなる
+- 自機の弾は画面に1発まで。敵弾は最下段の敵からランダム発射
+- 防壁3つ（ブロック単位で削れる）
+- 得点: 段ごとに 50/40/30/20/10 点。全滅で次のウェーブ（速度アップ）
+- 残機3。敵が自機の高さまで降りてきたら即ゲームオーバー
+
+#### ゴリラピンボール
+- 重力・反射ありの簡易物理（1フレーム6サブステップ）
+- バンパー3個（各100点・はじき返し）、左右インレーン、左右フリッパー、右側に発射レーン
+- ボール3個。ボールが下から落ちたら1個減る
+- 発射ボタン長押しでためて、離すと発射
+
+### 共通仕様
+
+- 実装は新ファイル `arcade.js`（ES5・IIFE・外部ライブラリなし）。`window.UGArcade` だけを公開する
+  - `UGArcade.list()` / `UGArcade.start(gameId, rootEl, opts)` / `UGArcade.stop()` / `UGArcade.isRunning()`
+  - `index.html` で `script.js` より前に読み込む（`file://` で動くよう相対パス）
+- 描画は `<canvas>`（論理解像度 240×320、CSSで画面幅に合わせて拡大）
+- ゲームループは `requestAnimationFrame` ＋ 固定 1/60 秒ステップ
+- 画面下にタッチボタン。長押し対応ボタンは pointerdown/pointerup/pointercancel/pointerleave で管理。`touch-action:none`
+- ⏸ 一時停止 / ✖ やめる ボタン。タブが非表示になったら自動で一時停止
+- ゲームオーバー時は canvas 上に結果表示、「もう一度」「メニューへ」ボタン
+- キーボード操作はゲーム中だけ window にリスナーを付け、終了時に外す。矢印キー・Space の既定動作（スクロール）は preventDefault
+- **BGM/SE には一切触れない**（ミニゲームは無音。既存BGMはそのまま流れ続ける）
+
+### セーブデータ
+
+- `state.arcadeHighScores = { blocks: 0, shooter: 0, pinball: 0 }`
+- `saveGame()` / `loadGame()` に追加。`normalizeArcadeHighScores()` で数値以外・負数・欠損キーを0に補完（旧セーブ互換）
+- ハイスコアは下がらない（never-demote）
+- ハイスコア更新時のみ、ゲーム終了（ゲームオーバー or やめる）のタイミングで `saveGame()` を1回呼ぶ
+- ニューゲーム（セーブ削除＋リロード）で初期値に戻る
+
+### 報酬
+
+- v0.65 ではハイスコア記録のみ。G・EXP・アイテム報酬なし（経済バランス不変）
+- 将来候補: スコア達成でメダル、景品交換、ゲーム追加（ブロックくずし、スネーク等）
+
+### 変更しないもの
+
+- BGM関連コード全般、究極ゴリラ捕獲条件、究極チンパンジー、最終サイドストーリー、仲間戦闘能力・AI、既存施設の座標
+
+### デバッグ（§146・4本）
+
+| id | 内容 |
+|---|---|
+| btn-debug-v65-open-arcade | ゲームセンターモーダルを直接開く |
+| btn-debug-v65-warp-arcade | ゲームセンター横 (19,12) へワープ |
+| btn-debug-v65-scores | ハイスコア一覧表示 |
+| btn-debug-v65-reset-scores | ハイスコアを0にリセット |

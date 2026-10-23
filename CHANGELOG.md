@@ -5,6 +5,29 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [0.65] - 2026-10-24 — ゲームセンター（レトロミニゲーム） (§146)
+
+### Added
+- **`arcade.js`** 新規ファイル: ミニゲーム集（ES5・外部ライブラリなし）。`window.UGArcade`（list/start/stop/isRunning）を公開
+  - 共通: canvas 240×320・固定60fpsループ・タッチボタン（長押し対応）・キーボード操作・一時停止・タブ非表示で自動一時停止・ゲームオーバー画面（もう一度/メニューへ）
+  - 🧱 **ゴリラブロック**: 落ちものパズル（7種ミノ・次ミノ・ゴースト・ハードドロップ・10ライン毎レベルアップ）
+  - 👾 **UMAシューター**: インベーダー風（5段×8列のUMA・防壁・UFOボーナス・ウェーブ制）
+  - 🎯 **ゴリラピンボール**: 簡易物理（バンパー3・ロールオーバー3・左右フリッパー・ため発射・ボール3個）
+- マップ東ウイング (20,12) にゲームセンタータイル `Q` 🕹️（SAFE_TILE）
+- `openArcadeModal()` / `renderArcadeMenu()` / `startArcadeGame()` / `onArcadeGameEnd()` / `closeArcadeModal()`
+- `state.arcadeHighScores`（saveGame/loadGame・`normalizeArcadeHighScores()` で旧セーブ補完）。更新時のみ終了時に1回保存
+- `index.html`: `modal-arcade` 追加、`arcade.js` を `script.js` より前に読み込み
+- `style.css`: ゲームセンター用スタイル
+- デバッグ4本（§146）: `btn-debug-v65-*`
+
+### Notes
+- BGM/SE には触れていない（ミニゲームは無音）
+- G・EXP・アイテム報酬なし（ハイスコア記録のみ）
+- ゲーム内では商標名を使わずオリジナル名で表記
+
+### Fixed
+- GAME_DESIGN.md §145 のデバッグ表を実装済みのボタンIDに合わせて修正
+
 ## [0.64] - 2026-10-17 — 仲間わざ2種類目 (§145)
 
 ### Added
