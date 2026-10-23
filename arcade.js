@@ -136,9 +136,10 @@
     renderSysButtons();
   }
 
-  function gameOver() {
+  function gameOver(title) {
     if (!host || host.over) { return; }
     host.over = true;
+    host.overTitle = title || "GAME OVER";
     report();
     renderSysButtons();
   }
@@ -160,6 +161,63 @@
     if (ev.cancelable) { ev.preventDefault(); }
     send(act, false);
   }
+  // キャンバス直接入力（タップ・ドラッグ・スワイプ）。座標は論理解像度 240×320
+  function bindCanvas(canvas) {
+    var pressed = false;
+    function pos(ev) {
+      var r = canvas.getBoundingClientRect();
+      var src = (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0] : ev;
+      var rw = r.width || W, rh = r.height || H;
+      return [(src.clientX - r.left) * W / rw, (src.clientY - r.top) * H / rh];
+    }
+    function deliver(type, ev) {
+      if (!host || !host.game || !host.game.pointer) { return; }
+      if (type !== "up" && (host.paused || host.over)) { return; }
+      var p = pos(ev);
+      host.game.pointer(type, p[0], p[1]);
+    }
+    function down(ev) {
+      if (ev.cancelable) { ev.preventDefault(); }
+      pressed = true;
+      if (ev.pointerId !== undefined && canvas.setPointerCapture) {
+        try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      }
+      deliver("down", ev);
+    }
+    function move(ev) {
+      if (!pressed) { return; }
+      if (ev.cancelable) { ev.preventDefault(); }
+      deliver("move", ev);
+    }
+    function up(ev) {
+      if (!pressed) { return; }
+      pressed = false;
+      deliver("up", ev);
+    }
+    if (window.PointerEvent) {
+      canvas.addEventListener("pointerdown", down);
+      canvas.addEventListener("pointermove", move);
+      canvas.addEventListener("pointerup", up);
+      canvas.addEventListener("pointercancel", up);
+    } else {
+      canvas.addEventListener("touchstart", down, { passive: false });
+      canvas.addEventListener("touchmove", move, { passive: false });
+      canvas.addEventListener("touchend", up);
+      canvas.addEventListener("touchcancel", up);
+      canvas.addEventListener("mousedown", down);
+      canvas.addEventListener("mousemove", move);
+      canvas.addEventListener("mouseup", up);
+    }
+  }
+
+  // スワイプ判定ヘルパー（down→up の移動量から方向を返す。短ければ "tap"）
+  function swipeDir(sx, sy, ex, ey) {
+    var dx = ex - sx, dy = ey - sy;
+    if (Math.abs(dx) < 14 && Math.abs(dy) < 14) { return "tap"; }
+    if (Math.abs(dx) > Math.abs(dy)) { return dx > 0 ? "right" : "left"; }
+    return dy > 0 ? "down" : "up";
+  }
+
   function onVisibility() {
     if (host && document.hidden && !host.paused && !host.over) { togglePause(); }
   }
@@ -198,7 +256,7 @@
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#ffd166";
       ctx.font = "bold 24px sans-serif";
-      ctx.fillText(host.over ? "GAME OVER" : "PAUSE", W / 2, H / 2 - 24);
+      ctx.fillText(host.over ? host.overTitle : "PAUSE", W / 2, H / 2 - 24);
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 15px sans-serif";
       ctx.fillText("SCORE " + host.score, W / 2, H / 2 + 8);
@@ -256,10 +314,12 @@
       gameOver: gameOver
     };
     host.game = def.create(api);
+    bindCanvas(canvas);
     // タッチボタン
     var ctrl = rootEl.querySelector(".arcade-controls");
     var controls = def.controls;
-    ctrl.style.gridTemplateColumns = "repeat(" + controls.length + ", 1fr)";
+    if (controls.length === 0) { ctrl.style.display = "none"; }
+    ctrl.style.gridTemplateColumns = "repeat(" + Math.max(1, controls.length) + ", 1fr)";
     for (var i = 0; i < controls.length; i++) {
       var b = document.createElement("button");
       b.className = "arcade-btn";
@@ -970,6 +1030,802 @@
             ctx.font = "bold 14px sans-serif";
             ctx.fillText("ROLLOVER BONUS +500", 110, 72);
           }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 共通: 方向入力
+  // ---------------------------------------------------------
+  var DIR_CONTROLS = [
+    { action: "left", label: "&#x25C0;" },
+    { action: "up", label: "&#x25B2;" },
+    { action: "down", label: "&#x25BC;" },
+    { action: "right", label: "&#x25B6;" }
+  ];
+  var DIR_KEYS = {
+    "ArrowLeft": "left", "a": "left", "A": "left",
+    "ArrowRight": "right", "d": "right", "D": "right",
+    "ArrowUp": "up", "w": "up", "W": "up",
+    "ArrowDown": "down", "s": "down", "S": "down"
+  };
+
+  function emojiAt(ctx, ch, x, y, size) {
+    ctx.font = size + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ch, x, y);
+  }
+  function hudText(ctx, text, x, y, align) {
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = align || "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+  }
+
+  // ---------------------------------------------------------
+  // 💥 ジャングルくずし（ブロックくずし）
+  // ---------------------------------------------------------
+  var BREAK_COLORS = ["#e84393", "#e17055", "#fdcb6e", "#00b894", "#0984e3", "#6c5ce7"];
+
+  register({
+    id: "breakout",
+    name: "ジャングルくずし",
+    icon: "&#x1F4A5;",
+    desc: "ボールを打ち返してブロックを全部こわそう",
+    help: "←→移動 / Space発射 / 画面ドラッグで移動・タップで発射 / P一時停止",
+    controls: [
+      { action: "left", label: "&#x25C0;" },
+      { action: "launch", label: "&#x1F680; 発射" },
+      { action: "right", label: "&#x25B6;" }
+    ],
+    keys: { "ArrowLeft": "left", "ArrowRight": "right", " ": "launch", "ArrowUp": "launch" },
+    create: function (api) {
+      var COLS = 8, ROWS = 6, BW = 26, BH = 10, BX0 = 9, BY0 = 36;
+      var PW = 44, PH = 6, PY = 292, BR = 4;
+      var pad = { x: W / 2 };
+      var held = { left: false, right: false };
+      var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };
+      var stuck = true, lives = 3, level = 1, bricks = [], msg = 0;
+
+      function speed() { return Math.min(6, 3.2 + (level - 1) * 0.4); }
+      function build() {
+        bricks = [];
+        for (var r = 0; r < ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            bricks.push({ x: BX0 + c * 28, y: BY0 + r * 14, row: r, hp: (level >= 2 && r === 0) ? 2 : 1 });
+          }
+        }
+      }
+      function launch() {
+        if (!stuck) { return; }
+        stuck = false;
+        var a = (Math.random() - 0.5) * 0.8;
+        ball.vx = speed() * Math.sin(a);
+        ball.vy = -speed() * Math.cos(a);
+      }
+      function resetBall() { stuck = true; ball.vx = 0; ball.vy = 0; }
+
+      build();
+
+      return {
+        input: function (action, down) {
+          if (action === "left" || action === "right") { held[action] = down; }
+          if (down && action === "launch") { launch(); }
+        },
+        pointer: function (type, x) {
+          if (type === "down" || type === "move") { pad.x = clamp(x, PW / 2, W - PW / 2); }
+          if (type === "down") { launch(); }
+        },
+        step: function () {
+          var k, s;
+          if (msg > 0) { msg--; }
+          if (held.left) { pad.x -= 3.6; }
+          if (held.right) { pad.x += 3.6; }
+          pad.x = clamp(pad.x, PW / 2, W - PW / 2);
+          if (stuck) { ball.x = pad.x; ball.y = PY - BR - 1; return; }
+          for (s = 0; s < 3; s++) {
+            var px = ball.x, py = ball.y;
+            ball.x += ball.vx / 3;
+            ball.y += ball.vy / 3;
+            if (ball.x < BR) { ball.x = BR; ball.vx = Math.abs(ball.vx); }
+            if (ball.x > W - BR) { ball.x = W - BR; ball.vx = -Math.abs(ball.vx); }
+            if (ball.y < BR) { ball.y = BR; ball.vy = Math.abs(ball.vy); }
+            if (ball.vy > 0 && ball.y + BR >= PY && py + BR <= PY + PH && Math.abs(ball.x - pad.x) <= PW / 2 + BR) {
+              var rel = clamp((ball.x - pad.x) / (PW / 2), -1, 1);
+              var a = rel * 1.05, sp = speed();
+              ball.vx = sp * Math.sin(a);
+              ball.vy = -sp * Math.cos(a);
+              ball.y = PY - BR;
+            }
+            for (k = 0; k < bricks.length; k++) {
+              var b = bricks[k];
+              if (b.hp <= 0) { continue; }
+              var cx = clamp(ball.x, b.x, b.x + BW), cy = clamp(ball.y, b.y, b.y + BH);
+              var dx = ball.x - cx, dy = ball.y - cy;
+              if (dx * dx + dy * dy > BR * BR) { continue; }
+              if (px >= b.x && px <= b.x + BW) { ball.vy = -ball.vy; ball.y = py; }
+              else { ball.vx = -ball.vx; ball.x = px; }
+              b.hp--;
+              if (b.hp === 0) { api.addScore((ROWS - b.row) * 10); }
+              break;
+            }
+          }
+          if (ball.y > H + 10) {
+            lives--;
+            if (lives <= 0) { api.gameOver(); return; }
+            resetBall();
+          }
+          var left = 0;
+          for (k = 0; k < bricks.length; k++) { if (bricks[k].hp > 0) { left++; } }
+          if (left === 0) { level++; build(); resetBall(); msg = 90; }
+        },
+        draw: function (ctx) {
+          var k;
+          for (k = 0; k < bricks.length; k++) {
+            var b = bricks[k];
+            if (b.hp <= 0) { continue; }
+            ctx.fillStyle = b.hp >= 2 ? "#b2bec3" : BREAK_COLORS[b.row];
+            ctx.fillRect(b.x, b.y, BW, BH);
+            ctx.fillStyle = "rgba(255,255,255,0.3)";
+            ctx.fillRect(b.x, b.y, BW, 2);
+          }
+          ctx.fillStyle = "#74b9ff";
+          ctx.fillRect(pad.x - PW / 2, PY, PW, PH);
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath(); ctx.arc(ball.x, ball.y, BR, 0, Math.PI * 2); ctx.fill();
+          hudText(ctx, "LIFE " + lives + "   LEVEL " + level, 6, 312);
+          if (stuck) { hudText(ctx, "タップ or 発射でスタート", W / 2, 220, "center"); }
+          if (msg > 0) {
+            ctx.fillStyle = "#55efc4";
+            ctx.font = "bold 18px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("LEVEL " + level, W / 2, 180);
+          }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🐍 バナナスネーク
+  // ---------------------------------------------------------
+  register({
+    id: "snake",
+    name: "バナナスネーク",
+    icon: "&#x1F40D;",
+    desc: "バナナを食べてどんどん長くなろう",
+    help: "矢印/WASDで方向転換 / 画面スワイプでもOK / P一時停止",
+    controls: DIR_CONTROLS,
+    keys: DIR_KEYS,
+    create: function (api) {
+      var COLS = 20, ROWS = 24, CELL = 12, OY = 8;
+      var DIRS = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } };
+      var body = [{ x: 9, y: 12 }, { x: 8, y: 12 }, { x: 7, y: 12 }, { x: 6, y: 12 }];
+      var dir = DIRS.right, queue = [];
+      var food = null, star = null, eaten = 0, timer = 0, sx = 0, sy = 0;
+
+      function occupied(x, y) {
+        for (var i = 0; i < body.length; i++) { if (body[i].x === x && body[i].y === y) { return true; } }
+        return false;
+      }
+      function emptyCell() {
+        for (var tries = 0; tries < 500; tries++) {
+          var x = randInt(0, COLS - 1), y = randInt(0, ROWS - 1);
+          if (occupied(x, y)) { continue; }
+          if (food && food.x === x && food.y === y) { continue; }
+          if (star && star.x === x && star.y === y) { continue; }
+          return { x: x, y: y };
+        }
+        return null;
+      }
+      function turn(name) {
+        var d = DIRS[name];
+        if (!d) { return; }
+        var last = queue.length ? queue[queue.length - 1] : dir;
+        if ((d.x === -last.x && d.y === -last.y) || (d.x === last.x && d.y === last.y)) { return; }
+        if (queue.length < 2) { queue.push(d); }
+      }
+      function interval() { return Math.max(4, 10 - Math.floor(body.length / 6)); }
+
+      food = emptyCell();
+
+      return {
+        input: function (action, down) { if (down) { turn(action); } },
+        pointer: function (type, x, y) {
+          if (type === "down") { sx = x; sy = y; }
+          else if (type === "up") {
+            var d = swipeDir(sx, sy, x, y);
+            if (d !== "tap") { turn(d); }
+          }
+        },
+        step: function () {
+          if (star) { star.t--; if (star.t <= 0) { star = null; } }
+          timer++;
+          if (timer < interval()) { return; }
+          timer = 0;
+          if (queue.length) { dir = queue.shift(); }
+          var nx = body[0].x + dir.x, ny = body[0].y + dir.y;
+          if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) { api.gameOver(); return; }
+          for (var i = 0; i < body.length - 1; i++) {
+            if (body[i].x === nx && body[i].y === ny) { api.gameOver(); return; }
+          }
+          body.unshift({ x: nx, y: ny });
+          var grew = false;
+          if (food && food.x === nx && food.y === ny) {
+            grew = true;
+            api.addScore(10);
+            eaten++;
+            food = emptyCell();
+            if (eaten % 5 === 0 && !star) {
+              var c = emptyCell();
+              if (c) { star = { x: c.x, y: c.y, t: 300 }; }
+            }
+          }
+          if (star && star.x === nx && star.y === ny) { grew = true; api.addScore(50); star = null; }
+          if (!grew) { body.pop(); }
+        },
+        draw: function (ctx) {
+          ctx.fillStyle = "#0b3d20";
+          ctx.fillRect(0, OY, COLS * CELL, ROWS * CELL);
+          ctx.strokeStyle = "#55efc4";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(0.5, OY + 0.5, COLS * CELL - 1, ROWS * CELL - 1);
+          if (food) { emojiAt(ctx, "🍌", food.x * CELL + 6, OY + food.y * CELL + 7, 11); }
+          if (star && (star.t > 90 || Math.floor(star.t / 6) % 2 === 0)) {
+            emojiAt(ctx, "⭐", star.x * CELL + 6, OY + star.y * CELL + 7, 11);
+          }
+          for (var i = body.length - 1; i >= 0; i--) {
+            ctx.fillStyle = i === 0 ? "#ffd166" : (i % 2 === 0 ? "#55efc4" : "#00b894");
+            ctx.fillRect(body[i].x * CELL + 1, OY + body[i].y * CELL + 1, CELL - 2, CELL - 2);
+          }
+          hudText(ctx, "LENGTH " + body.length, 6, 312);
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🏓 ゴリラテニス（CPU対戦）
+  // ---------------------------------------------------------
+  register({
+    id: "tennis",
+    name: "ゴリラテニス",
+    icon: "&#x1F3D3;",
+    desc: "CPUゴリラとラリー対決。先に5点とろう",
+    help: "←→移動 / 画面ドラッグでも移動 / P一時停止",
+    controls: [
+      { action: "left", label: "&#x25C0;" },
+      { action: "right", label: "&#x25B6;" }
+    ],
+    keys: { "ArrowLeft": "left", "ArrowRight": "right", "a": "left", "A": "left", "d": "right", "D": "right" },
+    create: function (api) {
+      var PW = 44, PH = 6, PY = 294, CY = 20, BR = 4, WIN = 5;
+      var me = { x: W / 2 }, cpu = { x: W / 2 };
+      var held = { left: false, right: false };
+      var ball = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
+      var sp = 3, serveT = 60, serveDir = 1, cpuErr = 0;
+      var myPts = 0, cpuPts = 0, level = 1, msg = 0;
+
+      function serve() {
+        sp = 3 + (level - 1) * 0.25;
+        var a = (Math.random() - 0.5) * 0.9;
+        ball.x = W / 2; ball.y = H / 2;
+        ball.vx = sp * Math.sin(a);
+        ball.vy = sp * Math.cos(a) * serveDir;
+      }
+      function bounce(px, dirY) {
+        var rel = clamp((ball.x - px) / (PW / 2), -1, 1);
+        sp = Math.min(7.5, sp * 1.04);
+        ball.vx = sp * Math.sin(rel);
+        ball.vy = sp * Math.cos(rel) * dirY;
+      }
+      function point() {
+        serveT = 60;
+        if (myPts >= WIN) {
+          level++;
+          myPts = 0; cpuPts = 0;
+          msg = 90;
+        } else if (cpuPts >= WIN) {
+          api.gameOver();
+        }
+      }
+
+      return {
+        input: function (action, down) { held[action] = down; },
+        pointer: function (type, x) {
+          if (type === "down" || type === "move") { me.x = clamp(x, PW / 2, W - PW / 2); }
+        },
+        step: function () {
+          if (msg > 0) { msg--; }
+          if (held.left) { me.x -= 3.4; }
+          if (held.right) { me.x += 3.4; }
+          me.x = clamp(me.x, PW / 2, W - PW / 2);
+          var cpuSpd = 1.8 + level * 0.35;
+          var target = ball.vy < 0 && serveT === 0 ? ball.x + cpuErr : W / 2;
+          cpu.x = clamp(cpu.x + clamp(target - cpu.x, -cpuSpd, cpuSpd), PW / 2, W - PW / 2);
+          if (serveT > 0) {
+            serveT--;
+            ball.x = W / 2; ball.y = H / 2;
+            if (serveT === 0) { serve(); }
+            return;
+          }
+          for (var s = 0; s < 2; s++) {
+            ball.x += ball.vx / 2;
+            ball.y += ball.vy / 2;
+            if (ball.x < BR) { ball.x = BR; ball.vx = Math.abs(ball.vx); }
+            if (ball.x > W - BR) { ball.x = W - BR; ball.vx = -Math.abs(ball.vx); }
+            if (ball.vy > 0 && ball.y + BR >= PY && ball.y + BR <= PY + PH + 6 && Math.abs(ball.x - me.x) <= PW / 2 + BR) {
+              ball.y = PY - BR;
+              bounce(me.x, -1);
+              api.addScore(10);
+              cpuErr = (Math.random() - 0.5) * Math.max(10, 44 - level * 4);
+            }
+            if (ball.vy < 0 && ball.y - BR <= CY + PH && ball.y - BR >= CY - 6 && Math.abs(ball.x - cpu.x) <= PW / 2 + BR) {
+              ball.y = CY + PH + BR;
+              bounce(cpu.x, 1);
+            }
+          }
+          if (ball.y < -10) { myPts++; api.addScore(100); serveDir = -1; point(); }
+          else if (ball.y > H + 10) { cpuPts++; serveDir = 1; point(); }
+        },
+        draw: function (ctx) {
+          ctx.strokeStyle = "rgba(255,255,255,0.25)";
+          ctx.lineWidth = 2;
+          for (var x = 4; x < W; x += 16) {
+            ctx.beginPath(); ctx.moveTo(x, H / 2); ctx.lineTo(x + 8, H / 2); ctx.stroke();
+          }
+          ctx.fillStyle = "rgba(255,255,255,0.15)";
+          ctx.font = "bold 48px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(cpuPts), W / 2, H / 2 - 50);
+          ctx.fillText(String(myPts), W / 2, H / 2 + 50);
+          ctx.fillStyle = "#ff7675";
+          ctx.fillRect(cpu.x - PW / 2, CY, PW, PH);
+          emojiAt(ctx, "🦍", cpu.x, CY - 9, 12);
+          ctx.fillStyle = "#74b9ff";
+          ctx.fillRect(me.x - PW / 2, PY, PW, PH);
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath(); ctx.arc(ball.x, ball.y, BR, 0, Math.PI * 2); ctx.fill();
+          hudText(ctx, "LEVEL " + level + "   先に" + WIN + "点", 6, 312);
+          if (msg > 0) { hudText(ctx, "セット獲得！ LEVEL " + level, W / 2, H / 2 - 16, "center"); }
+          else if (serveT > 0) { hudText(ctx, "READY", W / 2, H / 2 - 16, "center"); }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🚗 UMAクロッシング（道路・川わたり）
+  // ---------------------------------------------------------
+  var CROSS_LANES = [
+    null,
+    { type: "log", speed: 0.6, w: 80, gap: 60 },
+    { type: "log", speed: -0.9, w: 60, gap: 70 },
+    { type: "log", speed: 0.5, w: 100, gap: 60 },
+    { type: "log", speed: -0.7, w: 60, gap: 50 },
+    { type: "log", speed: 1.0, w: 80, gap: 70 },
+    null,
+    { type: "car", speed: -1.0, w: 20, gap: 70, emoji: "🚗" },
+    { type: "car", speed: 0.8, w: 40, gap: 90, emoji: "🚚" },
+    { type: "car", speed: -1.5, w: 20, gap: 90, emoji: "🏎️" },
+    { type: "car", speed: 0.7, w: 20, gap: 60, emoji: "🚙" },
+    { type: "car", speed: -0.9, w: 40, gap: 80, emoji: "🚌" },
+    { type: "car", speed: 1.2, w: 20, gap: 80, emoji: "🚓" },
+    null,
+    null
+  ];
+
+  register({
+    id: "crossing",
+    name: "UMAクロッシング",
+    icon: "&#x1F697;",
+    desc: "車をよけて丸太に乗り、向こう岸のゴールをめざそう",
+    help: "矢印/WASDで1マス移動 / スワイプ・タップ(前進)でもOK / P一時停止",
+    controls: DIR_CONTROLS,
+    keys: DIR_KEYS,
+    create: function (api) {
+      var CELL = 20, ROWS = 15, START_X = 5 * CELL;
+      var lanes = [], level = 1, lives = 3;
+      var px = START_X, row = ROWS - 1, maxRow = ROWS - 1, dead = 0, msg = 0, sx = 0, sy = 0;
+
+      function buildLanes() {
+        var mult = 1 + (level - 1) * 0.15;
+        lanes = [];
+        for (var r = 0; r < ROWS; r++) {
+          var d = CROSS_LANES[r];
+          if (!d) { lanes.push(null); continue; }
+          var span = d.w + d.gap, n = Math.ceil((W + d.w) / span) + 1, off = randInt(0, span), xs = [];
+          for (var i = 0; i < n; i++) { xs.push(i * span - off); }
+          lanes.push({ type: d.type, speed: d.speed * mult, w: d.w, emoji: d.emoji, span: n * span, xs: xs });
+        }
+      }
+      function resetPlayer() { px = START_X; row = ROWS - 1; maxRow = ROWS - 1; }
+      function die() { lives--; dead = 40; }
+      function move(dx, dy) {
+        if (dead > 0) { return; }
+        var nr = row + dy;
+        if (nr < 0 || nr >= ROWS) { return; }
+        row = nr;
+        px = clamp(px + dx * CELL, 0, W - CELL);
+        if (!lanes[row] || lanes[row].type !== "log") { px = clamp(Math.round(px / CELL) * CELL, 0, W - CELL); }
+        if (row < maxRow) { maxRow = row; api.addScore(10); }
+        if (row === 0) {
+          api.addScore(100 + level * 50);
+          level++;
+          msg = 90;
+          buildLanes();
+          resetPlayer();
+        }
+      }
+      function dirMove(name) {
+        if (name === "left") { move(-1, 0); }
+        else if (name === "right") { move(1, 0); }
+        else if (name === "up") { move(0, -1); }
+        else if (name === "down") { move(0, 1); }
+      }
+
+      buildLanes();
+
+      return {
+        input: function (action, down) { if (down) { dirMove(action); } },
+        pointer: function (type, x, y) {
+          if (type === "down") { sx = x; sy = y; }
+          else if (type === "up") {
+            var d = swipeDir(sx, sy, x, y);
+            dirMove(d === "tap" ? "up" : d);
+          }
+        },
+        step: function () {
+          var r, i, ln;
+          if (msg > 0) { msg--; }
+          for (r = 0; r < ROWS; r++) {
+            ln = lanes[r];
+            if (!ln) { continue; }
+            for (i = 0; i < ln.xs.length; i++) {
+              ln.xs[i] += ln.speed;
+              if (ln.speed > 0 && ln.xs[i] > W) { ln.xs[i] -= ln.span; }
+              if (ln.speed < 0 && ln.xs[i] + ln.w < 0) { ln.xs[i] += ln.span; }
+            }
+          }
+          if (dead > 0) {
+            dead--;
+            if (dead === 0) {
+              if (lives <= 0) { api.gameOver(); return; }
+              resetPlayer();
+            }
+            return;
+          }
+          ln = lanes[row];
+          if (!ln) { return; }
+          if (ln.type === "log") {
+            var on = false, cx = px + CELL / 2;
+            for (i = 0; i < ln.xs.length; i++) {
+              if (cx >= ln.xs[i] && cx <= ln.xs[i] + ln.w) { on = true; break; }
+            }
+            if (!on) { die(); return; }
+            px += ln.speed;
+            if (px < -6 || px > W - CELL + 6) { die(); }
+          } else {
+            for (i = 0; i < ln.xs.length; i++) {
+              if (px + 4 < ln.xs[i] + ln.w && px + CELL - 4 > ln.xs[i]) { die(); return; }
+            }
+          }
+        },
+        draw: function (ctx) {
+          var r, i, ln, y;
+          for (r = 0; r < ROWS; r++) {
+            y = r * CELL;
+            ln = lanes[r];
+            ctx.fillStyle = r === 0 ? "#2d6a4f" : (!ln ? "#40916c" : (ln.type === "log" ? "#1e3a8a" : "#2d3436"));
+            ctx.fillRect(0, y, W, CELL);
+          }
+          for (i = 0; i < 6; i++) { emojiAt(ctx, "🏁", 20 + i * 40, 10, 12); }
+          ctx.strokeStyle = "rgba(255,255,255,0.25)";
+          ctx.lineWidth = 1;
+          for (r = 8; r <= 12; r++) {
+            for (i = 0; i < W; i += 20) { ctx.beginPath(); ctx.moveTo(i, r * CELL + 0.5); ctx.lineTo(i + 10, r * CELL + 0.5); ctx.stroke(); }
+          }
+          for (r = 0; r < ROWS; r++) {
+            ln = lanes[r];
+            if (!ln) { continue; }
+            y = r * CELL;
+            for (i = 0; i < ln.xs.length; i++) {
+              var x = ln.xs[i];
+              if (x > W || x + ln.w < 0) { continue; }
+              if (ln.type === "log") {
+                ctx.fillStyle = "#8d5524";
+                ctx.fillRect(x, y + 3, ln.w, CELL - 6);
+                ctx.fillStyle = "#6f4518";
+                ctx.fillRect(x, y + 9, ln.w, 2);
+              } else {
+                ctx.save();
+                ctx.translate(x + ln.w / 2, y + CELL / 2);
+                if (ln.speed > 0) { ctx.scale(-1, 1); }
+                emojiAt(ctx, ln.emoji, 0, 0, ln.w > 20 ? 20 : 16);
+                ctx.restore();
+              }
+            }
+          }
+          emojiAt(ctx, dead > 0 ? "💥" : "🦍", px + CELL / 2, row * CELL + CELL / 2, 15);
+          hudText(ctx, "LIFE " + Math.max(0, lives) + "   LEVEL " + level, 6, 310);
+          if (msg > 0) {
+            ctx.fillStyle = "#ffd166";
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("ゴール！ LEVEL " + level, W / 2, 6.5 * CELL);
+          }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🔨 ゴリラたたき（もぐらたたき）
+  // ---------------------------------------------------------
+  register({
+    id: "mole",
+    name: "ゴリラたたき",
+    icon: "&#x1F528;",
+    desc: "30秒で顔を出すゴリラをたたきまくろう（💣はダメ）",
+    help: "画面の穴をタップ / キーボードはテンキー配置 7 8 9・4 5 6・1 2 3 / P一時停止",
+    controls: [],
+    keys: { "7": "h0", "8": "h1", "9": "h2", "4": "h3", "5": "h4", "6": "h5", "1": "h6", "2": "h7", "3": "h8" },
+    create: function (api) {
+      var TIME = 1800, t = 0, spawnT = 0;
+      var KIND = {
+        gorilla: { emoji: "🦍", pts: 10 },
+        monkey: { emoji: "🐒", pts: 30 },
+        bomb: { emoji: "💣", pts: -30 }
+      };
+      var holes = [];
+      for (var r = 0; r < 3; r++) {
+        for (var c = 0; c < 3; c++) {
+          holes.push({ x: 50 + c * 70, y: 100 + r * 78, kind: null, life: 0, max: 0, hit: 0, fx: 0, fxText: "", fxBad: false });
+        }
+      }
+      function spawn() {
+        var empty = [], i;
+        for (i = 0; i < holes.length; i++) { if (!holes[i].kind && holes[i].hit === 0) { empty.push(i); } }
+        if (!empty.length) { return; }
+        var h = holes[empty[randInt(0, empty.length - 1)]];
+        var roll = Math.random();
+        if (roll < 0.15) { h.kind = "bomb"; h.life = 80; }
+        else if (roll < 0.32) { h.kind = "monkey"; h.life = 36; }
+        else { h.kind = "gorilla"; h.life = Math.round(70 - 30 * (t / TIME)); }
+        h.max = h.life;
+      }
+      function whack(i) {
+        var h = holes[i];
+        if (!h || !h.kind) { return; }
+        var pts = KIND[h.kind].pts;
+        api.addScore(pts);
+        h.fx = 24;
+        h.fxText = (pts > 0 ? "+" : "") + pts;
+        h.fxBad = pts < 0;
+        h.kind = null;
+        h.hit = 10;
+      }
+
+      return {
+        input: function (action, down) {
+          if (down) { whack(parseInt(action.substring(1), 10)); }
+        },
+        pointer: function (type, x, y) {
+          if (type !== "down") { return; }
+          for (var i = 0; i < holes.length; i++) {
+            var dx = x - holes[i].x, dy = y - holes[i].y;
+            if (dx * dx + dy * dy < 34 * 34) { whack(i); return; }
+          }
+        },
+        step: function () {
+          t++;
+          if (t >= TIME) { api.gameOver("TIME UP"); return; }
+          spawnT++;
+          var iv = Math.max(16, Math.round(40 - 24 * (t / TIME)));
+          if (spawnT >= iv) {
+            spawnT = 0;
+            spawn();
+            if (t > TIME / 2 && Math.random() < 0.3) { spawn(); }
+          }
+          for (var i = 0; i < holes.length; i++) {
+            var h = holes[i];
+            if (h.kind) { h.life--; if (h.life <= 0) { h.kind = null; } }
+            if (h.hit > 0) { h.hit--; }
+            if (h.fx > 0) { h.fx--; }
+          }
+        },
+        draw: function (ctx) {
+          var i;
+          ctx.fillStyle = "#2d6a4f";
+          ctx.fillRect(0, 0, W, H);
+          var remain = Math.max(0, Math.ceil((TIME - t) / 60));
+          ctx.fillStyle = "#1b4332";
+          ctx.fillRect(10, 14, W - 20, 8);
+          ctx.fillStyle = remain <= 5 ? "#ff7675" : "#ffd166";
+          ctx.fillRect(10, 14, (W - 20) * (1 - t / TIME), 8);
+          hudText(ctx, "のこり " + remain + "秒", W / 2, 34, "center");
+          for (i = 0; i < holes.length; i++) {
+            var h = holes[i];
+            ctx.save();
+            ctx.translate(h.x, h.y + 18);
+            ctx.scale(1, 0.35);
+            ctx.fillStyle = "#1b1b1b";
+            ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+            if (h.kind) {
+              var rise = Math.min(1, (h.max - h.life) / 6, h.life / 6);
+              emojiAt(ctx, KIND[h.kind].emoji, h.x, h.y + 14 - 16 * rise, 32);
+            }
+            if (h.hit > 0) { emojiAt(ctx, "💥", h.x, h.y, 26); }
+            if (h.fx > 0) {
+              ctx.fillStyle = h.fxBad ? "#ff7675" : "#55efc4";
+              ctx.font = "bold 14px sans-serif";
+              ctx.textAlign = "center";
+              ctx.fillText(h.fxText, h.x, h.y - 26 - (24 - h.fx));
+            }
+          }
+          hudText(ctx, "🦍+10  🐒+30  💣-30", W / 2, 312, "center");
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 💣 UMAスイーパー（マインスイーパー風）
+  // ---------------------------------------------------------
+  var SWEEP_NUM_COLORS = ["", "#74b9ff", "#55efc4", "#ff7675", "#a29bfe", "#fdcb6e", "#81ecec", "#ffffff", "#b2bec3"];
+
+  register({
+    id: "sweeper",
+    name: "UMAスイーパー",
+    icon: "&#x1F4A3;",
+    desc: "数字をヒントに、地雷をふまずに全マスを開けよう",
+    help: "タップで開く / 長押し or 旗モードで🚩 / 数字タップで周りを一括オープン / Fで旗モード",
+    controls: [{ action: "flag", label: "&#x1F6A9; 旗モード切替" }],
+    keys: { "f": "flag", "F": "flag" },
+    create: function (api) {
+      var COLS = 9, ROWS = 11, CELL = 26, OX = 3, OY = 22, MINES = 14;
+      var grid = [], placed = false, flagMode = false, frames = 0, opened = 0, ended = false, press = null;
+      var y, x;
+      for (y = 0; y < ROWS; y++) {
+        var line = [];
+        for (x = 0; x < COLS; x++) { line.push({ mine: false, open: false, flag: false, boom: false, n: 0 }); }
+        grid.push(line);
+      }
+      function at(cx, cy) { return (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS) ? grid[cy][cx] : null; }
+      function neighbors(cx, cy, fn) {
+        for (var dy = -1; dy <= 1; dy++) {
+          for (var dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) { continue; }
+            var c = at(cx + dx, cy + dy);
+            if (c) { fn(c, cx + dx, cy + dy); }
+          }
+        }
+      }
+      function place(sx, sy) {
+        var n = 0;
+        while (n < MINES) {
+          var mx = randInt(0, COLS - 1), my = randInt(0, ROWS - 1);
+          if (Math.abs(mx - sx) <= 1 && Math.abs(my - sy) <= 1) { continue; }
+          if (grid[my][mx].mine) { continue; }
+          grid[my][mx].mine = true;
+          n++;
+        }
+        for (var yy = 0; yy < ROWS; yy++) {
+          for (var xx = 0; xx < COLS; xx++) {
+            var cnt = 0;
+            neighbors(xx, yy, function (c) { if (c.mine) { cnt++; } });
+            grid[yy][xx].n = cnt;
+          }
+        }
+        placed = true;
+      }
+      function lose() { ended = true; api.gameOver(); }
+      function win() {
+        ended = true;
+        api.addScore(Math.max(100, 2000 - Math.floor(frames / 60) * 10));
+        api.gameOver("CLEAR!");
+      }
+      function open(cx, cy) {
+        var c = at(cx, cy);
+        if (ended || !c || c.open || c.flag) { return; }
+        if (!placed) { place(cx, cy); }
+        if (c.mine) { c.open = true; c.boom = true; lose(); return; }
+        var stack = [[cx, cy]];
+        while (stack.length) {
+          var p = stack.pop(), cc = at(p[0], p[1]);
+          if (!cc || cc.open || cc.flag || cc.mine) { continue; }
+          cc.open = true;
+          opened++;
+          api.addScore(5);
+          if (cc.n === 0) {
+            neighbors(p[0], p[1], function (nc, nx, ny) { if (!nc.open) { stack.push([nx, ny]); } });
+          }
+        }
+        if (opened === COLS * ROWS - MINES) { win(); }
+      }
+      function chord(cx, cy) {
+        var c = at(cx, cy);
+        if (!c.open || c.n === 0) { return; }
+        var f = 0;
+        neighbors(cx, cy, function (nc) { if (nc.flag) { f++; } });
+        if (f !== c.n) { return; }
+        neighbors(cx, cy, function (nc, nx, ny) { open(nx, ny); });
+      }
+      function toggleFlag(cx, cy) {
+        var c = at(cx, cy);
+        if (c && !c.open) { c.flag = !c.flag; }
+      }
+      function cellAt(px, py) {
+        var cx = Math.floor((px - OX) / CELL), cy = Math.floor((py - OY) / CELL);
+        return at(cx, cy) ? [cx, cy] : null;
+      }
+      function tapCell(cx, cy) {
+        if (grid[cy][cx].open) { chord(cx, cy); return; }
+        if (flagMode) { toggleFlag(cx, cy); } else { open(cx, cy); }
+      }
+
+      return {
+        input: function (action, down) { if (down && action === "flag") { flagMode = !flagMode; } },
+        pointer: function (type, px, py) {
+          if (ended) { return; }
+          var cell = cellAt(px, py);
+          if (type === "down") { press = cell ? { x: cell[0], y: cell[1], t: 0, done: false } : null; }
+          else if (type === "move") {
+            if (press && (!cell || cell[0] !== press.x || cell[1] !== press.y)) { press = null; }
+          } else if (type === "up") {
+            if (press && !press.done) { tapCell(press.x, press.y); }
+            press = null;
+          }
+        },
+        step: function () {
+          if (placed && !ended) { frames++; }
+          if (press && !press.done) {
+            press.t++;
+            if (press.t >= 24) { press.done = true; toggleFlag(press.x, press.y); }
+          }
+        },
+        draw: function (ctx) {
+          var flags = 0, yy, xx;
+          for (yy = 0; yy < ROWS; yy++) {
+            for (xx = 0; xx < COLS; xx++) {
+              var c = grid[yy][xx], cx = OX + xx * CELL, cy = OY + yy * CELL;
+              if (c.flag) { flags++; }
+              if (c.open) {
+                ctx.fillStyle = c.boom ? "#d63031" : "#1a202c";
+                ctx.fillRect(cx, cy, CELL - 1, CELL - 1);
+                if (c.mine) { emojiAt(ctx, "💣", cx + CELL / 2, cy + CELL / 2 + 1, 15); }
+                else if (c.n > 0) {
+                  ctx.fillStyle = SWEEP_NUM_COLORS[c.n];
+                  ctx.font = "bold 15px sans-serif";
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText(String(c.n), cx + CELL / 2, cy + CELL / 2 + 1);
+                }
+              } else {
+                ctx.fillStyle = "#4a5568";
+                ctx.fillRect(cx, cy, CELL - 1, CELL - 1);
+                ctx.fillStyle = "rgba(255,255,255,0.18)";
+                ctx.fillRect(cx, cy, CELL - 1, 3);
+                if (ended && c.mine && !c.flag) { emojiAt(ctx, "💣", cx + CELL / 2, cy + CELL / 2 + 1, 15); }
+                else if (c.flag) { emojiAt(ctx, "🚩", cx + CELL / 2, cy + CELL / 2 + 1, 14); }
+              }
+            }
+          }
+          if (press && !press.done) {
+            ctx.strokeStyle = "#ffd166";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(OX + press.x * CELL + CELL / 2, OY + press.y * CELL + CELL / 2, 10, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (press.t / 24));
+            ctx.stroke();
+          }
+          hudText(ctx, "💣 " + (MINES - flags) + "   ⏱ " + Math.floor(frames / 60) + "秒", 6, 11);
+          hudText(ctx, flagMode ? "🚩 旗モード" : "⛏ 開くモード", W - 6, 11, "right");
+          hudText(ctx, "長押しでも🚩", W / 2, 314, "center");
         }
       };
     }

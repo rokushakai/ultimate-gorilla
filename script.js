@@ -1294,7 +1294,7 @@
     companionTechniqueLearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §139 v0.58: 仲間わざ習得演出済みフラグ（永続・saveする）
     companionTechnique2LearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §145 v0.64: わざ2習得演出済みフラグ（永続・saveする）
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
-    arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0 }, // §146 v0.65: ゲームセンターのハイスコア（永続・saveする）
+    arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0, breakout: 0, snake: 0, tennis: 0, crossing: 0, mole: 0, sweeper: 0 }, // §146 v0.65 / §147 v0.66: ゲームセンターのハイスコア（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -15265,11 +15265,15 @@
       };
       document.getElementById("btn-debug-v65-scores").onclick = function () {
         normalizeArcadeHighScores();
-        var _hs = state.arcadeHighScores;
-        showToast("[DEBUG] HI ブロック:" + _hs.blocks + " / シューター:" + _hs.shooter + " / ピンボール:" + _hs.pinball);
+        var _hsParts = [];
+        for (var _hsi = 0; _hsi < ARCADE_GAME_IDS.length; _hsi++) {
+          _hsParts.push(ARCADE_GAME_IDS[_hsi] + ":" + state.arcadeHighScores[ARCADE_GAME_IDS[_hsi]]);
+        }
+        showToast("[DEBUG] HI " + _hsParts.join(" / "));
       };
       document.getElementById("btn-debug-v65-reset-scores").onclick = function () {
-        state.arcadeHighScores = { blocks: 0, shooter: 0, pinball: 0 };
+        state.arcadeHighScores = {};
+        normalizeArcadeHighScores();
         saveGame();
         showToast("[DEBUG] ハイスコアを0にリセット");
       };
@@ -19197,7 +19201,7 @@
   // ---------------------------------------------------------
   // §146 v0.65: ゲームセンター（ミニゲーム本体は arcade.js / window.UGArcade）
   // ---------------------------------------------------------
-  var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball"];
+  var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball", "breakout", "snake", "tennis", "crossing", "mole", "sweeper"]; // §147 v0.66: 6本追加
 
   // ハイスコアを正規化（欠損・数値以外・負数→0。値は下げない）
   function normalizeArcadeHighScores() {
