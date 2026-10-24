@@ -2956,46 +2956,6 @@
     return g;
   }
 
-  function melodyDrum(ac, m, t, level) {
-    var env = ac.createGain();
-    env.connect(melodyLevelOut(ac, level));
-    var o, dur;
-    if (m < 45) { // キック
-      dur = 0.3;
-      o = ac.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(150, t);
-      o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
-      o.connect(env);
-      o.start(t); o.stop(t + dur + 0.05);
-      env.gain.setValueAtTime(0.9, t);
-    } else if (m < 58) { // タム
-      dur = 0.3;
-      o = ac.createOscillator();
-      o.type = "sine";
-      var tf = 70 + (m - 45) * 14;
-      o.frequency.setValueAtTime(tf, t);
-      o.frequency.exponentialRampToValueAtTime(tf * 0.6, t + dur);
-      o.connect(env);
-      o.start(t); o.stop(t + dur + 0.05);
-      env.gain.setValueAtTime(0.7, t);
-    } else if (m < 67) { // スネア
-      dur = 0.2;
-      melodyNoise(ac, t, dur, 0.8, env, "highpass", 1200);
-      o = ac.createOscillator();
-      o.type = "triangle";
-      o.frequency.value = 190;
-      o.connect(env);
-      o.start(t); o.stop(t + 0.08);
-      env.gain.setValueAtTime(0.6, t);
-    } else { // ハイハット / シンバル
-      dur = m > 74 ? 0.5 : 0.07;
-      melodyNoise(ac, t, dur, 0.6, env, "highpass", 7000);
-      env.gain.setValueAtTime(0.4, t);
-    }
-    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  }
-
   function melodySynth(midi, prog, when, level) {
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
@@ -3453,6 +3413,11 @@
       sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
       rec: typeof p.rec === "boolean" ? p.rec : true,
       relax: p.relax === true,
+      layout: (function () { for (var li = 0; li < MELODY_LAYOUTS.length; li++) { if (MELODY_LAYOUTS[li].id === p.layout) { return p.layout; } } return "pos"; })(),
+      oct: (p.oct >= 1 && p.oct <= 6) ? p.oct : 2,
+      rows: MELODY_ROW_CHOICES.indexOf(p.rows) >= 0 ? p.rows : 3,
+      scroll: (p.scroll >= 0 && p.scroll <= 3) ? p.scroll : 0,
+      autoTone: p.autoTone !== false,
       samples: p.samples !== false, // §155 v0.74: 本物の楽器サンプルを使う（既定ON）
       fxRev: (p.fxRev >= 0 && p.fxRev <= 3) ? p.fxRev : 1,
       fxDly: (p.fxDly >= 0 && p.fxDly <= 3) ? p.fxDly : 0,
@@ -3584,6 +3549,42 @@
       }
       return html;
     }
+    // §156 v0.75: ブロック配置モードの設定行
+    function optList(key, items, valueOf, nameOf) {
+      var html = "";
+      for (var i = 0; i < items.length; i++) {
+        var v = valueOf(items[i], i);
+        html += '<option value="' + v + '"' + (String(v) === String(prefs[key]) ? " selected" : "") + ">" + nameOf(items[i], i) + "</option>";
+      }
+      return html;
+    }
+    function layoutRows() {
+      var lay = prefs.layout, html =
+        '<label class="melody-row"><span>ブロック</span><select data-p="layout">' +
+        optList("layout", MELODY_LAYOUTS, function (x) { return x.id; }, function (x) { return x.name; }) + '</select></label>';
+      if (lay === "piano") {
+        html += '<label class="melody-row"><span>鍵盤のオクターブ</span><select data-p="oct">' +
+          optList("oct", [1, 2, 3, 4, 5, 6], function (x) { return x; }, function (x) { return x + "オクターブ"; }) + '</select></label>';
+        if (prefs.oct >= 4 && !prefs.scroll) {
+          html += '<p class="small" style="color:#fdcb6e;margin:0 0 4px;">4オクターブ以上は画面に収めると鍵がとても細くなります。「横スクロール」をONにすると鍵の幅を保ったまま流れます。</p>';
+        }
+      }
+      if (lay !== "pos") {
+        html += '<label class="melody-row"><span>' + (lay === "piano" ? "ブロックの段数" : "1マスをたたける回数") + '</span><select data-p="rows">' +
+          optList("rows", MELODY_ROW_CHOICES, function (x) { return x; }, function (x) {
+            return lay === "piano" ? x + "段（同じ音が" + (x * 2) + "回）" : (lay === "drums" || lay === "perc" ? (x * 2) + "回" : x + "回");
+          }) + '</select></label>';
+      }
+      html += '<label class="melody-row"><span>ブロックの横スクロール</span><select data-p="scroll">' +
+        optList("scroll", MELODY_SCROLL_NAMES, function (x, i) { return i; }, function (x) { return x; }) + '</select></label>';
+      if (lay !== "pos") {
+        html += '<div class="melody-checks"><label><input type="checkbox" data-p="autoTone"' + (prefs.autoTone ? " checked" : "") + '> ブロックの音色を楽器に合わせる（' +
+          escHtml(gmLabel(MELODY_LAYOUT_PROG[lay])) + '）</label>' +
+          '<span class="small" style="color:#adb5bd;">' + (lay === "piano" ? "本物の鍵盤と同じ音程。スケール内の鍵に色の点が付きます" :
+            (lay === "drums" || lay === "perc" ? "GMドラム（ch10）の音。和音にはなりません" : "標準チューニング・開放弦〜12フレット")) + '</span></div>';
+      }
+      return html;
+    }
     function sampleStatusText() {
       if (!prefs.samples) { return "合成音だけで鳴らします"; }
       var progs = melodyProgList(prefs.prog), names = [], loading = 0, ready = 0, err = 0, i;
@@ -3668,6 +3669,7 @@
         html += '<option value="' + MELODY_MODES[i].id + '"' + (MELODY_MODES[i].id === prefs.mode ? " selected" : "") + ">" + MELODY_MODES[i].name + "</option>";
       }
       html += '</select></label>' +
+        layoutRows() +
         '<label class="melody-row"><span>スケール</span><select data-p="scale">' + scaleOptions() + '</select></label>' +
         '<label class="melody-row"><span>キー（主音）</span><select data-p="key">';
       for (i = 0; i < 12; i++) { html += '<option value="' + i + '"' + (i === prefs.key ? " selected" : "") + ">" + NOTE_NAMES[i] + "</option>"; }
@@ -3717,7 +3719,8 @@
         html += '<div class="melody-rec">' +
           '<div class="melody-rec-info"><b>' + melodyRecLabel(r) + '</b>' +
           '<span class="small">' + NOTE_NAMES[r.key || 0] + ' ' + escHtml(melodyScale(r.scale).name) + (r.mode === "rand" ? " 🎲" : " 📍") +
-          (r.chord > 1 ? " / " + r.chord + "和音" + (r.arp ? "・アルペジオ" : "") : "") + '</span>' +
+          (r.chord > 1 ? " / " + r.chord + "和音" + (r.arp ? "・アルペジオ" : "") : "") +
+          (r.layout && r.layout !== "pos" ? " / " + melodyLayoutName(r.layout) : "") + '</span>' +
           '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + ' / ' + escHtml(gmLabel(melodyProgOf(r.prog, "b"))) + '</span></div>' +
           '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '" title="再生">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
           '<button class="arcade-mini-btn melody-midi-btn" data-m="midi" data-id="' + r.id + '" title="MIDIファイルで保存">&#x1F4BE; MIDI</button>' +
@@ -3732,6 +3735,8 @@
         sels[i].onchange = function (ev) {
           var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
           if (k === "fxRev" || k === "fxDly") { prefs[k] = parseInt(v, 10); melodySetFx(prefs.fxRev, prefs.fxDly); }
+          else if (k === "oct" || k === "rows" || k === "scroll") { prefs[k] = parseInt(v, 10); if (prefs.layout === "piano") { savePrefs(); render(); return; } }
+          else if (k === "layout") { prefs[k] = v; savePrefs(); render(); return; }
           else if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
           else if (k === "arp") { prefs[k] = v === "1"; }
           else { prefs[k] = v; }
@@ -3780,7 +3785,8 @@
         if (prefs.sound) { startTones(); }
         melodyStopPlayback(true);
         ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog),
-          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples });
+          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples,
+          layout: prefs.layout, oct: prefs.oct, rows: prefs.rows, scroll: prefs.scroll, autoTone: prefs.autoTone });
       } else if (m === "preview") {
         preview();
       } else if (m === "tone") {
@@ -3818,6 +3824,176 @@
     render();
   }
 
+  // ---------------------------------------------------------
+  // §156 v0.75: ブロック配置モード（鍵盤・ギター・ウクレレ・ベース・ドラム・パーカッション）
+  // ---------------------------------------------------------
+  var MELODY_LAYOUTS = [
+    { id: "pos", name: "🎵 いつもの（位置で音程が決まる）" },
+    { id: "piano", name: "🎹 鍵盤（白鍵・黒鍵）" },
+    { id: "guitar", name: "🎸 ギター（6弦×12フレット）" },
+    { id: "ukulele", name: "🪕 ウクレレ（4弦×12フレット）" },
+    { id: "bass", name: "🎸 ベース（4弦×12フレット）" },
+    { id: "drums", name: "🥁 ドラムセット" },
+    { id: "perc", name: "🪘 パーカッション" }
+  ];
+  // 楽器に合わせた音色（ブロックの音）。drums/perc はドラムキット（ch10）
+  var MELODY_LAYOUT_PROG = { piano: 0, guitar: 25, ukulele: 24, bass: 32, drums: 128, perc: 128 };
+  var MELODY_SCROLL_SPEED = [0, 0.25, 0.5, 1.0];
+  var MELODY_SCROLL_NAMES = ["なし", "ゆっくり", "ふつう", "はやい"];
+  var MELODY_ROW_CHOICES = [2, 3, 4, 6];
+  // 弦は上から1弦（タブ譜と同じ並び）
+  var MELODY_STRINGS = { guitar: [64, 59, 55, 50, 45, 40], ukulele: [69, 64, 60, 67], bass: [43, 38, 33, 28] };
+  var MELODY_WHITE_PC = [0, 2, 4, 5, 7, 9, 11];
+  // ドラムセット（上から見た配置）: [名前, GMドラム番号, x, y, 幅, 高さ, 種類]
+  var MELODY_DRUM_PADS = [
+    ["Crash", 49, 4, 32, 56, 14, "cym"], ["Splash", 55, 64, 32, 34, 14, "cym"], ["China", 52, 102, 32, 36, 14, "cym"],
+    ["Ride", 51, 142, 32, 58, 14, "cym"], ["Bell", 53, 204, 32, 32, 14, "cym"],
+    ["Open HH", 46, 4, 52, 44, 12, "hat"], ["Hi Tom", 50, 54, 52, 40, 16, "tom"], ["Mid Tom", 48, 100, 52, 40, 16, "tom"],
+    ["Low Tom", 47, 146, 52, 40, 16, "tom"], ["Crash 2", 57, 192, 52, 44, 12, "cym"],
+    ["Closed HH", 42, 4, 70, 44, 12, "hat"], ["Snare", 38, 54, 74, 50, 18, "snare"], ["Side Stick", 37, 108, 74, 34, 12, "snare"],
+    ["Floor Tom", 43, 146, 74, 44, 18, "tom"], ["Low Floor", 41, 194, 74, 42, 18, "tom"],
+    ["Pedal HH", 44, 4, 88, 44, 12, "hat"], ["Clap", 39, 108, 92, 34, 12, "snare"], ["Kick", 36, 54, 98, 50, 18, "kick"],
+    ["Kick 2", 35, 146, 98, 44, 18, "kick"], ["Tamb", 54, 194, 98, 42, 12, "perc"]
+  ];
+  var MELODY_PERC_PADS = [
+    ["Hi Bongo", 60], ["Lo Bongo", 61], ["Mute Conga", 62], ["Open Conga", 63], ["Low Conga", 64],
+    ["Hi Timbale", 65], ["Lo Timbale", 66], ["Hi Agogo", 67], ["Lo Agogo", 68], ["Cabasa", 69],
+    ["Maracas", 70], ["S.Whistle", 71], ["L.Whistle", 72], ["S.Guiro", 73], ["L.Guiro", 74],
+    ["Claves", 75], ["Hi Wood", 76], ["Lo Wood", 77], ["Mute Cuica", 78], ["Open Cuica", 79],
+    ["Mute Tri", 80], ["Open Tri", 81], ["Tambourine", 54], ["Cowbell", 56], ["Vibraslap", 58]
+  ];
+  var MELODY_DRUM_NAMES = {};
+  (function () {
+    var i;
+    for (i = 0; i < MELODY_DRUM_PADS.length; i++) { MELODY_DRUM_NAMES[MELODY_DRUM_PADS[i][1]] = MELODY_DRUM_PADS[i][0]; }
+    for (i = 0; i < MELODY_PERC_PADS.length; i++) { MELODY_DRUM_NAMES[MELODY_PERC_PADS[i][1]] = MELODY_PERC_PADS[i][0]; }
+  })();
+
+  // 配置を作る。戻り値 { bricks: [...], span: 横スクロールで1周する幅, frets: フレット線の位置 }
+  // brick: { x0, y, w, h, hp, maxHp, midi, kind, label, deg?, row? }
+  function melodyBuildLayout(lay, o) {
+    var bricks = [], i, r, top = 32;
+    var rows = o.rows || 3, scrolling = (o.scroll || 0) > 0, x0 = 4, avail = W - 8;
+    if (lay === "piano") {
+      var oct = clamp(o.oct || 2, 1, 6), nWhite = 7 * oct + 1, startC = 60 - 12 * Math.floor(oct / 2);
+      var ww = scrolling ? Math.max(avail / nWhite, 14) : avail / nWhite, bw = ww * 0.62, h = 9;
+      var hasBlackAfter = function (wi) { var pc = MELODY_WHITE_PC[wi % 7]; return wi < nWhite - 1 && pc !== 4 && pc !== 11; };
+      for (i = 0; i < nWhite; i++) {
+        var wm = startC + 12 * Math.floor(i / 7) + MELODY_WHITE_PC[i % 7], wx = x0 + i * ww;
+        var cutL = (i > 0 && hasBlackAfter(i - 1)) ? bw / 2 : 0, cutR = hasBlackAfter(i) ? bw / 2 : 0;
+        for (r = 0; r < rows; r++) {
+          // 奥（黒鍵ゾーン）の白鍵は黒鍵のぶん細い
+          bricks.push({ x0: wx + cutL + 0.5, y: top + r * h, w: Math.max(1, ww - cutL - cutR - 1), h: h - 1, hp: 1, maxHp: 1, midi: wm, kind: "white" });
+          // 手前の白鍵は全幅
+          bricks.push({ x0: wx + 0.5, y: top + (rows + r) * h, w: ww - 1, h: h - 1, hp: 1, maxHp: 1, midi: wm, kind: "white", front: r === rows - 1 });
+        }
+        if (hasBlackAfter(i)) {
+          for (r = 0; r < rows; r++) {
+            bricks.push({ x0: wx + ww - bw / 2, y: top + r * h, w: bw, h: h - 1, hp: 1, maxHp: 1, midi: wm + 1, kind: "black" });
+          }
+        }
+      }
+      return { bricks: bricks, span: Math.max(W, nWhite * ww + (scrolling ? 16 : 0)), frets: [] };
+    }
+    if (lay === "guitar" || lay === "ukulele" || lay === "bass") {
+      var strs = MELODY_STRINGS[lay], nCol = 13, cw = scrolling ? Math.max(avail / nCol, 18) : avail / nCol, sh = lay === "guitar" ? 12 : 15;
+      var frets = [];
+      for (i = 0; i < nCol; i++) { frets.push(x0 + i * cw); }
+      for (var s = 0; s < strs.length; s++) {
+        for (i = 0; i < nCol; i++) {
+          bricks.push({ x0: x0 + i * cw + 0.5, y: top + s * (sh + 3), w: cw - 1, h: sh, hp: rows, maxHp: rows, midi: strs[s] + i, kind: "fret", fret: i, str: s });
+        }
+      }
+      return { bricks: bricks, span: Math.max(W, nCol * cw + (scrolling ? 16 : 0)), frets: frets };
+    }
+    if (lay === "drums") {
+      for (i = 0; i < MELODY_DRUM_PADS.length; i++) {
+        var d = MELODY_DRUM_PADS[i];
+        bricks.push({ x0: d[2], y: d[3], w: d[4], h: d[5], hp: rows * 2, maxHp: rows * 2, midi: d[1], kind: "pad", pad: d[6], label: d[0] });
+      }
+      return { bricks: bricks, span: W + (scrolling ? 16 : 0), frets: [] };
+    }
+    if (lay === "perc") {
+      var pw = avail / 5;
+      for (i = 0; i < MELODY_PERC_PADS.length; i++) {
+        var pp = MELODY_PERC_PADS[i];
+        bricks.push({ x0: x0 + (i % 5) * pw + 1, y: top + Math.floor(i / 5) * 17, w: pw - 2, h: 15, hp: rows * 2, maxHp: rows * 2, midi: pp[1], kind: "pad", pad: "perc" + (Math.floor(i / 5) % 5), label: pp[0] });
+      }
+      return { bricks: bricks, span: W + (scrolling ? 16 : 0), frets: [] };
+    }
+    // いつもの（位置で音程）
+    var scale = o.scale, key = o.key || 0, level = o.level || 1;
+    for (r = 0; r < 6; r++) {
+      for (i = 0; i < 8; i++) {
+        var bx = 9 + i * 28, by = 36 + r * 14, deg = melodyPosDegree(scale, bx + 13, by + 5);
+        bricks.push({ x0: bx, y: by, w: 26, h: 10, hp: (level >= 2 && r === 0) ? 2 : 1, maxHp: (level >= 2 && r === 0) ? 2 : 1,
+          deg: deg, midi: melodyDegreeToMidi(scale, key, deg), kind: "pos", row: r });
+      }
+    }
+    return { bricks: bricks, span: W + (scrolling ? 16 : 0), frets: [] };
+  }
+
+  // GMドラム（ch10）の内蔵音: 番号ごとの鳴らし方
+  // type: kick / snare / clap / hat / tom / cym / bell / tamb / cowbell / skin / wood / shaker / whistle / guiro / cuica / tri / vibra
+  var GM_DRUM_SYNTH = {
+    35: ["kick", 120], 36: ["kick", 150], 37: ["stick", 0], 38: ["snare", 190], 39: ["clap", 0], 40: ["snare", 220],
+    41: ["tom", 70], 42: ["hat", 0.05], 43: ["tom", 85], 44: ["hat", 0.09], 45: ["tom", 100], 46: ["hat", 0.45],
+    47: ["tom", 120], 48: ["tom", 140], 49: ["cym", 1.6], 50: ["tom", 165], 51: ["cym", 1.2], 52: ["cym", 1.3],
+    53: ["bell", 620], 54: ["tamb", 0], 55: ["cym", 0.7], 56: ["cowbell", 560], 57: ["cym", 1.6], 58: ["vibra", 0], 59: ["cym", 1.2],
+    60: ["skin", 420], 61: ["skin", 300], 62: ["skin", 260, 0.08], 63: ["skin", 240], 64: ["skin", 180],
+    65: ["skin", 520, 0.4], 66: ["skin", 380, 0.4], 67: ["bell", 920], 68: ["bell", 680], 69: ["shaker", 0.08], 70: ["shaker", 0.05],
+    71: ["whistle", 0.12], 72: ["whistle", 0.45], 73: ["guiro", 0.12], 74: ["guiro", 0.4], 75: ["wood", 2500],
+    76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2]
+  };
+  function melodyDrum(ac, m, t, level) {
+    var env = ac.createGain(), out = melodyLevelOut(ac, level);
+    env.connect(out);
+    var spec = GM_DRUM_SYNTH[m] || (m < 45 ? ["kick", 150] : (m < 58 ? ["tom", 70 + (m - 45) * 14] : (m < 67 ? ["snare", 190] : ["hat", m > 74 ? 0.5 : 0.07])));
+    var type = spec[0], p = spec[1], dur = 0.3, o;
+    function tone(wave, f0, f1, d, lv) {
+      var oo = ac.createOscillator(), g = ac.createGain();
+      oo.type = wave;
+      oo.frequency.setValueAtTime(f0, t);
+      if (f1 && f1 !== f0) { oo.frequency.exponentialRampToValueAtTime(f1, t + d); }
+      g.gain.setValueAtTime(lv, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      oo.connect(g);
+      g.connect(env);
+      oo.start(t);
+      oo.stop(t + d + 0.05);
+    }
+    env.gain.setValueAtTime(1, t);
+    if (type === "kick") { dur = 0.35; tone("sine", p, 42, 0.3, 0.95); melodyNoise(ac, t, 0.01, 0.3, env, "lowpass", 3000); }
+    else if (type === "snare") { dur = 0.22; melodyNoise(ac, t, 0.2, 0.7, env, "highpass", 1500); tone("triangle", p, p * 0.8, 0.1, 0.5); }
+    else if (type === "stick") { dur = 0.06; tone("square", 1700, 1500, 0.04, 0.35); melodyNoise(ac, t, 0.03, 0.4, env, "bandpass", 3000); }
+    else if (type === "clap") {
+      dur = 0.25;
+      for (var ci = 0; ci < 3; ci++) { melodyNoise(ac, t + ci * 0.012, 0.03, 0.5, env, "bandpass", 1200); }
+      melodyNoise(ac, t + 0.036, 0.18, 0.4, env, "bandpass", 1100);
+    }
+    else if (type === "hat") { dur = p; melodyNoise(ac, t, p, 0.5, env, "highpass", 7500); }
+    else if (type === "tom") { dur = 0.4; tone("sine", p * 1.6, p, 0.35, 0.8); melodyNoise(ac, t, 0.02, 0.2, env, "lowpass", 2000); }
+    else if (type === "cym") { dur = p; melodyNoise(ac, t, p, 0.45, env, "highpass", 5000); tone("square", 4200, 4000, Math.min(0.5, p), 0.03); }
+    else if (type === "bell") { dur = 0.6; tone("square", p, p, 0.5, 0.12); tone("sine", p * 1.5, p * 1.5, 0.4, 0.15); }
+    else if (type === "tamb") { dur = 0.3; for (var ti = 0; ti < 4; ti++) { melodyNoise(ac, t + ti * 0.02, 0.06, 0.35, env, "highpass", 8000); } }
+    else if (type === "cowbell") { dur = 0.4; tone("square", p, p, 0.35, 0.18); tone("square", p * 1.48, p * 1.48, 0.3, 0.12); }
+    else if (type === "skin") { dur = spec[2] || 0.3; tone("sine", p * 1.25, p, dur, 0.75); melodyNoise(ac, t, 0.015, 0.2, env, "bandpass", p * 4); }
+    else if (type === "wood") { dur = 0.08; tone("sine", p, p * 0.95, 0.06, 0.7); }
+    else if (type === "shaker") { dur = p; melodyNoise(ac, t, p, 0.45, env, "highpass", 6000); }
+    else if (type === "whistle") { dur = p; tone("sine", 2400, 2300, p, 0.35); }
+    else if (type === "guiro") { dur = p; for (var gi = 0; gi < Math.round(p / 0.025); gi++) { melodyNoise(ac, t + gi * 0.025, 0.012, 0.35, env, "bandpass", 3500); } }
+    else if (type === "cuica") { dur = p; tone("sine", 320, 640, p, 0.6); }
+    else if (type === "tri") { dur = p; tone("sine", 4100, 4100, p, 0.25); tone("sine", 5300, 5300, p * 0.8, 0.12); }
+    else if (type === "vibra") { dur = 0.6; for (var vi = 0; vi < 12; vi++) { melodyNoise(ac, t + vi * 0.04, 0.02, 0.3 * (1 - vi / 12), env, "bandpass", 2500); } }
+    env.gain.setValueAtTime(1, t + dur);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+  }
+
+  function melodyLayoutName(id) {
+    for (var i = 0; i < MELODY_LAYOUTS.length; i++) { if (MELODY_LAYOUTS[i].id === id) { return MELODY_LAYOUTS[i].name.split("（")[0]; } }
+    return "";
+  }
+
   register({
     id: "melody",
     after: "breakout",
@@ -3836,14 +4012,20 @@
     create: function (api, cfg) {
       cfg = cfg || melodyLoadPrefs(false);
       var scale = melodyScale(cfg.scale), key = cfg.key || 0, nDeg = scale.iv.length * 3;
-      var COLS = 8, ROWS = 6, BW = 26, BH = 10, BX0 = 9, BY0 = 36;
+      var layout = cfg.layout || "pos", isPerc = layout === "drums" || layout === "perc";
+      var rowsSet = cfg.rows || 3, scrollSpd = MELODY_SCROLL_SPEED[cfg.scroll || 0] || 0;
       var PW = 44, PH = 6, PY = 292, BR = 4;
       var pad = { x: W / 2 };
       var held = { left: false, right: false };
       var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };
-      var stuck = true, lives = 3, level = 1, bricks = [], msg = 0, frame = 0;
+      var stuck = true, lives = 3, level = 1, bricks = [], span = W, frets = [], msg = 0, frame = 0, offset = 0;
       var notes = [], pops = [], recFull = false;
       var prog = melodyCleanProg(cfg.prog);
+      // §156: 楽器ブロックに合わせてブロックの音色を切り替える
+      if (cfg.autoTone !== false && MELODY_LAYOUT_PROG[layout] !== undefined) {
+        prog.b = MELODY_LAYOUT_PROG[layout];
+        prog.p = MELODY_LAYOUT_PROG[layout];
+      }
       melodySamples.enabled = cfg.samples !== false; // §155 v0.74
       melodyLoadSamples(melodyProgList(prog));
       if (cfg.sound) {
@@ -3857,16 +4039,32 @@
         return cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
       }
       function noteAt(x, y) { return melodyDegreeToMidi(scale, key, degAt(x, y)); }
-      // 鳴り所ごとに和音にするか（§152）
+      // 鳴り所ごとに和音にするか（§152）。ドラム・パーカッションのブロックは単音
       function sizeFor(voice) {
         if (chordSize <= 1) { return 1; }
+        if (isPerc && (voice === "b" || voice === "p")) { return 1; }
         if (chordAt === "all") { return chordSize; }
         if (chordAt === "b") { return (voice === "b" || voice === "p") ? chordSize : 1; }
         return voice === "s" ? 1 : chordSize;
       }
-      // deg を根音に単音 or 和音で鳴らし、録音し、音名/コード名を表示する
-      function sound(deg, voice, x, y, shift) {
-        var midis = melodyChordMidis(scale, key, deg, sizeFor(voice), shift || 0);
+      // 根音の MIDI 番号から和音を作る（スケール内の音ならスケールで3度積み、外ならメジャー系）
+      function chordFromMidi(root, size) {
+        var n = scale.iv.length, pc = ((root - key) % 12 + 12) % 12, idx = scale.iv.indexOf(pc), out = [], i;
+        if (size <= 1) { return [root]; }
+        if (scale.id === "chromatic" || idx < 0) {
+          var iv = [0, 4, 7, 11, 14];
+          for (i = 0; i < size; i++) { out.push(root + iv[i]); }
+        } else {
+          for (i = 0; i < size; i++) {
+            var d = idx + 2 * i;
+            out.push(root - scale.iv[idx] + 12 * Math.floor(d / n) + scale.iv[d % n]);
+          }
+        }
+        if (out[out.length - 1] > 100) { for (i = 0; i < out.length; i++) { out[i] -= 12; } }
+        return out;
+      }
+      // 鳴らす・録音する・音名/コード名/楽器名を浮かべる
+      function playMidis(midis, voice, x, y, label) {
         var lv = midis.length > 1 ? 1 / Math.sqrt(midis.length) : 1;
         var now = perfNow(), tms = Math.round(frame * 1000 / 60);
         for (var i = 0; i < midis.length; i++) {
@@ -3880,20 +4078,26 @@
             } else { recFull = true; }
           }
         }
-        var label = midis.length > 1 ? melodyChordName(midis) : midiName(midis[0]);
+        if (!label) { label = midis.length > 1 ? melodyChordName(midis) : midiName(midis[0]); }
         pops.push({ x: clamp(x, 18, W - 18), y: clamp(y, 12, H - 30), text: label, t: 36, col: midiColor(midis[0]) });
         if (pops.length > 12) { pops.shift(); }
       }
+      // 度数を根音に（いつもの配置・壁・パドル）
+      function sound(deg, voice, x, y, shift) {
+        playMidis(melodyChordMidis(scale, key, deg, sizeFor(voice), shift || 0), voice, x, y);
+      }
       function speed() { return Math.min(6, 3.2 + (level - 1) * 0.4); }
       function build() {
-        bricks = [];
-        for (var r = 0; r < ROWS; r++) {
-          for (var c = 0; c < COLS; c++) {
-            var bx = BX0 + c * 28, by = BY0 + r * 14;
-            var deg = melodyPosDegree(scale, bx + BW / 2, by + BH / 2);
-            bricks.push({ x: bx, y: by, row: r, hp: (level >= 2 && r === 0) ? 2 : 1, deg: deg, midi: melodyDegreeToMidi(scale, key, deg) });
-          }
-        }
+        var lo = melodyBuildLayout(layout, { rows: rowsSet, oct: cfg.oct || 2, scroll: cfg.scroll || 0, scale: scale, key: key, level: level });
+        bricks = lo.bricks;
+        span = lo.span;
+        frets = lo.frets;
+      }
+      // スクロール後の表示位置（右端をはみ出した分は左側にも出す）
+      function xsOf(x0, w) {
+        if (!scrollSpd) { return [x0]; }
+        var x = ((x0 + offset) % span + span) % span;
+        return x + w > span ? [x, x - span] : [x];
       }
       function launch() {
         if (!stuck) { return; }
@@ -3903,6 +4107,7 @@
         ball.vy = -speed() * Math.cos(a);
       }
       function resetBall() { stuck = true; ball.vx = 0; ball.vy = 0; }
+      function inScale(m) { return scale.iv.indexOf(((m - key) % 12 + 12) % 12) >= 0; }
 
       build();
 
@@ -3921,12 +4126,13 @@
           // アルペジオの時差で前後するので時刻順に並べ直す
           notes.sort(function (a, b) { return a[0] - b[0]; });
           melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog,
-            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, fxRev: melodyAudio.fxRev || 0, notes: notes });
+            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, fxRev: melodyAudio.fxRev || 0, layout: layout, notes: notes });
         },
         step: function () {
-          var k, s;
+          var k, s, j;
           frame++;
           if (msg > 0) { msg--; }
+          if (scrollSpd) { offset -= scrollSpd; }
           for (k = pops.length - 1; k >= 0; k--) { pops[k].t--; if (pops[k].t <= 0) { pops.splice(k, 1); } }
           if (held.left) { pad.x -= 3.6; }
           if (held.right) { pad.x += 3.6; }
@@ -3947,21 +4153,34 @@
               ball.y = PY - BR;
               sound(degAt(ball.x, PY), "s", ball.x, PY - 8, -12);
             }
-            for (k = 0; k < bricks.length; k++) {
+            var hitDone = false;
+            for (k = 0; k < bricks.length && !hitDone; k++) {
               var b = bricks[k];
               if (b.hp <= 0) { continue; }
-              var cx = clamp(ball.x, b.x, b.x + BW), cy = clamp(ball.y, b.y, b.y + BH);
-              var dx = ball.x - cx, dy = ball.y - cy;
-              if (dx * dx + dy * dy > BR * BR) { continue; }
-              if (px >= b.x && px <= b.x + BW) { ball.vy = -ball.vy; ball.y = py; }
-              else { ball.vx = -ball.vx; ball.x = px; }
-              b.hp--;
-              var bd = cfg.mode === "rand" ? degAt(0, 0) : b.deg;
-              sound(bd, b.hp > 0 ? "p" : "b", b.x + BW / 2, b.y + BH / 2);
-              if (b.hp === 0) { api.addScore((ROWS - b.row) * 10); }
-              break;
+              var xs = xsOf(b.x0, b.w);
+              for (j = 0; j < xs.length; j++) {
+                var bx = xs[j];
+                var cx = clamp(ball.x, bx, bx + b.w), cy = clamp(ball.y, b.y, b.y + b.h);
+                var dx = ball.x - cx, dy = ball.y - cy;
+                if (dx * dx + dy * dy > BR * BR) { continue; }
+                if (px >= bx && px <= bx + b.w) { ball.vy = -ball.vy; ball.y = py; }
+                else { ball.vx = -ball.vx; ball.x = px; }
+                b.hp--;
+                b.flash = 8;
+                if (layout === "pos") {
+                  sound(cfg.mode === "rand" ? degAt(0, 0) : b.deg, b.hp > 0 ? "p" : "b", bx + b.w / 2, b.y + b.h / 2);
+                  if (b.hp === 0) { api.addScore((6 - b.row) * 10); }
+                } else {
+                  var v = "b";
+                  playMidis(chordFromMidi(b.midi, sizeFor(v)), v, bx + b.w / 2, b.y + b.h / 2, isPerc ? b.label : null);
+                  api.addScore(b.hp === 0 ? 10 : 2);
+                }
+                hitDone = true;
+                break;
+              }
             }
           }
+          for (k = 0; k < bricks.length; k++) { if (bricks[k].flash > 0) { bricks[k].flash--; } }
           if (ball.y > H + 10) {
             if (!cfg.relax) { lives--; }
             if (lives <= 0) { api.gameOver(); return; }
@@ -3972,7 +4191,7 @@
           if (left === 0) { level++; build(); resetBall(); msg = 90; }
         },
         draw: function (ctx) {
-          var k, y, x;
+          var k, y, x, j, xs;
           if (cfg.mode === "pos") {
             for (y = 0; y < H; y += 8) {
               ctx.fillStyle = midiColor(noteAt(0, y + 4));
@@ -3985,13 +4204,77 @@
               ctx.fillRect(x, 0, 8, 3);
             }
           }
+          // 指板の背景（ポジションマーク）
+          if (frets.length) {
+            ctx.fillStyle = "#3b2414";
+            var strCount = MELODY_STRINGS[layout].length, sh = layout === "guitar" ? 12 : 15;
+            var boardH = strCount * (sh + 3) - 3, cw = frets.length > 1 ? frets[1] - frets[0] : 18;
+            xs = xsOf(frets[0], frets.length * cw);
+            for (j = 0; j < xs.length; j++) { ctx.fillRect(xs[j], 32, frets.length * cw, boardH); }
+            ctx.fillStyle = "rgba(255,255,255,0.35)";
+            var marks = [3, 5, 7, 9, 12];
+            for (k = 0; k < marks.length; k++) {
+              xs = xsOf(frets[marks[k]], cw);
+              for (j = 0; j < xs.length; j++) {
+                ctx.beginPath(); ctx.arc(xs[j] + cw / 2, 32 + boardH + 5, 2, 0, Math.PI * 2); ctx.fill();
+                if (marks[k] === 12) { ctx.beginPath(); ctx.arc(xs[j] + cw / 2 + 5, 32 + boardH + 5, 2, 0, Math.PI * 2); ctx.fill(); }
+              }
+            }
+          }
           for (k = 0; k < bricks.length; k++) {
             var b = bricks[k];
             if (b.hp <= 0) { continue; }
-            ctx.fillStyle = cfg.mode === "pos" ? midiColor(b.midi) : BREAK_COLORS[b.row];
-            ctx.fillRect(b.x, b.y, BW, BH);
-            ctx.fillStyle = b.hp >= 2 ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.25)";
-            ctx.fillRect(b.x, b.y, BW, b.hp >= 2 ? 4 : 2);
+            xs = xsOf(b.x0, b.w);
+            for (j = 0; j < xs.length; j++) {
+              var bx = xs[j];
+              if (bx > W || bx + b.w < 0) { continue; }
+              var lit = b.flash > 0;
+              if (b.kind === "white") {
+                ctx.fillStyle = lit ? "#ffe08a" : "#f5f1e6";
+                ctx.fillRect(bx, b.y, b.w, b.h);
+                if (b.front) {
+                  if (inScale(b.midi)) { ctx.fillStyle = midiColor(b.midi); ctx.fillRect(bx + b.w / 2 - 1.5, b.y + b.h - 4, 3, 3); }
+                  if (b.midi % 12 === 0 && b.w >= 9) {
+                    ctx.fillStyle = "#555";
+                    ctx.font = "bold 6px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "top";
+                    ctx.fillText(midiName(b.midi), bx + b.w / 2, b.y + b.h + 1);
+                  }
+                }
+              } else if (b.kind === "black") {
+                ctx.fillStyle = lit ? "#a29bfe" : "#1e1e24";
+                ctx.fillRect(bx, b.y, b.w, b.h);
+                ctx.fillStyle = "rgba(255,255,255,0.18)";
+                ctx.fillRect(bx, b.y, b.w, 1.5);
+                if (inScale(b.midi)) { ctx.fillStyle = midiColor(b.midi); ctx.fillRect(bx + b.w / 2 - 1, b.y + b.h - 3, 2, 2); }
+              } else if (b.kind === "fret") {
+                ctx.globalAlpha = 0.45 + 0.55 * b.hp / b.maxHp;
+                ctx.fillStyle = lit ? "#ffe08a" : midiColor(b.midi);
+                ctx.fillRect(bx, b.y, b.w, b.h);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = "rgba(230,230,230,0.8)";
+                ctx.fillRect(bx, b.y + b.h / 2 - 0.5, b.w + 1, layout === "bass" ? 2 : 1);
+                if (b.fret === 0) { ctx.fillStyle = "#f5f1e6"; ctx.fillRect(bx + b.w - 1, b.y, 2, b.h); }
+              } else if (b.kind === "pad") {
+                var col = { cym: "#d4a017", hat: "#b8860b", tom: "#c0392b", snare: "#ecf0f1", kick: "#34495e", perc: "#16a085",
+                  perc0: "#e67e22", perc1: "#9b59b6", perc2: "#2980b9", perc3: "#27ae60", perc4: "#c0392b" }[b.pad] || "#7f8c8d";
+                ctx.globalAlpha = 0.45 + 0.55 * b.hp / b.maxHp;
+                ctx.fillStyle = lit ? "#ffffff" : col;
+                ctx.fillRect(bx, b.y, b.w, b.h);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = b.pad === "snare" ? "#2d3436" : "#ffffff";
+                ctx.font = "bold 7px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(b.label, bx + b.w / 2, b.y + b.h / 2);
+              } else {
+                ctx.fillStyle = cfg.mode === "pos" ? midiColor(b.midi) : BREAK_COLORS[b.row];
+                ctx.fillRect(bx, b.y, b.w, b.h);
+                ctx.fillStyle = b.hp >= 2 ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.25)";
+                ctx.fillRect(bx, b.y, b.w, b.hp >= 2 ? 4 : 2);
+              }
+            }
           }
           ctx.fillStyle = "#74b9ff";
           ctx.fillRect(pad.x - PW / 2, PY, PW, PH);
@@ -4006,7 +4289,8 @@
             ctx.fillText(pops[k].text, pops[k].x, pops[k].y - (36 - pops[k].t) * 0.4);
           }
           ctx.globalAlpha = 1;
-          hudText(ctx, NOTE_NAMES[key] + " " + scale.name + (cfg.mode === "rand" ? " 🎲" : "") + (chordSize > 1 ? "  " + chordSize + "和音" + (cfg.arp ? "↗" : "") : ""), 6, 14);
+          var head = layout === "pos" ? NOTE_NAMES[key] + " " + scale.name + (cfg.mode === "rand" ? " 🎲" : "") : melodyLayoutName(layout);
+          hudText(ctx, head + (chordSize > 1 && !isPerc ? "  " + chordSize + "和音" + (cfg.arp ? "↗" : "") : ""), 6, 14);
           if (cfg.rec) {
             ctx.fillStyle = recFull ? "#fdcb6e" : "#ff7675";
             ctx.font = "bold 10px sans-serif";

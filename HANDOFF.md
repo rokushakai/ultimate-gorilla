@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.74** |
+| 現在バージョン | **v0.75** |
 | ブランチ | main |
 
 ---
@@ -95,12 +95,16 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.75] メロディくずし ブロック配置モード＋横スクロール**（§156）
+  - `melodyBuildLayout(layout, opts)` が {bricks, span, frets} を返す（pos/piano/guitar/ukulele/bass/drums/perc）。ブロックは x0 基準・`xsOf()` でスクロールと折り返し
+  - `GM_DRUM_SYNTH` / `melodyDrum`（GMドラム35〜81）、`MELODY_LAYOUT_PROG`（楽器に合わせた音色）
+  - ブラッシュアップ残り: v0.76 WAV / v0.77 テンポ同期・伴奏・コード進行
 - **[v0.74] メロディくずし 本物の楽器サンプル**（§155）
   - `samples/*.js`（16音色・FluidR3 GM CC BY 3.0 → `CREDITS.md`）。`MELODY_SAMPLE_FILES` / `melodyLoadSamples` / `melodySampleNote`（未読込なら合成音）
   - サンプル再作成はネットから gleitz/midi-js-soundfonts の `<name>-mp3.js` を取り、MIDI 36〜96 の長3度おきを抜き出す
 - **[v0.73] メロディくずし 内蔵シンセ v2＋エフェクト**（§154）
   - `MELODY_RECIPES`（77）＋`MELODY_PATCHES`（128）→ `melodyRecipe(prog)`。`melodySynth` はバス（`melodyAudio.bus`）へ出力、`melodyBuildFx` / `melodySetFx`（リバーブ・ディレイ）
-  - ブラッシュアップ計画: v0.75 鍵盤ブロック / v0.76 楽器ブロック / v0.77 WAV書き出し / v0.78 テンポ同期・伴奏・コード進行
+  - ブラッシュアップ計画: v0.75 鍵盤・楽器ブロック / v0.76 WAV書き出し / v0.77 テンポ同期・伴奏・コード進行
 - **[v0.72] ゲームセンターメダル＆景品交換所**（§153）
   - `ARCADE_MEDAL_RATE`（ゲーム別換算値）/ `calcArcadeMedals` / `onArcadeGameEnd` がメダル数を返す → arcade.js が終了画面に表示
   - `ARCADE_PRIZES` / `getArcadePrizeStatus` / `exchangeArcadePrize` / `renderArcadeMenu(view)`（"games" / "prizes"）
