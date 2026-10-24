@@ -2347,10 +2347,10 @@
     desc: "宇宙船をあやつって隕石をこなごなにしよう",
     help: "←→回転 / ↑加速 / Space発射 / P一時停止",
     controls: [
-      { action: "rotL", label: "&#x21BA;" },
-      { action: "rotR", label: "&#x21BB;" },
-      { action: "thrust", label: "&#x1F525;" },
-      { action: "fire", label: "&#x1F52B;" }
+      { action: "rotL", label: "&#x21BA; 左" },
+      { action: "rotR", label: "&#x21BB; 右" },
+      { action: "thrust", label: "&#x1F525; 加速" },
+      { action: "fire", label: "&#x1F52B; 発射" }
     ],
     keys: {
       "ArrowLeft": "rotL", "a": "rotL", "A": "rotL",

@@ -519,7 +519,7 @@
       { action: "left", label: "&#x25C0;" },
       { action: "launch", label: "&#x1F680;" },
       { action: "right", label: "&#x25B6;" },
-      { action: "nl", label: "&#x21B5; 改行" },
+      { action: "nl", label: "&#x21B5;改行" },
       { action: "undo", label: "&#x232B;" }
     ],
     keys: { "ArrowLeft": "left", "ArrowRight": "right", " ": "launch", "ArrowUp": "launch", "Enter": "nl", "Backspace": "undo" },

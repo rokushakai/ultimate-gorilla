@@ -792,6 +792,8 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  white-space: nowrap;
+  padding: 0 2px;
 }
 .arcade-btn.pressed {
   background: #74b9ff;
@@ -808,8 +810,9 @@ html, body {
   flex: 1;
 }
 .arcade-help {
-  font-size: 10px;
-  color: #6c757d;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9aa4b1;
   margin: 6px 0 0;
 }
 /* ===== §150 v0.69: メロディくずし 設定画面 ===== */
@@ -853,6 +856,7 @@ html, body {
 }
 .melody-rec {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
@@ -861,12 +865,14 @@ html, body {
   border-radius: 8px;
 }
 .melody-rec-info {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
+/* §165 v0.84: 情報を1行目、ボタンを2行目の右寄せにする */
+.melody-rec-info + .arcade-mini-btn { margin-left: auto; }
 .arcade-mini-btn {
   min-width: 38px;
   min-height: 38px;
@@ -891,6 +897,11 @@ html, body {
   font-weight: bold;
 }
 .melody-tones .melody-row select { max-width: 58%; }
+/* §165 v0.84: 見出しの下に選択欄を全幅で出し、選択肢の文字が切れないようにする */
+.melody-row { flex-wrap: wrap; gap: 2px 8px; }
+.melody-row span { flex: 1 1 100%; font-size: 12px; }
+.melody-row select { flex: 1 1 100%; max-width: 100%; }
+.melody-tones .melody-row select { flex: 1 1 calc(100% - 50px); max-width: none; }
 .melody-small-btn {
   margin-top: 4px;
   padding: 6px 12px;

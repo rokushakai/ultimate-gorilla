@@ -1861,8 +1861,8 @@
                 if (b.front) {
                   if (inScale(b.midi)) { ctx.fillStyle = midiColor(b.midi); ctx.fillRect(bx + b.w / 2 - 1.5, b.y + b.h - 4, 3, 3); }
                   if (b.midi % 12 === 0 && b.w >= 9) {
-                    ctx.fillStyle = "#555";
-                    ctx.font = "bold 6px sans-serif";
+                    ctx.fillStyle = "#adb5bd";
+                    ctx.font = "bold 7px sans-serif";
                     ctx.textAlign = "center";
                     ctx.textBaseline = "top";
                     ctx.fillText(midiName(b.midi), bx + b.w / 2, b.y + b.h + 1);

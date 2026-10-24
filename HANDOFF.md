@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.83** |
+| 現在バージョン | **v0.84** |
 | ブランチ | main |
 
 ---
@@ -99,6 +99,8 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.84] 見た目・読みやすさの見直し**（§165）
+  - style.css: `.arcade-help` / `.melody-row`（見出しの下に全幅の選択欄）/ `.melody-rec`（情報行＋ボタン行）/ `.arcade-btn`（折り返さない）。ゲームの動きは変更なし
 - **[v0.83] 🃏 ゴリラソリティア**（§164）
   - arcade-table.js: `solFindDest`（組札優先の自動移動）/ `solUsefulMoves`（行ったり来たりを除いた手）/ `solHint`（null＝手詰まり）
 - **[v0.82] ⚪ 五目ならべ・🔢 ナンプレ**（§163）
