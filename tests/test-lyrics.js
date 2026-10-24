@@ -5,9 +5,10 @@ var ok = H.ok;
 
 function patch(src, file) {
   if (file !== "arcade-lyrics.js") { return src; }
-  var from = "var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };";
-  if (src.indexOf(from) < 0) { throw new Error("lyrics patch target missing"); }
-  return src.split(from).join("var ball = window.__lb = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };");
+  var from = "var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };", from2 = "var lyricOpenId = null, lyricMsg = \"\";";
+  if (src.indexOf(from) < 0 || src.indexOf(from2) < 0) { throw new Error("lyrics patch target missing"); }
+  return src.split(from).join("var ball = window.__lb = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };")
+    .split(from2).join("var lyricOpenId = window.__lyricOpen || null, lyricMsg = \"\";");
 }
 function cfg(over) {
   var c = { genres: ["love", "youth"], mix: false, phrases: true, fillers: true, breakMode: "rally", joiner: "space", relax: false };
@@ -118,6 +119,37 @@ module.exports = function () {
   sample.joiner = "none";
   ok(L.toText(sample).indexOf("タイトル: 恋残業") === 0, "joiner none concatenates words");
   ok(L.fileName(sample) === "lyrics-20261024-2130.txt", "file name", L.fileName(sample));
+
+  // --- 歌詞 × メロディ（§162） ---
+  var mrec = { id: 77, date: Date.now(), scale: "major", key: 0, prog: { b: 0 },
+    notes: [[0, 60, "b"], [20, 64, "b", 0.5], [40, 67, "b", 0.5], [500, 62, "w"], [600, 40, "s"], [700, 36, "d"], [800, 60, "c"], [1000, 65, "p"]] };
+  ok(L.slots(mrec).join(",") === "0,500,1000", "singable slots skip chord tones, paddle and accompaniment", L.slots(mrec));
+  var lrec = { id: 5, date: new Date(2026, 9, 24, 21, 30).getTime(), joiner: "space", genres: ["love"],
+    lines: [{ t: 0, words: [{ w: "恋", t: 0 }, { w: "残業", t: 9 }, { w: "流れ星", t: 18 }] }, { t: 30, words: [{ w: "Oh", t: 30 }, { w: "ときめキック", t: 40 }] }] };
+  var al = L.align(lrec, mrec);
+  ok(al.words.map(function (w) { return w.t; }).join(",") === "0,500,1000,1400,1800" && al.extra === 2 && al.lines[1].t === 1400, "words go on notes in order; extras every 0.4s", al.words.map(function (w) { return w.t; }));
+  var lrc = L.toLrc(lrec, al).split("\n");
+  ok(lrc[0] === "[ti:恋 残業 流れ星]" && lrc[2] === "[00:00.00]<00:00.00>恋 <00:00.50>残業 <00:01.00>流れ星" && lrc[3] === "[00:01.40]<00:01.40>Oh <00:01.80>ときめキック", "LRC with word timings", lrc.slice(0, 4));
+  var mb = env.window.UGMelody.midiBytes(mrec, L.midiEvents(lrec, al)), texts = [], qi = 22;
+  function rdv() { var v = 0, cc; do { cc = mb[qi++]; v = (v << 7) | (cc & 0x7F); } while (cc & 0x80); return v; }
+  while (qi < mb.length) { rdv(); var stt = mb[qi++];
+    if (stt === 0xFF) { var ty = mb[qi++], ln2 = rdv(); if (ty === 5) { texts.push(decodeURIComponent(escape(String.fromCharCode.apply(null, mb.slice(qi, qi + ln2))))); } qi += ln2; if (ty === 0x2F) { break; } }
+    else if ((stt & 0xF0) === 0xC0) { qi++; } else { qi += 2; } }
+  ok(texts.join("|") === "恋 |残業 |流れ星\r|Oh |ときめキック\r", "lyric MIDI: UTF-8 lyric events with spaces and line ends", texts);
+  ok(((mb[18] << 24) | (mb[19] << 16) | (mb[20] << 8) | mb[21]) === mb.length - 22, "lyric MIDI: track length still valid");
+  ok(L.songName(lrec, "mid") === "song-20261024-2130.mid", "song file name");
+  var kh = L.karaokeHtml(lrec, al, 1);
+  ok(kh.indexOf('<span class="k-done">恋</span>') >= 0 && kh.indexOf('<span class="k-on">残業</span>') >= 0 && kh.indexOf('<span class="">流れ星</span>') >= 0, "karaoke highlights the current word", kh.slice(0, 120));
+  // 歌詞ノートで開くと「メロディと合わせる」欄（メロディの録音があるとき）
+  //（歌詞を開いた状態は、読み込み時に lyricOpenId の初期値を差し替えて作る）
+  var saved = L.loadSaved()[0];
+  var env3 = H.load({ patch: function (src, f) { src = patch(src, f); return f === "arcade-lyrics.js" ? src.split("window.__lyricOpen || null").join(saved.id + " || null") : src; } });
+  env3.store.ultimateGorillaMelodyRecV1 = JSON.stringify([mrec]);
+  env3.store.ultimateGorillaLyricsV1 = JSON.stringify([saved]);
+  var root3 = H.makeEl("div");
+  env3.window.UGArcade.start("lyrics", root3, { onEnd: function () {}, onExit: function () {} });
+  ok(root3.innerHTML.indexOf("メロディと合わせる") >= 0 && root3.innerHTML.indexOf('data-k="melody"') >= 0 && root3.innerHTML.indexOf("歌詞つき再生") >= 0, "opened lyric shows the melody pairing box");
+  env3.window.UGArcade.stop();
 
   // --- 設定画面 ---
   var root = H.makeEl("div");

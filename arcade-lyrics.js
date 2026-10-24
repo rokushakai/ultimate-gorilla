@@ -227,6 +227,93 @@
   }
 
   // ---------------------------------------------------------
+  // §162 v0.81: 歌詞 × メロディ（言葉をメロディの音に1つずつ乗せる）
+  // ---------------------------------------------------------
+  var LYRIC_SLOT_GAP = 80, LYRIC_TAIL_STEP = 400;
+  function lyricMelody() { return window.UGMelody || null; }
+  // 歌える音の時刻（ブロック・硬いブロック・壁。80ms以内に続く音＝和音/アルペジオは1つ）
+  function lyricMelodySlots(mrec) {
+    var out = [], last = -1e9;
+    for (var i = 0; i < mrec.notes.length; i++) {
+      var n = mrec.notes[i];
+      if (n[2] !== "b" && n[2] !== "p" && n[2] !== "w") { continue; }
+      if (n[0] - last < LYRIC_SLOT_GAP) { continue; }
+      out.push(n[0]);
+      last = n[0];
+    }
+    return out;
+  }
+  // { words: [{ w, t, li, last }], lines: [{ t, from, to }], slots, extra }
+  function lyricAlign(lrec, mrec) {
+    var slots = lyricMelodySlots(mrec), words = [], lines = [], k = 0, tail = slots.length ? slots[slots.length - 1] : 0;
+    for (var li = 0; li < lrec.lines.length; li++) {
+      var from = words.length, ws = lrec.lines[li].words;
+      for (var wi = 0; wi < ws.length; wi++) {
+        var t;
+        if (k < slots.length) { t = slots[k]; } else { tail += LYRIC_TAIL_STEP; t = tail; }
+        k++;
+        words.push({ w: ws[wi].w, t: t, li: li, last: wi === ws.length - 1 });
+      }
+      if (words.length > from) { lines.push({ t: words[from].t, from: from, to: words.length - 1 }); }
+    }
+    return { words: words, lines: lines, slots: slots.length, extra: Math.max(0, words.length - slots.length) };
+  }
+  function lyricLrcTime(ms) {
+    var cs = Math.max(0, Math.round(ms / 10)), m = Math.floor(cs / 6000), s = Math.floor(cs / 100) % 60, c = cs % 100;
+    return lyricPad(m) + ":" + lyricPad(s) + "." + lyricPad(c);
+  }
+  // 拡張LRC: [mm:ss.xx]<mm:ss.xx>言葉 <mm:ss.xx>言葉
+  function lyricToLrc(lrec, al) {
+    var out = ["[ti:" + lyricTitle(lrec) + "]", "[by:究極ゴリラ 歌詞くずし×メロディくずし]"], sep = lrec.joiner === "none" ? "" : " ";
+    for (var i = 0; i < al.lines.length; i++) {
+      var ln = al.lines[i], parts = [];
+      for (var j = ln.from; j <= ln.to; j++) { parts.push("<" + lyricLrcTime(al.words[j].t) + ">" + al.words[j].w); }
+      out.push("[" + lyricLrcTime(ln.t) + "]" + parts.join(sep));
+    }
+    return out.join("\n") + "\n";
+  }
+  // 歌詞メタイベント用 [[ms, 文字列]]（行末は \r、スペース区切りなら言葉の後ろに空白）
+  function lyricMidiEvents(lrec, al) {
+    var ev = [], sp = lrec.joiner === "none" ? "" : " ";
+    for (var i = 0; i < al.words.length; i++) { ev.push([al.words[i].t, al.words[i].w + (al.words[i].last ? "\r" : sp)]); }
+    return ev;
+  }
+  function lyricSongName(lrec, ext) {
+    var d = new Date(lrec.date);
+    return "song-" + d.getFullYear() + lyricPad(d.getMonth() + 1) + lyricPad(d.getDate()) + "-" + lyricPad(d.getHours()) + lyricPad(d.getMinutes()) + "." + ext;
+  }
+  function lyricUpdate(id, fields) {
+    var all = lyricLoadSaved();
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].id === id) { for (var k in fields) { if (fields.hasOwnProperty(k)) { all[i][k] = fields[k]; } } }
+    }
+    I.lsSet(LYRIC_SAVE_KEY, all);
+  }
+  function lyricMelodyLabel(mrec) {
+    var M = lyricMelody(), sc = M ? M.scale(mrec.scale) : null;
+    return lyricDateText(mrec.date) + " " + (M ? M.noteNames[mrec.key || 0] : "") + " " + (sc ? sc.name : "") + "（" + mrec.notes.length + "音）";
+  }
+  // カラオケ表示（cur: いまの言葉の番号、-1 で未再生）
+  function lyricKaraokeHtml(lrec, al, cur) {
+    var html = "", sep = lrec.joiner === "none" ? "" : " ";
+    for (var i = 0; i < al.lines.length; i++) {
+      var ln = al.lines[i], parts = [];
+      for (var j = ln.from; j <= ln.to; j++) {
+        parts.push('<span class="' + (j === cur ? "k-on" : (j < cur ? "k-done" : "")) + '">' + escHtml(al.words[j].w) + "</span>");
+      }
+      html += '<div class="lyric-line">' + parts.join(sep) + "</div>";
+    }
+    return html;
+  }
+  var lyricKara = null; // 再生中 { id, timer }
+  function lyricStopKaraoke(stopMelody) {
+    if (lyricKara) { clearInterval(lyricKara.timer); lyricKara = null; }
+    var M = lyricMelody();
+    if (stopMelody && M) { M.stopPlayback(true); }
+  }
+  I.addStopHook(function () { lyricStopKaraoke(false); });
+
+  // ---------------------------------------------------------
   // 設定画面・歌詞ノート
   // ---------------------------------------------------------
   var lyricOpenId = null, lyricMsg = "";
@@ -274,7 +361,7 @@
           '<button class="arcade-mini-btn" data-m="del" data-id="' + r.id + '" title="削除">&#x1F5D1;&#xFE0F;</button>' +
           '</div>';
         if (lyricOpenId === r.id) {
-          html += '<textarea class="lyric-view" readonly rows="' + Math.min(14, r.lines.length + 6) + '">' + escHtml(lyricToText(r)) + '</textarea>';
+          html += '<textarea class="lyric-view" readonly rows="' + Math.min(14, r.lines.length + 6) + '">' + escHtml(lyricToText(r)) + '</textarea>' + songBox(r);
         }
       }
       html += '<button class="modal-btn" data-m="back" style="width:100%;margin-top:10px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
@@ -308,11 +395,61 @@
       }
       var btns = root.querySelectorAll("button[data-m]");
       for (i = 0; i < btns.length; i++) { btns[i].onclick = onButton; }
+      var msel = root.querySelectorAll("select[data-k]");
+      for (i = 0; i < msel.length; i++) {
+        msel[i].onchange = function (ev) {
+          lyricStopKaraoke(true);
+          lyricUpdate(parseInt(ev.currentTarget.getAttribute("data-id"), 10), { melodyId: parseInt(ev.currentTarget.value, 10) });
+          render();
+        };
+      }
     }
     function findRec(id) {
       var all = lyricLoadSaved();
       for (var i = 0; i < all.length; i++) { if (all[i].id === id) { return all[i]; } }
       return null;
+    }
+    // §162: 選ばれているメロディ録音（保存した melodyId が消えていたら最新）
+    function melodyFor(r) {
+      var M = lyricMelody(), recs = M ? M.loadRecs() : [];
+      for (var i = 0; i < recs.length; i++) { if (recs[i].id === r.melodyId) { return recs[i]; } }
+      return recs[0] || null;
+    }
+    function songBox(r) {
+      var M = lyricMelody();
+      if (!M) { return ""; }
+      var recs = M.loadRecs(), html = '<div class="lyric-song"><div class="melody-section-title">&#x1F3B9; メロディと合わせる</div>';
+      if (!recs.length) { return html + '<p class="small" style="color:#adb5bd;">メロディくずしで録音すると、ここで歌詞と合わせられます。</p></div>'; }
+      var mrec = melodyFor(r), al = lyricAlign(r, mrec), playing = lyricKara && lyricKara.id === r.id;
+      html += '<label class="melody-row"><span>メロディ</span><select data-k="melody" data-id="' + r.id + '">';
+      for (var i = 0; i < recs.length; i++) {
+        html += '<option value="' + recs[i].id + '"' + (recs[i].id === mrec.id ? " selected" : "") + ">" + escHtml(lyricMelodyLabel(recs[i])) + "</option>";
+      }
+      html += '</select></label>' +
+        '<p class="small" style="color:#adb5bd;margin:0 0 4px;">言葉 ' + al.words.length + ' / 歌える音 ' + al.slots + (al.extra ? '（はみ出し ' + al.extra + '語は最後に0.4秒ずつ）' : '') + '</p>' +
+        '<div class="melody-actions">' +
+        '<button class="modal-btn melody-small-btn" data-m="' + (playing ? "kstop" : "kplay") + '" data-id="' + r.id + '">' + (playing ? "&#x23F9; 止める" : "&#x1F3A4; 歌詞つき再生") + '</button>' +
+        '<button class="modal-btn melody-small-btn" data-m="kmidi" data-id="' + r.id + '">&#x1F3BC; 歌詞付きMIDI</button>' +
+        '<button class="modal-btn melody-small-btn" data-m="klrc" data-id="' + r.id + '">&#x1F4DD; LRC</button></div>' +
+        '<div class="arcade-panel lyric-karaoke" data-k="kara">' + lyricKaraokeHtml(r, al, -1) + '</div></div>';
+      return html;
+    }
+    function playSong(r) {
+      var M = lyricMelody(), mrec = melodyFor(r);
+      if (!M || !mrec) { return; }
+      lyricStopKaraoke(true);
+      var al = lyricAlign(r, mrec), perf = window.performance && window.performance.now ? window.performance : Date;
+      var t0 = (perf.now ? perf.now() : Date.now()) + 150, lastIdx = -2;
+      M.startPlayback(mrec, function () { lyricStopKaraoke(false); if (I.isSetupRoot(root)) { render(); } });
+      lyricKara = { id: r.id, timer: null };
+      render();
+      lyricKara.timer = setInterval(function () {
+        var el = root.querySelector ? root.querySelector(".lyric-karaoke") : null;
+        var now = (perf.now ? perf.now() : Date.now()) - t0, idx = -1;
+        for (var i = 0; i < al.words.length; i++) { if (al.words[i].t <= now) { idx = i; } else { break; } }
+        if (idx !== lastIdx && el) { el.innerHTML = lyricKaraokeHtml(r, al, idx); lastIdx = idx; }
+        if (al.words.length && now > al.words[al.words.length - 1].t + 3000 && lyricKara) { lyricStopKaraoke(true); if (I.isSetupRoot(root)) { render(); } }
+      }, 50);
     }
     function onButton(ev) {
       var m = ev.currentTarget.getAttribute("data-m"), id = parseInt(ev.currentTarget.getAttribute("data-id"), 10), r;
@@ -342,6 +479,21 @@
             navigator.clipboard.writeText(text).then(function () { lyricMsg = "📋 コピーしました"; if (I.isSetupRoot(root)) { render(); } }, function () { if (I.isSetupRoot(root)) { fallback(); } });
           } else { fallback(); }
         } catch (e) { fallback(); }
+      } else if (m === "kplay") {
+        r = findRec(id);
+        if (r) { playSong(r); }
+      } else if (m === "kstop") {
+        lyricStopKaraoke(true);
+        render();
+      } else if (m === "kmidi" || m === "klrc") {
+        r = findRec(id);
+        var mrec = r ? melodyFor(r) : null, M = lyricMelody();
+        if (!r || !mrec || !M) { return; }
+        var al = lyricAlign(r, mrec), how2, fname = lyricSongName(r, m === "kmidi" ? "mid" : "lrc");
+        if (m === "kmidi") { how2 = I.saveBlob(new Blob([new Uint8Array(M.midiBytes(mrec, lyricMidiEvents(r, al)))], { type: "audio/midi" }), fname); }
+        else { how2 = I.saveBlob(new Blob([lyricToLrc(r, al)], { type: "text/plain;charset=utf-8" }), fname); }
+        lyricMsg = how2 === "fail" ? "保存できませんでした" : (m === "kmidi" ? "🎼 歌詞付きMIDI" : "📝 LRC") + "を" + (how2 === "share" ? "共有メニューに出しました" : "保存しました") + "（" + fname + "）";
+        render();
       } else if (m === "del") {
         if (window.confirm && !window.confirm("この歌詞を削除しますか？")) { return; }
         lyricDelete(id);
@@ -542,6 +694,7 @@
   // テスト・将来のメロディ連携用（ゲームの動作には使わない）
   window.UGLyrics = {
     genres: LYRIC_GENRES, fillers: LYRIC_FILLERS, coin: lyricCoin, chars: lyricChars, textWidth: lyricTextWidth,
-    pool: lyricPool, buildStage: lyricBuildStage, toText: lyricToText, fileName: lyricFileName, loadSaved: lyricLoadSaved, loadPrefs: lyricLoadPrefs
+    pool: lyricPool, buildStage: lyricBuildStage, toText: lyricToText, fileName: lyricFileName, loadSaved: lyricLoadSaved, loadPrefs: lyricLoadPrefs,
+    slots: lyricMelodySlots, align: lyricAlign, toLrc: lyricToLrc, midiEvents: lyricMidiEvents, songName: lyricSongName, karaokeHtml: lyricKaraokeHtml
   };
 })();

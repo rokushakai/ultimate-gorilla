@@ -832,7 +832,13 @@
 
   // Standard MIDI File（フォーマット0・120BPM・480tick/四分音符）
   // 鳴り所ごとにチャンネル1〜4（ドラムは10）。先頭に録音時のGM音色をプログラムチェンジで書く
-  function melodyMidiBytes(rec) {
+  // §162: lyrics = [[ms, 文字列], ...] を渡すと歌詞メタイベント（FF 05・UTF-8）を同じ時刻の音より先に書く
+  function melodyUtf8(s) {
+    var bin = unescape(encodeURIComponent(s)), out = [];
+    for (var i = 0; i < bin.length; i++) { out.push(bin.charCodeAt(i)); }
+    return out;
+  }
+  function melodyMidiBytes(rec, lyrics) {
     var TPQ = 480, MS_PER_TICK = 500 / TPQ;
     var ev = [], i;
     for (i = 0; i < rec.notes.length; i++) {
@@ -840,6 +846,13 @@
       var drum = prog === MELODY_DRUM, c = drum ? 9 : v.ch, m = drum ? clamp(nt[1], 35, 81) : clamp(nt[1], 0, 127);
       ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, Math.max(40, Math.round(96 * (nt[3] || 1)))]]);
       ev.push([Math.round((nt[0] + v.dur) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
+    }
+    for (i = 0; lyrics && i < lyrics.length; i++) {
+      var txt = melodyUtf8(lyrics[i][1]), meta = [0xFF, 0x05];
+      var n = txt.length, lb = [n & 0x7F];
+      n = Math.floor(n / 128);
+      while (n > 0) { lb.unshift((n & 0x7F) | 0x80); n = Math.floor(n / 128); }
+      ev.push([Math.round(lyrics[i][0] / MS_PER_TICK), -1, meta.concat(lb, txt)]);
     }
     ev.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
     var name = "Ultimate Gorilla Melody";
@@ -862,7 +875,7 @@
     for (i = 0; i < ev.length; i++) {
       vlq(ev[i][0] - lastTick);
       lastTick = ev[i][0];
-      trk.push(ev[i][2][0], ev[i][2][1], ev[i][2][2]);
+      for (var bi = 0; bi < ev[i][2].length; bi++) { trk.push(ev[i][2][bi]); }
     }
     trk.push(0x00, 0xFF, 0x2F, 0x00);
     var len = trk.length;

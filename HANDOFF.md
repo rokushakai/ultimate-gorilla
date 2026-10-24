@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.80** |
+| 現在バージョン | **v0.81** |
 | ブランチ | main |
 
 ---
@@ -98,6 +98,9 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.81] 歌詞くずし × メロディくずし**（§162）
+  - arcade-lyrics.js: `lyricMelodySlots` / `lyricAlign` / `lyricToLrc` / `lyricMidiEvents`、カラオケ再生 `playSong`（停止時フックで止まる）
+  - メロディ側は `window.UGMelody` 経由（`loadRecs` / `startPlayback` / `midiBytes(rec, lyrics)`）。歌詞くずしはメロディが無くても動く
 - **[v0.80] ゲームセンターのメニュー整理＋パドルは主音**（§161）
   - 各ゲーム定義に `cat`（action/puzzle/music）必須。script.js の `ARCADE_CATS` / `_arcadeCat` でタブ表示
 - **[v0.79] ✍️ 歌詞くずし**（§160）
@@ -105,7 +108,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（222項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（230項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
