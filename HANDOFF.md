@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.69** |
+| 現在バージョン | **v0.70** |
 | ブランチ | main |
 
 ---
@@ -93,6 +93,10 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.70] メロディくずし GM音色・Web MIDI・MIDI書き出し強化**（§151）
+  - `MELODY_VOICES`（b/p/w/s → ch1〜4）・`GM_NAMES`・`melodyRecipe(prog)`（系統別合成）・`melodyNote()`（内蔵シンセ／MIDI出力の振り分け）
+  - Web MIDI: `melodyRequestMidi` / `melodySelectOutput` / `melodyMidiPrograms` / `melodyMidiAllOff`。prefs.output にポートID
+  - prefs.prog / 録音の prog（0〜127、128=ドラム ch10）
 - **[v0.69] 🎹 メロディくずし**（§150）— 合計16本
   - 当たった位置で音程が決まる音楽ブロックくずし。スケール23種・キー12種・位置/ランダム・録音/再生/MIDI書き出し
   - サウンドは arcade.js 独自の AudioContext（`melodyAudioInit` / `melodyPlayNote`）。ゲーム本編のBGM/SEとは独立
@@ -996,6 +1000,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 3. **さらなるゲーム追加候補**: ソリティア、五目ならべ（対CPU）、ナンプレ、タイピング、ジャンプアクション 等（プロデューサー判断）
 4. **ゲームセンターメニューの整理**（15本で縦に長いので、ジャンル別タブ等）
 
+> v0.70（§151 GM音色・Web MIDI・MIDI書き出し強化）実装済み。実機（Windows Chrome + GS Wavetable Synth）での確認が次の課題。
 > v0.69（§150 メロディくずし）実装済み。実機での音の確認（特にiOSの消音スイッチ・音量）が次の課題。
 > v0.68（§149 ゲームセンター移設＋デバッグ敵と遭遇しないモード）実装済み。
 > v0.67（§148 ゲーム6本追加＋プレイ中バトルBGM）実装済み。合計15本。捕獲条件/仲間能力変更なし。BGMは既存関数の呼び出しのみ。

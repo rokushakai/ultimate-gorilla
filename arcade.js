@@ -2666,10 +2666,39 @@
     { id: "wholetone", group: "その他", name: "全音音階", iv: [0, 2, 4, 6, 8, 10] },
     { id: "diminished", group: "その他", name: "ディミニッシュ", iv: [0, 2, 3, 5, 6, 8, 9, 11] }
   ];
-  var MELODY_VOICE_NAMES = { b: "マリンバ", p: "プラック", w: "ベル", s: "ベース" };
+  // GM 音色（§151 v0.70）
+  var GM_FAMILIES = ["ピアノ", "クロマチック・パーカッション", "オルガン", "ギター", "ベース", "ストリングス", "アンサンブル", "ブラス",
+    "リード", "パイプ", "シンセリード", "シンセパッド", "シンセエフェクト", "民族楽器", "パーカッシブ", "効果音"];
+  var GM_NAMES = [
+    "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano", "Electric Piano 1", "Electric Piano 2", "Harpsichord", "Clavinet",
+    "Celesta", "Glockenspiel", "Music Box", "Vibraphone", "Marimba", "Xylophone", "Tubular Bells", "Dulcimer",
+    "Drawbar Organ", "Percussive Organ", "Rock Organ", "Church Organ", "Reed Organ", "Accordion", "Harmonica", "Tango Accordion",
+    "Acoustic Guitar (nylon)", "Acoustic Guitar (steel)", "Electric Guitar (jazz)", "Electric Guitar (clean)", "Electric Guitar (muted)", "Overdriven Guitar", "Distortion Guitar", "Guitar Harmonics",
+    "Acoustic Bass", "Electric Bass (finger)", "Electric Bass (pick)", "Fretless Bass", "Slap Bass 1", "Slap Bass 2", "Synth Bass 1", "Synth Bass 2",
+    "Violin", "Viola", "Cello", "Contrabass", "Tremolo Strings", "Pizzicato Strings", "Orchestral Harp", "Timpani",
+    "String Ensemble 1", "String Ensemble 2", "Synth Strings 1", "Synth Strings 2", "Choir Aahs", "Voice Oohs", "Synth Voice", "Orchestra Hit",
+    "Trumpet", "Trombone", "Tuba", "Muted Trumpet", "French Horn", "Brass Section", "Synth Brass 1", "Synth Brass 2",
+    "Soprano Sax", "Alto Sax", "Tenor Sax", "Baritone Sax", "Oboe", "English Horn", "Bassoon", "Clarinet",
+    "Piccolo", "Flute", "Recorder", "Pan Flute", "Blown Bottle", "Shakuhachi", "Whistle", "Ocarina",
+    "Lead 1 (square)", "Lead 2 (sawtooth)", "Lead 3 (calliope)", "Lead 4 (chiff)", "Lead 5 (charang)", "Lead 6 (voice)", "Lead 7 (fifths)", "Lead 8 (bass + lead)",
+    "Pad 1 (new age)", "Pad 2 (warm)", "Pad 3 (polysynth)", "Pad 4 (choir)", "Pad 5 (bowed)", "Pad 6 (metallic)", "Pad 7 (halo)", "Pad 8 (sweep)",
+    "FX 1 (rain)", "FX 2 (soundtrack)", "FX 3 (crystal)", "FX 4 (atmosphere)", "FX 5 (brightness)", "FX 6 (goblins)", "FX 7 (echoes)", "FX 8 (sci-fi)",
+    "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba", "Bagpipe", "Fiddle", "Shanai",
+    "Tinkle Bell", "Agogo", "Steel Drums", "Woodblock", "Taiko Drum", "Melodic Tom", "Synth Drum", "Reverse Cymbal",
+    "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot"
+  ];
+  var MELODY_DRUM = 128;
+  // 鳴り所: b=ブロック / p=硬いブロック1回目 / w=壁 / s=パドル
+  var MELODY_VOICES = [
+    { id: "b", name: "ブロック", ch: 0, def: 12, dur: 300 },
+    { id: "p", name: "硬いブロック1回目", ch: 1, def: 24, dur: 150 },
+    { id: "w", name: "壁", ch: 2, def: 8, dur: 600 },
+    { id: "s", name: "パドル", ch: 3, def: 32, dur: 350 }
+  ];
 
-  var melodyAudio = { ctx: null, master: null };
+  var melodyAudio = { ctx: null, master: null, noise: null };
   var melodyPlayback = null;
+  var melodyMidi = { access: null, out: null, status: "" };
 
   function lsGet(k) {
     try { var s = window.localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; }
@@ -2679,6 +2708,9 @@
   }
   function escHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function perfNow() {
+    return (window.performance && window.performance.now) ? window.performance.now() : Date.now();
   }
 
   function melodyScale(id) {
@@ -2701,6 +2733,30 @@
     return "hsl(" + ((m % 12) * 30) + ",75%," + clamp(38 + (oct - 3) * 9, 30, 75) + "%)";
   }
 
+  function melodyVoice(id) {
+    for (var i = 0; i < MELODY_VOICES.length; i++) { if (MELODY_VOICES[i].id === id) { return MELODY_VOICES[i]; } }
+    return MELODY_VOICES[0];
+  }
+  function melodyDefaultProg() {
+    var out = {};
+    for (var i = 0; i < MELODY_VOICES.length; i++) { out[MELODY_VOICES[i].id] = MELODY_VOICES[i].def; }
+    return out;
+  }
+  function melodyProgOf(map, v) {
+    var p = map ? parseInt(map[v], 10) : NaN;
+    return (p >= 0 && p <= MELODY_DRUM) ? p : melodyVoice(v).def;
+  }
+  function melodyCleanProg(map) {
+    var out = {};
+    for (var i = 0; i < MELODY_VOICES.length; i++) { out[MELODY_VOICES[i].id] = melodyProgOf(map, MELODY_VOICES[i].id); }
+    return out;
+  }
+  function gmLabel(p) {
+    if (p === MELODY_DRUM) { return "🥁 ドラムキット（ch10）"; }
+    var n = p + 1;
+    return (n < 10 ? "00" : (n < 100 ? "0" : "")) + n + " " + GM_NAMES[p];
+  }
+
   function melodyAudioInit() {
     if (!melodyAudio.ctx) {
       var AC = window.AudioContext || window.webkitAudioContext;
@@ -2709,6 +2765,12 @@
       melodyAudio.master = melodyAudio.ctx.createGain();
       melodyAudio.master.gain.value = 0.25;
       melodyAudio.master.connect(melodyAudio.ctx.destination);
+      try {
+        var len = melodyAudio.ctx.sampleRate || 44100;
+        var buf = melodyAudio.ctx.createBuffer(1, len, len), data = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) { data[i] = Math.random() * 2 - 1; }
+        melodyAudio.noise = buf;
+      } catch (e3) { melodyAudio.noise = null; }
     }
     if (melodyAudio.ctx.state === "suspended" && melodyAudio.ctx.resume) {
       try { melodyAudio.ctx.resume(); } catch (e2) {}
@@ -2716,67 +2778,240 @@
     return melodyAudio.ctx;
   }
 
-  // voice: b=マリンバ / p=プラック / w=ベル / s=ベース
-  function melodyPlayNote(midi, voice, when) {
+  // 内蔵シンセ: GMの系統ごとの合成レシピ（本物のGMサンプルではなく近似音）
+  // osc: [波形, 周波数比, 音量, デチューン(cent)]
+  var MELODY_RECIPES = {
+    piano: { osc: [["triangle", 1, 1, 0], ["sine", 2, 0.3, 0], ["sine", 3, 0.1, 0]], a: 0.004, dur: 1.3, peak: 0.6 },
+    bell: { osc: [["sine", 1, 1, 0], ["sine", 2.76, 0.25, 0], ["sine", 5.4, 0.08, 0]], a: 0.003, dur: 1.1, peak: 0.45 },
+    marimba: { osc: [["triangle", 1, 1, 0], ["sine", 4, 0.15, 0]], a: 0.003, dur: 0.5, peak: 0.7 },
+    tubular: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.4, 0], ["sine", 3.01, 0.2, 0]], a: 0.003, dur: 1.8, peak: 0.4 },
+    organ: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.5, 0], ["sine", 3, 0.3, 0], ["sine", 4, 0.15, 0]], a: 0.01, dur: 0.6, sus: 0.8, rel: 0.08, peak: 0.35 },
+    guitar: { osc: [["sawtooth", 1, 1, 0]], lp: 3500, lpEnd: 600, a: 0.003, dur: 0.9, peak: 0.5 },
+    pluck: { osc: [["sawtooth", 1, 1, 0], ["square", 2, 0.2, 0]], lp: 4000, lpEnd: 800, a: 0.002, dur: 0.35, peak: 0.4 },
+    bass: { osc: [["sawtooth", 1, 0.8, 0], ["sine", 1, 0.4, 0]], lp: 900, a: 0.005, dur: 0.5, peak: 0.6 },
+    strings: { osc: [["sawtooth", 1, 0.6, -7], ["sawtooth", 1, 0.6, 7]], lp: 2600, a: 0.09, dur: 0.9, sus: 0.8, rel: 0.25, peak: 0.3, vib: 6 },
+    ensemble: { osc: [["triangle", 1, 0.7, -5], ["sine", 1, 0.7, 5], ["sine", 2, 0.2, 0]], a: 0.12, dur: 1.0, sus: 0.85, rel: 0.3, peak: 0.3, vib: 4 },
+    brass: { osc: [["sawtooth", 1, 1, 0]], lp: 700, lpEnd: 2800, a: 0.03, dur: 0.55, sus: 0.8, rel: 0.1, peak: 0.35 },
+    reed: { osc: [["square", 1, 0.8, 0]], lp: 1800, a: 0.02, dur: 0.5, sus: 0.8, rel: 0.08, peak: 0.3, vib: 5 },
+    pipe: { osc: [["sine", 1, 1, 0], ["triangle", 2, 0.1, 0]], a: 0.04, dur: 0.55, sus: 0.85, rel: 0.1, peak: 0.45, vib: 8, noise: 0.04 },
+    lead: { osc: [["square", 1, 0.6, 0], ["sawtooth", 1, 0.4, 8]], lp: 5000, a: 0.005, dur: 0.4, sus: 0.9, rel: 0.06, peak: 0.25 },
+    pad: { osc: [["sawtooth", 1, 0.5, -10], ["sawtooth", 1, 0.5, 10], ["sine", 0.5, 0.3, 0]], lp: 1400, a: 0.25, dur: 1.4, sus: 0.9, rel: 0.4, peak: 0.25 },
+    fx: { osc: [["sine", 1, 1, 0], ["triangle", 1.5, 0.3, 0]], glide: 1.5, a: 0.01, dur: 0.9, peak: 0.35, vib: 20 },
+    ethnic: { osc: [["sawtooth", 1, 0.7, 0], ["triangle", 2, 0.3, 0]], lp: 3000, lpEnd: 900, a: 0.002, dur: 0.7, peak: 0.45 },
+    percussive: { osc: [["sine", 1, 1, 0], ["triangle", 1.6, 0.3, 0]], glide: 0.6, a: 0.002, dur: 0.4, peak: 0.7 },
+    sfx: { osc: [], noise: 0.9, band: true, a: 0.005, dur: 0.35, peak: 0.5 },
+    timpani: { osc: [["sine", 1, 1, 0], ["sine", 1.5, 0.3, 0]], glide: 0.85, a: 0.003, dur: 0.9, peak: 0.7, noise: 0.08 }
+  };
+  var MELODY_FAMILY_RECIPE = ["piano", "marimba", "organ", "guitar", "bass", "strings", "ensemble", "brass",
+    "reed", "pipe", "lead", "pad", "fx", "ethnic", "percussive", "sfx"];
+  var MELODY_RECIPE_OVERRIDES = {
+    6: "pluck", 7: "pluck", 8: "bell", 9: "bell", 10: "bell", 11: "bell", 12: "marimba", 13: "marimba", 14: "tubular", 15: "pluck",
+    21: "reed", 22: "reed", 23: "reed", 45: "pluck", 46: "pluck", 47: "timpani", 105: "pluck", 106: "pluck", 107: "pluck", 108: "marimba"
+  };
+  function melodyRecipe(prog) {
+    var name = MELODY_RECIPE_OVERRIDES[prog] || MELODY_FAMILY_RECIPE[Math.floor(prog / 8)] || "piano";
+    return MELODY_RECIPES[name];
+  }
+
+  function melodyNoise(ac, t, dur, level, target, filterType, freq) {
+    if (!melodyAudio.noise) { return; }
+    var src = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+    src.buffer = melodyAudio.noise;
+    src.loop = true;
+    f.type = filterType;
+    f.frequency.value = freq;
+    g.gain.value = level;
+    src.connect(f);
+    f.connect(g);
+    g.connect(target);
+    src.start(t);
+    src.stop(t + dur + 0.05);
+  }
+
+  function melodyDrum(ac, m, t) {
+    var env = ac.createGain();
+    env.connect(melodyAudio.master);
+    var o, dur;
+    if (m < 45) { // キック
+      dur = 0.3;
+      o = ac.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+      o.connect(env);
+      o.start(t); o.stop(t + dur + 0.05);
+      env.gain.setValueAtTime(0.9, t);
+    } else if (m < 58) { // タム
+      dur = 0.3;
+      o = ac.createOscillator();
+      o.type = "sine";
+      var tf = 70 + (m - 45) * 14;
+      o.frequency.setValueAtTime(tf, t);
+      o.frequency.exponentialRampToValueAtTime(tf * 0.6, t + dur);
+      o.connect(env);
+      o.start(t); o.stop(t + dur + 0.05);
+      env.gain.setValueAtTime(0.7, t);
+    } else if (m < 67) { // スネア
+      dur = 0.2;
+      melodyNoise(ac, t, dur, 0.8, env, "highpass", 1200);
+      o = ac.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = 190;
+      o.connect(env);
+      o.start(t); o.stop(t + 0.08);
+      env.gain.setValueAtTime(0.6, t);
+    } else { // ハイハット / シンバル
+      dur = m > 74 ? 0.5 : 0.07;
+      melodyNoise(ac, t, dur, 0.6, env, "highpass", 7000);
+      env.gain.setValueAtTime(0.4, t);
+    }
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+
+  function melodySynth(midi, prog, when) {
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
+    if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t); return; }
+    var r = melodyRecipe(prog);
     var f = 440 * Math.pow(2, (midi - 69) / 12);
-    var env = ac.createGain();
-    var dur, peak, target = env;
-    if (voice === "w") { dur = 0.9; peak = 0.45; }
-    else if (voice === "s") { dur = 0.45; peak = 0.6; }
-    else if (voice === "p") { dur = 0.18; peak = 0.3; }
-    else { dur = 0.5; peak = 0.7; }
+    var env = ac.createGain(), target = env, i;
     env.gain.setValueAtTime(0.0001, t);
-    env.gain.exponentialRampToValueAtTime(peak, t + 0.005);
-    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    env.gain.exponentialRampToValueAtTime(r.peak, t + r.a);
+    if (r.sus) {
+      env.gain.exponentialRampToValueAtTime(r.peak * r.sus, t + r.a + 0.06);
+      env.gain.setValueAtTime(r.peak * r.sus, t + Math.max(r.a + 0.07, r.dur - r.rel));
+    }
+    env.gain.exponentialRampToValueAtTime(0.0001, t + r.dur);
     env.connect(melodyAudio.master);
-    if (voice === "s") {
+    if (r.lp) {
       var lp = ac.createBiquadFilter();
       lp.type = "lowpass";
-      lp.frequency.value = 900;
+      var lp0 = Math.max(r.lp, f * 1.5);
+      lp.frequency.setValueAtTime(lp0, t);
+      if (r.lpEnd) { lp.frequency.exponentialRampToValueAtTime(Math.max(r.lpEnd, f * 1.2), t + r.dur * 0.8); }
       lp.connect(env);
       target = lp;
     }
-    function osc(type, freq, level) {
-      var o = ac.createOscillator(), g = ac.createGain();
-      o.type = type;
-      o.frequency.value = freq;
-      g.gain.value = level;
+    var lfoGain = null;
+    if (r.vib) {
+      var lfo = ac.createOscillator();
+      lfoGain = ac.createGain();
+      lfo.frequency.value = 5.5;
+      lfoGain.gain.value = f * r.vib * 0.000578;
+      lfo.connect(lfoGain);
+      lfo.start(t);
+      lfo.stop(t + r.dur + 0.05);
+    }
+    for (i = 0; i < r.osc.length; i++) {
+      var spec = r.osc[i], o = ac.createOscillator(), g = ac.createGain();
+      o.type = spec[0];
+      o.frequency.setValueAtTime(f * spec[1], t);
+      if (r.glide) { o.frequency.exponentialRampToValueAtTime(f * spec[1] * r.glide, t + r.dur); }
+      if (spec[3] && o.detune) { o.detune.value = spec[3]; }
+      if (lfoGain) { lfoGain.connect(o.frequency); }
+      g.gain.value = spec[2];
       o.connect(g);
       g.connect(target);
       o.start(t);
-      o.stop(t + dur + 0.05);
+      o.stop(t + r.dur + 0.05);
     }
-    if (voice === "w") { osc("sine", f, 1); osc("sine", f * 2.76, 0.25); osc("sine", f * 5.4, 0.08); }
-    else if (voice === "s") { osc("sawtooth", f, 0.6); }
-    else if (voice === "p") { osc("square", f, 0.5); }
-    else { osc("triangle", f, 1); osc("sine", f * 4, 0.15); }
+    if (r.noise) { melodyNoise(ac, t, r.dur, r.noise, target, r.band ? "bandpass" : "highpass", r.band ? f : 3000); }
+  }
+
+  // Web MIDI 出力
+  function melodyMidiSend(bytes, ts) {
+    var out = melodyMidi.out;
+    if (!out) { return; }
+    try { out.send(bytes, ts); } catch (e) { try { out.send(bytes); } catch (e2) {} }
+  }
+  function melodyMidiPrograms(map) {
+    if (!melodyMidi.out) { return; }
+    for (var i = 0; i < MELODY_VOICES.length; i++) {
+      var p = melodyProgOf(map, MELODY_VOICES[i].id);
+      if (p < MELODY_DRUM) { melodyMidiSend([0xC0 | MELODY_VOICES[i].ch, p]); }
+    }
+  }
+  function melodyMidiAllOff() {
+    if (!melodyMidi.out) { return; }
+    var chs = [0, 1, 2, 3, 9];
+    for (var i = 0; i < chs.length; i++) { melodyMidiSend([0xB0 | chs[i], 123, 0]); }
+  }
+  function melodyMidiOutputs() {
+    var out = [];
+    if (!melodyMidi.access || !melodyMidi.access.outputs) { return out; }
+    melodyMidi.access.outputs.forEach(function (port) { out.push({ id: port.id, name: port.name || port.id, port: port }); });
+    return out;
+  }
+  function melodySelectOutput(id) {
+    melodyMidiAllOff();
+    melodyMidi.out = null;
+    if (!id || id === "synth") { return; }
+    var outs = melodyMidiOutputs();
+    for (var i = 0; i < outs.length; i++) { if (outs[i].id === id) { melodyMidi.out = outs[i].port; } }
+  }
+  function melodyRequestMidi(cb) {
+    if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
+      melodyMidi.status = "unsupported";
+      cb();
+      return;
+    }
+    melodyMidi.status = "asking";
+    try {
+      navigator.requestMIDIAccess({ sysex: false }).then(function (acc) {
+        melodyMidi.access = acc;
+        melodyMidi.status = "ok";
+        cb();
+      }, function () {
+        melodyMidi.status = "denied";
+        cb();
+      });
+    } catch (e) {
+      melodyMidi.status = "denied";
+      cb();
+    }
+  }
+
+  // 1音を鳴らす（出力先に応じて内蔵シンセ or MIDI機器）。whenPerf は performance.now 基準
+  function melodyNote(midi, voice, progMap, whenPerf) {
+    var prog = melodyProgOf(progMap, voice), v = melodyVoice(voice);
+    if (melodyMidi.out) {
+      var drum = prog === MELODY_DRUM;
+      var ch = drum ? 9 : v.ch, note = drum ? clamp(midi, 35, 81) : clamp(midi, 0, 127);
+      var ts = whenPerf || perfNow();
+      melodyMidiSend([0x90 | ch, note, 100], ts);
+      melodyMidiSend([0x80 | ch, note, 0], ts + v.dur);
+      return;
+    }
+    var ac = melodyAudio.ctx;
+    if (!ac) { return; }
+    melodySynth(midi, prog, whenPerf ? ac.currentTime + Math.max(0, whenPerf - perfNow()) / 1000 : 0);
   }
 
   function melodyStopPlayback(silent) {
     if (!melodyPlayback) { return; }
     clearInterval(melodyPlayback.timer);
+    melodyMidiAllOff();
     var cb = melodyPlayback.onEnd;
     melodyPlayback = null;
     if (!silent && cb) { cb(); }
   }
-  // 先読みスケジューラ: 40msごとに250ms先までの音を予約
+  // 先読みスケジューラ: 40msごとに250ms先までの音を予約（performance.now 基準）
   function melodyStartPlayback(rec, onEnd) {
     melodyStopPlayback(true);
-    var ac = melodyAudioInit();
-    if (!ac || !rec.notes.length) { if (onEnd) { onEnd(); } return; }
-    var st = { id: rec.id, idx: 0, t0: ac.currentTime + 0.15, onEnd: onEnd, timer: null };
-    var last = rec.notes[rec.notes.length - 1][0] / 1000;
+    if (!melodyMidi.out && !melodyAudioInit()) { if (onEnd) { onEnd(); } return; }
+    if (!rec.notes.length) { if (onEnd) { onEnd(); } return; }
+    melodyMidiPrograms(rec.prog);
+    var st = { id: rec.id, idx: 0, t0: perfNow() + 150, onEnd: onEnd, timer: null };
+    var last = rec.notes[rec.notes.length - 1][0];
     st.timer = setInterval(function () {
-      var now = ac.currentTime;
-      while (st.idx < rec.notes.length && st.t0 + rec.notes[st.idx][0] / 1000 < now + 0.25) {
+      var now = perfNow();
+      while (st.idx < rec.notes.length && st.t0 + rec.notes[st.idx][0] < now + 250) {
         var nt = rec.notes[st.idx];
-        melodyPlayNote(nt[1], nt[2], st.t0 + nt[0] / 1000);
+        melodyNote(nt[1], nt[2], rec.prog, st.t0 + nt[0]);
         st.idx++;
       }
-      if (st.idx >= rec.notes.length && now > st.t0 + last + 1) { melodyStopPlayback(); }
+      if (st.idx >= rec.notes.length && now > st.t0 + last + 1000) { melodyStopPlayback(); }
     }, 40);
     melodyPlayback = st;
   }
@@ -2790,7 +3025,9 @@
       key: (key >= 0 && key < 12) ? key : 0,
       sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
       rec: typeof p.rec === "boolean" ? p.rec : true,
-      relax: p.relax === true
+      relax: p.relax === true,
+      prog: melodyCleanProg(p.prog),
+      output: typeof p.output === "string" ? p.output : "synth"
     };
   }
   function melodyLoadRecs() {
@@ -2822,17 +3059,25 @@
   }
 
   // Standard MIDI File（フォーマット0・120BPM・480tick/四分音符）
+  // 鳴り所ごとにチャンネル1〜4（ドラムは10）。先頭に録音時のGM音色をプログラムチェンジで書く
   function melodyMidiBytes(rec) {
     var TPQ = 480, MS_PER_TICK = 500 / TPQ;
-    var CH = { b: 0, p: 0, w: 1, s: 2 }, DUR = { b: 300, p: 120, w: 600, s: 350 };
     var ev = [], i;
     for (i = 0; i < rec.notes.length; i++) {
-      var nt = rec.notes[i], c = CH[nt[2]] || 0, m = clamp(nt[1], 0, 127);
+      var nt = rec.notes[i], v = melodyVoice(nt[2]), prog = melodyProgOf(rec.prog, nt[2]);
+      var drum = prog === MELODY_DRUM, c = drum ? 9 : v.ch, m = drum ? clamp(nt[1], 35, 81) : clamp(nt[1], 0, 127);
       ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, 96]]);
-      ev.push([Math.round((nt[0] + (DUR[nt[2]] || 300)) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
+      ev.push([Math.round((nt[0] + v.dur) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
     }
     ev.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
-    var trk = [0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20, 0x00, 0xC0, 12, 0x00, 0xC1, 8, 0x00, 0xC2, 32];
+    var name = "Ultimate Gorilla Melody";
+    var trk = [0x00, 0xFF, 0x03, name.length];
+    for (i = 0; i < name.length; i++) { trk.push(name.charCodeAt(i)); }
+    trk.push(0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20);
+    for (i = 0; i < MELODY_VOICES.length; i++) {
+      var pg = melodyProgOf(rec.prog, MELODY_VOICES[i].id);
+      if (pg < MELODY_DRUM) { trk.push(0x00, 0xC0 | MELODY_VOICES[i].ch, pg); }
+    }
     var lastTick = 0;
     function vlq(n) {
       var buf = [n & 0x7F];
@@ -2867,6 +3112,8 @@
   }
 
   // 設定画面（HTML）
+  var melodyToneOpen = false;
+
   function melodySetup(root, ctl) {
     var prefs = melodyLoadPrefs(ctl.soundEnabled);
 
@@ -2884,11 +3131,53 @@
       }
       return html + "</optgroup>";
     }
+    function gmOptions(sel) {
+      var html = "";
+      for (var fam = 0; fam < 16; fam++) {
+        html += '<optgroup label="' + escHtml(GM_FAMILIES[fam]) + '">';
+        for (var p = fam * 8; p < fam * 8 + 8; p++) {
+          html += '<option value="' + p + '"' + (p === sel ? " selected" : "") + ">" + escHtml(gmLabel(p)) + "</option>";
+        }
+        html += "</optgroup>";
+      }
+      return html + '<optgroup label="ドラム"><option value="' + MELODY_DRUM + '"' + (sel === MELODY_DRUM ? " selected" : "") + ">" + gmLabel(MELODY_DRUM) + "</option></optgroup>";
+    }
+    function outputOptions() {
+      var outs = melodyMidiOutputs(), html = '<option value="synth"' + (prefs.output === "synth" ? " selected" : "") + '>🎛️ 内蔵シンセ（GM風の近似音）</option>';
+      for (var i = 0; i < outs.length; i++) {
+        html += '<option value="' + escHtml(outs[i].id) + '"' + (outs[i].id === prefs.output ? " selected" : "") + ">🔌 " + escHtml(outs[i].name) + "</option>";
+      }
+      return html;
+    }
+    function midiStatusText() {
+      if (melodyMidi.status === "unsupported") { return "このブラウザはWeb MIDIに対応していません（パソコンのChrome/Edgeなら使えます）"; }
+      if (melodyMidi.status === "denied") { return "MIDI機器へのアクセスが許可されませんでした"; }
+      if (melodyMidi.status === "asking") { return "MIDI機器を探しています…"; }
+      if (melodyMidi.status === "ok") {
+        return melodyMidiOutputs().length ? "出力先にMIDI機器を選ぶと、本物のGM音源で鳴ります" : "MIDI出力が見つかりませんでした";
+      }
+      return "Windows の Chrome/Edge なら「Microsoft GS Wavetable Synth」で本物のGM音色が鳴らせます";
+    }
+    function applyOutput() {
+      melodySelectOutput(prefs.output);
+      if (prefs.output !== "synth" && !melodyMidi.out && melodyMidi.access) { prefs.output = "synth"; }
+    }
+    function startTones() {
+      if (melodyMidi.out) { melodyMidiPrograms(prefs.prog); } else { melodyAudioInit(); }
+    }
     function preview() {
-      var ac = melodyAudioInit();
-      if (!ac) { return; }
-      var sc = melodyScale(prefs.scale), n = sc.iv.length, t = ac.currentTime + 0.05;
-      for (var i = 0; i <= n; i++) { melodyPlayNote(melodyDegreeToMidi(sc, prefs.key, n + i), "b", t + i * 0.16); }
+      startTones();
+      var sc = melodyScale(prefs.scale), n = sc.iv.length, t = perfNow() + 60;
+      for (var i = 0; i <= n; i++) { melodyNote(melodyDegreeToMidi(sc, prefs.key, n + i), "b", prefs.prog, t + i * 160); }
+    }
+    function previewTone(v) {
+      startTones();
+      var sc = melodyScale(prefs.scale), n = sc.iv.length, base = v === "s" ? 0 : n, t = perfNow() + 60;
+      var degs = [0, 2, 4, 7];
+      for (var i = 0; i < degs.length; i++) {
+        var d = Math.min(3 * n - 1, base + Math.round(degs[i] * n / 7));
+        melodyNote(melodyDegreeToMidi(sc, prefs.key, d) - (v === "s" ? 12 : 0), v, prefs.prog, t + i * 220);
+      }
     }
     function render() {
       var recs = melodyLoadRecs(), i;
@@ -2904,6 +3193,17 @@
         '<label class="melody-row"><span>キー（主音）</span><select data-p="key">';
       for (i = 0; i < 12; i++) { html += '<option value="' + i + '"' + (i === prefs.key ? " selected" : "") + ">" + NOTE_NAMES[i] + "</option>"; }
       html += '</select></label>' +
+        '<details class="melody-tones"' + (melodyToneOpen ? " open" : "") + '><summary>&#x1F3BB; 音色（GM）</summary>';
+      for (i = 0; i < MELODY_VOICES.length; i++) {
+        var mv = MELODY_VOICES[i];
+        html += '<div class="melody-row"><span>' + mv.name + '</span>' +
+          '<select data-prog="' + mv.id + '">' + gmOptions(prefs.prog[mv.id]) + '</select>' +
+          '<button class="arcade-mini-btn" data-m="tone" data-v="' + mv.id + '" title="試し聴き">&#x1F508;</button></div>';
+      }
+      html += '<button class="modal-btn melody-small-btn" data-m="tone-reset">↺ 音色を最初に戻す</button></details>' +
+        '<label class="melody-row"><span>出力先</span><select data-p="output">' + outputOptions() + '</select></label>' +
+        '<div class="melody-midi-line"><button class="modal-btn melody-small-btn" data-m="midi-scan">&#x1F50C; MIDI機器を探す</button>' +
+        '<span class="small">' + escHtml(midiStatusText()) + '</span></div>' +
         '<div class="melody-checks">' +
         '<label><input type="checkbox" data-p="sound"' + (prefs.sound ? " checked" : "") + '> &#x1F50A; 音を鳴らす</label>' +
         '<label><input type="checkbox" data-p="rec"' + (prefs.rec ? " checked" : "") + '> &#x1F399;&#xFE0F; 録音する</label>' +
@@ -2922,9 +3222,9 @@
         html += '<div class="melody-rec">' +
           '<div class="melody-rec-info"><b>' + melodyRecLabel(r) + '</b>' +
           '<span class="small">' + NOTE_NAMES[r.key || 0] + ' ' + escHtml(melodyScale(r.scale).name) + (r.mode === "rand" ? " 🎲" : " 📍") + '</span>' +
-          '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + '</span></div>' +
-          '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
-          '<button class="arcade-mini-btn" data-m="midi" data-id="' + r.id + '" title="MIDIで保存">&#x1F4BE;</button>' +
+          '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + ' / ' + escHtml(gmLabel(melodyProgOf(r.prog, "b"))) + '</span></div>' +
+          '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '" title="再生">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
+          '<button class="arcade-mini-btn melody-midi-btn" data-m="midi" data-id="' + r.id + '" title="MIDIファイルで保存">&#x1F4BE; MIDI</button>' +
           '<button class="arcade-mini-btn" data-m="del" data-id="' + r.id + '" title="削除">&#x1F5D1;&#xFE0F;</button>' +
           '</div>';
       }
@@ -2936,6 +3236,15 @@
         sels[i].onchange = function (ev) {
           var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
           prefs[k] = k === "key" ? parseInt(v, 10) : v;
+          if (k === "output") { applyOutput(); }
+          savePrefs();
+        };
+      }
+      var progSels = root.querySelectorAll("select[data-prog]");
+      for (i = 0; i < progSels.length; i++) {
+        progSels[i].onchange = function (ev) {
+          prefs.prog[ev.currentTarget.getAttribute("data-prog")] = parseInt(ev.currentTarget.value, 10);
+          prefs.prog = melodyCleanProg(prefs.prog);
           savePrefs();
         };
       }
@@ -2946,6 +3255,8 @@
           savePrefs();
         };
       }
+      var det = root.querySelector ? root.querySelector("details.melody-tones") : null;
+      if (det) { det.addEventListener("toggle", function () { melodyToneOpen = !!det.open; }); }
       var btns = root.querySelectorAll("button[data-m]");
       for (i = 0; i < btns.length; i++) { btns[i].onclick = onButton; }
     }
@@ -2954,14 +3265,29 @@
       for (var i = 0; i < recs.length; i++) { if (recs[i].id === id) { return recs[i]; } }
       return null;
     }
+    function scanMidi() {
+      melodyRequestMidi(function () {
+        applyOutput();
+        render();
+      });
+      render();
+    }
     function onButton(ev) {
       var m = ev.currentTarget.getAttribute("data-m"), id = parseInt(ev.currentTarget.getAttribute("data-id"), 10);
       if (m === "start") {
-        if (prefs.sound) { melodyAudioInit(); }
+        if (prefs.sound) { startTones(); }
         melodyStopPlayback(true);
-        ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax });
+        ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog) });
       } else if (m === "preview") {
         preview();
+      } else if (m === "tone") {
+        previewTone(ev.currentTarget.getAttribute("data-v"));
+      } else if (m === "tone-reset") {
+        prefs.prog = melodyDefaultProg();
+        savePrefs();
+        render();
+      } else if (m === "midi-scan") {
+        scanMidi();
       } else if (m === "back") {
         ctl.back();
       } else if (m === "play") {
@@ -2978,6 +3304,13 @@
         melodyDeleteRec(id);
         render();
       }
+    }
+
+    // 前回MIDI機器を選んでいたら、許可済みのはずなので自動で探し直す
+    if (prefs.output !== "synth" && !melodyMidi.access && melodyMidi.status !== "unsupported") {
+      melodyRequestMidi(function () { applyOutput(); if (setupState && setupState.root === root) { render(); } });
+    } else {
+      applyOutput();
     }
     render();
   }
@@ -3007,14 +3340,17 @@
       var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };
       var stuck = true, lives = 3, level = 1, bricks = [], msg = 0, frame = 0;
       var notes = [], pops = [], recFull = false;
-      if (cfg.sound) { melodyAudioInit(); }
+      var prog = melodyCleanProg(cfg.prog);
+      if (cfg.sound) {
+        if (melodyMidi.out) { melodyMidiPrograms(prog); } else { melodyAudioInit(); }
+      }
 
       function noteAt(x, y) {
         var deg = cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
         return melodyDegreeToMidi(scale, key, deg);
       }
       function sound(midi, voice, x, y) {
-        if (cfg.sound) { melodyPlayNote(midi, voice); }
+        if (cfg.sound) { melodyNote(midi, voice, prog); }
         if (cfg.rec) {
           if (notes.length < MELODY_REC_NOTES_MAX) { notes.push([Math.round(frame * 1000 / 60), midi, voice]); }
           else { recFull = true; }
@@ -3054,8 +3390,9 @@
           if (type === "down") { launch(); }
         },
         finish: function (score) {
+          melodyMidiAllOff();
           if (!cfg.rec || !notes.length) { return; }
-          melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, notes: notes });
+          melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog, notes: notes });
         },
         step: function () {
           var k, s;
