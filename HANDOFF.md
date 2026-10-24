@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.76** |
+| 現在バージョン | **v0.77** |
 | ブランチ | main |
 
 ---
@@ -95,12 +95,15 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
+  - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
+  - 隠れた鳴り所 `d`（伴奏ドラム ch10）・`c`（伴奏コード ch5）を `MELODY_VOICES` に hidden で追加
+  - §154〜§158 のメロディくずしブラッシュアップ計画はすべて完了
 - **[v0.76] メロディくずし 録音のWAV書き出し・共有**（§157）
   - `melodyRenderWav`（OfflineAudioContext・描画中だけ melodyAudio の出力先を差し替え）/ `melodyEncodeWav` / `melodySaveBlob`（navigator.share → ダウンロード）
 - **[v0.75] メロディくずし ブロック配置モード＋横スクロール**（§156）
   - `melodyBuildLayout(layout, opts)` が {bricks, span, frets} を返す（pos/piano/guitar/ukulele/bass/drums/perc）。ブロックは x0 基準・`xsOf()` でスクロールと折り返し
   - `GM_DRUM_SYNTH` / `melodyDrum`（GMドラム35〜81）、`MELODY_LAYOUT_PROG`（楽器に合わせた音色）
-  - ブラッシュアップ残り: v0.77 テンポ同期・伴奏・コード進行
 - **[v0.74] メロディくずし 本物の楽器サンプル**（§155）
   - `samples/*.js`（16音色・FluidR3 GM CC BY 3.0 → `CREDITS.md`）。`MELODY_SAMPLE_FILES` / `melodyLoadSamples` / `melodySampleNote`（未読込なら合成音）
   - サンプル再作成はネットから gleitz/midi-js-soundfonts の `<name>-mp3.js` を取り、MIDI 36〜96 の長3度おきを抜き出す

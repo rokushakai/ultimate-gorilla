@@ -2700,7 +2700,10 @@
     { id: "b", name: "ブロック", ch: 0, def: 12, dur: 300 },
     { id: "p", name: "硬いブロック1回目", ch: 1, def: 24, dur: 150 },
     { id: "w", name: "壁", ch: 2, def: 8, dur: 600 },
-    { id: "s", name: "パドル", ch: 3, def: 32, dur: 350 }
+    { id: "s", name: "パドル", ch: 3, def: 32, dur: 350 },
+    // §158 v0.77: 伴奏（設定画面の音色欄には出さない）
+    { id: "d", name: "伴奏ドラム", ch: 9, def: 128, dur: 120, hidden: true },
+    { id: "c", name: "伴奏コード", ch: 4, def: 48, dur: 1500, hidden: true }
   ];
 
   var melodyAudio = { ctx: null, master: null, noise: null, bus: null, revSend: null, dlySend: null, fxRev: 1, fxDly: 0 };
@@ -3273,7 +3276,7 @@
   }
   function melodyMidiAllOff() {
     if (!melodyMidi.out) { return; }
-    var chs = [0, 1, 2, 3, 9];
+    var chs = [0, 1, 2, 3, 4, 9];
     for (var i = 0; i < chs.length; i++) { melodyMidiSend([0xB0 | chs[i], 123, 0]); }
   }
   function melodyMidiOutputs() {
@@ -3418,6 +3421,11 @@
       rows: MELODY_ROW_CHOICES.indexOf(p.rows) >= 0 ? p.rows : 3,
       scroll: (p.scroll >= 0 && p.scroll <= 3) ? p.scroll : 0,
       autoTone: p.autoTone !== false,
+      bpm: MELODY_BPMS.indexOf(p.bpm) >= 0 ? p.bpm : 0, // §158 v0.77
+      quant: p.quant === 16 ? 16 : 8,
+      groove: melodyFindById(MELODY_GROOVES, p.groove).id,
+      progId: melodyFindById(MELODY_PROGRESSIONS, p.progId).id,
+      pad: p.pad !== false,
       samples: p.samples !== false, // §155 v0.74: 本物の楽器サンプルを使う（既定ON）
       fxRev: (p.fxRev >= 0 && p.fxRev <= 3) ? p.fxRev : 1,
       fxDly: (p.fxDly >= 0 && p.fxDly <= 3) ? p.fxDly : 0,
@@ -3700,6 +3708,28 @@
       }
       return html;
     }
+    // §158 v0.77: テンポ・伴奏・コード進行の設定行
+    function tempoRows() {
+      var html = '<div class="melody-section-title">&#x1F941; テンポ・伴奏</div>' +
+        '<label class="melody-row"><span>テンポ（拍に合わせる）</span><select data-p="bpm">' +
+        optList("bpm", MELODY_BPMS, function (x) { return x; }, function (x) { return x ? x + " BPM" : "なし（すぐ鳴る）"; }) + '</select></label>';
+      if (prefs.bpm) {
+        html += '<label class="melody-row"><span>合わせる細かさ</span><select data-p="quant">' +
+          optList("quant", [8, 16], function (x) { return x; }, function (x) { return x + "分音符"; }) + '</select></label>' +
+          '<label class="melody-row"><span>伴奏ドラム</span><select data-p="groove">' +
+          optList("groove", MELODY_GROOVES, function (x) { return x.id; }, function (x) { return x.name; }) + '</select></label>';
+      } else {
+        html += '<p class="small" style="color:#adb5bd;margin:0 0 4px;">テンポを選ぶと、当たった音が拍に合わせて鳴り、伴奏ドラムも使えます。</p>';
+      }
+      html += '<label class="melody-row"><span>コード進行</span><select data-p="progId">' +
+        optList("progId", MELODY_PROGRESSIONS, function (x) { return x.id; }, function (x) { return x.name; }) + '</select></label>';
+      if (prefs.progId !== "none") {
+        html += '<div class="melody-checks"><label><input type="checkbox" data-p="pad"' + (prefs.pad ? " checked" : "") + '> コードを伴奏で鳴らす（ストリングス）</label>' +
+          '<span class="small" style="color:#adb5bd;">1小節ごとにコードが変わり、ブロック（いつもの配置）と壁の音がいまのコードの音に寄ります。パドルはコードの根音。' +
+          (prefs.bpm ? "" : "テンポなしのときは 120BPM の速さで進みます。") + '</span></div>';
+      }
+      return html;
+    }
     function sampleStatusText() {
       if (!prefs.samples) { return "合成音だけで鳴らします"; }
       var progs = melodyProgList(prefs.prog), names = [], loading = 0, ready = 0, err = 0, i;
@@ -3801,10 +3831,11 @@
       for (i = 0; i < MELODY_CHORD_AT.length; i++) {
         html += '<option value="' + MELODY_CHORD_AT[i].id + '"' + (MELODY_CHORD_AT[i].id === prefs.chordAt ? " selected" : "") + ">" + MELODY_CHORD_AT[i].name + "</option>";
       }
-      html += '</select></label>' +
+      html += '</select></label>' + tempoRows() +
         '<details class="melody-tones"' + (melodyToneOpen ? " open" : "") + '><summary>&#x1F3BB; 音色（GM）</summary>';
       for (i = 0; i < MELODY_VOICES.length; i++) {
         var mv = MELODY_VOICES[i];
+        if (mv.hidden) { continue; }
         html += '<div class="melody-row"><span>' + mv.name + '</span>' +
           '<select data-prog="' + mv.id + '">' + gmOptions(prefs.prog[mv.id]) + '</select>' +
           '<button class="arcade-mini-btn" data-m="tone" data-v="' + mv.id + '" title="試し聴き">&#x1F508;</button></div>';
@@ -3854,6 +3885,8 @@
           var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
           if (k === "fxRev" || k === "fxDly") { prefs[k] = parseInt(v, 10); melodySetFx(prefs.fxRev, prefs.fxDly); }
           else if (k === "oct" || k === "rows" || k === "scroll") { prefs[k] = parseInt(v, 10); if (prefs.layout === "piano") { savePrefs(); render(); return; } }
+          else if (k === "bpm" || k === "quant") { prefs[k] = parseInt(v, 10); savePrefs(); render(); return; }
+          else if (k === "progId") { prefs[k] = v; savePrefs(); render(); return; }
           else if (k === "layout") { prefs[k] = v; savePrefs(); render(); return; }
           else if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
           else if (k === "arp") { prefs[k] = v === "1"; }
@@ -3904,7 +3937,8 @@
         melodyStopPlayback(true);
         ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog),
           chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples,
-          layout: prefs.layout, oct: prefs.oct, rows: prefs.rows, scroll: prefs.scroll, autoTone: prefs.autoTone });
+          layout: prefs.layout, oct: prefs.oct, rows: prefs.rows, scroll: prefs.scroll, autoTone: prefs.autoTone,
+          bpm: prefs.bpm, quant: prefs.quant, groove: prefs.groove, progId: prefs.progId, pad: prefs.pad });
       } else if (m === "preview") {
         preview();
       } else if (m === "tone") {
@@ -3966,6 +4000,51 @@
   ];
   // 楽器に合わせた音色（ブロックの音）。drums/perc はドラムキット（ch10）
   var MELODY_LAYOUT_PROG = { piano: 0, guitar: 25, ukulele: 24, bass: 32, drums: 128, perc: 128 };
+  // §158 v0.77: テンポ・伴奏ドラム・コード進行
+  var MELODY_BPMS = [0, 70, 90, 110, 130, 150];
+  var MELODY_GROOVES = [
+    { id: "none", name: "なし" },
+    { id: "8beat", name: "8ビート", hits: [[36, [0, 8, 10], 0.7], [38, [4, 12], 0.6], [42, [0, 2, 4, 6, 8, 10, 12, 14], 0.3]] },
+    { id: "four", name: "4つ打ち", hits: [[36, [0, 4, 8, 12], 0.75], [39, [4, 12], 0.45], [46, [2, 6, 10, 14], 0.3]] },
+    { id: "shuffle", name: "シャッフル", hits: [[36, [0, 8], 0.7], [38, [4, 12], 0.55], [42, [0, 3, 4, 7, 8, 11, 12, 15], 0.3]] },
+    { id: "ballad", name: "バラード", hits: [[36, [0, 10], 0.6], [37, [8], 0.45], [42, [0, 4, 8, 12], 0.25], [51, [0], 0.2]] },
+    { id: "bossa", name: "ボサノバ", hits: [[36, [0, 3, 8, 11], 0.55], [37, [0, 3, 6, 10, 13], 0.4], [42, [0, 2, 4, 6, 8, 10, 12, 14], 0.2]] },
+    { id: "latin", name: "ラテン（クラーベ）", hits: [[75, [0, 3, 6, 10, 12], 0.45], [63, [2, 7, 10, 15], 0.45], [64, [4, 12], 0.5], [56, [0, 4, 8, 12], 0.3], [36, [0, 8], 0.5]] }
+  ];
+  // コード進行: [根音（キーからの半音）, 種類]
+  var MELODY_CHORD_TYPES = { "": [0, 4, 7], m: [0, 3, 7], "7": [0, 4, 7, 10], M7: [0, 4, 7, 11], m7: [0, 3, 7, 10] };
+  var MELODY_PROGRESSIONS = [
+    { id: "none", name: "なし" },
+    { id: "ohdo", name: "王道 I–V–vi–IV", seq: [[0, ""], [7, ""], [9, "m"], [5, ""]] },
+    { id: "fifties", name: "50s I–vi–IV–V", seq: [[0, ""], [9, "m"], [5, ""], [7, ""]] },
+    { id: "canon", name: "カノン I–V–vi–iii–IV–I–IV–V", seq: [[0, ""], [7, ""], [9, "m"], [4, "m"], [5, ""], [0, ""], [5, ""], [7, ""]] },
+    { id: "jpop", name: "J-POP王道 IV–V–iii–vi", seq: [[5, "M7"], [7, "7"], [4, "m7"], [9, "m"]] },
+    { id: "komuro", name: "小室進行 vi–IV–V–I", seq: [[9, "m"], [5, ""], [7, ""], [0, ""]] },
+    { id: "twofive", name: "ii–V–I", seq: [[2, "m7"], [7, "7"], [0, "M7"], [0, "M7"]] },
+    { id: "blues", name: "12小節ブルース", seq: [[0, "7"], [0, "7"], [0, "7"], [0, "7"], [5, "7"], [5, "7"], [0, "7"], [0, "7"], [7, "7"], [5, "7"], [0, "7"], [7, "7"]] },
+    { id: "minor", name: "マイナー i–VI–III–VII", seq: [[0, "m"], [8, ""], [3, ""], [10, ""]] }
+  ];
+  function melodyFindById(list, id) {
+    for (var i = 0; i < list.length; i++) { if (list[i].id === id) { return list[i]; } }
+    return list[0];
+  }
+  // 音を「いまのコードの音」のうち一番近い高さへ寄せる
+  function melodySnapToChord(midi, pcs) {
+    for (var d = 0; d <= 6; d++) {
+      if (pcs.indexOf(((midi - d) % 12 + 12) % 12) >= 0) { return midi - d; }
+      if (pcs.indexOf(((midi + d) % 12 + 12) % 12) >= 0) { return midi + d; }
+    }
+    return midi;
+  }
+  // root から上へコードの音を size 個積む
+  function melodyVoiceChord(root, pcs, size) {
+    var out = [root], m = root;
+    while (out.length < size && m < root + 36) {
+      m++;
+      if (pcs.indexOf(((m % 12) + 12) % 12) >= 0) { out.push(m); }
+    }
+    return out;
+  }
   var MELODY_SCROLL_SPEED = [0, 0.25, 0.5, 1.0];
   var MELODY_SCROLL_NAMES = ["なし", "ゆっくり", "ふつう", "はやい"];
   var MELODY_ROW_CHOICES = [2, 3, 4, 6];
@@ -4162,6 +4241,24 @@
 
       var chordSize = (cfg.chord === 3 || cfg.chord === 4 || cfg.chord === 5) ? cfg.chord : 1;
       var chordAt = cfg.chordAt || "bw";
+      // §158 v0.77: テンポ・伴奏・コード進行（時間はゲーム内フレーム基準＝一時停止で止まる）
+      var bpm = MELODY_BPMS.indexOf(cfg.bpm) > 0 ? cfg.bpm : 0, quant = cfg.quant === 16 ? 16 : 8;
+      var groove = melodyFindById(MELODY_GROOVES, cfg.groove), progn = melodyFindById(MELODY_PROGRESSIONS, cfg.progId);
+      var useGroove = groove.id !== "none" && bpm > 0, useProg = progn.id !== "none", usePad = useProg && cfg.pad !== false;
+      var stepMs = 60000 / (bpm || 120) / 4, nextStep = 0;
+      function songMs() { return frame * 1000 / 60; }
+      function chordInfo(bar) {
+        var c = progn.seq[((bar % progn.seq.length) + progn.seq.length) % progn.seq.length], root = (key + c[0]) % 12, iv = MELODY_CHORD_TYPES[c[1]], pcs = [];
+        for (var i = 0; i < iv.length; i++) { pcs.push((root + iv[i]) % 12); }
+        return { root: root, pcs: pcs, name: NOTE_NAMES[root] + c[1] };
+      }
+      function curChord() { return chordInfo(Math.floor(songMs() / (stepMs * 16))); }
+      // 次の拍（8分 or 16分）までの待ち時間（ms）
+      function quantDelay() {
+        if (!bpm) { return 0; }
+        var grid = 60000 / bpm * 4 / quant, t = songMs();
+        return Math.ceil(t / grid - 1e-6) * grid - t;
+      }
 
       function degAt(x, y) {
         return cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
@@ -4194,9 +4291,9 @@
       // 鳴らす・録音する・音名/コード名/楽器名を浮かべる
       function playMidis(midis, voice, x, y, label) {
         var lv = midis.length > 1 ? 1 / Math.sqrt(midis.length) : 1;
-        var now = perfNow(), tms = Math.round(frame * 1000 / 60);
+        var now = perfNow(), tms = Math.round(frame * 1000 / 60), qd = Math.round(quantDelay());
         for (var i = 0; i < midis.length; i++) {
-          var off = (cfg.arp && i > 0) ? i * 45 : 0;
+          var off = qd + ((cfg.arp && i > 0) ? i * 45 : 0);
           if (cfg.sound) { melodyNote(midis[i], voice, prog, off ? now + off : 0, lv); }
           if (cfg.rec) {
             if (notes.length < MELODY_REC_NOTES_MAX) {
@@ -4212,7 +4309,41 @@
       }
       // 度数を根音に（いつもの配置・壁・パドル）
       function sound(deg, voice, x, y, shift) {
+        if (useProg) {
+          // §158: コード進行中は、いまのコードの音へ寄せる。パドルはコードの根音のベース
+          var ci = curChord(), size = sizeFor(voice), root;
+          if (voice === "s") { root = 36 + ci.root; }
+          else { root = melodySnapToChord(melodyDegreeToMidi(scale, key, deg) + (shift || 0), ci.pcs); }
+          playMidis(size > 1 ? melodyVoiceChord(root, ci.pcs, size) : [root], voice, x, y);
+          return;
+        }
         playMidis(melodyChordMidis(scale, key, deg, sizeFor(voice), shift || 0), voice, x, y);
+      }
+      // 伴奏の1音（予約して鳴らし、拍ちょうどの時刻で録音）
+      function emitAcc(midi, voice, atMs, delay, lv) {
+        if (cfg.sound) { melodyNote(midi, voice, prog, delay > 0 ? perfNow() + delay : 0, lv); }
+        if (cfg.rec) {
+          if (notes.length < MELODY_REC_NOTES_MAX) { notes.push([Math.round(atMs), midi, voice, lv]); }
+          else { recFull = true; }
+        }
+      }
+      // 先読みして、これから60ms以内の拍の伴奏を予約する
+      function scheduleAcc() {
+        if (!useGroove && !usePad) { return; }
+        var t = songMs(), i, j;
+        while (nextStep * stepMs <= t + 60) {
+          var st = nextStep % 16, at = nextStep * stepMs, delay = Math.max(0, at - t);
+          if (useGroove) {
+            for (i = 0; i < groove.hits.length; i++) {
+              if (groove.hits[i][1].indexOf(st) >= 0) { emitAcc(groove.hits[i][0], "d", at, delay, groove.hits[i][2]); }
+            }
+          }
+          if (usePad && st === 0) {
+            var ci = chordInfo(Math.floor(nextStep / 16)), pm = melodyVoiceChord(48 + ci.root, ci.pcs, Math.min(4, ci.pcs.length));
+            for (j = 0; j < pm.length; j++) { emitAcc(pm[j], "c", at, delay, 0.3); }
+          }
+          nextStep++;
+        }
       }
       function speed() { return Math.min(6, 3.2 + (level - 1) * 0.4); }
       function build() {
@@ -4254,11 +4385,13 @@
           // アルペジオの時差で前後するので時刻順に並べ直す
           notes.sort(function (a, b) { return a[0] - b[0]; });
           melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog,
-            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, fxRev: melodyAudio.fxRev || 0, layout: layout, notes: notes });
+            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, fxRev: melodyAudio.fxRev || 0, layout: layout,
+            bpm: bpm, groove: groove.id, progId: progn.id, notes: notes });
         },
         step: function () {
           var k, s, j;
           frame++;
+          scheduleAcc();
           if (msg > 0) { msg--; }
           if (scrollSpd) { offset -= scrollSpd; }
           for (k = pops.length - 1; k >= 0; k--) { pops[k].t--; if (pops[k].t <= 0) { pops.splice(k, 1); } }
@@ -4426,6 +4559,15 @@
             ctx.fillText((recFull ? "REC満杯 " : "● REC ") + notes.length, W - 6, 26);
           }
           hudText(ctx, "LIFE " + (cfg.relax ? "∞" : lives) + "   LEVEL " + level + (cfg.sound ? "" : "   🔇"), 6, 312);
+          // §158: テンポ・いまのコード・拍の点
+          if (bpm || useProg) {
+            var tm = songMs(), beatMs = stepMs * 4, beatPhase = (tm % beatMs) / beatMs, beatNo = Math.floor(tm / beatMs) % 4;
+            hudText(ctx, (bpm ? "♩" + bpm + " " : "") + (useProg ? curChord().name : ""), W - 40, 312, "right");
+            for (k = 0; k < 4; k++) {
+              ctx.fillStyle = k === beatNo ? (beatPhase < 0.25 ? "#ffd166" : "#b38f3a") : "#3d3d5c";
+              ctx.beginPath(); ctx.arc(W - 32 + k * 8, 312, 2.5, 0, Math.PI * 2); ctx.fill();
+            }
+          }
           if (stuck) { hudText(ctx, "タップ or 発射でスタート", W / 2, 220, "center"); }
           if (msg > 0) {
             ctx.fillStyle = "#55efc4";
