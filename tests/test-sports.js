@@ -81,7 +81,7 @@ module.exports = function () {
   ok(res.length > 0 && res.every(function (x) { return x === "miss"; }), "swinging far too early (tap) is a miss", res);
 
   // ===== 🎸 ウクレレ =====
-  var all = U.chordSet("hard"), names = {}, badChord = [];
+  var all = U.chordSet("hard").concat(U.chords.extra), names = {}, badChord = [];
   all.forEach(function (c) {
     if (names[c.name]) { badChord.push("dup " + c.name); }
     names[c.name] = true;
@@ -130,6 +130,24 @@ module.exports = function () {
   ok(trace.osc1 - trace.osc0 >= 4, "a swipe across 4 strings plays 4 notes", trace);
   ok(trace.wrongSeen && trace.afterWrong === 1, "a wrong shape shows ✕ / おしい and does not score", trace);
   ok(r.ended !== null && r.ended >= 100, "chord practice ends at 60 seconds with the score", r);
+
+  // §168 コード進行: 使うコードが全部押さえ方を持つ・お手本どおり2周で CLEAR!
+  var missing = [];
+  U.progressions.forEach(function (pg) { pg.chords.forEach(function (n) { if (!U.byName[n]) { missing.push(pg.id + ":" + n); } }); });
+  ok(missing.length === 0 && U.progressions.length === 6, "every progression chord has a shape", missing);
+  ok(U.chordSet("hard").every(function (c) { return c.name !== "Fmaj7" && c.name !== "Gm7"; }), "progression-only chords are not in the quiz sets");
+  var pgDone = 0;
+  r = env.run("ukulele", { config: { mode: "prog:canon" } }, 4000, function (f, e) {
+    if (f % 10 === 5) {
+      var u = W.__uke();
+      if (!u.target) { return; }
+      var ids = holdShape(e, u.target.shape);
+      swipe(e, 9);
+      ids.forEach(function (id) { e.ptr("up", 0, 0, id); });
+      pgDone = W.__uke().correct;
+    }
+  });
+  ok(r.ended !== null && env.lastTitle() === "CLEAR!" && pgDone === 16 && r.ended >= 1600, "playing the canon progression twice clears it", { ended: r.ended, done: pgDone, title: env.lastTitle() });
 
   // マウスはクリックで押さえる/はなす
   var mouse = null;

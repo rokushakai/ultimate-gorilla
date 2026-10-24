@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.86** |
+| 現在バージョン | **v0.87** |
 | ブランチ | main |
 
 ---
@@ -101,6 +101,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.87] 🎸 ウクレレ「コード進行で練習」**（§168）: `UKE_PROGRESSIONS`（mode は "prog:<id>"）・`UKE_CHORDS.extra`（Fmaj7/Gm7）・`UKE_BY_NAME`
 - **[v0.86] ⚾ バッティングセンター・🎸 ウクレレ**（§167）
   - arcade.js `bindCanvas`: 指ごとに追いかけて `pointer(type, x, y, id, kind)`。ピンボールは指ごとにフリッパー
   - arcade-sports.js: `batGrade`（±1 HR / ±3 長打 / ±5 ヒット / ±7 ファウル）、`batMakePitch`。arcade-ukulele.js: `ukeCellAt` / `ukeCrossed`（スワイプで通った弦）/ `ukeFrets`（弦ごとの最高フレット）/ `UKE_CHORDS`
@@ -123,7 +124,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（308項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（311項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
