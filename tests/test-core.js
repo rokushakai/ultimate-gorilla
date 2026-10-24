@@ -39,7 +39,7 @@ module.exports = function () {
 
   // --- 登録・内部API ---
   var ids = A.list().map(function (g) { return g.id; });
-  ["blocks", "shooter", "pinball", "breakout", "melody", "snake", "tennis", "crossing", "mole", "sweeper", "g2048", "reversi", "slide", "memory", "meteor", "defense", "lyrics", "gomoku", "sudoku", "solitaire"].forEach(function (id) {
+  ["blocks", "shooter", "pinball", "breakout", "melody", "snake", "tennis", "crossing", "mole", "sweeper", "g2048", "reversi", "slide", "memory", "meteor", "defense", "lyrics", "gomoku", "sudoku", "solitaire", "batting", "ukulele"].forEach(function (id) {
     ok(ids.indexOf(id) >= 0, "game registered: " + id);
   });
   ok(ids.indexOf("melody") === ids.indexOf("breakout") + 1 && ids.indexOf("lyrics") === ids.indexOf("melody") + 1, "melody and lyrics listed right after breakout");
@@ -48,7 +48,7 @@ module.exports = function () {
   ok(badCat.length === 0, "every game has a menu category (action/puzzle/music)", badCat);
 
   // --- 全ゲームのスモーク（例外なく動く） ---
-  ids.filter(function (id) { return id !== "melody" && id !== "lyrics" && id !== "sudoku"; }).forEach(function (id) {
+  ids.filter(function (id) { return ["melody", "lyrics", "sudoku", "batting", "ukulele"].indexOf(id) < 0; }).forEach(function (id) {
     var err = null, r;
     try {
       r = env.run(id, {}, 3000, function (f, e) {

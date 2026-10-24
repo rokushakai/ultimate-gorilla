@@ -156,7 +156,7 @@ function load(opts) {
   };
   var ctx = vm.createContext(sandbox);
   // opts.patch(src, file): テストだけで中身をのぞくための置換（本体のファイルは変更しない）
-  (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js"]).forEach(function (f) {
+  (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-ukulele.js"]).forEach(function (f) {
     var src = fs.readFileSync(path.join(ROOT, f), "utf8");
     if (opts.patch) { src = opts.patch(src, f); }
     vm.runInContext(src, ctx, { filename: f });
@@ -169,10 +169,11 @@ function load(opts) {
       f({ key: k, repeat: false, cancelable: true, preventDefault: function () {}, stopPropagation: function () { counters.stopped++; } });
     });
   };
-  env.ptr = function (type, x, y) {
+  // id: 指の番号（省略時 1）、kind: "touch" / "mouse"（省略時はなし＝タッチ扱い）
+  env.ptr = function (type, x, y, id, kind) {
     if (!env.canvas) { return; }
     (env.canvas.listeners["pointer" + type] || []).forEach(function (f) {
-      f({ clientX: x, clientY: y === undefined ? 300 : y, pointerId: 1, cancelable: true, preventDefault: function () {} });
+      f({ clientX: x, clientY: y === undefined ? 300 : y, pointerId: id === undefined ? 1 : id, pointerType: kind, cancelable: true, preventDefault: function () {} });
     });
   };
   env.tap = function (x, y) { env.ptr("down", x, y); env.ptr("up", x, y); };

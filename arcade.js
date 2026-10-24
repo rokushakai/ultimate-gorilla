@@ -179,37 +179,59 @@
     send(act, false);
   }
   // キャンバス直接入力（タップ・ドラッグ・スワイプ）。座標は論理解像度 240×320
+  // §167 v0.86: 指ごとに追いかける（pointer(type, x, y, 指の番号, 種類)）
   function bindCanvas(canvas) {
-    var pressed = false;
-    function pos(ev) {
+    var active = {};
+    function pos(src) {
       var r = canvas.getBoundingClientRect();
-      var src = (ev.changedTouches && ev.changedTouches[0]) ? ev.changedTouches[0] : ev;
       var rw = r.width || W, rh = r.height || H;
       return [(src.clientX - r.left) * W / rw, (src.clientY - r.top) * H / rh];
     }
-    function deliver(type, ev) {
+    function deliver(type, src, id, kind) {
       if (!host || !host.game || !host.game.pointer) { return; }
       if (type !== "up" && (host.paused || host.over)) { return; }
-      var p = pos(ev);
-      host.game.pointer(type, p[0], p[1]);
+      var p = pos(src);
+      host.game.pointer(type, p[0], p[1], id, kind);
+    }
+    // ev から [ {src, id, kind} ] を作る（タッチは変化した指ぜんぶ）
+    function points(ev) {
+      if (ev.changedTouches && ev.changedTouches.length) {
+        var out = [];
+        for (var i = 0; i < ev.changedTouches.length; i++) {
+          out.push({ src: ev.changedTouches[i], id: "t" + ev.changedTouches[i].identifier, kind: "touch" });
+        }
+        return out;
+      }
+      if (ev.pointerId !== undefined) { return [{ src: ev, id: ev.pointerId, kind: ev.pointerType || "touch" }]; }
+      return [{ src: ev, id: "m", kind: "mouse" }];
     }
     function down(ev) {
       if (ev.cancelable) { ev.preventDefault(); }
-      pressed = true;
       if (ev.pointerId !== undefined && canvas.setPointerCapture) {
         try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
       }
-      deliver("down", ev);
+      var ps = points(ev);
+      for (var i = 0; i < ps.length; i++) {
+        active[ps[i].id] = true;
+        deliver("down", ps[i].src, ps[i].id, ps[i].kind);
+      }
     }
     function move(ev) {
-      if (!pressed) { return; }
-      if (ev.cancelable) { ev.preventDefault(); }
-      deliver("move", ev);
+      var ps = points(ev), any = false;
+      for (var i = 0; i < ps.length; i++) {
+        if (!active[ps[i].id]) { continue; }
+        any = true;
+        deliver("move", ps[i].src, ps[i].id, ps[i].kind);
+      }
+      if (any && ev.cancelable) { ev.preventDefault(); }
     }
     function up(ev) {
-      if (!pressed) { return; }
-      pressed = false;
-      deliver("up", ev);
+      var ps = points(ev);
+      for (var i = 0; i < ps.length; i++) {
+        if (!active[ps[i].id]) { continue; }
+        delete active[ps[i].id];
+        deliver("up", ps[i].src, ps[i].id, ps[i].kind);
+      }
     }
     if (window.PointerEvent) {
       canvas.addEventListener("pointerdown", down);
@@ -901,7 +923,7 @@
     name: "ゴリラピンボール",
     icon: "&#x1F3AF;",
     desc: "フリッパーでボールを打ち返してバンパーを狙おう",
-    help: "Z/←左フリッパー / M/→右フリッパー / Space/↓発射（長押しでため） / 画面の左半分・右半分タップでもフリッパー / P一時停止",
+    help: "Z/←左フリッパー / M/→右フリッパー / Space/↓発射（長押しでため） / 画面の左半分・右半分をさわってもフリッパー（2本指OK） / P一時停止",
     controls: [
       { action: "left", label: "&#x2196;&#xFE0F; 左" },
       { action: "launch", label: "&#x1F680; 発射" },
@@ -941,6 +963,7 @@
       var balls = 3, charge = 0, launchHeld = false, bonusMsg = 0;
       // §166 v0.85: 発射から5秒以内に落ちたら1球につき1回だけ戻す（ボールセーブ）
       var SAVE_FRAMES = 300, saveT = 0, saveUsed = false, saveMsg = 0;
+      var fingers = {}; // 指の番号 → 0 左 / 1 右
 
       function readyBall() {
         ball.x = 220; ball.y = 300; ball.vx = 0; ball.vy = 0;
@@ -1034,14 +1057,23 @@
           else if (action === "launch") { launchInput(down); }
         },
         // 画面の左半分＝左フリッパー、右半分＝右フリッパー。発射待ちのときは長押し→離すで発射
-        pointer: function (type, x) {
+        // §167 v0.86: 指ごとにどちらのフリッパーかを覚え、離した指の側だけ下げる
+        pointer: function (type, x, y, id) {
           if (type === "down") {
             if (mode === "ready") { launchInput(true); }
-            flippers[x < W / 2 ? 0 : 1].held = true;
+            var side = x < W / 2 ? 0 : 1;
+            fingers[id] = side;
+            flippers[side].held = true;
           } else if (type === "up") {
             if (launchHeld) { launchInput(false); }
-            flippers[0].held = false;
-            flippers[1].held = false;
+            var sd = fingers[id];
+            delete fingers[id];
+            for (var s2 = 0; s2 < 2; s2++) {
+              if (sd !== undefined && sd !== s2) { continue; }
+              var still = false;
+              for (var k in fingers) { if (fingers.hasOwnProperty(k) && fingers[k] === s2) { still = true; } }
+              if (!still) { flippers[s2].held = false; }
+            }
           }
         },
         step: function () {
