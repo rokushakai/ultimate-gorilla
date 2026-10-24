@@ -381,8 +381,296 @@
     }
   });
 
+  // ---------------------------------------------------------
+  // 🃏 ゴリラソリティア（クロンダイク・1枚めくり）§164
+  // ---------------------------------------------------------
+  var SOL_SUITS = ["♠", "♥", "♦", "♣"], SOL_RANKS = ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  function solRed(c) { return c.s === 1 || c.s === 2; }
+  function solDeal() {
+    var deck = [], s, r, c, k;
+    for (s = 0; s < 4; s++) { for (r = 1; r <= 13; r++) { deck.push({ s: s, r: r, up: false }); } }
+    shuffle(deck);
+    var tab = [[], [], [], [], [], [], []];
+    for (c = 0; c < 7; c++) { for (k = 0; k <= c; k++) { var card = deck.pop(); card.up = k === c; tab[c].push(card); } }
+    return { tab: tab, stock: deck, waste: [], found: [[], [], [], []] };
+  }
+  function solTop(a) { return a.length ? a[a.length - 1] : null; }
+  function solCanFound(card, pile) { var t = solTop(pile); return t ? (t.s === card.s && card.r === t.r + 1) : card.r === 1; }
+  function solCanTab(card, col) { var t = solTop(col); return t ? (t.up && solRed(t) !== solRed(card) && card.r === t.r - 1) : card.r === 13; }
+  // src: { kind: "waste" } / { kind: "found", col } / { kind: "tab", col, idx } → 動かすカードの並び
+  function solCardsOf(st, src) {
+    if (src.kind === "waste") { return st.waste.length ? [solTop(st.waste)] : null; }
+    if (src.kind === "found") { return st.found[src.col].length ? [solTop(st.found[src.col])] : null; }
+    var col = st.tab[src.col];
+    if (!col || src.idx < 0 || src.idx >= col.length || !col[src.idx].up) { return null; }
+    return col.slice(src.idx);
+  }
+  // src を置ける場所（組札優先 → 場札の左から）。なければ null
+  function solFindDest(st, src) {
+    var cards = solCardsOf(st, src);
+    if (!cards) { return null; }
+    var first = cards[0], i;
+    if (cards.length === 1 && src.kind !== "found") {
+      for (i = 0; i < 4; i++) { if (solCanFound(first, st.found[i])) { return { kind: "found", i: i }; } }
+    }
+    for (i = 0; i < 7; i++) {
+      if (src.kind === "tab" && src.col === i) { continue; }
+      if (!solCanTab(first, st.tab[i])) { continue; }
+      if (first.r === 13 && !st.tab[i].length && src.kind === "tab" && src.idx === 0) { continue; }
+      return { kind: "tab", i: i };
+    }
+    return null;
+  }
+  // 動かす。得点の増減を返す
+  function solApply(st, src, dst) {
+    var cards = solCardsOf(st, src), delta = 0;
+    if (!cards) { return 0; }
+    if (src.kind === "waste") { st.waste.pop(); }
+    else if (src.kind === "found") { st.found[src.col].pop(); delta -= 10; }
+    else {
+      st.tab[src.col].length = src.idx;
+      var nt = solTop(st.tab[src.col]);
+      if (nt && !nt.up) { nt.up = true; delta += 5; }
+    }
+    var target = dst.kind === "found" ? st.found[dst.i] : st.tab[dst.i];
+    for (var k = 0; k < cards.length; k++) { target.push(cards[k]); }
+    if (dst.kind === "found") { delta += 10; }
+    return delta;
+  }
+  function solDraw(st) {
+    if (st.stock.length) { var c = st.stock.pop(); c.up = true; st.waste.push(c); return true; }
+    if (st.waste.length) { while (st.waste.length) { var w = st.waste.pop(); w.up = false; st.stock.push(w); } return true; }
+    return false;
+  }
+  // 意味のある手（組札へ・捨て札から場札へ・裏が表になる/列が空く場札の移動）。行ったり来たりの手は数えない
+  function solUsefulMoves(st) {
+    var out = [], c, i, src, dst;
+    src = { kind: "waste" };
+    dst = solFindDest(st, src);
+    if (dst) { out.push({ src: src, dst: dst }); }
+    for (c = 0; c < 7; c++) {
+      var col = st.tab[c];
+      for (i = 0; i < col.length; i++) {
+        if (!col[i].up) { continue; }
+        src = { kind: "tab", col: c, idx: i };
+        dst = solFindDest(st, src);
+        if (!dst) { continue; }
+        var reveals = i > 0 && !col[i - 1].up, empties = i === 0 && col[i].r !== 13;
+        if (dst.kind === "found" || reveals || empties) { out.push({ src: src, dst: dst }); }
+      }
+    }
+    out.sort(function (a, b) { return (a.dst.kind === "found" ? 0 : 1) - (b.dst.kind === "found" ? 0 : 1); });
+    return out;
+  }
+  // 山札・捨て札の中に、どこかへ置ける札があるか
+  function solStockHasPlay(st) {
+    var cards = st.stock.concat(st.waste);
+    for (var i = 0; i < cards.length; i++) {
+      for (var f = 0; f < 4; f++) { if (solCanFound(cards[i], st.found[f])) { return true; } }
+      for (var c = 0; c < 7; c++) { if (solCanTab(cards[i], st.tab[c])) { return true; } }
+    }
+    return false;
+  }
+  // ヒント: 意味のある手 / "draw"（山札をめくる） / null（手詰まり）
+  function solHint(st) {
+    var mv = solUsefulMoves(st);
+    if (mv.length) { return mv[0]; }
+    return solStockHasPlay(st) ? "draw" : null;
+  }
+  function solFoundCount(st) { return st.found[0].length + st.found[1].length + st.found[2].length + st.found[3].length; }
+
+  I.register({
+    id: "solitaire",
+    after: "sudoku",
+    cat: "puzzle",
+    name: "ゴリラソリティア",
+    icon: "&#x1F0CF;",
+    desc: "クロンダイク。タップだけでカードが置ける場所へ動く",
+    help: "カードをタップすると置ける場所へ動く / 山札タップでめくる / Space めくる・U 戻す・H ヒント・A 自動 / P一時停止",
+    controls: [
+      { action: "undo", label: "&#x21B6; 戻す" },
+      { action: "hint", label: "&#x1F4A1; ヒント" },
+      { action: "auto", label: "&#x1F3C1; 自動" }
+    ],
+    keys: { " ": "draw", "u": "undo", "U": "undo", "h": "hint", "H": "hint", "a": "auto", "A": "auto" },
+    create: function (api) {
+      var CW = 30, CH = 42, GAP = 3, OX = (W - (7 * CW + 6 * GAP)) / 2, TOPY = 18, TABY = 68, MAXY = 304;
+      var st = solDeal(), undoStack = [], frames = 0, ended = false, flash = null, hint = null, msg = "", msgT = 0, moves = 0;
+
+      function colX(c) { return OX + c * (CW + GAP); }
+      // 場札の各カードのy（長い列は詰める）
+      function tabYs(col) {
+        var down = 5, up = 13, ys = [], y = TABY, i, last = col.length - 1;
+        var need = 0;
+        for (i = 0; i < last; i++) { need += col[i].up ? up : down; }
+        if (TABY + need + CH > MAXY && need > 0) {
+          var k = (MAXY - CH - TABY) / need;
+          down *= k; up *= k;
+        }
+        for (i = 0; i < col.length; i++) { ys.push(y); y += col[i].up ? up : down; }
+        return ys;
+      }
+      function snapshot() {
+        undoStack.push({ st: JSON.parse(JSON.stringify(st)), score: api.getScore() });
+        if (undoStack.length > 50) { undoStack.shift(); }
+      }
+      function afterMove() {
+        moves++;
+        hint = null;
+        if (solFoundCount(st) === 52) {
+          ended = true;
+          api.addScore(Math.max(0, 3000 - Math.floor(frames / 60) * 3));
+          api.gameOver("CLEAR!");
+          return;
+        }
+        if (!solHint(st)) {
+          ended = true;
+          msg = "もう動かせる手がありません";
+          msgT = 999;
+          api.gameOver();
+        }
+      }
+      function tryMove(src) {
+        var dst = solFindDest(st, src);
+        if (!dst) { flash = { src: src, t: 20 }; return; }
+        snapshot();
+        api.addScore(solApply(st, src, dst));
+        afterMove();
+      }
+      function draw() {
+        if (!st.stock.length && !st.waste.length) { return; }
+        snapshot();
+        solDraw(st);
+        afterMove();
+      }
+      function autoUp() {
+        var moved = false, again = true;
+        while (again && !ended) {
+          again = false;
+          var srcs = [{ kind: "waste" }];
+          for (var c = 0; c < 7; c++) { if (st.tab[c].length) { srcs.push({ kind: "tab", col: c, idx: st.tab[c].length - 1 }); } }
+          for (var i = 0; i < srcs.length; i++) {
+            var cards = solCardsOf(st, srcs[i]);
+            if (!cards || cards.length !== 1) { continue; }
+            for (var f = 0; f < 4; f++) {
+              if (solCanFound(cards[0], st.found[f])) {
+                if (!moved) { snapshot(); }
+                moved = again = true;
+                api.addScore(solApply(st, srcs[i], { kind: "found", i: f }));
+                break;
+              }
+            }
+            if (again) { break; }
+          }
+        }
+        if (moved) { afterMove(); } else { msg = "上げられるカードがありません"; msgT = 60; }
+      }
+      function undo() {
+        var u = undoStack.pop();
+        if (!u) { return; }
+        st = u.st;
+        api.addScore(u.score - api.getScore());
+        hint = null;
+      }
+      function hitTest(px, py) {
+        var c, i;
+        if (py >= TOPY && py <= TOPY + CH) {
+          if (px >= colX(0) && px <= colX(0) + CW) { return { kind: "stock" }; }
+          if (px >= colX(1) && px <= colX(1) + CW) { return { kind: "waste" }; }
+          for (i = 0; i < 4; i++) { if (px >= colX(3 + i) && px <= colX(3 + i) + CW) { return { kind: "found", col: i }; } }
+          return null;
+        }
+        for (c = 0; c < 7; c++) {
+          if (px < colX(c) || px > colX(c) + CW) { continue; }
+          var col = st.tab[c], ys = tabYs(col);
+          for (i = col.length - 1; i >= 0; i--) {
+            var hh = i === col.length - 1 ? CH : ys[i + 1] - ys[i]; // 重なって見えている部分だけが当たり
+            if (py >= ys[i] && py <= ys[i] + hh) { return { kind: "tab", col: c, idx: i }; }
+          }
+        }
+        return null;
+      }
+      function drawCard(ctx, card, x, y, hl) {
+        ctx.fillStyle = card.up ? "#ffffff" : "#2d6cdf";
+        ctx.fillRect(x, y, CW, CH);
+        ctx.strokeStyle = hl || "#636e72";
+        ctx.lineWidth = hl ? 2 : 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, CW - 1, CH - 1);
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "center";
+        if (!card.up) {
+          ctx.font = "13px sans-serif";
+          ctx.fillText("🦍", x + CW / 2, y + CH / 2);
+          return;
+        }
+        ctx.fillStyle = solRed(card) ? "#d63031" : "#2d3436";
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(SOL_RANKS[card.r] + SOL_SUITS[card.s], x + 2, y + 7);
+        ctx.textAlign = "center";
+        ctx.font = "15px sans-serif";
+        ctx.fillText(SOL_SUITS[card.s], x + CW / 2, y + CH / 2 + 5);
+      }
+      function same(a, b) { return a && b && a.kind === b.kind && a.col === b.col && a.idx === b.idx; }
+      function hlFor(src) {
+        if (flash && flash.t > 0 && same(flash.src, src)) { return "#ff7675"; }
+        if (hint && hint !== "draw" && same(hint.src, src)) { return "#fdcb6e"; }
+        return null;
+      }
+
+      return {
+        input: function (action, down) {
+          if (!down || ended) { return; }
+          if (action === "draw") { draw(); }
+          else if (action === "undo") { undo(); }
+          else if (action === "auto") { autoUp(); }
+          else if (action === "hint") { hint = solHint(st); msg = hint ? (hint === "draw" ? "山札をめくろう" : "光っているカードを動かそう") : "手がありません"; msgT = 120; }
+        },
+        pointer: function (type, px, py) {
+          if (type !== "down" || ended) { return; }
+          var h = hitTest(px, py);
+          if (!h) { return; }
+          if (h.kind === "stock") { draw(); return; }
+          if (h.kind === "tab" && !st.tab[h.col][h.idx].up) { return; }
+          tryMove(h);
+        },
+        step: function () {
+          if (!ended) { frames++; }
+          if (flash && flash.t > 0) { flash.t--; }
+          if (msgT > 0 && msgT < 999) { msgT--; if (msgT === 0) { hint = null; } }
+        },
+        draw: function (ctx) {
+          var c, i;
+          ctx.fillStyle = "#0b6e4f";
+          ctx.fillRect(0, 0, W, H);
+          // 山札・捨て札・組札
+          ctx.strokeStyle = "rgba(255,255,255,0.35)";
+          ctx.lineWidth = 1;
+          for (i = 0; i < 7; i++) { if (i !== 2) { ctx.strokeRect(colX(i) + 0.5, TOPY + 0.5, CW - 1, CH - 1); } }
+          if (st.stock.length) { drawCard(ctx, { up: false }, colX(0), TOPY, hint === "draw" ? "#fdcb6e" : null); }
+          else { ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.font = "16px sans-serif"; ctx.textAlign = "center"; ctx.fillText("↻", colX(0) + CW / 2, TOPY + CH / 2); }
+          if (st.waste.length) { drawCard(ctx, solTop(st.waste), colX(1), TOPY, hlFor({ kind: "waste" })); }
+          for (i = 0; i < 4; i++) {
+            if (st.found[i].length) { drawCard(ctx, solTop(st.found[i]), colX(3 + i), TOPY, hlFor({ kind: "found", col: i })); }
+            else { ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center"; ctx.fillText("A", colX(3 + i) + CW / 2, TOPY + CH / 2); }
+          }
+          // 場札
+          for (c = 0; c < 7; c++) {
+            var col = st.tab[c], ys = tabYs(col);
+            if (!col.length) { ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.strokeRect(colX(c) + 0.5, TABY + 0.5, CW - 1, CH - 1); }
+            for (i = 0; i < col.length; i++) { drawCard(ctx, col[i], colX(c), ys[i], hlFor({ kind: "tab", col: c, idx: i })); }
+          }
+          hudText(ctx, "組札 " + solFoundCount(st) + "/52   手数 " + moves + "   ⏱ " + Math.floor(frames / 60) + "秒   山 " + st.stock.length, W / 2, 10, "center");
+          if (msgT > 0) { hudText(ctx, msg, W / 2, 312, "center"); }
+        }
+      };
+    }
+  });
+
   // テスト用（ゲームの動作には使わない）
   window.UGTable = {
+    solDeal: solDeal, solCanFound: solCanFound, solCanTab: solCanTab, solFindDest: solFindDest, solApply: solApply, solDraw: solDraw,
+    solHint: solHint, solUsefulMoves: solUsefulMoves, solFoundCount: solFoundCount,
     gomokuNewBoard: gomokuNewBoard, gomokuWinLine: gomokuWinLine, gomokuBestMove: gomokuBestMove, gomokuEval: gomokuEval, GN: GN,
     sudokuMake: sudokuMake, sudokuSolve: sudokuSolve, sudokuValid: sudokuValid, sudokuFull: sudokuFull, sudokuLevels: SUDOKU_LEVELS
   };

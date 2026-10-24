@@ -7,8 +7,10 @@ function patch(src, file) {
   if (file !== "arcade-table.js") { return src; }
   var a = "var lv = sudokuLevel(cfg && cfg.level), data = sudokuMake(lv.id);";
   var b = "var board = gomokuNewBoard(), turn = 1,";
-  if (src.indexOf(a) < 0 || src.indexOf(b) < 0) { throw new Error("table patch target missing"); }
-  return src.split(a).join(a + " window.__sd = data;").split(b).join("var board = window.__gb = gomokuNewBoard(), turn = 1,");
+  var c = "var st = solDeal(), undoStack = [],";
+  if (src.indexOf(a) < 0 || src.indexOf(b) < 0 || src.indexOf(c) < 0) { throw new Error("table patch target missing"); }
+  return src.split(a).join(a + " window.__sd = data;").split(b).join("var board = window.__gb = gomokuNewBoard(), turn = 1,")
+    .split(c).join("var st = solDeal(), undoStack = []; window.__solGet = function () { return st; }; window.__solSet = function (s) { st = s; }; var");
 }
 
 module.exports = function () {
@@ -97,6 +99,87 @@ module.exports = function () {
     }
   });
   ok(r.ended !== null && env.lastTitle() === "GAME OVER", "sudoku: three mistakes end the game", { ended: r.ended, title: env.lastTitle() });
+  // --- ソリティア ---
+  var d0 = T.solDeal(), all = [];
+  d0.tab.forEach(function (col, ci) { col.forEach(function (cd, k) { all.push(cd); if (cd.up !== (k === ci)) { all.bad = true; } }); });
+  all = all.concat(d0.stock);
+  var keys = {}; all.forEach(function (cd) { keys[cd.s + ":" + cd.r] = 1; });
+  ok(!all.bad && d0.tab.map(function (col) { return col.length; }).join("") === "1234567" && d0.stock.length === 24 && Object.keys(keys).length === 52, "solitaire deal: 1-7 columns, top face-up, 24 in stock, 52 unique cards");
+  ok(T.solCanFound({ s: 1, r: 1 }, []) && !T.solCanFound({ s: 1, r: 2 }, []) && T.solCanFound({ s: 1, r: 2 }, [{ s: 1, r: 1 }]) && !T.solCanFound({ s: 2, r: 2 }, [{ s: 1, r: 1 }]), "foundation rules (A first, same suit up)");
+  ok(T.solCanTab({ s: 1, r: 6 }, [{ s: 0, r: 7, up: true }]) && !T.solCanTab({ s: 2, r: 6 }, [{ s: 1, r: 7, up: true }]) && T.solCanTab({ s: 0, r: 13 }, []) && !T.solCanTab({ s: 0, r: 12 }, []), "tableau rules (alternate colors down, K on empty)");
+  function invariants(s) {
+    var cards = [], k2 = {}, okv = true;
+    s.tab.forEach(function (col) {
+      col.forEach(function (cd, i) {
+        cards.push(cd);
+        if (i > 0 && col[i - 1].up && cd.up && !((col[i - 1].s === 1 || col[i - 1].s === 2) !== (cd.s === 1 || cd.s === 2) && cd.r === col[i - 1].r - 1)) { okv = false; }
+        if (i > 0 && col[i - 1].up && !cd.up) { okv = false; } // 表の上に裏は来ない
+      });
+    });
+    s.found.forEach(function (p) { p.forEach(function (cd, i) { cards.push(cd); if (cd.r !== i + 1 || cd.s !== p[0].s) { okv = false; } }); });
+    cards = cards.concat(s.stock, s.waste);
+    cards.forEach(function (cd) { k2[cd.s + ":" + cd.r] = 1; });
+    return okv && cards.length === 52 && Object.keys(k2).length === 52;
+  }
+  var wins = 0, stuck = 0, broken = 0, hung = 0;
+  for (var gi = 0; gi < 30; gi++) {
+    var s = T.solDeal(), steps = 0, finished = false;
+    while (steps++ < 5000) {
+      if (!invariants(s)) { broken++; break; }
+      if (T.solFoundCount(s) === 52) { wins++; finished = true; break; }
+      var hnt = T.solHint(s);
+      if (!hnt) { stuck++; finished = true; break; }
+      if (hnt === "draw") { T.solDraw(s); } else { T.solApply(s, hnt.src, hnt.dst); }
+    }
+    if (!finished && !broken) { hung++; }
+  }
+  ok(broken === 0 && hung === 0 && wins + stuck === 30, "solitaire bot: 30 deals end in clear or stuck, rules always hold", { wins: wins, stuck: stuck, broken: broken, hung: hung });
+  ok(wins >= 1, "solitaire is winnable by following hints (at least 1 of 30)", wins);
+  // 画面の操作: 山札→戻す、ほぼ完成でCLEAR、タップでヒントどおりに進める
+  var CW = 30, GAP = 3, OX = (240 - (7 * CW + 6 * GAP)) / 2, TOPY = 18, TABY = 68;
+  function tabYs(col) {
+    var down = 5, up = 13, ys = [], y = TABY, i, need = 0;
+    for (i = 0; i < col.length - 1; i++) { need += col[i].up ? up : down; }
+    if (TABY + need + 42 > 304 && need > 0) { var kk = (304 - 42 - TABY) / need; down *= kk; up *= kk; }
+    for (i = 0; i < col.length; i++) { ys.push(y); y += col[i].up ? up : down; }
+    return ys;
+  }
+  function srcPoint(s2, src) {
+    if (src.kind === "waste") { return [OX + 1 * (CW + GAP) + 15, TOPY + 20]; }
+    if (src.kind === "found") { return [OX + (3 + src.col) * (CW + GAP) + 15, TOPY + 20]; }
+    var ys = tabYs(s2.tab[src.col]);
+    return [OX + src.col * (CW + GAP) + 15, ys[src.idx] + 4];
+  }
+  var undoOk = null;
+  env.run("solitaire", {}, 40, function (f, e) {
+    var g = e.window.__solGet();
+    if (f === 2) { undoOk = g.stock.length; e.key("keydown", " "); }
+    if (f === 4) { undoOk = (e.window.__solGet().stock.length === undoOk - 1) ? undoOk : -1; e.key("keydown", "u"); }
+    if (f === 6) { undoOk = e.window.__solGet().stock.length === undoOk && e.window.__solGet().waste.length === 0; }
+  });
+  ok(undoOk === true, "solitaire: draw then undo restores the stock", undoOk);
+  r = env.run("solitaire", {}, 60, function (f, e) {
+    if (f !== 2) { return; }
+    var full = { tab: [[{ s: 0, r: 13, up: true }], [], [], [], [], [], []], stock: [], waste: [], found: [[], [], [], []] };
+    for (var su = 0; su < 4; su++) { for (var rk = 1; rk <= (su === 0 ? 12 : 13); rk++) { full.found[su].push({ s: su, r: rk, up: true }); } }
+    e.window.__solSet(full);
+    e.tap(OX + 15, TABY + 10);
+  });
+  ok(r.ended !== null && env.lastTitle() === "CLEAR!", "solitaire: last king to foundation clears", { ended: r.ended, title: env.lastTitle() });
+  var tapEnded = 0;
+  for (var tg = 0; tg < 6 && !tapEnded; tg++) {
+    r = env.run("solitaire", {}, 8000, function (f, e) {
+      if (f % 3 !== 0) { return; }
+      var g = e.window.__solGet(), hh = T.solHint(g);
+      if (!hh) { return; }
+      if (hh === "draw") { e.key("keydown", " "); return; }
+      var p = srcPoint(g, hh.src);
+      e.tap(p[0], p[1]);
+    });
+    if (r.ended !== null && (env.lastTitle() === "CLEAR!" || env.lastTitle() === "GAME OVER")) { tapEnded++; }
+  }
+  ok(tapEnded > 0, "solitaire: playing by taps reaches clear or stuck", env.lastTitle());
+
   // 設定画面
   var root = H.makeEl("div");
   env.window.UGArcade.start("sudoku", root, { onEnd: function () {}, onExit: function () {} });

@@ -1295,7 +1295,7 @@
     companionTechnique2LearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §145 v0.64: わざ2習得演出済みフラグ（永続・saveする）
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
     arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0, breakout: 0, snake: 0, tennis: 0, crossing: 0, mole: 0, sweeper: 0,
-      g2048: 0, reversi: 0, slide: 0, memory: 0, meteor: 0, defense: 0, melody: 0, lyrics: 0, gomoku: 0, sudoku: 0 }, // §146〜§150: ゲームセンターのハイスコア（永続・saveする）
+      g2048: 0, reversi: 0, slide: 0, memory: 0, meteor: 0, defense: 0, melody: 0, lyrics: 0, gomoku: 0, sudoku: 0, solitaire: 0 }, // §146〜§150: ゲームセンターのハイスコア（永続・saveする）
     arcadeMedals: 0,      // §153 v0.72: ゲームセンターのメダル所持数（永続・saveする）
     arcadeMedalsTotal: 0, // §153 v0.72: メダル累計獲得数（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
@@ -19239,7 +19239,7 @@
   // §146 v0.65: ゲームセンター（ミニゲーム本体は arcade.js / window.UGArcade）
   // ---------------------------------------------------------
   var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball", "breakout", "snake", "tennis", "crossing", "mole", "sweeper",
-    "g2048", "reversi", "slide", "memory", "meteor", "defense", "melody", "lyrics", "gomoku", "sudoku"]; // §147 v0.66 / §148 v0.67: 6本ずつ追加 / §150 v0.69: melody / §160 v0.79: lyrics
+    "g2048", "reversi", "slide", "memory", "meteor", "defense", "melody", "lyrics", "gomoku", "sudoku", "solitaire"]; // §147 v0.66 / §148 v0.67: 6本ずつ追加 / §150 v0.69: melody / §160 v0.79: lyrics
 
   // ハイスコアを正規化（欠損・数値以外・負数→0。値は下げない）
   function normalizeArcadeHighScores() {
@@ -19276,7 +19276,7 @@
   // §153 v0.72: メダル（スコア÷換算値、最大100枚/プレイ、ハイスコア更新+5）
   var ARCADE_MEDAL_RATE = {
     blocks: 100, shooter: 75, pinball: 250, breakout: 80, melody: 80, snake: 8, tennis: 30, crossing: 15,
-    mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75, lyrics: 30, gomoku: 50, sudoku: 150
+    mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75, lyrics: 30, gomoku: 50, sudoku: 150, solitaire: 200
   };
   var ARCADE_MEDAL_MAX_PER_PLAY = 100, ARCADE_MEDAL_HISCORE_BONUS = 5;
   // §153 v0.72: 景品（メダル1枚 ≒ 5G）。伝説装備・ウクレレ・仲間報酬装備・商人で買える装備は扱わない
