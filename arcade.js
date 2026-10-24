@@ -13,7 +13,11 @@
 
   var GAMES = {};
   var ORDER = [];
-  function register(def) { GAMES[def.id] = def; ORDER.push(def.id); }
+  function register(def) {
+    GAMES[def.id] = def;
+    var at = def.after ? ORDER.indexOf(def.after) : -1;
+    if (at >= 0) { ORDER.splice(at + 1, 0, def.id); } else { ORDER.push(def.id); }
+  }
 
   function randInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -29,6 +33,7 @@
   // ホスト（ループ・入力・UI）
   // ---------------------------------------------------------
   var host = null;
+  var setupState = null; // 設定画面表示中（§150）
 
   function send(action, down) {
     if (!host || !host.game) { return; }
@@ -81,6 +86,7 @@
   function report() {
     if (!host || host.reported) { return; }
     host.reported = true;
+    if (host.game && typeof host.game.finish === "function") { host.game.finish(host.score); }
     if (host.opts && typeof host.opts.onEnd === "function") {
       host.opts.onEnd(host.gameId, host.score);
     }
@@ -92,6 +98,7 @@
     if (host.over) {
       sys.innerHTML =
         '<button class="modal-btn" data-sys="retry">&#x1F501; もう一度</button>' +
+        (host.def.setup ? '<button class="modal-btn" data-sys="setup">&#x2699;&#xFE0F; 設定・録音</button>' : '') +
         '<button class="modal-btn" data-sys="menu">&#x1F579;&#xFE0F; メニューへ</button>';
     } else {
       sys.innerHTML =
@@ -117,16 +124,21 @@
       var g = host.gameId, root = host.root, opts = host.opts;
       if (host.score > host.hi) { opts.hiScore = host.score; }
       start(g, root, opts);
+    } else if (kind === "setup") {
+      var g2 = host.gameId, root2 = host.root, opts2 = host.opts;
+      if (host.score > host.hi) { opts2.hiScore = host.score; }
+      opts2.config = null;
+      start(g2, root2, opts2);
     } else if (kind === "menu") {
       exitToMenu();
     }
   }
 
   function exitToMenu() {
-    if (!host) { return; }
-    var opts = host.opts;
+    var opts = host ? host.opts : (setupState ? setupState.opts : null);
+    if (!opts) { return; }
     stop();
-    if (opts && typeof opts.onExit === "function") { opts.onExit(); }
+    if (typeof opts.onExit === "function") { opts.onExit(); }
   }
 
   function togglePause() {
@@ -275,6 +287,20 @@
     if (!def || !rootEl) { return false; }
     stop();
     opts = opts || {};
+    // 設定画面つきのゲーム（§150）: 設定が決まるまで本編を始めない
+    if (def.setup && !opts.config) {
+      setupState = { root: rootEl, opts: opts, gameId: gameId };
+      def.setup(rootEl, {
+        soundEnabled: !!opts.soundEnabled,
+        hiScore: opts.hiScore || 0,
+        done: function (cfg) {
+          opts.config = cfg;
+          start(gameId, rootEl, opts);
+        },
+        back: exitToMenu
+      });
+      return true;
+    }
     var hi = Math.max(0, Math.floor(opts.hiScore || 0));
     rootEl.innerHTML =
       '<div class="arcade-hud">' +
@@ -316,7 +342,7 @@
       getScore: function () { return host ? host.score : 0; },
       gameOver: gameOver
     };
-    host.game = def.create(api);
+    host.game = def.create(api, opts.config || null);
     bindCanvas(canvas);
     // タッチボタン
     var ctrl = rootEl.querySelector(".arcade-controls");
@@ -341,6 +367,12 @@
   }
 
   function stop() {
+    melodyStopPlayback();
+    if (setupState) {
+      var sr = setupState.root;
+      setupState = null;
+      if (sr) { sr.innerHTML = ""; }
+    }
     if (!host) { return; }
     if (host.rafId !== null) { caf(host.rafId); }
     window.removeEventListener("keydown", onKeyDown, true);
@@ -2601,6 +2633,534 @@
   });
 
   // ---------------------------------------------------------
+  // 🎹 メロディくずし（§150）: サウンドエンジン・スケール・録音
+  // arcade.js 専用の AudioContext。ゲーム本編のBGM/SEとは無関係
+  // ---------------------------------------------------------
+  var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  var MELODY_PREFS_KEY = "ultimateGorillaMelodyPrefsV1";
+  var MELODY_REC_KEY = "ultimateGorillaMelodyRecV1";
+  var MELODY_REC_MAX = 5, MELODY_REC_NOTES_MAX = 2000;
+  var MELODY_MODES = [{ id: "pos", name: "📍 位置で決まる（近い場所＝近い音）" }, { id: "rand", name: "🎲 ランダム（スケール内）" }];
+  var MELODY_SCALES = [
+    { id: "chromatic", group: "基本", name: "クロマチック（制限なし）", iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
+    { id: "major", group: "基本", name: "メジャー（ダイアトニック）", iv: [0, 2, 4, 5, 7, 9, 11] },
+    { id: "minor", group: "基本", name: "ナチュラルマイナー", iv: [0, 2, 3, 5, 7, 8, 10] },
+    { id: "harmonic", group: "基本", name: "ハーモニックマイナー", iv: [0, 2, 3, 5, 7, 8, 11] },
+    { id: "melodic", group: "基本", name: "メロディックマイナー", iv: [0, 2, 3, 5, 7, 9, 11] },
+    { id: "majpenta", group: "ペンタ・ブルース", name: "メジャーペンタトニック", iv: [0, 2, 4, 7, 9] },
+    { id: "minpenta", group: "ペンタ・ブルース", name: "マイナーペンタトニック", iv: [0, 3, 5, 7, 10] },
+    { id: "blues", group: "ペンタ・ブルース", name: "ブルース", iv: [0, 3, 5, 6, 7, 10] },
+    { id: "ionian", group: "教会旋法", name: "イオニアン", iv: [0, 2, 4, 5, 7, 9, 11] },
+    { id: "dorian", group: "教会旋法", name: "ドリアン", iv: [0, 2, 3, 5, 7, 9, 10] },
+    { id: "phrygian", group: "教会旋法", name: "フリジアン", iv: [0, 1, 3, 5, 7, 8, 10] },
+    { id: "lydian", group: "教会旋法", name: "リディアン", iv: [0, 2, 4, 6, 7, 9, 11] },
+    { id: "mixolydian", group: "教会旋法", name: "ミクソリディアン", iv: [0, 2, 4, 5, 7, 9, 10] },
+    { id: "aeolian", group: "教会旋法", name: "エオリアン", iv: [0, 2, 3, 5, 7, 8, 10] },
+    { id: "locrian", group: "教会旋法", name: "ロクリアン", iv: [0, 1, 3, 5, 6, 8, 10] },
+    { id: "miyako", group: "和風・民族", name: "都節（みやこぶし）", iv: [0, 1, 5, 7, 8] },
+    { id: "ryukyu", group: "和風・民族", name: "琉球音階", iv: [0, 4, 5, 7, 11] },
+    { id: "ritsu", group: "和風・民族", name: "律音階", iv: [0, 2, 5, 7, 9] },
+    { id: "hungarian", group: "和風・民族", name: "ハンガリアンマイナー", iv: [0, 2, 3, 6, 7, 8, 11] },
+    { id: "spanish", group: "和風・民族", name: "スパニッシュ（フリジアンドミナント）", iv: [0, 1, 4, 5, 7, 8, 10] },
+    { id: "dblharm", group: "和風・民族", name: "ダブルハーモニック", iv: [0, 1, 4, 5, 7, 8, 11] },
+    { id: "wholetone", group: "その他", name: "全音音階", iv: [0, 2, 4, 6, 8, 10] },
+    { id: "diminished", group: "その他", name: "ディミニッシュ", iv: [0, 2, 3, 5, 6, 8, 9, 11] }
+  ];
+  var MELODY_VOICE_NAMES = { b: "マリンバ", p: "プラック", w: "ベル", s: "ベース" };
+
+  var melodyAudio = { ctx: null, master: null };
+  var melodyPlayback = null;
+
+  function lsGet(k) {
+    try { var s = window.localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+  }
+  function lsSet(k, v) {
+    try { window.localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; }
+  }
+  function escHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function melodyScale(id) {
+    for (var i = 0; i < MELODY_SCALES.length; i++) { if (MELODY_SCALES[i].id === id) { return MELODY_SCALES[i]; } }
+    return MELODY_SCALES[1];
+  }
+  function melodyDegreeToMidi(scale, key, deg) {
+    var n = scale.iv.length;
+    return 48 + key + 12 * Math.floor(deg / n) + scale.iv[deg % n];
+  }
+  // 位置→度数: 左→右で2オクターブ、下→上で1オクターブ。近い点は近い度数になる
+  function melodyPosDegree(scale, x, y) {
+    var n = scale.iv.length;
+    var u = (clamp(x, 0, W) / W) * 2 * n + (1 - clamp(y, 0, H) / H) * n;
+    return clamp(Math.round(u), 0, 3 * n - 1);
+  }
+  function midiName(m) { return NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1); }
+  function midiColor(m) {
+    var oct = Math.floor(m / 12) - 1;
+    return "hsl(" + ((m % 12) * 30) + ",75%," + clamp(38 + (oct - 3) * 9, 30, 75) + "%)";
+  }
+
+  function melodyAudioInit() {
+    if (!melodyAudio.ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { return null; }
+      try { melodyAudio.ctx = new AC(); } catch (e) { return null; }
+      melodyAudio.master = melodyAudio.ctx.createGain();
+      melodyAudio.master.gain.value = 0.25;
+      melodyAudio.master.connect(melodyAudio.ctx.destination);
+    }
+    if (melodyAudio.ctx.state === "suspended" && melodyAudio.ctx.resume) {
+      try { melodyAudio.ctx.resume(); } catch (e2) {}
+    }
+    return melodyAudio.ctx;
+  }
+
+  // voice: b=マリンバ / p=プラック / w=ベル / s=ベース
+  function melodyPlayNote(midi, voice, when) {
+    var ac = melodyAudio.ctx;
+    if (!ac) { return; }
+    var t = (when && when > ac.currentTime) ? when : ac.currentTime;
+    var f = 440 * Math.pow(2, (midi - 69) / 12);
+    var env = ac.createGain();
+    var dur, peak, target = env;
+    if (voice === "w") { dur = 0.9; peak = 0.45; }
+    else if (voice === "s") { dur = 0.45; peak = 0.6; }
+    else if (voice === "p") { dur = 0.18; peak = 0.3; }
+    else { dur = 0.5; peak = 0.7; }
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    env.connect(melodyAudio.master);
+    if (voice === "s") {
+      var lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 900;
+      lp.connect(env);
+      target = lp;
+    }
+    function osc(type, freq, level) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = level;
+      o.connect(g);
+      g.connect(target);
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+    if (voice === "w") { osc("sine", f, 1); osc("sine", f * 2.76, 0.25); osc("sine", f * 5.4, 0.08); }
+    else if (voice === "s") { osc("sawtooth", f, 0.6); }
+    else if (voice === "p") { osc("square", f, 0.5); }
+    else { osc("triangle", f, 1); osc("sine", f * 4, 0.15); }
+  }
+
+  function melodyStopPlayback(silent) {
+    if (!melodyPlayback) { return; }
+    clearInterval(melodyPlayback.timer);
+    var cb = melodyPlayback.onEnd;
+    melodyPlayback = null;
+    if (!silent && cb) { cb(); }
+  }
+  // 先読みスケジューラ: 40msごとに250ms先までの音を予約
+  function melodyStartPlayback(rec, onEnd) {
+    melodyStopPlayback(true);
+    var ac = melodyAudioInit();
+    if (!ac || !rec.notes.length) { if (onEnd) { onEnd(); } return; }
+    var st = { id: rec.id, idx: 0, t0: ac.currentTime + 0.15, onEnd: onEnd, timer: null };
+    var last = rec.notes[rec.notes.length - 1][0] / 1000;
+    st.timer = setInterval(function () {
+      var now = ac.currentTime;
+      while (st.idx < rec.notes.length && st.t0 + rec.notes[st.idx][0] / 1000 < now + 0.25) {
+        var nt = rec.notes[st.idx];
+        melodyPlayNote(nt[1], nt[2], st.t0 + nt[0] / 1000);
+        st.idx++;
+      }
+      if (st.idx >= rec.notes.length && now > st.t0 + last + 1) { melodyStopPlayback(); }
+    }, 40);
+    melodyPlayback = st;
+  }
+
+  function melodyLoadPrefs(soundDefault) {
+    var p = lsGet(MELODY_PREFS_KEY) || {};
+    var key = parseInt(p.key, 10);
+    return {
+      mode: p.mode === "rand" ? "rand" : "pos",
+      scale: melodyScale(p.scale).id,
+      key: (key >= 0 && key < 12) ? key : 0,
+      sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
+      rec: typeof p.rec === "boolean" ? p.rec : true,
+      relax: p.relax === true
+    };
+  }
+  function melodyLoadRecs() {
+    var arr = lsGet(MELODY_REC_KEY);
+    if (!arr || !arr.length) { return []; }
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var r = arr[i];
+      if (r && r.notes && r.notes.length && typeof r.id === "number") { out.push(r); }
+    }
+    return out;
+  }
+  function melodySaveRec(rec) {
+    var recs = melodyLoadRecs();
+    recs.unshift(rec);
+    if (recs.length > MELODY_REC_MAX) { recs.length = MELODY_REC_MAX; }
+    // 容量不足なら古い録音から削って再挑戦
+    while (recs.length > 0 && !lsSet(MELODY_REC_KEY, recs)) { recs.pop(); }
+  }
+  function melodyDeleteRec(id) {
+    var recs = melodyLoadRecs(), out = [];
+    for (var i = 0; i < recs.length; i++) { if (recs[i].id !== id) { out.push(recs[i]); } }
+    lsSet(MELODY_REC_KEY, out);
+  }
+  function melodyRecLabel(r) {
+    var d = new Date(r.date);
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  // Standard MIDI File（フォーマット0・120BPM・480tick/四分音符）
+  function melodyMidiBytes(rec) {
+    var TPQ = 480, MS_PER_TICK = 500 / TPQ;
+    var CH = { b: 0, p: 0, w: 1, s: 2 }, DUR = { b: 300, p: 120, w: 600, s: 350 };
+    var ev = [], i;
+    for (i = 0; i < rec.notes.length; i++) {
+      var nt = rec.notes[i], c = CH[nt[2]] || 0, m = clamp(nt[1], 0, 127);
+      ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, 96]]);
+      ev.push([Math.round((nt[0] + (DUR[nt[2]] || 300)) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
+    }
+    ev.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    var trk = [0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20, 0x00, 0xC0, 12, 0x00, 0xC1, 8, 0x00, 0xC2, 32];
+    var lastTick = 0;
+    function vlq(n) {
+      var buf = [n & 0x7F];
+      n = Math.floor(n / 128);
+      while (n > 0) { buf.unshift((n & 0x7F) | 0x80); n = Math.floor(n / 128); }
+      for (var k = 0; k < buf.length; k++) { trk.push(buf[k]); }
+    }
+    for (i = 0; i < ev.length; i++) {
+      vlq(ev[i][0] - lastTick);
+      lastTick = ev[i][0];
+      trk.push(ev[i][2][0], ev[i][2][1], ev[i][2][2]);
+    }
+    trk.push(0x00, 0xFF, 0x2F, 0x00);
+    var len = trk.length;
+    var head = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, (TPQ >> 8) & 255, TPQ & 255,
+      0x4D, 0x54, 0x72, 0x6B, (len >>> 24) & 255, (len >>> 16) & 255, (len >>> 8) & 255, len & 255];
+    return head.concat(trk);
+  }
+  function melodyDownloadMidi(rec) {
+    try {
+      var blob = new Blob([new Uint8Array(melodyMidiBytes(rec))], { type: "audio/midi" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      var d = new Date(rec.date);
+      var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+      a.href = url;
+      a.download = "melody-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + ".mid";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+    } catch (e) {}
+  }
+
+  // 設定画面（HTML）
+  function melodySetup(root, ctl) {
+    var prefs = melodyLoadPrefs(ctl.soundEnabled);
+
+    function savePrefs() { lsSet(MELODY_PREFS_KEY, prefs); }
+    function scaleOptions() {
+      var html = "", group = null;
+      for (var i = 0; i < MELODY_SCALES.length; i++) {
+        var s = MELODY_SCALES[i];
+        if (s.group !== group) {
+          if (group !== null) { html += "</optgroup>"; }
+          group = s.group;
+          html += '<optgroup label="' + escHtml(group) + '">';
+        }
+        html += '<option value="' + s.id + '"' + (s.id === prefs.scale ? " selected" : "") + ">" + escHtml(s.name) + "</option>";
+      }
+      return html + "</optgroup>";
+    }
+    function preview() {
+      var ac = melodyAudioInit();
+      if (!ac) { return; }
+      var sc = melodyScale(prefs.scale), n = sc.iv.length, t = ac.currentTime + 0.05;
+      for (var i = 0; i <= n; i++) { melodyPlayNote(melodyDegreeToMidi(sc, prefs.key, n + i), "b", t + i * 0.16); }
+    }
+    function render() {
+      var recs = melodyLoadRecs(), i;
+      var html = '<div class="melody-setup">' +
+        '<h3 style="margin:0 0 4px;">&#x1F3B9; メロディくずし</h3>' +
+        '<p class="small" style="color:#adb5bd;margin:0 0 8px;">ボールが当たった場所で音が鳴るブロックくずし。左ほど低く、右と上ほど高い音になるよ。</p>' +
+        '<label class="melody-row"><span>音の決め方</span><select data-p="mode">';
+      for (i = 0; i < MELODY_MODES.length; i++) {
+        html += '<option value="' + MELODY_MODES[i].id + '"' + (MELODY_MODES[i].id === prefs.mode ? " selected" : "") + ">" + MELODY_MODES[i].name + "</option>";
+      }
+      html += '</select></label>' +
+        '<label class="melody-row"><span>スケール</span><select data-p="scale">' + scaleOptions() + '</select></label>' +
+        '<label class="melody-row"><span>キー（主音）</span><select data-p="key">';
+      for (i = 0; i < 12; i++) { html += '<option value="' + i + '"' + (i === prefs.key ? " selected" : "") + ">" + NOTE_NAMES[i] + "</option>"; }
+      html += '</select></label>' +
+        '<div class="melody-checks">' +
+        '<label><input type="checkbox" data-p="sound"' + (prefs.sound ? " checked" : "") + '> &#x1F50A; 音を鳴らす</label>' +
+        '<label><input type="checkbox" data-p="rec"' + (prefs.rec ? " checked" : "") + '> &#x1F399;&#xFE0F; 録音する</label>' +
+        '<label><input type="checkbox" data-p="relax"' + (prefs.relax ? " checked" : "") + '> &#x1F33F; のんびり（ボールを落としても減らない）</label>' +
+        '</div>' +
+        '<div class="melody-actions">' +
+        '<button class="modal-btn" data-m="preview">&#x1F508; スケール試し聴き</button>' +
+        '<button class="modal-btn" data-m="start">&#x25B6;&#xFE0F; スタート</button>' +
+        '</div>' +
+        '<h4 style="margin:12px 0 4px;">&#x1F399;&#xFE0F; 録音リスト（最大' + MELODY_REC_MAX + '件）</h4>';
+      if (!recs.length) {
+        html += '<p class="small" style="color:#6c757d;">まだ録音はありません。「録音する」をONにして遊ぶと、ゲーム終了時に保存されます。</p>';
+      }
+      for (i = 0; i < recs.length; i++) {
+        var r = recs[i], playing = melodyPlayback && melodyPlayback.id === r.id;
+        html += '<div class="melody-rec">' +
+          '<div class="melody-rec-info"><b>' + melodyRecLabel(r) + '</b>' +
+          '<span class="small">' + NOTE_NAMES[r.key || 0] + ' ' + escHtml(melodyScale(r.scale).name) + (r.mode === "rand" ? " 🎲" : " 📍") + '</span>' +
+          '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + '</span></div>' +
+          '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
+          '<button class="arcade-mini-btn" data-m="midi" data-id="' + r.id + '" title="MIDIで保存">&#x1F4BE;</button>' +
+          '<button class="arcade-mini-btn" data-m="del" data-id="' + r.id + '" title="削除">&#x1F5D1;&#xFE0F;</button>' +
+          '</div>';
+      }
+      html += '<button class="modal-btn" data-m="back" style="width:100%;margin-top:10px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
+      root.innerHTML = html;
+
+      var sels = root.querySelectorAll("select[data-p]");
+      for (i = 0; i < sels.length; i++) {
+        sels[i].onchange = function (ev) {
+          var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
+          prefs[k] = k === "key" ? parseInt(v, 10) : v;
+          savePrefs();
+        };
+      }
+      var chks = root.querySelectorAll("input[data-p]");
+      for (i = 0; i < chks.length; i++) {
+        chks[i].onchange = function (ev) {
+          prefs[ev.currentTarget.getAttribute("data-p")] = !!ev.currentTarget.checked;
+          savePrefs();
+        };
+      }
+      var btns = root.querySelectorAll("button[data-m]");
+      for (i = 0; i < btns.length; i++) { btns[i].onclick = onButton; }
+    }
+    function findRec(id) {
+      var recs = melodyLoadRecs();
+      for (var i = 0; i < recs.length; i++) { if (recs[i].id === id) { return recs[i]; } }
+      return null;
+    }
+    function onButton(ev) {
+      var m = ev.currentTarget.getAttribute("data-m"), id = parseInt(ev.currentTarget.getAttribute("data-id"), 10);
+      if (m === "start") {
+        if (prefs.sound) { melodyAudioInit(); }
+        melodyStopPlayback(true);
+        ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax });
+      } else if (m === "preview") {
+        preview();
+      } else if (m === "back") {
+        ctl.back();
+      } else if (m === "play") {
+        var r = findRec(id);
+        if (r) { melodyStartPlayback(r, render); render(); }
+      } else if (m === "stop") {
+        melodyStopPlayback();
+      } else if (m === "midi") {
+        var r2 = findRec(id);
+        if (r2) { melodyDownloadMidi(r2); }
+      } else if (m === "del") {
+        if (window.confirm && !window.confirm("この録音を削除しますか？")) { return; }
+        if (melodyPlayback && melodyPlayback.id === id) { melodyStopPlayback(true); }
+        melodyDeleteRec(id);
+        render();
+      }
+    }
+    render();
+  }
+
+  register({
+    id: "melody",
+    after: "breakout",
+    music: true,
+    name: "メロディくずし",
+    icon: "&#x1F3B9;",
+    desc: "当たった場所で音が鳴る！スケールやキーを選べて録音もできる",
+    help: "←→移動 / Space発射 / 画面ドラッグで移動・タップで発射 / P一時停止",
+    controls: [
+      { action: "left", label: "&#x25C0;" },
+      { action: "launch", label: "&#x1F680; 発射" },
+      { action: "right", label: "&#x25B6;" }
+    ],
+    keys: { "ArrowLeft": "left", "ArrowRight": "right", " ": "launch", "ArrowUp": "launch" },
+    setup: melodySetup,
+    create: function (api, cfg) {
+      cfg = cfg || melodyLoadPrefs(false);
+      var scale = melodyScale(cfg.scale), key = cfg.key || 0, nDeg = scale.iv.length * 3;
+      var COLS = 8, ROWS = 6, BW = 26, BH = 10, BX0 = 9, BY0 = 36;
+      var PW = 44, PH = 6, PY = 292, BR = 4;
+      var pad = { x: W / 2 };
+      var held = { left: false, right: false };
+      var ball = { x: W / 2, y: PY - BR - 1, vx: 0, vy: 0 };
+      var stuck = true, lives = 3, level = 1, bricks = [], msg = 0, frame = 0;
+      var notes = [], pops = [], recFull = false;
+      if (cfg.sound) { melodyAudioInit(); }
+
+      function noteAt(x, y) {
+        var deg = cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
+        return melodyDegreeToMidi(scale, key, deg);
+      }
+      function sound(midi, voice, x, y) {
+        if (cfg.sound) { melodyPlayNote(midi, voice); }
+        if (cfg.rec) {
+          if (notes.length < MELODY_REC_NOTES_MAX) { notes.push([Math.round(frame * 1000 / 60), midi, voice]); }
+          else { recFull = true; }
+        }
+        pops.push({ x: clamp(x, 14, W - 14), y: clamp(y, 12, H - 30), text: midiName(midi), t: 36, col: midiColor(midi) });
+        if (pops.length > 12) { pops.shift(); }
+      }
+      function speed() { return Math.min(6, 3.2 + (level - 1) * 0.4); }
+      function build() {
+        bricks = [];
+        for (var r = 0; r < ROWS; r++) {
+          for (var c = 0; c < COLS; c++) {
+            var bx = BX0 + c * 28, by = BY0 + r * 14;
+            var midi = melodyDegreeToMidi(scale, key, melodyPosDegree(scale, bx + BW / 2, by + BH / 2));
+            bricks.push({ x: bx, y: by, row: r, hp: (level >= 2 && r === 0) ? 2 : 1, midi: midi });
+          }
+        }
+      }
+      function launch() {
+        if (!stuck) { return; }
+        stuck = false;
+        var a = (Math.random() - 0.5) * 0.8;
+        ball.vx = speed() * Math.sin(a);
+        ball.vy = -speed() * Math.cos(a);
+      }
+      function resetBall() { stuck = true; ball.vx = 0; ball.vy = 0; }
+
+      build();
+
+      return {
+        input: function (action, down) {
+          if (action === "left" || action === "right") { held[action] = down; }
+          if (down && action === "launch") { launch(); }
+        },
+        pointer: function (type, x) {
+          if (type === "down" || type === "move") { pad.x = clamp(x, PW / 2, W - PW / 2); }
+          if (type === "down") { launch(); }
+        },
+        finish: function (score) {
+          if (!cfg.rec || !notes.length) { return; }
+          melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, notes: notes });
+        },
+        step: function () {
+          var k, s;
+          frame++;
+          if (msg > 0) { msg--; }
+          for (k = pops.length - 1; k >= 0; k--) { pops[k].t--; if (pops[k].t <= 0) { pops.splice(k, 1); } }
+          if (held.left) { pad.x -= 3.6; }
+          if (held.right) { pad.x += 3.6; }
+          pad.x = clamp(pad.x, PW / 2, W - PW / 2);
+          if (stuck) { ball.x = pad.x; ball.y = PY - BR - 1; return; }
+          for (s = 0; s < 3; s++) {
+            var px = ball.x, py = ball.y;
+            ball.x += ball.vx / 3;
+            ball.y += ball.vy / 3;
+            if (ball.x < BR) { ball.x = BR; ball.vx = Math.abs(ball.vx); sound(noteAt(0, ball.y), "w", 0, ball.y); }
+            if (ball.x > W - BR) { ball.x = W - BR; ball.vx = -Math.abs(ball.vx); sound(noteAt(W, ball.y), "w", W, ball.y); }
+            if (ball.y < BR) { ball.y = BR; ball.vy = Math.abs(ball.vy); sound(noteAt(ball.x, 0), "w", ball.x, 0); }
+            if (ball.vy > 0 && ball.y + BR >= PY && py + BR <= PY + PH && Math.abs(ball.x - pad.x) <= PW / 2 + BR) {
+              var rel = clamp((ball.x - pad.x) / (PW / 2), -1, 1);
+              var a = rel * 1.05, sp = speed();
+              ball.vx = sp * Math.sin(a);
+              ball.vy = -sp * Math.cos(a);
+              ball.y = PY - BR;
+              sound(noteAt(ball.x, PY) - 12, "s", ball.x, PY - 8);
+            }
+            for (k = 0; k < bricks.length; k++) {
+              var b = bricks[k];
+              if (b.hp <= 0) { continue; }
+              var cx = clamp(ball.x, b.x, b.x + BW), cy = clamp(ball.y, b.y, b.y + BH);
+              var dx = ball.x - cx, dy = ball.y - cy;
+              if (dx * dx + dy * dy > BR * BR) { continue; }
+              if (px >= b.x && px <= b.x + BW) { ball.vy = -ball.vy; ball.y = py; }
+              else { ball.vx = -ball.vx; ball.x = px; }
+              b.hp--;
+              var bm = cfg.mode === "rand" ? noteAt(0, 0) : b.midi;
+              sound(bm, b.hp > 0 ? "p" : "b", b.x + BW / 2, b.y + BH / 2);
+              if (b.hp === 0) { api.addScore((ROWS - b.row) * 10); }
+              break;
+            }
+          }
+          if (ball.y > H + 10) {
+            if (!cfg.relax) { lives--; }
+            if (lives <= 0) { api.gameOver(); return; }
+            resetBall();
+          }
+          var left = 0;
+          for (k = 0; k < bricks.length; k++) { if (bricks[k].hp > 0) { left++; } }
+          if (left === 0) { level++; build(); resetBall(); msg = 90; }
+        },
+        draw: function (ctx) {
+          var k, y, x;
+          if (cfg.mode === "pos") {
+            for (y = 0; y < H; y += 8) {
+              ctx.fillStyle = midiColor(noteAt(0, y + 4));
+              ctx.fillRect(0, y, 3, 8);
+              ctx.fillStyle = midiColor(noteAt(W, y + 4));
+              ctx.fillRect(W - 3, y, 3, 8);
+            }
+            for (x = 0; x < W; x += 8) {
+              ctx.fillStyle = midiColor(noteAt(x + 4, 0));
+              ctx.fillRect(x, 0, 8, 3);
+            }
+          }
+          for (k = 0; k < bricks.length; k++) {
+            var b = bricks[k];
+            if (b.hp <= 0) { continue; }
+            ctx.fillStyle = cfg.mode === "pos" ? midiColor(b.midi) : BREAK_COLORS[b.row];
+            ctx.fillRect(b.x, b.y, BW, BH);
+            ctx.fillStyle = b.hp >= 2 ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.25)";
+            ctx.fillRect(b.x, b.y, BW, b.hp >= 2 ? 4 : 2);
+          }
+          ctx.fillStyle = "#74b9ff";
+          ctx.fillRect(pad.x - PW / 2, PY, PW, PH);
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath(); ctx.arc(ball.x, ball.y, BR, 0, Math.PI * 2); ctx.fill();
+          ctx.font = "bold 10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          for (k = 0; k < pops.length; k++) {
+            ctx.globalAlpha = pops[k].t / 36;
+            ctx.fillStyle = pops[k].col;
+            ctx.fillText(pops[k].text, pops[k].x, pops[k].y - (36 - pops[k].t) * 0.4);
+          }
+          ctx.globalAlpha = 1;
+          hudText(ctx, NOTE_NAMES[key] + " " + scale.name + (cfg.mode === "rand" ? " 🎲" : ""), 6, 14);
+          if (cfg.rec) {
+            ctx.fillStyle = recFull ? "#fdcb6e" : "#ff7675";
+            ctx.font = "bold 10px sans-serif";
+            ctx.textAlign = "right";
+            ctx.fillText((recFull ? "REC満杯 " : "● REC ") + notes.length, W - 6, 26);
+          }
+          hudText(ctx, "LIFE " + (cfg.relax ? "∞" : lives) + "   LEVEL " + level + (cfg.sound ? "" : "   🔇"), 6, 312);
+          if (stuck) { hudText(ctx, "タップ or 発射でスタート", W / 2, 220, "center"); }
+          if (msg > 0) {
+            ctx.fillStyle = "#55efc4";
+            ctx.font = "bold 18px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("LEVEL " + level, W / 2, 180);
+          }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
   // 公開API
   // ---------------------------------------------------------
   window.UGArcade = {
@@ -2608,12 +3168,12 @@
       var out = [];
       for (var i = 0; i < ORDER.length; i++) {
         var d = GAMES[ORDER[i]];
-        out.push({ id: d.id, name: d.name, icon: d.icon, desc: d.desc });
+        out.push({ id: d.id, name: d.name, icon: d.icon, desc: d.desc, music: !!d.music });
       }
       return out;
     },
     start: start,
     stop: stop,
-    isRunning: function () { return !!host; }
+    isRunning: function () { return !!host || !!setupState; }
   };
 })();

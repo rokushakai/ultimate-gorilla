@@ -812,3 +812,68 @@ html, body {
   color: #6c757d;
   margin: 6px 0 0;
 }
+/* ===== §150 v0.69: メロディくずし 設定画面 ===== */
+.melody-setup { text-align: left; }
+.melody-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+.melody-row span { flex-shrink: 0; color: #ffd166; }
+.melody-row select {
+  flex: 1;
+  min-width: 0;
+  max-width: 70%;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 13px;
+}
+.melody-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.melody-checks input { margin-right: 6px; }
+.melody-actions {
+  display: flex;
+  gap: 8px;
+}
+.melody-actions .modal-btn {
+  flex: 1;
+  margin-top: 4px;
+  padding: 10px 8px;
+}
+.melody-rec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #1a2a3a;
+  border-radius: 8px;
+}
+.melody-rec-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.arcade-mini-btn {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 16px;
+  flex-shrink: 0;
+}

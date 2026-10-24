@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.68** |
+| 現在バージョン | **v0.69** |
 | ブランチ | main |
 
 ---
@@ -93,6 +93,12 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.69] 🎹 メロディくずし**（§150）— 合計16本
+  - 当たった位置で音程が決まる音楽ブロックくずし。スケール23種・キー12種・位置/ランダム・録音/再生/MIDI書き出し
+  - サウンドは arcade.js 独自の AudioContext（`melodyAudioInit` / `melodyPlayNote`）。ゲーム本編のBGM/SEとは独立
+  - 設定・録音は localStorage `ultimateGorillaMelodyPrefsV1` / `ultimateGorillaMelodyRecV1`（メインセーブ外）
+  - 音楽ゲーム（`music: true`）は script.js がプレイ中 `stopBGM()`、他のゲームは `updateBGM("battle")`
+  - ホスト: `setup(root, ctl)` があれば設定画面→`ctl.done(cfg)`→`create(api, cfg)`。`game.finish(score)` は終了時1回
 - **[v0.68] ゲームセンター移設＋デバッグ「敵と遭遇しないモード」**（§149）
   - ゲームセンター `Q` は (3,1)（スタート地点 🏠 (4,1) のすぐ左）。旧 (20,12) は道
   - `_debugNoEncounter` / `isDebugNoEncounter()`: ランダムエンカウントの2か所（通常マップ・横スクロール `g`）だけ止める。固定敵・ボスは止めない
@@ -990,6 +996,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 3. **さらなるゲーム追加候補**: ソリティア、五目ならべ（対CPU）、ナンプレ、タイピング、ジャンプアクション 等（プロデューサー判断）
 4. **ゲームセンターメニューの整理**（15本で縦に長いので、ジャンル別タブ等）
 
+> v0.69（§150 メロディくずし）実装済み。実機での音の確認（特にiOSの消音スイッチ・音量）が次の課題。
 > v0.68（§149 ゲームセンター移設＋デバッグ敵と遭遇しないモード）実装済み。
 > v0.67（§148 ゲーム6本追加＋プレイ中バトルBGM）実装済み。合計15本。捕獲条件/仲間能力変更なし。BGMは既存関数の呼び出しのみ。
 > v0.66（§147 ゲーム6本追加）実装済み。合計9本。BGM/捕獲条件/仲間能力変更なし。
