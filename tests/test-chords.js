@@ -7,7 +7,7 @@ function patch(src, file) {
   if (file !== "arcade-ukulele.js") { return src; }
   var a = "      var msg = \"\", msgT = 0, msgGood = false, wrong = null, wrongT = 0;";
   if (src.indexOf(a) < 0) { throw new Error("ukulele patch target missing"); }
-  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode }; };");
+  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode, ear: ear, msg: msg }; };");
 }
 function pcsOf(C, shape, lowG) {
   var m = C.shapeMidis(shape, lowG), o = {};
@@ -222,4 +222,33 @@ module.exports = function () {
   ok(hs.indexOf('value="Am7"') > 0 && hs.indexOf("uke-seq-chord bad") > 0 && hs.indexOf("転調") > 0 && hs.indexOf("付点4分") > 0 && hs.indexOf("スイング") > 0 && hs.indexOf("12小節ブルース") > 0, "sequencer tab shows rows, lengths, swing and presets");
   W.UGArcade.stop();
   U.ui.tab = "play";
+
+  // ===== §171 本物らしい音・勉強の助け・耳コピ =====
+  var fcases = [[[0, 0, 0, 3], "0,0,0,3"], [[2, 0, 0, 0], "2,0,0,0"], [[0, 2, 3, 2], "0,1,3,2"], [[2, 0, 1, 0], "2,0,1,0"], [[0, 2, 1, 2], "0,2,1,3"],
+    [[2, 2, 2, 0], "1,2,3,0"], [[3, 2, 1, 1], "3,2,1,1"], [[1, 2, 0, 2], "1,2,0,3"], [[0, 4, 3, 2], "0,3,2,1"], [[0, 0, 0, 7], "0,0,0,1"], [[0, 0, 0, 0], "0,0,0,0"]];
+  var fbad = fcases.filter(function (c2) { return U.fingering(c2[0]).join() !== c2[1]; }).map(function (c2) { return c2[0].join("") + "→" + U.fingering(c2[0]).join(""); });
+  ok(fbad.length === 0, "finger numbers follow the usual fingerings (G=0132, B♭=3211 barre…)", fbad);
+  ok(U.velocity(0) === 0.45 && U.velocity(60) === 1 && U.velocity(20) > 0.8, "faster swipes are louder", [U.velocity(0), U.velocity(20), U.velocity(60)]);
+  var log = [], fakeAc = { currentTime: 0, destination: {}, createGain: function () {
+    var n = { gain: { value: 0, setValueAtTime: function (v, t2) { log.push(["set", n.id, v, t2]); }, exponentialRampToValueAtTime: function (v, t2) { log.push(["ramp", n.id, v, t2]); } }, connect: function () {}, disconnect: function () {} };
+    n.id = log.length + ":" + Math.random(); return n; } };
+  var o4 = [null, null, null, null], g1 = U.stringOut({ audio: {} }, fakeAc, o4, 2, 0.5, 0.8), g2 = U.stringOut({ audio: {} }, fakeAc, o4, 2, 0.9, 0.7), g3 = U.stringOut({ audio: {} }, fakeAc, o4, 1, 0.9, 0.7);
+  var ramps = log.filter(function (l) { return l[0] === "ramp"; });
+  ok(ramps.length === 1 && ramps[0][1] === g1.id && Math.abs(ramps[0][3] - 0.94) < 1e-9 && g2.gain.value === 0.7 && g3 !== g2, "re-plucking a string fades its previous note (other strings keep ringing)", ramps);
+  ok(U.prefs().fingers === true && U.prefs().notes === false, "study aids default: finger numbers on, note names off");
+  // 耳コピ: 正解を選ぶと得点、まちがえると正解を教える
+  var earSeen = { right: 0, wrong: false, sameRoot: true, revealGhost: true };
+  r = env.run("ukulele", { config: { mode: "ear:easy" } }, 3700, function (f, e) {
+    var u = W.__uk2();
+    if (!u.ear || u.ear.pick >= 0 || u.ear.t < 20) { if (u.ear && u.ear.pick < 0 && u.target) { earSeen.revealGhost = false; } return; }
+    var pick = earSeen.wrong ? u.ear.ans : (u.ear.ans + 1) % 4, b = U.earBtn(pick);
+    e.tap(b.x + b.w / 2, b.y + b.h / 2);
+    if (!earSeen.wrong) { earSeen.wrong = W.__uk2().msg.indexOf("正解は") === 0; } else { earSeen.right++; }
+  });
+  ok(earSeen.wrong && earSeen.right >= 10 && r.ended !== null && r.ended >= 1000, "ear quiz: right answers score, a wrong one shows the answer", { seen: earSeen, ended: r.ended });
+  ok(earSeen.revealGhost, "ear quiz does not show the fingering before you answer");
+  var opt = null;
+  env.run("ukulele", { config: { mode: "ear:hard" } }, 3, function () { opt = W.__uk2().ear; });
+  var roots = opt.opts.map(function (o) { return C.parse(o.name).root; });
+  ok(opt.opts.length === 4 && roots.every(function (x) { return x === roots[0]; }) && opt.opts[opt.ans].name === opt.chord.name, "hard ear quiz compares 4 qualities of the same root", opt.opts.map(function (o) { return o.name; }));
 };

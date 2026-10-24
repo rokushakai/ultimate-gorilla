@@ -324,12 +324,13 @@
     return g;
   }
 
-  function melodySynth(midi, prog, when, level) {
+  // dest（省略可・§171 v0.90）: 出口の GainNode。指定すると level は使わずそこへつなぐ（弦ごとに止めたいとき）
+  function melodySynth(midi, prog, when, level, dest) {
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
     if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level); return; }
-    if (melodySampleNote(ac, midi, prog, t, level)) { return; }
+    if (melodySampleNote(ac, midi, prog, t, level, dest)) { return; }
     var r = melodyRecipe(prog);
     var f = 440 * Math.pow(2, (midi - 69) / 12);
     var end = t + r.dur, i;
@@ -355,7 +356,7 @@
       env.connect(tg);
       out = tg;
     }
-    out.connect(melodyLevelOut(ac, level));
+    out.connect(dest || melodyLevelOut(ac, level));
     // 音源 → 歪み → ローパス → フォルマント → エンベロープ
     var mix = ac.createGain(), node = mix;
     if (r.drive) {
@@ -604,7 +605,7 @@
   }
 
   // サンプルで鳴らせたら true（無い・読み込み中なら false → 合成音で鳴らす）
-  function melodySampleNote(ac, midi, prog, t, level) {
+  function melodySampleNote(ac, midi, prog, t, level, dest) {
     if (!melodySamples.enabled || !melodySampleReady(prog)) { return false; }
     var name = MELODY_SAMPLE_FILES[prog], ks = melodySamples.keys[name], best = ks[0];
     for (var i = 1; i < ks.length; i++) { if (Math.abs(ks[i] - midi) < Math.abs(best - midi)) { best = ks[i]; } }
@@ -618,7 +619,7 @@
     g.gain.setValueAtTime(vol, t + hold);
     g.gain.exponentialRampToValueAtTime(0.0001, t + hold + MELODY_SAMPLE_FADE);
     src.connect(g);
-    g.connect(melodyLevelOut(ac, level));
+    g.connect(dest || melodyLevelOut(ac, level));
     src.start(t);
     src.stop(t + hold + MELODY_SAMPLE_FADE + 0.05);
     melodySamples.used[name] = Date.now();
