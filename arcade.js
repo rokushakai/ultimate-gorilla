@@ -3511,6 +3511,121 @@
     } catch (e) {}
   }
 
+  // ---------------------------------------------------------
+  // §157 v0.76: 録音を WAV に書き出す（内蔵の鳴らし方そのままでオフライン描画）
+  // ---------------------------------------------------------
+  var MELODY_WAV_RATE = 32000, MELODY_WAV_MAX_SEC = 180, MELODY_WAV_TAIL = 2.5;
+  var melodyWavBusy = null; // 書き出し中の録音 id
+  var melodyWavMsg = "";
+
+  function melodyFileStamp(rec) {
+    var d = new Date(rec.date), pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes());
+  }
+  // AudioBuffer（2ch）→ 16bit PCM WAV
+  function melodyEncodeWav(buf) {
+    var ch = Math.min(2, buf.numberOfChannels), len = buf.length, rate = buf.sampleRate;
+    var dataBytes = len * ch * 2, ab = new ArrayBuffer(44 + dataBytes), v = new DataView(ab), i, c, pos = 44;
+    function str(o, s) { for (var k = 0; k < s.length; k++) { v.setUint8(o + k, s.charCodeAt(k)); } }
+    str(0, "RIFF"); v.setUint32(4, 36 + dataBytes, true); str(8, "WAVE");
+    str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+    str(36, "data"); v.setUint32(40, dataBytes, true);
+    var chans = [];
+    for (c = 0; c < ch; c++) { chans.push(buf.getChannelData(c)); }
+    for (i = 0; i < len; i++) {
+      for (c = 0; c < ch; c++) {
+        var s = Math.max(-1, Math.min(1, chans[c][i]));
+        v.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        pos += 2;
+      }
+    }
+    return new Blob([ab], { type: "audio/wav" });
+  }
+  // 録音をオフラインで描画して WAV Blob を返す。cb(blob, 秒数, 途中で切ったか) / cb(null) は失敗
+  function melodyRenderWav(rec, cb) {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC || !rec.notes.length) { cb(null); return; }
+    if (!melodyAudioInit()) { cb(null); return; }
+    var last = 0, i;
+    for (i = 0; i < rec.notes.length; i++) { if (rec.notes[i][0] > last) { last = rec.notes[i][0]; } }
+    var sec = Math.min(MELODY_WAV_MAX_SEC, last / 1000 + MELODY_WAV_TAIL), cut = last / 1000 + MELODY_WAV_TAIL > MELODY_WAV_MAX_SEC;
+    var off;
+    try { off = new OAC(2, Math.ceil(sec * MELODY_WAV_RATE), MELODY_WAV_RATE); } catch (e) { cb(null); return; }
+    // 本番の音源をそのまま使うため、描画のあいだだけ出力先をオフライン側に差し替える
+    var saved = { ctx: melodyAudio.ctx, master: melodyAudio.master, bus: melodyAudio.bus, revSend: melodyAudio.revSend, dlySend: melodyAudio.dlySend };
+    try {
+      var master = off.createGain();
+      master.gain.value = 0.25;
+      master.connect(off.destination);
+      var fx = melodyBuildFx(off, master);
+      if (fx.revSend) { fx.revSend.gain.value = MELODY_REV_SEND[(rec.fxRev >= 0 && rec.fxRev <= 3) ? rec.fxRev : 1]; }
+      if (fx.dlySend) { fx.dlySend.gain.value = MELODY_DLY_SEND[melodyAudio.fxDly || 0]; }
+      melodyAudio.ctx = off; melodyAudio.master = master; melodyAudio.bus = fx.bus; melodyAudio.revSend = fx.revSend; melodyAudio.dlySend = fx.dlySend;
+      for (i = 0; i < rec.notes.length; i++) {
+        var nt = rec.notes[i], t = nt[0] / 1000;
+        if (t > sec - 0.05) { continue; }
+        melodySynth(nt[1], melodyProgOf(rec.prog, nt[2]), Math.max(0.0001, t), nt[3] || 1);
+      }
+    } catch (e2) {
+      off = null;
+    }
+    melodyAudio.ctx = saved.ctx; melodyAudio.master = saved.master; melodyAudio.bus = saved.bus; melodyAudio.revSend = saved.revSend; melodyAudio.dlySend = saved.dlySend;
+    if (!off) { cb(null); return; }
+    var done = false;
+    function finish(buf) {
+      if (done) { return; }
+      done = true;
+      try { cb(melodyEncodeWav(buf), sec, cut); } catch (e3) { cb(null); }
+    }
+    off.oncomplete = function (ev) { finish(ev.renderedBuffer); };
+    try {
+      var pr = off.startRendering();
+      if (pr && pr.then) { pr.then(finish, function () { if (!done) { done = true; cb(null); } }); }
+    } catch (e4) { cb(null); }
+  }
+  // スマホは共有メニュー（保存・送信）、できなければダウンロード
+  function melodySaveBlob(blob, filename) {
+    try {
+      if (window.File && navigator.share && navigator.canShare) {
+        var file = new File([blob], filename, { type: blob.type });
+        if (navigator.canShare({ files: [file] })) {
+          var sp = navigator.share({ files: [file], title: filename });
+          if (sp && sp.catch) { sp.catch(function () {}); }
+          return "share";
+        }
+      }
+    } catch (e) {}
+    try {
+      var url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 3000);
+      return "download";
+    } catch (e2) { return "fail"; }
+  }
+  function melodyExportWav(rec, onState) {
+    if (melodyWavBusy) { return; }
+    melodyWavBusy = rec.id;
+    onState("busy");
+    var started = false;
+    function go() {
+      if (started) { return; }
+      started = true;
+      melodyRenderWav(rec, function (blob, sec, cut) {
+        melodyWavBusy = null;
+        if (!blob) { onState("fail"); return; }
+        var how = melodySaveBlob(blob, "melody-" + melodyFileStamp(rec) + ".wav");
+        onState(how === "fail" ? "fail" : (cut ? "cut" : "ok"), sec);
+      });
+    }
+    // サンプルの読み込みを待つ（8秒で来なければ合成音のまま書き出す）
+    melodyLoadSamples(melodyProgList(rec.prog), go);
+    setTimeout(go, 8000);
+  }
+
   // 設定画面（HTML）
   var melodyToneOpen = false;
 
@@ -3710,7 +3825,8 @@
         '<button class="modal-btn" data-m="preview">&#x1F508; スケール試し聴き</button>' +
         '<button class="modal-btn" data-m="start">&#x25B6;&#xFE0F; スタート</button>' +
         '</div>' +
-        '<h4 style="margin:12px 0 4px;">&#x1F399;&#xFE0F; 録音リスト（最大' + MELODY_REC_MAX + '件）</h4>';
+        '<h4 style="margin:12px 0 4px;">&#x1F399;&#xFE0F; 録音リスト（最大' + MELODY_REC_MAX + '件）</h4>' +
+        (melodyWavMsg ? '<p class="small" style="color:#ffd166;margin:0 0 6px;">' + escHtml(melodyWavMsg) + '</p>' : '');
       if (!recs.length) {
         html += '<p class="small" style="color:#6c757d;">まだ録音はありません。「録音する」をONにして遊ぶと、ゲーム終了時に保存されます。</p>';
       }
@@ -3724,6 +3840,8 @@
           '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + ' / ' + escHtml(gmLabel(melodyProgOf(r.prog, "b"))) + '</span></div>' +
           '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '" title="再生">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
           '<button class="arcade-mini-btn melody-midi-btn" data-m="midi" data-id="' + r.id + '" title="MIDIファイルで保存">&#x1F4BE; MIDI</button>' +
+          '<button class="arcade-mini-btn melody-midi-btn" data-m="wav" data-id="' + r.id + '" title="音声ファイル(WAV)で保存・共有"' + (melodyWavBusy ? " disabled" : "") + '>' +
+          (melodyWavBusy === r.id ? "作成中…" : "&#x1F3A7; WAV") + '</button>' +
           '<button class="arcade-mini-btn" data-m="del" data-id="' + r.id + '" title="削除">&#x1F5D1;&#xFE0F;</button>' +
           '</div>';
       }
@@ -3807,6 +3925,16 @@
       } else if (m === "midi") {
         var r2 = findRec(id);
         if (r2) { melodyDownloadMidi(r2); }
+      } else if (m === "wav") {
+        var r3 = findRec(id);
+        if (r3) {
+          melodyExportWav(r3, function (st, sec) {
+            melodyWavMsg = st === "busy" ? "🎧 WAVを作っています…（長い録音は少し時間がかかります）" :
+              (st === "fail" ? "WAVを作れませんでした（このブラウザでは未対応の可能性があります）" :
+                "🎧 WAVを作りました（" + Math.round(sec) + "秒）" + (st === "cut" ? "。長いので最初の" + MELODY_WAV_MAX_SEC / 60 + "分だけ書き出しました" : ""));
+            if (setupState && setupState.root === root) { render(); }
+          });
+        }
       } else if (m === "del") {
         if (window.confirm && !window.confirm("この録音を削除しますか？")) { return; }
         if (melodyPlayback && melodyPlayback.id === id) { melodyStopPlayback(true); }
