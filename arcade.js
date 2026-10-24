@@ -88,7 +88,8 @@
     host.reported = true;
     if (host.game && typeof host.game.finish === "function") { host.game.finish(host.score); }
     if (host.opts && typeof host.opts.onEnd === "function") {
-      host.opts.onEnd(host.gameId, host.score);
+      var earned = host.opts.onEnd(host.gameId, host.score);
+      host.earned = typeof earned === "number" ? earned : null; // §153 v0.72: 獲得メダル数
     }
   }
 
@@ -278,6 +279,10 @@
       if (host.over && host.score > host.hi) {
         ctx.fillStyle = "#55efc4";
         ctx.fillText("ハイスコア更新！", W / 2, H / 2 + 32);
+      }
+      if (host.over && host.earned !== null && host.earned !== undefined) {
+        ctx.fillStyle = "#ffd166";
+        ctx.fillText("🪙 メダル +" + host.earned + "枚", W / 2, H / 2 + 56);
       }
     }
   }

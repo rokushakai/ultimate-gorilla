@@ -1296,6 +1296,8 @@
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
     arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0, breakout: 0, snake: 0, tennis: 0, crossing: 0, mole: 0, sweeper: 0,
       g2048: 0, reversi: 0, slide: 0, memory: 0, meteor: 0, defense: 0, melody: 0 }, // §146〜§150: ゲームセンターのハイスコア（永続・saveする）
+    arcadeMedals: 0,      // §153 v0.72: ゲームセンターのメダル所持数（永続・saveする）
+    arcadeMedalsTotal: 0, // §153 v0.72: メダル累計獲得数（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -10616,6 +10618,8 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v65-warp-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F6B6; ゲームセンター下(3,2)へワープ</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v65-scores" style="border-color:#a0cfff;color:#a0cfff;">&#x1F3C6; ハイスコア一覧</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v65-reset-scores" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ハイスコアリセット</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v72-medals-1000" style="border-color:#ffd166;color:#ffd166;">&#x1FA99; メダル+1000枚</button>'; // §153 v0.72
+      html += '<button class="shop-menu-btn" id="btn-debug-v72-medals-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; メダルを0枚に</button>';
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {
@@ -15292,6 +15296,18 @@
         saveGame();
         showToast("[DEBUG] ハイスコアを0にリセット");
       };
+      // §153 v0.72: メダルデバッグ
+      document.getElementById("btn-debug-v72-medals-1000").onclick = function () {
+        normalizeArcadeMedals();
+        state.arcadeMedals += 1000;
+        saveGame();
+        showToast("[DEBUG] メダル+1000枚（所持 " + state.arcadeMedals + "枚）");
+      };
+      document.getElementById("btn-debug-v72-medals-reset").onclick = function () {
+        state.arcadeMedals = 0;
+        saveGame();
+        showToast("[DEBUG] メダルを0枚にしました");
+      };
       // §80 v0.27: 仲間自動戦闘テスト
       document.getElementById("btn-debug-companion-battle-wilddog").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
@@ -17669,6 +17685,8 @@
         companionTechniqueLearnedNotices: state.companionTechniqueLearnedNotices || {}, // §139 v0.58: 仲間わざ習得演出済みフラグ
         companionTechnique2LearnedNotices: state.companionTechnique2LearnedNotices || {}, // §145 v0.64: 仲間わざ2習得演出済みフラグ
         arcadeHighScores: state.arcadeHighScores || {}, // §146 v0.65: ゲームセンターのハイスコア
+        arcadeMedals: state.arcadeMedals || 0, // §153 v0.72: ゲームセンターのメダル所持数
+        arcadeMedalsTotal: state.arcadeMedalsTotal || 0, // §153 v0.72: メダル累計獲得数
         companionBags: state.companionBags || {} // §142 v0.61: 仲間個人バッグ
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -17838,6 +17856,10 @@
       // §146 v0.65: ゲームセンターのハイスコア（旧セーブはundefined→0補完）
       state.arcadeHighScores = data.arcadeHighScores || {};
       normalizeArcadeHighScores();
+      // §153 v0.72: メダル（旧セーブは0）
+      state.arcadeMedals = data.arcadeMedals;
+      state.arcadeMedalsTotal = data.arcadeMedalsTotal;
+      normalizeArcadeMedals();
       // §145 v0.64: 仲間わざ2習得演出済みフラグ（旧セーブはundefined→{}補完・never-demote）
       state.companionTechnique2LearnedNotices = data.companionTechnique2LearnedNotices || {};
       var _tech2LearnFlagChanged = normalizeCompanionTechnique2LearnedNotices();
@@ -19239,7 +19261,7 @@
   function openArcadeModal() {
     if (state.inBattle) { return; }
     openModal("modal-arcade");
-    renderArcadeMenu();
+    renderArcadeMenu("games");
   }
 
   function closeArcadeModal() {
@@ -19251,34 +19273,185 @@
     renderField();
   }
 
-  function renderArcadeMenu() {
+  // §153 v0.72: メダル（スコア÷換算値、最大100枚/プレイ、ハイスコア更新+5）
+  var ARCADE_MEDAL_RATE = {
+    blocks: 100, shooter: 75, pinball: 250, breakout: 80, melody: 80, snake: 8, tennis: 30, crossing: 15,
+    mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75
+  };
+  var ARCADE_MEDAL_MAX_PER_PLAY = 100, ARCADE_MEDAL_HISCORE_BONUS = 5;
+  // §153 v0.72: 景品（メダル1枚 ≒ 5G）。伝説装備・ウクレレ・仲間報酬装備・商人で買える装備は扱わない
+  var ARCADE_PRIZES = [
+    { id: "g50", cat: "gold", kind: "gold", amount: 50, cost: 10 },
+    { id: "g260", cat: "gold", kind: "gold", amount: 260, cost: 50 },
+    { id: "g1100", cat: "gold", kind: "gold", amount: 1100, cost: 200 },
+    { id: "exp_s", cat: "exp", kind: "exp", mult: 0.5, cost: 15, name: "経験値パック小", note: "次のLvまでの50%" },
+    { id: "exp_l", cat: "exp", kind: "exp", mult: 1.5, cost: 40, name: "経験値パック大", note: "次のLvまでの150%" },
+    { id: "i_potion", cat: "item", kind: "item", itemId: "potion", cost: 2 },
+    { id: "i_coffee", cat: "item", kind: "item", itemId: "coffee", cost: 1 },
+    { id: "i_bread", cat: "item", kind: "item", itemId: "bread", cost: 2 },
+    { id: "i_bento", cat: "item", kind: "item", itemId: "bento", cost: 4 },
+    { id: "i_ramen", cat: "item", kind: "item", itemId: "ramen", cost: 8 },
+    { id: "i_rope", cat: "item", kind: "item", itemId: "rope", cost: 3 },
+    { id: "i_coughsyrup", cat: "item", kind: "item", itemId: "coughsyrup", cost: 3 },
+    { id: "i_deodorant", cat: "item", kind: "item", itemId: "deodorant", cost: 3 },
+    { id: "e_rockcutter", cat: "equip", kind: "equip", slot: "weapon", equipId: "rockcutter", cost: 150, minLevel: 20 },
+    { id: "e_ironcutter", cat: "equip", kind: "equip", slot: "weapon", equipId: "ironcutter", cost: 250, minLevel: 30 },
+    { id: "e_megatonhammer", cat: "equip", kind: "equip", slot: "weapon", equipId: "megatonhammer", cost: 400, minLevel: 40 },
+    { id: "e_spiritsword", cat: "equip", kind: "equip", slot: "weapon", equipId: "spiritsword", cost: 600, minLevel: 50 },
+    { id: "e_chainsaw", cat: "equip", kind: "equip", slot: "weapon", equipId: "chainsaw", cost: 1000, minLevel: 70 },
+    { id: "e_shingenkabuto", cat: "equip", kind: "equip", slot: "helmet", equipId: "shingenkabuto", cost: 200, minLevel: 25 },
+    { id: "e_nobunagaarmor", cat: "equip", kind: "equip", slot: "armor", equipId: "nobunagaarmor", cost: 350, minLevel: 35 },
+    { id: "e_turtlegi", cat: "equip", kind: "equip", slot: "armor", equipId: "turtlegi", cost: 700, minLevel: 55 }
+  ];
+  var ARCADE_PRIZE_CATS = [
+    { id: "gold", name: "💰 ゴールド" }, { id: "exp", name: "⭐ 経験値（Lv98まで）" },
+    { id: "item", name: "🧪 アイテム" }, { id: "equip", name: "⚔️ メダル限定装備" }
+  ];
+  var ARCADE_EXP_LEVEL_CAP = 98;
+  var _arcadeView = "games";
+
+  function normalizeArcadeMedals() {
+    var m = state.arcadeMedals, t = state.arcadeMedalsTotal;
+    state.arcadeMedals = (typeof m === "number" && !isNaN(m) && m > 0) ? Math.floor(m) : 0;
+    state.arcadeMedalsTotal = (typeof t === "number" && !isNaN(t) && t > 0) ? Math.floor(t) : 0;
+  }
+
+  function calcArcadeMedals(gameId, score, isHiScore) {
+    var rate = ARCADE_MEDAL_RATE[gameId] || 100;
+    var n = Math.min(ARCADE_MEDAL_MAX_PER_PLAY, Math.floor(Math.max(0, score) / rate));
+    return n + (isHiScore && score > 0 ? ARCADE_MEDAL_HISCORE_BONUS : 0);
+  }
+
+  function getArcadePrizeName(pz) {
+    if (pz.kind === "gold") { return pz.amount + "G"; }
+    if (pz.kind === "exp") { return pz.name; }
+    if (pz.kind === "item") { var it = findById(ITEM_DATA, pz.itemId); return it ? it.name : pz.itemId; }
+    var eq = findById(findEquipSlot(pz.slot).data(), pz.equipId);
+    return eq ? eq.name : pz.equipId;
+  }
+
+  // 経験値パックの量（Lv99に届く量なら Lv98・次まで残り1 で止める）
+  function getArcadeExpAmount(pz) {
+    var p = state.player;
+    var amt = Math.max(1, Math.round(p.nextExp * pz.mult));
+    if (p.level >= ARCADE_EXP_LEVEL_CAP) { return 0; }
+    var maxAmt = p.nextExp - p.exp;
+    for (var lv = p.level + 1; lv < ARCADE_EXP_LEVEL_CAP; lv++) { maxAmt += lv * 10 + 15; }
+    maxAmt += ARCADE_EXP_LEVEL_CAP * 10 + 15 - 1;
+    return Math.min(amt, maxAmt);
+  }
+
+  function getArcadePrizeStatus(pz) {
+    normalizeArcadeMedals();
+    if (pz.kind === "equip") {
+      var slotInfo = findEquipSlot(pz.slot);
+      if (isEquipOwned(slotInfo, pz.equipId)) { return { ok: false, reason: "所持済み" }; }
+      if (state.player.level < pz.minLevel) { return { ok: false, reason: "Lv" + pz.minLevel + "から" }; }
+    }
+    if (pz.kind === "exp" && getArcadeExpAmount(pz) <= 0) { return { ok: false, reason: "Lv99は冒険で！" }; }
+    if (state.arcadeMedals < pz.cost) { return { ok: false, reason: "メダル不足" }; }
+    return { ok: true, reason: "" };
+  }
+
+  function exchangeArcadePrize(prizeId) {
+    var pz = null;
+    for (var i = 0; i < ARCADE_PRIZES.length; i++) { if (ARCADE_PRIZES[i].id === prizeId) { pz = ARCADE_PRIZES[i]; } }
+    if (!pz || state.inBattle) { return; }
+    if (!getArcadePrizeStatus(pz).ok) { return; }
+    var name = getArcadePrizeName(pz);
+    if (pz.cost >= 100 && window.confirm && !window.confirm("🪙 " + pz.cost + "枚で「" + name + "」と交換しますか？")) { return; }
+    var p = state.player;
+    if (pz.kind === "exp") {
+      var amt = getArcadeExpAmount(pz);
+      state.arcadeMedals -= pz.cost;
+      closeArcadeModal(); // レベルアップ画面を出すため、ゲームセンターを閉じてから受け取る
+      addExp(amt);
+      saveGame();
+      showToast("⭐ 経験値を" + amt + "受け取った！（🪙 残り" + state.arcadeMedals + "枚）");
+      return;
+    }
+    state.arcadeMedals -= pz.cost;
+    if (pz.kind === "gold") {
+      p.gold += pz.amount;
+    } else if (pz.kind === "item") {
+      addItemCount(pz.itemId, 1);
+    } else if (pz.kind === "equip") {
+      p[findEquipSlot(pz.slot).ownedKey].push(pz.equipId);
+    }
+    updateStatusBar();
+    saveGame();
+    showToast("🎁 「" + name + "」と交換した！" + (pz.kind === "equip" ? "装備変更画面で装備できます" : "") + "（🪙 残り" + state.arcadeMedals + "枚）");
+    renderArcadeMenu("prizes");
+  }
+
+  function renderArcadeMenu(view) {
     var menuEl = document.getElementById("arcade-menu");
     var stageEl = document.getElementById("arcade-stage");
     if (!menuEl || !stageEl) { return; }
+    if (view === "games" || view === "prizes") { _arcadeView = view; }
+    normalizeArcadeMedals();
     stageEl.innerHTML = "";
     stageEl.classList.add("hidden");
     menuEl.classList.remove("hidden");
-    var html = '<h3 style="margin:0 0 6px;">&#x1F579;&#xFE0F; ゲームセンター</h3>' +
-      '<p class="small" style="color:#adb5bd;margin:0 0 10px;">なつかしのミニゲームで一息つこう。ハイスコアは記録されるよ。</p>';
-    if (!window.UGArcade) {
-      html += '<p style="color:#ff7675;">ゲーム機の電源が入っていないようだ…（arcade.js を読み込めませんでした）</p>';
+    var i, html = '<h3 style="margin:0 0 6px;">&#x1F579;&#xFE0F; ゲームセンター</h3>' +
+      '<div class="arcade-medal-bar"><span>&#x1FA99; メダル <b>' + state.arcadeMedals + '</b>枚</span>' +
+      '<span class="small" style="color:#adb5bd;">所持金 ' + state.player.gold + 'G</span></div>' +
+      '<div class="arcade-tabs">' +
+      '<button class="modal-btn' + (_arcadeView === "games" ? " active" : "") + '" data-arcade-view="games">&#x1F3AE; ゲーム</button>' +
+      '<button class="modal-btn' + (_arcadeView === "prizes" ? " active" : "") + '" data-arcade-view="prizes">&#x1F381; 景品交換所</button>' +
+      '</div>';
+    if (_arcadeView === "prizes") {
+      html += '<p class="small" style="color:#adb5bd;margin:0 0 8px;">遊んで集めたメダルを、冒険に役立つ景品と交換しよう。</p>';
+      for (var c = 0; c < ARCADE_PRIZE_CATS.length; c++) {
+        html += '<h4 class="arcade-prize-cat">' + ARCADE_PRIZE_CATS[c].name + '</h4>';
+        for (i = 0; i < ARCADE_PRIZES.length; i++) {
+          var pz = ARCADE_PRIZES[i];
+          if (pz.cat !== ARCADE_PRIZE_CATS[c].id) { continue; }
+          var st = getArcadePrizeStatus(pz), sub = "";
+          if (pz.kind === "exp") { sub = pz.note + (getArcadeExpAmount(pz) > 0 ? "（いまなら EXP " + getArcadeExpAmount(pz) + "）" : ""); }
+          else if (pz.kind === "item") { sub = "所持 " + getItemCount(pz.itemId) + "個"; }
+          else if (pz.kind === "equip") {
+            var eq = findById(findEquipSlot(pz.slot).data(), pz.equipId);
+            sub = (eq ? bonusText(eq) : "") + " ・ Lv" + pz.minLevel + "以上";
+          }
+          html += '<div class="arcade-game-row">' +
+            '<div class="arcade-game-info"><b>' + getArcadePrizeName(pz) + '</b>' +
+            (sub ? '<span class="small" style="color:#adb5bd;">' + sub + '</span>' : '') +
+            '<span class="small" style="color:#ffd166;">&#x1FA99; ' + pz.cost + '枚</span></div>' +
+            '<button class="modal-btn" data-arcade-prize="' + pz.id + '"' + (st.ok ? "" : " disabled") + '>' + (st.ok ? "交換" : st.reason) + '</button>' +
+            '</div>';
+        }
+      }
     } else {
-      var games = window.UGArcade.list();
-      for (var i = 0; i < games.length; i++) {
-        var g = games[i];
-        html += '<div class="arcade-game-row">' +
-          '<div class="arcade-game-info"><b>' + g.icon + ' ' + g.name + '</b>' +
-          '<span class="small" style="color:#adb5bd;">' + g.desc + '</span>' +
-          '<span class="small" style="color:#ffd166;">HI ' + getArcadeHighScore(g.id) + '</span></div>' +
-          '<button class="modal-btn" data-arcade-game="' + g.id + '">あそぶ</button>' +
-          '</div>';
+      html += '<p class="small" style="color:#adb5bd;margin:0 0 10px;">なつかしのミニゲームで一息つこう。スコアに応じてメダルがもらえるよ（1回最大' + ARCADE_MEDAL_MAX_PER_PLAY + '枚＋ハイスコアで+' + ARCADE_MEDAL_HISCORE_BONUS + '）。</p>';
+      if (!window.UGArcade) {
+        html += '<p style="color:#ff7675;">ゲーム機の電源が入っていないようだ…（arcade.js を読み込めませんでした）</p>';
+      } else {
+        var games = window.UGArcade.list();
+        for (i = 0; i < games.length; i++) {
+          var g = games[i];
+          html += '<div class="arcade-game-row">' +
+            '<div class="arcade-game-info"><b>' + g.icon + ' ' + g.name + '</b>' +
+            '<span class="small" style="color:#adb5bd;">' + g.desc + '</span>' +
+            '<span class="small" style="color:#ffd166;">HI ' + getArcadeHighScore(g.id) + ' ・ &#x1FA99; ' + (ARCADE_MEDAL_RATE[g.id] || 100) + '点で1枚</span></div>' +
+            '<button class="modal-btn" data-arcade-game="' + g.id + '">あそぶ</button>' +
+            '</div>';
+        }
       }
     }
     html += '<button class="modal-btn" id="btn-arcade-close" style="width:100%;margin-top:10px;">でる</button>';
     menuEl.innerHTML = html;
     var btns = menuEl.querySelectorAll("button[data-arcade-game]");
-    for (var b = 0; b < btns.length; b++) {
-      btns[b].onclick = function (ev) { startArcadeGame(ev.currentTarget.getAttribute("data-arcade-game")); };
+    for (i = 0; i < btns.length; i++) {
+      btns[i].onclick = function (ev) { startArcadeGame(ev.currentTarget.getAttribute("data-arcade-game")); };
+    }
+    var pbtns = menuEl.querySelectorAll("button[data-arcade-prize]");
+    for (i = 0; i < pbtns.length; i++) {
+      pbtns[i].onclick = function (ev) { exchangeArcadePrize(ev.currentTarget.getAttribute("data-arcade-prize")); };
+    }
+    var tbtns = menuEl.querySelectorAll("button[data-arcade-view]");
+    for (i = 0; i < tbtns.length; i++) {
+      tbtns[i].onclick = function (ev) { renderArcadeMenu(ev.currentTarget.getAttribute("data-arcade-view")); };
     }
     document.getElementById("btn-arcade-close").onclick = closeArcadeModal;
   }
@@ -19307,15 +19480,20 @@
     renderArcadeMenu();
   }
 
-  // ゲーム終了（ゲームオーバー or やめる）時に1回だけ呼ばれる
+  // ゲーム終了（ゲームオーバー or やめる）時に1回だけ呼ばれる。獲得メダル数を返す（§153 v0.72）
   function onArcadeGameEnd(gameId, score) {
-    if (ARCADE_GAME_IDS.indexOf(gameId) < 0) { return; }
+    if (ARCADE_GAME_IDS.indexOf(gameId) < 0) { return 0; }
     score = Math.floor(score) || 0;
-    if (score > getArcadeHighScore(gameId)) {
-      state.arcadeHighScores[gameId] = score;
-      saveGame();
-      showToast("🏆 ハイスコア更新！ " + score + "点");
-    }
+    var isHi = score > getArcadeHighScore(gameId);
+    if (isHi) { state.arcadeHighScores[gameId] = score; }
+    normalizeArcadeMedals();
+    var medals = calcArcadeMedals(gameId, score, isHi);
+    state.arcadeMedals += medals;
+    state.arcadeMedalsTotal += medals;
+    if (isHi || medals > 0) { saveGame(); }
+    if (isHi) { showToast("🏆 ハイスコア更新！ " + score + "点 ／ 🪙 +" + medals + "枚"); }
+    else if (medals > 0) { showToast("🪙 メダル +" + medals + "枚（所持 " + state.arcadeMedals + "枚）"); }
+    return medals;
   }
 
   function openHintShopModal() {

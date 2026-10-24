@@ -909,3 +909,38 @@ html, body {
   padding: 0 6px;
   white-space: nowrap;
 }
+/* ===== §153 v0.72: メダル・景品交換所 ===== */
+.arcade-medal-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: #2d2a12;
+  border: 1px solid #ffd166;
+  border-radius: 8px;
+  color: #ffd166;
+  font-size: 14px;
+}
+.arcade-medal-bar b { font-size: 18px; color: #ffffff; }
+.arcade-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.arcade-tabs .modal-btn {
+  flex: 1;
+  margin-top: 0;
+  padding: 8px 6px;
+  opacity: 0.6;
+}
+.arcade-tabs .modal-btn.active { opacity: 1; }
+.arcade-prize-cat {
+  margin: 10px 0 6px;
+  color: #ffd166;
+  text-align: left;
+}
+.arcade-game-row .modal-btn:disabled {
+  opacity: 0.45;
+  font-size: 11px;
+}

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.71** |
+| 現在バージョン | **v0.72** |
 | ブランチ | main |
 
 ---
@@ -93,6 +93,11 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.72] ゲームセンターメダル＆景品交換所**（§153）
+  - `ARCADE_MEDAL_RATE`（ゲーム別換算値）/ `calcArcadeMedals` / `onArcadeGameEnd` がメダル数を返す → arcade.js が終了画面に表示
+  - `ARCADE_PRIZES` / `getArcadePrizeStatus` / `exchangeArcadePrize` / `renderArcadeMenu(view)`（"games" / "prizes"）
+  - 経験値は `addExp` 直接（のりお倍率なし）・`ARCADE_EXP_LEVEL_CAP = 98`。交換時はゲームセンターを閉じてから付与（levelup-modal と重ならないように）
+  - 新しいゲームを足すときは `ARCADE_MEDAL_RATE` にも換算値を入れること
 - **[v0.71] メロディくずし 和音モード**（§152）
   - `melodyChordMidis(scale, key, deg, size, shift)` / `melodyChordName(midis)`。ゲーム内は度数（deg）で扱い、`sound(deg, voice, x, y, shift)` で単音/和音を鳴らす
   - 録音の1音 = `[時刻ms, MIDI, voice, (音量)]`（音量は1未満のときだけ）。prefs: chord / arp / chordAt
@@ -1003,6 +1008,7 @@ var DEBUG_MODE = window.location.search.indexOf("debug=1") >= 0;
 3. **さらなるゲーム追加候補**: ソリティア、五目ならべ（対CPU）、ナンプレ、タイピング、ジャンプアクション 等（プロデューサー判断）
 4. **ゲームセンターメニューの整理**（15本で縦に長いので、ジャンル別タブ等）
 
+> v0.72（§153 メダル＆景品交換所）実装済み。実プレイでの獲得ペース（1回あたり約20枚の想定）と景品価格の調整が次の課題。
 > v0.71（§152 和音モード）実装済み。
 > v0.70（§151 GM音色・Web MIDI・MIDI書き出し強化）実装済み。実機（Windows Chrome + GS Wavetable Synth）での確認が次の課題。
 > v0.69（§150 メロディくずし）実装済み。実機での音の確認（特にiOSの消音スイッチ・音量）が次の課題。
