@@ -2639,7 +2639,9 @@
   var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   var MELODY_PREFS_KEY = "ultimateGorillaMelodyPrefsV1";
   var MELODY_REC_KEY = "ultimateGorillaMelodyRecV1";
-  var MELODY_REC_MAX = 5, MELODY_REC_NOTES_MAX = 2000;
+  var MELODY_REC_MAX = 5, MELODY_REC_NOTES_MAX = 4000; // §152 v0.71: 和音で音数が増えるため 2000→4000
+  var MELODY_CHORDS = [{ n: 1, name: "単音" }, { n: 3, name: "3和音（トライアド）" }, { n: 4, name: "4和音（セブンス）" }, { n: 5, name: "5和音（ナインス）" }];
+  var MELODY_CHORD_AT = [{ id: "bw", name: "ブロックと壁（パドルは単音ベース）" }, { id: "all", name: "すべて（パドルも）" }, { id: "b", name: "ブロックだけ" }];
   var MELODY_MODES = [{ id: "pos", name: "📍 位置で決まる（近い場所＝近い音）" }, { id: "rand", name: "🎲 ランダム（スケール内）" }];
   var MELODY_SCALES = [
     { id: "chromatic", group: "基本", name: "クロマチック（制限なし）", iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
@@ -2828,9 +2830,18 @@
     src.stop(t + dur + 0.05);
   }
 
-  function melodyDrum(ac, m, t) {
+  // 和音のときなど音量を下げる出口（level 1 = そのまま）
+  function melodyLevelOut(ac, level) {
+    if (!(level > 0) || level >= 1) { return melodyAudio.master; }
+    var g = ac.createGain();
+    g.gain.value = level;
+    g.connect(melodyAudio.master);
+    return g;
+  }
+
+  function melodyDrum(ac, m, t, level) {
     var env = ac.createGain();
-    env.connect(melodyAudio.master);
+    env.connect(melodyLevelOut(ac, level));
     var o, dur;
     if (m < 45) { // キック
       dur = 0.3;
@@ -2868,11 +2879,11 @@
     env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   }
 
-  function melodySynth(midi, prog, when) {
+  function melodySynth(midi, prog, when, level) {
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
-    if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t); return; }
+    if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level); return; }
     var r = melodyRecipe(prog);
     var f = 440 * Math.pow(2, (midi - 69) / 12);
     var env = ac.createGain(), target = env, i;
@@ -2883,7 +2894,7 @@
       env.gain.setValueAtTime(r.peak * r.sus, t + Math.max(r.a + 0.07, r.dur - r.rel));
     }
     env.gain.exponentialRampToValueAtTime(0.0001, t + r.dur);
-    env.connect(melodyAudio.master);
+    env.connect(melodyLevelOut(ac, level));
     if (r.lp) {
       var lp = ac.createBiquadFilter();
       lp.type = "lowpass";
@@ -2973,19 +2984,65 @@
   }
 
   // 1音を鳴らす（出力先に応じて内蔵シンセ or MIDI機器）。whenPerf は performance.now 基準
-  function melodyNote(midi, voice, progMap, whenPerf) {
+  // level: 音量の比率（和音のとき 1/√音数）。MIDIではベロシティに反映（最低40）
+  function melodyNote(midi, voice, progMap, whenPerf, level) {
     var prog = melodyProgOf(progMap, voice), v = melodyVoice(voice);
+    var lv = (level > 0 && level < 1) ? level : 1;
     if (melodyMidi.out) {
       var drum = prog === MELODY_DRUM;
       var ch = drum ? 9 : v.ch, note = drum ? clamp(midi, 35, 81) : clamp(midi, 0, 127);
       var ts = whenPerf || perfNow();
-      melodyMidiSend([0x90 | ch, note, 100], ts);
+      melodyMidiSend([0x90 | ch, note, Math.max(40, Math.round(100 * lv))], ts);
       melodyMidiSend([0x80 | ch, note, 0], ts + v.dur);
       return;
     }
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
-    melodySynth(midi, prog, whenPerf ? ac.currentTime + Math.max(0, whenPerf - perfNow()) / 1000 : 0);
+    melodySynth(midi, prog, whenPerf ? ac.currentTime + Math.max(0, whenPerf - perfNow()) / 1000 : 0, lv);
+  }
+
+  // 和音: 根音の度数 deg からスケール内で1つおきに積む（クロマチックは 0/4/7/11/14 半音）
+  function melodyChordMidis(scale, key, deg, size, shift) {
+    var out = [], i, n = Math.max(1, size || 1);
+    if (scale.id === "chromatic") {
+      var root = melodyDegreeToMidi(scale, key, deg), iv = [0, 4, 7, 11, 14];
+      for (i = 0; i < n; i++) { out.push(root + iv[i]); }
+    } else {
+      for (i = 0; i < n; i++) { out.push(melodyDegreeToMidi(scale, key, deg + 2 * i)); }
+    }
+    for (i = 0; i < out.length; i++) { out[i] += shift || 0; }
+    if (out[out.length - 1] > 100) { for (i = 0; i < out.length; i++) { out[i] -= 12; } }
+    return out;
+  }
+
+  var CHORD_TRIADS = { "4,7": "", "3,7": "m", "3,6": "dim", "4,8": "aug", "2,7": "sus2", "5,7": "sus4", "4,6": "(b5)" };
+  var CHORD_SEVENTHS = {
+    "": { 11: "M7", 10: "7", 9: "6" }, "m": { 11: "mM7", 10: "m7", 9: "m6" }, "dim": { 10: "m7(b5)", 9: "dim7" },
+    "aug": { 10: "aug7", 11: "augM7" }, "sus4": { 10: "7sus4", 11: "M7sus4" }, "sus2": { 10: "7sus2", 11: "M7sus2" },
+    "(b5)": { 10: "7(b5)", 11: "M7(b5)" }
+  };
+  var CHORD_TENSIONS = { 2: "(9)", 1: "(b9)", 3: "(#9)" };
+  // コード名（3度積みでなければ構成音名を並べる）
+  function melodyChordName(midis) {
+    var names = [], rel = [], i;
+    for (i = 0; i < midis.length; i++) {
+      names.push(NOTE_NAMES[midis[i] % 12]);
+      rel.push(((midis[i] - midis[0]) % 12 + 12) % 12);
+    }
+    if (midis.length < 3) { return midiName(midis[0]); }
+    var plain = names.join(" ");
+    var q = CHORD_TRIADS[rel[1] + "," + rel[2]];
+    if (q === undefined) { return plain; }
+    var out = names[0] + q;
+    if (midis.length === 3) { return out; }
+    var s7 = CHORD_SEVENTHS[q] ? CHORD_SEVENTHS[q][rel[3]] : undefined;
+    if (!s7) { return plain; }
+    out = names[0] + s7;
+    if (midis.length === 4) { return out; }
+    var ten = CHORD_TENSIONS[rel[4]];
+    if (!ten) { return plain; }
+    // m7(b5) + (b9) → m7(b5,b9)
+    return out.charAt(out.length - 1) === ")" ? out.slice(0, -1) + "," + ten.slice(1) : out + ten;
   }
 
   function melodyStopPlayback(silent) {
@@ -3003,12 +3060,13 @@
     if (!rec.notes.length) { if (onEnd) { onEnd(); } return; }
     melodyMidiPrograms(rec.prog);
     var st = { id: rec.id, idx: 0, t0: perfNow() + 150, onEnd: onEnd, timer: null };
-    var last = rec.notes[rec.notes.length - 1][0];
+    var last = 0;
+    for (var li = 0; li < rec.notes.length; li++) { if (rec.notes[li][0] > last) { last = rec.notes[li][0]; } }
     st.timer = setInterval(function () {
       var now = perfNow();
       while (st.idx < rec.notes.length && st.t0 + rec.notes[st.idx][0] < now + 250) {
         var nt = rec.notes[st.idx];
-        melodyNote(nt[1], nt[2], rec.prog, st.t0 + nt[0]);
+        melodyNote(nt[1], nt[2], rec.prog, st.t0 + nt[0], nt[3] || 1);
         st.idx++;
       }
       if (st.idx >= rec.notes.length && now > st.t0 + last + 1000) { melodyStopPlayback(); }
@@ -3026,6 +3084,9 @@
       sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
       rec: typeof p.rec === "boolean" ? p.rec : true,
       relax: p.relax === true,
+      chord: (p.chord === 3 || p.chord === 4 || p.chord === 5) ? p.chord : 1,
+      arp: p.arp === true,
+      chordAt: (p.chordAt === "all" || p.chordAt === "b") ? p.chordAt : "bw",
       prog: melodyCleanProg(p.prog),
       output: typeof p.output === "string" ? p.output : "synth"
     };
@@ -3066,7 +3127,7 @@
     for (i = 0; i < rec.notes.length; i++) {
       var nt = rec.notes[i], v = melodyVoice(nt[2]), prog = melodyProgOf(rec.prog, nt[2]);
       var drum = prog === MELODY_DRUM, c = drum ? 9 : v.ch, m = drum ? clamp(nt[1], 35, 81) : clamp(nt[1], 0, 127);
-      ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, 96]]);
+      ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, Math.max(40, Math.round(96 * (nt[3] || 1)))]]);
       ev.push([Math.round((nt[0] + v.dur) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
     }
     ev.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
@@ -3167,8 +3228,17 @@
     }
     function preview() {
       startTones();
-      var sc = melodyScale(prefs.scale), n = sc.iv.length, t = perfNow() + 60;
-      for (var i = 0; i <= n; i++) { melodyNote(melodyDegreeToMidi(sc, prefs.key, n + i), "b", prefs.prog, t + i * 160); }
+      var sc = melodyScale(prefs.scale), n = sc.iv.length, t = perfNow() + 60, i, j;
+      if (prefs.chord > 1) {
+        // 和音モード: I → IV → V → I（スケールの1・4・5・1番目の音を根音に）
+        var roots = [0, Math.min(3, n - 1), Math.min(4, n - 1), 0];
+        for (i = 0; i < roots.length; i++) {
+          var ms = melodyChordMidis(sc, prefs.key, n + roots[i], prefs.chord, 0), lv = 1 / Math.sqrt(ms.length);
+          for (j = 0; j < ms.length; j++) { melodyNote(ms[j], "b", prefs.prog, t + i * 600 + (prefs.arp ? j * 45 : 0), lv); }
+        }
+        return;
+      }
+      for (i = 0; i <= n; i++) { melodyNote(melodyDegreeToMidi(sc, prefs.key, n + i), "b", prefs.prog, t + i * 160); }
     }
     function previewTone(v) {
       startTones();
@@ -3192,6 +3262,19 @@
         '<label class="melody-row"><span>スケール</span><select data-p="scale">' + scaleOptions() + '</select></label>' +
         '<label class="melody-row"><span>キー（主音）</span><select data-p="key">';
       for (i = 0; i < 12; i++) { html += '<option value="' + i + '"' + (i === prefs.key ? " selected" : "") + ">" + NOTE_NAMES[i] + "</option>"; }
+      html += '</select></label>' +
+        '<label class="melody-row"><span>和音</span><select data-p="chord">';
+      for (i = 0; i < MELODY_CHORDS.length; i++) {
+        html += '<option value="' + MELODY_CHORDS[i].n + '"' + (MELODY_CHORDS[i].n === prefs.chord ? " selected" : "") + ">" + MELODY_CHORDS[i].name + "</option>";
+      }
+      html += '</select></label>' +
+        '<label class="melody-row"><span>和音の鳴らし方</span><select data-p="arp">' +
+        '<option value="0"' + (prefs.arp ? "" : " selected") + '>同時に鳴らす</option>' +
+        '<option value="1"' + (prefs.arp ? " selected" : "") + '>アルペジオ（下から順に）</option></select></label>' +
+        '<label class="melody-row"><span>和音を鳴らす所</span><select data-p="chordAt">';
+      for (i = 0; i < MELODY_CHORD_AT.length; i++) {
+        html += '<option value="' + MELODY_CHORD_AT[i].id + '"' + (MELODY_CHORD_AT[i].id === prefs.chordAt ? " selected" : "") + ">" + MELODY_CHORD_AT[i].name + "</option>";
+      }
       html += '</select></label>' +
         '<details class="melody-tones"' + (melodyToneOpen ? " open" : "") + '><summary>&#x1F3BB; 音色（GM）</summary>';
       for (i = 0; i < MELODY_VOICES.length; i++) {
@@ -3221,7 +3304,8 @@
         var r = recs[i], playing = melodyPlayback && melodyPlayback.id === r.id;
         html += '<div class="melody-rec">' +
           '<div class="melody-rec-info"><b>' + melodyRecLabel(r) + '</b>' +
-          '<span class="small">' + NOTE_NAMES[r.key || 0] + ' ' + escHtml(melodyScale(r.scale).name) + (r.mode === "rand" ? " 🎲" : " 📍") + '</span>' +
+          '<span class="small">' + NOTE_NAMES[r.key || 0] + ' ' + escHtml(melodyScale(r.scale).name) + (r.mode === "rand" ? " 🎲" : " 📍") +
+          (r.chord > 1 ? " / " + r.chord + "和音" + (r.arp ? "・アルペジオ" : "") : "") + '</span>' +
           '<span class="small" style="color:#adb5bd;">' + r.notes.length + '音 / SCORE ' + (r.score || 0) + ' / ' + escHtml(gmLabel(melodyProgOf(r.prog, "b"))) + '</span></div>' +
           '<button class="arcade-mini-btn" data-m="' + (playing ? "stop" : "play") + '" data-id="' + r.id + '" title="再生">' + (playing ? "&#x23F9;" : "&#x25B6;&#xFE0F;") + '</button>' +
           '<button class="arcade-mini-btn melody-midi-btn" data-m="midi" data-id="' + r.id + '" title="MIDIファイルで保存">&#x1F4BE; MIDI</button>' +
@@ -3235,7 +3319,9 @@
       for (i = 0; i < sels.length; i++) {
         sels[i].onchange = function (ev) {
           var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
-          prefs[k] = k === "key" ? parseInt(v, 10) : v;
+          if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
+          else if (k === "arp") { prefs[k] = v === "1"; }
+          else { prefs[k] = v; }
           if (k === "output") { applyOutput(); }
           savePrefs();
         };
@@ -3277,7 +3363,8 @@
       if (m === "start") {
         if (prefs.sound) { startTones(); }
         melodyStopPlayback(true);
-        ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog) });
+        ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog),
+          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt });
       } else if (m === "preview") {
         preview();
       } else if (m === "tone") {
@@ -3345,17 +3432,38 @@
         if (melodyMidi.out) { melodyMidiPrograms(prog); } else { melodyAudioInit(); }
       }
 
-      function noteAt(x, y) {
-        var deg = cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
-        return melodyDegreeToMidi(scale, key, deg);
+      var chordSize = (cfg.chord === 3 || cfg.chord === 4 || cfg.chord === 5) ? cfg.chord : 1;
+      var chordAt = cfg.chordAt || "bw";
+
+      function degAt(x, y) {
+        return cfg.mode === "rand" ? randInt(0, nDeg - 1) : melodyPosDegree(scale, x, y);
       }
-      function sound(midi, voice, x, y) {
-        if (cfg.sound) { melodyNote(midi, voice, prog); }
-        if (cfg.rec) {
-          if (notes.length < MELODY_REC_NOTES_MAX) { notes.push([Math.round(frame * 1000 / 60), midi, voice]); }
-          else { recFull = true; }
+      function noteAt(x, y) { return melodyDegreeToMidi(scale, key, degAt(x, y)); }
+      // 鳴り所ごとに和音にするか（§152）
+      function sizeFor(voice) {
+        if (chordSize <= 1) { return 1; }
+        if (chordAt === "all") { return chordSize; }
+        if (chordAt === "b") { return (voice === "b" || voice === "p") ? chordSize : 1; }
+        return voice === "s" ? 1 : chordSize;
+      }
+      // deg を根音に単音 or 和音で鳴らし、録音し、音名/コード名を表示する
+      function sound(deg, voice, x, y, shift) {
+        var midis = melodyChordMidis(scale, key, deg, sizeFor(voice), shift || 0);
+        var lv = midis.length > 1 ? 1 / Math.sqrt(midis.length) : 1;
+        var now = perfNow(), tms = Math.round(frame * 1000 / 60);
+        for (var i = 0; i < midis.length; i++) {
+          var off = (cfg.arp && i > 0) ? i * 45 : 0;
+          if (cfg.sound) { melodyNote(midis[i], voice, prog, off ? now + off : 0, lv); }
+          if (cfg.rec) {
+            if (notes.length < MELODY_REC_NOTES_MAX) {
+              var ev = [tms + off, midis[i], voice];
+              if (lv < 1) { ev.push(Math.round(lv * 100) / 100); }
+              notes.push(ev);
+            } else { recFull = true; }
+          }
         }
-        pops.push({ x: clamp(x, 14, W - 14), y: clamp(y, 12, H - 30), text: midiName(midi), t: 36, col: midiColor(midi) });
+        var label = midis.length > 1 ? melodyChordName(midis) : midiName(midis[0]);
+        pops.push({ x: clamp(x, 18, W - 18), y: clamp(y, 12, H - 30), text: label, t: 36, col: midiColor(midis[0]) });
         if (pops.length > 12) { pops.shift(); }
       }
       function speed() { return Math.min(6, 3.2 + (level - 1) * 0.4); }
@@ -3364,8 +3472,8 @@
         for (var r = 0; r < ROWS; r++) {
           for (var c = 0; c < COLS; c++) {
             var bx = BX0 + c * 28, by = BY0 + r * 14;
-            var midi = melodyDegreeToMidi(scale, key, melodyPosDegree(scale, bx + BW / 2, by + BH / 2));
-            bricks.push({ x: bx, y: by, row: r, hp: (level >= 2 && r === 0) ? 2 : 1, midi: midi });
+            var deg = melodyPosDegree(scale, bx + BW / 2, by + BH / 2);
+            bricks.push({ x: bx, y: by, row: r, hp: (level >= 2 && r === 0) ? 2 : 1, deg: deg, midi: melodyDegreeToMidi(scale, key, deg) });
           }
         }
       }
@@ -3392,7 +3500,10 @@
         finish: function (score) {
           melodyMidiAllOff();
           if (!cfg.rec || !notes.length) { return; }
-          melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog, notes: notes });
+          // アルペジオの時差で前後するので時刻順に並べ直す
+          notes.sort(function (a, b) { return a[0] - b[0]; });
+          melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog,
+            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, notes: notes });
         },
         step: function () {
           var k, s;
@@ -3407,16 +3518,16 @@
             var px = ball.x, py = ball.y;
             ball.x += ball.vx / 3;
             ball.y += ball.vy / 3;
-            if (ball.x < BR) { ball.x = BR; ball.vx = Math.abs(ball.vx); sound(noteAt(0, ball.y), "w", 0, ball.y); }
-            if (ball.x > W - BR) { ball.x = W - BR; ball.vx = -Math.abs(ball.vx); sound(noteAt(W, ball.y), "w", W, ball.y); }
-            if (ball.y < BR) { ball.y = BR; ball.vy = Math.abs(ball.vy); sound(noteAt(ball.x, 0), "w", ball.x, 0); }
+            if (ball.x < BR) { ball.x = BR; ball.vx = Math.abs(ball.vx); sound(degAt(0, ball.y), "w", 0, ball.y); }
+            if (ball.x > W - BR) { ball.x = W - BR; ball.vx = -Math.abs(ball.vx); sound(degAt(W, ball.y), "w", W, ball.y); }
+            if (ball.y < BR) { ball.y = BR; ball.vy = Math.abs(ball.vy); sound(degAt(ball.x, 0), "w", ball.x, 0); }
             if (ball.vy > 0 && ball.y + BR >= PY && py + BR <= PY + PH && Math.abs(ball.x - pad.x) <= PW / 2 + BR) {
               var rel = clamp((ball.x - pad.x) / (PW / 2), -1, 1);
               var a = rel * 1.05, sp = speed();
               ball.vx = sp * Math.sin(a);
               ball.vy = -sp * Math.cos(a);
               ball.y = PY - BR;
-              sound(noteAt(ball.x, PY) - 12, "s", ball.x, PY - 8);
+              sound(degAt(ball.x, PY), "s", ball.x, PY - 8, -12);
             }
             for (k = 0; k < bricks.length; k++) {
               var b = bricks[k];
@@ -3427,8 +3538,8 @@
               if (px >= b.x && px <= b.x + BW) { ball.vy = -ball.vy; ball.y = py; }
               else { ball.vx = -ball.vx; ball.x = px; }
               b.hp--;
-              var bm = cfg.mode === "rand" ? noteAt(0, 0) : b.midi;
-              sound(bm, b.hp > 0 ? "p" : "b", b.x + BW / 2, b.y + BH / 2);
+              var bd = cfg.mode === "rand" ? degAt(0, 0) : b.deg;
+              sound(bd, b.hp > 0 ? "p" : "b", b.x + BW / 2, b.y + BH / 2);
               if (b.hp === 0) { api.addScore((ROWS - b.row) * 10); }
               break;
             }
@@ -3477,7 +3588,7 @@
             ctx.fillText(pops[k].text, pops[k].x, pops[k].y - (36 - pops[k].t) * 0.4);
           }
           ctx.globalAlpha = 1;
-          hudText(ctx, NOTE_NAMES[key] + " " + scale.name + (cfg.mode === "rand" ? " 🎲" : ""), 6, 14);
+          hudText(ctx, NOTE_NAMES[key] + " " + scale.name + (cfg.mode === "rand" ? " 🎲" : "") + (chordSize > 1 ? "  " + chordSize + "和音" + (cfg.arp ? "↗" : "") : ""), 6, 14);
           if (cfg.rec) {
             ctx.fillStyle = recFull ? "#fdcb6e" : "#ff7675";
             ctx.font = "bold 10px sans-serif";
