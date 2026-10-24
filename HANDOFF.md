@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.73** |
+| 現在バージョン | **v0.74** |
 | ブランチ | main |
 
 ---
@@ -36,6 +36,8 @@
 |---|---|
 | `index.html` | UI構造（モーダル・フィールド・ボタン） |
 | `script.js` | ゲームロジック全体（ES5 IIFE パターン） |
+| `samples/*.js` | メロディくずし用の楽器サンプル（必要なときだけ読み込み） |
+| `CREDITS.md` | 素材クレジット（FluidR3 GM, CC BY 3.0） |
 | `arcade.js` | ゲームセンターのミニゲーム集（§146。`window.UGArcade` のみ公開。script.js より先に読み込む） |
 | `style.css` | スタイル（スマホ縦画面優先） |
 | `GAME_DESIGN.md` | 正式仕様書（Single Source of Truth） |
@@ -93,9 +95,12 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.74] メロディくずし 本物の楽器サンプル**（§155）
+  - `samples/*.js`（16音色・FluidR3 GM CC BY 3.0 → `CREDITS.md`）。`MELODY_SAMPLE_FILES` / `melodyLoadSamples` / `melodySampleNote`（未読込なら合成音）
+  - サンプル再作成はネットから gleitz/midi-js-soundfonts の `<name>-mp3.js` を取り、MIDI 36〜96 の長3度おきを抜き出す
 - **[v0.73] メロディくずし 内蔵シンセ v2＋エフェクト**（§154）
   - `MELODY_RECIPES`（77）＋`MELODY_PATCHES`（128）→ `melodyRecipe(prog)`。`melodySynth` はバス（`melodyAudio.bus`）へ出力、`melodyBuildFx` / `melodySetFx`（リバーブ・ディレイ）
-  - 残り: v0.74 サンプル同梱（`melodySampleNote` が今は false を返すだけのフック）/ v0.75 WAV / v0.76 テンポ同期・コード進行
+  - ブラッシュアップ計画: v0.75 鍵盤ブロック / v0.76 楽器ブロック / v0.77 WAV書き出し / v0.78 テンポ同期・伴奏・コード進行
 - **[v0.72] ゲームセンターメダル＆景品交換所**（§153）
   - `ARCADE_MEDAL_RATE`（ゲーム別換算値）/ `calcArcadeMedals` / `onArcadeGameEnd` がメダル数を返す → arcade.js が終了画面に表示
   - `ARCADE_PRIZES` / `getArcadePrizeStatus` / `exchangeArcadePrize` / `renderArcadeMenu(view)`（"games" / "prizes"）

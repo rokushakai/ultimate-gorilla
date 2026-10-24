@@ -2761,7 +2761,7 @@
   function gmLabel(p) {
     if (p === MELODY_DRUM) { return "🥁 ドラムキット（ch10）"; }
     var n = p + 1;
-    return (n < 10 ? "00" : (n < 100 ? "0" : "")) + n + " " + GM_NAMES[p];
+    return (n < 10 ? "00" : (n < 100 ? "0" : "")) + n + " " + GM_NAMES[p] + (MELODY_SAMPLE_FILES[p] ? " 🎙" : "");
   }
 
   function melodyAudioInit() {
@@ -3160,8 +3160,142 @@
     }
   }
 
-  // §155 で本物の楽器サンプルを使う（ここではまだ無し）
-  function melodySampleNote() { return false; }
+  // §155 v0.74: 本物の楽器サンプル（FluidR3_GM, CC BY 3.0）。samples/*.js を必要なときだけ読み込む
+  var MELODY_SAMPLE_FILES = {
+    0: "acoustic_grand_piano", 4: "electric_piano_1", 8: "celesta", 11: "vibraphone", 12: "marimba",
+    24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "violin", 46: "orchestral_harp",
+    48: "string_ensemble_1", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto"
+  };
+  // 鳴らす長さ（秒）: 減衰する楽器は長め、持続する楽器は短く切ってフェード
+  var MELODY_SAMPLE_HOLD = { 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
+  var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 6;
+  // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
+  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {} };
+
+  window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
+  window.UGMelodySamples.onload = function (name) {
+    if (melodySamples.state[name] === "loading") { melodyDecodeBank(name); }
+  };
+
+  function melodySampleReady(prog) {
+    var n = MELODY_SAMPLE_FILES[prog];
+    return !!(n && melodySamples.state[n] === "ready");
+  }
+  function melodySampleFinish(name, ok) {
+    melodySamples.state[name] = ok ? "ready" : "error";
+    var w = melodySamples.waiting[name] || [];
+    melodySamples.waiting[name] = [];
+    for (var i = 0; i < w.length; i++) { w[i](); }
+  }
+  function melodyB64ToBuf(b64) {
+    var bin = window.atob(b64), len = bin.length, bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) { bytes[i] = bin.charCodeAt(i); }
+    return bytes.buffer;
+  }
+  // 展開後はモノラル・必要な長さだけに詰めてメモリを節約する
+  function melodyTrimBuffer(ac, buf, seconds) {
+    var len = Math.min(buf.length, Math.ceil(seconds * buf.sampleRate));
+    var out = ac.createBuffer(1, len, buf.sampleRate), d = out.getChannelData(0), chs = buf.numberOfChannels;
+    for (var c = 0; c < chs; c++) {
+      var src = buf.getChannelData(c);
+      for (var i = 0; i < len; i++) { d[i] += src[i] / chs; }
+    }
+    return out;
+  }
+  function melodyDecodeBank(name) {
+    var ac = melodyAudio.ctx, bank = window.UGMelodySamples.banks[name];
+    if (!ac || !bank) { melodySampleFinish(name, false); return; }
+    melodySamples.state[name] = "decoding";
+    var keys = Object.keys(bank.notes), left = keys.length, bufs = {}, hold = (MELODY_SAMPLE_HOLD[bank.prog] || 1) + MELODY_SAMPLE_FADE + 0.05;
+    function one(k, ab) {
+      function ok(buf) { try { bufs[k] = melodyTrimBuffer(ac, buf, hold); } catch (e) {} done(); }
+      function ng() { done(); }
+      try {
+        var pr = ac.decodeAudioData(ab, ok, ng);
+        if (pr && pr.catch) { pr.catch(function () {}); }
+      } catch (e2) { done(); }
+    }
+    function done() {
+      left--;
+      if (left > 0) { return; }
+      var ks = Object.keys(bufs).map(function (x) { return parseInt(x, 10); }).sort(function (a, b) { return a - b; });
+      melodySamples.buffers[name] = bufs;
+      melodySamples.keys[name] = ks;
+      delete window.UGMelodySamples.banks[name]; // base64 の元データは捨てる
+      melodyEvictSamples(melodySamples.wanted || [name]);
+      melodySampleFinish(name, ks.length > 0);
+    }
+    for (var i = 0; i < keys.length; i++) {
+      try { one(keys[i], melodyB64ToBuf(bank.notes[keys[i]])); } catch (e3) { done(); }
+    }
+  }
+  // 使わなくなった音色を捨てる（最大 MELODY_SAMPLE_KEEP 音色まで保持）
+  function melodyEvictSamples(keepNames) {
+    var names = Object.keys(melodySamples.buffers);
+    if (names.length <= MELODY_SAMPLE_KEEP) { return; }
+    names.sort(function (a, b) { return (melodySamples.used[a] || 0) - (melodySamples.used[b] || 0); });
+    for (var i = 0; i < names.length && Object.keys(melodySamples.buffers).length > MELODY_SAMPLE_KEEP; i++) {
+      if (keepNames.indexOf(names[i]) >= 0) { continue; }
+      delete melodySamples.buffers[names[i]];
+      delete melodySamples.keys[names[i]];
+      delete melodySamples.state[names[i]];
+    }
+  }
+  // progs の中でサンプルがある音色を読み込む。全部そろったら cb（すでにそろっていれば即 cb）
+  function melodyLoadSamples(progs, cb) {
+    var ac = melodyAudioInit(), pending = 0, names = [], i;
+    if (!ac || !melodySamples.enabled) { if (cb) { cb(); } return; }
+    function doneOne() { pending--; if (pending === 0 && cb) { cb(); } }
+    for (i = 0; i < progs.length; i++) {
+      var name = MELODY_SAMPLE_FILES[progs[i]];
+      if (!name || names.indexOf(name) >= 0) { continue; }
+      names.push(name);
+      melodySamples.used[name] = Date.now();
+      var st = melodySamples.state[name];
+      if (st === "ready" || st === "error") { continue; }
+      pending++;
+      (melodySamples.waiting[name] = melodySamples.waiting[name] || []).push(doneOne);
+      if (st) { continue; }
+      melodySamples.state[name] = "loading";
+      if (window.UGMelodySamples.banks[name]) { melodyDecodeBank(name); continue; }
+      try {
+        var sc = document.createElement("script");
+        sc.src = "samples/" + name + ".js";
+        sc.onerror = (function (n) { return function () { melodySampleFinish(n, false); }; })(name);
+        (document.head || document.body).appendChild(sc);
+      } catch (e) { melodySampleFinish(name, false); }
+    }
+    melodySamples.wanted = names;
+    melodyEvictSamples(names);
+    if (pending === 0 && cb) { cb(); }
+  }
+  function melodyProgList(map) {
+    var out = [];
+    for (var i = 0; i < MELODY_VOICES.length; i++) { out.push(melodyProgOf(map, MELODY_VOICES[i].id)); }
+    return out;
+  }
+
+  // サンプルで鳴らせたら true（無い・読み込み中なら false → 合成音で鳴らす）
+  function melodySampleNote(ac, midi, prog, t, level) {
+    if (!melodySamples.enabled || !melodySampleReady(prog)) { return false; }
+    var name = MELODY_SAMPLE_FILES[prog], ks = melodySamples.keys[name], best = ks[0];
+    for (var i = 1; i < ks.length; i++) { if (Math.abs(ks[i] - midi) < Math.abs(best - midi)) { best = ks[i]; } }
+    var buf = melodySamples.buffers[name][best];
+    if (!buf) { return false; }
+    var hold = MELODY_SAMPLE_HOLD[prog] || 1, vol = MELODY_SAMPLE_VOL;
+    var src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = buf;
+    src.playbackRate.value = Math.pow(2, (midi - best) / 12);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.setValueAtTime(vol, t + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + hold + MELODY_SAMPLE_FADE);
+    src.connect(g);
+    g.connect(melodyLevelOut(ac, level));
+    src.start(t);
+    src.stop(t + hold + MELODY_SAMPLE_FADE + 0.05);
+    melodySamples.used[name] = Date.now();
+    return true;
+  }
 
   // Web MIDI 出力
   function melodyMidiSend(bytes, ts) {
@@ -3293,6 +3427,7 @@
     if (!melodyMidi.out && !melodyAudioInit()) { if (onEnd) { onEnd(); } return; }
     if (!rec.notes.length) { if (onEnd) { onEnd(); } return; }
     melodyMidiPrograms(rec.prog);
+    melodyLoadSamples(melodyProgList(rec.prog)); // §155 v0.74: 読み込み前の音は合成音で鳴る
     var st = { id: rec.id, idx: 0, t0: perfNow() + 150, onEnd: onEnd, timer: null };
     var last = 0;
     for (var li = 0; li < rec.notes.length; li++) { if (rec.notes[li][0] > last) { last = rec.notes[li][0]; } }
@@ -3318,6 +3453,7 @@
       sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
       rec: typeof p.rec === "boolean" ? p.rec : true,
       relax: p.relax === true,
+      samples: p.samples !== false, // §155 v0.74: 本物の楽器サンプルを使う（既定ON）
       fxRev: (p.fxRev >= 0 && p.fxRev <= 3) ? p.fxRev : 1,
       fxDly: (p.fxDly >= 0 && p.fxDly <= 3) ? p.fxDly : 0,
       chord: (p.chord === 3 || p.chord === 4 || p.chord === 5) ? p.chord : 1,
@@ -3448,6 +3584,33 @@
       }
       return html;
     }
+    function sampleStatusText() {
+      if (!prefs.samples) { return "合成音だけで鳴らします"; }
+      var progs = melodyProgList(prefs.prog), names = [], loading = 0, ready = 0, err = 0, i;
+      for (i = 0; i < progs.length; i++) {
+        var n = MELODY_SAMPLE_FILES[progs[i]];
+        if (!n || names.indexOf(n) >= 0) { continue; }
+        names.push(n);
+        var st = melodySamples.state[n];
+        if (st === "ready") { ready++; } else if (st === "error") { err++; } else { loading++; }
+      }
+      if (!names.length) { return "選んだ音色に🎙はありません（合成音で鳴ります）"; }
+      if (loading) { return "🎙 本物の音を読み込み中…（" + ready + "/" + names.length + "）"; }
+      if (err) { return "🎙 一部の音を読み込めませんでした（合成音で鳴ります）"; }
+      return "🎙 本物の音 準備OK（" + ready + "音色） ／ FluidR3 GM・CC BY 3.0";
+    }
+    // 選んだ音色のサンプルを読み込み、終わったら（まだこの画面なら）表示を更新
+    function loadSamplesForPrefs() {
+      melodySamples.enabled = !!prefs.samples;
+      if (!prefs.samples) { return; }
+      var progs = melodyProgList(prefs.prog), need = false;
+      for (var i = 0; i < progs.length; i++) {
+        var n = MELODY_SAMPLE_FILES[progs[i]], st = n ? melodySamples.state[n] : "ready";
+        if (st !== "ready" && st !== "error") { need = true; }
+      }
+      if (!need) { return; }
+      melodyLoadSamples(progs, function () { if (setupState && setupState.root === root) { render(); } });
+    }
     function fxSelect(key, label) {
       var html = '<label class="melody-row"><span>' + label + '</span><select data-p="' + key + '">';
       for (var i = 0; i < MELODY_FX_NAMES.length; i++) {
@@ -3530,6 +3693,8 @@
           '<button class="arcade-mini-btn" data-m="tone" data-v="' + mv.id + '" title="試し聴き">&#x1F508;</button></div>';
       }
       html += '<button class="modal-btn melody-small-btn" data-m="tone-reset">↺ 音色を最初に戻す</button></details>' +
+        '<div class="melody-checks"><label><input type="checkbox" data-p="samples"' + (prefs.samples ? " checked" : "") + '> &#x1F399;&#xFE0F; 本物の楽器サンプルを使う（🎙の付いた音色）</label>' +
+        '<span class="small" style="color:#adb5bd;">' + escHtml(sampleStatusText()) + '</span></div>' +
         fxSelect("fxRev", "リバーブ（残響）") + fxSelect("fxDly", "ディレイ（やまびこ）") +
         '<label class="melody-row"><span>出力先</span><select data-p="output">' + outputOptions() + '</select></label>' +
         '<div class="melody-midi-line"><button class="modal-btn melody-small-btn" data-m="midi-scan">&#x1F50C; MIDI機器を探す</button>' +
@@ -3580,6 +3745,7 @@
           prefs.prog[ev.currentTarget.getAttribute("data-prog")] = parseInt(ev.currentTarget.value, 10);
           prefs.prog = melodyCleanProg(prefs.prog);
           savePrefs();
+          render();
         };
       }
       var chks = root.querySelectorAll("input[data-p]");
@@ -3587,12 +3753,14 @@
         chks[i].onchange = function (ev) {
           prefs[ev.currentTarget.getAttribute("data-p")] = !!ev.currentTarget.checked;
           savePrefs();
+          if (ev.currentTarget.getAttribute("data-p") === "samples") { render(); }
         };
       }
       var det = root.querySelector ? root.querySelector("details.melody-tones") : null;
       if (det) { det.addEventListener("toggle", function () { melodyToneOpen = !!det.open; }); }
       var btns = root.querySelectorAll("button[data-m]");
       for (i = 0; i < btns.length; i++) { btns[i].onclick = onButton; }
+      loadSamplesForPrefs();
     }
     function findRec(id) {
       var recs = melodyLoadRecs();
@@ -3612,7 +3780,7 @@
         if (prefs.sound) { startTones(); }
         melodyStopPlayback(true);
         ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog),
-          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt });
+          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples });
       } else if (m === "preview") {
         preview();
       } else if (m === "tone") {
@@ -3676,6 +3844,8 @@
       var stuck = true, lives = 3, level = 1, bricks = [], msg = 0, frame = 0;
       var notes = [], pops = [], recFull = false;
       var prog = melodyCleanProg(cfg.prog);
+      melodySamples.enabled = cfg.samples !== false; // §155 v0.74
+      melodyLoadSamples(melodyProgList(prog));
       if (cfg.sound) {
         if (melodyMidi.out) { melodyMidiPrograms(prog); } else { melodyAudioInit(); }
       }
