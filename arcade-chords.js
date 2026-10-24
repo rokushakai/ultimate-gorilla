@@ -364,10 +364,91 @@
     return out;
   }
 
+  // ---------- §170 v0.89: シーケンサーの時間計算 ----------
+  var SEQ_LENGTHS = [
+    { id: "w", label: "全音符", beats: 4 }, { id: "h.", label: "付点2分", beats: 3 }, { id: "h", label: "2分", beats: 2 },
+    { id: "q.", label: "付点4分", beats: 1.5 }, { id: "q", label: "4分", beats: 1 }, { id: "qt", label: "3連4分", beats: 2 / 3 },
+    { id: "e.", label: "付点8分", beats: 0.75 }, { id: "e", label: "8分", beats: 0.5 }, { id: "et", label: "3連8分", beats: 1 / 3 },
+    { id: "s", label: "16分", beats: 0.25 }
+  ];
+  var SEQ_STYLES = [
+    { id: "once", label: "ジャーン（1回）", unit: 0 }, { id: "q", label: "4分ストローク", unit: 1 }, { id: "e", label: "8分ストローク", unit: 0.5 },
+    { id: "s", label: "16分ストローク", unit: 0.25 }, { id: "arp8", label: "アルペジオ8分", unit: 0.5, arp: true }, { id: "arp16", label: "アルペジオ16分", unit: 0.25, arp: true }
+  ];
+  var SEQ_SWINGS = [{ v: 0.5, label: "なし" }, { v: 0.58, label: "軽め 58%" }, { v: 0.62, label: "中くらい 62%" }, { v: 0.67, label: "3連 67%" }, { v: 0.72, label: "強め 72%" }];
+  var SEQ_ARP = [1, 0, 2, 3]; // C → G → E → A
+  var EPS = 1e-6;
+  function seqLen(id) {
+    for (var i = 0; i < SEQ_LENGTHS.length; i++) { if (SEQ_LENGTHS[i].id === id) { return SEQ_LENGTHS[i]; } }
+    return SEQ_LENGTHS[4];
+  }
+  function seqStyle(id) {
+    for (var i = 0; i < SEQ_STYLES.length; i++) { if (SEQ_STYLES[i].id === id) { return SEQ_STYLES[i]; } }
+    return SEQ_STYLES[0];
+  }
+  // スイング: 拍の位置 b（拍）を、grid（8分=0.5 / 16分=0.25）の2つ組ごとに「前半を長く・後半を短く」ゆがめる
+  function swingBeat(b, ratio, grid) {
+    if (!(ratio > 0.5) || !(grid > 0)) { return b; }
+    var pair = grid * 2, k = Math.floor((b + EPS) / pair), f = b - k * pair, split = pair * ratio;
+    if (f < EPS) { return k * pair; }
+    var out = f <= grid ? f * split / grid : split + (f - grid) * (pair - split) / grid;
+    return k * pair + out;
+  }
+  // 名前を半音 n ずらす（読めない名前＝★マイコードなどはそのまま）
+  function transposeName(name, n) {
+    var sp = parseName(name);
+    return sp ? chordName(transpose(sp, n)) : name;
+  }
+  // 曲 → 鳴らす予定の一覧
+  //   seq: { bpm, key, meter, swing, swingGrid, style, metronome, countIn, rows: [{ type: "chord"|"rest"|"key", name, len, semis }] }
+  //   resolve(name, semis) → { name, shape } / null（押さえ方を決める）
+  //   戻り値: { rows: [{ i, name, shape, ok, start, end, t0, t1 }], events: [{ t, kind, ... }], beats, time, lead }
+  function seqSchedule(seq, resolve) {
+    var bpm = Math.max(40, Math.min(240, Math.round(seq.bpm || 90))), spb = 60 / bpm;
+    var meter = seq.meter === 3 ? 3 : 4, style = seqStyle(seq.style), ratio = seq.swing || 0.5, grid = seq.swingGrid === 0.25 ? 0.25 : 0.5;
+    var lead = seq.countIn ? meter : 0, rows = [], events = [], beat = 0, semis = seq.key || 0, i;
+    function tm(b) { return (lead + swingBeat(b, ratio, grid)) * spb; }
+    var list = seq.rows || [];
+    for (i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (!r) { continue; }
+      if (r.type === "key") { semis += (r.semis || 0); rows.push({ i: i, type: "key", start: beat, end: beat, t0: tm(beat), t1: tm(beat), semis: semis }); continue; }
+      var len = seqLen(r.len).beats, start = beat, end = beat + len;
+      beat = end;
+      if (r.type === "rest") { rows.push({ i: i, type: "rest", start: start, end: end, t0: tm(start), t1: tm(end) }); continue; }
+      var res = resolve ? resolve(r.name, semis) : null;
+      var row = { i: i, type: "chord", name: res ? res.name : String(r.name || ""), shape: res ? res.shape : null, ok: !!res, start: start, end: end, t0: tm(start), t1: tm(end) };
+      rows.push(row);
+      if (!res) { continue; }
+      if (!style.unit) {
+        events.push({ t: tm(start), kind: "strum", dir: "down", shape: res.shape, row: rows.length - 1 });
+        continue;
+      }
+      // 拍の頭からの格子で打つ（ダウン／アップは格子の偶数・奇数で決める）
+      var k0 = Math.ceil(start / style.unit - EPS);
+      for (var k = k0; k * style.unit < end - EPS; k++) {
+        var p = k * style.unit;
+        if (style.arp) { events.push({ t: tm(p), kind: "pluck", string: SEQ_ARP[((k % 4) + 4) % 4], shape: res.shape, row: rows.length - 1 }); }
+        else { events.push({ t: tm(p), kind: "strum", dir: k % 2 === 0 ? "down" : "up", shape: res.shape, row: rows.length - 1 }); }
+      }
+      // 格子にのらない長さ（3連など）で始まるときは頭でも1回鳴らす
+      if (k0 * style.unit > start + EPS) { events.push({ t: tm(start), kind: style.arp ? "pluck" : "strum", dir: "down", string: SEQ_ARP[0], shape: res.shape, row: rows.length - 1 }); }
+    }
+    var total = beat;
+    if (seq.metronome || seq.countIn) {
+      for (var b = -lead; b < (seq.metronome ? total : 0) - EPS; b++) {
+        events.push({ t: (lead + b) * spb, kind: "click", accent: ((b % meter) + meter) % meter === 0 });
+      }
+    }
+    events.sort(function (x, y) { return x.t - y.t; });
+    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb };
+  }
+
   window.UGChords = {
     ROOTS: ROOTS, PARTS: PARTS, PART_CLASH: PART_CLASH, QUALITIES: QUALITIES,
     intervals: intervals, suffix: suffix, name: chordName, pcs: chordPcs, tones: chordTones, parse: parseName, addPart: addPart,
     voicings: voicings, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
-    shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf
+    shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf,
+    SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, seqLen: seqLen, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
   };
 })();

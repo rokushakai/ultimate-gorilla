@@ -160,4 +160,66 @@ module.exports = function () {
   ok(root.innerHTML.indexOf("Fmaj7") > 0, "string builder names the shape", null);
   W.UGArcade.stop();
   U.ui.tab = "play";
+
+  // ===== §170 シーケンサー =====
+  ok(C.seqLen("w").beats === 4 && C.seqLen("q.").beats === 1.5 && Math.abs(C.seqLen("et").beats - 1 / 3) < 1e-9 && C.seqLen("???").id === "q", "note lengths in beats");
+  var sw = [0, 0.25, 0.5, 0.75, 1, 1.5].map(function (b) { return Math.round(C.swingBeat(b, 0.67, 0.5) * 1000) / 1000; });
+  ok(sw.join(",") === "0,0.335,0.67,0.835,1,1.67", "8th swing 67%: the off-beat moves to 0.67", sw);
+  ok(C.swingBeat(0.25, 0.67, 0.25) === 0.335 && C.swingBeat(0.5, 0.67, 0.25) === 0.5 && C.swingBeat(0.7, 0.5, 0.5) === 0.7, "16th swing / no swing", [C.swingBeat(0.25, 0.67, 0.25), C.swingBeat(0.5, 0.67, 0.25)]);
+  ok(C.transposeName("C/E", 2) === "D/F#" && C.transposeName("★マイ", 3) === "★マイ", "transpose names");
+  function rsv(n, semis) { var sp = C.parse(n); return sp ? { name: C.name(C.transpose(sp, semis)), shape: [0, 0, 0, 3] } : null; }
+  var sc = C.schedule({ bpm: 120, key: 0, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "rest", len: "h" }, { type: "key", semis: 2 }, { type: "chord", name: "Am", len: "q" }, { type: "chord", name: "???", len: "q" }] }, rsv);
+  var cr = sc.rows.filter(function (r) { return r.type === "chord"; });
+  ok(sc.beats === 8 && Math.abs(sc.time - 4) < 1e-9 && cr[0].t1 === 2 && Math.abs(cr[1].t0 - 3) < 1e-9, "row times at 120 BPM (whole = 2s, half rest = 1s)", sc.rows.map(function (r) { return [r.type, r.t0, r.t1]; }));
+  ok(cr[1].name === "Bm" && cr[2].ok === false, "key-change rows transpose what follows / unknown names are marked", cr.map(function (r) { return r.name + ":" + r.ok; }));
+  ok(sc.events.length === 2 && sc.events.every(function (e) { return e.kind === "strum" && e.dir === "down"; }), "style 'once' strums each chord once", sc.events.length);
+  sc = C.schedule({ bpm: 120, key: 5, style: "e", rows: [{ type: "chord", name: "C", len: "h" }] }, rsv);
+  ok(sc.rows[0].name === "F" && sc.events.length === 4 && sc.events.map(function (e) { return e.dir.charAt(0); }).join("") === "dudu" && sc.events[1].t === 0.25, "8th strokes alternate down/up (global key +5: C→F)", sc.events.map(function (e) { return e.t + e.dir; }));
+  sc = C.schedule({ bpm: 120, style: "e", swing: 0.67, rows: [{ type: "chord", name: "C", len: "q" }] }, rsv);
+  ok(Math.abs(sc.events[1].t - 0.335) < 1e-9, "swing delays the up-stroke", sc.events.map(function (e) { return e.t; }));
+  sc = C.schedule({ bpm: 120, style: "arp16", rows: [{ type: "chord", name: "C", len: "q" }] }, rsv);
+  ok(sc.events.length === 4 && sc.events.map(function (e) { return e.string; }).join("") === "1023", "16th arpeggio plucks C-G-E-A", sc.events.map(function (e) { return e.string; }));
+  sc = C.schedule({ bpm: 60, style: "q", meter: 3, metronome: true, countIn: true, rows: [{ type: "chord", name: "C", len: "h." }, { type: "chord", name: "G", len: "qt" }] }, rsv);
+  var clicks = sc.events.filter(function (e) { return e.kind === "click"; }), strums = sc.events.filter(function (e) { return e.kind === "strum"; });
+  ok(sc.lead === 3 && clicks.length === 7 && clicks[0].accent && !clicks[1].accent && clicks[3].accent && strums[0].t === 3, "3/4 count-in (3 clicks) + metronome, chords start after the count-in", { lead: sc.lead, clicks: clicks.map(function (c2) { return c2.t + (c2.accent ? "!" : ""); }) });
+  ok(strums.length === 4 && Math.abs(strums[3].t - 6) < 1e-9, "a triplet-quarter chord off the grid still sounds at its start", strums.map(function (e) { return e.t; }));
+  // 保存データの掃除・マイコードの解決
+  var cl = U.seqClean({ bpm: 999, key: 40, swing: 3, style: "zzz", rows: [{ type: "chord", name: "C", len: "bad" }, null, { type: "key", semis: 99 }, { type: "rest", len: "s" }] });
+  ok(cl.bpm === 240 && cl.key === 11 && cl.swing === 0.75 && cl.style === "e" && cl.rows.length === 3 && cl.rows[0].len === "q" && cl.rows[1].semis === 11, "broken sequences are cleaned", cl);
+  U.saveMy([{ id: 1, name: "マイ", shape: [0, 2, 0, 3] }]);
+  var rm = U.resolve("★マイ", 2, false);
+  ok(rm && rm.shape.join() === "2,4,2,5" && U.resolve("Q#", 0, false) === null, "★my-chord names resolve (and shift with the key)", rm);
+  var st0 = U.seqLoad();
+  st0.songs = [{ id: 1, name: "テスト曲", seq: U.seqClean({ bpm: 100 }) }];
+  U.seqSave(st0);
+  ok(U.seqLoad().songs.length === 1 && U.seqLoad().songs[0].seq.bpm === 100, "songs are saved and loaded");
+  ok(U.seqPresets().length === 8 && U.seqPresets().every(function (p) { return p.chords.every(function (n) { return !!U.resolve(n, 0, false); }); }), "all presets resolve to fingerings");
+
+  // 合わせて弾く: 曲どおりに押さえて弾くと CLEAR!、同じ行では1回だけ得点
+  var song = { bpm: 240, style: "e", metronome: false, countIn: false, backing: true, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }, { type: "rest", len: "w" }, { type: "chord", name: "G7", len: "w" }, { type: "chord", name: "F", len: "w" }] };
+  var tg = {}, osc0 = env.counters.osc + env.counters.src.length;
+  r = env.run("ukulele", { config: { mode: "seq", seq: song } }, 1200, function (f, e) {
+    var u = W.__uk2();
+    if (u.target) { tg[u.target.name] = true; }
+    if (f % 10 === 0 && u.target) {
+      var ids = [];
+      u.target.shape.forEach(function (fr, s) { if (fr > 0) { e.ptr("down", U.STRX[s], U.NUT_Y + (fr - u.pos - 0.5) * U.FH, 1 + s); ids.push(1 + s); } });
+      swipe(e, 9);
+      ids.forEach(function (id) { e.ptr("up", 0, 0, id); });
+    }
+  });
+  ok(r.ended === 400 && env.lastTitle() === "CLEAR!", "play-along: following the song scores once per chord and clears", { ended: r.ended, title: env.lastTitle() });
+  ok(Object.keys(tg).join(",") === "C,Am,G7,F", "play-along targets follow the song order", Object.keys(tg));
+  ok(env.counters.osc + env.counters.src.length - osc0 > 40, "play-along plays the backing", env.counters.osc + env.counters.src.length - osc0);
+  r = env.run("ukulele", { config: { mode: "seq", seq: { rows: [{ type: "chord", name: "???", len: "w" }] } } }, 5);
+  ok(W.__uk2().mode === "free", "a song without playable chords falls back to free play");
+
+  // 設定画面のシーケンサー
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "Am7", len: "q." }, { type: "chord", name: "Zz", len: "q" }, { type: "key", semis: 2 }] }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  var hs = root.innerHTML;
+  ok(hs.indexOf('value="Am7"') > 0 && hs.indexOf("uke-seq-chord bad") > 0 && hs.indexOf("転調") > 0 && hs.indexOf("付点4分") > 0 && hs.indexOf("スイング") > 0 && hs.indexOf("12小節ブルース") > 0, "sequencer tab shows rows, lengths, swing and presets");
+  W.UGArcade.stop();
+  U.ui.tab = "play";
 };

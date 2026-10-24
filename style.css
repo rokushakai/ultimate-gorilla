@@ -1073,3 +1073,45 @@ html, body {
   color: #ffffff;
   font-size: 13px;
 }
+/* ===== §170 v0.89: ゴリラウクレレ シーケンサー ===== */
+.uke-seq-set { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.uke-seq-set label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #ffd166; }
+.uke-seq-set select, .uke-seq-set input {
+  width: 100%;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.uke-seq-checks { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
+.uke-seq-rows { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.uke-seq-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #1a2a3a;
+  border: 1px solid #3d3d5c;
+  border-radius: 8px;
+}
+.uke-seq-row.playing { border-color: #ffd166; background: #2d2a12; }
+.uke-seq-no { width: 18px; font-size: 11px; color: #adb5bd; text-align: right; }
+.uke-seq-row input, .uke-seq-row select {
+  padding: 5px;
+  border-radius: 6px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 13px;
+}
+.uke-seq-row input { width: 70px; flex-shrink: 0; }
+.uke-seq-row select { flex-shrink: 0; max-width: 84px; }
+.uke-seq-row select.uke-seq-semis { max-width: none; flex: 1; }
+.uke-seq-row input.bad { border-color: #ff7675; color: #ff7675; }
+.uke-seq-kind { width: 70px; flex-shrink: 0; font-size: 13px; color: #ffd166; }
+.uke-seq-res { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: #f1e4c8; }
+.uke-seq-row .arcade-mini-btn { min-width: 30px; min-height: 30px; font-size: 13px; padding: 0; }
+.uke-now .uke-card-name { font-size: 26px; }
