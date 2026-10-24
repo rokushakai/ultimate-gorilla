@@ -21,6 +21,11 @@ function patch(src, file) {
   src = sub(src, "var wave = 0, toSpawn = 0", "window.__dw = function () { return wave; }; var wave = 0, toSpawn = 0");
   src = sub(src, "var ball = { x: 220, y: 300, vx: 0, vy: 0 };", "var ball = window.__pb = { x: 220, y: 300, vx: 0, vy: 0 };");
   src = sub(src, "      function resetPlayer() { px = START_X;", "      window.__cx = function () { return { px: px, row: row, lanes: lanes, level: level, dead: dead }; };\n      function resetPlayer() { px = START_X;");
+  // §166 v0.85: 遊びやすさ調整ののぞき穴
+  src = sub(src, "      var touch = null;", "      var touch = null; window.__bk = function () { return { cur: cur, lockT: lockT }; };");
+  src = sub(src, "      var started = false; // §166", "      window.__sn = function () { return { head: body[0], started: started }; }; var started = false; // §166");
+  src = sub(src, "      var player = { x: W / 2, inv: 0 }, touchX = null;", "      var player = window.__sp = { x: W / 2, inv: 0 }, touchX = null; window.__sb = function () { return bullet; };");
+  src = sub(src, "      var SAVE_FRAMES = 300,", "      window.__pbs = function () { return { balls: balls, saveUsed: saveUsed, saveT: saveT, mode: mode, fl: [flippers[0].held, flippers[1].held] }; }; var SAVE_FRAMES = 300,");
   return src;
 }
 
@@ -58,6 +63,54 @@ module.exports = function () {
   var r = env.run("blocks", {}, 20000, function (f, e) { if (f % 7 === 0) { press(e, rnd(["ArrowLeft", "ArrowRight", "ArrowUp"])); } if (f % 40 === 0) { press(e, " "); } });
   ok(r.ended !== null, "blocks: random play reaches game over", r);
   ok(env.counters.texts.indexOf("🪙 メダル +7枚") >= 0, "game over screen shows medals returned by onEnd");
+
+  // --- §166 v0.85 遊びやすさ ---
+  // blocks: 着地してもすぐ固定されない・横に動かすと待ち直し・画面タップで回転・なぞって移動
+  var bk = { maxLock: 0, reset: false, pressed: false };
+  env.run("blocks", {}, 1500, function (f, e) {
+    var s = W.__bk();
+    if (s.lockT > bk.maxLock) { bk.maxLock = s.lockT; }
+    if (!bk.pressed && s.lockT === 20) { bk.pressed = true; bk.before = s.cur.x; press(e, s.cur.x > 3 ? "ArrowLeft" : "ArrowRight"); bk.after = W.__bk(); }
+  });
+  ok(bk.maxLock >= 29, "blocks: a grounded piece waits about half a second before locking", bk.maxLock);
+  ok(bk.after && bk.after.lockT === 0 && bk.after.cur.x !== bk.before, "blocks: moving a grounded piece restarts the lock timer", bk.after);
+  var rot = null, slid = null;
+  env.run("blocks", {}, 30, function (f, e) {
+    if (f === 2) { var r0 = W.__bk().cur.r; e.tap(80, 150); rot = [r0, W.__bk().cur.r]; }
+    if (f === 4) { var x0 = W.__bk().cur.x; e.ptr("down", 60, 150); e.ptr("move", 75, 150); e.ptr("move", 90, 150); e.ptr("up", 90, 150); slid = [x0, W.__bk().cur.x]; }
+  });
+  ok(rot && rot[1] === (rot[0] + 1) % 4, "blocks: tapping the board rotates", rot);
+  ok(slid && slid[1] === slid[0] + 2, "blocks: dragging 2 cells right moves the piece 2 cells", slid);
+
+  // snake: 入力するまで動かない
+  var sn = null;
+  r = env.run("snake", {}, 900, function (f, e) {
+    if (f === 600) { sn = { head: W.__sn().head, started: W.__sn().started }; press(e, "ArrowUp"); }
+  });
+  ok(sn && !sn.started && sn.head.x === 9 && sn.head.y === 12, "snake: waits for the first input", sn);
+  ok(W.__sn().started && W.__sn().head.y < 12, "snake: starts moving after a direction", W.__sn().head);
+
+  // shooter: 画面をさわると指の位置へ動いて撃つ
+  var shot = false;
+  env.run("shooter", {}, 90, function (f, e) {
+    if (f === 0) { e.ptr("down", 30, 200); }
+    if (W.__sb()) { shot = true; }
+  });
+  ok(W.__sp.x < 40 && shot, "shooter: touching moves toward the finger and auto-fires", { x: W.__sp.x, shot: shot });
+
+  // pinball: 画面の左右タップでフリッパー、発射直後に落ちたら1回だけ戻る
+  var fl = null;
+  env.run("pinball", {}, 5, function (f, e) { if (f === 1) { e.ptr("down", 40, 200); fl = W.__pbs().fl.slice(); e.ptr("up", 40, 200); } });
+  ok(fl && fl[0] && !fl[1], "pinball: tapping the left half raises the left flipper", fl);
+  var pbs = { saved: false, ballsAtSave: null };
+  env.run("pinball", {}, 6000, function (f, e) {
+    var s = W.__pbs();
+    if (s.mode === "ready" && f % 30 === 0) { e.key("keydown", " "); e.key("keyup", " "); }
+    // 打ち上げた直後にボールを排水口へ落とす
+    if (s.mode === "play" && s.saveT > 0 && s.saveT < 280 && !pbs.forced) { pbs.forced = true; W.__pb.x = 110; W.__pb.y = 330; W.__pb.vy = 3; }
+    if (s.saveUsed && !pbs.saved) { pbs.saved = true; pbs.ballsAtSave = s.balls; }
+  });
+  ok(pbs.saved && pbs.ballsAtSave === 3, "pinball: a ball lost right after launch is saved once", pbs);
 
   // pinball: 壁を突き抜けない・盤面に入る・フリッパーなしなら落ちる
   var st = { minX: 999, maxX: -999, entered: 0, was: false };

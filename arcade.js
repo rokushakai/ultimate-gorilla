@@ -418,7 +418,7 @@
     name: "ゴリラブロック",
     icon: "&#x1F9F1;",
     desc: "落ちてくるブロックを並べて横一列を消そう",
-    help: "←→移動 / ↑回転 / ↓ソフトドロップ / Spaceハードドロップ / P一時停止",
+    help: "←→移動 / ↑回転 / ↓ソフトドロップ / Spaceハードドロップ / 画面: 横になぞる=移動・タップ=回転・下へはらう=落とす / P一時停止",
     controls: [
       { action: "left", label: "&#x25C0;" },
       { action: "right", label: "&#x25B6;" },
@@ -437,6 +437,9 @@
       var held = { left: false, right: false, down: false };
       var das = { dir: 0, t: 0 };
       var flash = 0;
+      // §166 v0.85: 着地してから少し待って固定（動かすと待ち直し、最大15回）
+      var LOCK_FRAMES = 30, LOCK_RESETS = 15, lockT = 0, lockResets = 0;
+      var touch = null;
 
       function drawFromBag() {
         if (bag.length === 0) {
@@ -470,19 +473,26 @@
         nextType = drawFromBag();
         cur = { t: t, r: 0, x: (t === "O") ? 4 : 3, y: (t === "I") ? -1 : 0 };
         dropTimer = 0;
+        lockT = 0;
+        lockResets = 0;
         if (!fits(cur)) { api.gameOver(); }
       }
       function tryMove(dx, dy) {
         var p = { t: cur.t, r: cur.r, x: cur.x + dx, y: cur.y + dy };
-        if (fits(p)) { cur = p; return true; }
+        if (fits(p)) { cur = p; if (dx !== 0) { moved(); } return true; }
         return false;
+      }
+      function grounded() { return !fits({ t: cur.t, r: cur.r, x: cur.x, y: cur.y + 1 }); }
+      function moved() {
+        if (lockT > 0 && lockResets < LOCK_RESETS) { lockT = 0; lockResets++; }
       }
       function rotate() {
         var r = (cur.r + 1) % 4;
-        var kicks = [0, -1, 1, -2, 2];
+        // 横にずらす → 床際では1段上にずらす
+        var kicks = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1], [-1, -1], [1, -1]];
         for (var i = 0; i < kicks.length; i++) {
-          var p = { t: cur.t, r: r, x: cur.x + kicks[i], y: cur.y };
-          if (fits(p)) { cur = p; return; }
+          var p = { t: cur.t, r: r, x: cur.x + kicks[i][0], y: cur.y + kicks[i][1] };
+          if (fits(p)) { cur = p; moved(); return; }
         }
       }
       function interval() { return Math.max(4, 48 - (level - 1) * 4); }
@@ -531,6 +541,25 @@
           else if (action === "rot") { rotate(); }
           else if (action === "drop") { hardDrop(); }
         },
+        // 画面: 横になぞると1マスずつ移動、タップで回転、下へすばやくはらうとハードドロップ
+        pointer: function (type, x, y) {
+          if (!cur) { return; }
+          if (type === "down") { touch = { sx: x, sy: y, lx: x, slid: false }; return; }
+          if (!touch) { return; }
+          if (type === "move") {
+            while (x - touch.lx >= CELL) { tryMove(1, 0); touch.lx += CELL; touch.slid = true; }
+            while (touch.lx - x >= CELL) { tryMove(-1, 0); touch.lx -= CELL; touch.slid = true; }
+            return;
+          }
+          if (type === "up") {
+            if (!touch.slid) {
+              var d = swipeDir(touch.sx, touch.sy, x, y);
+              if (d === "tap" || d === "up") { rotate(); }
+              else if (d === "down" && y - touch.sy > 40) { hardDrop(); }
+            }
+            touch = null;
+          }
+        },
         step: function () {
           if (!cur) { return; }
           if (flash > 0) { flash--; }
@@ -542,15 +571,19 @@
             das.t++;
             if (das.t > 10 && (das.t - 10) % 3 === 0) { tryMove(dir, 0); }
           }
+          if (!cur) { return; }
+          if (grounded()) {
+            dropTimer = 0;
+            lockT++;
+            if (lockT >= LOCK_FRAMES) { lock(); }
+            return;
+          }
+          lockT = 0;
           dropTimer++;
           var iv = held.down ? Math.min(2, interval()) : interval();
           if (dropTimer >= iv) {
             dropTimer = 0;
-            if (tryMove(0, 1)) {
-              if (held.down) { api.addScore(1); }
-            } else {
-              lock();
-            }
+            if (tryMove(0, 1) && held.down) { api.addScore(1); }
           }
         },
         draw: function (ctx) {
@@ -632,7 +665,7 @@
     name: "UMAシューター",
     icon: "&#x1F47E;",
     desc: "せまりくるUMAの大群を撃ち落とそう",
-    help: "←→移動 / Space発射 / P一時停止",
+    help: "←→移動 / Space発射 / 画面をさわっている間は指の位置へ動いて連射 / P一時停止",
     controls: [
       { action: "left", label: "&#x25C0;" },
       { action: "fire", label: "&#x1F52B; 発射" },
@@ -642,7 +675,7 @@
     create: function (api) {
       var COLS = 8, ROWS = 5, DX = 22, DY = 20, EW = 16, EH = 14;
       var PY = 296, PW = 18;
-      var player = { x: W / 2, inv: 0 };
+      var player = { x: W / 2, inv: 0 }, touchX = null;
       var lives = 3, wave = 0;
       var held = { left: false, right: false, fire: false };
       var bullet = null, eBullets = [];
@@ -721,10 +754,17 @@
           held[action] = down;
           if (down && action === "fire" && !bullet) { bullet = { x: player.x, y: PY - 10 }; }
         },
+        // §166 v0.85: さわっている間は指のx位置へ向かって動き、自動で撃つ
+        pointer: function (type, x) {
+          if (type === "up") { touchX = null; held.fire = false; return; }
+          touchX = clamp(x, 12, W - 12);
+          held.fire = true;
+        },
         step: function () {
           var r, c, p, k;
           if (held.left) { player.x -= 2.2; }
           if (held.right) { player.x += 2.2; }
+          if (touchX !== null) { player.x += clamp(touchX - player.x, -3, 3); }
           player.x = clamp(player.x, 12, W - 12);
           if (player.inv > 0) { player.inv--; }
           if (held.fire && !bullet) { bullet = { x: player.x, y: PY - 10 }; }
@@ -861,7 +901,7 @@
     name: "ゴリラピンボール",
     icon: "&#x1F3AF;",
     desc: "フリッパーでボールを打ち返してバンパーを狙おう",
-    help: "Z/←左フリッパー / M/→右フリッパー / Space/↓発射（長押しでため） / P一時停止",
+    help: "Z/←左フリッパー / M/→右フリッパー / Space/↓発射（長押しでため） / 画面の左半分・右半分タップでもフリッパー / P一時停止",
     controls: [
       { action: "left", label: "&#x2196;&#xFE0F; 左" },
       { action: "launch", label: "&#x1F680; 発射" },
@@ -899,6 +939,8 @@
       var ball = { x: 220, y: 300, vx: 0, vy: 0 };
       var mode = "ready";
       var balls = 3, charge = 0, launchHeld = false, bonusMsg = 0;
+      // §166 v0.85: 発射から5秒以内に落ちたら1球につき1回だけ戻す（ボールセーブ）
+      var SAVE_FRAMES = 300, saveT = 0, saveUsed = false, saveMsg = 0;
 
       function readyBall() {
         ball.x = 220; ball.y = 300; ball.vx = 0; ball.vy = 0;
@@ -925,6 +967,17 @@
           ball.vy -= (1 + e) * vn * ny;
         }
         return true;
+      }
+      function launchInput(down) {
+        if (down) { launchHeld = true; return; }
+        if (launchHeld && mode === "ready") {
+          ball.vy = -(9 + 5 * charge);
+          ball.vx = 0;
+          mode = "play";
+          if (!saveUsed) { saveT = SAVE_FRAMES; }
+        }
+        launchHeld = false;
+        charge = 0;
       }
       function flipperTip(f) { return [f.px + Math.cos(f.a) * FL_LEN, f.py + Math.sin(f.a) * FL_LEN]; }
 
@@ -978,23 +1031,25 @@
         input: function (action, down) {
           if (action === "left") { flippers[0].held = down; }
           else if (action === "right") { flippers[1].held = down; }
-          else if (action === "launch") {
-            if (down) { launchHeld = true; }
-            else {
-              if (launchHeld && mode === "ready") {
-                ball.vy = -(9 + 5 * charge);
-                ball.vx = 0;
-                mode = "play";
-              }
-              launchHeld = false;
-              charge = 0;
-            }
+          else if (action === "launch") { launchInput(down); }
+        },
+        // 画面の左半分＝左フリッパー、右半分＝右フリッパー。発射待ちのときは長押し→離すで発射
+        pointer: function (type, x) {
+          if (type === "down") {
+            if (mode === "ready") { launchInput(true); }
+            flippers[x < W / 2 ? 0 : 1].held = true;
+          } else if (type === "up") {
+            if (launchHeld) { launchInput(false); }
+            flippers[0].held = false;
+            flippers[1].held = false;
           }
         },
         step: function () {
           var k;
           for (k = 0; k < BUMPERS.length; k++) { if (BUMPERS[k].flash > 0) { BUMPERS[k].flash--; } }
           if (bonusMsg > 0) { bonusMsg--; }
+          if (saveMsg > 0) { saveMsg--; }
+          if (saveT > 0 && mode === "play") { saveT--; }
           if (mode === "ready") {
             if (launchHeld) { charge = Math.min(1, charge + 0.02); }
             // フリッパーは待機中も動かせる
@@ -1024,6 +1079,15 @@
           if (ball.x > 210 && ball.y > 290 && Math.abs(ball.vx) + Math.abs(ball.vy) < 0.6) { readyBall(); }
           // 落ちた
           if (ball.y > H + 10) {
+            if (saveT > 0 && !saveUsed) {
+              saveUsed = true;
+              saveT = 0;
+              saveMsg = 90;
+              readyBall();
+              return;
+            }
+            saveT = 0;
+            saveUsed = false;
             balls--;
             if (balls <= 0) { api.gameOver(); return; }
             readyBall();
@@ -1073,6 +1137,16 @@
           ctx.font = "bold 11px sans-serif";
           ctx.textAlign = "left";
           ctx.fillText("BALL " + balls, 14, 312);
+          if (saveT > 0 && Math.floor(saveT / 10) % 2 === 0) { ctx.fillStyle = "#55efc4"; ctx.fillText("SAVE", 160, 312); }
+          if (saveMsg > 0) {
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#55efc4";
+            ctx.font = "bold 14px sans-serif";
+            ctx.fillText("BALL SAVE! もう一度", 110, 180);
+            ctx.font = "bold 11px sans-serif";
+            ctx.fillStyle = "#ffd166";
+            ctx.textAlign = "left";
+          }
           if (mode === "ready") {
             ctx.textAlign = "center";
             ctx.fillText("発射ボタン長押し→離す", 110, 200);
@@ -1261,6 +1335,7 @@
       var body = [{ x: 9, y: 12 }, { x: 8, y: 12 }, { x: 7, y: 12 }, { x: 6, y: 12 }];
       var dir = DIRS.right, queue = [];
       var food = null, star = null, eaten = 0, timer = 0, sx = 0, sy = 0;
+      var started = false; // §166 v0.85: 最初の方向入力まで待つ
 
       function occupied(x, y) {
         for (var i = 0; i < body.length; i++) { if (body[i].x === x && body[i].y === y) { return true; } }
@@ -1279,11 +1354,12 @@
       function turn(name) {
         var d = DIRS[name];
         if (!d) { return; }
+        if (!started) { started = true; timer = 0; }
         var last = queue.length ? queue[queue.length - 1] : dir;
         if ((d.x === -last.x && d.y === -last.y) || (d.x === last.x && d.y === last.y)) { return; }
         if (queue.length < 2) { queue.push(d); }
       }
-      function interval() { return Math.max(4, 10 - Math.floor(body.length / 6)); }
+      function interval() { return Math.max(5, 10 - Math.floor(body.length / 6)); }
 
       food = emptyCell();
 
@@ -1294,9 +1370,11 @@
           else if (type === "up") {
             var d = swipeDir(sx, sy, x, y);
             if (d !== "tap") { turn(d); }
+            else if (!started) { started = true; }
           }
         },
         step: function () {
+          if (!started) { return; }
           if (star) { star.t--; if (star.t <= 0) { star = null; } }
           timer++;
           if (timer < interval()) { return; }
@@ -1337,6 +1415,12 @@
             ctx.fillRect(body[i].x * CELL + 1, OY + body[i].y * CELL + 1, CELL - 2, CELL - 2);
           }
           hudText(ctx, "LENGTH " + body.length, 6, 312);
+          if (!started) {
+            ctx.fillStyle = "rgba(0,0,0,0.55)";
+            ctx.fillRect(20, 196, W - 40, 44);
+            hudText(ctx, "方向ボタン・スワイプ・タップでスタート", W / 2, 211, "center");
+            hudText(ctx, "（いまは → 向き）", W / 2, 227, "center");
+          }
         }
       };
     }
