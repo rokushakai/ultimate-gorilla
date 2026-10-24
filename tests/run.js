@@ -1,7 +1,7 @@
 // 究極ゴリラ 自動テスト: node tests/run.js
 "use strict";
 var H = require("./harness");
-var suites = [require("./test-core"), require("./test-melody"), require("./test-lyrics"), require("./test-script")];
+var suites = [require("./test-core"), require("./test-melody"), require("./test-lyrics"), require("./test-table"), require("./test-script")];
 
 (async function () {
   var t0 = Date.now();

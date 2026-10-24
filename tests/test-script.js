@@ -13,7 +13,7 @@ module.exports = function () {
   function slice(a, b) { var i = s.indexOf(a), j = s.indexOf(b, i); if (i < 0 || j < 0) { throw new Error("slice " + a); } return s.slice(i, j); }
 
   // --- 構文・ES5 ---
-  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js"];
+  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js"];
   jsFiles.forEach(function (f) {
     var err = null;
     try { new vm.Script(fs.readFileSync(path.join(ROOT, f), "utf8"), { filename: f }); } catch (e) { err = e.message; }
@@ -22,8 +22,8 @@ module.exports = function () {
     ok(probs.length === 0, "ES5 only: " + f, probs.slice(0, 3));
   });
   var html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  var order = ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "script.js"].map(function (f) { return html.indexOf('<script src="' + f + '">'); });
-  ok(order[0] > 0 && order[0] < order[1] && order[1] < order[2] && order[2] < order[3], "index.html loads arcade.js → arcade-melody.js → arcade-lyrics.js → script.js", order);
+  var order = ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "script.js"].map(function (f) { return html.indexOf('<script src="' + f + '">'); });
+  ok(order[0] > 0 && order[0] < order[1] && order[1] < order[2] && order[2] < order[3] && order[3] < order[4], "index.html loads arcade.js → melody → lyrics → table → script.js", order);
 
   // --- マップ ---
   var mapSrc = slice("var RAW_MAP = [", "];") + "];";

@@ -100,7 +100,7 @@
     if (host.over) {
       sys.innerHTML =
         '<button class="modal-btn" data-sys="retry">&#x1F501; もう一度</button>' +
-        (host.def.setup ? '<button class="modal-btn" data-sys="setup">&#x2699;&#xFE0F; 設定・録音</button>' : '') +
+        (host.def.setup ? '<button class="modal-btn" data-sys="setup">&#x2699;&#xFE0F; ' + (host.def.setupLabel || "設定・録音") + '</button>' : '') +
         '<button class="modal-btn" data-sys="menu">&#x1F579;&#xFE0F; メニューへ</button>';
     } else {
       sys.innerHTML =
