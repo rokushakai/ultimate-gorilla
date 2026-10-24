@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.77** |
+| 現在バージョン | **v0.78** |
 | ブランチ | main |
 
 ---
@@ -38,6 +38,8 @@
 | `script.js` | ゲームロジック全体（ES5 IIFE パターン） |
 | `samples/*.js` | メロディくずし用の楽器サンプル（必要なときだけ読み込み） |
 | `CREDITS.md` | 素材クレジット（FluidR3 GM, CC BY 3.0） |
+| `arcade-melody.js` | 🎹 メロディくずし（arcade.js の後・script.js の前に読み込む。`UGArcade.internal` を使う） |
+| `tests/` | 自動テスト `node tests/run.js`（ゲーム本体には含まれない） |
 | `arcade.js` | ゲームセンターのミニゲーム集（§146。`window.UGArcade` のみ公開。script.js より先に読み込む） |
 | `style.css` | スタイル（スマホ縦画面優先） |
 | `GAME_DESIGN.md` | 正式仕様書（Single Source of Truth） |
@@ -95,6 +97,9 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
+  - **作業後は必ず `node tests/run.js`**（151項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
   - 隠れた鳴り所 `d`（伴奏ドラム ch10）・`c`（伴奏コード ch5）を `MELODY_VOICES` に hidden で追加
