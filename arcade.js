@@ -2703,7 +2703,7 @@
     { id: "s", name: "パドル", ch: 3, def: 32, dur: 350 }
   ];
 
-  var melodyAudio = { ctx: null, master: null, noise: null };
+  var melodyAudio = { ctx: null, master: null, noise: null, bus: null, revSend: null, dlySend: null, fxRev: 1, fxDly: 0 };
   var melodyPlayback = null;
   var melodyMidi = { access: null, out: null, status: "" };
 
@@ -2772,6 +2772,12 @@
       melodyAudio.master = melodyAudio.ctx.createGain();
       melodyAudio.master.gain.value = 0.25;
       melodyAudio.master.connect(melodyAudio.ctx.destination);
+      var fx = melodyBuildFx(melodyAudio.ctx, melodyAudio.master); // §154 v0.73
+      melodyAudio.bus = fx.bus;
+      melodyAudio.revSend = fx.revSend;
+      melodyAudio.dlySend = fx.dlySend;
+      var fp = lsGet(MELODY_PREFS_KEY) || {};
+      melodySetFx(typeof fp.fxRev === "number" ? fp.fxRev : 1, fp.fxDly || 0);
       try {
         var len = melodyAudio.ctx.sampleRate || 44100;
         var buf = melodyAudio.ctx.createBuffer(1, len, len), data = buf.getChannelData(0);
@@ -2785,39 +2791,144 @@
     return melodyAudio.ctx;
   }
 
-  // 内蔵シンセ: GMの系統ごとの合成レシピ（本物のGMサンプルではなく近似音）
+  // 内蔵シンセ v2（§154 v0.73）: 128音色それぞれのパッチ＝基本レシピ＋上書き
   // osc: [波形, 周波数比, 音量, デチューン(cent)]
+  // a/dur/peak/sus/rel: エンベロープ  lp/lpEnd/q: ローパス（開閉）  bp: [[中心Hz, Q, 音量]] フォルマント
+  // vib/vibRate: ビブラート(cent/Hz)  trem/tremRate: トレモロ(深さ0-1/Hz)  glide: 終わりの音程比
+  // noise/noiseType/noiseFreq/band: ノイズ  drive: 歪み(0-1)  click: 打鍵ノイズ  perc: [比, 音量, 減衰秒] 減衰する倍音
   var MELODY_RECIPES = {
-    piano: { osc: [["triangle", 1, 1, 0], ["sine", 2, 0.3, 0], ["sine", 3, 0.1, 0]], a: 0.004, dur: 1.3, peak: 0.6 },
+    piano: { osc: [["triangle", 1, 1, 0], ["sine", 2, 0.3, 0], ["sine", 3, 0.1, 0]], lp: 5000, lpEnd: 1500, a: 0.004, dur: 1.3, peak: 0.6, click: 0.03 },
+    honky: { osc: [["triangle", 1, 0.7, -12], ["triangle", 1, 0.7, 12], ["sine", 2, 0.2, 0]], lp: 5000, lpEnd: 1800, a: 0.004, dur: 1.2, peak: 0.5, click: 0.03 },
+    rhodes: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.15, 0]], perc: [7, 0.25, 0.25], a: 0.003, dur: 1.6, peak: 0.55, trem: 0.15, tremRate: 4 },
+    dxep: { osc: [["sine", 1, 1, 0]], perc: [14, 0.35, 0.15], a: 0.002, dur: 1.4, peak: 0.5 },
+    harpsi: { osc: [["sawtooth", 1, 0.6, 0], ["square", 2, 0.25, 0]], lp: 7000, lpEnd: 2500, a: 0.002, dur: 0.8, peak: 0.35, click: 0.05 },
+    clav: { osc: [["square", 1, 0.7, 0]], lp: 2600, lpEnd: 900, q: 4, a: 0.002, dur: 0.4, peak: 0.4 },
     bell: { osc: [["sine", 1, 1, 0], ["sine", 2.76, 0.25, 0], ["sine", 5.4, 0.08, 0]], a: 0.003, dur: 1.1, peak: 0.45 },
+    musicbox: { osc: [["sine", 1, 1, 0], ["sine", 3, 0.25, 0], ["sine", 6.2, 0.05, 0]], a: 0.002, dur: 1.0, peak: 0.5 },
+    vibes: { osc: [["sine", 1, 1, 0], ["sine", 4, 0.08, 0]], a: 0.003, dur: 1.8, peak: 0.5, trem: 0.5, tremRate: 5 },
     marimba: { osc: [["triangle", 1, 1, 0], ["sine", 4, 0.15, 0]], a: 0.003, dur: 0.5, peak: 0.7 },
     tubular: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.4, 0], ["sine", 3.01, 0.2, 0]], a: 0.003, dur: 1.8, peak: 0.4 },
-    organ: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.5, 0], ["sine", 3, 0.3, 0], ["sine", 4, 0.15, 0]], a: 0.01, dur: 0.6, sus: 0.8, rel: 0.08, peak: 0.35 },
-    guitar: { osc: [["sawtooth", 1, 1, 0]], lp: 3500, lpEnd: 600, a: 0.003, dur: 0.9, peak: 0.5 },
     pluck: { osc: [["sawtooth", 1, 1, 0], ["square", 2, 0.2, 0]], lp: 4000, lpEnd: 800, a: 0.002, dur: 0.35, peak: 0.4 },
-    bass: { osc: [["sawtooth", 1, 0.8, 0], ["sine", 1, 0.4, 0]], lp: 900, a: 0.005, dur: 0.5, peak: 0.6 },
-    strings: { osc: [["sawtooth", 1, 0.6, -7], ["sawtooth", 1, 0.6, 7]], lp: 2600, a: 0.09, dur: 0.9, sus: 0.8, rel: 0.25, peak: 0.3, vib: 6 },
-    ensemble: { osc: [["triangle", 1, 0.7, -5], ["sine", 1, 0.7, 5], ["sine", 2, 0.2, 0]], a: 0.12, dur: 1.0, sus: 0.85, rel: 0.3, peak: 0.3, vib: 4 },
-    brass: { osc: [["sawtooth", 1, 1, 0]], lp: 700, lpEnd: 2800, a: 0.03, dur: 0.55, sus: 0.8, rel: 0.1, peak: 0.35 },
+    organ: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.5, 0], ["sine", 3, 0.3, 0], ["sine", 4, 0.15, 0]], a: 0.01, dur: 0.6, sus: 0.8, rel: 0.08, peak: 0.35 },
+    percorgan: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.5, 0], ["sine", 4, 0.15, 0]], perc: [3, 0.4, 0.12], a: 0.005, dur: 0.6, sus: 0.7, rel: 0.08, peak: 0.35 },
+    rockorgan: { osc: [["sine", 1, 1, 0], ["square", 2, 0.25, 0], ["sine", 3, 0.3, 0]], lp: 3000, drive: 0.15, a: 0.008, dur: 0.6, sus: 0.85, rel: 0.06, peak: 0.3, vib: 6, vibRate: 6.5 },
+    church: { osc: [["sine", 0.5, 0.6, 0], ["sine", 1, 1, 0], ["sine", 2, 0.6, 0], ["sine", 4, 0.3, 0], ["sine", 8, 0.12, 0]], a: 0.06, dur: 1.2, sus: 0.9, rel: 0.3, peak: 0.25 },
     reed: { osc: [["square", 1, 0.8, 0]], lp: 1800, a: 0.02, dur: 0.5, sus: 0.8, rel: 0.08, peak: 0.3, vib: 5 },
+    accordion: { osc: [["sawtooth", 1, 0.5, -8], ["sawtooth", 1, 0.5, 8]], lp: 2200, a: 0.02, dur: 0.6, sus: 0.85, rel: 0.08, peak: 0.25, vib: 3, trem: 0.1, tremRate: 6 },
+    harmonica: { osc: [["square", 1, 0.6, 0], ["sawtooth", 1, 0.3, 0]], lp: 2400, q: 2, a: 0.03, dur: 0.55, sus: 0.8, rel: 0.08, peak: 0.3, vib: 9 },
+    nylon: { osc: [["triangle", 1, 1, 0], ["sine", 2, 0.25, 0], ["sine", 3, 0.08, 0]], lp: 2600, lpEnd: 700, a: 0.003, dur: 1.0, peak: 0.55, click: 0.05 },
+    guitar: { osc: [["sawtooth", 1, 1, 0]], lp: 5000, lpEnd: 1100, a: 0.002, dur: 1.2, peak: 0.45, click: 0.05 },
+    drive: { osc: [["sawtooth", 1, 0.7, -6], ["sawtooth", 1, 0.7, 6]], drive: 0.6, lp: 3200, a: 0.005, dur: 0.9, sus: 0.8, rel: 0.1, peak: 0.22 },
+    harmonics: { osc: [["sine", 2, 1, 0], ["sine", 4, 0.3, 0], ["sine", 6, 0.1, 0]], a: 0.002, dur: 1.3, peak: 0.4 },
+    bass: { osc: [["sawtooth", 1, 0.8, 0], ["sine", 1, 0.4, 0]], lp: 900, a: 0.005, dur: 0.5, peak: 0.6 },
+    fretless: { osc: [["sine", 1, 1, 0], ["triangle", 1, 0.5, 0]], lp: 900, a: 0.02, dur: 0.9, sus: 0.7, rel: 0.15, peak: 0.55, vib: 4 },
+    slap: { osc: [["sawtooth", 1, 0.8, 0], ["sine", 1, 0.4, 0]], lp: 3200, lpEnd: 700, a: 0.002, dur: 0.35, peak: 0.65, click: 0.25 },
+    synbass: { osc: [["square", 1, 0.6, 0], ["sawtooth", 1, 0.5, 0]], lp: 2200, lpEnd: 300, q: 8, a: 0.003, dur: 0.45, peak: 0.5 },
+    violin: { osc: [["sawtooth", 1, 0.8, -3], ["sawtooth", 1, 0.3, 4]], lp: 3500, q: 1.5, a: 0.06, dur: 0.9, sus: 0.85, rel: 0.2, peak: 0.3, vib: 8, vibRate: 5.8 },
+    strings: { osc: [["sawtooth", 1, 0.6, -7], ["sawtooth", 1, 0.6, 7]], lp: 2600, a: 0.09, dur: 0.9, sus: 0.8, rel: 0.25, peak: 0.3, vib: 6 },
+    harp: { osc: [["triangle", 1, 1, 0], ["sine", 2, 0.2, 0]], lp: 4000, lpEnd: 1500, a: 0.002, dur: 1.6, peak: 0.5 },
+    timpani: { osc: [["sine", 1, 1, 0], ["sine", 1.5, 0.3, 0]], glide: 0.85, a: 0.003, dur: 0.9, peak: 0.7, noise: 0.08 },
+    synstr: { osc: [["sawtooth", 1, 0.5, -12], ["sawtooth", 1, 0.5, 12]], lp: 3000, a: 0.15, dur: 1.1, sus: 0.85, rel: 0.35, peak: 0.25 },
+    choir: { osc: [["sawtooth", 1, 0.6, -5], ["sawtooth", 1, 0.6, 5]], bp: [[700, 6, 1], [1150, 7, 0.6], [2800, 8, 0.25]], a: 0.15, dur: 1.2, sus: 0.85, rel: 0.35, peak: 0.9, vib: 5 },
+    oohs: { osc: [["sawtooth", 1, 0.6, -5], ["sawtooth", 1, 0.6, 5]], bp: [[400, 6, 1], [800, 7, 0.5], [2600, 8, 0.15]], a: 0.15, dur: 1.2, sus: 0.85, rel: 0.35, peak: 0.9, vib: 5 },
+    orchhit: { osc: [["sawtooth", 0.5, 0.6, 0], ["sawtooth", 1, 0.8, -10], ["sawtooth", 2, 0.5, 10]], lp: 4000, lpEnd: 800, noise: 0.3, a: 0.003, dur: 0.5, peak: 0.4 },
+    brass: { osc: [["sawtooth", 1, 1, 0]], lp: 700, lpEnd: 2800, a: 0.03, dur: 0.55, sus: 0.8, rel: 0.1, peak: 0.35 },
+    mutetp: { osc: [["sawtooth", 1, 1, 0]], bp: [[1500, 3, 1], [3000, 4, 0.4]], a: 0.02, dur: 0.5, sus: 0.8, rel: 0.08, peak: 0.7 },
+    synbrass: { osc: [["sawtooth", 1, 0.6, -8], ["sawtooth", 1, 0.6, 8]], lp: 400, lpEnd: 4500, q: 3, a: 0.01, dur: 0.6, sus: 0.8, rel: 0.1, peak: 0.3 },
+    sax: { osc: [["sawtooth", 1, 0.8, 0], ["square", 1, 0.25, 0]], lp: 2600, q: 2, a: 0.03, dur: 0.55, sus: 0.85, rel: 0.08, peak: 0.3, vib: 5, noise: 0.03 },
+    oboe: { osc: [["square", 1, 0.6, 0], ["sawtooth", 2, 0.2, 0]], lp: 3000, q: 4, a: 0.03, dur: 0.5, sus: 0.85, rel: 0.08, peak: 0.28, vib: 5 },
+    clarinet: { osc: [["square", 1, 0.8, 0], ["square", 3, 0.1, 0]], lp: 2000, a: 0.03, dur: 0.55, sus: 0.85, rel: 0.08, peak: 0.3, vib: 3 },
     pipe: { osc: [["sine", 1, 1, 0], ["triangle", 2, 0.1, 0]], a: 0.04, dur: 0.55, sus: 0.85, rel: 0.1, peak: 0.45, vib: 8, noise: 0.04 },
-    lead: { osc: [["square", 1, 0.6, 0], ["sawtooth", 1, 0.4, 8]], lp: 5000, a: 0.005, dur: 0.4, sus: 0.9, rel: 0.06, peak: 0.25 },
+    bottle: { osc: [["sine", 1, 1, 0]], noise: 0.18, band: true, a: 0.05, dur: 0.6, sus: 0.8, rel: 0.15, peak: 0.45 },
+    shakuhachi: { osc: [["sine", 1, 1, 0], ["triangle", 2, 0.08, 0]], noise: 0.1, vib: 12, vibRate: 4.5, a: 0.07, dur: 0.7, sus: 0.8, rel: 0.15, peak: 0.45 },
+    whistle: { osc: [["sine", 1, 1, 0]], a: 0.03, dur: 0.5, sus: 0.9, rel: 0.1, peak: 0.45, vib: 6 },
+    ocarina: { osc: [["sine", 1, 1, 0], ["triangle", 3, 0.08, 0]], a: 0.03, dur: 0.5, sus: 0.9, rel: 0.1, peak: 0.45 },
+    sqlead: { osc: [["square", 1, 0.8, 0]], lp: 6000, a: 0.005, dur: 0.4, sus: 0.9, rel: 0.06, peak: 0.25 },
+    sawlead: { osc: [["sawtooth", 1, 0.8, 0]], lp: 6000, a: 0.005, dur: 0.4, sus: 0.9, rel: 0.06, peak: 0.25 },
+    fifths: { osc: [["sawtooth", 1, 0.6, 0], ["sawtooth", 1.5, 0.45, 0]], lp: 5000, a: 0.005, dur: 0.45, sus: 0.9, rel: 0.06, peak: 0.22 },
+    basslead: { osc: [["sawtooth", 1, 0.6, 0], ["square", 0.5, 0.5, 0]], lp: 4000, a: 0.005, dur: 0.45, sus: 0.9, rel: 0.06, peak: 0.25 },
     pad: { osc: [["sawtooth", 1, 0.5, -10], ["sawtooth", 1, 0.5, 10], ["sine", 0.5, 0.3, 0]], lp: 1400, a: 0.25, dur: 1.4, sus: 0.9, rel: 0.4, peak: 0.25 },
-    fx: { osc: [["sine", 1, 1, 0], ["triangle", 1.5, 0.3, 0]], glide: 1.5, a: 0.01, dur: 0.9, peak: 0.35, vib: 20 },
-    ethnic: { osc: [["sawtooth", 1, 0.7, 0], ["triangle", 2, 0.3, 0]], lp: 3000, lpEnd: 900, a: 0.002, dur: 0.7, peak: 0.45 },
+    polypad: { osc: [["sawtooth", 1, 0.5, -8], ["sawtooth", 1, 0.5, 8]], lp: 2500, lpEnd: 1200, a: 0.02, dur: 0.9, sus: 0.7, rel: 0.25, peak: 0.25 },
+    metalpad: { osc: [["sine", 1, 1, 0], ["sine", 2.76, 0.3, 0], ["sine", 5.4, 0.12, 0]], a: 0.25, dur: 1.6, sus: 0.8, rel: 0.5, peak: 0.3 },
+    halopad: { osc: [["sine", 1, 0.6, -8], ["sine", 1, 0.6, 8], ["sine", 2, 0.2, 0]], a: 0.3, dur: 1.6, sus: 0.9, rel: 0.5, peak: 0.35, vib: 4 },
+    sweeppad: { osc: [["sawtooth", 1, 0.5, -10], ["sawtooth", 1, 0.5, 10]], lp: 300, lpEnd: 3500, a: 0.2, dur: 1.6, sus: 0.9, rel: 0.4, peak: 0.25 },
+    rain: { osc: [["sine", 1, 0.6, 0]], noise: 0.4, noiseType: "highpass", noiseFreq: 5000, a: 0.01, dur: 1.0, peak: 0.35 },
+    goblin: { osc: [["sine", 1, 1, 0], ["triangle", 1.5, 0.3, 0]], glide: 0.5, vib: 35, a: 0.01, dur: 0.9, peak: 0.35 },
+    scifi: { osc: [["sine", 1, 1, 0], ["triangle", 1.5, 0.3, 0]], glide: 2.2, vib: 45, a: 0.01, dur: 0.9, peak: 0.35 },
+    sitar: { osc: [["sawtooth", 1, 0.6, 0], ["sawtooth", 1, 0.4, 9], ["sawtooth", 2, 0.2, 0]], lp: 4500, lpEnd: 1400, q: 3, a: 0.002, dur: 1.5, peak: 0.35 },
+    banjo: { osc: [["sawtooth", 1, 1, 0], ["square", 2, 0.2, 0]], lp: 6000, lpEnd: 2000, a: 0.002, dur: 0.45, peak: 0.4, click: 0.1 },
+    shamisen: { osc: [["sawtooth", 1, 0.8, 0], ["square", 2, 0.2, 0]], lp: 4000, lpEnd: 700, a: 0.001, dur: 0.45, peak: 0.4, click: 0.3 },
+    koto: { osc: [["triangle", 1, 1, 0], ["sawtooth", 2, 0.15, 0]], lp: 3500, lpEnd: 900, a: 0.002, dur: 0.9, peak: 0.5, click: 0.08 },
+    kalimba: { osc: [["sine", 1, 1, 0], ["sine", 5.4, 0.15, 0]], a: 0.002, dur: 0.7, peak: 0.6, click: 0.05 },
+    bagpipe: { osc: [["sawtooth", 1, 0.6, 0], ["square", 1, 0.3, 5]], lp: 3200, q: 2, a: 0.02, dur: 0.7, sus: 0.95, rel: 0.08, peak: 0.25 },
+    steeldrum: { osc: [["sine", 1, 1, 0], ["sine", 2, 0.4, 0], ["sine", 3, 0.2, 0]], glide: 0.98, a: 0.002, dur: 0.8, peak: 0.55 },
+    woodblock: { osc: [["sine", 1, 1, 0]], a: 0.001, dur: 0.09, peak: 0.8, click: 0.3 },
+    taiko: { osc: [["sine", 1, 1, 0], ["sine", 1.5, 0.2, 0]], glide: 0.7, noise: 0.2, noiseType: "lowpass", noiseFreq: 800, a: 0.002, dur: 0.7, peak: 0.8 },
     percussive: { osc: [["sine", 1, 1, 0], ["triangle", 1.6, 0.3, 0]], glide: 0.6, a: 0.002, dur: 0.4, peak: 0.7 },
-    sfx: { osc: [], noise: 0.9, band: true, a: 0.005, dur: 0.35, peak: 0.5 },
-    timpani: { osc: [["sine", 1, 1, 0], ["sine", 1.5, 0.3, 0]], glide: 0.85, a: 0.003, dur: 0.9, peak: 0.7, noise: 0.08 }
+    revcym: { osc: [], noise: 0.8, noiseType: "highpass", noiseFreq: 6000, a: 0.8, dur: 0.9, peak: 0.4 },
+    fret: { osc: [], noise: 0.6, band: true, a: 0.002, dur: 0.1, peak: 0.5 },
+    breath: { osc: [], noise: 0.5, noiseType: "lowpass", noiseFreq: 1500, a: 0.05, dur: 0.5, sus: 0.8, rel: 0.1, peak: 0.5 },
+    seashore: { osc: [], noise: 0.6, noiseType: "lowpass", noiseFreq: 800, a: 0.4, dur: 1.5, peak: 0.5, trem: 0.6, tremRate: 0.4 },
+    bird: { osc: [["sine", 2, 1, 0]], glide: 1.6, vib: 80, vibRate: 18, a: 0.01, dur: 0.3, peak: 0.35 },
+    phone: { osc: [["square", 2, 0.5, 0]], trem: 1, tremRate: 16, a: 0.005, dur: 0.8, sus: 0.9, rel: 0.05, peak: 0.2 },
+    heli: { osc: [], noise: 0.6, noiseType: "lowpass", noiseFreq: 600, trem: 1, tremRate: 12, a: 0.01, dur: 1.0, sus: 0.9, rel: 0.1, peak: 0.6 },
+    applause: { osc: [], noise: 0.6, noiseType: "bandpass", noiseFreq: 2500, trem: 0.8, tremRate: 20, a: 0.05, dur: 1.0, peak: 0.6 },
+    gunshot: { osc: [], noise: 0.9, noiseType: "lowpass", noiseFreq: 2500, a: 0.001, dur: 0.3, peak: 0.8, click: 0.4 }
   };
-  var MELODY_FAMILY_RECIPE = ["piano", "marimba", "organ", "guitar", "bass", "strings", "ensemble", "brass",
-    "reed", "pipe", "lead", "pad", "fx", "ethnic", "percussive", "sfx"];
-  var MELODY_RECIPE_OVERRIDES = {
-    6: "pluck", 7: "pluck", 8: "bell", 9: "bell", 10: "bell", 11: "bell", 12: "marimba", 13: "marimba", 14: "tubular", 15: "pluck",
-    21: "reed", 22: "reed", 23: "reed", 45: "pluck", 46: "pluck", 47: "timpani", 105: "pluck", 106: "pluck", 107: "pluck", 108: "marimba"
-  };
+
+  // GM 128音色 → [基本レシピ, 上書き]
+  var MELODY_PATCHES = [
+    ["piano"], ["piano", { lp: 8000, lpEnd: 3000, peak: 0.55 }], ["piano", { osc: [["triangle", 1, 0.8, -6], ["triangle", 1, 0.5, 6], ["sine", 2, 0.3, 0]] }], ["honky"],
+    ["rhodes"], ["dxep"], ["harpsi"], ["clav"],
+    ["bell", { dur: 1.2 }], ["bell", { osc: [["sine", 1, 1, 0], ["sine", 2.76, 0.4, 0], ["sine", 5.4, 0.2, 0]], dur: 1.5, peak: 0.4 }], ["musicbox"], ["vibes"],
+    ["marimba"], ["marimba", { dur: 0.25, osc: [["triangle", 1, 1, 0], ["sine", 3, 0.3, 0]] }], ["tubular"], ["pluck", { osc: [["sawtooth", 1, 0.6, -5], ["sawtooth", 1, 0.6, 5]], lp: 5000, lpEnd: 1500, dur: 0.9 }],
+    ["organ"], ["percorgan"], ["rockorgan"], ["church"],
+    ["reed", { lp: 1400, vib: 0, peak: 0.25 }], ["accordion"], ["harmonica"], ["accordion", { osc: [["sawtooth", 1, 0.5, -14], ["sawtooth", 1, 0.5, 14]] }],
+    ["nylon"], ["guitar"], ["guitar", { lp: 1800, lpEnd: 500, dur: 0.9, peak: 0.55 }], ["guitar", { lp: 4000, lpEnd: 1600, osc: [["sawtooth", 1, 0.7, -7], ["sawtooth", 1, 0.7, 7]], peak: 0.35 }],
+    ["guitar", { dur: 0.18, lp: 1500, lpEnd: 400 }], ["drive", { drive: 0.4 }], ["drive"], ["harmonics"],
+    ["bass"], ["bass", { lp: 1300 }], ["bass", { lp: 2400, lpEnd: 800, osc: [["sawtooth", 1, 1, 0]] }], ["fretless"],
+    ["slap"], ["slap", { lp: 4500, lpEnd: 1100 }], ["synbass"], ["synbass", { osc: [["sawtooth", 1, 0.6, -10], ["sawtooth", 1, 0.6, 10]], q: 4, lp: 1600, lpEnd: 400 }],
+    ["violin"], ["violin", { lp: 2800 }], ["violin", { lp: 2000, vib: 6 }], ["violin", { lp: 1200, vib: 4 }],
+    ["strings", { trem: 0.6, tremRate: 8 }], ["pluck", { lp: 2500, lpEnd: 600, dur: 0.3, peak: 0.45 }], ["harp"], ["timpani"],
+    ["strings"], ["strings", { a: 0.2, lp: 2000 }], ["synstr"], ["synstr", { lp: 1800 }],
+    ["choir"], ["oohs"], ["choir", { osc: [["square", 1, 0.5, -5], ["sawtooth", 1, 0.5, 5]] }], ["orchhit"],
+    ["brass", { lp: 900, lpEnd: 3200 }], ["brass", { lp: 600, lpEnd: 2000 }], ["brass", { lp: 400, lpEnd: 1200, osc: [["sawtooth", 1, 1, 0], ["sine", 0.5, 0.3, 0]] }], ["mutetp"],
+    ["brass", { lp: 450, lpEnd: 1300, a: 0.06, vib: 3 }], ["brass", { osc: [["sawtooth", 1, 0.6, -6], ["sawtooth", 1, 0.6, 6]] }], ["synbrass"], ["synbrass", { a: 0.06, lpEnd: 3000 }],
+    ["sax"], ["sax", { lp: 2200 }], ["sax", { lp: 1800 }], ["sax", { lp: 1300 }],
+    ["oboe"], ["oboe", { lp: 2200 }], ["oboe", { lp: 1200, vib: 3 }], ["clarinet"],
+    ["pipe", { vib: 6, noise: 0.03 }], ["pipe"], ["pipe", { vib: 0, osc: [["triangle", 1, 1, 0]] }], ["pipe", { noise: 0.12 }],
+    ["bottle"], ["shakuhachi"], ["whistle"], ["ocarina"],
+    ["sqlead"], ["sawlead"], ["pipe", { osc: [["sine", 1, 0.8, 0], ["square", 1, 0.25, 0]], vib: 7 }], ["sqlead", { click: 0.2 }],
+    ["drive", { drive: 0.3, lp: 4000 }], ["choir", { osc: [["sawtooth", 1, 0.7, 0]], a: 0.05 }], ["fifths"], ["basslead"],
+    ["pad", { osc: [["sawtooth", 1, 0.4, -10], ["sawtooth", 1, 0.4, 10], ["sine", 3, 0.25, 0]] }], ["pad", { lp: 900 }], ["polypad"], ["choir", { a: 0.4, dur: 1.8, rel: 0.6 }],
+    ["strings", { a: 0.4, dur: 1.6, rel: 0.5 }], ["metalpad"], ["halopad"], ["sweeppad"],
+    ["rain"], ["pad", { lp: 2000, vib: 3 }], ["bell", { osc: [["sine", 1, 1, 0], ["sine", 4.2, 0.3, 0], ["sine", 8.5, 0.15, 0]], dur: 1.8 }], ["halopad", { osc: [["triangle", 1, 0.6, -6], ["triangle", 1, 0.6, 6]] }],
+    ["pad", { lp: 5000 }], ["goblin"], ["bell", { dur: 2.2, peak: 0.35 }], ["scifi"],
+    ["sitar"], ["banjo"], ["shamisen"], ["koto"],
+    ["kalimba"], ["bagpipe"], ["violin", { vib: 10, lp: 3800 }], ["oboe", { lp: 3800, vib: 8 }],
+    ["bell", { osc: [["sine", 2, 1, 0], ["sine", 5.5, 0.3, 0]], dur: 0.9 }], ["bell", { osc: [["sine", 1, 1, 0], ["sine", 2.2, 0.5, 0]], dur: 0.3 }], ["steeldrum"], ["woodblock"],
+    ["taiko"], ["percussive"], ["percussive", { glide: 0.3, osc: [["sine", 1, 1, 0]] }], ["revcym"],
+    ["fret"], ["breath"], ["seashore"], ["bird"],
+    ["phone"], ["heli"], ["applause"], ["gunshot"]
+  ];
+  var _melodyRecipeCache = {};
   function melodyRecipe(prog) {
-    var name = MELODY_RECIPE_OVERRIDES[prog] || MELODY_FAMILY_RECIPE[Math.floor(prog / 8)] || "piano";
-    return MELODY_RECIPES[name];
+    if (_melodyRecipeCache[prog]) { return _melodyRecipeCache[prog]; }
+    var pt = MELODY_PATCHES[prog] || ["piano"], base = MELODY_RECIPES[pt[0]] || MELODY_RECIPES.piano, r = {}, k;
+    for (k in base) { if (base.hasOwnProperty(k)) { r[k] = base[k]; } }
+    if (pt[1]) { for (k in pt[1]) { if (pt[1].hasOwnProperty(k)) { r[k] = pt[1][k]; } } }
+    _melodyRecipeCache[prog] = r;
+    return r;
+  }
+
+  var _melodyDriveCurves = {};
+  function melodyDriveCurve(amount) {
+    var key = Math.round(amount * 100);
+    if (_melodyDriveCurves[key]) { return _melodyDriveCurves[key]; }
+    var n = 1024, curve = new Float32Array(n), k = amount * 50;
+    for (var i = 0; i < n; i++) { var x = i * 2 / n - 1; curve[i] = (1 + k) * x / (1 + k * Math.abs(x)); }
+    _melodyDriveCurves[key] = curve;
+    return curve;
   }
 
   function melodyNoise(ac, t, dur, level, target, filterType, freq) {
@@ -2835,12 +2946,13 @@
     src.stop(t + dur + 0.05);
   }
 
-  // 和音のときなど音量を下げる出口（level 1 = そのまま）
+  // 和音のときなど音量を下げる出口（level 1 = そのまま）。エフェクトバスへつなぐ
   function melodyLevelOut(ac, level) {
-    if (!(level > 0) || level >= 1) { return melodyAudio.master; }
+    var bus = melodyAudio.bus || melodyAudio.master;
+    if (!(level > 0) || level >= 1) { return bus; }
     var g = ac.createGain();
     g.gain.value = level;
-    g.connect(melodyAudio.master);
+    g.connect(bus);
     return g;
   }
 
@@ -2889,51 +3001,167 @@
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
     if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level); return; }
+    if (melodySampleNote(ac, midi, prog, t, level)) { return; }
     var r = melodyRecipe(prog);
     var f = 440 * Math.pow(2, (midi - 69) / 12);
-    var env = ac.createGain(), target = env, i;
+    var end = t + r.dur, i;
+    // エンベロープ
+    var env = ac.createGain();
     env.gain.setValueAtTime(0.0001, t);
     env.gain.exponentialRampToValueAtTime(r.peak, t + r.a);
     if (r.sus) {
       env.gain.exponentialRampToValueAtTime(r.peak * r.sus, t + r.a + 0.06);
-      env.gain.setValueAtTime(r.peak * r.sus, t + Math.max(r.a + 0.07, r.dur - r.rel));
+      env.gain.setValueAtTime(r.peak * r.sus, t + Math.max(r.a + 0.07, r.dur - (r.rel || 0.1)));
     }
-    env.gain.exponentialRampToValueAtTime(0.0001, t + r.dur);
-    env.connect(melodyLevelOut(ac, level));
+    env.gain.exponentialRampToValueAtTime(0.0001, end);
+    var out = env;
+    if (r.trem) {
+      var tg = ac.createGain(), tl = ac.createOscillator(), tlg = ac.createGain();
+      tg.gain.value = 1 - r.trem / 2;
+      tl.frequency.value = r.tremRate || 5;
+      tlg.gain.value = r.trem / 2;
+      tl.connect(tlg);
+      tlg.connect(tg.gain);
+      tl.start(t);
+      tl.stop(end + 0.05);
+      env.connect(tg);
+      out = tg;
+    }
+    out.connect(melodyLevelOut(ac, level));
+    // 音源 → 歪み → ローパス → フォルマント → エンベロープ
+    var mix = ac.createGain(), node = mix;
+    if (r.drive) {
+      var ws = ac.createWaveShaper();
+      ws.curve = melodyDriveCurve(r.drive);
+      node.connect(ws);
+      node = ws;
+    }
     if (r.lp) {
       var lp = ac.createBiquadFilter();
       lp.type = "lowpass";
-      var lp0 = Math.max(r.lp, f * 1.5);
-      lp.frequency.setValueAtTime(lp0, t);
+      if (r.q) { lp.Q.value = r.q; }
+      lp.frequency.setValueAtTime(Math.max(r.lp, f * 1.5), t);
       if (r.lpEnd) { lp.frequency.exponentialRampToValueAtTime(Math.max(r.lpEnd, f * 1.2), t + r.dur * 0.8); }
-      lp.connect(env);
-      target = lp;
+      node.connect(lp);
+      node = lp;
     }
+    if (r.bp) {
+      var sum = ac.createGain();
+      for (i = 0; i < r.bp.length; i++) {
+        var bf = ac.createBiquadFilter(), bg = ac.createGain();
+        bf.type = "bandpass";
+        bf.frequency.value = r.bp[i][0];
+        bf.Q.value = r.bp[i][1];
+        bg.gain.value = r.bp[i][2];
+        node.connect(bf);
+        bf.connect(bg);
+        bg.connect(sum);
+      }
+      node = sum;
+    }
+    node.connect(env);
     var lfoGain = null;
     if (r.vib) {
       var lfo = ac.createOscillator();
       lfoGain = ac.createGain();
-      lfo.frequency.value = 5.5;
+      lfo.frequency.value = r.vibRate || 5.5;
       lfoGain.gain.value = f * r.vib * 0.000578;
       lfo.connect(lfoGain);
       lfo.start(t);
-      lfo.stop(t + r.dur + 0.05);
+      lfo.stop(end + 0.05);
     }
     for (i = 0; i < r.osc.length; i++) {
       var spec = r.osc[i], o = ac.createOscillator(), g = ac.createGain();
       o.type = spec[0];
       o.frequency.setValueAtTime(f * spec[1], t);
-      if (r.glide) { o.frequency.exponentialRampToValueAtTime(f * spec[1] * r.glide, t + r.dur); }
+      if (r.glide) { o.frequency.exponentialRampToValueAtTime(f * spec[1] * r.glide, end); }
       if (spec[3] && o.detune) { o.detune.value = spec[3]; }
       if (lfoGain) { lfoGain.connect(o.frequency); }
       g.gain.value = spec[2];
       o.connect(g);
-      g.connect(target);
+      g.connect(mix);
       o.start(t);
-      o.stop(t + r.dur + 0.05);
+      o.stop(end + 0.05);
     }
-    if (r.noise) { melodyNoise(ac, t, r.dur, r.noise, target, r.band ? "bandpass" : "highpass", r.band ? f : 3000); }
+    if (r.perc) {
+      var po = ac.createOscillator(), pg = ac.createGain();
+      po.type = "sine";
+      po.frequency.value = f * r.perc[0];
+      pg.gain.setValueAtTime(r.perc[1], t);
+      pg.gain.exponentialRampToValueAtTime(0.0001, t + r.perc[2]);
+      po.connect(pg);
+      pg.connect(mix);
+      po.start(t);
+      po.stop(t + r.perc[2] + 0.05);
+    }
+    if (r.noise) {
+      melodyNoise(ac, t, r.dur, r.noise, mix, r.noiseType || (r.band ? "bandpass" : "highpass"), r.noiseFreq || (r.band ? f : 3000));
+    }
+    if (r.click) {
+      var cg = ac.createGain();
+      cg.gain.setValueAtTime(r.click, t);
+      cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.015);
+      cg.connect(env);
+      melodyNoise(ac, t, 0.02, 1, cg, "highpass", 2000);
+    }
   }
+
+  // §154 v0.73: エフェクト（リバーブ・ディレイ）の量。0=なし 1=少し 2=ふつう 3=たっぷり
+  var MELODY_FX_NAMES = ["なし", "少し", "ふつう", "たっぷり"];
+  var MELODY_REV_SEND = [0, 0.18, 0.35, 0.6], MELODY_DLY_SEND = [0, 0.12, 0.25, 0.4], MELODY_REV_CC = [0, 30, 60, 100];
+  function melodySetFx(rev, dly) {
+    rev = clamp(parseInt(rev, 10) || 0, 0, 3);
+    dly = clamp(parseInt(dly, 10) || 0, 0, 3);
+    melodyAudio.fxRev = rev;
+    melodyAudio.fxDly = dly;
+    if (melodyAudio.revSend) { melodyAudio.revSend.gain.value = MELODY_REV_SEND[rev]; }
+    if (melodyAudio.dlySend) { melodyAudio.dlySend.gain.value = MELODY_DLY_SEND[dly]; }
+    if (melodyMidi && melodyMidi.out) {
+      for (var i = 0; i < MELODY_VOICES.length; i++) { melodyMidiSend([0xB0 | MELODY_VOICES[i].ch, 91, MELODY_REV_CC[rev]]); }
+    }
+  }
+  function melodyMakeImpulse(ac, seconds) {
+    var rate = ac.sampleRate || 44100, len = Math.floor(rate * seconds);
+    var buf = ac.createBuffer(2, len, rate);
+    for (var ch = 0; ch < 2; ch++) {
+      var d = buf.getChannelData(ch);
+      for (var i = 0; i < len; i++) { d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    }
+    return buf;
+  }
+  // エフェクトバス: bus → master（ドライ）／ bus → リバーブ ／ bus → ディレイ
+  function melodyBuildFx(ac, master) {
+    var bus = ac.createGain();
+    bus.connect(master);
+    try {
+      var rev = ac.createConvolver(), revSend = ac.createGain(), revOut = ac.createGain();
+      rev.buffer = melodyMakeImpulse(ac, 2.2);
+      revSend.gain.value = 0;
+      revOut.gain.value = 0.7;
+      bus.connect(revSend);
+      revSend.connect(rev);
+      rev.connect(revOut);
+      revOut.connect(master);
+      var dly = ac.createDelay(1.0), dlySend = ac.createGain(), fb = ac.createGain(), dlp = ac.createBiquadFilter();
+      dly.delayTime.value = 0.28;
+      dlySend.gain.value = 0;
+      fb.gain.value = 0.32;
+      dlp.type = "lowpass";
+      dlp.frequency.value = 3000;
+      bus.connect(dlySend);
+      dlySend.connect(dly);
+      dly.connect(dlp);
+      dlp.connect(fb);
+      fb.connect(dly);
+      dlp.connect(master);
+      return { bus: bus, revSend: revSend, dlySend: dlySend };
+    } catch (e) {
+      return { bus: bus, revSend: null, dlySend: null };
+    }
+  }
+
+  // §155 で本物の楽器サンプルを使う（ここではまだ無し）
+  function melodySampleNote() { return false; }
 
   // Web MIDI 出力
   function melodyMidiSend(bytes, ts) {
@@ -2946,6 +3174,7 @@
     for (var i = 0; i < MELODY_VOICES.length; i++) {
       var p = melodyProgOf(map, MELODY_VOICES[i].id);
       if (p < MELODY_DRUM) { melodyMidiSend([0xC0 | MELODY_VOICES[i].ch, p]); }
+      melodyMidiSend([0xB0 | MELODY_VOICES[i].ch, 91, MELODY_REV_CC[melodyAudio.fxRev || 0]]); // §154: リバーブ量
     }
   }
   function melodyMidiAllOff() {
@@ -3089,6 +3318,8 @@
       sound: typeof p.sound === "boolean" ? p.sound : !!soundDefault,
       rec: typeof p.rec === "boolean" ? p.rec : true,
       relax: p.relax === true,
+      fxRev: (p.fxRev >= 0 && p.fxRev <= 3) ? p.fxRev : 1,
+      fxDly: (p.fxDly >= 0 && p.fxDly <= 3) ? p.fxDly : 0,
       chord: (p.chord === 3 || p.chord === 4 || p.chord === 5) ? p.chord : 1,
       arp: p.arp === true,
       chordAt: (p.chordAt === "all" || p.chordAt === "b") ? p.chordAt : "bw",
@@ -3140,9 +3371,11 @@
     var trk = [0x00, 0xFF, 0x03, name.length];
     for (i = 0; i < name.length; i++) { trk.push(name.charCodeAt(i)); }
     trk.push(0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20);
+    var revCC = MELODY_REV_CC[(rec.fxRev >= 0 && rec.fxRev <= 3) ? rec.fxRev : 1];
     for (i = 0; i < MELODY_VOICES.length; i++) {
       var pg = melodyProgOf(rec.prog, MELODY_VOICES[i].id);
       if (pg < MELODY_DRUM) { trk.push(0x00, 0xC0 | MELODY_VOICES[i].ch, pg); }
+      trk.push(0x00, 0xB0 | MELODY_VOICES[i].ch, 91, revCC);
     }
     var lastTick = 0;
     function vlq(n) {
@@ -3215,6 +3448,13 @@
       }
       return html;
     }
+    function fxSelect(key, label) {
+      var html = '<label class="melody-row"><span>' + label + '</span><select data-p="' + key + '">';
+      for (var i = 0; i < MELODY_FX_NAMES.length; i++) {
+        html += '<option value="' + i + '"' + (i === prefs[key] ? " selected" : "") + ">" + MELODY_FX_NAMES[i] + "</option>";
+      }
+      return html + "</select></label>";
+    }
     function midiStatusText() {
       if (melodyMidi.status === "unsupported") { return "このブラウザはWeb MIDIに対応していません（パソコンのChrome/Edgeなら使えます）"; }
       if (melodyMidi.status === "denied") { return "MIDI機器へのアクセスが許可されませんでした"; }
@@ -3230,6 +3470,7 @@
     }
     function startTones() {
       if (melodyMidi.out) { melodyMidiPrograms(prefs.prog); } else { melodyAudioInit(); }
+      melodySetFx(prefs.fxRev, prefs.fxDly);
     }
     function preview() {
       startTones();
@@ -3289,6 +3530,7 @@
           '<button class="arcade-mini-btn" data-m="tone" data-v="' + mv.id + '" title="試し聴き">&#x1F508;</button></div>';
       }
       html += '<button class="modal-btn melody-small-btn" data-m="tone-reset">↺ 音色を最初に戻す</button></details>' +
+        fxSelect("fxRev", "リバーブ（残響）") + fxSelect("fxDly", "ディレイ（やまびこ）") +
         '<label class="melody-row"><span>出力先</span><select data-p="output">' + outputOptions() + '</select></label>' +
         '<div class="melody-midi-line"><button class="modal-btn melody-small-btn" data-m="midi-scan">&#x1F50C; MIDI機器を探す</button>' +
         '<span class="small">' + escHtml(midiStatusText()) + '</span></div>' +
@@ -3324,7 +3566,8 @@
       for (i = 0; i < sels.length; i++) {
         sels[i].onchange = function (ev) {
           var k = ev.currentTarget.getAttribute("data-p"), v = ev.currentTarget.value;
-          if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
+          if (k === "fxRev" || k === "fxDly") { prefs[k] = parseInt(v, 10); melodySetFx(prefs.fxRev, prefs.fxDly); }
+          else if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
           else if (k === "arp") { prefs[k] = v === "1"; }
           else { prefs[k] = v; }
           if (k === "output") { applyOutput(); }
@@ -3508,7 +3751,7 @@
           // アルペジオの時差で前後するので時刻順に並べ直す
           notes.sort(function (a, b) { return a[0] - b[0]; });
           melodySaveRec({ id: Date.now(), date: Date.now(), scale: scale.id, key: key, mode: cfg.mode, score: score, prog: prog,
-            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, notes: notes });
+            chord: chordSize, arp: !!cfg.arp, chordAt: chordAt, fxRev: melodyAudio.fxRev || 0, notes: notes });
         },
         step: function () {
           var k, s;

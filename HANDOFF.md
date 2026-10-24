@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.72** |
+| 現在バージョン | **v0.73** |
 | ブランチ | main |
 
 ---
@@ -93,6 +93,9 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.73] メロディくずし 内蔵シンセ v2＋エフェクト**（§154）
+  - `MELODY_RECIPES`（77）＋`MELODY_PATCHES`（128）→ `melodyRecipe(prog)`。`melodySynth` はバス（`melodyAudio.bus`）へ出力、`melodyBuildFx` / `melodySetFx`（リバーブ・ディレイ）
+  - 残り: v0.74 サンプル同梱（`melodySampleNote` が今は false を返すだけのフック）/ v0.75 WAV / v0.76 テンポ同期・コード進行
 - **[v0.72] ゲームセンターメダル＆景品交換所**（§153）
   - `ARCADE_MEDAL_RATE`（ゲーム別換算値）/ `calcArcadeMedals` / `onArcadeGameEnd` がメダル数を返す → arcade.js が終了画面に表示
   - `ARCADE_PRIZES` / `getArcadePrizeStatus` / `exchangeArcadePrize` / `renderArcadeMenu(view)`（"games" / "prizes"）
