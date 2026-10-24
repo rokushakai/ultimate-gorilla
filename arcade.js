@@ -269,6 +269,13 @@
     if (host.paused || host.over) {
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fillRect(0, 0, W, H);
+      // §165 v0.84: 文字の後ろに枠を敷いて、ゲーム画面と重なっても読めるようにする
+      var boxBottom = host.over && host.earned !== null && host.earned !== undefined ? H / 2 + 72 : (host.over && host.score > host.hi ? H / 2 + 48 : H / 2 + 24);
+      ctx.fillStyle = "rgba(11,18,32,0.94)";
+      ctx.fillRect(24, H / 2 - 48, W - 48, boxBottom - (H / 2 - 48));
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(24, H / 2 - 48, W - 48, boxBottom - (H / 2 - 48));
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#ffd166";

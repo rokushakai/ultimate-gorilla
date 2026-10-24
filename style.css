@@ -1005,8 +1005,8 @@ html, body {
 }
 /* ===== §161 v0.80: ゲームセンターの分類タブ ===== */
 .arcade-cats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* §165 v0.84: 4つを2×2でそろえる */
   gap: 4px;
   margin: 0 0 8px;
 }
