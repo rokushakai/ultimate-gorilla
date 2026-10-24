@@ -26,7 +26,7 @@
   // row25に1/2/3ワープ(col7/11/15)、row29に4/5/6ワープ(col7/11/15)
   var RAW_MAP = [
     "##########################",                    // row 0
-    "#,,,H,,,T,,S##############",                   // row 1 H=start(4,1) T=tavern(8,1) S=king aide(11,1)
+    "#,,QH,,,T,,S##############",                   // row 1 Q=game center(3,1) §149 v0.68 H=start(4,1) T=tavern(8,1) S=king aide(11,1)
     "#,D,,,,M,,K,##############",                   // row 2 D=UMADoc(2,2) M=merchant(7,2) K=smith(10,2)
     "#,V,N,,,,G,,##############",                   // row 3 V=sideGate(2,3) N=paperView(4,3) G=shrine(9,3)
     "#..........A##############",                   // row 4 A=pegasus chest(11,4)
@@ -37,7 +37,7 @@
     "#..W..E.........." + ",,,,,,,##",              // row 9 col12開放 東ウイング開始
     "#....P......#" + "....,,,,,,,##",              // row 10
     "#.....#....C#" + "....,,,,,,,##",              // row 11 C=cosmos chest(11,11)
-    "#......W....#" + "....,,,Q,,,##",              // row 12 Q=game center(20,12) §146 v0.65
+    "#......W....#" + "....,,,,,,,##",              // row 12
     "#....P..B...#" + "....,,,,,,,##",              // row 13 B=chest(8,13)
     "#........U..#" + "....,,,,,,,##",              // row 14 U=ukulele chest(9,14)
     "#..#...J...##" + "....,,,,,,,##",              // row 15 J=nyoibo chest(7,15)
@@ -1770,7 +1770,7 @@
       } else {
         triggerFixedEncounter("midboss_gorilla");
       }
-    } else if (tileChar === "g") {
+    } else if (tileChar === "g" && !isDebugNoEncounter()) { // §149 v0.68: デバッグ時はランダムエンカウント停止可
       state.stepsSinceEncounter++;
       if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
           Math.random() < ENCOUNTER_CHANCE) {
@@ -3227,8 +3227,8 @@
       return; // 有効移動非加算・エンカウントなし
     }
 
-    // 安全地形でなければエンカウント判定
-    if (!SAFE_TILE[tile]) {
+    // 安全地形でなければエンカウント判定（§149 v0.68: デバッグ「敵と遭遇しない」中は除く）
+    if (!SAFE_TILE[tile] && !isDebugNoEncounter()) {
       state.stepsSinceEncounter++;
       if (state.stepsSinceEncounter >= MIN_STEPS_BEFORE_ENCOUNTER &&
           Math.random() < ENCOUNTER_CHANCE) {
@@ -3541,6 +3541,12 @@
     copy.exp    = Math.max(1, Math.round((monster.exp    || 1) * m));
     copy.stageLevel = getEnemyLevelForStage(stageNum, !!(monster.canCapture === false));
     return copy;
+  }
+
+  // §149 v0.68: デバッグ「敵と遭遇しないモード」（メモリ上のみ・saveしない）
+  var _debugNoEncounter = false;
+  function isDebugNoEncounter() {
+    return DEBUG_MODE && _debugNoEncounter;
   }
 
   function triggerEncounter() {
@@ -9960,6 +9966,8 @@
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
     if (DEBUG_MODE) {
       html += '<p class="small" style="color:#ffd166;margin-top:16px;">🛠️ 開発用テスト (debug=1)</p>';
+      html += '<button class="shop-menu-btn" id="btn-debug-no-encounter" style="border-color:#55efc4;color:#55efc4;">' +
+        (_debugNoEncounter ? "🚫 敵と遭遇しない: ON" : "⚔️ 敵と遭遇しない: OFF") + '</button>'; // §149 v0.68
       html += '<button class="shop-menu-btn" id="btn-debug-lv1">📉 Lv.1にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-lv5">📈 Lv.5にする</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-lv10">📈 Lv.10にする</button>';
@@ -10605,7 +10613,7 @@
       // §146 v0.65: ゲームセンターテスト（4本）
       html += '<p style="color:#74b9ff;margin:8px 0 2px;">§146 v0.65 ゲームセンター</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-v65-open-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F579;&#xFE0F; ゲームセンターを開く</button>';
-      html += '<button class="shop-menu-btn" id="btn-debug-v65-warp-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F6B6; ゲームセンター横(19,12)へワープ</button>';
+      html += '<button class="shop-menu-btn" id="btn-debug-v65-warp-arcade" style="border-color:#74b9ff;color:#74b9ff;">&#x1F6B6; ゲームセンター下(3,2)へワープ</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v65-scores" style="border-color:#a0cfff;color:#a0cfff;">&#x1F3C6; ハイスコア一覧</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v65-reset-scores" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ハイスコアリセット</button>';
     }
@@ -10659,6 +10667,12 @@
       renderSettingsBody();
     };
     if (DEBUG_MODE) {
+      document.getElementById("btn-debug-no-encounter").onclick = function () { // §149 v0.68
+        _debugNoEncounter = !_debugNoEncounter;
+        state.stepsSinceEncounter = 0;
+        this.textContent = _debugNoEncounter ? "🚫 敵と遭遇しない: ON" : "⚔️ 敵と遭遇しない: OFF";
+        showToast(_debugNoEncounter ? "[DEBUG] 敵と遭遇しないモード ON（固定敵・ボスは出ます）" : "[DEBUG] 敵と遭遇しないモード OFF");
+      };
       document.getElementById("btn-debug-lv1").onclick = debugSetLevel1;
       document.getElementById("btn-debug-lv5").onclick = debugSetLevel5;
       document.getElementById("btn-debug-lv10").onclick = debugSetLevel10;
@@ -15258,11 +15272,11 @@
       document.getElementById("btn-debug-v65-warp-arcade").onclick = function () {
         if (state.inBattle) { showToast("[DEBUG] 戦闘中は使えない"); return; }
         if (state.mapMode === "side") { showToast("[DEBUG] 通常マップで使ってください"); return; }
-        state.player.x = 19;
-        state.player.y = 12;
+        state.player.x = 3;
+        state.player.y = 2;
         closeModal("settings-modal");
         renderField();
-        showToast("[DEBUG] ゲームセンター横へワープ（→で入店）");
+        showToast("[DEBUG] ゲームセンター下へワープ（↑で入店）");
       };
       document.getElementById("btn-debug-v65-scores").onclick = function () {
         normalizeArcadeHighScores();
