@@ -1294,7 +1294,8 @@
     companionTechniqueLearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §139 v0.58: 仲間わざ習得演出済みフラグ（永続・saveする）
     companionTechnique2LearnedNotices: { juritani: false, shurittani: false, norio: false, harumi: false }, // §145 v0.64: わざ2習得演出済みフラグ（永続・saveする）
     companionBags: { juritani: {}, shurittani: {}, norio: {}, harumi: {} }, // §142 v0.61: 仲間個人バッグ（永続・saveする）
-    arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0, breakout: 0, snake: 0, tennis: 0, crossing: 0, mole: 0, sweeper: 0 }, // §146 v0.65 / §147 v0.66: ゲームセンターのハイスコア（永続・saveする）
+    arcadeHighScores: { blocks: 0, shooter: 0, pinball: 0, breakout: 0, snake: 0, tennis: 0, crossing: 0, mole: 0, sweeper: 0,
+      g2048: 0, reversi: 0, slide: 0, memory: 0, meteor: 0, defense: 0 }, // §146〜§148: ゲームセンターのハイスコア（永続・saveする）
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
@@ -19201,7 +19202,8 @@
   // ---------------------------------------------------------
   // §146 v0.65: ゲームセンター（ミニゲーム本体は arcade.js / window.UGArcade）
   // ---------------------------------------------------------
-  var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball", "breakout", "snake", "tennis", "crossing", "mole", "sweeper"]; // §147 v0.66: 6本追加
+  var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball", "breakout", "snake", "tennis", "crossing", "mole", "sweeper",
+    "g2048", "reversi", "slide", "memory", "meteor", "defense"]; // §147 v0.66 / §148 v0.67: 6本ずつ追加
 
   // ハイスコアを正規化（欠損・数値以外・負数→0。値は下げない）
   function normalizeArcadeHighScores() {
@@ -19227,7 +19229,10 @@
   }
 
   function closeArcadeModal() {
-    if (window.UGArcade && window.UGArcade.isRunning()) { window.UGArcade.stop(); }
+    if (window.UGArcade && window.UGArcade.isRunning()) {
+      window.UGArcade.stop();
+      updateBGM(getFieldBgmType()); // §148 v0.67: ゲーム中に閉じたらフィールドBGMへ戻す
+    }
     closeModal("modal-arcade");
     renderField();
   }
@@ -19270,11 +19275,18 @@
     var stageEl = document.getElementById("arcade-stage");
     menuEl.classList.add("hidden");
     stageEl.classList.remove("hidden");
+    updateBGM("battle"); // §148 v0.67: プレイ中は戦闘と同じBGM（BGM関数本体は変更なし）
     window.UGArcade.start(gameId, stageEl, {
       hiScore: getArcadeHighScore(gameId),
       onEnd: onArcadeGameEnd,
-      onExit: renderArcadeMenu
+      onExit: onArcadeGameExit
     });
+  }
+
+  // ゲーム画面からメニューへ戻るとき（メニューへ / やめる）
+  function onArcadeGameExit() {
+    updateBGM(getFieldBgmType()); // §148 v0.67
+    renderArcadeMenu();
   }
 
   // ゲーム終了（ゲームオーバー or やめる）時に1回だけ呼ばれる

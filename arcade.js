@@ -144,8 +144,10 @@
     renderSysButtons();
   }
 
+  // ゲーム中のキーはフィールド側（移動・BGM切替）へ届けない（capture で受けて止める）
   function onKeyDown(ev) {
     if (!host) { return; }
+    ev.stopPropagation();
     if (ev.key === "p" || ev.key === "P") { togglePause(); return; }
     var act = host.def.keys[ev.key];
     if (!act) { return; }
@@ -155,6 +157,7 @@
   }
   function onKeyUp(ev) {
     if (!host) { return; }
+    ev.stopPropagation();
     var act = host.def.keys[ev.key];
     if (!act) { return; }
     // フォーカス中のボタンが Space で押されないようにする
@@ -330,8 +333,8 @@
       bindHold(b, controls[i].action);
     }
     renderSysButtons();
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
     document.addEventListener("visibilitychange", onVisibility);
     host.rafId = raf(frame);
     return true;
@@ -340,8 +343,8 @@
   function stop() {
     if (!host) { return; }
     if (host.rafId !== null) { caf(host.rafId); }
-    window.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("keydown", onKeyDown, true);
+    window.removeEventListener("keyup", onKeyUp, true);
     document.removeEventListener("visibilitychange", onVisibility);
     var root = host.root;
     host = null;
@@ -1826,6 +1829,772 @@
           hudText(ctx, "💣 " + (MINES - flags) + "   ⏱ " + Math.floor(frames / 60) + "秒", 6, 11);
           hudText(ctx, flagMode ? "🚩 旗モード" : "⛏ 開くモード", W - 6, 11, "right");
           hudText(ctx, "長押しでも🚩", W / 2, 314, "center");
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🔢 ゴリラ2048
+  // ---------------------------------------------------------
+  var TILE_COLORS = {
+    2: "#eee4da", 4: "#ede0c8", 8: "#f2b179", 16: "#f59563", 32: "#f67c5f", 64: "#f65e3b",
+    128: "#edcf72", 256: "#edcc61", 512: "#edc850", 1024: "#edc53f", 2048: "#edc22e"
+  };
+
+  register({
+    id: "g2048",
+    name: "ゴリラ2048",
+    icon: "&#x1F522;",
+    desc: "同じ数字をくっつけて2048をめざそう",
+    help: "スワイプ / 矢印・WASD でタイルを寄せる / P一時停止",
+    controls: DIR_CONTROLS,
+    keys: DIR_KEYS,
+    create: function (api) {
+      var N = 4, CELL = 52, GAP = 4, OX = 6, OY = 50;
+      var board = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+      var sx = 0, sy = 0, reached = false, msg = 0;
+
+      function addTile() {
+        var e = [], x, y;
+        for (y = 0; y < N; y++) { for (x = 0; x < N; x++) { if (!board[y][x]) { e.push([x, y]); } } }
+        if (!e.length) { return; }
+        var p = e[randInt(0, e.length - 1)];
+        board[p[1]][p[0]] = Math.random() < 0.1 ? 4 : 2;
+      }
+      function slideLine(line) {
+        var vals = [], out = [], gained = 0, i;
+        for (i = 0; i < N; i++) { if (line[i]) { vals.push(line[i]); } }
+        for (i = 0; i < vals.length; i++) {
+          if (i + 1 < vals.length && vals[i] === vals[i + 1]) { out.push(vals[i] * 2); gained += vals[i] * 2; i++; }
+          else { out.push(vals[i]); }
+        }
+        while (out.length < N) { out.push(0); }
+        return { line: out, gained: gained };
+      }
+      function canMove() {
+        for (var y = 0; y < N; y++) {
+          for (var x = 0; x < N; x++) {
+            if (!board[y][x]) { return true; }
+            if (x + 1 < N && board[y][x] === board[y][x + 1]) { return true; }
+            if (y + 1 < N && board[y][x] === board[y + 1][x]) { return true; }
+          }
+        }
+        return false;
+      }
+      function move(dir) {
+        var moved = false, total = 0, k, i;
+        for (k = 0; k < N; k++) {
+          var coords = [];
+          for (i = 0; i < N; i++) {
+            if (dir === "left") { coords.push([i, k]); }
+            else if (dir === "right") { coords.push([N - 1 - i, k]); }
+            else if (dir === "up") { coords.push([k, i]); }
+            else { coords.push([k, N - 1 - i]); }
+          }
+          var line = [];
+          for (i = 0; i < N; i++) { line.push(board[coords[i][1]][coords[i][0]]); }
+          var res = slideLine(line);
+          for (i = 0; i < N; i++) {
+            var c = coords[i];
+            if (board[c[1]][c[0]] !== res.line[i]) { moved = true; }
+            board[c[1]][c[0]] = res.line[i];
+          }
+          total += res.gained;
+        }
+        if (!moved) { return; }
+        api.addScore(total);
+        addTile();
+        if (!reached) {
+          for (var y = 0; y < N; y++) { for (var x = 0; x < N; x++) { if (board[y][x] >= 2048) { reached = true; msg = 150; } } }
+        }
+        if (!canMove()) { api.gameOver(); }
+      }
+      function maxTile() {
+        var m = 0;
+        for (var y = 0; y < N; y++) { for (var x = 0; x < N; x++) { if (board[y][x] > m) { m = board[y][x]; } } }
+        return m;
+      }
+
+      addTile();
+      addTile();
+
+      return {
+        input: function (action, down) { if (down) { move(action); } },
+        pointer: function (type, x, y) {
+          if (type === "down") { sx = x; sy = y; }
+          else if (type === "up") {
+            var d = swipeDir(sx, sy, x, y);
+            if (d !== "tap") { move(d); }
+          }
+        },
+        step: function () { if (msg > 0) { msg--; } },
+        draw: function (ctx) {
+          ctx.fillStyle = "#bbada0";
+          ctx.fillRect(OX - GAP, OY - GAP, N * (CELL + GAP) + GAP, N * (CELL + GAP) + GAP);
+          for (var y = 0; y < N; y++) {
+            for (var x = 0; x < N; x++) {
+              var v = board[y][x], cx = OX + x * (CELL + GAP), cy = OY + y * (CELL + GAP);
+              ctx.fillStyle = v ? (TILE_COLORS[v] || "#3c3a32") : "#cdc1b4";
+              ctx.fillRect(cx, cy, CELL, CELL);
+              if (v) {
+                var digits = String(v).length;
+                ctx.fillStyle = v <= 4 ? "#776e65" : "#ffffff";
+                ctx.font = "bold " + (digits <= 2 ? 24 : (digits === 3 ? 20 : (digits === 4 ? 16 : 13))) + "px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(String(v), cx + CELL / 2, cy + CELL / 2 + 1);
+              }
+            }
+          }
+          hudText(ctx, "最大タイル " + maxTile(), 6, 300);
+          if (msg > 0) { hudText(ctx, "🎉 2048 達成！ まだ続けられるよ", W / 2, 30, "center"); }
+          else { hudText(ctx, "スワイプで寄せて、同じ数字を合体！", W / 2, 30, "center"); }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // ⚫ ゴリラリバーシ（CPU対戦）
+  // ---------------------------------------------------------
+  var REVERSI_WEIGHTS = [
+    [100, -20, 10, 5, 5, 10, -20, 100],
+    [-20, -50, -2, -2, -2, -2, -50, -20],
+    [10, -2, 1, 1, 1, 1, -2, 10],
+    [5, -2, 1, 0, 0, 1, -2, 5],
+    [5, -2, 1, 0, 0, 1, -2, 5],
+    [10, -2, 1, 1, 1, 1, -2, 10],
+    [-20, -50, -2, -2, -2, -2, -50, -20],
+    [100, -20, 10, 5, 5, 10, -20, 100]
+  ];
+  var DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+  register({
+    id: "reversi",
+    name: "ゴリラリバーシ",
+    icon: "&#x26AB;",
+    desc: "CPUゴリラとリバーシ対決。石を多く取ろう",
+    help: "置きたいマスをタップ（点のあるマスに置ける） / P一時停止",
+    controls: [],
+    keys: {},
+    create: function (api) {
+      var N = 8, CELL = 28, OX = 8, OY = 44, BK = 1, WH = 2;
+      var board = [], y, x;
+      for (y = 0; y < N; y++) { board.push([0, 0, 0, 0, 0, 0, 0, 0]); }
+      board[3][3] = WH; board[4][4] = WH; board[3][4] = BK; board[4][3] = BK;
+      var turn = BK, cpuT = 0, ended = false, lastMove = null, msg = "", msgT = 0;
+
+      function inside(cx, cy) { return cx >= 0 && cx < N && cy >= 0 && cy < N; }
+      function flips(cx, cy, who) {
+        if (board[cy][cx]) { return []; }
+        var opp = 3 - who, all = [];
+        for (var d = 0; d < DIRS8.length; d++) {
+          var tx = cx + DIRS8[d][0], ty = cy + DIRS8[d][1], line = [];
+          while (inside(tx, ty) && board[ty][tx] === opp) { line.push([tx, ty]); tx += DIRS8[d][0]; ty += DIRS8[d][1]; }
+          if (line.length && inside(tx, ty) && board[ty][tx] === who) { all = all.concat(line); }
+        }
+        return all;
+      }
+      function moves(who) {
+        var out = [];
+        for (var yy = 0; yy < N; yy++) {
+          for (var xx = 0; xx < N; xx++) {
+            var f = flips(xx, yy, who);
+            if (f.length) { out.push({ x: xx, y: yy, f: f }); }
+          }
+        }
+        return out;
+      }
+      function play(m, who) {
+        board[m.y][m.x] = who;
+        for (var i = 0; i < m.f.length; i++) { board[m.f[i][1]][m.f[i][0]] = who; }
+        lastMove = [m.x, m.y];
+      }
+      function count(who) {
+        var n = 0;
+        for (var yy = 0; yy < N; yy++) { for (var xx = 0; xx < N; xx++) { if (board[yy][xx] === who) { n++; } } }
+        return n;
+      }
+      function finish() {
+        ended = true;
+        var me = count(BK), cp = count(WH);
+        api.addScore(me * 10 + (me > cp ? 500 : 0));
+        api.gameOver(me > cp ? "WIN!" : (me < cp ? "LOSE" : "DRAW"));
+      }
+      function nextTurn() {
+        var other = 3 - turn;
+        if (moves(other).length) { turn = other; }
+        else if (moves(turn).length) { msg = other === BK ? "あなたはパス" : "CPUはパス"; msgT = 90; }
+        else { finish(); return; }
+        if (turn === WH) { cpuT = 30; }
+      }
+      function cpuMove() {
+        var ms = moves(WH);
+        if (!ms.length) { nextTurn(); return; }
+        var best = null, bestScore = -9999;
+        for (var i = 0; i < ms.length; i++) {
+          var sc = REVERSI_WEIGHTS[ms[i].y][ms[i].x] + ms[i].f.length * 2 + Math.random() * 3;
+          if (sc > bestScore) { bestScore = sc; best = ms[i]; }
+        }
+        play(best, WH);
+        nextTurn();
+      }
+
+      return {
+        input: function () {},
+        pointer: function (type, px, py) {
+          if (type !== "down" || ended || turn !== BK) { return; }
+          var cx = Math.floor((px - OX) / CELL), cy = Math.floor((py - OY) / CELL);
+          if (!inside(cx, cy)) { return; }
+          var f = flips(cx, cy, BK);
+          if (!f.length) { return; }
+          play({ x: cx, y: cy, f: f }, BK);
+          nextTurn();
+        },
+        step: function () {
+          if (msgT > 0) { msgT--; }
+          if (!ended && turn === WH) {
+            if (cpuT > 0) { cpuT--; } else { cpuMove(); }
+          }
+        },
+        draw: function (ctx) {
+          var i;
+          ctx.fillStyle = "#1e7a46";
+          ctx.fillRect(OX, OY, N * CELL, N * CELL);
+          ctx.strokeStyle = "#0b3d20";
+          ctx.lineWidth = 1;
+          for (i = 0; i <= N; i++) {
+            ctx.beginPath(); ctx.moveTo(OX + i * CELL + 0.5, OY); ctx.lineTo(OX + i * CELL + 0.5, OY + N * CELL); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(OX, OY + i * CELL + 0.5); ctx.lineTo(OX + N * CELL, OY + i * CELL + 0.5); ctx.stroke();
+          }
+          var hints = (!ended && turn === BK) ? moves(BK) : [];
+          ctx.fillStyle = "rgba(255,255,255,0.25)";
+          for (i = 0; i < hints.length; i++) {
+            ctx.beginPath(); ctx.arc(OX + hints[i].x * CELL + CELL / 2, OY + hints[i].y * CELL + CELL / 2, 4, 0, Math.PI * 2); ctx.fill();
+          }
+          for (var yy = 0; yy < N; yy++) {
+            for (var xx = 0; xx < N; xx++) {
+              if (!board[yy][xx]) { continue; }
+              ctx.fillStyle = board[yy][xx] === BK ? "#111111" : "#f5f6fa";
+              ctx.beginPath(); ctx.arc(OX + xx * CELL + CELL / 2, OY + yy * CELL + CELL / 2, 11, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+          if (lastMove) {
+            ctx.fillStyle = "#ff7675";
+            ctx.beginPath(); ctx.arc(OX + lastMove[0] * CELL + CELL / 2, OY + lastMove[1] * CELL + CELL / 2, 3, 0, Math.PI * 2); ctx.fill();
+          }
+          hudText(ctx, "⚫ あなた " + count(BK) + "    ⚪ CPU🦍 " + count(WH), W / 2, 24, "center");
+          hudText(ctx, ended ? "おしまい" : (turn === BK ? "あなたの番です" : "CPU考え中…"), W / 2, 290, "center");
+          if (msgT > 0) { hudText(ctx, msg, W / 2, 306, "center"); }
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🧩 スライドパズル（15パズル）
+  // ---------------------------------------------------------
+  register({
+    id: "slide",
+    name: "スライドパズル",
+    icon: "&#x1F9E9;",
+    desc: "1〜15のタイルを順番どおりに並べよう",
+    help: "空きマスと同じ列・行のタイルをタップ / 矢印・WASDでも動かせる / P一時停止",
+    controls: DIR_CONTROLS,
+    keys: DIR_KEYS,
+    create: function (api) {
+      var N = 4, CELL = 54, GAP = 4, OX = 4, OY = 52;
+      var tiles = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
+      var movesN = 0, frames = 0, started = false, done = false;
+
+      function blank() { return tiles.indexOf(0); }
+      function solved() {
+        for (var i = 0; i < 15; i++) { if (tiles[i] !== i + 1) { return false; } }
+        return true;
+      }
+      function slideAt(x, y) {
+        var b = blank(), bx = b % N, by = Math.floor(b / N), c;
+        if (x < 0 || x >= N || y < 0 || y >= N || (x === bx && y === by)) { return false; }
+        if (y === by) {
+          var st = x < bx ? -1 : 1;
+          for (c = bx; c !== x; c += st) { tiles[by * N + c] = tiles[by * N + c + st]; }
+        } else if (x === bx) {
+          var sv = y < by ? -1 : 1;
+          for (c = by; c !== y; c += sv) { tiles[c * N + bx] = tiles[(c + sv) * N + bx]; }
+        } else {
+          return false;
+        }
+        tiles[y * N + x] = 0;
+        return true;
+      }
+      function dirTarget(dir) {
+        var b = blank(), bx = b % N, by = Math.floor(b / N);
+        if (dir === "left") { return [bx + 1, by]; }
+        if (dir === "right") { return [bx - 1, by]; }
+        if (dir === "up") { return [bx, by + 1]; }
+        return [bx, by - 1];
+      }
+      function userMove(x, y) {
+        if (done || !slideAt(x, y)) { return; }
+        started = true;
+        movesN++;
+        if (solved()) {
+          done = true;
+          api.addScore(Math.max(100, 5000 - movesN * 10 - Math.floor(frames / 60) * 5));
+          api.gameOver("CLEAR!");
+        }
+      }
+
+      var dirs = ["left", "right", "up", "down"];
+      do {
+        for (var s = 0; s < 200; s++) {
+          var t = dirTarget(dirs[randInt(0, 3)]);
+          slideAt(t[0], t[1]);
+        }
+      } while (solved());
+
+      return {
+        input: function (action, down) {
+          if (!down) { return; }
+          var t2 = dirTarget(action);
+          userMove(t2[0], t2[1]);
+        },
+        pointer: function (type, px, py) {
+          if (type !== "down") { return; }
+          userMove(Math.floor((px - OX) / (CELL + GAP)), Math.floor((py - OY) / (CELL + GAP)));
+        },
+        step: function () { if (started && !done) { frames++; } },
+        draw: function (ctx) {
+          ctx.fillStyle = "#2d3436";
+          ctx.fillRect(OX - GAP, OY - GAP, N * (CELL + GAP) + GAP, N * (CELL + GAP) + GAP);
+          for (var i = 0; i < tiles.length; i++) {
+            var v = tiles[i];
+            if (!v) { continue; }
+            var cx = OX + (i % N) * (CELL + GAP), cy = OY + Math.floor(i / N) * (CELL + GAP);
+            ctx.fillStyle = v === i + 1 ? "#00b894" : "#0984e3";
+            ctx.fillRect(cx, cy, CELL, CELL);
+            ctx.fillStyle = "rgba(255,255,255,0.2)";
+            ctx.fillRect(cx, cy, CELL, 4);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 22px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(String(v), cx + CELL / 2, cy + CELL / 2 + 1);
+          }
+          hudText(ctx, "手数 " + movesN + "   ⏱ " + Math.floor(frames / 60) + "秒", W / 2, 30, "center");
+          hudText(ctx, "緑＝正しい位置のタイル", W / 2, 300, "center");
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🃏 UMAしんけいすいじゃく
+  // ---------------------------------------------------------
+  var MEMORY_EMOJIS = ["🦍", "🐒", "🦕", "👽", "🐙", "🦄", "🐉", "🦖", "🐸", "🦉"];
+
+  register({
+    id: "memory",
+    name: "UMAしんけいすいじゃく",
+    icon: "&#x1F0CF;",
+    desc: "同じUMAのカードを2枚そろえて全部とろう",
+    help: "カードをタップしてめくる / P一時停止",
+    controls: [],
+    keys: {},
+    create: function (api) {
+      var COLS = 4, ROWS = 5, CW = 54, CH = 50, GAP = 4, OX = 7, OY = 30;
+      var cards = [], i;
+      for (i = 0; i < MEMORY_EMOJIS.length; i++) {
+        cards.push({ e: MEMORY_EMOJIS[i], open: false, taken: false });
+        cards.push({ e: MEMORY_EMOJIS[i], open: false, taken: false });
+      }
+      for (i = cards.length - 1; i > 0; i--) { var j = randInt(0, i), tmp = cards[i]; cards[i] = cards[j]; cards[j] = tmp; }
+      var first = -1, second = -1, waitT = 0, misses = 0, combo = 0, frames = 0, started = false, pairs = 0;
+
+      return {
+        input: function () {},
+        pointer: function (type, px, py) {
+          if (type !== "down" || waitT > 0) { return; }
+          var cx = Math.floor((px - OX) / (CW + GAP)), cy = Math.floor((py - OY) / (CH + GAP));
+          if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) { return; }
+          var idx = cy * COLS + cx, c = cards[idx];
+          if (c.open || c.taken) { return; }
+          c.open = true;
+          started = true;
+          if (first < 0) { first = idx; return; }
+          second = idx;
+          if (cards[first].e === c.e) {
+            cards[first].taken = true;
+            c.taken = true;
+            combo++;
+            api.addScore(100 + (combo - 1) * 50);
+            pairs++;
+            first = -1; second = -1;
+            if (pairs === MEMORY_EMOJIS.length) {
+              api.addScore(Math.max(0, 1000 - misses * 30 - Math.floor(frames / 60) * 5));
+              api.gameOver("CLEAR!");
+            }
+          } else {
+            misses++;
+            combo = 0;
+            waitT = 42;
+          }
+        },
+        step: function () {
+          if (started && pairs < MEMORY_EMOJIS.length) { frames++; }
+          if (waitT > 0) {
+            waitT--;
+            if (waitT === 0) {
+              cards[first].open = false;
+              cards[second].open = false;
+              first = -1; second = -1;
+            }
+          }
+        },
+        draw: function (ctx) {
+          for (var k = 0; k < cards.length; k++) {
+            var c = cards[k], cx = OX + (k % COLS) * (CW + GAP), cy = OY + Math.floor(k / COLS) * (CH + GAP);
+            ctx.globalAlpha = c.taken ? 0.35 : 1;
+            if (c.open || c.taken) {
+              ctx.fillStyle = "#dfe6e9";
+              ctx.fillRect(cx, cy, CW, CH);
+              emojiAt(ctx, c.e, cx + CW / 2, cy + CH / 2 + 1, 28);
+            } else {
+              ctx.fillStyle = "#6c5ce7";
+              ctx.fillRect(cx, cy, CW, CH);
+              ctx.strokeStyle = "#a29bfe";
+              ctx.lineWidth = 2;
+              ctx.strokeRect(cx + 4, cy + 4, CW - 8, CH - 8);
+              ctx.fillStyle = "#ffffff";
+              ctx.font = "bold 20px sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText("?", cx + CW / 2, cy + CH / 2 + 1);
+            }
+            ctx.globalAlpha = 1;
+          }
+          hudText(ctx, "ミス " + misses + "   ⏱ " + Math.floor(frames / 60) + "秒" + (combo > 1 ? "   🔥コンボ×" + combo : ""), W / 2, 14, "center");
+          hudText(ctx, "のこり " + (MEMORY_EMOJIS.length - pairs) + "ペア", W / 2, 306, "center");
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // ☄️ メテオシューター（アステロイド風）
+  // ---------------------------------------------------------
+  var METEOR_SIZES = { 3: { r: 20, pts: 20 }, 2: { r: 12, pts: 50 }, 1: { r: 6, pts: 100 } };
+
+  register({
+    id: "meteor",
+    name: "メテオシューター",
+    icon: "&#x2604;&#xFE0F;",
+    desc: "宇宙船をあやつって隕石をこなごなにしよう",
+    help: "←→回転 / ↑加速 / Space発射 / P一時停止",
+    controls: [
+      { action: "rotL", label: "&#x21BA;" },
+      { action: "rotR", label: "&#x21BB;" },
+      { action: "thrust", label: "&#x1F525;" },
+      { action: "fire", label: "&#x1F52B;" }
+    ],
+    keys: {
+      "ArrowLeft": "rotL", "a": "rotL", "A": "rotL",
+      "ArrowRight": "rotR", "d": "rotR", "D": "rotR",
+      "ArrowUp": "thrust", "w": "thrust", "W": "thrust",
+      " ": "fire", "z": "fire", "Z": "fire"
+    },
+    create: function (api) {
+      var ship = { x: W / 2, y: H / 2, a: -Math.PI / 2, vx: 0, vy: 0, inv: 120 };
+      var held = { rotL: false, rotR: false, thrust: false, fire: false };
+      var bullets = [], rocks = [], parts = [];
+      var lives = 3, wave = 0, fireCD = 0, dead = 0;
+
+      function makeRock(x, y, s) {
+        var a = Math.random() * Math.PI * 2;
+        var sp = (0.4 + Math.random() * 0.6) * (1 + (3 - s) * 0.4) * (1 + wave * 0.05);
+        var shape = [];
+        for (var i = 0; i < 10; i++) { shape.push(0.75 + Math.random() * 0.4); }
+        return { x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, s: s, r: METEOR_SIZES[s].r, rot: 0, vr: (Math.random() - 0.5) * 0.05, shape: shape };
+      }
+      function spawnWave() {
+        wave++;
+        for (var i = 0; i < 3 + wave; i++) {
+          var x, y, tries = 0;
+          do { x = Math.random() * W; y = Math.random() * H; tries++; }
+          while (tries < 50 && Math.sqrt((x - ship.x) * (x - ship.x) + (y - ship.y) * (y - ship.y)) < 80);
+          rocks.push(makeRock(x, y, 3));
+        }
+      }
+      function wrap(o) {
+        if (o.x < 0) { o.x += W; } else if (o.x > W) { o.x -= W; }
+        if (o.y < 0) { o.y += H; } else if (o.y > H) { o.y -= H; }
+      }
+      function burst(x, y, n, col) {
+        for (var i = 0; i < n; i++) {
+          var a = Math.random() * Math.PI * 2, sp = 0.5 + Math.random() * 2;
+          parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 30, col: col });
+        }
+      }
+      function dist(ax, ay, bx, by) { return Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by)); }
+
+      spawnWave();
+
+      return {
+        input: function (action, down) { held[action] = down; },
+        step: function () {
+          var i, k;
+          for (i = parts.length - 1; i >= 0; i--) {
+            parts[i].x += parts[i].vx; parts[i].y += parts[i].vy; parts[i].t--;
+            if (parts[i].t <= 0) { parts.splice(i, 1); }
+          }
+          if (dead > 0) {
+            dead--;
+            if (dead === 0) {
+              if (lives <= 0) { api.gameOver(); return; }
+              ship.x = W / 2; ship.y = H / 2; ship.vx = 0; ship.vy = 0; ship.a = -Math.PI / 2; ship.inv = 120;
+            }
+          } else {
+            if (held.rotL) { ship.a -= 0.07; }
+            if (held.rotR) { ship.a += 0.07; }
+            if (held.thrust) { ship.vx += Math.cos(ship.a) * 0.08; ship.vy += Math.sin(ship.a) * 0.08; }
+            ship.vx *= 0.992; ship.vy *= 0.992;
+            var sp = Math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy);
+            if (sp > 4) { ship.vx = ship.vx / sp * 4; ship.vy = ship.vy / sp * 4; }
+            ship.x += ship.vx; ship.y += ship.vy;
+            wrap(ship);
+            if (fireCD > 0) { fireCD--; }
+            if (held.fire && fireCD === 0 && bullets.length < 4) {
+              bullets.push({ x: ship.x + Math.cos(ship.a) * 10, y: ship.y + Math.sin(ship.a) * 10, vx: Math.cos(ship.a) * 5 + ship.vx, vy: Math.sin(ship.a) * 5 + ship.vy, life: 55 });
+              fireCD = 10;
+            }
+            if (ship.inv > 0) { ship.inv--; }
+          }
+          for (i = bullets.length - 1; i >= 0; i--) {
+            var b = bullets[i];
+            b.x += b.vx; b.y += b.vy; b.life--;
+            wrap(b);
+            if (b.life <= 0) { bullets.splice(i, 1); }
+          }
+          for (k = 0; k < rocks.length; k++) {
+            rocks[k].x += rocks[k].vx; rocks[k].y += rocks[k].vy; rocks[k].rot += rocks[k].vr;
+            wrap(rocks[k]);
+          }
+          for (i = bullets.length - 1; i >= 0; i--) {
+            for (k = rocks.length - 1; k >= 0; k--) {
+              var r = rocks[k];
+              if (dist(bullets[i].x, bullets[i].y, r.x, r.y) < r.r) {
+                api.addScore(METEOR_SIZES[r.s].pts);
+                burst(r.x, r.y, 6 + r.s * 3, "#b2bec3");
+                rocks.splice(k, 1);
+                if (r.s > 1) { rocks.push(makeRock(r.x, r.y, r.s - 1)); rocks.push(makeRock(r.x, r.y, r.s - 1)); }
+                bullets.splice(i, 1);
+                break;
+              }
+            }
+          }
+          if (dead === 0 && ship.inv === 0) {
+            for (k = 0; k < rocks.length; k++) {
+              if (dist(ship.x, ship.y, rocks[k].x, rocks[k].y) < rocks[k].r + 6) {
+                lives--;
+                dead = 60;
+                burst(ship.x, ship.y, 24, "#74b9ff");
+                break;
+              }
+            }
+          }
+          if (rocks.length === 0) { spawnWave(); ship.inv = Math.max(ship.inv, 90); }
+        },
+        draw: function (ctx) {
+          var i, k;
+          ctx.strokeStyle = "#b2bec3";
+          ctx.lineWidth = 1.5;
+          for (k = 0; k < rocks.length; k++) {
+            var r = rocks[k];
+            ctx.beginPath();
+            for (i = 0; i < r.shape.length; i++) {
+              var ang = r.rot + i / r.shape.length * Math.PI * 2, rr = r.r * r.shape[i];
+              var px = r.x + Math.cos(ang) * rr, py = r.y + Math.sin(ang) * rr;
+              if (i === 0) { ctx.moveTo(px, py); } else { ctx.lineTo(px, py); }
+            }
+            ctx.closePath();
+            ctx.stroke();
+          }
+          for (i = 0; i < parts.length; i++) {
+            ctx.fillStyle = parts[i].col;
+            ctx.globalAlpha = parts[i].t / 30;
+            ctx.fillRect(parts[i].x, parts[i].y, 2, 2);
+          }
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#ffffff";
+          for (i = 0; i < bullets.length; i++) { ctx.fillRect(bullets[i].x - 1, bullets[i].y - 1, 2, 2); }
+          if (dead === 0 && (ship.inv === 0 || Math.floor(ship.inv / 6) % 2 === 0)) {
+            var c = Math.cos(ship.a), s = Math.sin(ship.a);
+            ctx.strokeStyle = "#74b9ff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ship.x + c * 10, ship.y + s * 10);
+            ctx.lineTo(ship.x - c * 7 - s * 6, ship.y - s * 7 + c * 6);
+            ctx.lineTo(ship.x - c * 4, ship.y - s * 4);
+            ctx.lineTo(ship.x - c * 7 + s * 6, ship.y - s * 7 - c * 6);
+            ctx.closePath();
+            ctx.stroke();
+            if (held.thrust) {
+              ctx.strokeStyle = "#fdcb6e";
+              ctx.beginPath();
+              ctx.moveTo(ship.x - c * 5, ship.y - s * 5);
+              ctx.lineTo(ship.x - c * (11 + Math.random() * 4), ship.y - s * (11 + Math.random() * 4));
+              ctx.stroke();
+            }
+          }
+          hudText(ctx, "LIFE " + Math.max(0, lives) + "   WAVE " + wave, 6, 312);
+        }
+      };
+    }
+  });
+
+  // ---------------------------------------------------------
+  // 🍌 バナナディフェンス（ミサイルコマンド風）
+  // ---------------------------------------------------------
+  register({
+    id: "defense",
+    name: "バナナディフェンス",
+    icon: "&#x1F34C;",
+    desc: "落ちてくるミサイルを迎撃してバナナ倉庫を守ろう",
+    help: "迎撃したい場所をタップ（そこで爆発する） / P一時停止",
+    controls: [],
+    keys: {},
+    create: function (api) {
+      var BASE = { x: 120, y: 292 }, GROUND = 302;
+      var stores = [{ x: 30, alive: true }, { x: 75, alive: true }, { x: 165, alive: true }, { x: 210, alive: true }];
+      var enemies = [], shots = [], booms = [];
+      var wave = 0, toSpawn = 0, spawnT = 0, ammo = 0, betweenT = 0, msg = "", msgT = 0;
+
+      function aliveStores() {
+        var out = [];
+        for (var i = 0; i < stores.length; i++) { if (stores[i].alive) { out.push(stores[i]); } }
+        return out;
+      }
+      function startWave() {
+        wave++;
+        toSpawn = 6 + wave * 2;
+        ammo = 20 + wave;
+        spawnT = 60;
+        msg = "WAVE " + wave;
+        msgT = 90;
+      }
+      function spawnEnemy() {
+        var ts = aliveStores();
+        if (!ts.length) { return; }
+        var t = ts[randInt(0, ts.length - 1)], sx = randInt(10, W - 10);
+        enemies.push({ sx: sx, sy: 0, x: sx, y: 0, tx: t.x, ty: GROUND - 4, sp: 0.35 + wave * 0.07 });
+      }
+
+      startWave();
+
+      return {
+        input: function () {},
+        pointer: function (type, px, py) {
+          if (type !== "down" || ammo <= 0 || betweenT > 0 || py > 270) { return; }
+          shots.push({ x: BASE.x, y: BASE.y - 6, tx: px, ty: py, sp: 4.5 });
+          ammo--;
+        },
+        step: function () {
+          var i, k, dx, dy, d;
+          if (msgT > 0) { msgT--; }
+          if (betweenT > 0) {
+            betweenT--;
+            if (betweenT === 0) { startWave(); }
+            return;
+          }
+          if (toSpawn > 0) {
+            spawnT--;
+            if (spawnT <= 0) {
+              spawnEnemy();
+              toSpawn--;
+              spawnT = Math.max(20, 90 - wave * 8) + randInt(0, 30);
+            }
+          }
+          for (i = shots.length - 1; i >= 0; i--) {
+            var s = shots[i];
+            dx = s.tx - s.x; dy = s.ty - s.y; d = Math.sqrt(dx * dx + dy * dy);
+            if (d <= s.sp) {
+              booms.push({ x: s.tx, y: s.ty, t: 0, max: 40, r: 0, enemy: false });
+              shots.splice(i, 1);
+            } else {
+              s.x += dx / d * s.sp; s.y += dy / d * s.sp;
+            }
+          }
+          for (i = booms.length - 1; i >= 0; i--) {
+            var bm = booms[i];
+            bm.t++;
+            bm.r = (bm.enemy ? 16 : 26) * Math.sin(Math.PI * bm.t / bm.max);
+            if (bm.t >= bm.max) { booms.splice(i, 1); }
+          }
+          for (i = enemies.length - 1; i >= 0; i--) {
+            var e = enemies[i];
+            var hit = false;
+            for (k = 0; k < booms.length; k++) {
+              if (booms[k].enemy) { continue; }
+              dx = e.x - booms[k].x; dy = e.y - booms[k].y;
+              if (dx * dx + dy * dy < booms[k].r * booms[k].r) { hit = true; break; }
+            }
+            if (hit) { enemies.splice(i, 1); api.addScore(25); continue; }
+            dx = e.tx - e.x; dy = e.ty - e.y; d = Math.sqrt(dx * dx + dy * dy);
+            if (d <= e.sp) {
+              for (k = 0; k < stores.length; k++) { if (stores[k].x === e.tx) { stores[k].alive = false; } }
+              booms.push({ x: e.tx, y: GROUND - 6, t: 0, max: 30, r: 0, enemy: true });
+              enemies.splice(i, 1);
+              if (!aliveStores().length) { api.gameOver(); return; }
+            } else {
+              e.x += dx / d * e.sp; e.y += dy / d * e.sp;
+            }
+          }
+          if (toSpawn === 0 && enemies.length === 0 && shots.length === 0) {
+            var bonus = aliveStores().length * 100 + ammo * 5;
+            api.addScore(bonus);
+            msg = "WAVE CLEAR! +" + bonus;
+            msgT = 120;
+            betweenT = 120;
+          }
+        },
+        draw: function (ctx) {
+          var i;
+          ctx.fillStyle = "#2d3436";
+          ctx.fillRect(0, GROUND, W, H - GROUND);
+          for (i = 0; i < stores.length; i++) {
+            if (stores[i].alive) { emojiAt(ctx, "🍌", stores[i].x, GROUND - 8, 18); }
+            else { ctx.fillStyle = "#636e72"; ctx.fillRect(stores[i].x - 9, GROUND - 4, 18, 4); }
+          }
+          ctx.fillStyle = "#74b9ff";
+          ctx.beginPath();
+          ctx.moveTo(BASE.x, BASE.y - 10); ctx.lineTo(BASE.x + 10, GROUND); ctx.lineTo(BASE.x - 10, GROUND);
+          ctx.closePath();
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          for (i = 0; i < enemies.length; i++) {
+            var e = enemies[i];
+            ctx.strokeStyle = "rgba(255,118,117,0.7)";
+            ctx.beginPath(); ctx.moveTo(e.sx, e.sy); ctx.lineTo(e.x, e.y); ctx.stroke();
+            ctx.fillStyle = "#ff7675";
+            ctx.fillRect(e.x - 1.5, e.y - 1.5, 3, 3);
+          }
+          for (i = 0; i < shots.length; i++) {
+            var s = shots[i];
+            ctx.strokeStyle = "rgba(116,185,255,0.8)";
+            ctx.beginPath(); ctx.moveTo(BASE.x, BASE.y - 6); ctx.lineTo(s.x, s.y); ctx.stroke();
+            ctx.strokeStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.moveTo(s.tx - 3, s.ty - 3); ctx.lineTo(s.tx + 3, s.ty + 3);
+            ctx.moveTo(s.tx + 3, s.ty - 3); ctx.lineTo(s.tx - 3, s.ty + 3);
+            ctx.stroke();
+          }
+          for (i = 0; i < booms.length; i++) {
+            ctx.fillStyle = booms[i].enemy ? "rgba(255,118,117,0.7)" : "rgba(253,203,110,0.75)";
+            ctx.beginPath(); ctx.arc(booms[i].x, booms[i].y, Math.max(0, booms[i].r), 0, Math.PI * 2); ctx.fill();
+          }
+          hudText(ctx, "WAVE " + wave + "   弾 " + ammo, 6, 12);
+          if (msgT > 0) { hudText(ctx, msg, W / 2, 140, "center"); }
         }
       };
     }
