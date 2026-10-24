@@ -110,6 +110,11 @@ module.exports = async function () {
     ok(rec.notes.every(function (n, i, a) { return i === 0 || n[0] >= a[i - 1][0]; }), L.id + ": recording is in time order");
   });
 
+  // --- パドルを「いつも主音」 ---
+  play(env, baseCfg({ key: 2, paddleRoot: true }), 12000);
+  var pr = M.loadRecs()[0].notes.filter(function (n) { return n[2] === "s"; });
+  ok(pr.length > 0 && pr.every(function (n) { return n[1] === 38; }), "paddleRoot: paddle always plays the tonic (D2 in D)", pr.slice(0, 5).map(function (n) { return n[1]; }));
+
   // --- テンポ・伴奏・コード進行 ---
   play(env, baseCfg({ bpm: 130, groove: "8beat", progId: "ohdo" }), 12000);
   var rec2 = M.loadRecs()[0], stepMs = 60000 / 130 / 4, grid = stepMs * 2, bar = stepMs * 16;

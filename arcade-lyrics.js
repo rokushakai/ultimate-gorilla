@@ -357,6 +357,7 @@
   // ---------------------------------------------------------
   I.register({
     id: "lyrics",
+    cat: "music",
     after: "melody",
     name: "歌詞くずし",
     icon: "&#x270D;&#xFE0F;",

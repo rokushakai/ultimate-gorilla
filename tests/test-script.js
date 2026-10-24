@@ -41,16 +41,16 @@ module.exports = function () {
   var addExpSrc = slice("  function addExp(amount) {", "\n  }\n") + "\n  }\n";
   var slotsStart = s.lastIndexOf("var ", s.indexOf('{ slot: "weapon", label: "⚔ 武器"'));
   var slotsDef = s.slice(slotsStart, s.indexOf("];", slotsStart) + 2);
-  var sandbox = { console: console, toasts: [], saves: 0, closed: 0, confirmAnswer: true };
+  var sandbox = { console: console, toasts: [], saves: 0, closed: 0, confirmAnswer: true, realList: H.load().window.UGArcade.list() };
   var prelude = "var state = { inBattle: false, arcadeHighScores: {}, arcadeMedals: 0, arcadeMedalsTotal: 0, player: { level: 1, exp: 0, nextExp: 25, gold: 0, ownedWeapons: ['woodstick'], ownedArmors: ['tshirt'], ownedShields: ['cardboard'], ownedHelmets: ['hachimaki'] } };\n" +
     "function findById(a, id) { for (var i = 0; i < a.length; i++) { if (a[i].id === id) { return a[i]; } } return null; }\n" +
     "function getItemCount(id) { return state.player[id + 'Count'] || 0; } function addItemCount(id, d) { state.player[id + 'Count'] = getItemCount(id) + d; }\n" +
     "function updateStatusBar() {} function saveGame() { saves++; } function showToast(m) { toasts.push(m); } function closeModal() { closed++; } function openModal() {} function renderField() {} function updateBGM() {} function stopBGM() {}\n" +
     "function levelUp() { var p = state.player; p.level++; p.nextExp = p.level * 10 + 15; if (p.level >= 99) { throw new Error('reached Lv99 via exchange'); } }\n" +
     "var soundEnabled = false; var elStub = { innerHTML: '', classList: { add: function () {}, remove: function () {} }, querySelectorAll: function () { return []; } };\n" +
-    "var document = { getElementById: function () { return elStub; } }; var window = { confirm: function () { return confirmAnswer; } };\n";
+    "var document = { getElementById: function () { return elStub; } }; var window = { confirm: function () { return confirmAnswer; }, UGArcade: { list: function () { return realList; }, isRunning: function () { return false; }, stop: function () {} } };\n";
   vm.runInNewContext(prelude + dataSrc + slotsDef + findSlotSrc + ownSrc + bonusSrc + addExpSrc + arcadeSrc +
-    "\nthis.T = { calc: calcArcadeMedals, end: onArcadeGameEnd, ex: exchangeArcadePrize, st: getArcadePrizeStatus, amt: getArcadeExpAmount, prizes: ARCADE_PRIZES, rate: ARCADE_MEDAL_RATE, ids: ARCADE_GAME_IDS, state: state, findEquipSlot: findEquipSlot, findById: findById, setConfirm: function (v) { confirmAnswer = v; } };", sandbox);
+    "\nthis.T = { calc: calcArcadeMedals, end: onArcadeGameEnd, ex: exchangeArcadePrize, st: getArcadePrizeStatus, amt: getArcadeExpAmount, prizes: ARCADE_PRIZES, rate: ARCADE_MEDAL_RATE, ids: ARCADE_GAME_IDS, state: state, findEquipSlot: findEquipSlot, findById: findById, setConfirm: function (v) { confirmAnswer = v; }, render: renderArcadeMenu, setCat: function (c) { _arcadeCat = c; }, html: function () { return elStub.innerHTML; } };", sandbox);
   var T = sandbox.T, st = T.state;
   ok(T.ids.every(function (id) { return !!T.rate[id]; }), "every arcade game has a medal rate");
   ok(T.calc("blocks", 2000, false) === 20 && T.calc("g2048", 999999, false) === 100 && T.calc("mole", 500, true) === 25 && T.calc("mole", 0, true) === 0, "medal calculation (rate, cap 100, high score +5)");
@@ -75,6 +75,16 @@ module.exports = function () {
     try { T.ex(Math.random() < 0.5 ? "exp_s" : "exp_l"); } catch (e) { never99 = false; break; }
   }
   ok(never99, "EXP packs never reach Lv99");
+
+  // --- メニューの分類タブ（§161） ---
+  var counts = {};
+  sandbox.realList.forEach(function (g) { counts[g.cat] = (counts[g.cat] || 0) + 1; });
+  ["all", "action", "puzzle", "music"].forEach(function (c) {
+    T.setCat(c); T.render("games");
+    var shown = (T.html().match(/data-arcade-game="/g) || []).length;
+    ok(shown === (c === "all" ? sandbox.realList.length : counts[c]), "menu tab '" + c + "' shows its games", shown);
+  });
+  ok(T.html().indexOf('data-arcade-game="melody"') >= 0 && T.html().indexOf('data-arcade-game="lyrics"') >= 0, "music tab has melody and lyrics");
 
   // --- セーブ項目（ゲームセンター系が saveGame と loadGame の両方にある） ---
   var saveSrc = slice("function saveGame()", "function loadGame()"), loadSrc = slice("function loadGame()", "\n  function ");

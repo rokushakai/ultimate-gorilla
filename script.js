@@ -19309,6 +19309,12 @@
   ];
   var ARCADE_EXP_LEVEL_CAP = 98;
   var _arcadeView = "games";
+  // §161 v0.80: メニューの分類タブ（各ゲーム定義の cat と対応）
+  var ARCADE_CATS = [
+    { id: "all", name: "すべて" }, { id: "action", name: "🏃 アクション" },
+    { id: "puzzle", name: "🧩 パズル" }, { id: "music", name: "🎵 音楽・創作" }
+  ];
+  var _arcadeCat = "all";
 
   function normalizeArcadeMedals() {
     var m = state.arcadeMedals, t = state.arcadeMedalsTotal;
@@ -19428,8 +19434,18 @@
         html += '<p style="color:#ff7675;">ゲーム機の電源が入っていないようだ…（arcade.js を読み込めませんでした）</p>';
       } else {
         var games = window.UGArcade.list();
+        // §161 v0.80: 分類タブ（すべて / アクション / パズル / 音楽・創作）
+        html += '<div class="arcade-cats">';
+        for (i = 0; i < ARCADE_CATS.length; i++) {
+          var cn = 0;
+          for (var gi = 0; gi < games.length; gi++) { if (ARCADE_CATS[i].id === "all" || games[gi].cat === ARCADE_CATS[i].id) { cn++; } }
+          html += '<button class="arcade-cat' + (_arcadeCat === ARCADE_CATS[i].id ? " active" : "") + '" data-arcade-cat="' + ARCADE_CATS[i].id + '">' +
+            ARCADE_CATS[i].name + ' <span class="small">' + cn + '</span></button>';
+        }
+        html += '</div>';
         for (i = 0; i < games.length; i++) {
           var g = games[i];
+          if (_arcadeCat !== "all" && g.cat !== _arcadeCat) { continue; }
           html += '<div class="arcade-game-row">' +
             '<div class="arcade-game-info"><b>' + g.icon + ' ' + g.name + '</b>' +
             '<span class="small" style="color:#adb5bd;">' + g.desc + '</span>' +
@@ -19452,6 +19468,10 @@
     var tbtns = menuEl.querySelectorAll("button[data-arcade-view]");
     for (i = 0; i < tbtns.length; i++) {
       tbtns[i].onclick = function (ev) { renderArcadeMenu(ev.currentTarget.getAttribute("data-arcade-view")); };
+    }
+    var cbtns = menuEl.querySelectorAll("button[data-arcade-cat]");
+    for (i = 0; i < cbtns.length; i++) {
+      cbtns[i].onclick = function (ev) { _arcadeCat = ev.currentTarget.getAttribute("data-arcade-cat"); renderArcadeMenu("games"); };
     }
     document.getElementById("btn-arcade-close").onclick = closeArcadeModal;
   }

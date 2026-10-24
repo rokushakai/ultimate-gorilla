@@ -407,6 +407,7 @@
 
   register({
     id: "blocks",
+    cat: "puzzle",
     name: "ゴリラブロック",
     icon: "&#x1F9F1;",
     desc: "落ちてくるブロックを並べて横一列を消そう",
@@ -620,6 +621,7 @@
 
   register({
     id: "shooter",
+    cat: "action",
     name: "UMAシューター",
     icon: "&#x1F47E;",
     desc: "せまりくるUMAの大群を撃ち落とそう",
@@ -848,6 +850,7 @@
   // ---------------------------------------------------------
   register({
     id: "pinball",
+    cat: "action",
     name: "ゴリラピンボール",
     icon: "&#x1F3AF;",
     desc: "フリッパーでボールを打ち返してバンパーを狙おう",
@@ -1115,6 +1118,7 @@
 
   register({
     id: "breakout",
+    cat: "action",
     name: "ジャングルくずし",
     icon: "&#x1F4A5;",
     desc: "ボールを打ち返してブロックを全部こわそう",
@@ -1237,6 +1241,7 @@
   // ---------------------------------------------------------
   register({
     id: "snake",
+    cat: "action",
     name: "バナナスネーク",
     icon: "&#x1F40D;",
     desc: "バナナを食べてどんどん長くなろう",
@@ -1335,6 +1340,7 @@
   // ---------------------------------------------------------
   register({
     id: "tennis",
+    cat: "action",
     name: "ゴリラテニス",
     icon: "&#x1F3D3;",
     desc: "CPUゴリラとラリー対決。先に5点とろう",
@@ -1464,6 +1470,7 @@
 
   register({
     id: "crossing",
+    cat: "action",
     name: "UMAクロッシング",
     icon: "&#x1F697;",
     desc: "車をよけて丸太に乗り、向こう岸のゴールをめざそう",
@@ -1611,6 +1618,7 @@
   // ---------------------------------------------------------
   register({
     id: "mole",
+    cat: "action",
     name: "ゴリラたたき",
     icon: "&#x1F528;",
     desc: "30秒で顔を出すゴリラをたたきまくろう（💣はダメ）",
@@ -1724,6 +1732,7 @@
 
   register({
     id: "sweeper",
+    cat: "puzzle",
     name: "UMAスイーパー",
     icon: "&#x1F4A3;",
     desc: "数字をヒントに、地雷をふまずに全マスを開けよう",
@@ -1884,6 +1893,7 @@
 
   register({
     id: "g2048",
+    cat: "puzzle",
     name: "ゴリラ2048",
     icon: "&#x1F522;",
     desc: "同じ数字をくっつけて2048をめざそう",
@@ -2012,6 +2022,7 @@
 
   register({
     id: "reversi",
+    cat: "puzzle",
     name: "ゴリラリバーシ",
     icon: "&#x26AB;",
     desc: "CPUゴリラとリバーシ対決。石を多く取ろう",
@@ -2137,6 +2148,7 @@
   // ---------------------------------------------------------
   register({
     id: "slide",
+    cat: "puzzle",
     name: "スライドパズル",
     icon: "&#x1F9E9;",
     desc: "1〜15のタイルを順番どおりに並べよう",
@@ -2236,6 +2248,7 @@
 
   register({
     id: "memory",
+    cat: "puzzle",
     name: "UMAしんけいすいじゃく",
     icon: "&#x1F0CF;",
     desc: "同じUMAのカードを2枚そろえて全部とろう",
@@ -2328,6 +2341,7 @@
 
   register({
     id: "meteor",
+    cat: "action",
     name: "メテオシューター",
     icon: "&#x2604;&#xFE0F;",
     desc: "宇宙船をあやつって隕石をこなごなにしよう",
@@ -2498,6 +2512,7 @@
   // ---------------------------------------------------------
   register({
     id: "defense",
+    cat: "action",
     name: "バナナディフェンス",
     icon: "&#x1F34C;",
     desc: "落ちてくるミサイルを迎撃してバナナ倉庫を守ろう",
@@ -2683,7 +2698,7 @@
       var out = [];
       for (var i = 0; i < ORDER.length; i++) {
         var d = GAMES[ORDER[i]];
-        out.push({ id: d.id, name: d.name, icon: d.icon, desc: d.desc, music: !!d.music });
+        out.push({ id: d.id, name: d.name, icon: d.icon, desc: d.desc, music: !!d.music, cat: d.cat || "action" });
       }
       return out;
     },

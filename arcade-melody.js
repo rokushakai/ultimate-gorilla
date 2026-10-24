@@ -797,6 +797,7 @@
       chord: (p.chord === 3 || p.chord === 4 || p.chord === 5) ? p.chord : 1,
       arp: p.arp === true,
       chordAt: (p.chordAt === "all" || p.chordAt === "b") ? p.chordAt : "bw",
+      paddleRoot: p.paddleRoot === true, // §161 v0.80
       prog: melodyCleanProg(p.prog),
       output: typeof p.output === "string" ? p.output : "synth"
     };
@@ -1176,7 +1177,10 @@
       for (i = 0; i < MELODY_CHORD_AT.length; i++) {
         html += '<option value="' + MELODY_CHORD_AT[i].id + '"' + (MELODY_CHORD_AT[i].id === prefs.chordAt ? " selected" : "") + ">" + MELODY_CHORD_AT[i].name + "</option>";
       }
-      html += '</select></label>' + tempoRows() +
+      html += '</select></label>' +
+        '<label class="melody-row"><span>パドルの音</span><select data-p="paddleRoot">' +
+        '<option value="0"' + (prefs.paddleRoot ? "" : " selected") + '>位置で変わる</option>' +
+        '<option value="1"' + (prefs.paddleRoot ? " selected" : "") + '>いつも主音（キーの音）</option></select></label>' + tempoRows() +
         '<details class="melody-tones"' + (melodyToneOpen ? " open" : "") + '><summary>&#x1F3BB; 音色（GM）</summary>';
       for (i = 0; i < MELODY_VOICES.length; i++) {
         var mv = MELODY_VOICES[i];
@@ -1234,7 +1238,7 @@
           else if (k === "progId") { prefs[k] = v; savePrefs(); render(); return; }
           else if (k === "layout") { prefs[k] = v; savePrefs(); render(); return; }
           else if (k === "key" || k === "chord") { prefs[k] = parseInt(v, 10); }
-          else if (k === "arp") { prefs[k] = v === "1"; }
+          else if (k === "arp" || k === "paddleRoot") { prefs[k] = v === "1"; }
           else { prefs[k] = v; }
           if (k === "output") { applyOutput(); }
           savePrefs();
@@ -1281,7 +1285,7 @@
         if (prefs.sound) { startTones(); }
         melodyStopPlayback(true);
         ctl.done({ mode: prefs.mode, scale: prefs.scale, key: prefs.key, sound: prefs.sound, rec: prefs.rec, relax: prefs.relax, prog: melodyCleanProg(prefs.prog),
-          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples,
+          chord: prefs.chord, arp: prefs.arp, chordAt: prefs.chordAt, samples: prefs.samples, paddleRoot: prefs.paddleRoot,
           layout: prefs.layout, oct: prefs.oct, rows: prefs.rows, scroll: prefs.scroll, autoTone: prefs.autoTone,
           bpm: prefs.bpm, quant: prefs.quant, groove: prefs.groove, progId: prefs.progId, pad: prefs.pad });
       } else if (m === "preview") {
@@ -1548,6 +1552,7 @@
 
   register({
     id: "melody",
+    cat: "music",
     after: "breakout",
     music: true,
     name: "メロディくずし",
@@ -1662,6 +1667,8 @@
           playMidis(size > 1 ? melodyVoiceChord(root, ci.pcs, size) : [root], voice, x, y);
           return;
         }
+        // §161 v0.80: パドルを「いつも主音」にする設定（スケールの1番目の音・C2〜B2）
+        if (voice === "s" && cfg.paddleRoot) { deg = 0; shift = -12; }
         playMidis(melodyChordMidis(scale, key, deg, sizeFor(voice), shift || 0), voice, x, y);
       }
       // 伴奏の1音（予約して鳴らし、拍ちょうどの時刻で録音）

@@ -30,7 +30,7 @@
 ### 自動テスト（v0.78〜）
 - [ ] `node tests/run.js` がすべて OK（構文・ES5・ゲームセンター全ゲーム・メロディくずし・メダル/景品・セーブ項目）
 - [ ] 新しいゲームや機能を足したら、`tests/` にテストも足した（ゲーム本体にテスト用コードは入れず、`patch` でのぞく）
-- [ ] ゲームセンターのゲームを足したら `ARCADE_GAME_IDS` / `state.arcadeHighScores` / `ARCADE_MEDAL_RATE` の3か所に入れた
+- [ ] ゲームセンターのゲームを足したら `ARCADE_GAME_IDS` / `state.arcadeHighScores` / `ARCADE_MEDAL_RATE` の3か所に入れ、ゲーム定義に `cat` を付けた
 
 ### ゲーム動作
 - [ ] index.html を直接ダブルクリックして起動できる（file:// 対応）

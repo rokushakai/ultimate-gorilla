@@ -992,3 +992,21 @@ html, body {
   -webkit-user-select: text;
   user-select: text;
 }
+/* ===== §161 v0.80: ゲームセンターの分類タブ ===== */
+.arcade-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+.arcade-cat {
+  flex: 1 1 auto;
+  padding: 6px 8px;
+  border-radius: 14px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 12px;
+  opacity: 0.65;
+}
+.arcade-cat.active { opacity: 1; background: #0984e3; }
