@@ -315,6 +315,7 @@
         '<span>HI <b class="arcade-hi">' + hi + '</b></span>' +
       '</div>' +
       '<canvas class="arcade-canvas" width="' + (W * SCALE) + '" height="' + (H * SCALE) + '"></canvas>' +
+      (def.panel ? '<div class="arcade-panel"></div>' : '') + // §160: ゲームが使う表示欄（歌詞くずし）
       '<div class="arcade-controls"></div>' +
       '<div class="arcade-sys"></div>' +
       '<p class="arcade-help">' + def.help + '</p>';
@@ -346,7 +347,8 @@
       H: H,
       addScore: function (n) { if (host) { setScore(host.score + n); } },
       getScore: function () { return host ? host.score : 0; },
-      gameOver: gameOver
+      gameOver: gameOver,
+      panel: def.panel ? rootEl.querySelector(".arcade-panel") : null
     };
     host.game = def.create(api, opts.config || null);
     bindCanvas(canvas);

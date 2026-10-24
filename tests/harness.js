@@ -156,7 +156,7 @@ function load(opts) {
   };
   var ctx = vm.createContext(sandbox);
   // opts.patch(src, file): テストだけで中身をのぞくための置換（本体のファイルは変更しない）
-  (opts.files || ["arcade.js", "arcade-melody.js"]).forEach(function (f) {
+  (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js"]).forEach(function (f) {
     var src = fs.readFileSync(path.join(ROOT, f), "utf8");
     if (opts.patch) { src = opts.patch(src, f); }
     vm.runInContext(src, ctx, { filename: f });

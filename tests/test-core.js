@@ -34,14 +34,14 @@ module.exports = function () {
 
   // --- 登録・内部API ---
   var ids = A.list().map(function (g) { return g.id; });
-  ["blocks", "shooter", "pinball", "breakout", "melody", "snake", "tennis", "crossing", "mole", "sweeper", "g2048", "reversi", "slide", "memory", "meteor", "defense"].forEach(function (id) {
+  ["blocks", "shooter", "pinball", "breakout", "melody", "snake", "tennis", "crossing", "mole", "sweeper", "g2048", "reversi", "slide", "memory", "meteor", "defense", "lyrics"].forEach(function (id) {
     ok(ids.indexOf(id) >= 0, "game registered: " + id);
   });
-  ok(ids.indexOf("melody") === ids.indexOf("breakout") + 1, "melody listed right after breakout");
+  ok(ids.indexOf("melody") === ids.indexOf("breakout") + 1 && ids.indexOf("lyrics") === ids.indexOf("melody") + 1, "melody and lyrics listed right after breakout");
   ok(A.internal && typeof A.internal.register === "function" && typeof A.internal.saveBlob === "function", "internal API exposed");
 
   // --- 全ゲームのスモーク（例外なく動く） ---
-  ids.filter(function (id) { return id !== "melody"; }).forEach(function (id) {
+  ids.filter(function (id) { return id !== "melody" && id !== "lyrics"; }).forEach(function (id) {
     var err = null, r;
     try {
       r = env.run(id, {}, 3000, function (f, e) {
