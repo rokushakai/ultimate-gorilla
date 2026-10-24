@@ -373,8 +373,18 @@
   ];
   var SEQ_STYLES = [
     { id: "once", label: "ジャーン（1回）", unit: 0 }, { id: "q", label: "4分ストローク", unit: 1 }, { id: "e", label: "8分ストローク", unit: 0.5 },
-    { id: "s", label: "16分ストローク", unit: 0.25 }, { id: "arp8", label: "アルペジオ8分", unit: 0.5, arp: true }, { id: "arp16", label: "アルペジオ16分", unit: 0.25, arp: true }
+    { id: "s", label: "16分ストローク", unit: 0.25 }, { id: "arp8", label: "アルペジオ8分", unit: 0.5, arp: true }, { id: "arp16", label: "アルペジオ16分", unit: 0.25, arp: true },
+    { id: "pat", label: "🎵 パターン", unit: 0, pattern: true }
   ];
+  // §172 v0.91: ストロークパターン（1小節。D ダウン / U アップ / - 休み / x ブラッシング）
+  var SEQ_PATTERNS = [
+    { p: "D-DU-UDU", label: "島のストローク" }, { p: "D-D-D-D-", label: "4分" }, { p: "DUDUDUDU", label: "8分" },
+    { p: "D--UD-DU", label: "ためて" }, { p: "D-xUD-xU", label: "チャック入り" }, { p: "DDUUDDUU", label: "2つずつ" }
+  ];
+  function seqPattern(p) {
+    var out = String(p || "").toUpperCase().replace(/X/g, "x").replace(/[^DUx\-]/g, "").slice(0, 16);
+    return out || "D-DU-UDU";
+  }
   var SEQ_SWINGS = [{ v: 0.5, label: "なし" }, { v: 0.58, label: "軽め 58%" }, { v: 0.62, label: "中くらい 62%" }, { v: 0.67, label: "3連 67%" }, { v: 0.72, label: "強め 72%" }];
   var SEQ_ARP = [1, 0, 2, 3]; // C → G → E → A
   var EPS = 1e-6;
@@ -407,6 +417,8 @@
     var bpm = Math.max(40, Math.min(240, Math.round(seq.bpm || 90))), spb = 60 / bpm;
     var meter = seq.meter === 3 ? 3 : 4, style = seqStyle(seq.style), ratio = seq.swing || 0.5, grid = seq.swingGrid === 0.25 ? 0.25 : 0.5;
     var lead = seq.countIn ? meter : 0, rows = [], events = [], beat = 0, semis = seq.key || 0, i;
+    var pat = style.pattern ? seqPattern(seq.pattern) : "", patUnit = pat ? meter / pat.length : 0;
+    function barOf(b) { return Math.abs(b / meter - Math.round(b / meter)) < EPS ? Math.round(b / meter) + 1 : 0; }
     function tm(b) { return (lead + swingBeat(b, ratio, grid)) * spb; }
     var list = seq.rows || [];
     for (i = 0; i < list.length; i++) {
@@ -415,11 +427,24 @@
       if (r.type === "key") { semis += (r.semis || 0); rows.push({ i: i, type: "key", start: beat, end: beat, t0: tm(beat), t1: tm(beat), semis: semis }); continue; }
       var len = seqLen(r.len).beats, start = beat, end = beat + len;
       beat = end;
-      if (r.type === "rest") { rows.push({ i: i, type: "rest", start: start, end: end, t0: tm(start), t1: tm(end) }); continue; }
+      if (r.type === "rest") { rows.push({ i: i, type: "rest", start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) }); continue; }
       var res = resolve ? resolve(r.name, semis) : null;
-      var row = { i: i, type: "chord", name: res ? res.name : String(r.name || ""), shape: res ? res.shape : null, ok: !!res, start: start, end: end, t0: tm(start), t1: tm(end) };
+      var row = { i: i, type: "chord", name: res ? res.name : String(r.name || ""), shape: res ? res.shape : null, ok: !!res, start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) };
       rows.push(row);
       if (!res) { continue; }
+      if (pat) {
+        // 小節の頭からの位置で文字を選ぶ（コードが小節の途中から始まってもパターンは続く）
+        var kp0 = Math.ceil(start / patUnit - EPS), hitStart = false;
+        for (var kp = kp0; kp * patUnit < end - EPS; kp++) {
+          var chp = pat.charAt(((kp % pat.length) + pat.length) % pat.length), tp = tm(kp * patUnit);
+          if (chp === "D" || chp === "U") { events.push({ t: tp, kind: "strum", dir: chp === "D" ? "down" : "up", shape: res.shape, row: rows.length - 1 }); }
+          else if (chp === "x") { events.push({ t: tp, kind: "chuck", shape: res.shape, row: rows.length - 1 }); }
+          if (Math.abs(kp * patUnit - start) < EPS && chp !== "-") { hitStart = true; }
+        }
+        // 頭が休みの位置でも、コードが変わったら最初に1回鳴らす
+        if (!hitStart) { events.push({ t: tm(start), kind: "strum", dir: "down", shape: res.shape, row: rows.length - 1 }); }
+        continue;
+      }
       if (!style.unit) {
         events.push({ t: tm(start), kind: "strum", dir: "down", shape: res.shape, row: rows.length - 1 });
         continue;
@@ -441,7 +466,7 @@
       }
     }
     events.sort(function (x, y) { return x.t - y.t; });
-    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb };
+    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb, bars: Math.ceil(total / meter - EPS) };
   }
 
   window.UGChords = {
@@ -449,6 +474,6 @@
     intervals: intervals, suffix: suffix, name: chordName, pcs: chordPcs, tones: chordTones, parse: parseName, addPart: addPart,
     voicings: voicings, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
     shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf,
-    SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, seqLen: seqLen, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
+    SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, SEQ_PATTERNS: SEQ_PATTERNS, seqPattern: seqPattern, seqLen: seqLen, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
   };
 })();

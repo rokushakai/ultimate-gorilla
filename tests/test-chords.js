@@ -15,7 +15,7 @@ function pcsOf(C, shape, lowG) {
   return o;
 }
 
-module.exports = function () {
+module.exports = async function () {
   H.suite("chords");
   var env = H.load({ patch: patch });
   var W = env.window, C = W.UGChords, U = W.UGUkulele;
@@ -251,4 +251,25 @@ module.exports = function () {
   env.run("ukulele", { config: { mode: "ear:hard" } }, 3, function () { opt = W.__uk2().ear; });
   var roots = opt.opts.map(function (o) { return C.parse(o.name).root; });
   ok(opt.opts.length === 4 && roots.every(function (x) { return x === roots[0]; }) && opt.opts[opt.ans].name === opt.chord.name, "hard ear quiz compares 4 qualities of the same root", opt.opts.map(function (o) { return o.name; }));
+
+  // ===== §172 ストロークパターン・小節・書き出し =====
+  ok(C.seqPattern("d-du-udu") === "D-DU-UDU" && C.seqPattern("abc") === "D-DU-UDU" && C.seqPattern("DxX-U") === "Dxx-U" && C.seqPattern("DUDUDUDUDUDUDUDUDU").length === 16, "patterns are cleaned (D/U/-/x, max 16)");
+  function evs(sc2, row) { return sc2.events.filter(function (e) { return e.row === row; }).map(function (e) { return e.t + (e.kind === "chuck" ? "x" : e.dir.charAt(0)); }).join(" "); }
+  var ps = C.schedule({ bpm: 60, style: "pat", pattern: "D-DU-UDU", rows: [{ type: "chord", name: "C", len: "w" }] }, rsv);
+  ok(evs(ps, 0) === "0d 1d 1.5u 2.5u 3d 3.5u", "island strum D-DU-UDU over one bar", evs(ps, 0));
+  ps = C.schedule({ bpm: 60, style: "pat", pattern: "D-DU-UDU", rows: [{ type: "chord", name: "C", len: "h" }, { type: "chord", name: "G", len: "h" }] }, rsv);
+  ok(evs(ps, 0) === "0d 1d 1.5u" && evs(ps, 1) === "2d 2.5u 3d 3.5u", "the pattern keeps going through a chord change (and the new chord sounds at its start)", [evs(ps, 0), evs(ps, 1)]);
+  ps = C.schedule({ bpm: 60, style: "pat", pattern: "D-xUD-xU", rows: [{ type: "chord", name: "C", len: "w" }] }, rsv);
+  ok(ps.events.filter(function (e) { return e.kind === "chuck"; }).map(function (e) { return e.t; }).join() === "1,3", "x makes a muted chuck", evs(ps, 0));
+  ps = C.schedule({ bpm: 60, meter: 3, style: "pat", pattern: "D-DUDU", rows: [{ type: "chord", name: "C", len: "h." }] }, rsv);
+  ok(evs(ps, 0) === "0d 1d 1.5u 2d 2.5u", "3/4 pattern with 6 letters = 8th notes", evs(ps, 0));
+  ps = C.schedule({ bpm: 60, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "h" }, { type: "chord", name: "Am", len: "h" }, { type: "chord", name: "F", len: "w" }] }, rsv);
+  ok(ps.rows.map(function (r2) { return r2.bar; }).join() === "1,2,0,3" && ps.bars === 3, "bar numbers on rows that start a bar", ps.rows.map(function (r2) { return r2.bar; }));
+  var rec = U.seqRec(U.seqClean({ bpm: 120, style: "e", countIn: true, rows: [{ type: "chord", name: "C", len: "h" }] }), false);
+  ok(rec.notes.length === 16 && rec.notes[0][0] === 0 && rec.notes[4][0] === 250 && rec.prog.b === 24, "export: every stroke becomes 4 notes, count-in is cut", rec.notes.slice(0, 6));
+  var dl0 = env.counters.downloads.length;
+  U.exportMidi(U.seqClean({ rows: [{ type: "chord", name: "Am", len: "w" }] }), false);
+  ok(env.counters.downloads.length === dl0 + 1 && /^ukulele-\d{8}-\d{4}\.mid$/.test(env.counters.downloads[dl0]), "MIDI export saves ukulele-YYYYMMDD-HHMM.mid", env.counters.downloads.slice(dl0));
+  var wavHow = await new Promise(function (resolve) { U.exportWav(U.seqClean({ rows: [{ type: "chord", name: "Am", len: "h" }] }), false, resolve); setTimeout(function () { resolve("timeout"); }, 9500); });
+  ok(wavHow === "ok" && /\.wav$/.test(env.counters.downloads[env.counters.downloads.length - 1]), "WAV export renders and saves a .wav", wavHow);
 };

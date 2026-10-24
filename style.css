@@ -1115,3 +1115,5 @@ html, body {
 .uke-seq-res { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: #f1e4c8; }
 .uke-seq-row .arcade-mini-btn { min-width: 30px; min-height: 30px; font-size: 13px; padding: 0; }
 .uke-now .uke-card-name { font-size: 26px; }
+/* ===== §172 v0.91: シーケンサー 小節番号 ===== */
+.uke-seq-bar { color: #ffd166; font-weight: bold; }
