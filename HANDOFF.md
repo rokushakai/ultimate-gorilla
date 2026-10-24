@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.87** |
+| 現在バージョン | **v0.88** |
 | ブランチ | main |
 
 ---
@@ -42,7 +42,8 @@
 | `arcade-lyrics.js` | ✍️ 歌詞くずし（arcade-melody.js の後・script.js の前。`UGArcade.internal` を使う） |
 | `arcade-table.js` | 盤・カードのゲーム（五目ならべ・ナンプレ・ソリティア。arcade-lyrics.js の後・script.js の前） |
 | `arcade-sports.js` | スポーツ（⚾ バッティングセンター。arcade-table.js の後。読み取り口 `window.UGSports`） |
-| `arcade-ukulele.js` | 🎸 ゴリラウクレレ（arcade-sports.js の後・script.js の前。音は `window.UGMelody`。読み取り口 `window.UGUkulele`） |
+| `arcade-chords.js` | コードの理論エンジン（画面なし。arcade-sports.js の後・arcade-ukulele.js の前。読み取り口 `window.UGChords`） |
+| `arcade-ukulele.js` | 🎸 ゴリラウクレレ（arcade-chords.js の後・script.js の前。音は `window.UGMelody`。読み取り口 `window.UGUkulele`） |
 | `tests/` | 自動テスト `node tests/run.js`（ゲーム本体には含まれない） |
 | `arcade.js` | ゲームセンターのミニゲーム集（§146。`window.UGArcade` のみ公開。script.js より先に読み込む） |
 | `style.css` | スタイル（スマホ縦画面優先） |
@@ -101,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.88] 🎸 コード辞典・カスタムコード**（§169）: arcade-chords.js `intervals`（パーツ→音程・省ける順）/ `parse` / `voicings`（13^4 を総当たり・段階的にゆるめる）/ `detect` / `transpose`。ukulele は `ukeUi`（設定タブの状態）・`UKE_PREFERRED`（定番の押さえ方を優先）・`pos`（表示するフレットの位置）・マイコード `ultimateGorillaUkuleleChordsV1`
 - **[v0.87] 🎸 ウクレレ「コード進行で練習」**（§168）: `UKE_PROGRESSIONS`（mode は "prog:<id>"）・`UKE_CHORDS.extra`（Fmaj7/Gm7）・`UKE_BY_NAME`
 - **[v0.86] ⚾ バッティングセンター・🎸 ウクレレ**（§167）
   - arcade.js `bindCanvas`: 指ごとに追いかけて `pointer(type, x, y, id, kind)`。ピンボールは指ごとにフリッパー
@@ -124,7 +126,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（311項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（345項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

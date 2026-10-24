@@ -1027,3 +1027,49 @@ html, body {
 .lyric-karaoke { max-width: none; margin-top: 6px; }
 .lyric-karaoke .k-on { background: #ffd166; color: #2d3436; border-radius: 3px; padding: 0 2px; font-weight: bold; }
 .lyric-karaoke .k-done { color: #b2bec3; }
+/* ===== §169 v0.88: ゴリラウクレレ コード辞典・カスタム ===== */
+.uke-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+.uke-chip {
+  padding: 5px 8px;
+  min-width: 34px;
+  border-radius: 12px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.uke-chip.active { opacity: 1; background: #0984e3; border-color: #ffd166; }
+.uke-label { font-size: 12px; color: #ffd166; margin-top: 4px; }
+.uke-role { font-size: 10px; color: #adb5bd; }
+.uke-card {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px;
+  margin: 6px 0;
+  background: #1a2a3a;
+  border: 1px solid #3d3d5c;
+  border-radius: 8px;
+}
+.uke-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.uke-card-name { font-size: 22px; font-weight: bold; color: #ffffff; word-break: break-all; }
+.uke-card-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.uke-diagram { width: 110px; height: 152px; flex-shrink: 0; border-radius: 6px; }
+.uke-strsel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.uke-strsel label { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #ffd166; }
+.uke-strsel select { width: 100%; padding: 6px 2px; border-radius: 8px; border: 1px solid #74b9ff; background: #1b263b; color: #ffffff; font-size: 14px; }
+.melody-row input[type="text"] {
+  flex: 1 1 100%;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #74b9ff;
+  background: #1b263b;
+  color: #ffffff;
+  font-size: 13px;
+}
