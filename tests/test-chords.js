@@ -629,6 +629,23 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf('data-pp="view"') > 0 && root.innerHTML.indexOf("引き（ボタンを減らして指板を大きく）") > 0, "play tab: screen view choice", null);
   W.UGArcade.stop();
 
+  // ===== §184 ハイブリッド =====
+  var hy = [], cy2 = function (f) { return U.NUT_Y + (f - 0.5) * U.FH; };
+  env.run("ukulele", { config: { mode: "free", hybrid: true } }, 10, function (f, e) {
+    if (f !== 2) { return; }
+    e.tap(U.STRX[0], cy2(2)); e.tap(U.STRX[3], cy2(3)); hy.push(W.__uk2().cur.join(""));
+    e.key("keydown", " "); e.key("keyup", " ");
+    hy.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[1], cy2(2)); hy.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[2], cy2(3)); hy.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[2], cy2(3)); hy.push(W.__uk2().cur.join(""));
+  });
+  ok(hy.join() === "2003,2003,0200,0230,0200", "hybrid: marks stay after strumming, the next tap replaces them, later taps add/toggle as in hold", hy);
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
+  W.UGArcade.stop();
+
   // ===== §183 コード進行のバリエーション =====
   var pgs = U.progressions, catIds = U.progCats.map(function (c6) { return c6.id; }), pBad = [];
   pgs.forEach(function (pg) {
