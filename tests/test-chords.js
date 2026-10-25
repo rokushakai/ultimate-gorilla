@@ -380,6 +380,42 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §178 録音・クオンタイズ・重ね録り・メロディ =====
+  var rc = U.tracksClean({ rec1: { on: true, quant: "8", notes: [[1.2, 64, 0.9], ["x", 1], [2, 300], [3, 60]] }, mel: { on: true, notes: [[0, 0.5, 72], [1, 0, 60], [2, 1, 61]] } });
+  ok(rc.rec1.notes.length === 2 && rc.rec1.notes[1][2] === 0.8 && rc.rec1.quant === "8" && rc.mel.notes.length === 2 && rc.rec2.quant === "off", "recorded / melody notes are cleaned", rc);
+  var rsc = tev([{ type: "chord", name: "C", len: "w" }], { rec1: { on: true, quant: "off", notes: [[0.6, 64, 0.9]] }, rec2: { on: true, quant: "8", notes: [[0.6, 67, 0.7]] }, mel: { on: true, notes: [[1, 0.5, 72]] } }, { swing: 0.67, bpm: 120 });
+  var r1 = only(rsc, "rec1")[0], r2 = only(rsc, "rec2")[0], m1 = only(rsc, "mel")[0];
+  ok(Math.abs(r1.t - 0.3) < 1e-9 && Math.abs(r2.t - 0.335) < 1e-9 && m1.t === 0.5 && m1.dur === 0.5, "takes: no quantize = as played (no swing), 8th quantize snaps then swings; melody notes", [r1.t, r2.t, m1.t]);
+  // 録音: 合わせて弾く画面で弾くと録音1に入る（区間のはじめの拍を足す）
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ bpm: 240, countIn: false, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "w" }] }); U.seqSave(st0);
+  r = env.run("ukulele", { config: { mode: "seq", seq: U.seqClean({ bpm: 240, countIn: false, rows: [{ type: "chord", name: "G", len: "w" }] }), rec: "rec1", recOffset: 4 } }, 400, function (f, e) {
+    if (f === 40) { var u = W.__uk2(); var ids = []; u.target.shape.forEach(function (fr, s2) { if (fr > 0) { e.ptr("down", U.STRX[s2], U.NUT_Y + (fr - u.pos - 0.5) * U.FH, 1 + s2); ids.push(1 + s2); } }); swipe(e, 9); ids.forEach(function (id) { e.ptr("up", 0, 0, id); }); }
+  });
+  var took = U.seqLoad().cur.tracks.rec1;
+  ok(r.ended !== null && took.on && took.notes.length === 4 && took.notes[0][0] > 4 && took.notes[0][0] < 5 && took.notes.map(function (n) { return n[1]; }).join() === "67,62,67,71", "recording stores the played notes (pitch, beat incl. section offset)", took.notes);
+  // 途中でやめても、そこまで残る
+  st0 = U.seqLoad(); st0.cur.tracks.rec2.notes = []; U.seqSave(st0);
+  env.run("ukulele", { config: { mode: "seq", seq: U.seqClean({ bpm: 60, countIn: false, rows: [{ type: "chord", name: "C", len: "b16" }] }), rec: "rec2" } }, 120, function (f, e) { if (f === 50) { e.key("keydown", " "); e.key("keyup", " "); } });
+  ok(U.seqLoad().cur.tracks.rec2.notes.length === 4, "stopping in the middle keeps what was recorded", U.seqLoad().cur.tracks.rec2.notes.length);
+  // メロディくずしの録音を取り込む
+  env.store["ultimateGorillaMelodyRecV1"] = JSON.stringify([{ id: 77, date: Date.now(), scale: "major", key: 0, mode: "pos", score: 1, prog: {}, notes: [[0, 60, "b"], [480, 62, "p"], [1000, 64, "w"], [1000, 40, "s"], [9000, 70, "b"]] }]);
+  var mseq = U.seqClean({ bpm: 120, rows: [{ type: "chord", name: "C", len: "w" }] });
+  var got = U.rollImport(mseq, 77, false);
+  ok(got === 3 && mseq.tracks.mel.on && mseq.tracks.mel.notes.map(function (n) { return n[0] + ":" + n[2]; }).join() === "0:60,1:62,2:64", "melody-breakout recordings import as beats (no paddle, cut at the song end)", mseq.tracks.mel.notes);
+  // 書き出し: 録音・メロディのチャンネル
+  var xr2 = U.seqRec(U.seqClean({ countIn: false, rows: [{ type: "chord", name: "C", len: "w" }], tracks: { rec1: { on: true, notes: [[0, 60, 1]] }, rec2: { on: true, prog: 40, notes: [[1, 62, 1]] }, mel: { on: true, prog: 73, notes: [[2, 1, 72]] } } }), false);
+  var vv = {}; xr2.notes.forEach(function (n) { vv[n[2]] = (vv[n[2]] || 0) + 1; });
+  ok(vv.w === 1 && vv.r === 1 && vv.m === 1 && xr2.prog.r === 40 && xr2.prog.m === 73, "export: takes and melody on their own channels with their instruments", vv);
+  // 画面: 録音ボタン・ピアノロール
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }], tracks: { mel: { on: true, notes: [[0, 1, 60]] }, rec1: { on: true, notes: [[0, 60, 1]] } } }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-rec="rec1"') > 0 && hs.indexOf('data-rec="rec2"') > 0 && hs.indexOf('data-recclear="rec1"') > 0 && hs.indexOf("クオンタイズ") > 0, "mixer: record buttons, clear, quantize", null);
+  ok(hs.indexOf('canvas class="uke-roll"') > 0 && hs.indexOf("置く長さ") > 0 && hs.indexOf('data-roll="import"') > 0, "piano roll with note length and import", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §175 ポジション・表示するフレット数 =====
   ok(["0,0,0,3", "2,0,1,0", "5,4,3,3", "9,7,8,7", "0,0,0,7", "2,2,2,0"].map(function (t2) { return C.posOf(t2.split(",").map(Number)); }).join() === "low,low,mid,high,high,low", "position of a fingering (low / mid / high)");
   ok(C.voicingsAt(C.parse("C"), "mid")[0].join() === "5,4,3,3" && C.voicingsAt(C.parse("Am"), "high")[0].join() === "9,9,8,7" && C.voicingsAt(C.parse("F"), "high")[0].join() === "10,9,8,8", "classic mid/high shapes (C=5433, Am=9987, F=10988)");

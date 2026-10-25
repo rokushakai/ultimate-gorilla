@@ -77,7 +77,10 @@
     { id: "s", name: "パドル", ch: 3, def: 32, dur: 350 },
     // §158 v0.77: 伴奏（設定画面の音色欄には出さない）
     { id: "d", name: "伴奏ドラム", ch: 9, def: 128, dur: 120, hidden: true },
-    { id: "c", name: "伴奏コード", ch: 4, def: 48, dur: 1500, hidden: true }
+    { id: "c", name: "伴奏コード", ch: 4, def: 48, dur: 1500, hidden: true },
+    // §178 v0.97: ゴリラウクレレのシーケンサーの書き出し用（録音2・メロディ）
+    { id: "r", name: "ウクレレ録音2", ch: 5, def: 24, dur: 300, hidden: true },
+    { id: "m", name: "ウクレレのメロディ", ch: 6, def: 24, dur: 400, hidden: true }
   ];
 
   var melodyAudio = { ctx: null, master: null, noise: null, bus: null, revSend: null, dlySend: null, fxRev: 1, fxDly: 0 };

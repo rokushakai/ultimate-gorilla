@@ -140,7 +140,8 @@ module.exports = async function () {
     else if ((stt & 0xF0) === 0xC0) { pcs.push(((stt & 15) + 1) + "=" + bytes[q++]); }
     else if ((stt & 0xF0) === 0xB0) { if (bytes[q] === 91) { cc++; } q += 2; }
     else if ((stt & 0xF0) === 0x90) { ons.push(((stt & 15) + 1) + ":" + bytes[q + 1]); q += 2; } else { q += 2; } }
-  ok(pcs.join(" ") === "1=0 2=40 4=33 5=48", "MIDI: program changes per voice channel", pcs.join(" "));
+  // ch6・ch7 はゴリラウクレレの書き出し用の声部（§178）
+  ok(pcs.join(" ") === "1=0 2=40 4=33 5=48 6=24 7=24", "MIDI: program changes per voice channel", pcs.join(" "));
   ok(ons.join(" ") === "1:96 2:96 10:96 4:48 10:96 5:96", "MIDI: channels and chord velocity", ons.join(" "));
   ok(cc >= 4 && ((bytes[18] << 24) | (bytes[19] << 16) | (bytes[20] << 8) | bytes[21]) === bytes.length - 22, "MIDI: reverb CC91 and track length");
 
