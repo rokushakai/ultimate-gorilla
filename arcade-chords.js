@@ -508,7 +508,8 @@
       }
     }
     events.sort(function (x, y) { return x.t - y.t; });
-    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb, bars: Math.ceil(total / meter - EPS) };
+    // tm: 拍 → 秒（スイング・カウントイン込み。ほかのトラックの音を置くのに使う）
+    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb, bars: Math.ceil(total / meter - EPS), meter: meter, tm: tm };
   }
 
   window.UGChords = {

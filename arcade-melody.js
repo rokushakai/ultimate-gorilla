@@ -1515,8 +1515,11 @@
     71: ["whistle", 0.12], 72: ["whistle", 0.45], 73: ["guiro", 0.12], 74: ["guiro", 0.4], 75: ["wood", 2500],
     76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2]
   };
-  function melodyDrum(ac, m, t, level) {
-    var env = ac.createGain(), out = melodyLevelOut(ac, level);
+  // dest（省略可・§177 v0.96）: 出口の GainNode。指定すると level の GainNode をそこへつなぐ
+  function melodyDrum(ac, m, t, level, dest) {
+    var env = ac.createGain(), out;
+    if (dest) { out = ac.createGain(); out.gain.value = (level > 0 && level < 1) ? level : 1; out.connect(dest); }
+    else { out = melodyLevelOut(ac, level); }
     env.connect(out);
     var spec = GM_DRUM_SYNTH[m] || (m < 45 ? ["kick", 150] : (m < 58 ? ["tom", 70 + (m - 45) * 14] : (m < 67 ? ["snare", 190] : ["hat", m > 74 ? 0.5 : 0.07])));
     var type = spec[0], p = spec[1], dur = 0.3, o;
@@ -1959,6 +1962,6 @@
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
     layouts: MELODY_LAYOUTS, progressions: MELODY_PROGRESSIONS, chordTypes: MELODY_CHORD_TYPES, grooves: MELODY_GROOVES,
-    noteName: midiName, noteNames: NOTE_NAMES
+    noteName: midiName, noteNames: NOTE_NAMES, gmNames: GM_NAMES, DRUM: MELODY_DRUM
   };
 })();

@@ -332,6 +332,54 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.tl.view = "tl"; U.ui.tab = "play";
 
+  // ===== §177 トラック・ミキサー =====
+  var tc = U.tracksClean({ bass: { on: 1, vol: 300, pattern: "zz", pan: 5 }, drum: { on: true, groove: "bossa" } });
+  ok(tc.uke.on && tc.uke.prog === 24 && tc.bass.on && tc.bass.vol === 100 && tc.bass.pattern === "root" && tc.bass.pan === 0 && tc.drum.groove === "bossa" && !tc.pad.on && tc.pad.prog === 48, "tracks are cleaned (ukulele always on, defaults)", tc);
+  function tev(rows, tracks, extra) {
+    var sq = U.seqClean(Object.assign({ bpm: 60, countIn: false, style: "once", rows: rows, tracks: tracks }, extra || {}));
+    return U.seqSchedule(sq, false);
+  }
+  function only(sc2, id) { return sc2.events.filter(function (e) { return e.track === id; }); }
+  var bs = only(tev([{ type: "chord", name: "C", len: "b8" }, { type: "chord", name: "G7", len: "w" }], { bass: { on: true, pattern: "root" } }), "bass");
+  ok(bs.map(function (e) { return e.t + ":" + e.midi; }).join() === "0:48,4:48,8:43", "bass 'root' holds the root and repeats each bar", bs.map(function (e) { return e.t + ":" + e.midi; }));
+  bs = only(tev([{ type: "chord", name: "C", len: "w" }], { bass: { on: true, pattern: "r5" } }), "bass");
+  ok(bs.map(function (e) { return e.midi; }).join() === "48,43,48,43", "bass root-fifth alternates in quarters", bs.map(function (e) { return e.midi; }));
+  bs = only(tev([{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "F", len: "w" }], { bass: { on: true, pattern: "walk" } }), "bass");
+  ok(bs.slice(0, 4).map(function (e) { return e.midi; }).join() === "48,52,43,40", "walking bass: root, 3rd, 5th, then a half step into the next root", bs.slice(0, 4).map(function (e) { return e.midi; }));
+  bs = only(tev([{ type: "chord", name: "C/E", len: "h" }], { bass: { on: true, pattern: "root8" } }), "bass");
+  ok(bs.length === 4 && bs.every(function (e) { return e.midi === 40; }), "slash chords: bass plays the on-note (8ths)", bs.map(function (e) { return e.midi; }));
+  var pd = only(tev([{ type: "chord", name: "Am7", len: "w" }], { pad: { on: true } }), "pad");
+  ok(pd.length === 8 && pd.every(function (e) { return e.midi >= 57 && e.midi < 69; }) && pd[4].t === 2, "pad: chord tones A3–G#4 every 2 beats", pd.map(function (e) { return e.t + ":" + e.midi; }));
+  var dr = only(tev([{ type: "chord", name: "C", len: "w" }, { type: "rest", len: "w" }], { drum: { on: true, groove: "8beat" } }), "drum");
+  ok(dr.length === 26 && dr.filter(function (e) { return e.midi === 36; }).map(function (e) { return e.t; }).join() === "0,2,2.5,4,6,6.5", "8-beat drums keep going through rests", dr.length);
+  dr = only(tev([{ type: "chord", name: "C", len: "h." }], { drum: { on: true, groove: "waltz" } }, { meter: 3 }), "drum");
+  ok(dr.filter(function (e) { return e.midi === 36; }).length === 1 && dr.filter(function (e) { return e.midi === 42; }).map(function (e) { return e.t; }).join() === "1,2", "waltz for 3/4", dr.map(function (e) { return e.t + ":" + e.midi; }));
+  U.saveMy([{ id: 1, name: "マイG", shape: [0, 2, 3, 2] }]);
+  bs = only(tev([{ type: "chord", name: "★マイG", len: "q" }], { bass: { on: true, pattern: "root" } }), "bass");
+  ok(bs.length === 1 && bs[0].midi === 43, "★my chords get a bass note from the detected name", bs);
+  var tsq = tev([{ type: "chord", name: "C", len: "q" }], {});
+  ok(tsq.events.every(function (e) { return e.kind === "click" || e.track === "uke"; }) && tsq.tracks.uke.on, "ukulele events are tagged with their track");
+  var au = U.tracksClean({ bass: { on: true, solo: true }, drum: { on: true }, pad: { on: false, solo: true } });
+  ok(U.trackAudible(au, "bass") && !U.trackAudible(au, "uke") && !U.trackAudible(au, "drum") && !U.trackAudible(au, "pad"), "solo: only soloed (and switched on) tracks sound");
+  au = U.tracksClean({ uke: { mute: true }, drum: { on: true } });
+  ok(!U.trackAudible(au, "uke") && U.trackAudible(au, "drum"), "mute silences a track");
+  // ミキサー（出口の音量）
+  var made = [], fac = { destination: {}, createGain: function () { var n = { gain: { value: 1 }, connect: function () {} }; made.push(n); return n; } };
+  var mx = U.mixer({ audio: {} }, fac, U.tracksClean({ uke: { vol: 50 }, bass: { on: true, mute: true } }));
+  ok(Math.abs(mx.uke.g.gain.value - 0.5) < 1e-9 && mx.bass.g.gain.value === 0 && mx.drum.g.gain.value === 0, "mixer gains follow volume / mute / on", [mx.uke.g.gain.value, mx.bass.g.gain.value]);
+  // 書き出し: トラックはそれぞれのチャンネル（声部）に、ミュートは入れない
+  var xr = U.seqRec(U.seqClean({ countIn: false, style: "once", rows: [{ type: "chord", name: "C", len: "w" }], tracks: { bass: { on: true }, drum: { on: true }, pad: { on: true, mute: true } } }), false);
+  var voices = {}; xr.notes.forEach(function (n) { voices[n[2]] = (voices[n[2]] || 0) + 1; });
+  ok(voices.b === 4 && voices.p === 1 && voices.d === 13 && !voices.c && xr.prog.p === 32 && xr.prog.d === 128, "export: ukulele/bass/drums on their own channels, muted pad left out", voices);
+  // 画面: ミキサー
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }], tracks: { bass: { on: true }, drum: { on: true } } }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf("トラック・ミキサー") > 0 && hs.indexOf('data-tk="mute"') > 0 && hs.indexOf('data-tk="solo"') > 0 && hs.indexOf("ウォーキング") > 0 && hs.indexOf("ボサノバ") > 0 && hs.indexOf("033 Acoustic Bass") > 0, "mixer shows tracks with M/S, patterns, rhythms and instruments", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §175 ポジション・表示するフレット数 =====
   ok(["0,0,0,3", "2,0,1,0", "5,4,3,3", "9,7,8,7", "0,0,0,7", "2,2,2,0"].map(function (t2) { return C.posOf(t2.split(",").map(Number)); }).join() === "low,low,mid,high,high,low", "position of a fingering (low / mid / high)");
   ok(C.voicingsAt(C.parse("C"), "mid")[0].join() === "5,4,3,3" && C.voicingsAt(C.parse("Am"), "high")[0].join() === "9,9,8,7" && C.voicingsAt(C.parse("F"), "high")[0].join() === "10,9,8,8", "classic mid/high shapes (C=5433, Am=9987, F=10988)");
