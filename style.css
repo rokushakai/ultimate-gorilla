@@ -1121,3 +1121,17 @@ html, body {
 .uke-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0 8px; }
 .uke-tabs .uke-chip { padding: 9px 2px; font-size: 12px; font-weight: bold; white-space: nowrap; border-radius: 10px; opacity: 0.85; }
 .uke-tabs .uke-chip.active { opacity: 1; }
+/* ===== §174 v0.93: シーケンサー コードを選ぶ画面・区間ループ ===== */
+.uke-seq-row.chord { flex-wrap: wrap; }
+.uke-seq-row.chord .uke-seq-res { flex: 1 1 100%; order: 9; padding-left: 22px; white-space: normal; }
+.uke-seq-row .arcade-mini-btn.on { background: #0984e3; border-color: #ffd166; }
+.uke-seq-row.inloop { border-left: 4px solid #55efc4; }
+.uke-seq-loop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; padding: 6px 8px; background: #12304a; border-radius: 8px; font-size: 12px; color: #ffd166; }
+.uke-seq-loop select { padding: 5px; border-radius: 6px; border: 1px solid #74b9ff; background: #1b263b; color: #ffffff; font-size: 12px; max-width: 120px; }
+.uke-seq-loop-on { color: #55efc4; font-weight: bold; }
+.uke-pick { margin: -2px 0 4px 10px; padding: 6px 8px; background: #0f2236; border: 1px solid #74b9ff; border-radius: 8px; }
+.uke-pick-head { display: flex; justify-content: space-between; align-items: center; }
+.uke-pick-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.uke-pick-item { display: inline-flex; align-items: center; gap: 2px; }
+.uke-pick-item .arcade-mini-btn { min-width: 28px; min-height: 28px; font-size: 12px; padding: 0; }
+.uke-pick-item .uke-chip { opacity: 1; }

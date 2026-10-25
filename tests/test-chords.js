@@ -272,4 +272,36 @@ module.exports = async function () {
   ok(env.counters.downloads.length === dl0 + 1 && /^ukulele-\d{8}-\d{4}\.mid$/.test(env.counters.downloads[dl0]), "MIDI export saves ukulele-YYYYMMDD-HHMM.mid", env.counters.downloads.slice(dl0));
   var wavHow = await new Promise(function (resolve) { U.exportWav(U.seqClean({ rows: [{ type: "chord", name: "Am", len: "h" }] }), false, resolve); setTimeout(function () { resolve("timeout"); }, 9500); });
   ok(wavHow === "ok" && /\.wav$/.test(env.counters.downloads[env.counters.downloads.length - 1]), "WAV export renders and saves a .wav", wavHow);
+  // ===== §174 コードを選ぶ画面・区間ループ・試し聴き =====
+  var lseq = U.seqClean({ key: 1, loopOn: true, loopA: 4, loopB: 2, rows: [{ type: "chord", name: "C", len: "w" }, { type: "key", semis: 2 }, { type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "h" }, { type: "chord", name: "G7", len: "h" }, { type: "chord", name: "C", len: "w" }] });
+  var sec = U.seqSection(lseq);
+  ok(sec && sec.a === 2 && sec.b === 4 && sec.seq.rows.map(function (r2) { return r2.name; }).join() === "Am,F,G7" && sec.seq.key === 3 && sec.seq.loop === true, "section loop: rows A..B (swapped if needed), earlier key changes carried in", sec && { a: sec.a, b: sec.b, key: sec.seq.key });
+  ok(U.seqSection(U.seqClean({ loopOn: false, rows: lseq.rows })) === null, "no section when the loop is off");
+  var lsc = U.seqSchedule(sec.seq, false);
+  ok(lsc.rows[0].name === "Cm" && lsc.rows[0].i === 0, "section schedule is transposed like the full song (Am +3 = Cm)", lsc.rows[0].name);
+  var cl2 = U.seqClean({ loopOn: true, loopA: 50, loopB: -3, rows: [{ type: "chord", name: "C" }, { type: "chord", name: "G" }] });
+  ok(cl2.loopA === 1 && cl2.loopB === 0, "section rows are kept inside the song", [cl2.loopA, cl2.loopB]);
+  ok(U.seqSemisAt(lseq, 0) === 1 && U.seqSemisAt(lseq, 2) === 3, "key at a row = song key + key changes above it");
+  // 区間だけ合わせて弾く（2周で終わる）
+  var secRun = env.run("ukulele", { config: { mode: "seq", seq: U.seqSection(U.seqClean({ bpm: 240, countIn: false, loopOn: true, loopA: 1, loopB: 1, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }] })).seq } }, 1200);
+  ok(secRun.ended !== null && secRun.frames < 400, "play-along of a section ends after 2 passes", secRun);
+  // 画面: 🎯 選ぶ・▶・マイコード・辞典・区間ループ
+  U.saveMy([{ id: 1, name: "ぼくのC", shape: [0, 0, 0, 3] }, { id: 2, name: "Fmaj7風", shape: [2, 4, 1, 3] }]);
+  st0 = U.seqLoad(); st0.cur = lseq; U.seqSave(st0);
+  U.ui.tab = "seq"; U.pick.row = 0; U.pick.tab = "my";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-pset="★ぼくのC"') > 0 && hs.indexOf('data-pplay="★Fmaj7風"') > 0 && hs.indexOf("マイコード（2）") > 0, "picker lists all my chords with preview buttons", null);
+  ok(hs.indexOf('data-seq="rowplay"') > 0 && hs.indexOf('data-seq="pick"') > 0 && hs.indexOf("マイコードを全部並べる") > 0, "rows have 🎯 pick and ▶ preview buttons", null);
+  ok(hs.indexOf("区間ループ") > 0 && hs.indexOf("uke-seq-row inloop") > 0 && hs.indexOf("3〜5行目") > 0, "section loop controls and marked rows", null);
+  W.UGArcade.stop();
+  U.pick.tab = "dict"; U.pick.root = 9; U.pick.qual = "m7";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf('data-pset="Am7"') > 0 && root.innerHTML.indexOf("を入れる") > 0, "picker dictionary builds a chord to insert", null);
+  W.UGArcade.stop();
+  U.pick.row = 3;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("この行の Key +3") > 0, "picker shows the row's key for previews", null);
+  W.UGArcade.stop();
+  U.pick.row = -1; U.pick.tab = "my"; U.ui.tab = "play";
 };
