@@ -589,4 +589,43 @@ module.exports = async function () {
     } catch (fe) { fuzzBad.push(fz + " " + fe.message); }
   }
   ok(checked === 200 && fuzzBad.length === 0, "200 random songs: clean is stable, times never go back, MIDI chunks are well-formed", fuzzBad.slice(0, 5));
+
+  // ===== §181 指板にマーキング・引きのビュー =====
+  ok(U.markSet([0, 0, 0, 3], 3, 3).join() === "0,0,0,0" && U.markSet([0, 0, 0, 3], 1, 15).join() === "0,15,0,3" && U.markSet([2, 0, 0, 0], 0, 0).join() === "0,0,0,0" && U.MARK_FRETS === 15, "marking: tap sets the fret, tapping it again opens the string (up to fret 15)");
+  ok(U.detect([0, 12, 12, 12], false).name !== "" && U.detect([14, 12, 12, 12], false).tones.length > 0, "shapes up to fret 15 are named");
+  var Lc = U.layout(12, true);
+  ok(Lc.compact && Lc.nut === 30 && Math.abs(Lc.nut + 12 * Lc.fh - 380) < 1e-9 && Lc.strumY === 386 && Lc.h === 420, "zoomed-out layout: taller screen (420), fretboard 30–380, small sound hole", Lc);
+  var cls = [], croot = H.makeEl("div");
+  croot.classList = { add: function (c5) { cls.push("+" + c5); }, remove: function (c5) { cls.push("-" + c5); }, contains: function () { return false; } };
+  var cparts = {};
+  croot.querySelector = function (sel) {
+    if (!cparts[sel]) {
+      cparts[sel] = H.makeEl(sel);
+      if (sel === ".arcade-canvas") { cparts[sel].getContext = function () { return new Proxy({}, { get: function (t5, k5) { return t5[k5] !== undefined ? t5[k5] : function () {}; }, set: function (t5, k5, v5) { t5[k5] = v5; return true; } }); }; }
+    }
+    return cparts[sel];
+  };
+  W.UGArcade.start("ukulele", croot, { config: { mode: "free", compact: true, frets: 8 }, onExit: function () {} });
+  W.UGArcade.stop();
+  ok(cls.indexOf("+arcade-compact") >= 0 && cls[cls.length - 1] === "-arcade-compact", "zoomed-out view hides the extras while playing and restores them after", cls);
+  var posSeen = [];
+  env.run("ukulele", { config: { mode: "free", compact: true, frets: 8 } }, 12, function (f, e) {
+    // ハーネスの canvas は 320 の高さとして位置を返すので、論理 420 の y は 320/420 倍して渡す
+    var k3 = 320 / 420;
+    if (f === 2) { e.tap(15, 330 * k3); posSeen.push(W.__uk2().pos); e.tap(15, 330 * k3); posSeen.push(W.__uk2().pos); e.tap(15, 40 * k3); posSeen.push(W.__uk2().pos); }
+  });
+  ok(posSeen.join() === "1,2,1", "zoomed-out view: tap the fret-number column to move the position", posSeen);
+  U.ui.tab = "custom"; U.ui.sMode = "strings"; U.ui.sShape = [0, 15, 0, 3]; U.ui.markBig = false;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('canvas class="uke-mark" data-k="mark"') > 0 && hs.indexOf('<option value="15" selected>') > 0 && hs.indexOf('data-markbig="1"') > 0 && hs.indexOf("uke-mark-full") < 0, "string builder has a marking fretboard and 0–15 frets", null);
+  W.UGArcade.stop();
+  U.ui.markBig = true;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("uke-mark-full") > 0 && root.innerHTML.indexOf('data-k="markbig"') > 0 && root.innerHTML.indexOf('data-markbig="0"') > 0, "big marking view with close button", null);
+  W.UGArcade.stop();
+  U.ui.markBig = false; U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf('data-pp="view"') > 0 && root.innerHTML.indexOf("引き（ボタンを減らして指板を大きく）") > 0, "play tab: screen view choice", null);
+  W.UGArcade.stop();
 };

@@ -1172,3 +1172,14 @@ canvas.uke-roll { display: block; width: 100%; height: 160px; border-radius: 8px
 .uke-file { position: relative; overflow: hidden; cursor: pointer; }
 .uke-file input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .uke-seq-row input.uke-seq-bpm { width: 64px; }
+/* ===== §181 v0.99: 引きのビュー（ゲームが api.setCompact で付ける） ===== */
+.arcade-compact .arcade-controls, .arcade-compact .arcade-help { display: none !important; }
+.arcade-compact .arcade-canvas { width: min(100%, calc((100vh - 96px) * 0.75)); }
+.arcade-compact .arcade-hud { font-size: 11px; margin-bottom: 2px; }
+.arcade-compact .arcade-sys .modal-btn { margin-top: 4px; padding: 4px 10px; font-size: 12px; }
+/* ===== §181: 指板にマーキング ===== */
+canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px; border: 1px solid #3d3d5c; touch-action: pan-y; margin: 6px 0; }
+.uke-mark-full { position: fixed; inset: 0; z-index: 80; background: #0b1626; display: flex; flex-direction: column; padding: 8px 10px; box-sizing: border-box; }
+.uke-mark-full .uke-mark-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.uke-mark-full .uke-card-name { font-size: 22px; flex: 1; }
+.uke-mark-full canvas.uke-mark { flex: 1; height: auto; min-height: 0; touch-action: none; }

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.98.1** |
+| 現在バージョン | **v0.99** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.99] 🎸 指板にマーキング・引きのビュー**（§181）: arcade.js の api に `setCompact` / `setCanvasHeight`（host.h。pos と draw が使う）。ukulele `ukeMarkDraw` / `ukeMarkBind` / `ukeMarkSet`（UKE_MARK_FRETS=15）・`ukeUi.markBig`・`ukeLayout(n, compact)`（compact は高さ 420）・prefs に view
 - **[v0.98.1] シーケンサーの品質整備**（§180）: `ukeArrangedToWritten`（構成どおりの拍→書いた行の拍）・canvas の touch-action を pan-y・pointercancel で操作を取り消す・tests/test-chords.js の最後にでたらめな曲200曲（決まった種から作るので毎回同じ）
 - **[v0.98] 🎸 DAW化 第4段階 構成・テンポ・MIDI・プロジェクト・歌詞**（§179）: 行の種類に tempo（bpm）・sec（name）。`ukeIsMark`（長さなしの行）/ `ukeSeqSections` / `ukeSeqExpand`（構成どおりに並べ、`_src` でもとの行へ）/ `ukeMidiBytes`（SMF 1）/ `ukeProjectJson`・`ukeProjectRead` / `ukeLyricPlace`。曲に arr・lyrics。arcade-chords.js schedule に segs・tmRaw・beatAt
 - **[v0.97] 🎸 DAW化 第3段階 録音・メロディ**（§178）: tracks に rec1/rec2（notes [拍, midi, 強さ]・quant）と mel（notes [拍, 長さ, midi]）。ゲームの mode "seq" ＋ cfg.rec / cfg.recOffset で録音（`recSave`・停止フック `ukeRecFlush`）。`ukeRoll`（ピアノロール）/ `ukeRollImport`。melody の声部に r（ch6）・m（ch7）
@@ -137,7 +138,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（454項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（462項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

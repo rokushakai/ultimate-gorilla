@@ -77,15 +77,18 @@
   function ukeMidi(s, fret, lowG) { return (s === 0 && lowG ? UKE_OPEN_LOWG : UKE_OPEN[s]) + fret; }
   function ukeNoteName(midi) { return NOTE_NAMES[((midi % 12) + 12) % 12]; }
   // §175 v0.94: 表示するフレット数 → 指板の寸法（8以上はサウンドホールを小さくして指板を長く）
-  var UKE_TOTAL_FRETS = 18;
+  var UKE_TOTAL_FRETS = 18, UKE_TALL_H = 420;
   var UKE_FRET_CHOICES = [[5, "5"], [6, "6（いつも）"], [8, "8"], [9, "9（半分）"], [12, "12"], [15, "15（ソプラノほぼ全部）"], [18, "18（テナー全部）"]];
-  function ukeLayout(n) {
+  function ukeLayout(n, compact) {
     n = Math.round(Number(n) || 6);
     var ok = false;
     for (var i = 0; i < UKE_FRET_CHOICES.length; i++) { if (UKE_FRET_CHOICES[i][0] === n) { ok = true; } }
     if (!ok) { n = 6; }
-    if (n <= 7) { return { frets: n, nut: UKE_NUT_Y, fh: 168 / n, strumY: UKE_STRUM_Y, holeY: UKE_HOLE_Y, body: 70, hole: 34 }; }
-    return { frets: n, nut: 40, fh: 210 / n, strumY: 256, holeY: 284, body: 48, hole: 22 };
+    // §181 v0.99: 引きのビュー（サウンドホールを小さく、指板を長く）
+    // 引きのときはゲーム画面を縦に 420 まで伸ばす（api.setCanvasHeight）
+    if (compact) { return { frets: n, nut: 30, fh: 350 / n, strumY: 386, holeY: 404, body: 34, hole: 14, compact: true, h: UKE_TALL_H, bottom: UKE_TALL_H - 16 }; }
+    if (n <= 7) { return { frets: n, nut: UKE_NUT_Y, fh: 168 / n, strumY: UKE_STRUM_Y, holeY: UKE_HOLE_Y, body: 70, hole: 34, h: 320, bottom: 304 }; }
+    return { frets: n, nut: 40, fh: 210 / n, strumY: 256, holeY: 284, body: 48, hole: 22, h: 320, bottom: 304 };
   }
   var UKE_LAYOUT6 = null; // ukeLayout(6)（下の定数のあとで作る）
   // 指板の座標 → { s: 弦, f: 表示の中のフレット(1〜) } / null
@@ -226,10 +229,10 @@
   // 設定（Low-G・勉強の助け）を読む・書く（足りない項目は既定値）
   function ukePrefs() {
     var p0 = lsGet(UKE_PREFS_KEY) || {};
-    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto" };
+    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal" };
   }
   function ukeSavePrefs(p1) {
-    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto" });
+    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal" });
   }
   // 設定画面で音を鳴らす（arp: アルペジオ）
   function ukePlayShape(shape, lowG, arp) {
@@ -1658,7 +1661,7 @@
       if (a === "together") {
         var pf = ukePrefs(), sq = ukeSeqClean(seq), sc2 = ukeSeqSection(sq);
         ukeSeqStop();
-        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets });
+        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact" });
         return;
       }
       if (a === "save") {
@@ -1702,7 +1705,7 @@
         sc2.seq.loop = false;
       } else { sq = ukeSeqExpand(sq); sq.loop = false; }
       ukeSeqStop();
-      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets });
+      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact" });
     });
     all("button[data-recclear]", "onclick", function (ev) { var id = ev.currentTarget.getAttribute("data-recclear"); seq.tracks[id].notes = []; save(true); });
     ukeRollBind(root, seq, ctx, save);
@@ -1774,8 +1777,97 @@
     if (ukeSeqPlayer) { ukeSeqPlayer.row = -2; }
   }
 
+  // ---------- §181 v0.99: マーキング用の指板（弦で作る） ----------
+  var UKE_MARK_FRETS = 15, UKE_MARK_HEAD = 22;
+  function ukeMarkGeom(cv) {
+    var w = cv.clientWidth || 330, h = cv.clientHeight || 346, rows = UKE_MARK_FRETS + 1;
+    var rowH = (h - UKE_MARK_HEAD - 4) / rows, x0 = 40, colW = (w - x0 - 14) / 4;
+    return { w: w, h: h, rowH: rowH, x0: x0, colW: colW, sx: function (s2) { return x0 + colW * (s2 + 0.5); }, ry: function (f) { return UKE_MARK_HEAD + rowH * f; } };
+  }
+  function ukeMarkDraw(cv, shape, lowG, rootPc) {
+    if (!cv || !cv.getContext) { return; }
+    var g = ukeMarkGeom(cv), k = 2, ctx = cv.getContext("2d"), s2, f;
+    if (cv.width !== Math.round(g.w * k) || cv.height !== Math.round(g.h * k)) { cv.width = Math.round(g.w * k); cv.height = Math.round(g.h * k); }
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.fillStyle = "#3b2414"; ctx.fillRect(0, 0, g.w, g.h);
+    ctx.fillStyle = "#5c3a1e"; ctx.fillRect(g.x0, g.ry(1), g.colW * 4, g.rowH * UKE_MARK_FRETS);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // 開放の段・ナット・フレット・目印
+    ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(g.x0, g.ry(0), g.colW * 4, g.rowH);
+    ctx.fillStyle = "#f1e4c8"; ctx.fillRect(g.x0, g.ry(1) - 2, g.colW * 4, 4);
+    ctx.strokeStyle = "#c0c0c0"; ctx.lineWidth = 1;
+    for (f = 2; f <= UKE_MARK_FRETS + 1; f++) { ctx.beginPath(); ctx.moveTo(g.x0, g.ry(f)); ctx.lineTo(g.x0 + g.colW * 4, g.ry(f)); ctx.stroke(); }
+    var marks = [3, 5, 7, 10, 12, 15];
+    ctx.fillStyle = "rgba(241,228,200,0.6)";
+    for (var mi = 0; mi < marks.length; mi++) {
+      var my = g.ry(marks[mi]) + g.rowH / 2;
+      // 目印はフレット番号のとなりに（音名と重ならないように）
+      if (marks[mi] === 12) { ctx.beginPath(); ctx.arc(31, my, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(37, my, 2.5, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.beginPath(); ctx.arc(34, my, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.font = "bold " + Math.max(8, Math.min(12, g.rowH * 0.5)) + "px sans-serif";
+    ctx.fillStyle = "#e9c46a";
+    ctx.fillText("開放", 17, g.ry(0) + g.rowH / 2);
+    for (f = 1; f <= UKE_MARK_FRETS; f++) { ctx.fillText(String(f), 15, g.ry(f) + g.rowH / 2); }
+    for (s2 = 0; s2 < 4; s2++) {
+      ctx.fillStyle = "#e9c46a";
+      ctx.fillText(UKE_STRINGS[s2] + "弦", g.sx(s2), 11);
+      ctx.strokeStyle = "#e0e0e0"; ctx.lineWidth = 1 + (3 - s2) * 0.3;
+      ctx.beginPath(); ctx.moveTo(g.sx(s2), g.ry(0) + g.rowH / 2); ctx.lineTo(g.sx(s2), g.h - 4); ctx.stroke();
+    }
+    // 全マスの音名（薄く）と、押さえている印
+    var nf = Math.max(7, Math.min(11, g.rowH * 0.42)), rad = Math.min(g.rowH * 0.46, g.colW * 0.32);
+    for (s2 = 0; s2 < 4; s2++) {
+      for (f = 0; f <= UKE_MARK_FRETS; f++) {
+        var cx = g.sx(s2), cy = g.ry(f) + g.rowH / 2, midi = ukeMidi(s2, f, lowG), nm = ukeNoteName(midi);
+        if (shape[s2] === f) {
+          var isRoot = rootPc !== null && rootPc !== undefined && C.pcOf(midi) === rootPc;
+          ctx.fillStyle = isRoot ? "#ff7675" : "#ffd166";
+          ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = "#1b0f07"; ctx.font = "bold " + nf + "px sans-serif"; ctx.fillText(nm, cx, cy + 0.5);
+        } else if (g.rowH >= 14) {
+          ctx.fillStyle = "rgba(241,228,200,0.35)"; ctx.font = (nf - 1) + "px sans-serif"; ctx.fillText(nm, cx + g.colW * 0.28, cy);
+        }
+      }
+    }
+  }
+  // タップ → onTap(弦, フレット)。少しでも動いたらスクロールとみなして何もしない
+  function ukeMarkBind(cv, onTap) {
+    if (!cv || !cv.addEventListener) { return; }
+    var st = null;
+    function pt(ev) { var r = cv.getBoundingClientRect(), src = ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0] : ev; return { x: src.clientX - r.left, y: src.clientY - r.top }; }
+    function down(ev) { st = pt(ev); }
+    function up(ev) {
+      if (!st) { return; }
+      var p2 = pt(ev), s0 = st;
+      st = null;
+      if (Math.abs(p2.x - s0.x) > 10 || Math.abs(p2.y - s0.y) > 10) { return; }
+      var g = ukeMarkGeom(cv), best = -1, bd = g.colW / 2 + 4;
+      for (var i = 0; i < 4; i++) { var d = Math.abs(s0.x - g.sx(i)); if (d < bd) { bd = d; best = i; } }
+      var f = Math.floor((s0.y - UKE_MARK_HEAD) / g.rowH);
+      if (best < 0 || f < 0 || f > UKE_MARK_FRETS) { return; }
+      onTap(best, f);
+    }
+    if (window.PointerEvent) {
+      cv.addEventListener("pointerdown", down);
+      cv.addEventListener("pointerup", up);
+      cv.addEventListener("pointercancel", function () { st = null; });
+    } else {
+      cv.addEventListener("touchstart", down);
+      cv.addEventListener("touchend", up);
+      cv.addEventListener("mousedown", down);
+      cv.addEventListener("mouseup", up);
+    }
+  }
+  // 押さえ方を変える（同じ所をもう一度押したら開放）
+  function ukeMarkSet(shape, s2, f) {
+    var out = shape.slice();
+    out[s2] = f > 0 && out[s2] === f ? 0 : f;
+    return out;
+  }
+
   // ---------- 設定画面（タブ: あそぶ / コード辞典 / カスタム / マイコード / シーケンサー） ----------
-  var ukeUi = { tab: "play", vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
+  var ukeUi = { tab: "play", markBig: false, vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
   var UKE_TABS = [["play", "&#x1F3B8; あそぶ"], ["dict", "&#x1F4DA; コード辞典"], ["custom", "&#x1F6E0;&#xFE0F; カスタム"], ["my", "&#x2B50; マイコード"], ["seq", "&#x1F39B;&#xFE0F; シーケンサー"]];
   function ukeSelect(attr, opts, cur) {
     var o = '<select ' + attr + '>';
@@ -1877,13 +1969,15 @@
           cards.p = { shape: c.shape, root: ps.root, name: C.name(ps), src: "パーツで作成" };
           h += c.html;
         } else {
-          h += '<p class="small" style="color:#adb5bd;margin:4px 0;">弦ごとにフレットを選ぶと、コード名を当てるよ（0＝開放）。</p><div class="uke-strsel">';
+          h += '<p class="small" style="color:#adb5bd;margin:4px 0;">下の指板のマスをタップするか、弦ごとにフレットを選ぶと、コード名を当てるよ（0＝開放・15フレットまで）。</p><div class="uke-strsel">';
           for (i = 0; i < 4; i++) {
             h += '<label><span>' + UKE_STRINGS[i] + '弦</span><select data-str="' + i + '">';
-            for (var fr = 0; fr <= 12; fr++) { h += '<option value="' + fr + '"' + (ukeUi.sShape[i] === fr ? " selected" : "") + '>' + fr + '</option>'; }
+            for (var fr = 0; fr <= UKE_MARK_FRETS; fr++) { h += '<option value="' + fr + '"' + (ukeUi.sShape[i] === fr ? " selected" : "") + '>' + fr + '</option>'; }
             h += '</select></label>';
           }
-          h += '</div>';
+          h += '</div><div class="uke-chips"><button class="uke-chip" data-markbig="1">&#x1F50D; 大きく表示してマーキング</button>' +
+            '<button class="uke-chip" data-markreset="1">&#x21BA; 全部開放</button></div>' +
+            '<canvas class="uke-mark" data-k="mark"></canvas>';
           var det = ukeDetect(ukeUi.sShape, lowG), auto = det.name || det.tones.join("・");
           h += '<label class="melody-row"><span>名前（空ならコード名を自動で）</span><input type="text" class="uke-name" maxlength="24" value="' + I.escHtml(ukeUi.sName) + '" placeholder="' + I.escHtml(auto) + '"></label>';
           var tonesH = I.escHtml(det.tones.join(" ")) + (det.alts.length ? ' <span class="uke-role">別名: ' + I.escHtml(det.alts.join(" / ")) + '</span>' : '');
@@ -1891,6 +1985,16 @@
           var dsp = det.name ? C.parse(det.name) : null;
           cards.s = { shape: c.shape, root: dsp ? dsp.root : null, name: ukeUi.sName || auto, src: "弦で作成" };
           h += c.html;
+          // 大きく表示（画面いっぱいの指板）
+          if (ukeUi.markBig) {
+            h += '<div class="uke-mark-full"><div class="uke-mark-head"><div class="uke-card-name">' + I.escHtml(ukeUi.sName || auto || "?") + '</div>' +
+              '<button class="arcade-mini-btn melody-midi-btn" data-a="strum" data-k="s">&#x1F3B6; ジャーン</button>' +
+              '<button class="arcade-mini-btn melody-midi-btn" data-a="arp" data-k="s">&#x1F3BC;</button>' +
+              '<button class="arcade-mini-btn melody-midi-btn" data-a="add" data-k="s">&#x2B50; 追加</button>' +
+              '<button class="arcade-mini-btn" data-markbig="0" title="閉じる">&#x2716;&#xFE0F;</button></div>' +
+              '<div class="small" style="color:#f1e4c8;margin:2px 0;">' + tonesH + '　押さえ方 ' + ukeUi.sShape.join("-") + '</div>' +
+              '<canvas class="uke-mark" data-k="markbig"></canvas></div>';
+          }
         }
       } else if (ukeUi.tab === "seq") {
         seqTab = ukeSeqTab({ lowG: lowG, render: render, toast: function (m) { toast = m; render(); }, done: ctl.done });
@@ -1910,11 +2014,26 @@
           '<label><input type="checkbox" data-p="tones"' + (prefs.tones ? " checked" : "") + '> コードの音がある場所を光らせる</label>' +
           '<label><input type="checkbox" data-p="fingers"' + (prefs.fingers ? " checked" : "") + '> お手本に指番号を出す</label>' : '') + '</div>' +
         (ukeUi.tab === "play" ? '<div class="uke-seq-set"><label>表示するフレット数' + ukeSelect('data-pp="frets"', UKE_FRET_CHOICES, prefs.frets) + '</label>' +
-          '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label></div>' : '') +
+          '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label>' +
+          '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label></div>' : '') +
         '<button class="modal-btn" data-m="back" style="width:100%;margin-top:8px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
       root.innerHTML = h;
       for (var k in cards) {
         if (cards.hasOwnProperty(k) && cards[k].shape) { ukeDiagram(root.querySelector('canvas[data-k="' + k + '"]'), cards[k].shape, cards[k].root, lowG); }
+      }
+      // §181: マーキング用の指板
+      if (cards.s) {
+        var mcs = [root.querySelector('canvas[data-k="mark"]'), root.querySelector('canvas[data-k="markbig"]')];
+        for (var mc = 0; mc < mcs.length; mc++) {
+          if (!mcs[mc]) { continue; }
+          ukeMarkDraw(mcs[mc], ukeUi.sShape, lowG, cards.s.root);
+          ukeMarkBind(mcs[mc], function (s3, f3) {
+            ukeUi.sShape = ukeMarkSet(ukeUi.sShape, s3, f3);
+            var UG = window.UGMelody, ac3 = UG && UG.audioInit();
+            if (ac3) { ukeNote(UG, ac3, ukePreviewOuts, s3, ukeUi.sShape[s3], ac3.currentTime + 0.01, 0.85, lowG); }
+            render();
+          });
+        }
       }
       bind();
       if (seqTab) { seqTab.bind(root); }
@@ -1925,7 +2044,7 @@
     }
     function attr(ev, a) { return ev.currentTarget.getAttribute(a); }
     function bind() {
-      on("button[data-tab]", function (ev) { ukeUi.tab = attr(ev, "data-tab"); if (ukeUi.tab !== "seq") { ukeSeqStop(); } render(); });
+      on("button[data-tab]", function (ev) { ukeUi.tab = attr(ev, "data-tab"); ukeUi.markBig = false; if (ukeUi.tab !== "seq") { ukeSeqStop(); } render(); });
       on("button[data-droot]", function (ev) { ukeUi.dRoot = parseInt(attr(ev, "data-droot"), 10); ukeUi.dVoice = 0; render(); });
       on("button[data-dqual]", function (ev) { ukeUi.dQual = attr(ev, "data-dqual"); ukeUi.dVoice = 0; render(); });
       on("button[data-proot]", function (ev) { ukeUi.pRoot = parseInt(attr(ev, "data-proot"), 10); ukeUi.pVoice = 0; render(); });
@@ -1936,7 +2055,9 @@
         ukeUi.pVoice = 0;
         render();
       });
-      on("button[data-smode]", function (ev) { ukeUi.sMode = attr(ev, "data-smode"); render(); });
+      on("button[data-smode]", function (ev) { ukeUi.sMode = attr(ev, "data-smode"); ukeUi.markBig = false; render(); });
+      on("button[data-markbig]", function (ev) { ukeUi.markBig = attr(ev, "data-markbig") === "1"; render(); });
+      on("button[data-markreset]", function () { ukeUi.sShape = [0, 0, 0, 0]; render(); });
       on("button[data-vpos]", function (ev) { ukeUi.vPos = attr(ev, "data-vpos"); ukeUi.dVoice = 0; ukeUi.pVoice = 0; render(); });
       var sels = root.querySelectorAll("select[data-str]");
       for (var i = 0; i < sels.length; i++) {
@@ -1992,7 +2113,7 @@
         if (v === "back") { ukeSeqStop(); ctl.back(); return; }
         ukeSeqStop();
         ukeSavePrefs(prefs);
-        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref });
+        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact" });
       });
     }
     render();
@@ -2018,7 +2139,9 @@
     setupLabel: "モードを変える",
     create: function (api, cfg) {
       cfg = cfg || {};
-      var L = ukeLayout(cfg.frets); // §175 v0.94: 表示するフレット数と寸法
+      var L = ukeLayout(cfg.frets, !!cfg.compact); // §175 v0.94: 表示するフレット数と寸法（§181: 引きのビュー）
+      if (api.setCompact) { api.setCompact(!!cfg.compact); }
+      if (L.compact && api.setCanvasHeight) { api.setCanvasHeight(L.h); }
       var mode = cfg.mode || "free", practice = mode !== "free", lowG = !!cfg.lowG;
       var prog = mode.indexOf("prog:") === 0 ? ukeProgression(mode.substring(5)) : null, progIdx = -1, progTotal = prog ? prog.chords.length * UKE_PROG_LOOPS : 0;
       if (mode.indexOf("prog:") === 0 && !prog) { mode = "free"; practice = false; }
@@ -2291,6 +2414,11 @@
             if (y >= L.strumY) { earPlay(0); }
             return;
           }
+          if (type === "down" && L.compact && x < 30 && y >= L.nut && y <= L.nut + L.frets * L.fh) {
+            // 引きのビュー: 左のフレット番号の列で ▲（上半分）・▼（下半分）
+            if (y < L.nut + L.frets * L.fh / 2) { pos = Math.max(0, pos - 1); } else { pos = Math.min(UKE_TOTAL_FRETS - L.frets, pos + 1); }
+            return;
+          }
           if (type === "down") {
             var cell = ukeCellAt(x, y, L);
             if (cell) {
@@ -2355,7 +2483,7 @@
           var cur = current(), held = presses();
           // ボディと指板
           ctx.fillStyle = "#3b2414";
-          ctx.fillRect(0, 0, W, 320);
+          ctx.fillRect(0, 0, W, L.h);
           ctx.fillStyle = "#5c3a1e";
           ctx.fillRect(UKE_STRX[0] - 22, L.nut, UKE_STRX[3] - UKE_STRX[0] + 44, L.frets * L.fh);
           ctx.fillStyle = "#c68642";
@@ -2393,6 +2521,14 @@
             ctx.fillText(String(fnum), 14, L.nut + (f - 0.5) * L.fh);
           }
           if (pos > 0) { ctx.fillText("▲", 14, L.nut - 11); }
+          if (L.compact) {
+            // 左のはしに小さく（フレット番号と重ならないように）
+            ctx.fillStyle = "rgba(116,185,255,0.85)";
+            ctx.font = "bold 8px sans-serif";
+            ctx.fillText("▲", 4, L.nut + 6);
+            ctx.fillText("▼", 4, L.nut + L.frets * L.fh - 6);
+            ctx.font = "bold 9px sans-serif";
+          }
           // 弦（鳴っている弦は揺らす）
           for (s = 0; s < 4; s++) {
             ctx.strokeStyle = ring[s] > 0 ? "#ffd166" : "#e0e0e0";
@@ -2400,7 +2536,7 @@
             var amp = ring[s] > 0 ? (ring[s] / 30) * 2.2 : 0;
             ctx.beginPath();
             ctx.moveTo(UKE_STRX[s], L.nut);
-            for (var yy = L.nut; yy <= 304; yy += 8) { ctx.lineTo(UKE_STRX[s] + Math.sin(yy / 6 + frames) * amp, yy); }
+            for (var yy = L.nut; yy <= L.bottom; yy += 8) { ctx.lineTo(UKE_STRX[s] + Math.sin(yy / 6 + frames) * amp, yy); }
             ctx.stroke();
             ctx.fillStyle = "#e9c46a";
             ctx.fillText(UKE_STRINGS[s], UKE_STRX[s], L.nut - (L.frets > 7 ? 8 : 11));
@@ -2502,7 +2638,7 @@
             ctx.fillText(tn, 34, 10);
             hudText(ctx, "BPM " + seqData.bpm + "  つぎ: " + seqNext, W - 6, 9, "right");
             hudText(ctx, "せいかい " + correct + "/" + (seqChords * seqPasses), W - 6, 22, "right");
-            if (lyrNow) { ctx.fillStyle = "#ffd166"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText("♪ " + lyrNow, W / 2, 313); }
+            if (lyrNow) { ctx.fillStyle = "#ffd166"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText("♪ " + lyrNow, W / 2, L.h - 7); }
             if (recId) { ctx.fillStyle = Math.floor(frames / 20) % 2 ? "#ff7675" : "#d63031"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "left"; ctx.fillText("● 録音中 " + recNotes.length + "音", 106, 22); }
             ctx.fillStyle = "rgba(255,255,255,0.2)";
             ctx.fillRect(6, 22, 96, 3);
@@ -2561,6 +2697,7 @@
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
+    markSet: ukeMarkSet, MARK_FRETS: UKE_MARK_FRETS,
     layout: ukeLayout, FRET_CHOICES: UKE_FRET_CHOICES, voicePos: ukeVoicePos, rowPos: ukeRowPos,
     ui: ukeUi, fitPos: ukeFitPos, voice: ukeVoice, detect: ukeDetect, loadMy: ukeLoadMy, saveMy: ukeSaveMy, addMy: ukeAddMy, MY_KEY: UKE_MY_KEY
   };

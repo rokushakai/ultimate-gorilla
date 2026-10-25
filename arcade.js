@@ -184,8 +184,8 @@
     var active = {};
     function pos(src) {
       var r = canvas.getBoundingClientRect();
-      var rw = r.width || W, rh = r.height || H;
-      return [(src.clientX - r.left) * W / rw, (src.clientY - r.top) * H / rh];
+      var hh = (host && host.h) || H, rw = r.width || W, rh = r.height || hh;
+      return [(src.clientX - r.left) * W / rw, (src.clientY - r.top) * hh / rh];
     }
     function deliver(type, src, id, kind) {
       if (!host || !host.game || !host.game.pointer) { return; }
@@ -283,7 +283,7 @@
   }
 
   function draw() {
-    var ctx = host.ctx;
+    var ctx = host.ctx, H = host.h || 320; // §181: ゲームが縦に伸ばしたときはその高さ
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     ctx.fillStyle = "#05060f";
     ctx.fillRect(0, 0, W, H);
@@ -377,7 +377,17 @@
       addScore: function (n) { if (host) { setScore(host.score + n); } },
       getScore: function () { return host ? host.score : 0; },
       gameOver: gameOver,
-      panel: def.panel ? rootEl.querySelector(".arcade-panel") : null
+      panel: def.panel ? rootEl.querySelector(".arcade-panel") : null,
+      // §181 v0.99: ゲーム画面の高さ（論理）を変える（幅は 240 のまま。引きのビューなどで縦に長く）
+      setCanvasHeight: function (h) {
+        if (!host || !(h >= 160 && h <= 640)) { return; }
+        host.h = h;
+        canvas.height = h * SCALE;
+        canvas.style.aspectRatio = W + " / " + h;
+        canvas.style.width = "min(100%, calc((100vh - 90px) * " + (W / h).toFixed(4) + "))";
+      },
+      // §181 v0.99: 画面の飾り（下のボタン・説明）を減らしてゲーム画面を大きくする
+      setCompact: function (on) { if (rootEl.classList) { if (on) { rootEl.classList.add("arcade-compact"); } else { rootEl.classList.remove("arcade-compact"); } } }
     };
     host.game = def.create(api, opts.config || null);
     bindCanvas(canvas);
@@ -417,7 +427,7 @@
     document.removeEventListener("visibilitychange", onVisibility);
     var root = host.root;
     host = null;
-    if (root) { root.innerHTML = ""; }
+    if (root) { root.innerHTML = ""; if (root.classList) { root.classList.remove("arcade-compact"); } }
   }
 
   // ---------------------------------------------------------
