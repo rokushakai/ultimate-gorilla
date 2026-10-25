@@ -647,9 +647,11 @@
     }
     function render() {
       var h = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F3B8; ゴリラウクレレ</h3>', i, my = ukeLoadMy(), c, seqTab = null;
-      h += ukeChips(UKE_TABS.map(function (t) { return { v: t[0], t: t[1] }; }), function (v) { return v === ukeUi.tab; }, "tab");
+      // タブは大きなボタンで3列に（小さいと見落としやすいため）
+      h += ukeChips(UKE_TABS.map(function (t) { return { v: t[0], t: t[1] }; }), function (v) { return v === ukeUi.tab; }, "tab").replace('<div class="uke-chips">', '<div class="uke-chips uke-tabs">');
       cards = {};
       if (ukeUi.tab === "play") {
+        h += '<p class="small" style="color:#ffd166;margin:0 0 6px;">&#x1F446; コード辞典・カスタム（自分でコードを作る）・マイコード・シーケンサーは、上のボタンで切りかえ</p>';
         h += '<p class="small" style="color:#adb5bd;margin:0 0 8px;">左手で指板（上）を押さえたまま、右手でサウンドホール（下の丸）の上を横にスワイプ。通った弦が順番に鳴るよ。押さえる場所はコード表と同じ向き（左から G・C・E・A）。</p>';
         for (i = 0; i < UKE_MODES.length; i++) { h += modeBtn(UKE_MODES[i].id, UKE_MODES[i].name, UKE_MODES[i].note); }
         h += modeBtn("dict", "&#x1F393; コード辞典から出題", "360コードからランダム（お手本あり・60秒）");

@@ -9575,3 +9575,4 @@ var COMPANION_TECHNIQUE2_DATA = {
   - ファイル: `assets/audio/bgm/uranawanaii/toilet_kutsurogu_demo2.mp3`（受け取ったファイル名「トイレでくつろぐなよ仮デモ2.mp3」は日本語・濁点が分かれた形なので、GitHub Pages でも確実に読めるよう英数字の名前にした）
   - 変えるのは `BGM_FILE_DATA.field.src` の1行だけ。BGMの再生の仕組み（startBGM / stopBGMHard / 世代管理 / タイマー）は変えない
 - クリア後フィールド（`fieldClear`）・戦闘（`battle`）・エンディング（`ending`）は今までどおり。前の `uranawanaii_field.mp3` はフォルダに残す（元に戻すときは1行戻すだけ）
+- **v0.92.1 追加**: 🎸 ゴリラウクレレの設定画面のタブ（あそぶ / コード辞典 / カスタム / マイコード / シーケンサー）を、3列の大きなボタンにする（小さい札の形で見落とされたため）。「あそぶ」タブの先頭に「コード辞典・カスタム・マイコード・シーケンサーは上のボタンで切りかえ」と案内を出す

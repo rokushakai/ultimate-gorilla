@@ -1117,3 +1117,7 @@ html, body {
 .uke-now .uke-card-name { font-size: 26px; }
 /* ===== §172 v0.91: シーケンサー 小節番号 ===== */
 .uke-seq-bar { color: #ffd166; font-weight: bold; }
+/* v0.92.1: ウクレレの設定タブを大きなボタンに */
+.uke-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0 8px; }
+.uke-tabs .uke-chip { padding: 9px 2px; font-size: 12px; font-weight: bold; white-space: nowrap; border-radius: 10px; opacity: 0.85; }
+.uke-tabs .uke-chip.active { opacity: 1; }
