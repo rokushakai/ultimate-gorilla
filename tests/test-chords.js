@@ -646,6 +646,36 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §189 ドラムの打ち込み・行ごとの奏法・練習テンポ・おすすめ =====
+  var rsq = U.seqClean({ countIn: false, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "w", style: "e" }, { type: "chord", name: "F", len: "w", style: "pat", pattern: "d-d-d-d-" }, { type: "chord", name: "Am", len: "w", style: "zz" }] });
+  ok(rsq.rows[0].style === "song" && rsq.rows[2].pattern === "D-D-D-D-" && rsq.rows[3].style === "song" && rsq.rows[1].pattern === "", "row styles are cleaned (unknown → song, pattern only for pat)", rsq.rows);
+  var rss = U.seqSchedule(rsq, false), perRow = [0, 0, 0, 0];
+  rss.events.forEach(function (e) { if (e.kind === "strum" && e.track === "uke") { perRow[e.row]++; } });
+  ok(perRow.join() === "1,8,4,1", "each row can have its own style (once / 8th / pattern / song)", perRow);
+  var dc = U.drumCustomClean([[36, [0, 4, 4, 99, -1, 8]], [99, [1]], [38, "x"], [42, [2]]]);
+  ok(dc.length === 6 && dc[0][0] === 36 && dc[0][1].join() === "0,4,8" && dc[2][1].join() === "2" && dc[1][1].length === 0, "my rhythm is cleaned (6 rows, steps 0–15, no duplicates)", dc);
+  ok(U.drumFrom("8beat")[0][1].join() === "0,8,10" && U.drumFrom("latin").every(function (r9) { return [36, 38, 42, 46, 39, 37].indexOf(r9[0]) >= 0; }), "copy a preset rhythm into my rhythm (other drums are left out)");
+  var dsc = U.seqSchedule(U.seqClean({ countIn: false, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "C", len: "w" }], tracks: { drum: { on: true, groove: "custom", custom: [[36, [0, 4, 8, 12]], [39, [4, 12]]] } } }), false);
+  var kicks = dsc.events.filter(function (e) { return e.track === "drum" && e.midi === 36; }).length, claps = dsc.events.filter(function (e) { return e.track === "drum" && e.midi === 39; }).length;
+  ok(kicks === 8 && claps === 4, "my rhythm plays (4 kicks and 2 claps per bar)", [kicks, claps]);
+  var slow = U.seqAtRate(U.seqClean({ bpm: 100, countIn: false, rows: [{ type: "chord", name: "C", len: "w" }, { type: "tempo", bpm: 120 }, { type: "chord", name: "G", len: "w" }] }), 50);
+  var sls = U.seqSchedule(slow, false);
+  ok(slow.bpm === 50 && slow.rows[1].bpm === 60 && Math.abs(sls.time - 8.8) < 1e-9 && U.seqAtRate(slow, 100) === slow, "practice tempo slows the song and its tempo rows (50%)", sls.time);
+  ok(U.seqClean({ rate: 70, rateUp: 1 }).rate === 70 && U.seqClean({ rate: 33 }).rate === 100 && U.seqClean({ rateUp: 1 }).rateUp === true, "practice tempo settings are cleaned");
+  var sgq = U.seqClean({ rows: [{ type: "chord", name: "C" }, { type: "chord", name: "G7" }, { type: "chord", name: "?" }] });
+  var sug = U.suggest(sgq, 2);
+  ok(sug.tonic === 0 && sug.prev === "G7" && sug.after.map(function (x) { return x.name; }).join() === "C,Am" && sug.diatonic.map(function (x) { return x.name; }).indexOf("Bm7(♭5)") >= 0 && sug.secondary.map(function (x) { return x.name; }).indexOf("E7") >= 0, "suggestions: diatonic chords, what comes after G7 (C, Am), secondary dominants", sug);
+  ok(U.estimateKey(U.seqClean({ rows: [{ type: "chord", name: "G" }, { type: "chord", name: "D" }, { type: "chord", name: "Em" }, { type: "chord", name: "C" }] }).rows) === 7, "the song key is estimated from the written chords (G D Em C → G)");
+  var sgG = U.suggest(U.seqClean({ rows: [{ type: "chord", name: "G" }, { type: "chord", name: "D7" }, { type: "chord", name: "Em" }, { type: "chord", name: "?" }] }), 3);
+  ok(sgG.prevDeg === "Ⅵ" && sgG.after.map(function (x) { return x.name; }).join() === "C,Am,D", "in G, after Em (Ⅵm) come C, Am, D", sgG.after);
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w", style: "pat", pattern: "DUDU" }], tracks: { drum: { on: true, groove: "custom" } }, rate: 70 }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.tl.view = "list"; U.pick.row = 0; U.pick.tab = "rec";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('class="uke-step') > 0 && hs.indexOf('data-dcopy="1"') > 0 && hs.indexOf("uke-seq-style") > 0 && hs.indexOf('value="DUDU"') > 0 && hs.indexOf('<option value="70" selected>') > 0 && hs.indexOf("ループごとに +5%") > 0 && hs.indexOf("書いたコードから推定") > 0, "sequencer shows the drum grid, row style, practice tempo and suggestions", null);
+  W.UGArcade.stop();
+  U.pick.row = -1; U.tl.view = "tl"; U.ui.tab = "play";
+
   // ===== §188 上達メニュー =====
   var sn = U.strumNotes("D-DU-UDU", 60);
   ok(sn.length === 48 && sn[0].t === 4 && sn[1].t === 5 && sn[2].t === 5.5 && sn[2].dir === "up" && sn[6].t === 8, "strum drill notes: count-in bar then 8 bars of the pattern", sn.slice(0, 7));

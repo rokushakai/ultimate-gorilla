@@ -456,10 +456,10 @@
   //   resolve(name, semis, row) → { name, shape } / null（押さえ方を決める。row は行そのもの＝ポジションの指定など）
   //   戻り値: { rows: [{ i, name, shape, ok, start, end, t0, t1 }], events: [{ t, kind, ... }], beats, time, lead }
   function seqSchedule(seq, resolve) {
-    var bpm = Math.max(40, Math.min(240, Math.round(seq.bpm || 90))), spb = 60 / bpm;
+    // §189: BPM の下限は 20（練習テンポで遅くしたとき用。入力できるのは 40〜240）
+    var bpm = Math.max(20, Math.min(240, Math.round(seq.bpm || 90))), spb = 60 / bpm;
     var meter = seq.meter === 3 ? 3 : 4, style = seqStyle(seq.style), ratio = seq.swing || 0.5, grid = seq.swingGrid === 0.25 ? 0.25 : 0.5;
     var lead = seq.countIn ? meter : 0, rows = [], events = [], beat = 0, semis = seq.key || 0, i;
-    var pat = style.pattern ? seqPattern(seq.pattern) : "", patUnit = pat ? meter / pat.length : 0;
     function barOf(b) { return Math.abs(b / meter - Math.round(b / meter)) < EPS ? Math.round(b / meter) + 1 : 0; }
     // §179 v0.98: テンポの区切りごとに時間を積み上げる（区切りの頭の時刻 ＋ スイングをかけた拍の差 × その区切りの1拍の秒）
     var segs = [{ b0: 0, t0: lead * spb, spb: spb }];
@@ -478,7 +478,7 @@
       if (!r) { continue; }
       if (r.type === "key") { semis += (r.semis || 0); rows.push({ i: i, type: "key", start: beat, end: beat, t0: tm(beat), t1: tm(beat), semis: semis }); continue; }
       if (r.type === "tempo") {
-        var nb = Math.max(40, Math.min(240, Math.round(r.bpm || bpm))), tt = tm(beat);
+        var nb = Math.max(20, Math.min(240, Math.round(r.bpm || bpm))), tt = tm(beat);
         segs.push({ b0: beat, t0: tt, spb: 60 / nb });
         rows.push({ i: i, type: "tempo", start: beat, end: beat, t0: tt, t1: tt, bpm: nb });
         continue;
@@ -491,6 +491,9 @@
       var row = { i: i, type: "chord", name: res ? res.name : String(r.name || ""), shape: res ? res.shape : null, ok: !!res, start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) };
       rows.push(row);
       if (!res) { continue; }
+      // §189: 行ごとの奏法（"song" か なしなら曲の奏法）とパターン
+      var rst = r.style && r.style !== "song" ? seqStyle(r.style) : style;
+      var pat = rst.pattern ? seqPattern(r.style === "pat" && r.pattern ? r.pattern : seq.pattern) : "", patUnit = pat ? meter / pat.length : 0;
       if (pat) {
         // 小節の頭からの位置で文字を選ぶ（コードが小節の途中から始まってもパターンは続く）
         var kp0 = Math.ceil(start / patUnit - EPS), hitStart = false;
@@ -504,19 +507,19 @@
         if (!hitStart) { events.push({ t: tm(start), kind: "strum", dir: "down", shape: res.shape, row: rows.length - 1 }); }
         continue;
       }
-      if (!style.unit) {
+      if (!rst.unit) {
         events.push({ t: tm(start), kind: "strum", dir: "down", shape: res.shape, row: rows.length - 1 });
         continue;
       }
       // 拍の頭からの格子で打つ（ダウン／アップは格子の偶数・奇数で決める）
-      var k0 = Math.ceil(start / style.unit - EPS);
-      for (var k = k0; k * style.unit < end - EPS; k++) {
-        var p = k * style.unit;
-        if (style.arp) { events.push({ t: tm(p), kind: "pluck", string: SEQ_ARP[((k % 4) + 4) % 4], shape: res.shape, row: rows.length - 1 }); }
+      var k0 = Math.ceil(start / rst.unit - EPS);
+      for (var k = k0; k * rst.unit < end - EPS; k++) {
+        var p = k * rst.unit;
+        if (rst.arp) { events.push({ t: tm(p), kind: "pluck", string: SEQ_ARP[((k % 4) + 4) % 4], shape: res.shape, row: rows.length - 1 }); }
         else { events.push({ t: tm(p), kind: "strum", dir: k % 2 === 0 ? "down" : "up", shape: res.shape, row: rows.length - 1 }); }
       }
       // 格子にのらない長さ（3連など）で始まるときは頭でも1回鳴らす
-      if (k0 * style.unit > start + EPS) { events.push({ t: tm(start), kind: style.arp ? "pluck" : "strum", dir: "down", string: SEQ_ARP[0], shape: res.shape, row: rows.length - 1 }); }
+      if (k0 * rst.unit > start + EPS) { events.push({ t: tm(start), kind: rst.arp ? "pluck" : "strum", dir: "down", string: SEQ_ARP[0], shape: res.shape, row: rows.length - 1 }); }
     }
     var total = beat;
     if (seq.metronome || seq.countIn) {
