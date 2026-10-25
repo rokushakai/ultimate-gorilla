@@ -461,12 +461,29 @@
     var lead = seq.countIn ? meter : 0, rows = [], events = [], beat = 0, semis = seq.key || 0, i;
     var pat = style.pattern ? seqPattern(seq.pattern) : "", patUnit = pat ? meter / pat.length : 0;
     function barOf(b) { return Math.abs(b / meter - Math.round(b / meter)) < EPS ? Math.round(b / meter) + 1 : 0; }
-    function tm(b) { return (lead + swingBeat(b, ratio, grid)) * spb; }
+    // §179 v0.98: テンポの区切りごとに時間を積み上げる（区切りの頭の時刻 ＋ スイングをかけた拍の差 × その区切りの1拍の秒）
+    var segs = [{ b0: 0, t0: lead * spb, spb: spb }];
+    function segAt(b) { var sg = segs[0]; for (var q = 1; q < segs.length; q++) { if (segs[q].b0 <= b + EPS) { sg = segs[q]; } } return sg; }
+    function tm(b) { var sg = segAt(b); return sg.t0 + (swingBeat(b, ratio, grid) - swingBeat(sg.b0, ratio, grid)) * sg.spb; }
+    // スイングなしの時刻と、その逆（録音のクオンタイズなし・MIDI の拍に使う）
+    function tmRaw(b) { var sg = segAt(b); return sg.t0 + (b - sg.b0) * sg.spb; }
+    function beatAt(t) {
+      var sg = segs[0];
+      for (var q = 1; q < segs.length; q++) { if (segs[q].t0 <= t + EPS) { sg = segs[q]; } }
+      return sg.b0 + (t - sg.t0) / sg.spb;
+    }
     var list = seq.rows || [];
     for (i = 0; i < list.length; i++) {
       var r = list[i];
       if (!r) { continue; }
       if (r.type === "key") { semis += (r.semis || 0); rows.push({ i: i, type: "key", start: beat, end: beat, t0: tm(beat), t1: tm(beat), semis: semis }); continue; }
+      if (r.type === "tempo") {
+        var nb = Math.max(40, Math.min(240, Math.round(r.bpm || bpm))), tt = tm(beat);
+        segs.push({ b0: beat, t0: tt, spb: 60 / nb });
+        rows.push({ i: i, type: "tempo", start: beat, end: beat, t0: tt, t1: tt, bpm: nb });
+        continue;
+      }
+      if (r.type === "sec") { rows.push({ i: i, type: "sec", name: String(r.name || ""), start: beat, end: beat, t0: tm(beat), t1: tm(beat) }); continue; }
       var len = seqLen(r.len).beats, start = beat, end = beat + len;
       beat = end;
       if (r.type === "rest") { rows.push({ i: i, type: "rest", start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) }); continue; }
@@ -504,12 +521,12 @@
     var total = beat;
     if (seq.metronome || seq.countIn) {
       for (var b = -lead; b < (seq.metronome ? total : 0) - EPS; b++) {
-        events.push({ t: (lead + b) * spb, kind: "click", accent: ((b % meter) + meter) % meter === 0 });
+        events.push({ t: b < 0 ? (lead + b) * spb : tm(b), kind: "click", accent: ((b % meter) + meter) % meter === 0 });
       }
     }
     events.sort(function (x, y) { return x.t - y.t; });
     // tm: 拍 → 秒（スイング・カウントイン込み。ほかのトラックの音を置くのに使う）
-    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb, bars: Math.ceil(total / meter - EPS), meter: meter, tm: tm };
+    return { rows: rows, events: events, beats: total, time: tm(total), lead: lead * spb, spb: spb, bars: Math.ceil(total / meter - EPS), meter: meter, tm: tm, tmRaw: tmRaw, beatAt: beatAt, segs: segs };
   }
 
   window.UGChords = {

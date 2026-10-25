@@ -284,7 +284,7 @@
   var UKE_SEQ_PALETTE = ["C", "Am", "F", "G7", "G", "Dm", "Em", "E7", "Dm7", "Cmaj7", "A7", "D7", "B♭", "Fmaj7"];
   function ukeSeqDefault() {
     return { bpm: 90, key: 0, meter: 4, swing: 0.5, swingGrid: 0.5, style: "e", pattern: "D-DU-UDU", metronome: true, countIn: true, loop: false, backing: true,
-      loopOn: false, loopA: 0, loopB: 3, pos: "auto", tracks: null,
+      loopOn: false, loopA: 0, loopB: 3, pos: "auto", tracks: null, arr: [], lyrics: { id: 0 },
       rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }, { type: "chord", name: "G7", len: "w" }] };
   }
   function ukeSeqClean(q) {
@@ -300,12 +300,18 @@
     out.pattern = C.seqPattern(out.pattern);
     out.pos = ukePosOk(out.pos) ? out.pos : "auto";
     out.tracks = ukeTracksClean(out.tracks);
+    // §179: 曲の構成（セクションの名前の並び）と歌詞
+    out.arr = [];
+    if (Array.isArray(q.arr)) { for (var ai = 0; ai < q.arr.length && out.arr.length < 32; ai++) { if (typeof q.arr[ai] === "string" && q.arr[ai]) { out.arr.push(q.arr[ai].slice(0, 12)); } } }
+    out.lyrics = { id: q.lyrics && Number(q.lyrics.id) > 0 ? Number(q.lyrics.id) : 0 };
     out.metronome = !!out.metronome; out.countIn = !!out.countIn; out.loop = !!out.loop; out.backing = out.backing !== false;
     var rows = [], src = Array.isArray(q.rows) ? q.rows : d.rows;
     for (var i = 0; i < src.length && rows.length < UKE_SEQ_MAX_ROWS; i++) {
       var r = src[i];
       if (!r) { continue; }
       if (r.type === "key") { rows.push({ type: "key", semis: Math.max(-11, Math.min(11, Math.round(Number(r.semis) || 0))) }); }
+      else if (r.type === "tempo") { rows.push({ type: "tempo", bpm: Math.max(40, Math.min(240, Math.round(Number(r.bpm) || 90))) }); }
+      else if (r.type === "sec") { rows.push({ type: "sec", name: String(r.name || "セクション").replace(/[<>&"]/g, "").slice(0, 12) || "セクション" }); }
       else if (r.type === "rest") { rows.push({ type: "rest", len: C.seqLen(r.len).id }); }
       else { rows.push({ type: "chord", name: String(r.name || "").slice(0, 24), len: C.seqLen(r.len).id, pos: ukePosOk(r.pos) ? r.pos : "auto" }); }
     }
@@ -315,6 +321,35 @@
     out.loopOn = !!out.loopOn;
     out.loopA = Math.max(0, Math.min(last, Math.round(Number(out.loopA) || 0)));
     out.loopB = Math.max(0, Math.min(last, Math.round(Number(out.loopB) || 0)));
+    return out;
+  }
+  // §179: 長さのない行（転調・テンポ・セクション）
+  function ukeIsMark(t) { return t === "key" || t === "tempo" || t === "sec"; }
+  // 曲の構成どおりに行を並べた曲（_src にもとの行の番号）。構成が空ならそのまま
+  function ukeSeqSections(seq) {
+    var secs = [], cur = { name: "はじめ", rows: [] }, i;
+    for (i = 0; i < seq.rows.length; i++) {
+      if (seq.rows[i].type === "sec") { if (cur.rows.length || cur.name !== "はじめ") { secs.push(cur); } cur = { name: seq.rows[i].name, rows: [i] }; }
+      else { cur.rows.push(i); }
+    }
+    if (cur.rows.length || cur.name !== "はじめ") { secs.push(cur); }
+    return secs;
+  }
+  function ukeSeqExpand(seq) {
+    if (!seq.arr || !seq.arr.length) { return seq; }
+    var secs = ukeSeqSections(seq), byName = {}, i, j, rows = [], src = [];
+    for (i = 0; i < secs.length; i++) { if (!byName[secs[i].name]) { byName[secs[i].name] = secs[i]; } }
+    for (i = 0; i < seq.arr.length; i++) {
+      var sc = byName[seq.arr[i]];
+      if (!sc) { continue; }
+      for (j = 0; j < sc.rows.length && rows.length < 512; j++) { rows.push(seq.rows[sc.rows[j]]); src.push(sc.rows[j]); }
+    }
+    var out = {};
+    for (var k in seq) { if (seq.hasOwnProperty(k)) { out[k] = seq[k]; } }
+    out.rows = rows;
+    out.arr = [];
+    out._src = src;
+    out.loopOn = false;
     return out;
   }
   // 区間ループがオンなら { seq: 区間だけの曲, offset: はじめの行 }、オフなら null
@@ -501,7 +536,7 @@
         var nb = rt.notes[k][0];
         if (gq) { nb = Math.round(nb / gq) * gq; }
         if (nb > sched.beats + 1) { continue; }
-        out.push({ t: gq ? tm(nb) : sched.lead + nb * sched.spb, kind: "note", track: rid, midi: rt.notes[k][1], level: rt.notes[k][2], beat: nb });
+        out.push({ t: gq ? tm(nb) : (sched.tmRaw ? sched.tmRaw(nb) : sched.lead + nb * sched.spb), kind: "note", track: rid, midi: rt.notes[k][1], level: rt.notes[k][2], beat: nb });
       }
     }
     if (tr.mel && tr.mel.on && tr.mel.notes) {
@@ -551,6 +586,7 @@
   function ukeSeqSchedule(seq, lowG) {
     var sc = C.schedule(seq, function (n, s, row) { return ukeResolve(n, s, lowG, ukeRowPos(seq, row)); });
     var tracks = seq.tracks || ukeTracksClean(null), i;
+    if (seq._src) { for (i = 0; i < sc.rows.length; i++) { sc.rows[i].i = seq._src[sc.rows[i].i]; } }
     for (i = 0; i < sc.events.length; i++) { if (sc.events[i].kind !== "click") { sc.events[i].track = "uke"; } }
     var more = ukeTrackEvents({ tracks: tracks }, sc, lowG);
     if (more.length) {
@@ -636,7 +672,7 @@
       var cur = -1;
       for (var i = 0; i < sched.rows.length; i++) {
         var r = sched.rows[i];
-        if (r.type !== "key" && now >= r.t0 + pl.off && now < r.t1 + pl.off) { cur = i; break; }
+        if (!ukeIsMark(r.type) && now >= r.t0 + pl.off && now < r.t1 + pl.off) { cur = i; break; }
       }
       if (cur !== pl.row) { pl.row = cur; if (onRow) { onRow(cur >= 0 ? sched.rows[cur].i : -1, cur >= 0 ? sched.rows[cur] : null); } }
       if (onTick) { onTick(ukeTimeToBeat(sched, now - pl.off)); }
@@ -647,7 +683,7 @@
 
   // §172 v0.91: 曲 → メロディくずしの録音と同じ形（MIDI・WAV の書き出しに使う）
   function ukeSeqRec(seq, lowG) {
-    var sc = ukeSeqSchedule(seq, lowG), notes = [], i, k;
+    var sc = ukeSeqSchedule(ukeSeqExpand(seq), lowG), notes = [], i, k;
     for (i = 0; i < sc.events.length; i++) {
       var ev = sc.events[i], ms = Math.round((ev.t - sc.lead) * 1000);
       if (ev.kind !== "click" && !ukeTrackAudible(sc.tracks, ev.track || "uke")) { continue; }
@@ -669,10 +705,105 @@
     var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
     return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes());
   }
+  // §179 v0.98: SMF フォーマット1（トラックごとの MTrk・テンポ・音の長さ・歌詞）
+  var UKE_MIDI_CH = { uke: 0, bass: 1, rec1: 2, mel: 6, pad: 4, rec2: 5, drum: 9 };
+  var UKE_MIDI_NAMES = { uke: "Ukulele", bass: "Bass", drum: "Drums", pad: "Pad", rec1: "Rec 1", rec2: "Rec 2", mel: "Melody" };
+  function ukeUtf8(str) { var u = unescape(encodeURIComponent(String(str))), out = []; for (var i = 0; i < u.length; i++) { out.push(u.charCodeAt(i)); } return out; }
+  function ukeVlq(n) { var b = [n & 0x7F]; n = Math.floor(n / 128); while (n > 0) { b.unshift((n & 0x7F) | 0x80); n = Math.floor(n / 128); } return b; }
+  function ukeMtrk(evs) {
+    // evs: [tick, 順番, bytes]
+    evs.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    var d = [], last = 0, i;
+    for (i = 0; i < evs.length; i++) { d = d.concat(ukeVlq(Math.max(0, evs[i][0] - last))); last = Math.max(last, evs[i][0]); d = d.concat(evs[i][2]); }
+    d.push(0x00, 0xFF, 0x2F, 0x00);
+    return [0x4D, 0x54, 0x72, 0x6B, (d.length >>> 24) & 255, (d.length >>> 16) & 255, (d.length >>> 8) & 255, d.length & 255].concat(d);
+  }
+  function ukeMidiBytes(seq, lowG) {
+    var full = ukeSeqExpand(seq), sc = ukeSeqSchedule(full, lowG), TPQ = 480, tr = sc.tracks, i, k;
+    var tick = function (t) { return Math.max(0, Math.round((sc.beatAt ? sc.beatAt(t) : (t - sc.lead) / sc.spb) * TPQ)); };
+    var per = {}, lastOn = {};
+    function add(id, t, midi, lv, dur) {
+      if (!per[id]) { per[id] = []; }
+      per[id].push({ t: t, m: Math.max(0, Math.min(127, Math.round(midi))), v: Math.max(1, Math.min(127, Math.round(10 + 110 * (lv || 0.8)))), d: dur });
+    }
+    for (i = 0; i < sc.events.length; i++) {
+      var ev = sc.events[i], id = ev.track || "uke";
+      if (ev.kind === "click" || ev.kind === "chuck" || !ukeTrackAudible(tr, id)) { continue; }
+      if (ev.kind === "strum" || ev.kind === "pluck") {
+        var strs = ev.kind === "pluck" ? [ev.string] : (ev.dir === "up" ? [3, 2, 1, 0] : [0, 1, 2, 3]);
+        for (k = 0; k < strs.length; k++) {
+          if (ev.shape[strs[k]] === null) { continue; }
+          var t0 = ev.t + k * 0.012, key = "s" + strs[k];
+          // 同じ弦の前の音はここで止まる
+          if (lastOn[key]) { lastOn[key].d = Math.min(lastOn[key].d, t0 - lastOn[key].t); }
+          add("uke", t0, ukeMidi(strs[k], ev.shape[strs[k]], lowG), ev.dir === "up" ? 0.65 : 0.9, 2);
+          lastOn[key] = per.uke[per.uke.length - 1];
+        }
+      } else if (ev.kind === "note") {
+        var dur = id === "mel" ? (sc.tm(ev.beat + (ev.dur || 0.5)) - sc.tm(ev.beat)) : (id === "pad" ? 2 * sc.spb : (id === "bass" ? 4 * sc.spb : 0.4));
+        if (id === "bass" && lastOn.bass) { lastOn.bass.d = Math.min(lastOn.bass.d, ev.t - lastOn.bass.t); }
+        add(id, ev.t, ev.midi, ev.level, dur);
+        if (id === "bass") { lastOn.bass = per.bass[per.bass.length - 1]; }
+      } else if (ev.kind === "drum") { add("drum", ev.t, ev.midi, ev.level, 0.1); }
+    }
+    var mtrks = [], cond = [];
+    // 道具トラック: 曲名・拍子・テンポ（テンポの区切りごと）
+    cond.push([0, 0, [0xFF, 0x03].concat(ukeVlq(ukeUtf8("Ultimate Gorilla Ukulele").length), ukeUtf8("Ultimate Gorilla Ukulele"))]);
+    cond.push([0, 0, [0xFF, 0x58, 0x04, sc.meter, 2, 24, 8]]);
+    for (i = 0; i < sc.segs.length; i++) {
+      var us = Math.round(sc.segs[i].spb * 1000000);
+      cond.push([Math.round(sc.segs[i].b0 * TPQ), 1, [0xFF, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255]]);
+    }
+    mtrks.push(ukeMtrk(cond));
+    for (i = 0; i < UKE_TRACK_IDS.length; i++) {
+      var tid = UKE_TRACK_IDS[i], notes = per[tid];
+      if (!notes || !notes.length) { continue; }
+      var ch = UKE_MIDI_CH[tid], ev2 = [], nm = ukeUtf8(UKE_MIDI_NAMES[tid]);
+      ev2.push([0, 0, [0xFF, 0x03].concat(ukeVlq(nm.length), nm)]);
+      if (tid !== "drum") { ev2.push([0, 1, [0xC0 | ch, tr[tid].prog]]); }
+      ev2.push([0, 1, [0xB0 | ch, 7, Math.round(tr[tid].vol * 1.27)]]);
+      ev2.push([0, 1, [0xB0 | ch, 10, Math.round(64 + tr[tid].pan * 63)]]);
+      for (k = 0; k < notes.length; k++) {
+        var on = tick(notes[k].t), off = Math.max(on + 1, tick(notes[k].t + Math.max(0.03, notes[k].d)));
+        ev2.push([on, 3, [0x90 | ch, notes[k].m, notes[k].v]]);
+        ev2.push([off, 2, [0x80 | ch, notes[k].m, 0]]);
+      }
+      mtrks.push(ukeMtrk(ev2));
+    }
+    var lp = ukeLyricPlace(full, sc);
+    if (lp.length) {
+      var le = [[0, 0, [0xFF, 0x03].concat(ukeVlq(ukeUtf8("Lyrics").length), ukeUtf8("Lyrics"))]];
+      for (i = 0; i < lp.length; i++) { var lw = ukeUtf8(lp[i].w); le.push([Math.round(lp[i].beat * TPQ), 1, [0xFF, 0x05].concat(ukeVlq(lw.length), lw)]); }
+      mtrks.push(ukeMtrk(le));
+    }
+    var head = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, 0, mtrks.length, (TPQ >> 8) & 255, TPQ & 255], out = head;
+    for (i = 0; i < mtrks.length; i++) { out = out.concat(mtrks[i]); }
+    return mtrks.length > 1 ? out : null;
+  }
   function ukeSeqExportMidi(seq, lowG) {
-    var UG = window.UGMelody, rec = ukeSeqRec(seq, lowG);
-    if (!UG || !rec.notes.length) { return "fail"; }
-    return I.saveBlob(new Blob([new Uint8Array(UG.midiBytes(rec))], { type: "audio/midi" }), "ukulele-" + ukeFileStamp() + ".mid");
+    var bytes = ukeMidiBytes(seq, lowG);
+    if (!bytes) { return "fail"; }
+    return I.saveBlob(new Blob([new Uint8Array(bytes)], { type: "audio/midi" }), "ukulele-" + ukeFileStamp() + ".mid");
+  }
+  // §179: プロジェクトのファイル（曲＋マイコード）
+  var UKE_PROJECT_TYPE = "ultimate-gorilla-ukulele-project";
+  function ukeProjectJson(seq) {
+    return JSON.stringify({ type: UKE_PROJECT_TYPE, version: 1, saved: Date.now(), song: ukeSeqClean(seq), myChords: ukeLoadMy() });
+  }
+  function ukeProjectRead(text) {
+    var o;
+    try { o = JSON.parse(text); } catch (e) { return null; }
+    if (!o || o.type !== UKE_PROJECT_TYPE || !o.song) { return null; }
+    var added = 0;
+    if (Array.isArray(o.myChords)) {
+      var have = ukeLoadMy(), names = {};
+      for (var i = 0; i < have.length; i++) { names[have[i].name] = true; }
+      for (i = 0; i < o.myChords.length; i++) {
+        var c = o.myChords[i];
+        if (c && typeof c.name === "string" && c.shape && c.shape.length === 4 && !names[c.name] && ukeAddMy(c.name.slice(0, 24), c.shape.slice(0, 4), c.src || "ファイル")) { names[c.name] = true; added++; }
+      }
+    }
+    return { seq: ukeSeqClean(o.song), added: added };
   }
   var ukeWavBusy = false;
   function ukeSeqExportWav(seq, lowG, done) {
@@ -741,7 +872,7 @@
     var rows = sched.rows, last = 0;
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      if (r.type === "key") { continue; }
+      if (ukeIsMark(r.type)) { continue; }
       if (t < r.t0) { return i === 0 || last === 0 ? Math.max(0, r.start - (r.t0 - t) / sched.spb) : r.start; }
       if (t < r.t1) { return r.start + (t - r.t0) / Math.max(1e-6, r.t1 - r.t0) * (r.end - r.start); }
       last = r.end;
@@ -752,7 +883,7 @@
   function ukeRowAtBeat(sched, b) {
     for (var i = 0; i < sched.rows.length; i++) {
       var r = sched.rows[i];
-      if (r.type !== "key" && b >= r.start - 1e-6 && b < r.end - 1e-6) { return r.i; }
+      if (!ukeIsMark(r.type) && b >= r.start - 1e-6 && b < r.end - 1e-6) { return r.i; }
     }
     return -1;
   }
@@ -804,15 +935,20 @@
       var r = sched.rows[i], end = r.end;
       if (tmp && tmp.resize && tmp.resize.i === r.i) { end = r.start + tmp.resize.beats; }
       var x0 = r.start * ppb - sx, x1 = end * ppb - sx;
-      if (r.type === "key") {
-        if (x0 < -40 || x0 > w + 4) { continue; }
-        ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 2;
+      if (ukeIsMark(r.type)) {
+        var fx = x0 + ukeMarkDx(sched.rows, i);
+        if (fx < -40 || fx > w + 4) { continue; }
+        var src = seq.rows[r.i] || {}, col = r.type === "key" ? "#ffd166" : (r.type === "tempo" ? "#74b9ff" : "#55efc4");
+        var lab = r.type === "key" ? "🔑" + (src.semis > 0 ? "+" : "") + (src.semis || 0) : (r.type === "tempo" ? "⏱" + (src.bpm || "") : "§" + (src.name || "")), fw = ukeMarkW(src);
+        ctx.strokeStyle = col; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(x0, UKE_TL_LANE0); ctx.lineTo(x0, UKE_TL_FLAG + 8); ctx.stroke();
-        var kd = seq.rows[r.i] ? seq.rows[r.i].semis : 0;
-        ctx.fillStyle = ukeTl.sel === r.i ? "#ffd166" : "#3d3315";
-        ctx.fillRect(x0, UKE_TL_FLAG, 34, 14);
-        ctx.fillStyle = ukeTl.sel === r.i ? "#05060f" : "#ffd166";
-        ctx.fillText("🔑" + (kd > 0 ? "+" : "") + kd, x0 + 2, UKE_TL_FLAG + 7);
+        ctx.fillStyle = ukeTl.sel === r.i ? col : "rgba(20,24,36,0.92)";
+        ctx.fillRect(fx, UKE_TL_FLAG, fw, 14);
+        ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(fx, UKE_TL_FLAG, fw, 14);
+        ctx.fillStyle = ukeTl.sel === r.i ? "#05060f" : col;
+        ctx.save(); ctx.beginPath(); ctx.rect(fx, UKE_TL_FLAG, fw, 14); ctx.clip();
+        ctx.fillText(lab, fx + 2, UKE_TL_FLAG + 7);
+        ctx.restore();
         continue;
       }
       if (x1 < 0 || x0 > w) { continue; }
@@ -864,6 +1000,13 @@
     ctx.fillStyle = "#adb5bd"; ctx.font = "9px sans-serif";
     ctx.fillText("目盛り＝区間ループ / つまみ＝長さ / ドラッグ＝スクロール", 4, TH - 8);
   }
+  // 旗の幅（セクションは名前の長さに合わせる）と、同じ拍に重なったときに右へずらす量
+  function ukeMarkW(row) { return row && row.type === "sec" ? Math.min(78, 12 + String(row.name || "").length * 10) : 34; }
+  function ukeMarkDx(rows, i) {
+    var dx = 0;
+    for (var j = i - 1; j >= 0 && ukeIsMark(rows[j].type) && Math.abs(rows[j].start - rows[i].start) < 1e-6; j--) { dx += (rows[j].type === "sec" ? Math.min(78, 12 + String(rows[j].name || "").length * 10) : 34) + 2; }
+    return dx;
+  }
   function ukeTlMaxScroll(cv, sched, seq) {
     var w = (cv && cv.clientWidth) || 330, meter = seq.meter === 3 ? 3 : 4;
     return Math.max(0, (Math.max(sched.beats, meter * 4) + meter) * ukeTlPpb() - w);
@@ -884,7 +1027,7 @@
       if (ukeTl.sel >= 0) {
         for (i = 0; i < sched.rows.length; i++) {
           var rr = sched.rows[i];
-          if (rr.i === ukeTl.sel && rr.type !== "key" && Math.abs(rr.end * ppb - ukeTl.scroll - p.x) <= 12 && p.y >= UKE_TL_LANE0 && p.y <= UKE_TL_LANE1) {
+          if (rr.i === ukeTl.sel && !ukeIsMark(rr.type) && Math.abs(rr.end * ppb - ukeTl.scroll - p.x) <= 12 && p.y >= UKE_TL_LANE0 && p.y <= UKE_TL_LANE1) {
             drag = { mode: "resize", i: rr.i, start: rr.start, beats: rr.end - rr.start };
             return;
           }
@@ -892,7 +1035,10 @@
       }
       var hit = -1;
       if (p.y >= UKE_TL_FLAG - 4) {
-        for (i = 0; i < sched.rows.length; i++) { if (sched.rows[i].type === "key" && p.x >= sched.rows[i].start * ppb - ukeTl.scroll - 4 && p.x <= sched.rows[i].start * ppb - ukeTl.scroll + 36) { hit = sched.rows[i].i; } }
+        for (i = 0; i < sched.rows.length; i++) {
+          var mr = sched.rows[i], mx0 = mr.start * ppb - ukeTl.scroll + ukeMarkDx(sched.rows, i);
+          if (ukeIsMark(mr.type) && p.x >= mx0 - 4 && p.x <= mx0 + ukeMarkW(mr) + 2) { hit = mr.i; }
+        }
       }
       if (hit < 0 && p.y >= UKE_TL_LANE0 && p.y <= UKE_TL_LANE1) { hit = ukeRowAtBeat(sched, beat); }
       drag = { mode: "pan", x0: p.x, s0: ukeTl.scroll, moved: false, hit: hit };
@@ -940,6 +1086,11 @@
     }
   }
   // 表示の切りかえ・元に戻す・ズーム・グリッド
+  var UKE_SEC_NAMES = ["イントロ", "Aメロ", "Bメロ", "サビ", "間奏", "アウトロ"];
+  function ukeSecInput(i, name) {
+    var h = '<input type="text" class="uke-seq-secname" data-row="' + i + '" maxlength="12" value="' + I.escHtml(name) + '" list="uke-sec-names">';
+    return h;
+  }
   function ukeTlBar() {
     return '<div class="uke-tl-bar">' +
       ukeChips([{ v: "tl", t: "&#x1F39E;&#xFE0F; タイムライン" }, { v: "list", t: "&#x1F4CB; リスト" }], function (v) { return v === ukeTl.view; }, "tlview") +
@@ -964,11 +1115,15 @@
         '<span class="uke-seq-res">' + (bad ? '<span style="color:#ff7675;">？ 読めない名前です</span>' : I.escHtml(info.name) + ' <span class="uke-role">押さえ方 ' + info.shape.join("-") + '</span>') + '</span>';
     } else if (r.type === "rest") {
       h += '<span class="uke-seq-kind">&#x1F92B; 休符</span>';
+    } else if (r.type === "tempo") {
+      h += '<span class="uke-seq-kind">&#x23F1;&#xFE0F; テンポ</span><input type="number" min="40" max="240" class="uke-seq-bpm" data-row="' + i + '" value="' + r.bpm + '">';
+    } else if (r.type === "sec") {
+      h += '<span class="uke-seq-kind">&#x1F3F7;&#xFE0F; セクション</span>' + ukeSecInput(i, r.name);
     } else {
       h += '<span class="uke-seq-kind">&#x1F511; 転調</span>' + sel('class="uke-seq-semis" data-row="' + i + '"', semiOpts, r.semis);
     }
     h += '</div><div class="uke-chips">';
-    if (r.type !== "key") {
+    if (!ukeIsMark(r.type)) {
       h += '<span class="uke-label">長さ ' + C.seqLen(r.len).label + '</span><button class="uke-chip" data-tl="shorter">&#xFF0D;</button><button class="uke-chip" data-tl="longer">&#xFF0B;</button>';
     }
     h += '<button class="uke-chip" data-tl="dup">&#x29C9; 複製</button><button class="uke-chip" data-tl="copy">&#x1F4CB; コピー</button>' +
@@ -977,6 +1132,73 @@
       '<button class="uke-chip" data-seq="del" data-row="' + i + '">&#x1F5D1;&#xFE0F; 消す</button></div></div>';
     if (ukePick.row === i && r.type === "chord") { h += ukePickHtml(seq, i); }
     return h;
+  }
+
+  // §179 v0.98: 曲の構成
+  function ukeArrHtml(seq) {
+    var secs = ukeSeqSections(seq), names = [], i, h = '<h4 class="arcade-prize-cat">&#x1F9E9; 曲の構成</h4>';
+    for (i = 0; i < secs.length; i++) { if (names.indexOf(secs[i].name) < 0) { names.push(secs[i].name); } }
+    if (!seq.rows.some(function (r) { return r.type === "sec"; })) { return h + '<p class="small" style="color:#6c757d;margin:2px 0;">「＋ セクション」で区切りを入れると、イントロ → サビ → … の順番を組めます。</p>'; }
+    h += '<div class="uke-label">押した順に並ぶ（空なら書いた順に1回）</div>' + ukeChips(names.map(function (n) { return { v: I.escHtml(n), t: "&#xFF0B; " + I.escHtml(n) }; }), function () { return false; }, "arradd");
+    h += '<div class="uke-chips uke-arr">';
+    if (!seq.arr.length) { h += '<span class="uke-role">いまは書いた順に1回</span>'; }
+    for (i = 0; i < seq.arr.length; i++) { h += '<button class="uke-chip active" data-arrdel="' + i + '" title="外す">' + (i + 1) + '. ' + I.escHtml(seq.arr[i]) + ' &#x2715;</button>'; }
+    if (seq.arr.length) { h += '<button class="uke-chip" data-arrclear="1">&#x1F9F9; 空に</button>'; }
+    return h + '</div>';
+  }
+  // §179: 歌詞トラック（歌詞くずしの歌詞ノートから）
+  function ukeLyricList() { return (window.UGLyrics && window.UGLyrics.loadSaved) ? window.UGLyrics.loadSaved() : []; }
+  function ukeLyricWords(id) {
+    var ls = ukeLyricList(), out = [], i, j;
+    for (i = 0; i < ls.length; i++) {
+      if (ls[i].id !== id) { continue; }
+      for (j = 0; j < ls[i].lines.length; j++) { for (var k = 0; k < ls[i].lines[j].words.length; k++) { out.push(ls[i].lines[j].words[k].w); } }
+    }
+    return out;
+  }
+  function ukeLyricTitle(rec) {
+    var w = [];
+    for (var j = 0; j < rec.lines.length && w.length < 3; j++) { for (var k = 0; k < rec.lines[j].words.length && w.length < 3; k++) { w.push(rec.lines[j].words[k].w); } }
+    return w.join(" ") || "（空）";
+  }
+  // 言葉をのせる拍: メロディの音があればそれ、なければコードの拍ごと → [{ beat, t, w }]
+  function ukeLyricPlace(seq, sched) {
+    if (!seq.lyrics || !seq.lyrics.id) { return []; }
+    var words = ukeLyricWords(seq.lyrics.id), slots = [], i, b;
+    if (!words.length) { return []; }
+    var mel = seq.tracks && seq.tracks.mel;
+    if (mel && mel.on && mel.notes.length) { for (i = 0; i < mel.notes.length; i++) { if (slots.indexOf(mel.notes[i][0]) < 0) { slots.push(mel.notes[i][0]); } } slots.sort(function (a, c) { return a - c; }); }
+    else {
+      for (i = 0; i < sched.rows.length; i++) {
+        var r = sched.rows[i];
+        if (r.type !== "chord") { continue; }
+        for (b = r.start; b < r.end - 1e-6; b += 1) { slots.push(b); }
+      }
+    }
+    var out = [];
+    for (i = 0; i < slots.length && i < words.length; i++) { out.push({ beat: slots[i], t: sched.tm ? sched.tm(slots[i]) : 0, w: words[i] }); }
+    return out;
+  }
+  function ukeLyrHtml(seq, sel) {
+    var ls = ukeLyricList(), opts = [[0, "なし"]];
+    for (var i = 0; i < ls.length; i++) { opts.push([ls[i].id, ukeLyricTitle(ls[i]).slice(0, 18)]); }
+    var mel = seq.tracks && seq.tracks.mel && seq.tracks.mel.on && seq.tracks.mel.notes.length;
+    return '<h4 class="arcade-prize-cat">&#x1F3A4; 歌詞</h4>' +
+      (ls.length ? '<div class="uke-tl-tools"><span class="uke-label">歌詞ノートから</span>' + sel('class="uke-lyr-pick"', opts, seq.lyrics.id) + '</div>' +
+        (seq.lyrics.id ? '<p class="small" style="color:#adb5bd;margin:2px 0;">' + (mel ? "メロディの音" : "コードの拍") + 'に1つずつのせて、再生中にカラオケ表示します（' + ukeLyricWords(seq.lyrics.id).length + '語）。</p>' : '')
+        : '<p class="small" style="color:#6c757d;margin:2px 0;">歌詞くずしで歌詞を作ると、ここで選べます。</p>');
+  }
+  function ukeLyrShow(root, places, beat) {
+    var el = root.querySelector(".uke-lyr");
+    if (!el) { return; }
+    if (!places.length || beat === null) { el.innerHTML = ""; return; }
+    var cur = -1;
+    for (var i = 0; i < places.length; i++) { if (places[i].beat <= beat + 1e-6) { cur = i; } }
+    var h = "";
+    for (var j = Math.max(0, cur - 2); j < Math.min(places.length, cur + 4); j++) {
+      h += '<span class="' + (j === cur ? "now" : (j < cur ? "past" : "")) + '">' + I.escHtml(places[j].w) + '</span> ';
+    }
+    el.innerHTML = '&#x1F3A4; ' + h;
   }
 
   // §178 v0.97: ピアノロール（メロディトラック）。横はタイムラインと同じズーム・スクロール
@@ -1197,6 +1419,10 @@
           (bad ? '<span style="color:#ff7675;">？ 読めない名前です（🎯で選べます）</span>' : I.escHtml(info.name !== r.name ? "→" + info.name : info.name) + ' <span class="uke-role">押さえ方 ' + info.shape.join("-") + '</span>') + '</span>';
       } else if (r.type === "rest") {
         h += '<span class="uke-seq-kind">&#x1F92B; 休符</span>' + sel('class="uke-seq-len" data-row="' + i + '"', lenOptsFor(r.len), r.len);
+      } else if (r.type === "tempo") {
+        h += '<span class="uke-seq-kind">&#x23F1;&#xFE0F; テンポ</span><input type="number" min="40" max="240" class="uke-seq-bpm" data-row="' + i + '" value="' + r.bpm + '">';
+      } else if (r.type === "sec") {
+        h += '<span class="uke-seq-kind">&#x1F3F7;&#xFE0F; セクション</span>' + ukeSecInput(i, r.name);
       } else {
         h += '<span class="uke-seq-kind">&#x1F511; 転調</span>' + sel('class="uke-seq-semis" data-row="' + i + '"', semiOpts, r.semis);
       }
@@ -1208,10 +1434,11 @@
     } else { h += ukeTlHtml(seq, sched, lenOpts, semiOpts, sel); }
     h += '<div class="uke-chips">' +
       '<button class="uke-chip" data-seq="addChord">&#xFF0B; コード</button><button class="uke-chip" data-seq="addRest">&#xFF0B; 休符</button>' +
-      '<button class="uke-chip" data-seq="addKey">&#xFF0B; 転調</button><button class="uke-chip" data-seq="addAllMy">&#x2B50; マイコードを全部並べる</button>' +
+      '<button class="uke-chip" data-seq="addKey">&#xFF0B; 転調</button><button class="uke-chip" data-seq="addTempo">&#xFF0B; テンポ</button>' +
+      '<button class="uke-chip" data-seq="addSec">&#xFF0B; セクション</button><button class="uke-chip" data-seq="addAllMy">&#x2B50; マイコードを全部並べる</button>' +
       '<button class="uke-chip" data-seq="clear">&#x1F9F9; 全部消す</button></div>';
     // 区間ループ
-    var rowOpts = seq.rows.map(function (rw, j) { return [j, (j + 1) + "：" + (rw.type === "chord" ? rw.name : (rw.type === "rest" ? "休符" : "転調")).slice(0, 10)]; });
+    var rowOpts = seq.rows.map(function (rw, j) { return [j, (j + 1) + "：" + (rw.type === "chord" ? rw.name : ({ rest: "休符", key: "転調", tempo: "テンポ", sec: "§" + rw.name })[rw.type] || "").slice(0, 10)]; });
     h += '<div class="uke-seq-loop"><label class="uke-seq-loop-on"><input type="checkbox" data-set="loopOn"' + (seq.loopOn ? " checked" : "") + '> &#x1F501; 区間ループ</label>' +
       (seq.rows.length ? '<label>はじめ ' + sel('data-set="loopA"', rowOpts, seq.loopA) + '</label><label>おわり ' + sel('data-set="loopB"', rowOpts, seq.loopB) + '</label>' : '') +
       (sec ? '<span class="uke-role">' + (sec.a + 1) + '〜' + (sec.b + 1) + '行目をくり返し再生（合わせて弾くも区間だけ）</span>' : '') + '</div>' +
@@ -1222,7 +1449,10 @@
     h += ukeChips(pal.map(function (p) { return { v: I.escHtml(p.v), t: p.t }; }), function () { return false; }, "pal");
     h += '<div class="uke-label">合計 ' + (Math.round(sched.beats * 100) / 100) + '拍・' + sched.bars + '小節（' + (Math.round((sched.time - sched.lead) * 10) / 10) + '秒）　&#x2669;＝小節の頭</div>' +
       '<div class="melody-actions"><button class="modal-btn" data-seq="play">&#x25B6;&#xFE0F; 再生</button><button class="modal-btn" data-seq="stop">&#x23F9; 停止</button></div>' +
-      '<div class="melody-actions"><button class="modal-btn melody-small-btn" data-seq="midi">&#x1F4BE; MIDIで保存</button><button class="modal-btn melody-small-btn" data-seq="wav"' + (ukeWavBusy ? " disabled" : "") + '>&#x1F3A7; ' + (ukeWavBusy ? "作成中…" : "WAVで保存") + '</button></div>' +
+      '<div class="uke-lyr"></div>' +
+      '<div class="melody-actions"><button class="modal-btn melody-small-btn" data-seq="midi">&#x1F4BE; MIDI（トラック別）</button><button class="modal-btn melody-small-btn" data-seq="wav"' + (ukeWavBusy ? " disabled" : "") + '>&#x1F3A7; ' + (ukeWavBusy ? "作成中…" : "WAVで保存") + '</button></div>' +
+      ukeArrHtml(seq) +
+      ukeLyrHtml(seq, sel) +
       ukeRollHtml(seq, sel) +
       ukeMixerHtml(seq, sel) +
       '<div class="uke-card uke-now"><div class="uke-card-info"><div class="uke-label">いま鳴っているコード</div><div class="uke-card-name uke-now-name">―</div></div><canvas class="uke-diagram" data-k="now"></canvas></div>' +
@@ -1230,6 +1460,10 @@
     // プリセット・保存
     h += '<h4 class="arcade-prize-cat">&#x1F4E6; プリセット</h4>' +
       ukeChips(ukeSeqPresets().map(function (p) { return { v: p.id, t: p.name }; }), function () { return false; }, "preset");
+    h += '<h4 class="arcade-prize-cat">&#x1F4E6; プロジェクトのファイル</h4><div class="uke-chips">' +
+      '<button class="uke-chip" data-seq="projSave">&#x1F4E6; ファイルに保存</button>' +
+      '<label class="uke-chip uke-file">&#x1F4C2; ファイルから読み込む<input type="file" accept=".json,application/json" class="uke-proj-file"></label></div>' +
+      '<datalist id="uke-sec-names">' + UKE_SEC_NAMES.map(function (n) { return '<option value="' + n + '">'; }).join("") + '</datalist>';
     h += '<h4 class="arcade-prize-cat">&#x1F4BE; 保存した曲（' + st.songs.length + '/' + UKE_SEQ_MAX_SONGS + '）</h4>' +
       '<label class="melody-row"><span>曲の名前</span><input type="text" class="uke-song-name" maxlength="20" placeholder="例 わたしの曲"></label>' +
       '<button class="modal-btn melody-small-btn" data-seq="save">&#x1F4BE; いまの曲を保存</button>';
@@ -1282,6 +1516,32 @@
     all("select.uke-seq-len", "onchange", function (ev) { seq.rows[rowOf(ev)].len = ev.currentTarget.value; save(true); });
     all("select.uke-seq-pos", "onchange", function (ev) { seq.rows[rowOf(ev)].pos = ev.currentTarget.value; save(true); });
     all("select.uke-seq-semis", "onchange", function (ev) { seq.rows[rowOf(ev)].semis = Number(ev.currentTarget.value); save(true); });
+    all("input.uke-seq-bpm", "onchange", function (ev) { seq.rows[rowOf(ev)].bpm = Number(ev.currentTarget.value); save(true); });
+    all("input.uke-seq-secname", "onchange", function (ev) {
+      var r0 = seq.rows[rowOf(ev)], old = r0.name, nn = String(ev.currentTarget.value || "").trim().slice(0, 12) || "セクション";
+      r0.name = nn;
+      // 構成の中の名前もいっしょに変える
+      for (var ai = 0; ai < seq.arr.length; ai++) { if (seq.arr[ai] === old) { seq.arr[ai] = nn; } }
+      save(true);
+    });
+    all("button[data-arradd]", "onclick", function (ev) { if (seq.arr.length < 32) { seq.arr.push(ev.currentTarget.getAttribute("data-arradd")); save(true); } });
+    all("button[data-arrdel]", "onclick", function (ev) { seq.arr.splice(Number(ev.currentTarget.getAttribute("data-arrdel")), 1); save(true); });
+    all("button[data-arrclear]", "onclick", function () { seq.arr = []; save(true); });
+    all("select.uke-lyr-pick", "onchange", function (ev) { seq.lyrics = { id: Number(ev.currentTarget.value) }; save(true); });
+    all("input.uke-proj-file", "onchange", function (ev) {
+      var f = ev.currentTarget.files && ev.currentTarget.files[0];
+      if (!f || !window.FileReader) { return; }
+      var fr = new FileReader();
+      fr.onload = function () {
+        var res = ukeProjectRead(String(fr.result || ""));
+        if (!res) { ctx.toast("このファイルはゴリラウクレレのプロジェクトではありません"); return; }
+        seq = res.seq;
+        ukeTl.sel = -1;
+        save(true);
+        ctx.toast("&#x1F4C2; プロジェクトを読み込みました" + (res.added ? "（マイコード" + res.added + "個を追加）" : ""));
+      };
+      fr.readAsText(f);
+    });
     all("button[data-pal]", "onclick", function (ev) {
       if (seq.rows.length >= UKE_SEQ_MAX_ROWS) { ctx.toast("行は" + UKE_SEQ_MAX_ROWS + "までです"); return; }
       seq.rows.push({ type: "chord", name: ev.currentTarget.getAttribute("data-pal"), len: lastLen() });
@@ -1326,6 +1586,20 @@
       if (a === "addChord") { seq.rows.push({ type: "chord", name: "C", len: lastLen() }); save(true); return; }
       if (a === "addRest") { seq.rows.push({ type: "rest", len: lastLen() }); save(true); return; }
       if (a === "addKey") { seq.rows.push({ type: "key", semis: 2 }); save(true); return; }
+      if (a === "addTempo") { if (seq.rows.length >= UKE_SEQ_MAX_ROWS) { return; } seq.rows.push({ type: "tempo", bpm: seq.bpm }); save(true); return; }
+      if (a === "addSec") {
+        if (seq.rows.length >= UKE_SEQ_MAX_ROWS) { return; }
+        var used = seq.rows.filter(function (rw) { return rw.type === "sec"; }).map(function (rw) { return rw.name; }), nm2 = "セクション";
+        for (var si = 0; si < UKE_SEC_NAMES.length; si++) { if (used.indexOf(UKE_SEC_NAMES[si]) < 0) { nm2 = UKE_SEC_NAMES[si]; break; } }
+        seq.rows.push({ type: "sec", name: nm2 });
+        save(true);
+        return;
+      }
+      if (a === "projSave") {
+        var hp = I.saveBlob(new Blob([ukeProjectJson(seq)], { type: "application/json" }), "ukulele-project-" + ukeFileStamp() + ".json");
+        ctx.toast(hp === "fail" ? "保存できませんでした" : "&#x1F4E6; プロジェクトをファイルに保存しました");
+        return;
+      }
       if (a === "clear") { seq.rows = []; ukePick.row = -1; save(true); return; }
       if (a === "pick") { ukePick.row = ukePick.row === r ? -1 : r; ctx.render(); return; }
       if (a === "pickClose") { ukePick.row = -1; ctx.render(); return; }
@@ -1343,16 +1617,22 @@
         return;
       }
       if (a === "play") {
-        var sc = ukeSeqClean(seq), sec = ukeSeqSection(sc);
+        var sc = ukeSeqClean(seq), sec = ukeSeqSection(sc), lyrSeq = sec ? sec.seq : ukeSeqExpand(sc), lyrS = ukeSeqSchedule(lyrSeq, ctx.lowG), lyrP = ukeLyricPlace(lyrSeq, lyrS);
         // 区間ループのときは、区間のはじめの拍を足して全体の位置にする
         var fullS = ukeSeqSchedule(sc, ctx.lowG), offB = 0;
         if (sec) { for (var fi = 0; fi < fullS.rows.length; fi++) { if (fullS.rows[fi].i === sec.a) { offB = fullS.rows[fi].start; break; } } }
-        var tick = function (b) { ukeTl.play = b === null ? null : b + offB; if (ukeTl.redraw) { ukeTl.redraw(); } };
-        var okp = sec ? ukeSeqStart(sec.seq, ctx.lowG, function (ri2, info2) { showNow(ri2 >= 0 ? ri2 + sec.offset : -1, info2); }, tick) : ukeSeqStart(sc, ctx.lowG, showNow, tick);
+        var expd = !sec && sc.arr.length;
+        var tick = function (b) {
+          // 構成どおりに鳴らしているときは、タイムラインの線は出さない（書いた行の位置とずれるため）
+          ukeTl.play = b === null || expd ? null : b + offB;
+          if (ukeTl.redraw) { ukeTl.redraw(); }
+          ukeLyrShow(root, lyrP, b);
+        };
+        var okp = sec ? ukeSeqStart(sec.seq, ctx.lowG, function (ri2, info2) { showNow(ri2 >= 0 ? ri2 + sec.offset : -1, info2); }, tick) : ukeSeqStart(ukeSeqExpand(sc), ctx.lowG, showNow, tick);
         if (!okp) { ctx.toast("鳴らせるコードがありません"); }
         return;
       }
-      if (a === "stop") { ukeSeqStop(); showNow(-1, null); ukeTl.play = null; if (ukeTl.redraw) { ukeTl.redraw(); } return; }
+      if (a === "stop") { ukeSeqStop(); showNow(-1, null); ukeTl.play = null; if (ukeTl.redraw) { ukeTl.redraw(); } ukeLyrShow(root, [], null); return; }
       if (a === "midi") {
         var hm = ukeSeqExportMidi(ukeSeqClean(seq), ctx.lowG);
         ctx.toast(hm === "fail" ? "MIDIを作れませんでした（鳴らせるコードがありません）" : "&#x1F4BE; MIDIファイルを保存しました");
@@ -1368,7 +1648,7 @@
       if (a === "together") {
         var pf = ukePrefs(), sq = ukeSeqClean(seq), sc2 = ukeSeqSection(sq);
         ukeSeqStop();
-        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets });
+        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets });
         return;
       }
       if (a === "save") {
@@ -1410,7 +1690,7 @@
         var fs = ukeSeqSchedule(sq, ctx.lowG);
         for (var fi = 0; fi < fs.rows.length; fi++) { if (fs.rows[fi].i === sc2.a) { offB = fs.rows[fi].start; break; } }
         sc2.seq.loop = false;
-      } else { sq.loop = false; }
+      } else { sq = ukeSeqExpand(sq); sq.loop = false; }
       ukeSeqStop();
       ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets });
     });
@@ -1424,7 +1704,7 @@
     var tlSched = ukeSeqSchedule(seq, ctx.lowG), cv = root.querySelector("canvas.uke-tl");
     function snapLen(i, d) {
       var r = seq.rows[i];
-      if (!r || r.type === "key") { return; }
+      if (!r || ukeIsMark(r.type)) { return; }
       var nb = Math.max(ukeTl.snap, Math.min(32, Math.round((C.seqLen(r.len).beats + d) / ukeTl.snap) * ukeTl.snap));
       r.len = C.lenId(nb);
     }
@@ -1748,8 +2028,10 @@
       var seqRow = -1, seqHit = {}, seqChords = 0, seqNext = "", SEQ_START = 30, seqProg = 0, seqCount = 0, seqMix = null;
       // §178: 録音（合わせて弾く画面で、弾いた音をトラックに記録）
       var recId = mode === "seq" && (cfg.rec === "rec1" || cfg.rec === "rec2") ? cfg.rec : null, recNotes = [], recDirty = false, recOff = Number(cfg.recOffset) || 0;
+      var lyrP = [], lyrNow = ""; // 歌詞（曲の予定を作ったあとで並べる）
       if (seqData) {
         seqS = ukeSeqSchedule(seqData, lowG);
+        lyrP = ukeLyricPlace(seqData, seqS);
         seqPasses = seqData.loop ? 2 : 1;
         for (var sr = 0; sr < seqS.rows.length; sr++) { if (seqS.rows[sr].type === "chord" && seqS.rows[sr].ok) { seqChords++; } }
         if (!seqChords) { seqS = null; }
@@ -1913,7 +2195,8 @@
         if (recId && seqS && seqPass === 0 && !ended) {
           var rt = (frames - SEQ_START) / 60 + (delay || 0);
           if (rt >= seqS.lead && recNotes.length < UKE_REC_MAX) {
-            recNotes.push([Math.round(((rt - seqS.lead) / seqS.spb + recOff) * 1000) / 1000, ukeMidi(s, current()[s], lowG), Math.round((vel || 0.8) * 100) / 100]);
+            var rb = seqS.beatAt ? seqS.beatAt(rt) : (rt - seqS.lead) / seqS.spb;
+            recNotes.push([Math.round((rb + recOff) * 1000) / 1000, ukeMidi(s, current()[s], lowG), Math.round((vel || 0.8) * 100) / 100]);
             recDirty = true;
           }
         }
@@ -1951,11 +2234,13 @@
         var cur = -1, nx = -1, i;
         for (i = 0; i < seqS.rows.length; i++) {
           var r = seqS.rows[i];
-          if (r.type === "key") { continue; }
+          if (ukeIsMark(r.type)) { continue; }
           if (songT >= r.t0 + off && songT < r.t1 + off) { cur = i; }
           else if (r.t0 + off > songT && r.type === "chord" && nx < 0) { nx = i; }
         }
         // いまの行のどこまで進んだか（0〜1）と、カウントインの数字
+        lyrNow = "";
+        if (lyrP.length && seqPass === 0) { var lb = ukeTimeToBeat(seqS, songT); for (var li = 0; li < lyrP.length; li++) { if (lyrP[li].beat <= lb + 1e-6) { lyrNow = lyrP[li].w; } } }
         seqProg = cur >= 0 ? Math.max(0, Math.min(1, (songT - seqS.rows[cur].t0 - off) / Math.max(0.01, seqS.rows[cur].t1 - seqS.rows[cur].t0))) : 0;
         seqCount = seqPass === 0 && songT >= 0 && songT < seqS.lead ? Math.floor(songT / seqS.spb) + 1 : 0;
         if (cur !== seqRow) {
@@ -2207,6 +2492,7 @@
             ctx.fillText(tn, 34, 10);
             hudText(ctx, "BPM " + seqData.bpm + "  つぎ: " + seqNext, W - 6, 9, "right");
             hudText(ctx, "せいかい " + correct + "/" + (seqChords * seqPasses), W - 6, 22, "right");
+            if (lyrNow) { ctx.fillStyle = "#ffd166"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText("♪ " + lyrNow, W / 2, 313); }
             if (recId) { ctx.fillStyle = Math.floor(frames / 20) % 2 ? "#ff7675" : "#d63031"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "left"; ctx.fillText("● 録音中 " + recNotes.length + "音", 106, 22); }
             ctx.fillStyle = "rgba(255,255,255,0.2)";
             ctx.fillRect(6, 22, 96, 3);
@@ -2261,6 +2547,7 @@
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
     roll: ukeRoll, rollImport: ukeRollImport,
     tracksClean: ukeTracksClean, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
+    expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,

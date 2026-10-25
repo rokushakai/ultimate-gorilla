@@ -416,6 +416,60 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §179 曲の構成・テンポ・MIDI（トラック別）・プロジェクト・歌詞 =====
+  var c4 = U.seqClean({ arr: ["サビ", 3, "", "Aメロ"], lyrics: { id: "9" }, rows: [{ type: "tempo", bpm: 999 }, { type: "sec", name: "<b>サビ</b>" }, { type: "sec" }] });
+  ok(c4.rows[0].bpm === 240 && c4.rows[1].name === "bサビ/b" && c4.rows[2].name === "セクション" && c4.arr.join() === "サビ,Aメロ" && c4.lyrics.id === 9, "tempo / section rows, arrangement and lyrics are cleaned", c4);
+  var tsc2 = C.schedule({ bpm: 60, metronome: true, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "tempo", bpm: 120 }, { type: "chord", name: "G", len: "w" }] }, rsv);
+  var gRow = tsc2.rows.filter(function (r2) { return r2.type === "chord"; })[1], clk = tsc2.events.filter(function (e) { return e.kind === "click"; }).map(function (e) { return e.t; });
+  ok(gRow.t0 === 4 && gRow.t1 === 6 && clk.join() === "0,1,2,3,4,4.5,5,5.5" && tsc2.beatAt(5) === 6 && tsc2.tmRaw(6) === 5 && tsc2.segs.length === 2, "tempo change: later rows and the metronome follow the new tempo", { g: [gRow.t0, gRow.t1], clk: clk });
+  var aseq = U.seqClean({ countIn: false, arr: ["サビ", "イントロ", "サビ"], rows: [{ type: "sec", name: "イントロ" }, { type: "chord", name: "C", len: "w" }, { type: "sec", name: "サビ" }, { type: "chord", name: "G", len: "w" }, { type: "chord", name: "F", len: "w" }] });
+  var ex = U.expand(aseq);
+  ok(ex.rows.map(function (r2) { return r2.type === "sec" ? "#" + r2.name : r2.name; }).join() === "#サビ,G,F,#イントロ,C,#サビ,G,F" && ex._src.join() === "2,3,4,0,1,2,3,4", "arrangement plays sections in the chosen order", ex.rows.map(function (r2) { return r2.name; }));
+  var exs = U.seqSchedule(ex, false);
+  ok(exs.beats === 20 && exs.rows.filter(function (r2) { return r2.type === "chord"; }).map(function (r2) { return r2.i; }).join() === "3,4,1,3,4", "the arranged schedule points back to the written rows", exs.rows.map(function (r2) { return r2.i; }));
+  ok(U.sections(U.seqClean({ rows: [{ type: "chord", name: "C" }, { type: "sec", name: "A" }, { type: "chord", name: "G" }] })).map(function (x) { return x.name; }).join() === "はじめ,A", "rows before the first section are 'はじめ'");
+  ok(U.expand(U.seqClean({ rows: [{ type: "chord", name: "C" }] })).rows.length === 1, "no arrangement = as written");
+  // 歌詞: コードの拍に / メロディの音に
+  env.store["ultimateGorillaLyricsV1"] = JSON.stringify([{ id: 5, date: Date.now(), genres: ["love"], lines: [{ t: 0, words: [{ w: "きみ", t: 0, kind: "word" }, { w: "と", t: 1, kind: "word" }, { w: "ゴリラ", t: 2, kind: "word" }, { w: "の", t: 3, kind: "word" }, { w: "うた", t: 4, kind: "word" }, { w: "あまり", t: 5, kind: "word" }] }] }]);
+  var lsq = U.seqClean({ countIn: false, lyrics: { id: 5 }, rows: [{ type: "chord", name: "C", len: "w" }, { type: "rest", len: "w" }] });
+  var lp = U.lyricPlace(lsq, U.seqSchedule(lsq, false));
+  ok(lp.map(function (x) { return x.beat + x.w; }).join() === "0きみ,1と,2ゴリラ,3の", "lyrics on chord beats (rests skipped, extra words dropped)", lp);
+  lsq.tracks.mel.on = true; lsq.tracks.mel.notes = [[0.5, 1, 60], [2, 1, 62]];
+  lp = U.lyricPlace(lsq, U.seqSchedule(lsq, false));
+  ok(lp.map(function (x) { return x.beat + x.w; }).join() === "0.5きみ,2と", "lyrics follow the melody notes when there is a melody", lp);
+  // MIDI フォーマット1
+  var mb = U.midiBytes(U.seqClean({ bpm: 60, countIn: false, style: "q", lyrics: { id: 5 }, rows: [{ type: "chord", name: "C", len: "h" }, { type: "tempo", bpm: 120 }, { type: "chord", name: "G", len: "h" }], tracks: { bass: { on: true }, drum: { on: true }, pad: { on: true, mute: true } } }), false);
+  function u32(a2, i2) { return ((a2[i2] << 24) >>> 0) + (a2[i2 + 1] << 16) + (a2[i2 + 2] << 8) + a2[i2 + 3]; }
+  var fmt = (mb[8] << 8) + mb[9], ntr = (mb[10] << 8) + mb[11], pos2 = 14, trks = [];
+  for (var tn = 0; tn < ntr; tn++) { var ln = u32(mb, pos2 + 4); trks.push(mb.slice(pos2 + 8, pos2 + 8 + ln)); pos2 += 8 + ln; }
+  function countSeq(arr, sq) { var n = 0; for (var q = 0; q + sq.length <= arr.length; q++) { var okq = true; for (var z = 0; z < sq.length; z++) { if (arr[q + z] !== sq[z]) { okq = false; break; } } if (okq) { n++; } } return n; }
+  ok(fmt === 1 && ntr === 5 && pos2 === mb.length, "SMF format 1: conductor + ukulele + bass + drums + lyrics (muted pad left out)", { fmt: fmt, ntr: ntr });
+  ok(countSeq(trks[0], [0xFF, 0x51, 0x03]) === 2 && countSeq(trks[4], [0xFF, 0x05]) === 4, "tempo changes and lyric events are written", [countSeq(trks[0], [0xFF, 0x51, 0x03]), countSeq(trks[4], [0xFF, 0x05])]);
+  var ukeOn = 0; for (var q2 = 0; q2 < trks[1].length - 2; q2++) { if (trks[1][q2] === 0x90 && trks[1][q2 + 2] > 0) { ukeOn++; } }
+  ok(ukeOn === 16 && countSeq(trks[1], [0xC0, 24]) === 1, "ukulele track: 4 strokes × 4 strings with the program", ukeOn);
+  // 合わせて弾く画面に いまの言葉
+  var lyrSeen = "";
+  env.run("ukulele", { config: { mode: "seq", seq: U.seqClean({ bpm: 120, countIn: false, lyrics: { id: 5 }, rows: [{ type: "chord", name: "C", len: "w" }] }) } }, 90, function () {
+    var tx = env.counters.texts.filter(function (t2) { return t2.indexOf("♪ ") === 0; });
+    if (tx.length) { lyrSeen = tx[tx.length - 1]; }
+  });
+  ok(lyrSeen === "♪ ゴリラ" || lyrSeen === "♪ と" || lyrSeen === "♪ の", "play-along shows the current lyric word", lyrSeen);
+  // プロジェクト
+  U.saveMy([{ id: 1, name: "マイC", shape: [0, 0, 0, 3] }]);
+  var pj = U.projectJson(U.seqClean({ bpm: 133, rows: [{ type: "chord", name: "Am", len: "w" }] }));
+  U.saveMy([{ id: 1, name: "べつの", shape: [2, 0, 0, 0] }]);
+  var rd = U.projectRead(pj);
+  ok(rd && rd.seq.bpm === 133 && rd.seq.rows[0].name === "Am" && rd.added === 1 && U.loadMy().length === 2, "project file round-trips the song and adds missing my-chords", rd && { bpm: rd.seq.bpm, added: rd.added });
+  ok(U.projectRead("{\"type\":\"other\"}") === null && U.projectRead("not json") === null, "other files are rejected");
+  // 画面
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ lyrics: { id: 5 }, arr: ["サビ"], rows: [{ type: "sec", name: "サビ" }, { type: "chord", name: "C", len: "w" }, { type: "tempo", bpm: 100 }] }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.tl.view = "list";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf("uke-seq-secname") > 0 && hs.indexOf("uke-seq-bpm") > 0 && hs.indexOf('data-arradd="サビ"') > 0 && hs.indexOf('data-arrdel="0"') > 0 && hs.indexOf("uke-lyr-pick") > 0 && hs.indexOf('data-seq="projSave"') > 0 && hs.indexOf("uke-proj-file") > 0, "list shows section/tempo rows; arrangement, lyrics and project controls", null);
+  W.UGArcade.stop();
+  U.tl.view = "tl"; U.ui.tab = "play";
+
   // ===== §175 ポジション・表示するフレット数 =====
   ok(["0,0,0,3", "2,0,1,0", "5,4,3,3", "9,7,8,7", "0,0,0,7", "2,2,2,0"].map(function (t2) { return C.posOf(t2.split(",").map(Number)); }).join() === "low,low,mid,high,high,low", "position of a fingering (low / mid / high)");
   ok(C.voicingsAt(C.parse("C"), "mid")[0].join() === "5,4,3,3" && C.voicingsAt(C.parse("Am"), "high")[0].join() === "9,9,8,7" && C.voicingsAt(C.parse("F"), "high")[0].join() === "10,9,8,8", "classic mid/high shapes (C=5433, Am=9987, F=10988)");
