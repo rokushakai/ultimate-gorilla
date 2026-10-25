@@ -76,6 +76,7 @@
   function ukeChordName(frets) { return UKE_INDEX[frets.join(",")] || ""; }
   function ukeMidi(s, fret, lowG) { return (s === 0 && lowG ? UKE_OPEN_LOWG : UKE_OPEN[s]) + fret; }
   function ukeNoteName(midi) { return NOTE_NAMES[((midi % 12) + 12) % 12]; }
+  function ukeCountKeys(o) { var n = 0; for (var k in o) { if (o.hasOwnProperty(k)) { n++; } } return n; }
   // §175 v0.94: 表示するフレット数 → 指板の寸法（8以上はサウンドホールを小さくして指板を長く）
   var UKE_TOTAL_FRETS = 18, UKE_TALL_H = 420;
   var UKE_FRET_CHOICES = [[5, "5"], [6, "6（いつも）"], [8, "8"], [9, "9（半分）"], [12, "12"], [15, "15（ソプラノほぼ全部）"], [18, "18（テナー全部）"]];
@@ -229,10 +230,10 @@
   // 設定（Low-G・勉強の助け）を読む・書く（足りない項目は既定値）
   function ukePrefs() {
     var p0 = lsGet(UKE_PREFS_KEY) || {};
-    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal" };
+    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal", hold: p0.hold === "hold" ? "hold" : "real" };
   }
   function ukeSavePrefs(p1) {
-    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal" });
+    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal", hold: p1.hold === "hold" ? "hold" : "real" });
   }
   // 設定画面で音を鳴らす（arp: アルペジオ）
   function ukePlayShape(shape, lowG, arp) {
@@ -1661,7 +1662,7 @@
       if (a === "together") {
         var pf = ukePrefs(), sq = ukeSeqClean(seq), sc2 = ukeSeqSection(sq);
         ukeSeqStop();
-        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact" });
+        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold" });
         return;
       }
       if (a === "save") {
@@ -1705,7 +1706,7 @@
         sc2.seq.loop = false;
       } else { sq = ukeSeqExpand(sq); sq.loop = false; }
       ukeSeqStop();
-      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact" });
+      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold" });
     });
     all("button[data-recclear]", "onclick", function (ev) { var id = ev.currentTarget.getAttribute("data-recclear"); seq.tracks[id].notes = []; save(true); });
     ukeRollBind(root, seq, ctx, save);
@@ -2015,7 +2016,10 @@
           '<label><input type="checkbox" data-p="fingers"' + (prefs.fingers ? " checked" : "") + '> お手本に指番号を出す</label>' : '') + '</div>' +
         (ukeUi.tab === "play" ? '<div class="uke-seq-set"><label>表示するフレット数' + ukeSelect('data-pp="frets"', UKE_FRET_CHOICES, prefs.frets) + '</label>' +
           '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label>' +
-          '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label></div>' : '') +
+          '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label>' +
+          '<label>押さえ方' + ukeSelect('data-pp="hold"', [["real", "リアルタイム（押さえている間だけ）"], ["hold", "ホールド（タップで印を付けておく）"]], prefs.hold) + '</label></div>' +
+          '<p class="small" style="color:#adb5bd;margin:4px 0;">ボタン: &#x2B07;&#xFE0F; ダウン・&#x2B06;&#xFE0F; アップ＝4本をその向きに鳴らす ／ &#x270B; はなす＝ホールドした印（ホールドの押さえ方・マウスで付けた印）を全部消す ／ ▲▼＝見えるフレットの位置を動かす。' +
+          'ホールドにすると、先にマスをタップして押さえ方を作り、あとはストロークするだけで鳴らせます（正解すると印は自動で消えます）。</p>' : '') +
         '<button class="modal-btn" data-m="back" style="width:100%;margin-top:8px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
       root.innerHTML = h;
       for (var k in cards) {
@@ -2113,7 +2117,7 @@
         if (v === "back") { ukeSeqStop(); ctl.back(); return; }
         ukeSeqStop();
         ukeSavePrefs(prefs);
-        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact" });
+        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact", hold: prefs.hold === "hold" });
       });
     }
     render();
@@ -2127,14 +2131,16 @@
     name: "ゴリラウクレレ",
     icon: "&#x1F3B8;",
     desc: "左手で押さえて右手でジャカジャン！本物の押さえ方でコード練習",
-    help: "指板を押さえたまま、下の丸の上を横にスワイプで鳴らす / 弦をタップで1本だけ / マウスはクリックで押さえる・はなす / ▲▼（↑↓）で表示するフレットの位置を動かす / Space で4本鳴らす・1〜4 で1本ずつ / P一時停止",
+    help: "指板を押さえたまま、下の丸の上を横にスワイプで鳴らす / 弦をタップで1本だけ / ⬇ダウン・⬆アップ＝4本を鳴らす（Space・D / U）/ ✋はなす＝ホールドした印を全部消す（ホールドの押さえ方・マウスのとき）/ ▲▼（↑↓）で表示するフレットの位置を動かす / 1〜4 で1本ずつ / P一時停止",
     controls: [
-      { action: "strum", label: "&#x1F3B6; 鳴らす" },
+      { action: "strum", label: "&#x2B07;&#xFE0F; ダウン" },
+      { action: "strumUp", label: "&#x2B06;&#xFE0F; アップ" },
       { action: "clear", label: "&#x270B; はなす" },
       { action: "posUp", label: "&#x25B2;" },
       { action: "posDown", label: "&#x25BC;" }
     ],
-    keys: { " ": "strum", "1": "p0", "2": "p1", "3": "p2", "4": "p3", "Backspace": "clear", "ArrowUp": "posUp", "ArrowDown": "posDown" },
+    controlsClass: "uke-ctrl", // §182: 5つ並ぶので字を小さく
+    keys: { " ": "strum", "d": "strum", "D": "strum", "u": "strumUp", "U": "strumUp", "1": "p0", "2": "p1", "3": "p2", "4": "p3", "Backspace": "clear", "ArrowUp": "posUp", "ArrowDown": "posDown" },
     setup: ukeSetup,
     setupLabel: "モードを変える",
     create: function (api, cfg) {
@@ -2150,6 +2156,7 @@
       var pos = 0, myList = mode === "my" ? ukeLoadMy() : []; // pos: 表示しているいちばん上のフレット − 1（§169）
       // §171 v0.90: 弦ごとの出口（自分の音・伴奏）・勉強の助け・耳コピ
       var outs = [null, null, null, null], backOuts = [null, null, null, null];
+      var holdMode = !!cfg.hold; // §182: ホールド（タップで印を付けておく）
       var showNotes = !!cfg.notes, showTones = !!cfg.tones, showFingers = cfg.fingers !== false;
       var ear = mode.indexOf("ear:") === 0 ? { level: mode.substring(4), opts: [], ans: -1, pick: -1, t: 0, reveal: 0, chord: null } : null;
       if (ear && ["easy", "normal", "hard"].indexOf(ear.level) < 0) { ear.level = "easy"; }
@@ -2291,7 +2298,7 @@
         if (!bad.length && seqS) {
           var hk = seqPass + ":" + seqRow;
           msg = "◎ " + target.name;
-          if (!seqHit[hk]) { seqHit[hk] = true; correct++; api.addScore(100); msg += "  +100"; }
+          if (!seqHit[hk]) { seqHit[hk] = true; correct++; api.addScore(100); msg += "  +100"; if (holdMode) { sticky = {}; } }
           msgGood = true;
           msgT = 40;
           wrong = null;
@@ -2305,6 +2312,7 @@
           msgGood = true;
           msgT = 50;
           wrong = null;
+          if (holdMode) { sticky = {}; }
           nextChord();
         } else {
           msg = "おしい！";
@@ -2385,9 +2393,16 @@
         }
         seqNext = nx >= 0 ? seqS.rows[nx].name : (seqPass + 1 < seqPasses && seqS.rows.length ? "（もう1周）" : "おわり");
       }
-      function strumAll() {
+      // dir: "up" なら A→G の順に、少しやわらかく（§182）
+      function strumAll(dir) {
         if (ear) { earPlay(0); return; }
-        for (var s = 0; s < 4; s++) { pluck(s, s * 0.025, 0.85); }
+        for (var i = 0; i < 4; i++) { var s = dir === "up" ? 3 - i : i; pluck(s, i * 0.025, dir === "up" ? 0.72 : 0.85); }
+      }
+      // ホールドの印: 1本の弦に1つ。同じ所をもう一度押したら消す
+      function holdToggle(cell) {
+        var key = cell.s + "," + cell.f, had = !!sticky[key];
+        for (var k in sticky) { if (sticky.hasOwnProperty(k) && sticky[k].s === cell.s) { delete sticky[k]; } }
+        if (!had) { sticky[key] = cell; }
       }
 
       if (ear) { practice = true; earNext(); } else { nextChord(); }
@@ -2396,7 +2411,15 @@
         input: function (action, down) {
           if (!down) { return; }
           if (action === "strum") { strumAll(); }
-          else if (action === "clear") { sticky = {}; }
+          else if (action === "strumUp") { strumAll("up"); }
+          else if (action === "clear") {
+            var hadAny = false;
+            for (var hk2 in sticky) { if (sticky.hasOwnProperty(hk2)) { hadAny = true; } }
+            sticky = {};
+            msg = hadAny ? "✋ 印を全部はなしました" : "✋ はなす＝ホールドした印を消す";
+            msgGood = true;
+            msgT = 45;
+          }
           else if (action === "posUp") { pos = Math.max(0, pos - 1); }
           else if (action === "posDown") { pos = Math.min(UKE_TOTAL_FRETS - L.frets, pos + 1); }
           else if (action.charAt(0) === "p") {
@@ -2423,12 +2446,8 @@
             var cell = ukeCellAt(x, y, L);
             if (cell) {
               cell = { s: cell.s, f: cell.f + pos };
-              if (kind === "mouse") {
-                var key = cell.s + "," + cell.f;
-                if (sticky[key]) { delete sticky[key]; } else { sticky[key] = cell; }
-              } else {
-                fingers[id] = cell;
-              }
+              if (kind === "mouse" || holdMode) { holdToggle(cell); }
+              else { fingers[id] = cell; }
               return;
             }
             if (y >= L.strumY) {
@@ -2677,6 +2696,9 @@
             ctx.fillText(msg, W / 2, L.holeY);
           } else if (ear) {
             hudText(ctx, "タップでもう一度聞く", W / 2, L.holeY, "center");
+          } else if (holdMode && ukeCountKeys(sticky) > 0) {
+            ctx.fillStyle = "rgba(255,209,102,0.85)"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
+            ctx.fillText("ホールド中 ／ ✋ はなす＝印を全部消す", W / 2, Math.min(L.h - 6, L.holeY + L.hole + 12));
           } else if (frames < 300 && !held.length) {
             hudText(ctx, "ここを横にスワイプ", W / 2, L.holeY, "center");
           }
@@ -2697,6 +2719,7 @@
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
+    countKeys: ukeCountKeys,
     markSet: ukeMarkSet, MARK_FRETS: UKE_MARK_FRETS,
     layout: ukeLayout, FRET_CHOICES: UKE_FRET_CHOICES, voicePos: ukeVoicePos, rowPos: ukeRowPos,
     ui: ukeUi, fitPos: ukeFitPos, voice: ukeVoice, detect: ukeDetect, loadMy: ukeLoadMy, saveMy: ukeSaveMy, addMy: ukeAddMy, MY_KEY: UKE_MY_KEY

@@ -394,6 +394,7 @@
     // タッチボタン
     var ctrl = rootEl.querySelector(".arcade-controls");
     var controls = def.controls;
+    if (def.controlsClass && ctrl.classList) { ctrl.classList.add(def.controlsClass); } // §182: ゲームごとのボタンの見た目
     if (controls.length === 0) { ctrl.style.display = "none"; }
     ctrl.style.gridTemplateColumns = "repeat(" + Math.max(1, controls.length) + ", 1fr)";
     for (var i = 0; i < controls.length; i++) {

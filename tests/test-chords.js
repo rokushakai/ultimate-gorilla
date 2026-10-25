@@ -628,4 +628,35 @@ module.exports = async function () {
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   ok(root.innerHTML.indexOf('data-pp="view"') > 0 && root.innerHTML.indexOf("引き（ボタンを減らして指板を大きく）") > 0, "play tab: screen view choice", null);
   W.UGArcade.stop();
+
+  // ===== §182 ダウン・アップ・ホールド・はなす =====
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  var hs2 = root.innerHTML;
+  W.UGArcade.stop();
+  ok(hs2.indexOf('data-pp="hold"') > 0 && hs2.indexOf("ホールド（タップで印を付けておく）") > 0 && hs2.indexOf("はなす＝ホールドした印") > 0, "play tab: hold mode choice and button explanations", null);
+  var hcur = [], cellY = function (f) { return U.NUT_Y + (f - 0.5) * U.FH; };
+  env.run("ukulele", { config: { mode: "free", hold: true } }, 10, function (f, e) {
+    if (f !== 2) { return; }
+    e.tap(U.STRX[0], cellY(2)); hcur.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[0], cellY(4)); hcur.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[3], cellY(3)); hcur.push(W.__uk2().cur.join(""));
+    e.tap(U.STRX[0], cellY(4)); hcur.push(W.__uk2().cur.join(""));
+    e.key("keydown", "Backspace"); e.key("keyup", "Backspace"); hcur.push(W.__uk2().cur.join("") + ":" + W.__uk2().msg);
+  });
+  ok(hcur.join() === "2000,4000,4003,0003,0000:✋ 印を全部はなしました", "hold mode: taps leave marks (one per string, tap again to remove), はなす clears them", hcur);
+  // ホールドで押さえて ⬇ダウン で正解 → 印は自動で消える
+  var hq = null;
+  env.run("ukulele", { config: { mode: "easy", hold: true } }, 20, function (f, e) {
+    if (f !== 3) { return; }
+    var u = W.__uk2();
+    u.target.shape.forEach(function (fr, s2) { if (fr > 0) { e.tap(U.STRX[s2], cellY(fr)); } });
+    var before = W.__uk2().cur.join("");
+    e.key("keydown", " "); e.key("keyup", " ");
+    hq = { before: before, want: u.target.shape.join(""), correct: W.__uk2().correct, after: W.__uk2().cur.join("") };
+  });
+  ok(hq && hq.before === hq.want && hq.correct === 1 && hq.after === "0000", "hold mode: mark the chord, strum, and the marks clear after a correct answer", hq);
+  // ⬆アップは A→E→C→G の順
+  st0 = U.seqLoad(); st0.cur.tracks.rec1.notes = []; U.seqSave(st0);
+  env.run("ukulele", { config: { mode: "seq", seq: U.seqClean({ bpm: 60, countIn: false, rows: [{ type: "chord", name: "C", len: "b16" }] }), rec: "rec1" } }, 80, function (f, e) { if (f === 40) { e.key("keydown", "u"); e.key("keyup", "u"); } });
+  ok(U.seqLoad().cur.tracks.rec1.notes.map(function (n) { return n[1]; }).join() === "69,64,60,67", "up stroke plays A→E→C→G", U.seqLoad().cur.tracks.rec1.notes.map(function (n) { return n[1]; }));
 };
