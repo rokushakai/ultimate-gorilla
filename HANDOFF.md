@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.99.8** |
+| 現在バージョン | **v0.99.9** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.99.9] 🎸 パターンを増やす**（§190）: `SEQ_PATTERNS` に kind（"s"/"a"）と meter。パターン文字に 1〜4（pluck・string は 4−n）と P（string 0 と 3）。`ukePatterns(meter, kind)`・data-seq="patprev"（2小節の試聴）・select.uke-seq-rpsel
 - **[v0.99.8] 🎸 シーケンサー強化**（§189）: 行の style / pattern（schedule が行ごとの奏法を使う）・drum.groove "custom" と `drum.custom`（`UKE_DRUM_ROWS`・`ukeDrumFrom`）・seq.rate / rateUp（`ukeSeqAtRate`・`ukeSeqStart` の speed）・`ukeEstimateKey` / `ukeSuggest`（ピッカーの "rec" タブ）
 - **[v0.99.7] 🎸 上達メニュー**（§188）: mode "strum:<パターン>"（`ukeStrumNotes`・`strumJudge`・`drillStep`）/ "change:a|b"（`ukeBestSet`・`ultimateGorillaUkuleleBestV1`）/ "calib"（`calibTap`・中央値を prefs.latency に）。pluck で `strokeOrder`（ストロークの向き）。prefs に latency・strumBpm
 - **[v0.99.6] 🎸 練習の記録・リズム判定・予告**（§187）: `ukeStatsAdd` / `ukeWeakList`（`ultimateGorillaUkuleleStatsV1`）・mode "weak"・`ukeRhythmGrade`・`seqRhythm(1本目のフレーム)`（judge に1本目のフレームを渡す）・`nextShape()`・prefs.next
@@ -146,7 +147,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（505項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（512項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

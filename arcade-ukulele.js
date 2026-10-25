@@ -1329,9 +1329,15 @@
   // 表示の切りかえ・元に戻す・ズーム・グリッド
   var UKE_SEC_NAMES = ["イントロ", "Aメロ", "Bメロ", "サビ", "間奏", "アウトロ"];
   // §189: 行ごとの奏法
-  function ukeRowStyleHtml(r, i, sel) {
+  // §190: 拍子に合うパターン（kind: "s" / "a"、省略はどちらも）
+  function ukePatterns(meter, kind) {
+    return C.SEQ_PATTERNS.filter(function (pp) { return (pp.meter || 4) === (meter || 4) && (!kind || pp.kind === kind); });
+  }
+  function ukeRowStyleHtml(r, i, sel, meter) {
+    var popt = [["", "パターンを選ぶ…"]].concat(ukePatterns(meter).map(function (pp) { return [pp.p, (pp.kind === "a" ? "🎼 " : "🎸 ") + pp.label + " " + pp.p]; }));
     return '<span class="uke-seq-sty">' + sel('class="uke-seq-style" data-row="' + i + '"', [["song", "奏法: 全体"]].concat(C.SEQ_STYLES.map(function (st) { return [st.id, st.label]; })), r.style) +
-      (r.style === "pat" ? '<input type="text" class="uke-seq-rpat" data-row="' + i + '" maxlength="16" value="' + I.escHtml(r.pattern) + '">' : '') + '</span>';
+      (r.style === "pat" ? '<input type="text" class="uke-seq-rpat" data-row="' + i + '" maxlength="16" value="' + I.escHtml(r.pattern) + '">' +
+        sel('class="uke-seq-rpsel" data-row="' + i + '"', popt, "") + '<button class="arcade-mini-btn" data-seq="patprev" data-row="' + i + '" title="この行のパターンを試聴">&#x25B6;&#xFE0F;</button>' : '') + '</span>';
   }
   function ukeSecInput(i, name) {
     var h = '<input type="text" class="uke-seq-secname" data-row="' + i + '" maxlength="12" value="' + I.escHtml(name) + '" list="uke-sec-names">';
@@ -1359,7 +1365,7 @@
         '<button class="arcade-mini-btn" data-seq="rowplay" data-row="' + i + '" title="鳴らす">&#x25B6;&#xFE0F;</button>' +
         (r.name.charAt(0) === "★" ? '' : sel('class="uke-seq-pos" data-row="' + i + '"', [["auto", "位置: 全体"], ["low", "ロー"], ["mid", "ミドル"], ["high", "ハイ"]], r.pos)) +
         '<span class="uke-seq-res">' + (bad ? '<span style="color:#ff7675;">？ 読めない名前です</span>' : I.escHtml(info.name) + ' <span class="uke-role">押さえ方 ' + info.shape.join("-") + '</span>') + '</span>' +
-        ukeRowStyleHtml(r, i, sel);
+        ukeRowStyleHtml(r, i, sel, seq.meter);
     } else if (r.type === "rest") {
       h += '<span class="uke-seq-kind">&#x1F92B; 休符</span>';
     } else if (r.type === "tempo") {
@@ -1653,8 +1659,12 @@
       '<label>スイングする音符' + sel('data-set="swingGrid"', [[0.5, "8分"], [0.25, "16分"]], seq.swingGrid) + '</label>' +
       '<label>ポジション（全体）' + sel('data-set="pos"', UKE_POS, seq.pos) + '</label>' +
       '</div>' +
-      (seq.style === "pat" ? '<label class="melody-row"><span>パターン（1小節・D ダウン / U アップ / - 休み / x ブラッシング）</span><input type="text" class="uke-seq-pat" maxlength="16" value="' + I.escHtml(seq.pattern) + '"></label>' +
-        ukeChips(C.SEQ_PATTERNS.map(function (pp) { return { v: pp.p, t: pp.p + ' <span class="uke-role">' + pp.label + '</span>' }; }), function (v) { return v === seq.pattern; }, "pat") : '') +
+      (seq.style === "pat" ? '<label class="melody-row"><span>パターン（1小節・D ダウン / U アップ / - 休み / x ブラッシング / 1〜4 その弦だけ（1弦＝A・4弦＝G）/ P 4弦と1弦をいっしょに）</span><input type="text" class="uke-seq-pat" maxlength="16" value="' + I.escHtml(seq.pattern) + '"></label>' +
+        '<div class="uke-chips"><button class="uke-chip" data-seq="patprev">&#x25B6;&#xFE0F; パターンを試聴</button></div>' +
+        [["s", "&#x1F3B8; ストローク"], ["a", "&#x1F3BC; アルペジオ"]].map(function (kd) {
+          var pl0 = ukePatterns(seq.meter, kd[0]);
+          return pl0.length ? '<div class="uke-label">' + kd[1] + '</div>' + ukeChips(pl0.map(function (pp) { return { v: pp.p, t: pp.p + ' <span class="uke-role">' + pp.label + '</span>' }; }), function (v) { return v === seq.pattern; }, "pat") : '';
+        }).join("") : '') +
       '<div class="melody-checks uke-seq-checks">' +
       [["metronome", "メトロノーム"], ["countIn", "カウントイン（1小節）"], ["loop", "くりかえし"], ["backing", "合わせて弾くとき伴奏も鳴らす"]].map(function (c2) {
         return '<label><input type="checkbox" data-set="' + c2[0] + '"' + (seq[c2[0]] ? " checked" : "") + '> ' + c2[1] + '</label>';
@@ -1679,7 +1689,7 @@
           sel('class="uke-seq-len" data-row="' + i + '"', lenOptsFor(r.len), r.len) +
           '<span class="uke-seq-res">' + (r.name.charAt(0) === "★" ? '' : sel('class="uke-seq-pos" data-row="' + i + '"', [["auto", "位置: 全体"], ["low", "ロー"], ["mid", "ミドル"], ["high", "ハイ"]], r.pos) + ' ') +
           (bad ? '<span style="color:#ff7675;">？ 読めない名前です（🎯で選べます）</span>' : I.escHtml(info.name !== r.name ? "→" + info.name : info.name) + ' <span class="uke-role">押さえ方 ' + info.shape.join("-") + '</span>') + '</span>' +
-          ukeRowStyleHtml(r, i, sel);
+          ukeRowStyleHtml(r, i, sel, seq.meter);
       } else if (r.type === "rest") {
         h += '<span class="uke-seq-kind">&#x1F92B; 休符</span>' + sel('class="uke-seq-len" data-row="' + i + '"', lenOptsFor(r.len), r.len);
       } else if (r.type === "tempo") {
@@ -1783,6 +1793,7 @@
     all("select.uke-seq-pos", "onchange", function (ev) { seq.rows[rowOf(ev)].pos = ev.currentTarget.value; save(true); });
     all("select.uke-seq-style", "onchange", function (ev) { var rw = seq.rows[rowOf(ev)]; rw.style = ev.currentTarget.value; if (rw.style === "pat" && !rw.pattern) { rw.pattern = seq.pattern; } save(true); });
     all("input.uke-seq-rpat", "onchange", function (ev) { seq.rows[rowOf(ev)].pattern = C.seqPattern(ev.currentTarget.value); save(true); });
+    all("select.uke-seq-rpsel", "onchange", function (ev) { if (ev.currentTarget.value) { seq.rows[rowOf(ev)].pattern = ev.currentTarget.value; save(true); } });
     all("select.uke-seq-semis", "onchange", function (ev) { seq.rows[rowOf(ev)].semis = Number(ev.currentTarget.value); save(true); });
     all("input.uke-seq-bpm", "onchange", function (ev) { seq.rows[rowOf(ev)].bpm = Number(ev.currentTarget.value); save(true); });
     all("input.uke-seq-secname", "onchange", function (ev) {
@@ -1902,6 +1913,18 @@
         if (rateEl) { rateEl.textContent = sc.rate < 100 ? "いま " + sc.rate + "%" : ""; }
         var okp = sec ? ukeSeqStart(sec.seq, ctx.lowG, function (ri2, info2) { showNow(ri2 >= 0 ? ri2 + sec.offset : -1, info2); }, tick, speed) : ukeSeqStart(ukeSeqExpand(sc), ctx.lowG, showNow, tick, speed);
         if (!okp) { ctx.toast("鳴らせるコードがありません"); }
+        return;
+      }
+      if (a === "patprev") {
+        // §190: パターンだけを2小節（行の ▶ はその行のコードとパターン）
+        var pvs = ukeSeqClean(seq), pvr = r >= 0 ? pvs.rows[r] : null, pv = {}, pk, pvName = "C";
+        if (!pvr) { for (var pj = 0; pj < pvs.rows.length; pj++) { if (pvs.rows[pj].type === "chord" && ukeResolve(pvs.rows[pj].name, 0, ctx.lowG)) { pvName = pvs.rows[pj].name; break; } } }
+        else { pvName = pvr.name; }
+        for (pk in pvs) { if (pvs.hasOwnProperty(pk)) { pv[pk] = pvs[pk]; } }
+        var pvPat = pvr && pvr.style === "pat" ? pvr.pattern : pvs.pattern, pvLen = "b" + pvs.meter;
+        pv.rows = [0, 1].map(function () { return { type: "chord", name: pvName, len: pvLen, pos: pvr ? pvr.pos : "auto", style: "pat", pattern: pvPat }; });
+        pv.arr = []; pv.loop = false; pv.countIn = false; pv.metronome = false;
+        if (!ukeSeqStart(pv, ctx.lowG, null, null)) { ctx.toast("鳴らせるコードがありません"); }
         return;
       }
       if (a === "stop") { ukeSeqStop(); showNow(-1, null); ukeTl.play = null; if (ukeTl.redraw) { ukeTl.redraw(); } ukeLyrShow(root, [], null); return; }
@@ -2232,7 +2255,7 @@
         h += '<details class="uke-settings uke-drill"' + (ukeUi.drillOpen ? " open" : "") + '><summary>&#x1F3CB;&#xFE0F; 上達メニュー（ストローク練習・1分間チェンジ・タイミング調整）</summary>' +
           '<div class="uke-label">&#x1F941; ストローク練習（流れてくる ⬇⬆ に合わせて8小節）</div>' +
           '<div class="uke-seq-set"><label>テンポ' + ukeSelect('data-pp="strumBpm"', UKE_STRUM_BPMS.map(function (b0) { return [b0, "BPM " + b0]; }), prefs.strumBpm) + '</label></div>' +
-          ukeChips(C.SEQ_PATTERNS.map(function (pp) { return { v: "strum:" + pp.p, t: pp.p + ' <span class="uke-role">' + pp.label + '</span>' }; }), function () { return false; }, "m") +
+          ukeChips(ukePatterns(4, "s").map(function (pp) { return { v: "strum:" + pp.p, t: pp.p + ' <span class="uke-role">' + pp.label + '</span>' }; }), function () { return false; }, "m") +
           '<div class="uke-label">&#x1F501; 1分間チェンジ（60秒で何回持ちかえられるか）</div>' +
           ukeChips(UKE_CHANGE_PAIRS.map(function (pr0) { var k0 = pr0[0] + "|" + pr0[1]; return { v: "change:" + k0, t: pr0[0] + " ↔ " + pr0[1] + (bests[k0] ? ' <span class="uke-role">ベスト ' + bests[k0] + '回</span>' : '') }; }), function () { return false; }, "m") +
           '<div class="uke-label">&#x23F1;&#xFE0F; タイミング調整（いまの補正 ' + (prefs.latency > 0 ? "+" : "") + prefs.latency + 'ms）</div>' +
@@ -3293,7 +3316,7 @@
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
-    strumNotes: ukeStrumNotes, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
+    strumNotes: ukeStrumNotes, patterns: ukePatterns, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
     statsLoad: ukeStatsLoad, statsAdd: ukeStatsAdd, weakList: ukeWeakList, rhythmGrade: ukeRhythmGrade, STATS_KEY: UKE_STATS_KEY,
     countKeys: ukeCountKeys,
     markSet: ukeMarkSet, MARK_FRETS: UKE_MARK_FRETS,

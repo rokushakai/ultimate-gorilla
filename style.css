@@ -1206,9 +1206,10 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-step { width: 15px; height: 20px; border-radius: 3px; border: 1px solid #3d3d5c; background: #1b263b; padding: 0; }
 .uke-step.beat { border-color: #74b9ff; }
 .uke-step.on { background: #ffd166; border-color: #ffd166; }
-.uke-seq-sty { display: inline-flex; gap: 4px; margin-left: 4px; }
+.uke-seq-sty { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: 4px; max-width: 100%; }
 .uke-seq-sty select { font-size: 11px; padding: 2px 3px; max-width: none; }
 .uke-seq-sty input { width: 86px; font-size: 11px; padding: 2px 4px; }
 .uke-rate-up { justify-content: flex-end; }
 .uke-rate-up span { display: flex; align-items: center; gap: 4px; color: #f1e4c8; }
 .uke-rate-now { color: #55efc4 !important; font-weight: bold; }
+.uke-seq-sty select.uke-seq-rpsel { width: 7.5em; max-width: 7.5em; }

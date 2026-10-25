@@ -646,6 +646,29 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §190 ストロークパターン・アルペジオパターン =====
+  ok(C.SEQ_PATTERNS.length === 28 && C.SEQ_PATTERNS.every(function (pp) { return C.seqPattern(pp.p) === pp.p && pp.p.length === (pp.meter === 3 ? 6 : pp.p.length); }), "28 patterns, all valid (3/4 ones are 6 steps)");
+  ok(U.patterns(4, "s").length === 15 && U.patterns(4, "a").length === 9 && U.patterns(3).length === 4, "patterns are split by kind and meter", null);
+  ok(C.seqPattern("p-21x9q4") === "P-21x4" && C.seqPattern("du") === "DU", "pattern letters: D U x - 1-4 P (lower case is read)");
+  var aps = U.seqSchedule(U.seqClean({ countIn: false, style: "pat", pattern: "43214321", rows: [{ type: "chord", name: "C", len: "w" }] }), false);
+  var apl = aps.events.filter(function (e) { return e.track === "uke"; });
+  ok(apl.length === 8 && apl.every(function (e) { return e.kind === "pluck"; }) && apl.map(function (e) { return e.string; }).join() === "0,1,2,3,0,1,2,3" && Math.abs(apl[1].t - apl[0].t - aps.spb / 2) < 1e-9, "arpeggio pattern plucks string 4 → 1 in 8ths", apl.map(function (e) { return e.string; }));
+  var pps = U.seqSchedule(U.seqClean({ countIn: false, style: "pat", pattern: "P-2-D-xU", rows: [{ type: "chord", name: "C", len: "w" }] }), false);
+  var ppl = pps.events.filter(function (e) { return e.track === "uke"; }).map(function (e) { return e.kind + (e.kind === "pluck" ? e.string : ""); });
+  ok(ppl.join() === "pluck0,pluck3,pluck2,strum,chuck,strum", "pinch plays string 4 and 1 together, and strums mix in", ppl);
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ style: "pat", pattern: "P-21-P21", rows: [{ type: "chord", name: "C", len: "w", style: "pat", pattern: "31423142" }] }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.tl.view = "list";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-seq="patprev"') > 0 && hs.indexOf("アルペジオ") > 0 && hs.indexOf('data-pat="4321234143212341"') > 0 && hs.indexOf("uke-seq-rpsel") > 0 && hs.indexOf('data-pat="D-D-D-"') < 0, "pattern chips are split into strum / arpeggio with preview, and rows can pick a pattern", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play"; U.ui.drillOpen = true;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-m="strum:D-DUxUDUD-DUxUDU"') > 0 && hs.indexOf('data-m="strum:43214321"') < 0 && hs.indexOf('data-m="strum:D-D-D-"') < 0, "the strum drill offers only 4/4 strum patterns", null);
+  W.UGArcade.stop();
+  U.ui.drillOpen = false; U.tl.view = "tl";
+
   // ===== §189 ドラムの打ち込み・行ごとの奏法・練習テンポ・おすすめ =====
   var rsq = U.seqClean({ countIn: false, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "w", style: "e" }, { type: "chord", name: "F", len: "w", style: "pat", pattern: "d-d-d-d-" }, { type: "chord", name: "Am", len: "w", style: "zz" }] });
   ok(rsq.rows[0].style === "song" && rsq.rows[2].pattern === "D-D-D-D-" && rsq.rows[3].style === "song" && rsq.rows[1].pattern === "", "row styles are cleaned (unknown → song, pattern only for pat)", rsq.rows);

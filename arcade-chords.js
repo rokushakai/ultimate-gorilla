@@ -408,12 +408,23 @@
     { id: "pat", label: "🎵 パターン", unit: 0, pattern: true }
   ];
   // §172 v0.91: ストロークパターン（1小節。D ダウン / U アップ / - 休み / x ブラッシング）
+  // §190 v0.99.9: 1〜4 その弦だけ（1弦＝A … 4弦＝G）/ P 4弦と1弦をいっしょに。kind: "s" ストローク / "a" アルペジオ。meter: 拍子（なしは 4）
   var SEQ_PATTERNS = [
-    { p: "D-DU-UDU", label: "島のストローク" }, { p: "D-D-D-D-", label: "4分" }, { p: "DUDUDUDU", label: "8分" },
-    { p: "D--UD-DU", label: "ためて" }, { p: "D-xUD-xU", label: "チャック入り" }, { p: "DDUUDDUU", label: "2つずつ" }
+    { p: "D-DU-UDU", label: "島のストローク", kind: "s" }, { p: "D-D-D-D-", label: "4分", kind: "s" }, { p: "DUDUDUDU", label: "8分", kind: "s" },
+    { p: "D--UD-DU", label: "ためて", kind: "s" }, { p: "D-xUD-xU", label: "チャック入り", kind: "s" }, { p: "DDUUDDUU", label: "2つずつ", kind: "s" },
+    { p: "D-DUD-DU", label: "ポップス", kind: "s" }, { p: "D---D-DU", label: "バラード", kind: "s" }, { p: "D-D-DUDU", label: "走り出し", kind: "s" },
+    { p: "xUxUxUxU", label: "裏打ち（レゲエ風）", kind: "s" }, { p: "D-xU-UxU", label: "カッティング", kind: "s" },
+    { p: "D-DUxUDUD-DUxUDU", label: "16ビート", kind: "s" }, { p: "D--D--D-D-DUxUDU", label: "シンコペーション", kind: "s" },
+    { p: "D-UD-UD-UD-U", label: "シャッフル（3連）", kind: "s" }, { p: "D--D-UD--D-U", label: "ブルース（3連）", kind: "s" },
+    { p: "D-D-D-", label: "3拍子", kind: "s", meter: 3 }, { p: "D-DUDU", label: "ワルツ", kind: "s", meter: 3 },
+    { p: "43214321", label: "上り（4→1）", kind: "a" }, { p: "12341234", label: "下り（1→4）", kind: "a" }, { p: "32123212", label: "行ったり来たり", kind: "a" },
+    { p: "4-3-2-1-", label: "ゆったり", kind: "a" }, { p: "P-2-P-2-", label: "ピンチ", kind: "a" }, { p: "31423142", label: "トラヴィス風", kind: "a" },
+    { p: "3-21D-DU", label: "アルペジオ＋ストローク", kind: "a" }, { p: "P-21-P21", label: "ボサノバ風", kind: "a" },
+    { p: "4321234143212341", label: "16分の波", kind: "a" },
+    { p: "321212", label: "3拍子", kind: "a", meter: 3 }, { p: "P-2121", label: "ワルツ（ピンチ）", kind: "a", meter: 3 }
   ];
   function seqPattern(p) {
-    var out = String(p || "").toUpperCase().replace(/X/g, "x").replace(/[^DUx\-]/g, "").slice(0, 16);
+    var out = String(p || "").toUpperCase().replace(/X/g, "x").replace(/[^DUxP1-4\-]/g, "").slice(0, 16);
     return out || "D-DU-UDU";
   }
   var SEQ_SWINGS = [{ v: 0.5, label: "なし" }, { v: 0.58, label: "軽め 58%" }, { v: 0.62, label: "中くらい 62%" }, { v: 0.67, label: "3連 67%" }, { v: 0.72, label: "強め 72%" }];
@@ -501,6 +512,12 @@
           var chp = pat.charAt(((kp % pat.length) + pat.length) % pat.length), tp = tm(kp * patUnit);
           if (chp === "D" || chp === "U") { events.push({ t: tp, kind: "strum", dir: chp === "D" ? "down" : "up", shape: res.shape, row: rows.length - 1 }); }
           else if (chp === "x") { events.push({ t: tp, kind: "chuck", shape: res.shape, row: rows.length - 1 }); }
+          // §190: 弦の番号（1弦＝A は形の [3]）とピンチ（4弦＋1弦）
+          else if (chp >= "1" && chp <= "4") { events.push({ t: tp, kind: "pluck", string: 4 - parseInt(chp, 10), shape: res.shape, row: rows.length - 1 }); }
+          else if (chp === "P") {
+            events.push({ t: tp, kind: "pluck", string: 0, shape: res.shape, row: rows.length - 1 });
+            events.push({ t: tp, kind: "pluck", string: 3, shape: res.shape, row: rows.length - 1 });
+          }
           if (Math.abs(kp * patUnit - start) < EPS && chp !== "-") { hitStart = true; }
         }
         // 頭が休みの位置でも、コードが変わったら最初に1回鳴らす
