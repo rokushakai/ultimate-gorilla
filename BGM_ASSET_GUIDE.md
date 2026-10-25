@@ -195,7 +195,7 @@ OscillatorNode (osc)
 
 | 場面 | BGM cue | 対応ファイル（推奨構成） | 対応ファイル（最小構成） | ループ | 共用先 |
 |---|---|---|---|---|---|
-| 通常フィールド | `field` | `uranawanaii_field.mp3` | `uranawanaii_field.mp3` | 有 | — |
+| 通常フィールド | `field` | `toilet_kutsurogu_demo2.mp3`（v0.92〜「トイレでくつろぐなよ」仮デモ2。以前は `uranawanaii_field.mp3`） | `uranawanaii_field.mp3` | 有 | — |
 | クリア後フィールド | `fieldClear` | `uranawanaii_field_clear.mp3` | `uranawanaii_field.mp3` | 有 | field（最小構成時） |
 | 全戦闘 | `battle` | `uranawanaii_battle.mp3` | `uranawanaii_battle.mp3` | 有 | — |
 | エンディング | `ending` | `uranawanaii_ending.mp3` | `uranawanaii_ending.mp3` | 有 | — |

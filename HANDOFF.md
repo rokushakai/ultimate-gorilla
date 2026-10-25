@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.91** |
+| 現在バージョン | **v0.92** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.92] フィールドBGMの差し替え**（§173）: `BGM_FILE_DATA.field.src` → `toilet_kutsurogu_demo2.mp3`（「トイレでくつろぐなよ」仮デモ2）。旧 `uranawanaii_field.mp3` は残してある
 - **[v0.91] 🎸 ストロークパターン・小節・書き出し**（§172）: arcade-chords.js `SEQ_PATTERNS` / `seqPattern` / schedule の style "pat"（イベント kind "chuck"）・rows[].bar・sched.bars。ukulele `ukeSeqRec`（メロディの録音形式に変換）/ `ukeSeqExportMidi` / `ukeSeqExportWav`
 - **[v0.90] 🎸 本物らしい音・勉強の助け・耳コピ**（§171）: `melodySynth(midi, prog, when, level, dest)` の dest（arcade-melody.js・後方互換）。ukulele `ukeStringOut`（弦ごとの GainNode を止める）/ `ukeNote` / `ukeVelocity` / `ukeFingering` / `ukePrefs`（lowG・notes・tones・fingers）/ mode "ear:easy|normal|hard"（`ukeEarBtn` 2×2）
 - **[v0.89] 🎸 シーケンサー**（§170）: arcade-chords.js `swingBeat` / `schedule(seq, resolve)`（行の時間・ストローク/アルペジオ/クリックの予定）。ukulele `ukeSeqTab`（設定タブ）・`ukeSeqStart`（setInterval 25ms・120ms 先まで予約・停止フック）・`ukeResolve`（★マイコード対応）・ゲームの mode "seq"（`seqStep`: 時間はフレームから数え、音は AudioContext の時計に予約）。保存 `ultimateGorillaUkuleleSeqV1`

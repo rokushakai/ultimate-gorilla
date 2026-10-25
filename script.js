@@ -1134,7 +1134,7 @@
   var _bgmBackend = "none";        // 現在有効なバックエンド: "file" | "generated" | "none"
   var BGM_FILE_BASE_VOLUME = 0.45; // ファイルBGM初期音量（0〜1）
   var BGM_FILE_DATA = {
-    field:      { src: "./assets/audio/bgm/uranawanaii/uranawanaii_field.mp3",       loop: true },
+    field:      { src: "./assets/audio/bgm/uranawanaii/toilet_kutsurogu_demo2.mp3",  loop: true }, // §173 v0.92: 「トイレでくつろぐなよ」仮デモ2
     fieldClear: { src: "./assets/audio/bgm/uranawanaii/uranawanaii_field_clear.mp3", loop: true },
     battle:     { src: "./assets/audio/bgm/uranawanaii/uranawanaii_battle.mp3",       loop: true },
     ending:     { src: "./assets/audio/bgm/uranawanaii/uranawanaii_ending.mp3",       loop: true }
