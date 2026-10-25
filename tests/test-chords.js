@@ -7,7 +7,7 @@ function patch(src, file) {
   if (file !== "arcade-ukulele.js") { return src; }
   var a = "      var msg = \"\", msgT = 0, msgGood = false, wrong = null, wrongT = 0;";
   if (src.indexOf(a) < 0) { throw new Error("ukulele patch target missing"); }
-  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode, ear: ear, msg: msg, L: L }; };");
+  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode, ear: ear, msg: msg, L: L, fr: frames }; };");
 }
 function pcsOf(C, shape, lowG) {
   var m = C.shapeMidis(shape, lowG), o = {};
@@ -646,6 +646,63 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §188 上達メニュー =====
+  var sn = U.strumNotes("D-DU-UDU", 60);
+  ok(sn.length === 48 && sn[0].t === 4 && sn[1].t === 5 && sn[2].t === 5.5 && sn[2].dir === "up" && sn[6].t === 8, "strum drill notes: count-in bar then 8 bars of the pattern", sn.slice(0, 7));
+  function strumBot(cfg9, flip) {
+    var notes = U.strumNotes(cfg9.mode.substring(6), cfg9.strumBpm), done = {};
+    return env.run("ukulele", { config: cfg9 }, 3000, function (f, e) {
+      var t = (f + 1 - 30) / 60;
+      notes.forEach(function (n, i9) {
+        if (done[i9] || Math.abs(t - n.t) > 0.009) { return; }
+        done[i9] = true;
+        var k9 = (n.dir === "down") !== !!flip ? "d" : "u";
+        e.key("keydown", k9); e.key("keyup", k9);
+      });
+    });
+  }
+  r = strumBot({ mode: "strum:D-D-D-D-", strumBpm: 120 });
+  var titles = env.counters.texts.filter(function (t9) { return t9.indexOf("おつかれさま！") === 0; });
+  ok(r.ended === 32 * 30 && titles.length && titles[titles.length - 1] === "おつかれさま！ 正確さ100%", "strum drill: on-time strokes in the right direction are all PERFECT", { ended: r.ended, t: titles.slice(-1) });
+  r = strumBot({ mode: "strum:D-D-D-D-", strumBpm: 120 }, true);
+  titles = env.counters.texts.filter(function (t9) { return t9.indexOf("おつかれさま！") === 0; });
+  ok(r.ended === 0 && titles[titles.length - 1] === "おつかれさま！ 正確さ0%", "strum drill: wrong direction is a MISS", { ended: r.ended, t: titles.slice(-1) });
+  // 1分間チェンジ: 交互に出題・自己ベスト
+  env.store[U.BEST_KEY] = "{}";
+  var chSeen = [];
+  r = env.run("ukulele", { config: { mode: "change:C|Am", hold: true } }, 3700, function (f, e) {
+    if (f % 20 !== 5) { return; }
+    var u = W.__uk2();
+    if (!u.target) { return; }
+    chSeen.push(u.target.name);
+    u.target.shape.forEach(function (fr, s2) { if (fr > 0) { e.tap(U.STRX[s2], cy2(fr)); } });
+    e.key("keydown", " "); e.key("keyup", " ");
+  });
+  var bestC = U.bestLoad()["C|Am"];
+  ok(chSeen.slice(0, 4).join() === "C,Am,C,Am" && bestC >= 100 && r.ended === bestC * 50, "1-minute changes: C and Am alternate, the count is saved as the best", { seen: chSeen.slice(0, 4), best: bestC, ended: r.ended });
+  ok(U.bestSet("C|Am", 3) === false && U.bestSet("C|Am", bestC + 1) === true, "the best only goes up");
+  // タイミング調整: 拍より 0.1秒 おそく鳴らすと +100ms
+  r = env.run("ukulele", { config: { mode: "calib" } }, 600, function (f, e) {
+    // ゲームのフレームで時刻を数える（鳴らした瞬間の frames が判定に使われる）
+    var t = (W.__uk2().fr - 30) / 60;
+    for (var b9 = 4; b9 < 12; b9++) { if (Math.abs(t - (b9 * 0.6 + 0.1)) < 0.008) { e.key("keydown", " "); e.key("keyup", " "); } }
+  });
+  ok(U.prefs().latency === 100, "timing calibration measures +100ms when strokes come 0.1s late", U.prefs().latency);
+  // 補正つきだと 0.1秒おそいストロークも PERFECT
+  var pft = 0;
+  env.run("ukulele", { config: { mode: "seq", hold: true, latency: 100, seq: U.seqClean({ bpm: 120, countIn: false, style: "once", rows: [{ type: "chord", name: "C", len: "w" }] }) } }, 120, function (f, e) {
+    if (f === 20) { e.tap(U.STRX[3], cy2(3)); }
+    if (f === 66) { e.key("keydown", " "); e.key("keyup", " "); }
+    if (f === 67) { pft = env.counters.texts.filter(function (t9) { return t9.indexOf("PERFECT") === 0; }).length; }
+  });
+  ok(pft > 0, "latency correction: a stroke 0.1s late is PERFECT with +100ms", pft);
+  var pz = U.prefs(); pz.latency = 0; env.store["ultimateGorillaUkulelePrefsV1"] = JSON.stringify(pz);
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf("上達メニュー") > 0 && hs.indexOf('data-m="strum:D-DU-UDU"') > 0 && hs.indexOf('data-m="change:C|Am"') > 0 && hs.indexOf("ベスト " + (bestC + 1) + "回") > 0 && hs.indexOf('data-m="calib"') > 0 && hs.indexOf('data-lat="10"') > 0, "play tab: drill menu with patterns, change pairs (best) and calibration", null);
+  W.UGArcade.stop();
+
   // ===== §187 練習の記録・リズム判定・次のコードの予告 =====
   env.store[U.STATS_KEY] = "{}";
   U.statsAdd("C", true, 2); U.statsAdd("C", true, 4); U.statsAdd("F", false); U.statsAdd("F", true, 6); U.statsAdd("G7", true, 9); U.statsAdd("Am", true, 1);
@@ -658,7 +715,8 @@ module.exports = async function () {
   // 練習で記録される（正解とおしい）
   env.store[U.STATS_KEY] = "{}";
   env.run("ukulele", { config: { mode: "easy", hold: true } }, 30, function (f, e) {
-    if (f === 3) { e.key("keydown", " "); e.key("keyup", " "); }
+    // まず必ずちがう押さえ方（G弦5フレット）で鳴らす → はなす → お手本どおり
+    if (f === 3) { e.tap(U.STRX[0], cy2(5)); e.key("keydown", " "); e.key("keyup", " "); e.key("keydown", "Backspace"); e.key("keyup", "Backspace"); }
     if (f === 6) { var u = W.__uk2(); u.target.shape.forEach(function (fr, s2) { if (fr > 0) { e.tap(U.STRX[s2], cy2(fr)); } }); e.key("keydown", " "); e.key("keyup", " "); }
   });
   var stx = U.statsLoad(), stk = Object.keys(stx);
