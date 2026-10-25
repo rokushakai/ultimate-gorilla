@@ -39,16 +39,48 @@
     // §168 v0.87: コード進行だけで使う（クイズには出ない）
     extra: [{ name: "Fmaj7", shape: [2, 4, 1, 3] }, { name: "Gm7", shape: [0, 2, 1, 1] }]
   };
-  // §168 v0.87: コード進行で練習（2周でクリア）
+  // §168 v0.87 / §183 v0.99.2: コード進行で練習（2周でクリア）。キー C で書き、度数と説明つき
+  var UKE_PROG_CATS = [
+    { id: "jpop", name: "&#x1F38C; J-POPの定番" }, { id: "rock", name: "&#x1F3B8; 洋楽・ロック" },
+    { id: "jazz", name: "&#x1F3B7; ジャズ・おしゃれ" }, { id: "cliche", name: "&#x1F3B5; クリシェ・終止形" }
+  ];
   var UKE_PROGRESSIONS = [
-    { id: "ohdo", name: "&#x1F38C; 王道進行", chords: ["F", "G7", "Em", "Am"] },
-    { id: "canon", name: "&#x1F3BB; カノン進行", chords: ["C", "G", "Am", "Em", "F", "C", "F", "G7"] },
-    { id: "fifties", name: "&#x1F3B7; 50年代進行", chords: ["C", "Am", "F", "G7"] },
-    { id: "komuro", name: "&#x1F303; 小室進行", chords: ["Am", "F", "G", "C"] },
-    { id: "letitbe", name: "&#x1F3B9; レット・イット・ビー風", chords: ["C", "G", "Am", "F"] },
-    { id: "marusa", name: "&#x1F319; 丸サ進行（おしゃれ）", chords: ["Fmaj7", "E7", "Am7", "Gm7", "C7"] }
+    { id: "ohdo", cat: "jpop", name: "王道進行", chords: ["F", "G7", "Em", "Am"], deg: ["Ⅳ", "Ⅴ7", "Ⅲm", "Ⅵm"], note: "J-POPのサビの大定番。せつなさと前向きさが同居" },
+    { id: "ohdo7", cat: "jpop", name: "王道進行（7th版）", chords: ["Fmaj7", "G7", "Em7", "Am7"], deg: ["Ⅳmaj7", "Ⅴ7", "Ⅲm7", "Ⅵm7"], note: "4和音にして、おしゃれで大人っぽく" },
+    { id: "ohdo37", cat: "jpop", name: "王道進行（Ⅲ7入り）", chords: ["F", "G7", "E7", "Am"], deg: ["Ⅳ", "Ⅴ7", "Ⅲ7", "Ⅵm"], note: "Ⅲmを Ⅲ7 にすると、次の Ⅵm へ強く引っぱる（セカンダリードミナント）" },
+    { id: "komuro", cat: "jpop", name: "小室進行", chords: ["Am", "F", "G", "C"], deg: ["Ⅵm", "Ⅳ", "Ⅴ", "Ⅰ"], note: "マイナーから始まる、疾走感のある進行" },
+    { id: "canon", cat: "jpop", name: "カノン進行", chords: ["C", "G", "Am", "Em", "F", "C", "F", "G7"], deg: ["Ⅰ", "Ⅴ", "Ⅵm", "Ⅲm", "Ⅳ", "Ⅰ", "Ⅳ", "Ⅴ7"], note: "パッヘルベルのカノンから。いろいろな曲で使われる" },
+    { id: "canonbass", cat: "jpop", name: "カノン進行（ベース下降）", chords: ["C", "G/B", "Am", "Em/G", "F", "C/E", "Dm7", "G7"], deg: ["Ⅰ", "Ⅴ/Ⅶ", "Ⅵm", "Ⅲm/Ⅴ", "Ⅳ", "Ⅰ/Ⅲ", "Ⅱm7", "Ⅴ7"], note: "分数コードでベースが ド→シ→ラ→ソ… と1音ずつ下がる" },
+    { id: "marusa", cat: "jpop", name: "丸サ進行（おしゃれ）", chords: ["Fmaj7", "E7", "Am7", "Gm7", "C7"], deg: ["Ⅳmaj7", "Ⅲ7", "Ⅵm7", "Ⅴm7", "Ⅰ7"], note: "Ⅲ と Ⅰ を 7th にした都会的な進行" },
+    { id: "i37", cat: "jpop", name: "Ⅰ–Ⅲ7–Ⅵm–Ⅴ", chords: ["C", "E7", "Am", "G"], deg: ["Ⅰ", "Ⅲ7", "Ⅵm", "Ⅴ"], note: "Ⅲ7 で一度ゆさぶってから Ⅵm へ" },
+    { id: "fifties", cat: "rock", name: "50年代進行", chords: ["C", "Am", "F", "G7"], deg: ["Ⅰ", "Ⅵm", "Ⅳ", "Ⅴ7"], note: "オールディーズの定番。くり返しで覚えやすい" },
+    { id: "letitbe", cat: "rock", name: "レット・イット・ビー風", chords: ["C", "G", "Am", "F"], deg: ["Ⅰ", "Ⅴ", "Ⅵm", "Ⅳ"], note: "Ⅰ–Ⅴ–Ⅵm–Ⅳ。洋楽ポップスの大定番" },
+    { id: "setsunai", cat: "rock", name: "せつない進行", chords: ["Am", "F", "C", "G"], deg: ["Ⅵm", "Ⅳ", "Ⅰ", "Ⅴ"], note: "Ⅰ–Ⅴ–Ⅵm–Ⅳ を Ⅵm から始めた形。暗めでエモい" },
+    { id: "three", cat: "rock", name: "スリーコード", chords: ["C", "F", "G7", "C"], deg: ["Ⅰ", "Ⅳ", "Ⅴ7", "Ⅰ"], note: "Ⅰ・Ⅳ・Ⅴ の3つだけ。ロックやフォークの基本" },
+    { id: "mixo", cat: "rock", name: "ミクソリディアン（♭Ⅶ）", chords: ["C", "B♭", "F", "C"], deg: ["Ⅰ", "♭Ⅶ", "Ⅳ", "Ⅰ"], note: "♭Ⅶ（シ♭のコード）を使うと、ロックっぽい力強さ" },
+    { id: "andalusia", cat: "rock", name: "アンダルシア進行", chords: ["Am", "G", "F", "E7"], deg: ["Ⅵm", "Ⅴ", "Ⅳ", "Ⅲ7"], note: "フラメンコ風。ベースが ラ→ソ→ファ→ミ と下がる" },
+    { id: "b67", cat: "rock", name: "♭Ⅵ–♭Ⅶ–Ⅰ（クリア風）", chords: ["A♭", "B♭", "C", "C"], deg: ["♭Ⅵ", "♭Ⅶ", "Ⅰ", "Ⅰ"], note: "明るく堂々とした終わり方。ゲームのファンファーレ風" },
+    { id: "blues", cat: "rock", name: "12小節ブルース", chords: ["C7", "C7", "C7", "C7", "F7", "F7", "C7", "C7", "G7", "F7", "C7", "G7"], deg: ["Ⅰ7", "Ⅰ7", "Ⅰ7", "Ⅰ7", "Ⅳ7", "Ⅳ7", "Ⅰ7", "Ⅰ7", "Ⅴ7", "Ⅳ7", "Ⅰ7", "Ⅴ7"], note: "12小節でひとまわり。シャッフル（スイング）で", style: "e", swing: 0.67, bpm: 100 },
+    { id: "251", cat: "jazz", name: "ii-V-I", chords: ["Dm7", "G7", "Cmaj7", "Cmaj7"], deg: ["Ⅱm7", "Ⅴ7", "Ⅰmaj7", "Ⅰmaj7"], note: "ジャズの基本中の基本", style: "q", swing: 0.62, bpm: 110 },
+    { id: "junkan", cat: "jazz", name: "循環コード", chords: ["C", "Am", "Dm", "G7"], deg: ["Ⅰ", "Ⅵm", "Ⅱm", "Ⅴ7"], note: "Ⅰ–Ⅵm–Ⅱm–Ⅴ7 をくり返す。ジャズやポップスの定番", style: "q", swing: 0.62, bpm: 110 },
+    { id: "gyaku", cat: "jazz", name: "逆循環", chords: ["Dm7", "G7", "C", "Am7"], deg: ["Ⅱm7", "Ⅴ7", "Ⅰ", "Ⅵm7"], note: "Ⅱm から始める循環。おしゃれに回る", style: "q", swing: 0.62, bpm: 110 },
+    { id: "rhythm", cat: "jazz", name: "リズム・チェンジ風", chords: ["Cmaj7", "A7", "Dm7", "G7"], deg: ["Ⅰmaj7", "Ⅵ7", "Ⅱm7", "Ⅴ7"], note: "Ⅵ を 7th にして次へ強く進む。ジャズの定番", style: "q", swing: 0.62, bpm: 120 },
+    { id: "kareha", cat: "jazz", name: "枯葉風", chords: ["Dm7", "G7", "Cmaj7", "Fmaj7", "Bm7(♭5)", "E7", "Am7", "Am7"], deg: ["Ⅱm7", "Ⅴ7", "Ⅰmaj7", "Ⅳmaj7", "Ⅶm7(♭5)", "Ⅲ7", "Ⅵm7", "Ⅵm7"], note: "Ⅱ–Ⅴ–Ⅰ をメジャーとマイナーで2回。スタンダードの形", style: "q", swing: 0.62, bpm: 100 },
+    { id: "minor251", cat: "jazz", name: "マイナー ii-V-i", chords: ["Bm7(♭5)", "E7", "Am", "Am"], deg: ["Ⅶm7(♭5)", "Ⅲ7", "Ⅵm", "Ⅵm"], note: "マイナーのキーで終わる Ⅱm7(♭5)–Ⅴ7–Ⅰm（Am のキーで見たとき）", style: "q", swing: 0.62, bpm: 100 },
+    { id: "clichedown", cat: "cliche", name: "下降クリシェ", chords: ["Am", "AmM7", "Am7", "Am6"], deg: ["Ⅵm", "ⅥmM7", "Ⅵm7", "Ⅵm6"], note: "コードはそのままで、1つの音だけが ラ→ソ#→ソ→ファ# と半音ずつ下がる" },
+    { id: "clicheup", cat: "cliche", name: "上昇クリシェ", chords: ["C", "Caug", "C6", "C7"], deg: ["Ⅰ", "Ⅰaug", "Ⅰ6", "Ⅰ7"], note: "5度の音が ソ→ソ#→ラ→シ♭ と上がっていく" },
+    { id: "sdm", cat: "cliche", name: "サブドミナントマイナー", chords: ["F", "Fm", "C", "C"], deg: ["Ⅳ", "Ⅳm", "Ⅰ", "Ⅰ"], note: "Ⅳ を一瞬マイナー（Ⅳm）にすると、切なく温かい" },
+    { id: "cadence", cat: "cliche", name: "終止形（カデンツ）", chords: ["F", "G7", "C", "C"], deg: ["Ⅳ", "Ⅴ7", "Ⅰ", "Ⅰ"], note: "Ⅳ→Ⅴ→Ⅰ で「おしまい」の感じ（完全終止）" },
+    { id: "deceptive", cat: "cliche", name: "偽終止", chords: ["F", "G7", "Am", "Am"], deg: ["Ⅳ", "Ⅴ7", "Ⅵm", "Ⅵm"], note: "Ⅰ に行くと思わせて Ⅵm へ。意外な展開に" },
+    { id: "domchain", cat: "cliche", name: "ドミナントの連鎖", chords: ["E7", "A7", "D7", "G7", "C"], deg: ["Ⅲ7", "Ⅵ7", "Ⅱ7", "Ⅴ7", "Ⅰ"], note: "7th のコードが4度ずつ進んで、最後に Ⅰ に着く" }
   ];
   var UKE_PROG_LOOPS = 2;
+  // 進行のコードをキー（半音）でずらした名前の一覧
+  function ukeProgChords(prog, key) {
+    var out = [];
+    for (var i = 0; i < prog.chords.length; i++) { out.push(key && C ? C.transposeName(prog.chords[i], key) : prog.chords[i]); }
+    return out;
+  }
   function ukeProgression(id) {
     for (var i = 0; i < UKE_PROGRESSIONS.length; i++) { if (UKE_PROGRESSIONS[i].id === id) { return UKE_PROGRESSIONS[i]; } }
     return null;
@@ -230,10 +262,10 @@
   // 設定（Low-G・勉強の助け）を読む・書く（足りない項目は既定値）
   function ukePrefs() {
     var p0 = lsGet(UKE_PREFS_KEY) || {};
-    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal", hold: p0.hold === "hold" ? "hold" : "real" };
+    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal", hold: p0.hold === "hold" ? "hold" : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p0.progKey) || 0))) };
   }
   function ukeSavePrefs(p1) {
-    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal", hold: p1.hold === "hold" ? "hold" : "real" });
+    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal", hold: p1.hold === "hold" ? "hold" : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p1.progKey) || 0))) });
   }
   // 設定画面で音を鳴らす（arp: アルペジオ）
   function ukePlayShape(shape, lowG, arp) {
@@ -613,10 +645,9 @@
   function ukeSeqPresets() {
     var out = [], i;
     for (i = 0; i < UKE_PROGRESSIONS.length; i++) {
-      out.push({ id: UKE_PROGRESSIONS[i].id, name: UKE_PROGRESSIONS[i].name, chords: UKE_PROGRESSIONS[i].chords, len: "w", style: "e", swing: 0.5, bpm: 90 });
+      var pg = UKE_PROGRESSIONS[i];
+      out.push({ id: pg.id, name: pg.name, chords: pg.chords, len: "w", style: pg.style || "e", swing: pg.swing || 0.5, bpm: pg.bpm || 90 });
     }
-    out.push({ id: "blues", name: "&#x1F3B8; 12小節ブルース", chords: ["C7", "C7", "C7", "C7", "F7", "F7", "C7", "C7", "G7", "F7", "C7", "G7"], len: "w", style: "e", swing: 0.67, bpm: 100 });
-    out.push({ id: "251", name: "&#x1F3B7; ii-V-I（ジャズ）", chords: ["Dm7", "G7", "Cmaj7", "Cmaj7"], len: "w", style: "q", swing: 0.62, bpm: 110 });
     return out;
   }
   // 1つの音・ストロークを予約して鳴らす
@@ -1941,8 +1972,19 @@
           modeBtn("ear:easy", "&#x1F530; やさしい", "C・Am・F・G7 など7つから") +
           modeBtn("ear:normal", "&#x1F3B8; ふつう", "18コードから") +
           modeBtn("ear:hard", "&#x1F525; むずかしい", "コード辞典360コードから（同じ根音の別の種類とくらべる）");
-        h += '<h4 class="arcade-prize-cat">&#x1F3BC; コード進行で練習（2周でクリア・時間制限なし）</h4>';
-        for (i = 0; i < UKE_PROGRESSIONS.length; i++) { h += modeBtn("prog:" + UKE_PROGRESSIONS[i].id, UKE_PROGRESSIONS[i].name, UKE_PROGRESSIONS[i].chords.join(" → ")); }
+        h += '<h4 class="arcade-prize-cat">&#x1F3BC; コード進行で練習（2周でクリア・時間制限なし）</h4>' +
+          '<div class="uke-seq-set"><label>進行のキー' + ukeSelect('data-pp="progKey"', C.ROOTS.map(function (r0, ri) { return [ri, r0 + (ri ? "（" + (ri > 6 ? "−" + (12 - ri) : "+" + ri) + "）" : "（そのまま）")]; }), prefs.progKey) + '</label></div>' +
+          '<p class="small" style="color:#adb5bd;margin:2px 0 4px;">度数（Ⅰ・Ⅳ・Ⅴ…）はキーが変わっても同じ。同じ進行をいろいろなキーで弾くと、形のちがいが分かるよ。</p>';
+        for (var pc = 0; pc < UKE_PROG_CATS.length; pc++) {
+          h += '<div class="uke-label" style="margin-top:6px;">' + UKE_PROG_CATS[pc].name + '</div>';
+          for (i = 0; i < UKE_PROGRESSIONS.length; i++) {
+            var pg = UKE_PROGRESSIONS[i];
+            if (pg.cat !== UKE_PROG_CATS[pc].id) { continue; }
+            h += '<button class="modal-btn uke-prog-btn" data-m="prog:' + pg.id + '" style="width:100%;"><b>' + pg.name + '</b>' +
+              '<br><span class="small" style="color:inherit;">' + I.escHtml(ukeProgChords(pg, prefs.progKey).join(" → ")) + '</span>' +
+              '<br><span class="small" style="color:inherit;opacity:0.75;">' + pg.deg.join("–") + '　' + pg.note + '</span></button>';
+          }
+        }
       } else if (ukeUi.tab === "dict") {
         h += '<p class="small" style="color:#adb5bd;margin:0 0 6px;">根音と種類を選ぶと、押さえ方と構成音が出るよ（12×30＝360コード）。</p>' +
           '<div class="uke-label">根音</div>' + ukeChips(ukeRootItems(), function (v) { return v === ukeUi.dRoot; }, "droot") +
@@ -2098,7 +2140,7 @@
       for (var pi = 0; pi < pps.length; pi++) {
         pps[pi].onchange = function (ev) {
           var k2 = attr(ev, "data-pp");
-          prefs[k2] = k2 === "frets" ? Number(ev.currentTarget.value) : ev.currentTarget.value;
+          prefs[k2] = k2 === "frets" || k2 === "progKey" ? Number(ev.currentTarget.value) : ev.currentTarget.value;
           ukeSavePrefs(prefs);
           render();
         };
@@ -2117,7 +2159,7 @@
         if (v === "back") { ukeSeqStop(); ctl.back(); return; }
         ukeSeqStop();
         ukeSavePrefs(prefs);
-        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact", hold: prefs.hold === "hold" });
+        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact", hold: prefs.hold === "hold", progKey: prefs.progKey });
       });
     }
     render();
@@ -2150,6 +2192,7 @@
       if (L.compact && api.setCanvasHeight) { api.setCanvasHeight(L.h); }
       var mode = cfg.mode || "free", practice = mode !== "free", lowG = !!cfg.lowG;
       var prog = mode.indexOf("prog:") === 0 ? ukeProgression(mode.substring(5)) : null, progIdx = -1, progTotal = prog ? prog.chords.length * UKE_PROG_LOOPS : 0;
+      var progKey = Math.max(0, Math.min(11, Math.round(Number(cfg.progKey) || 0))), progChords = prog ? ukeProgChords(prog, progKey) : [], progDeg = ""; // §183
       if (mode.indexOf("prog:") === 0 && !prog) { mode = "free"; practice = false; }
       var fingers = {}, sticky = {}, strums = {}, ring = [0, 0, 0, 0], lastPluck = [-999, -999, -999, -999];
       var frames = 0, chordT = 0, target = null, set = ukeChordSet(mode), correct = 0, ended = false;
@@ -2202,7 +2245,10 @@
             api.gameOver("CLEAR!");
             return;
           }
-          target = UKE_BY_NAME[prog.chords[progIdx % prog.chords.length]];
+          var pnm = progChords[progIdx % progChords.length], psp = C ? C.parse(pnm) : null;
+          target = UKE_BY_NAME[pnm] || (psp ? { name: C.name(psp), shape: (ukeVoicePos(psp, lowG, cfg.posPref)[0] || [0, 0, 0, 0]) } : null);
+          if (target && psp && UKE_BY_NAME[pnm]) { target = { name: pnm, shape: UKE_BY_NAME[pnm].shape }; }
+          progDeg = prog.deg ? prog.deg[progIdx % prog.deg.length] : "";
           chordT = 0;
           pos = ukeFitPos(target.shape, pos, L.frets);
           return;
@@ -2670,7 +2716,8 @@
             ctx.font = "bold " + (target.name.length <= 4 ? 18 : (target.name.length <= 7 ? 14 : 11)) + "px sans-serif";
             ctx.fillText(target.name, 34, 10);
             if (prog) {
-              var nx = progIdx + 1 < progTotal ? prog.chords[(progIdx + 1) % prog.chords.length] : "ゴール";
+              var nx = progIdx + 1 < progTotal ? progChords[(progIdx + 1) % progChords.length] : "ゴール";
+              if (progDeg) { hudText(ctx, progDeg, 6, 22); }
               hudText(ctx, (progIdx + 1) + "/" + progTotal + "  つぎ: " + nx, W - 6, 9, "right");
             } else {
               var remain = Math.max(0, Math.ceil((UKE_TIME - frames) / 60));
@@ -2709,7 +2756,7 @@
 
   // テスト・他ファイル用の読み取り口
   window.UGUkulele = {
-    chords: UKE_CHORDS, chordSet: ukeChordSet, progressions: UKE_PROGRESSIONS, byName: UKE_BY_NAME, PROG_LOOPS: UKE_PROG_LOOPS, chordName: ukeChordName, midi: ukeMidi, cellAt: ukeCellAt, crossed: ukeCrossed, frets: ukeFrets,
+    chords: UKE_CHORDS, chordSet: ukeChordSet, progressions: UKE_PROGRESSIONS, progCats: UKE_PROG_CATS, progChords: ukeProgChords, byName: UKE_BY_NAME, PROG_LOOPS: UKE_PROG_LOOPS, chordName: ukeChordName, midi: ukeMidi, cellAt: ukeCellAt, crossed: ukeCrossed, frets: ukeFrets,
     STRX: UKE_STRX, NUT_Y: UKE_NUT_Y, FH: UKE_FH, STRUM_Y: UKE_STRUM_Y,
     fingering: ukeFingering, velocity: ukeVelocity, stringOut: ukeStringOut, earBtn: ukeEarBtn, prefs: ukePrefs,
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,

@@ -1185,3 +1185,5 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-mark-full canvas.uke-mark { flex: 1; height: auto; min-height: 0; touch-action: none; }
 /* ===== §182 v0.99.1: ウクレレの下のボタン（5つ） ===== */
 .uke-ctrl .arcade-btn { font-size: 13px; padding: 0 1px; }
+/* ===== §183 v0.99.2: コード進行のボタン ===== */
+.uke-prog-btn { text-align: left; padding: 8px 12px; line-height: 1.35; }

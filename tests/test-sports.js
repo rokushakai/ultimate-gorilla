@@ -133,8 +133,9 @@ module.exports = function () {
 
   // §168 コード進行: 使うコードが全部押さえ方を持つ・お手本どおり2周で CLEAR!
   var missing = [];
-  U.progressions.forEach(function (pg) { pg.chords.forEach(function (n) { if (!U.byName[n]) { missing.push(pg.id + ":" + n); } }); });
-  ok(missing.length === 0 && U.progressions.length === 6, "every progression chord has a shape", missing);
+  // §183: 定番の表にないコード（分数・mM7 など）はエンジンで押さえ方を決める
+  U.progressions.forEach(function (pg) { pg.chords.forEach(function (n) { if (!U.byName[n] && !U.resolve(n, 0, false)) { missing.push(pg.id + ":" + n); } }); });
+  ok(missing.length === 0 && U.progressions.length === 28, "every progression chord has a shape", missing);
   ok(U.chordSet("hard").every(function (c) { return c.name !== "Fmaj7" && c.name !== "Gm7"; }), "progression-only chords are not in the quiz sets");
   var pgDone = 0;
   r = env.run("ukulele", { config: { mode: "prog:canon" } }, 4000, function (f, e) {

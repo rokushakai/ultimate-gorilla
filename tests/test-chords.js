@@ -193,7 +193,7 @@ module.exports = async function () {
   st0.songs = [{ id: 1, name: "テスト曲", seq: U.seqClean({ bpm: 100 }) }];
   U.seqSave(st0);
   ok(U.seqLoad().songs.length === 1 && U.seqLoad().songs[0].seq.bpm === 100, "songs are saved and loaded");
-  ok(U.seqPresets().length === 8 && U.seqPresets().every(function (p) { return p.chords.every(function (n) { return !!U.resolve(n, 0, false); }); }), "all presets resolve to fingerings");
+  ok(U.seqPresets().length === 28 && U.seqPresets().every(function (p) { return p.chords.every(function (n) { return !!U.resolve(n, 0, false); }); }), "all presets resolve to fingerings");
 
   // 合わせて弾く: 曲どおりに押さえて弾くと CLEAR!、同じ行では1回だけ得点
   var song = { bpm: 240, style: "e", metronome: false, countIn: false, backing: true, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }, { type: "rest", len: "w" }, { type: "chord", name: "G7", len: "w" }, { type: "chord", name: "F", len: "w" }] };
@@ -627,6 +627,41 @@ module.exports = async function () {
   U.ui.markBig = false; U.ui.tab = "play";
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   ok(root.innerHTML.indexOf('data-pp="view"') > 0 && root.innerHTML.indexOf("引き（ボタンを減らして指板を大きく）") > 0, "play tab: screen view choice", null);
+  W.UGArcade.stop();
+
+  // ===== §183 コード進行のバリエーション =====
+  var pgs = U.progressions, catIds = U.progCats.map(function (c6) { return c6.id; }), pBad = [];
+  pgs.forEach(function (pg) {
+    if (pg.deg.length !== pg.chords.length || !pg.note || catIds.indexOf(pg.cat) < 0) { pBad.push(pg.id + " shape"); }
+    // 度数とコードが合っているか（キー C の Ⅰ＝C として根音をくらべる）
+    var DEG = { "Ⅰ": 0, "Ⅱ": 2, "Ⅲ": 4, "Ⅳ": 5, "Ⅴ": 7, "Ⅵ": 9, "Ⅶ": 11 };
+    pg.deg.forEach(function (d6, j6) {
+      var m6 = /^(♭?)(Ⅶ|Ⅵ|Ⅴ|Ⅳ|Ⅲ|Ⅱ|Ⅰ)/.exec(d6), sp6 = C.parse(pg.chords[j6]);
+      if (!m6 || !sp6 || (DEG[m6[2]] - (m6[1] ? 1 : 0) + 12) % 12 !== sp6.root) { pBad.push(pg.id + " " + d6 + "≠" + pg.chords[j6]); }
+    });
+  });
+  ok(pgs.length === 28 && pBad.length === 0, "28 progressions; each degree matches its chord's root", pBad);
+  ok(catIds.every(function (ci) { return pgs.some(function (pg) { return pg.cat === ci; }); }), "every category has progressions");
+  var gK = U.progChords(pgs.filter(function (pg) { return pg.id === "ohdo"; })[0], 7);
+  ok(gK.join() === "C,D7,Bm,Em", "progressions transpose to another key (王道 in G)", gK);
+  // キー D で下降クリシェを2周弾くと CLEAR!（表にない AmM7 などもエンジンの押さえ方で）
+  var pdone = 0, pnames = [];
+  r = env.run("ukulele", { config: { mode: "prog:clichedown", progKey: 2 } }, 3000, function (f, e) {
+    if (f % 10 !== 5) { return; }
+    var u = W.__uk2();
+    if (!u.target) { return; }
+    if (pnames.indexOf(u.target.name) < 0) { pnames.push(u.target.name); }
+    var ids = [];
+    u.target.shape.forEach(function (fr, s2) { if (fr > 0) { var rel = fr - u.pos; e.ptr("down", U.STRX[s2], U.NUT_Y + (rel - 0.5) * U.FH, 1 + s2); ids.push(1 + s2); } });
+    swipe(e, 9);
+    ids.forEach(function (id) { e.ptr("up", 0, 0, id); });
+    pdone = W.__uk2().correct;
+  });
+  ok(env.lastTitle() === "CLEAR!" && pdone === 8 && pnames.join() === "Bm,BmM7,Bm7,Bm6", "a progression in another key can be played through (B minor cliché)", { done: pdone, names: pnames });
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf("J-POPの定番") > 0 && hs.indexOf("ジャズ・おしゃれ") > 0 && hs.indexOf('data-pp="progKey"') > 0 && hs.indexOf("Ⅳ–Ⅴ7–Ⅲm–Ⅵm") > 0 && hs.indexOf('data-m="prog:domchain"') > 0, "play tab lists progressions by category with degrees and a key choice", null);
   W.UGArcade.stop();
 
   // ===== §182 ダウン・アップ・ホールド・はなす =====
