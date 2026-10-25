@@ -262,10 +262,10 @@
   // 設定（Low-G・勉強の助け）を読む・書く（足りない項目は既定値）
   function ukePrefs() {
     var p0 = lsGet(UKE_PREFS_KEY) || {};
-    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal", hold: p0.hold === "hold" || p0.hold === "hybrid" ? p0.hold : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p0.progKey) || 0))) };
+    return { lowG: !!p0.lowG, notes: !!p0.notes, tones: !!p0.tones, fingers: p0.fingers !== false, frets: ukeLayout(p0.frets).frets, posPref: ukePosOk(p0.posPref) ? p0.posPref : "auto", view: p0.view === "compact" ? "compact" : "normal", hold: p0.hold === "hold" || p0.hold === "hybrid" || p0.hold === "smart" ? p0.hold : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p0.progKey) || 0))) };
   }
   function ukeSavePrefs(p1) {
-    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal", hold: p1.hold === "hold" || p1.hold === "hybrid" ? p1.hold : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p1.progKey) || 0))) });
+    lsSet(UKE_PREFS_KEY, { lowG: !!p1.lowG, notes: !!p1.notes, tones: !!p1.tones, fingers: !!p1.fingers, frets: ukeLayout(p1.frets).frets, posPref: ukePosOk(p1.posPref) ? p1.posPref : "auto", view: p1.view === "compact" ? "compact" : "normal", hold: p1.hold === "hold" || p1.hold === "hybrid" || p1.hold === "smart" ? p1.hold : "real", progKey: Math.max(0, Math.min(11, Math.round(Number(p1.progKey) || 0))) });
   }
   // 設定画面で音を鳴らす（arp: アルペジオ）
   function ukePlayShape(shape, lowG, arp) {
@@ -1693,7 +1693,7 @@
       if (a === "together") {
         var pf = ukePrefs(), sq = ukeSeqClean(seq), sc2 = ukeSeqSection(sq);
         ukeSeqStop();
-        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold", hybrid: pf.hold === "hybrid" });
+        ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : ukeSeqExpand(sq), notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold", hybrid: pf.hold === "hybrid", smart: pf.hold === "smart" });
         return;
       }
       if (a === "save") {
@@ -1737,7 +1737,7 @@
         sc2.seq.loop = false;
       } else { sq = ukeSeqExpand(sq); sq.loop = false; }
       ukeSeqStop();
-      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold", hybrid: pf.hold === "hybrid" });
+      ctx.done({ mode: "seq", lowG: ctx.lowG, sound: true, seq: sc2 ? sc2.seq : sq, rec: id, recOffset: offB, notes: pf.notes, tones: pf.tones, fingers: pf.fingers, frets: pf.frets, compact: pf.view === "compact", hold: pf.hold === "hold", hybrid: pf.hold === "hybrid", smart: pf.hold === "smart" });
     });
     all("button[data-recclear]", "onclick", function (ev) { var id = ev.currentTarget.getAttribute("data-recclear"); seq.tracks[id].notes = []; save(true); });
     ukeRollBind(root, seq, ctx, save);
@@ -2059,10 +2059,11 @@
         (ukeUi.tab === "play" ? '<div class="uke-seq-set"><label>表示するフレット数' + ukeSelect('data-pp="frets"', UKE_FRET_CHOICES, prefs.frets) + '</label>' +
           '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label>' +
           '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label>' +
-          '<label>押さえ方' + ukeSelect('data-pp="hold"', [["real", "リアルタイム（押さえている間だけ）"], ["hold", "ホールド（タップで印を付けておく）"], ["hybrid", "ハイブリッド（鳴らしたら次の押さえで入れかえ）"]], prefs.hold) + '</label></div>' +
+          '<label>押さえ方' + ukeSelect('data-pp="hold"', [["real", "リアルタイム（押さえている間だけ）"], ["hold", "ホールド（タップで印を付けておく）"], ["hybrid", "ハイブリッド（鳴らしたら次の押さえで入れかえ）"], ["smart", "スマート（1か所なら飾り・2か所目から新しいコード）"]], prefs.hold) + '</label></div>' +
           '<p class="small" style="color:#adb5bd;margin:4px 0;">ボタン: &#x2B07;&#xFE0F; ダウン・&#x2B06;&#xFE0F; アップ＝4本をその向きに鳴らす ／ &#x270B; はなす＝ホールドした印（ホールドの押さえ方・マウスで付けた印）を全部消す ／ ▲▼＝見えるフレットの位置を動かす。' +
           'ホールドにすると、先にマスをタップして押さえ方を作り、あとはストロークするだけで鳴らせます（正解すると印は自動で消えます）。' +
-          'ハイブリッドは、鳴らしたあとに次の所を押さえ始めると前の印が消えて、すぐ次のコードを作れます。</p>' : '') +
+          'ハイブリッドは、鳴らしたあとに次の所を押さえ始めると前の印が消えて、すぐ次のコードを作れます。' +
+          'スマートは、鳴らしたあと1か所だけ押すと「飾り」（コードはそのまま。sus4 やメロディに）、2か所目を押すと「新しいコード」として作り直します（C→Am のような指1本のコードは、前の印を外してから押す）。</p>' : '') +
         '<button class="modal-btn" data-m="back" style="width:100%;margin-top:8px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
       root.innerHTML = h;
       for (var k in cards) {
@@ -2160,7 +2161,7 @@
         if (v === "back") { ukeSeqStop(); ctl.back(); return; }
         ukeSeqStop();
         ukeSavePrefs(prefs);
-        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact", hold: prefs.hold === "hold", hybrid: prefs.hold === "hybrid", progKey: prefs.progKey });
+        ctl.done({ mode: v, lowG: lowG, sound: true, notes: prefs.notes, tones: prefs.tones, fingers: prefs.fingers, frets: prefs.frets, posPref: prefs.posPref, compact: prefs.view === "compact", hold: prefs.hold === "hold", hybrid: prefs.hold === "hybrid", smart: prefs.hold === "smart", progKey: prefs.progKey });
       });
     }
     render();
@@ -2200,7 +2201,9 @@
       var pos = 0, myList = mode === "my" ? ukeLoadMy() : []; // pos: 表示しているいちばん上のフレット − 1（§169）
       // §171 v0.90: 弦ごとの出口（自分の音・伴奏）・勉強の助け・耳コピ
       var outs = [null, null, null, null], backOuts = [null, null, null, null];
-      var holdMode = !!cfg.hold || !!cfg.hybrid; // §182: ホールド（タップで印を付けておく）
+      var holdMode = !!cfg.hold || !!cfg.hybrid || !!cfg.smart; // §182: ホールド（タップで印を付けておく）
+      // §185: スマート（鳴らしたあと 1か所目＝飾り・2か所目＝新しいコード）
+      var smart = !!cfg.smart, smartArmed = false, smartFirst = null, smartOrn = null;
       var hybrid = !!cfg.hybrid, hybridArmed = false; // §184: ハイブリッド（鳴らしたあとの最初のタップで印を入れかえる）
       var showNotes = !!cfg.notes, showTones = !!cfg.tones, showFingers = cfg.fingers !== false;
       var ear = mode.indexOf("ear:") === 0 ? { level: mode.substring(4), opts: [], ans: -1, pick: -1, t: 0, reveal: 0, chord: null } : null;
@@ -2382,6 +2385,7 @@
       function pluck(s, delay, vel) {
         sound(s, delay, vel);
         if (hybrid && ukeCountKeys(sticky) > 0) { hybridArmed = true; }
+        if (smart && ukeCountKeys(sticky) > 0) { smartArmed = true; smartFirst = null; smartOrn = null; }
         if (recId && seqS && seqPass === 0 && !ended) {
           var rt = (frames - SEQ_START) / 60 + (delay || 0);
           if (rt >= seqS.lead && recNotes.length < UKE_REC_MAX) {
@@ -2450,6 +2454,20 @@
       // ホールドの印: 1本の弦に1つ。同じ所をもう一度押したら消す
       function holdToggle(cell) {
         if (hybrid && hybridArmed) { sticky = {}; hybridArmed = false; }
+        if (smart && smartArmed) {
+          var k0 = cell.s + "," + cell.f;
+          if (!smartFirst) {
+            // 1か所目: 飾り（土台は残してその弦だけ変える）
+            smartFirst = { cell: cell, removal: !!sticky[k0] };
+            smartOrn = smartFirst.removal ? null : k0;
+          } else {
+            // 2か所目: 新しいコード（1か所目と2か所目だけで作り直す。外すタップは入れない）
+            sticky = {};
+            if (!smartFirst.removal) { sticky[smartFirst.cell.s + "," + smartFirst.cell.f] = smartFirst.cell; }
+            smartArmed = false; smartFirst = null; smartOrn = null;
+            msg = "新しいコード"; msgGood = true; msgT = 30;
+          }
+        }
         var key = cell.s + "," + cell.f, had = !!sticky[key];
         for (var k in sticky) { if (sticky.hasOwnProperty(k) && sticky[k].s === cell.s) { delete sticky[k]; } }
         if (!had) { sticky[key] = cell; }
@@ -2466,7 +2484,7 @@
             var hadAny = false;
             for (var hk2 in sticky) { if (sticky.hasOwnProperty(hk2)) { hadAny = true; } }
             sticky = {};
-            hybridArmed = false;
+            hybridArmed = false; smartArmed = false; smartFirst = null; smartOrn = null;
             msg = hadAny ? "✋ 印を全部はなしました" : "✋ はなす＝ホールドした印を消す";
             msgGood = true;
             msgT = 45;
@@ -2664,7 +2682,7 @@
           for (i = 0; i < held.length; i++) {
             var p = held[i], top = cur[p.s] === p.f, pf = p.f - pos;
             if (pf < 1 || pf > L.frets) { continue; }
-            ctx.fillStyle = top ? (hybridArmed ? "rgba(255,209,102,0.55)" : "rgba(255,209,102,0.95)") : "rgba(255,209,102,0.45)";
+            ctx.fillStyle = smartOrn === p.s + "," + p.f ? "rgba(116,220,255,0.95)" : (top ? (hybridArmed ? "rgba(255,209,102,0.55)" : "rgba(255,209,102,0.95)") : "rgba(255,209,102,0.45)");
             ctx.beginPath(); ctx.arc(UKE_STRX[p.s], L.nut + (pf - 0.5) * L.fh, Math.min(9, L.fh * 0.36), 0, Math.PI * 2); ctx.fill();
           }
           // ちがう弦に ×
@@ -2750,7 +2768,7 @@
             hudText(ctx, "タップでもう一度聞く", W / 2, L.holeY, "center");
           } else if (holdMode && ukeCountKeys(sticky) > 0) {
             ctx.fillStyle = "rgba(255,209,102,0.85)"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
-            ctx.fillText(hybrid ? "ハイブリッド ／ 鳴らしたあとに押さえると入れかわる" : "ホールド中 ／ ✋ はなす＝印を全部消す", W / 2, Math.min(L.h - 6, L.holeY + L.hole + 12));
+            ctx.fillText(smart ? "スマート ／ 1か所＝飾り・2か所目から新しいコード" : (hybrid ? "ハイブリッド ／ 鳴らしたあとに押さえると入れかわる" : "ホールド中 ／ ✋ はなす＝印を全部消す"), W / 2, Math.min(L.h - 6, L.holeY + L.hole + 12));
           } else if (frames < 300 && !held.length) {
             hudText(ctx, "ここを横にスワイプ", W / 2, L.holeY, "center");
           }

@@ -646,6 +646,28 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §185 スマート =====
+  function smartRun(steps) {
+    var out = [];
+    env.run("ukulele", { config: { mode: "free", smart: true } }, 10, function (f, e) {
+      if (f !== 2) { return; }
+      steps.forEach(function (st) {
+        if (st === "S") { e.key("keydown", " "); e.key("keyup", " "); return; }
+        e.tap(U.STRX[st[0]], cy2(st[1]));
+        out.push(W.__uk2().cur.join(""));
+      });
+    });
+    return out.join();
+  }
+  ok(smartRun([[3, 3], "S", [2, 1], "S", [2, 1]]) === "0003,0013,0003", "smart: one tap after strumming is an ornament (C → Csus4 → back to C)", smartRun([[3, 3], "S", [2, 1], "S", [2, 1]]));
+  ok(smartRun([[3, 3], "S", [1, 2], [2, 3], [3, 2]]) === "0003,0203,0230,0232", "smart: the second tap starts a new chord (C → G)", smartRun([[3, 3], "S", [1, 2], [2, 3], [3, 2]]));
+  ok(smartRun([[3, 3], "S", [3, 3], [0, 2]]) === "0003,0000,2000", "smart: one-finger chord change = remove the old mark, then press the new one (C → Am)", smartRun([[3, 3], "S", [3, 3], [0, 2]]));
+  ok(smartRun([[0, 2], [3, 3], "S", [3, 5], "S", [3, 6], "S", [3, 3]]) === "2000,2003,2005,2006,2003", "smart: a melody on the A string keeps the chord underneath", smartRun([[0, 2], [3, 3], "S", [3, 5], "S", [3, 6], "S", [3, 3]]));
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("スマート（1か所なら飾り・2か所目から新しいコード）") > 0, "play tab offers the smart fingering mode", null);
+  W.UGArcade.stop();
+
   // ===== §183 コード進行のバリエーション =====
   var pgs = U.progressions, catIds = U.progCats.map(function (c6) { return c6.id; }), pBad = [];
   pgs.forEach(function (pg) {
