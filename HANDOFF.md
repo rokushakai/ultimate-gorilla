@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.99.4** |
+| 現在バージョン | **v0.99.5** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.99.5] 🎸 設定画面のメニューと設定を上に**（§186）: ukeSetup の `settingsH`（あそぶタブは上の details.uke-settings、ほかのタブは下）・`ukeUi.setOpen`・タイトル行に data-m="back"
 - **[v0.99.4] 🎸 押さえ方: スマート**（§185）: cfg.smart・`smartArmed`（印がある状態で鳴らすと true）/ `smartFirst`（1か所目のタップと、それが外すタップだったか）/ `smartOrn`（飾りの印・水色）。2か所目で sticky を作り直す
 - **[v0.99.3] 🎸 押さえ方: ハイブリッド**（§184）: cfg.hybrid・`hybridArmed`（印がある状態で鳴らすと true → 次の holdToggle で sticky を空に）。prefs.hold は real / hold / hybrid
 - **[v0.99.2] 🎸 コード進行のバリエーション**（§183）: `UKE_PROGRESSIONS` 28個（cat・deg・note・style/swing/bpm）・`UKE_PROG_CATS`・`ukeProgChords(prog, key)`・prefs に progKey。進行のお題は表 → なければエンジン（ukeVoicePos）

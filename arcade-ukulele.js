@@ -1899,7 +1899,7 @@
   }
 
   // ---------- 設定画面（タブ: あそぶ / コード辞典 / カスタム / マイコード / シーケンサー） ----------
-  var ukeUi = { tab: "play", markBig: false, vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
+  var ukeUi = { tab: "play", setOpen: false, markBig: false, vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
   var UKE_TABS = [["play", "&#x1F3B8; あそぶ"], ["dict", "&#x1F4DA; コード辞典"], ["custom", "&#x1F6E0;&#xFE0F; カスタム"], ["my", "&#x2B50; マイコード"], ["seq", "&#x1F39B;&#xFE0F; シーケンサー"]];
   function ukeSelect(attr, opts, cur) {
     var o = '<select ' + attr + '>';
@@ -1958,11 +1958,29 @@
         '<br><span class="small" style="color:inherit;opacity:0.75;">' + note + '</span></button>';
     }
     function render() {
-      var h = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F3B8; ゴリラウクレレ</h3>', i, my = ukeLoadMy(), c, seqTab = null;
+      // 設定（Low-G・勉強の助け・フレット数・画面・押さえ方）。あそぶタブは上に、ほかのタブは下に（§186）
+      var settingsH = '<div class="melody-checks"><label><input type="checkbox" data-p="lowG"' + (lowG ? " checked" : "") + '> Low-G（4弦のGを1オクターブ低く）</label>' +
+        (ukeUi.tab === "play" ? '<label><input type="checkbox" data-p="notes"' + (prefs.notes ? " checked" : "") + '> 指板に音名を表示</label>' +
+          '<label><input type="checkbox" data-p="tones"' + (prefs.tones ? " checked" : "") + '> コードの音がある場所を光らせる</label>' +
+          '<label><input type="checkbox" data-p="fingers"' + (prefs.fingers ? " checked" : "") + '> お手本に指番号を出す</label>' : '') + '</div>' +
+        (ukeUi.tab === "play" ? '<div class="uke-seq-set"><label>表示するフレット数' + ukeSelect('data-pp="frets"', UKE_FRET_CHOICES, prefs.frets) + '</label>' +
+          '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label>' +
+          '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label>' +
+          '<label class="uke-wide">押さえ方' + ukeSelect('data-pp="hold"', [["real", "リアルタイム（押さえている間だけ）"], ["hold", "ホールド（タップで印を付けておく）"], ["hybrid", "ハイブリッド（鳴らしたら次の押さえで入れかえ）"], ["smart", "スマート（1か所なら飾り・2か所目から新しいコード）"]], prefs.hold) + '</label></div>' +
+          '<details class="uke-help"><summary>ボタンと押さえ方の説明</summary><p class="small" style="color:#adb5bd;margin:4px 0;">ボタン: &#x2B07;&#xFE0F; ダウン・&#x2B06;&#xFE0F; アップ＝4本をその向きに鳴らす ／ &#x270B; はなす＝ホールドした印（ホールドの押さえ方・マウスで付けた印）を全部消す ／ ▲▼＝見えるフレットの位置を動かす。' +
+          'ホールドにすると、先にマスをタップして押さえ方を作り、あとはストロークするだけで鳴らせます（正解すると印は自動で消えます）。' +
+          'ハイブリッドは、鳴らしたあとに次の所を押さえ始めると前の印が消えて、すぐ次のコードを作れます。' +
+          'スマートは、鳴らしたあと1か所だけ押すと「飾り」（コードはそのまま。sus4 やメロディに）、2か所目を押すと「新しいコード」として作り直します（C→Am のような指1本のコードは、前の印を外してから押す）。</p></details>' : '');
+      var h = '<div class="melody-setup"><div class="uke-title"><h3 style="margin:0;">&#x1F3B8; ゴリラウクレレ</h3>' +
+        '<button class="modal-btn melody-small-btn" data-m="back">&#x1F579;&#xFE0F; メニューへ</button></div>', i, my = ukeLoadMy(), c, seqTab = null;
       // タブは大きなボタンで3列に（小さいと見落としやすいため）
       h += ukeChips(UKE_TABS.map(function (t) { return { v: t[0], t: t[1] }; }), function (v) { return v === ukeUi.tab; }, "tab").replace('<div class="uke-chips">', '<div class="uke-chips uke-tabs">');
       cards = {};
       if (ukeUi.tab === "play") {
+        // たたんでおき、見出しに今の設定を出す（開いたかどうかは覚えておく）
+        var HOLD_NAMES = { real: "リアルタイム", hold: "ホールド", hybrid: "ハイブリッド", smart: "スマート" };
+        h += '<details class="uke-settings"' + (ukeUi.setOpen ? " open" : "") + '><summary>&#x2699;&#xFE0F; 設定: 押さえ方 ' + HOLD_NAMES[prefs.hold] + '・' + prefs.frets + 'フレット・' +
+          (prefs.view === "compact" ? "引き" : "ふつう") + (lowG ? "・Low-G" : "") + '</summary>' + settingsH + '</details>';
         h += '<p class="small" style="color:#ffd166;margin:0 0 6px;">&#x1F446; コード辞典・カスタム（自分でコードを作る）・マイコード・シーケンサーは、上のボタンで切りかえ</p>';
         h += '<p class="small" style="color:#adb5bd;margin:0 0 8px;">左手で指板（上）を押さえたまま、右手でサウンドホール（下の丸）の上を横にスワイプ。通った弦が順番に鳴るよ。押さえる場所はコード表と同じ向き（左から G・C・E・A）。</p>';
         for (i = 0; i < UKE_MODES.length; i++) { h += modeBtn(UKE_MODES[i].id, UKE_MODES[i].name, UKE_MODES[i].note); }
@@ -2052,20 +2070,11 @@
         }
       }
       if (toast) { h += '<p class="small" style="color:#55efc4;margin:6px 0 0;">' + toast + '</p>'; toast = ""; }
-      h += '<div class="melody-checks"><label><input type="checkbox" data-p="lowG"' + (lowG ? " checked" : "") + '> Low-G（4弦のGを1オクターブ低く）</label>' +
-        (ukeUi.tab === "play" ? '<label><input type="checkbox" data-p="notes"' + (prefs.notes ? " checked" : "") + '> 指板に音名を表示</label>' +
-          '<label><input type="checkbox" data-p="tones"' + (prefs.tones ? " checked" : "") + '> コードの音がある場所を光らせる</label>' +
-          '<label><input type="checkbox" data-p="fingers"' + (prefs.fingers ? " checked" : "") + '> お手本に指番号を出す</label>' : '') + '</div>' +
-        (ukeUi.tab === "play" ? '<div class="uke-seq-set"><label>表示するフレット数' + ukeSelect('data-pp="frets"', UKE_FRET_CHOICES, prefs.frets) + '</label>' +
-          '<label>辞典から出題のポジション' + ukeSelect('data-pp="posPref"', UKE_POS, prefs.posPref) + '</label>' +
-          '<label>画面' + ukeSelect('data-pp="view"', [["normal", "ふつう"], ["compact", "引き（ボタンを減らして指板を大きく）"]], prefs.view) + '</label>' +
-          '<label>押さえ方' + ukeSelect('data-pp="hold"', [["real", "リアルタイム（押さえている間だけ）"], ["hold", "ホールド（タップで印を付けておく）"], ["hybrid", "ハイブリッド（鳴らしたら次の押さえで入れかえ）"], ["smart", "スマート（1か所なら飾り・2か所目から新しいコード）"]], prefs.hold) + '</label></div>' +
-          '<p class="small" style="color:#adb5bd;margin:4px 0;">ボタン: &#x2B07;&#xFE0F; ダウン・&#x2B06;&#xFE0F; アップ＝4本をその向きに鳴らす ／ &#x270B; はなす＝ホールドした印（ホールドの押さえ方・マウスで付けた印）を全部消す ／ ▲▼＝見えるフレットの位置を動かす。' +
-          'ホールドにすると、先にマスをタップして押さえ方を作り、あとはストロークするだけで鳴らせます（正解すると印は自動で消えます）。' +
-          'ハイブリッドは、鳴らしたあとに次の所を押さえ始めると前の印が消えて、すぐ次のコードを作れます。' +
-          'スマートは、鳴らしたあと1か所だけ押すと「飾り」（コードはそのまま。sus4 やメロディに）、2か所目を押すと「新しいコード」として作り直します（C→Am のような指1本のコードは、前の印を外してから押す）。</p>' : '') +
-        '<button class="modal-btn" data-m="back" style="width:100%;margin-top:8px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
+      if (ukeUi.tab !== "play") { h += settingsH; }
+      h += '<button class="modal-btn" data-m="back" style="width:100%;margin-top:8px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
       root.innerHTML = h;
+      var setD = root.querySelector("details.uke-settings");
+      if (setD && setD.addEventListener) { setD.addEventListener("toggle", function () { ukeUi.setOpen = !!setD.open; }); }
       for (var k in cards) {
         if (cards.hasOwnProperty(k) && cards[k].shape) { ukeDiagram(root.querySelector('canvas[data-k="' + k + '"]'), cards[k].shape, cards[k].root, lowG); }
       }

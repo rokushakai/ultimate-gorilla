@@ -1187,3 +1187,10 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-ctrl .arcade-btn { font-size: 13px; padding: 0 1px; }
 /* ===== §183 v0.99.2: コード進行のボタン ===== */
 .uke-prog-btn { text-align: left; padding: 8px 12px; line-height: 1.35; }
+/* ===== §186 v0.99.5: ウクレレの設定画面 上にメニュー・設定 ===== */
+.uke-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.uke-title .modal-btn { margin-top: 0; flex-shrink: 0; }
+.uke-settings { margin: 2px 0 8px; padding: 4px 8px; background: #1a2a3a; border: 1px solid #3d3d5c; border-radius: 8px; }
+.uke-settings summary { cursor: pointer; color: #ffd166; font-size: 13px; font-weight: bold; padding: 2px 0; }
+.uke-seq-set label.uke-wide { grid-column: 1 / -1; }
+.uke-help summary { cursor: pointer; color: #74b9ff; font-size: 12px; margin-top: 4px; }
