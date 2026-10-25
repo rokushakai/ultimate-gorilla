@@ -208,7 +208,7 @@ module.exports = async function () {
       ids.forEach(function (id) { e.ptr("up", 0, 0, id); });
     }
   });
-  ok(r.ended === 400 && env.lastTitle() === "CLEAR!", "play-along: following the song scores once per chord and clears", { ended: r.ended, title: env.lastTitle() });
+  ok(r.ended >= 400 && r.ended <= 400 + 20 * 120 && env.lastTitle() === "CLEAR!", "play-along: following the song scores once per chord (+ rhythm points) and clears", { ended: r.ended, title: env.lastTitle() });
   ok(Object.keys(tg).join(",") === "C,Am,G7,F", "play-along targets follow the song order", Object.keys(tg));
   ok(env.counters.osc + env.counters.src.length - osc0 > 40, "play-along plays the backing", env.counters.osc + env.counters.src.length - osc0);
   r = env.run("ukulele", { config: { mode: "seq", seq: { rows: [{ type: "chord", name: "???", len: "w" }] } } }, 5);
@@ -644,6 +644,51 @@ module.exports = async function () {
   U.ui.tab = "play";
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
+  W.UGArcade.stop();
+
+  // ===== §187 練習の記録・リズム判定・次のコードの予告 =====
+  env.store[U.STATS_KEY] = "{}";
+  U.statsAdd("C", true, 2); U.statsAdd("C", true, 4); U.statsAdd("F", false); U.statsAdd("F", true, 6); U.statsAdd("G7", true, 9); U.statsAdd("Am", true, 1);
+  var wl = U.weakList();
+  ok(wl.map(function (x) { return x.name; }).join() === "F,G7,C,Am" && wl[0].rate === 0.5 && wl[2].avg === 3, "weak list: lowest accuracy first, then slowest", wl);
+  env.store[U.STATS_KEY] = JSON.stringify({ X: { n: -1 }, Y: { n: 3, ok: 9, t: 2 } });
+  ok(Object.keys(U.statsLoad()).join() === "Y" && U.statsLoad().Y.ok === 3, "broken stats are cleaned");
+  var gR = [0, 0.06, -0.1, 0.2, -0.3, 0.5].map(function (d7) { return U.rhythmGrade(d7).id; });
+  ok(gR.join() === "perfect,perfect,great,good,early,late", "rhythm grades: PERFECT ≤0.07s / GREAT ≤0.14 / GOOD ≤0.22 / early・late", gR);
+  // 練習で記録される（正解とおしい）
+  env.store[U.STATS_KEY] = "{}";
+  env.run("ukulele", { config: { mode: "easy", hold: true } }, 30, function (f, e) {
+    if (f === 3) { e.key("keydown", " "); e.key("keyup", " "); }
+    if (f === 6) { var u = W.__uk2(); u.target.shape.forEach(function (fr, s2) { if (fr > 0) { e.tap(U.STRX[s2], cy2(fr)); } }); e.key("keydown", " "); e.key("keyup", " "); }
+  });
+  var stx = U.statsLoad(), stk = Object.keys(stx);
+  ok(stk.length >= 1 && stk.reduce(function (a8, k8) { return a8 + stx[k8].n; }, 0) === 2 && stk.reduce(function (a8, k8) { return a8 + stx[k8].ok; }, 0) === 1, "practice records attempts and correct answers per chord", stx);
+  // 苦手なコードを練習: 記録の上位から出題
+  env.store[U.STATS_KEY] = JSON.stringify({ "Bm": { n: 5, ok: 1, t: 9 }, "E": { n: 4, ok: 1, t: 9 }, "F#m": { n: 3, ok: 1, t: 2 }, "C": { n: 9, ok: 9, t: 9 } });
+  var wseen = {};
+  env.run("ukulele", { config: { mode: "weak", hold: true } }, 600, function (f, e) {
+    var u = W.__uk2();
+    if (!u.target) { return; }
+    wseen[u.target.name] = true;
+    if (f % 6 === 3) { u.target.shape.forEach(function (fr, s2) { if (fr > 0) { var rel = fr - u.pos; if (rel >= 1 && rel <= 6) { e.tap(U.STRX[s2], cy2(rel)); } } }); e.key("keydown", " "); e.key("keyup", " "); }
+  });
+  ok(W.__uk2().mode === "weak" && Object.keys(wseen).every(function (k9) { return ["Bm", "E", "F#m", "C"].indexOf(k9) >= 0; }) && wseen.Bm, "weak-chord quiz uses the recorded chords (weakest most)", wseen);
+  env.store[U.STATS_KEY] = JSON.stringify({ "C": { n: 1, ok: 1, t: 1 } });
+  env.run("ukulele", { config: { mode: "weak" } }, 3);
+  ok(W.__uk2().mode === "free", "weak-chord quiz needs at least 3 recorded chords");
+  // リズム: 拍ぴったりのストロークは PERFECT、次のコードの予告が描かれる
+  var perfectTexts = 0;
+  env.run("ukulele", { config: { mode: "seq", hold: true, seq: U.seqClean({ bpm: 120, countIn: false, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "w" }] }) } }, 300, function (f, e) {
+    // SEQ_START=30 フレーム → 拍0 は f=30、8分（0.25秒）は 15 フレームごと
+    if (f === 20) { e.tap(U.STRX[3], cy2(3)); }
+    if (f === 60) { e.key("keydown", " "); e.key("keyup", " "); }
+    if (f === 61) { perfectTexts = env.counters.texts.filter(function (t9) { return t9.indexOf("PERFECT") === 0; }).length; }
+  });
+  ok(perfectTexts > 0, "a strum right on the beat is judged PERFECT", perfectTexts);
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-m="weak"') > 0 && hs.indexOf("練習の記録") > 0 && hs.indexOf('data-p="next"') > 0, "play tab: weak-chord quiz, records and next-chord preview setting", null);
   W.UGArcade.stop();
 
   // ===== §185 スマート =====

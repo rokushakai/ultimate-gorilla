@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.99.5** |
+| 現在バージョン | **v0.99.6** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.99.6] 🎸 練習の記録・リズム判定・予告**（§187）: `ukeStatsAdd` / `ukeWeakList`（`ultimateGorillaUkuleleStatsV1`）・mode "weak"・`ukeRhythmGrade`・`seqRhythm(1本目のフレーム)`（judge に1本目のフレームを渡す）・`nextShape()`・prefs.next
 - **[v0.99.5] 🎸 設定画面のメニューと設定を上に**（§186）: ukeSetup の `settingsH`（あそぶタブは上の details.uke-settings、ほかのタブは下）・`ukeUi.setOpen`・タイトル行に data-m="back"
 - **[v0.99.4] 🎸 押さえ方: スマート**（§185）: cfg.smart・`smartArmed`（印がある状態で鳴らすと true）/ `smartFirst`（1か所目のタップと、それが外すタップだったか）/ `smartOrn`（飾りの印・水色）。2か所目で sticky を作り直す
 - **[v0.99.3] 🎸 押さえ方: ハイブリッド**（§184）: cfg.hybrid・`hybridArmed`（印がある状態で鳴らすと true → 次の holdToggle で sticky を空に）。prefs.hold は real / hold / hybrid
@@ -143,7 +144,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（478項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（486項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
