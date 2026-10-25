@@ -528,4 +528,65 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("uke-chip active\" data-vpos=\"high\"") > 0 && root.innerHTML.indexOf("押さえ方 9-9-8-7") > 0, "dictionary shows the high-position fingering", null);
   W.UGArcade.stop();
   U.ui.vPos = "auto"; U.ui.tab = "play";
+
+  // ===== §180 構成どおりの再生位置・でたらめな曲200曲 =====
+  var a80 = U.seqClean({ countIn: false, arr: ["サビ", "イントロ"], rows: [{ type: "sec", name: "イントロ" }, { type: "chord", name: "C", len: "w" }, { type: "sec", name: "サビ" }, { type: "chord", name: "G", len: "h" }] });
+  var aS = U.seqSchedule(U.expand(a80), false), wS = U.seqSchedule(a80, false);
+  ok(U.arrangedToWritten(aS, wS, 1) === 5 && U.arrangedToWritten(aS, wS, 3) === 1 && U.arrangedToWritten(aS, wS, 99) === null, "arranged play position maps onto the written rows", [U.arrangedToWritten(aS, wS, 1), U.arrangedToWritten(aS, wS, 3)]);
+  var seedV = 20261025;
+  function rnd2() { seedV = (seedV * 1103515245 + 12345) % 2147483648; return seedV / 2147483648; }
+  function pickR(arr2) { return arr2[Math.floor(rnd2() * arr2.length)]; }
+  function u32b(a2, i2) { return ((a2[i2] << 24) >>> 0) + (a2[i2 + 1] << 16) + (a2[i2 + 2] << 8) + a2[i2 + 3]; }
+  U.saveMy([{ id: 1, name: "マイX", shape: [2, 4, 1, 3] }]);
+  var NAMES = ["C", "Am", "F", "G7", "Bbmaj7", "F#m7(b5)", "C/E", "E7#9", "★マイX", "★ない", "Zz", "", "Cmaj9", "Dsus4", "G13"];
+  var LENS = ["w", "h.", "h", "q.", "q", "qt", "e.", "e", "et", "s", "b2.5", "b0.25", "b7", "bad"];
+  var fuzzBad = [], checked = 0;
+  for (var fz = 0; fz < 200; fz++) {
+    var rows = [], nr = Math.floor(rnd2() * 18), z;
+    for (z = 0; z < nr; z++) {
+      var kind = pickR(["chord", "chord", "chord", "rest", "key", "tempo", "sec"]);
+      if (kind === "chord") { rows.push({ type: "chord", name: pickR(NAMES), len: pickR(LENS), pos: pickR(["auto", "low", "mid", "high", "zz"]) }); }
+      else if (kind === "rest") { rows.push({ type: "rest", len: pickR(LENS) }); }
+      else if (kind === "key") { rows.push({ type: "key", semis: Math.floor(rnd2() * 30) - 15 }); }
+      else if (kind === "tempo") { rows.push({ type: "tempo", bpm: Math.floor(rnd2() * 300) }); }
+      else { rows.push({ type: "sec", name: pickR(["A", "B", "サビ"]) }); }
+    }
+    var recN = []; for (z = 0; z < Math.floor(rnd2() * 20); z++) { recN.push([rnd2() * 40, 50 + Math.floor(rnd2() * 30), rnd2()]); }
+    var melN = []; for (z = 0; z < Math.floor(rnd2() * 20); z++) { melN.push([rnd2() * 40, pickR([0.25, 0.5, 1, 2]), 55 + Math.floor(rnd2() * 30)]); }
+    var raw = {
+      bpm: Math.floor(rnd2() * 300), key: Math.floor(rnd2() * 30) - 15, meter: pickR([3, 4, 5]), swing: pickR([0.5, 0.58, 0.67, 0.72, 0.9]), swingGrid: pickR([0.5, 0.25, 1]),
+      style: pickR(["once", "q", "e", "s", "arp8", "arp16", "pat", "x"]), pattern: pickR(["D-DU-UDU", "x", "DUxx", "", "DUDUDUDUDUDUDUDUDU"]), metronome: rnd2() < 0.5, countIn: rnd2() < 0.5,
+      pos: pickR(["auto", "high", "q"]), arr: rnd2() < 0.5 ? [pickR(["A", "B", "サビ", "ない"]), pickR(["A", "B", "サビ"])] : [], lyrics: { id: rnd2() < 0.3 ? 5 : 0 }, rows: rows,
+      tracks: { bass: { on: rnd2() < 0.5, pattern: pickR(["root", "root8", "r5", "walk", "?"]) }, drum: { on: rnd2() < 0.5, groove: pickR(["8beat", "bossa", "waltz", "??"]) }, pad: { on: rnd2() < 0.5 },
+        rec1: { on: rnd2() < 0.5, quant: pickR(["off", "8", "16"]), notes: recN }, mel: { on: rnd2() < 0.5, notes: melN } }
+    };
+    try {
+      var cs = U.seqClean(raw);
+      if (JSON.stringify(U.seqClean(cs)) !== JSON.stringify(cs)) { fuzzBad.push(fz + " clean not stable"); }
+      var ex2 = U.expand(cs), sc3 = U.seqSchedule(ex2, false), lastT = -1;
+      for (z = 0; z < sc3.events.length; z++) {
+        var ev3 = sc3.events[z];
+        if (!(isFinite(ev3.t) && ev3.t >= 0) || ev3.t < lastT - 1e-9) { fuzzBad.push(fz + " event time " + ev3.t); break; }
+        lastT = ev3.t;
+      }
+      sc3.rows.forEach(function (r3) { if (!(r3.t1 >= r3.t0 - 1e-9) || !isFinite(r3.t0)) { fuzzBad.push(fz + " row time"); } });
+      var rec3 = U.seqRec(cs, false);
+      if (rec3.notes.some(function (n3) { return !isFinite(n3[0]) || n3[0] < 0; })) { fuzzBad.push(fz + " rec ms"); }
+      var mb3 = U.midiBytes(cs, false);
+      if (mb3) {
+        var pos3 = 14, nt3 = (mb3[10] << 8) + mb3[11];
+        if (String.fromCharCode(mb3[0], mb3[1], mb3[2], mb3[3]) !== "MThd") { fuzzBad.push(fz + " MThd"); }
+        for (z = 0; z < nt3; z++) {
+          var ln3 = u32b(mb3, pos3 + 4);
+          if (String.fromCharCode(mb3[pos3], mb3[pos3 + 1], mb3[pos3 + 2], mb3[pos3 + 3]) !== "MTrk" || mb3[pos3 + 8 + ln3 - 3] !== 0xFF || mb3[pos3 + 8 + ln3 - 2] !== 0x2F) { fuzzBad.push(fz + " MTrk " + z); break; }
+          pos3 += 8 + ln3;
+        }
+        if (pos3 !== mb3.length) { fuzzBad.push(fz + " midi length"); }
+      }
+      var wS3 = U.seqSchedule(cs, false), pp = U.arrangedToWritten(sc3, wS3, sc3.beats / 2);
+      if (pp !== null && !(pp >= 0 && pp <= wS3.beats + 1e-6)) { fuzzBad.push(fz + " play map " + pp); }
+      checked++;
+    } catch (fe) { fuzzBad.push(fz + " " + fe.message); }
+  }
+  ok(checked === 200 && fuzzBad.length === 0, "200 random songs: clean is stable, times never go back, MIDI chunks are well-formed", fuzzBad.slice(0, 5));
 };

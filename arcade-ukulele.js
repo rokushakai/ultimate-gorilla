@@ -323,6 +323,15 @@
     out.loopB = Math.max(0, Math.min(last, Math.round(Number(out.loopB) || 0)));
     return out;
   }
+  // §180: 構成どおりの予定の拍 → 書いた行の上の拍（鳴っているブロックがなければ null）
+  function ukeArrangedToWritten(arrS, fullS, b) {
+    for (var i = 0; i < arrS.rows.length; i++) {
+      var r = arrS.rows[i];
+      if (ukeIsMark(r.type) || b < r.start - 1e-6 || b >= r.end - 1e-6) { continue; }
+      for (var j = 0; j < fullS.rows.length; j++) { if (fullS.rows[j].i === r.i) { return fullS.rows[j].start + (b - r.start); } }
+    }
+    return null;
+  }
   // §179: 長さのない行（転調・テンポ・セクション）
   function ukeIsMark(t) { return t === "key" || t === "tempo" || t === "sec"; }
   // 曲の構成どおりに行を並べた曲（_src にもとの行の番号）。構成が空ならそのまま
@@ -1075,7 +1084,8 @@
       cv.addEventListener("pointerdown", function (ev) { try { cv.setPointerCapture(ev.pointerId); } catch (e) {} down(ev); });
       cv.addEventListener("pointermove", move);
       cv.addEventListener("pointerup", up);
-      cv.addEventListener("pointercancel", up);
+      // §180: 縦スクロールに切りかわったら、その操作は取り消す
+      cv.addEventListener("pointercancel", function () { drag = null; ukeTlDraw(cv, seq, sched); });
     } else {
       cv.addEventListener("touchstart", down, { passive: false });
       cv.addEventListener("touchmove", move, { passive: false });
@@ -1307,7 +1317,7 @@
       cv.addEventListener("pointerdown", function (ev) { try { cv.setPointerCapture(ev.pointerId); } catch (e) {} down(ev); });
       cv.addEventListener("pointermove", move);
       cv.addEventListener("pointerup", up);
-      cv.addEventListener("pointercancel", up);
+      cv.addEventListener("pointercancel", function () { drag = null; });
     } else {
       cv.addEventListener("touchstart", down, { passive: false });
       cv.addEventListener("touchmove", move, { passive: false });
@@ -1623,8 +1633,8 @@
         if (sec) { for (var fi = 0; fi < fullS.rows.length; fi++) { if (fullS.rows[fi].i === sec.a) { offB = fullS.rows[fi].start; break; } } }
         var expd = !sec && sc.arr.length;
         var tick = function (b) {
-          // 構成どおりに鳴らしているときは、タイムラインの線は出さない（書いた行の位置とずれるため）
-          ukeTl.play = b === null || expd ? null : b + offB;
+          // §180: 構成どおりに鳴らしているときは、鳴っているブロックの書いた行の上の同じ位置へ
+          ukeTl.play = b === null ? null : (expd ? ukeArrangedToWritten(lyrS, fullS, b) : b + offB);
           if (ukeTl.redraw) { ukeTl.redraw(); }
           ukeLyrShow(root, lyrP, b);
         };
@@ -2547,7 +2557,7 @@
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
     roll: ukeRoll, rollImport: ukeRollImport,
     tracksClean: ukeTracksClean, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
-    expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
+    arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
