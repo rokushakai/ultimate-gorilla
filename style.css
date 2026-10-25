@@ -1137,3 +1137,14 @@ html, body {
 .uke-pick-item .uke-chip { opacity: 1; }
 /* ===== §175 v0.94: 行ごとのポジション ===== */
 .uke-seq-row select.uke-seq-pos { max-width: none; font-size: 12px; padding: 3px 4px; }
+/* ===== §176 v0.95: シーケンサー タイムライン ===== */
+.uke-tl-bar { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px; }
+.uke-tl-bar .uke-chips { margin: 0; }
+.uke-tl-undo { display: flex; gap: 4px; }
+.uke-tl-undo .arcade-mini-btn:disabled { opacity: 0.35; }
+.uke-tl-tools { display: flex; align-items: center; gap: 6px; margin: 6px 0 4px; }
+.uke-tl-tools select { padding: 4px; border-radius: 6px; border: 1px solid #74b9ff; background: #1b263b; color: #ffffff; font-size: 12px; }
+.uke-tl-tools .arcade-mini-btn { min-width: 32px; min-height: 30px; padding: 0; }
+canvas.uke-tl { display: block; width: 100%; height: 150px; border-radius: 8px; border: 1px solid #3d3d5c; touch-action: none; }
+.uke-tl-sel { margin: 6px 0; padding: 6px; background: #0f2236; border: 1px solid #ffd166; border-radius: 8px; }
+.uke-tl-sel .uke-seq-row { background: transparent; border: none; padding: 0; }

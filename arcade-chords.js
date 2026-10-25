@@ -421,7 +421,18 @@
   var EPS = 1e-6;
   function seqLen(id) {
     for (var i = 0; i < SEQ_LENGTHS.length; i++) { if (SEQ_LENGTHS[i].id === id) { return SEQ_LENGTHS[i]; } }
+    // §176 v0.95: 「◯拍」（"b2.5" = 2.5拍。0.25拍きざみ・最大32拍）
+    var m = /^b(\d+(?:\.\d+)?)$/.exec(String(id || ""));
+    if (m) {
+      var n = Math.max(0.25, Math.min(32, Math.round(parseFloat(m[1]) * 4) / 4));
+      return { id: "b" + n, label: n + "拍", beats: n };
+    }
     return SEQ_LENGTHS[4];
+  }
+  // 拍の数 → 長さの id（音符にちょうど合えばその音符）
+  function lenId(beats) {
+    for (var i = 0; i < SEQ_LENGTHS.length; i++) { if (Math.abs(SEQ_LENGTHS[i].beats - beats) < 1e-6) { return SEQ_LENGTHS[i].id; } }
+    return seqLen("b" + beats).id;
   }
   function seqStyle(id) {
     for (var i = 0; i < SEQ_STYLES.length; i++) { if (SEQ_STYLES[i].id === id) { return SEQ_STYLES[i]; } }
@@ -505,6 +516,6 @@
     intervals: intervals, suffix: suffix, name: chordName, pcs: chordPcs, tones: chordTones, parse: parseName, addPart: addPart,
     voicings: voicings, voicingsAt: voicingsAt, posOf: posOf, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
     shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf,
-    SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, SEQ_PATTERNS: SEQ_PATTERNS, seqPattern: seqPattern, seqLen: seqLen, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
+    SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, SEQ_PATTERNS: SEQ_PATTERNS, seqPattern: seqPattern, seqLen: seqLen, lenId: lenId, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
   };
 })();

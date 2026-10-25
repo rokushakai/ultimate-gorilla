@@ -216,7 +216,7 @@ module.exports = async function () {
 
   // 設定画面のシーケンサー
   st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "Am7", len: "q." }, { type: "chord", name: "Zz", len: "q" }, { type: "key", semis: 2 }] }); U.seqSave(st0);
-  U.ui.tab = "seq";
+  U.ui.tab = "seq"; U.tl.view = "list";
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   var hs = root.innerHTML;
   ok(hs.indexOf('value="Am7"') > 0 && hs.indexOf("uke-seq-chord bad") > 0 && hs.indexOf("転調") > 0 && hs.indexOf("付点4分") > 0 && hs.indexOf("スイング") > 0 && hs.indexOf("12小節ブルース") > 0, "sequencer tab shows rows, lengths, swing and presets");
@@ -288,7 +288,7 @@ module.exports = async function () {
   // 画面: 🎯 選ぶ・▶・マイコード・辞典・区間ループ
   U.saveMy([{ id: 1, name: "ぼくのC", shape: [0, 0, 0, 3] }, { id: 2, name: "Fmaj7風", shape: [2, 4, 1, 3] }]);
   st0 = U.seqLoad(); st0.cur = lseq; U.seqSave(st0);
-  U.ui.tab = "seq"; U.pick.row = 0; U.pick.tab = "my";
+  U.ui.tab = "seq"; U.tl.view = "list"; U.pick.row = 0; U.pick.tab = "my";
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   hs = root.innerHTML;
   ok(hs.indexOf('data-pset="★ぼくのC"') > 0 && hs.indexOf('data-pplay="★Fmaj7風"') > 0 && hs.indexOf("マイコード（2）") > 0, "picker lists all my chords with preview buttons", null);
@@ -303,7 +303,34 @@ module.exports = async function () {
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   ok(root.innerHTML.indexOf("この行の Key +3") > 0, "picker shows the row's key for previews", null);
   W.UGArcade.stop();
-  U.pick.row = -1; U.pick.tab = "my"; U.ui.tab = "play";
+  U.pick.row = -1; U.pick.tab = "my"; U.ui.tab = "play"; U.tl.view = "tl";
+
+  // ===== §176 タイムライン・◯拍・元に戻す =====
+  ok(U.seqClean({ rows: [{ type: "chord", name: "C", len: "b2.5" }, { type: "rest", len: "b0.1" }, { type: "chord", name: "G", len: "b40" }] }).rows.map(function (r2) { return r2.len; }).join() === "b2.5,b0.25,b32", "beat lengths are kept (0.25 steps, max 32)");
+  ok(C.lenId(2) === "h" && C.lenId(2.75) === "b2.75", "beats → length id (note names when they match)");
+  var tsc = U.seqSchedule(U.seqClean({ bpm: 120, countIn: true, rows: [{ type: "chord", name: "C", len: "w" }, { type: "rest", len: "h" }, { type: "chord", name: "G", len: "b1.5" }] }), false);
+  ok(Math.abs(U.timeToBeat(tsc, tsc.lead + 1) - 2) < 1e-6 && Math.abs(U.timeToBeat(tsc, tsc.lead + 3.25) - 6.5) < 1e-6 && U.timeToBeat(tsc, 0) === 0, "song time → beat for the play line", [U.timeToBeat(tsc, tsc.lead + 1), U.timeToBeat(tsc, tsc.lead + 3.25)]);
+  ok(U.rowAtBeat(tsc, 0) === 0 && U.rowAtBeat(tsc, 4.5) === 1 && U.rowAtBeat(tsc, 6.9) === 2 && U.rowAtBeat(tsc, 99) === -1, "beat → block under it");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }, { type: "key", semis: 2 }, { type: "chord", name: "G", len: "b1.5" }] }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.tl.view = "tl"; U.tl.sel = -1; U.hist.last = null;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('canvas class="uke-tl"') > 0 && hs.indexOf("ブロックをタップすると") > 0 && hs.indexOf('data-seq="undo"') > 0 && hs.indexOf("uke-seq-rows") < 0 && U.hist.last !== null, "timeline view: canvas, undo/redo, no row list", null);
+  W.UGArcade.stop();
+  U.tl.sel = 2;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-tl="dup"') > 0 && hs.indexOf('data-tl="longer"') > 0 && hs.indexOf("長さ 1.5拍") > 0 && hs.indexOf('value="G"') > 0, "selected block toolbar (length, duplicate…)", null);
+  W.UGArcade.stop();
+  U.tl.sel = 1;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("uke-seq-semis") > 0 && root.innerHTML.indexOf('data-tl="longer"') < 0, "a key-change block has no length", null);
+  W.UGArcade.stop();
+  U.tl.view = "list"; U.tl.sel = -1;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf('value="b1.5" selected') > 0, "list view offers the beat length too", null);
+  W.UGArcade.stop();
+  U.tl.view = "tl"; U.ui.tab = "play";
 
   // ===== §175 ポジション・表示するフレット数 =====
   ok(["0,0,0,3", "2,0,1,0", "5,4,3,3", "9,7,8,7", "0,0,0,7", "2,2,2,0"].map(function (t2) { return C.posOf(t2.split(",").map(Number)); }).join() === "low,low,mid,high,high,low", "position of a fingering (low / mid / high)");
