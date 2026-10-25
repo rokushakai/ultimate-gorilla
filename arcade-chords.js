@@ -290,6 +290,37 @@
     return res;
   }
 
+  // ---------- §175 v0.94: ポジション（ロー・ミドル・ハイ） ----------
+  var POS_CENTER = { low: 0, mid: 4.5, high: 9 };
+  function posOf(shape) {
+    var sp = shapeSpan(shape);
+    var open = shape[0] === 0 || shape[1] === 0 || shape[2] === 0 || shape[3] === 0;
+    // 5フレット以内で、低いフレット（2以下）か開放弦を使う形はロー
+    if (sp.max === 0 || (sp.max <= 5 && (sp.min <= 2 || open))) { return "low"; }
+    return sp.min >= 7 ? "high" : (sp.min >= 3 ? "mid" : "low");
+  }
+  // そのポジションの押さえ方（よい順）。なければいちばん近いポジションのもの。pos が "auto" ならふつうの voicings
+  function voicingsAt(spec, pos, opts) {
+    opts = opts || {};
+    if (!pos || pos === "auto" || !POS_CENTER.hasOwnProperty(pos)) { return voicings(spec, opts); }
+    var all = voicings(spec, { lowG: opts.lowG, preferred: opts.preferred, count: 400, maxFret: opts.maxFret === undefined ? 15 : opts.maxFret });
+    var hit = [], i;
+    for (i = 0; i < all.length; i++) { if (posOf(all[i]) === pos) { hit.push(all[i]); } }
+    // ミドル・ハイは開放弦の少ない形（そのポジションらしい響き）を先に。同じ数ならもとの順
+    if (pos !== "low") {
+      var opensOf = function (sh) { var n = 0; for (var j = 0; j < 4; j++) { if (sh[j] === 0) { n++; } } return n; };
+      hit = hit.map(function (sh, j) { return { sh: sh, j: j, o: opensOf(sh) }; }).sort(function (a, b) { return a.o - b.o || a.j - b.j; }).map(function (x) { return x.sh; });
+    }
+    if (!hit.length) {
+      // いちばん近いポジションのものを、近い順に
+      hit = all.slice().sort(function (a, b) {
+        var ma = shapeSpan(a).min, mb = shapeSpan(b).min;
+        return Math.abs(ma - POS_CENTER[pos]) - Math.abs(mb - POS_CENTER[pos]);
+      });
+    }
+    return hit.slice(0, opts.count || 6);
+  }
+
   // ---------- 押さえた形 → コード名 ----------
   var DETECT_PARTS = [];
   (function () {
@@ -411,7 +442,7 @@
   }
   // 曲 → 鳴らす予定の一覧
   //   seq: { bpm, key, meter, swing, swingGrid, style, metronome, countIn, rows: [{ type: "chord"|"rest"|"key", name, len, semis }] }
-  //   resolve(name, semis) → { name, shape } / null（押さえ方を決める）
+  //   resolve(name, semis, row) → { name, shape } / null（押さえ方を決める。row は行そのもの＝ポジションの指定など）
   //   戻り値: { rows: [{ i, name, shape, ok, start, end, t0, t1 }], events: [{ t, kind, ... }], beats, time, lead }
   function seqSchedule(seq, resolve) {
     var bpm = Math.max(40, Math.min(240, Math.round(seq.bpm || 90))), spb = 60 / bpm;
@@ -428,7 +459,7 @@
       var len = seqLen(r.len).beats, start = beat, end = beat + len;
       beat = end;
       if (r.type === "rest") { rows.push({ i: i, type: "rest", start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) }); continue; }
-      var res = resolve ? resolve(r.name, semis) : null;
+      var res = resolve ? resolve(r.name, semis, r) : null;
       var row = { i: i, type: "chord", name: res ? res.name : String(r.name || ""), shape: res ? res.shape : null, ok: !!res, start: start, end: end, t0: tm(start), t1: tm(end), bar: barOf(start) };
       rows.push(row);
       if (!res) { continue; }
@@ -472,7 +503,7 @@
   window.UGChords = {
     ROOTS: ROOTS, PARTS: PARTS, PART_CLASH: PART_CLASH, QUALITIES: QUALITIES,
     intervals: intervals, suffix: suffix, name: chordName, pcs: chordPcs, tones: chordTones, parse: parseName, addPart: addPart,
-    voicings: voicings, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
+    voicings: voicings, voicingsAt: voicingsAt, posOf: posOf, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
     shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf,
     SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, SEQ_PATTERNS: SEQ_PATTERNS, seqPattern: seqPattern, seqLen: seqLen, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
   };

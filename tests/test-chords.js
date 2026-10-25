@@ -7,7 +7,7 @@ function patch(src, file) {
   if (file !== "arcade-ukulele.js") { return src; }
   var a = "      var msg = \"\", msgT = 0, msgGood = false, wrong = null, wrongT = 0;";
   if (src.indexOf(a) < 0) { throw new Error("ukulele patch target missing"); }
-  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode, ear: ear, msg: msg }; };");
+  return src.split(a).join(a + " window.__uk2 = function () { return { target: target, correct: correct, cur: current(), pos: pos, mode: mode, ear: ear, msg: msg, L: L }; };");
 }
 function pcsOf(C, shape, lowG) {
   var m = C.shapeMidis(shape, lowG), o = {};
@@ -304,4 +304,63 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("この行の Key +3") > 0, "picker shows the row's key for previews", null);
   W.UGArcade.stop();
   U.pick.row = -1; U.pick.tab = "my"; U.ui.tab = "play";
+
+  // ===== §175 ポジション・表示するフレット数 =====
+  ok(["0,0,0,3", "2,0,1,0", "5,4,3,3", "9,7,8,7", "0,0,0,7", "2,2,2,0"].map(function (t2) { return C.posOf(t2.split(",").map(Number)); }).join() === "low,low,mid,high,high,low", "position of a fingering (low / mid / high)");
+  ok(C.voicingsAt(C.parse("C"), "mid")[0].join() === "5,4,3,3" && C.voicingsAt(C.parse("Am"), "high")[0].join() === "9,9,8,7" && C.voicingsAt(C.parse("F"), "high")[0].join() === "10,9,8,8", "classic mid/high shapes (C=5433, Am=9987, F=10988)");
+  ok(C.voicingsAt(C.parse("C"), "auto")[0].join() === "0,0,0,3", "auto keeps the usual shape");
+  var posMiss = 0, posBadNotes = [], posNone = [];
+  ["low", "mid", "high"].forEach(function (pz) {
+    for (var rr = 0; rr < 12; rr++) {
+      C.QUALITIES.forEach(function (q) {
+        var sp = { root: rr, parts: q.parts, bass: null }, v = C.voicingsAt(sp, pz, {});
+        if (!v.length) { posNone.push(pz + " " + C.name(sp)); return; }
+        if (C.posOf(v[0]) !== pz) { posMiss++; }
+        var chord = {}; C.pcs(sp).forEach(function (pc) { chord[pc] = true; });
+        Object.keys(pcsOf(C, v[0], false)).forEach(function (pc) { if (!chord[pc]) { posBadNotes.push(pz + " " + C.name(sp) + " " + v[0].join("-")); } });
+        if (Math.max.apply(null, v[0]) > 15) { posBadNotes.push("over15 " + C.name(sp)); }
+      });
+    }
+  });
+  ok(posNone.length === 0 && posBadNotes.length === 0, "every chord has a fingering for each position, only chord notes, within 15 frets", { none: posNone.slice(0, 3), bad: posBadNotes.slice(0, 3) });
+  // Cm7（3333）や E♭7（3334）のように、ローに形がないコードもある（そのときはいちばん近い形を使う）
+  ok(posMiss / 1080 < 0.08, "almost all chords have a fingering exactly in the chosen position", posMiss + "/1080");
+  // シーケンサー: 全体のポジションと行ごとの指定
+  var pseq = U.seqClean({ pos: "high", rows: [{ type: "chord", name: "Am", len: "w" }, { type: "chord", name: "Am", len: "w", pos: "low" }, { type: "chord", name: "Am", len: "w", pos: "zz" }] });
+  var psc = U.seqSchedule(pseq, false);
+  ok(pseq.rows[2].pos === "auto" && C.posOf(psc.rows[0].shape) === "high" && psc.rows[1].shape.join() === "2,0,0,0" && C.posOf(psc.rows[2].shape) === "high", "song position applies to 'auto' rows, a row can override it", psc.rows.map(function (r2) { return r2.shape.join(""); }));
+  ok(U.seqClean({ pos: "???" }).pos === "auto", "bad position is cleaned to auto");
+  // 表示するフレット数
+  var L15 = U.layout(15), L6 = U.layout(6), Lx = U.layout(7);
+  ok(L15.frets === 15 && L15.nut + 15 * L15.fh <= L15.strumY && L6.fh === 28 && L6.nut === U.NUT_Y && Lx.frets === 6, "fret-count layouts (15 frets fit above the strum area; unknown counts fall back to 6)", { L15: L15, Lx: Lx.frets });
+  ok(U.FRET_CHOICES.map(function (c3) { return c3[0]; }).join() === "5,6,8,9,12,15,18", "fret count choices");
+  ok(U.fitPos([9, 9, 8, 7], 0, 15) === 0 && U.fitPos([9, 9, 8, 7], 0, 6) === 6 && U.fitPos([14, 14, 13, 15], 0, 9) === 9 && U.fitPos([17, 17, 16, 18], 0, 6) === 12, "position fitting uses the shown fret count (up to fret 18)");
+  // ゲーム: 15フレット表示・ハイで出題 → 押さえて正解できる
+  var hiSeen = 0, hiBad = [];
+  r = env.run("ukulele", { config: { mode: "dict", frets: 15, posPref: "high" } }, 1500, function (f, e) {
+    if (f % 6 !== 3) { return; }
+    var u = W.__uk2();
+    if (!u.target) { return; }
+    if (C.posOf(u.target.shape) === "high") { hiSeen++; }
+    var ids = [];
+    u.target.shape.forEach(function (fr, s2) {
+      if (fr <= 0) { return; }
+      var rel = fr - u.pos;
+      if (rel < 1 || rel > u.L.frets) { hiBad.push(u.target.shape.join("-") + " pos " + u.pos); return; }
+      e.ptr("down", U.STRX[s2], u.L.nut + (rel - 0.5) * u.L.fh, 1 + s2); ids.push(1 + s2);
+    });
+    swipe(e, 9);
+    ids.forEach(function (id) { e.ptr("up", 0, 0, id); });
+  });
+  ok(hiBad.length === 0 && hiSeen > 5 && W.__uk2().correct >= 10 && W.__uk2().L.frets === 15, "15-fret view with high-position quiz: shapes are on screen and playable", { bad: hiBad.slice(0, 3), seen: hiSeen, correct: W.__uk2().correct });
+  // 設定画面
+  U.ui.tab = "play";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("表示するフレット数") > 0 && root.innerHTML.indexOf("18（テナー全部）") > 0 && root.innerHTML.indexOf("辞典から出題のポジション") > 0, "play tab has fret count and quiz position", null);
+  W.UGArcade.stop();
+  U.ui.tab = "dict"; U.ui.dRoot = 9; U.ui.dQual = "m"; U.ui.vPos = "high"; U.ui.dVoice = 0;
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf("uke-chip active\" data-vpos=\"high\"") > 0 && root.innerHTML.indexOf("押さえ方 9-9-8-7") > 0, "dictionary shows the high-position fingering", null);
+  W.UGArcade.stop();
+  U.ui.vPos = "auto"; U.ui.tab = "play";
 };

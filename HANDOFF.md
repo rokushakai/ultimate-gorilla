@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v0.93** |
+| 現在バージョン | **v0.94** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v0.94] 🎸 ポジション・表示するフレット数**（§175）: arcade-chords.js `posOf` / `voicingsAt`（count 400・maxFret 15 で探して絞る）。ukulele `ukeLayout(n)`（ゲームの寸法 L。create の中は L.nut / L.fh / L.frets / L.strumY / L.holeY）/ `ukeVoicePos` / `ukeRowPos`（行→全体の順）/ prefs に frets・posPref / 曲に pos・行に pos
 - **[v0.93] 🎸 シーケンサー: 選ぶ画面・区間ループ・試し聴き**（§174）: ukulele `ukePick`（開いている行・タブ）/ `ukePickHtml` / `ukeSeqSection`（区間だけの曲＋offset。前の転調を key に足す）/ `ukeSeqSemisAt`。曲の保存に loopOn・loopA・loopB
 - **[v0.92] フィールドBGMの差し替え**（§173）: `BGM_FILE_DATA.field.src` → `toilet_kutsurogu_demo2.mp3`（「トイレでくつろぐなよ」仮デモ2）。旧 `uranawanaii_field.mp3` は残してある
 - **[v0.91] 🎸 ストロークパターン・小節・書き出し**（§172）: arcade-chords.js `SEQ_PATTERNS` / `seqPattern` / schedule の style "pat"（イベント kind "chuck"）・rows[].bar・sched.bars。ukulele `ukeSeqRec`（メロディの録音形式に変換）/ `ukeSeqExportMidi` / `ukeSeqExportWav`
@@ -131,7 +132,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（393項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（406項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

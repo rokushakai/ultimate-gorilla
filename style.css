@@ -1135,3 +1135,5 @@ html, body {
 .uke-pick-item { display: inline-flex; align-items: center; gap: 2px; }
 .uke-pick-item .arcade-mini-btn { min-width: 28px; min-height: 28px; font-size: 12px; padding: 0; }
 .uke-pick-item .uke-chip { opacity: 1; }
+/* ===== §175 v0.94: 行ごとのポジション ===== */
+.uke-seq-row select.uke-seq-pos { max-width: none; font-size: 12px; padding: 3px 4px; }
