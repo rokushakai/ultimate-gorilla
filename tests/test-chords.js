@@ -646,6 +646,30 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §192 ジャンルでおまかせ伴奏 =====
+  ok(U.GENRES.length === 21 && U.genresFor(4).length === 18 && U.genresFor(3).length === 3, "21 genres (18 in 4/4, 3 in 3/4)");
+  var gOk = U.GENRES.every(function (gg) {
+    var gn = U.genre(gg[0]), sq = U.seqClean({ meter: gn.meter });
+    U.applyGenre(sq, gn.id, true);
+    var cl = U.seqClean(sq);
+    return cl.tracks.bass.pattern === gn.bass && cl.tracks.drum.groove === gn.drum && cl.style === gn.style && (!gn.pattern || cl.pattern === gn.pattern) && cl.bpm === gn.bpm && U.genreOf(cl) === gn.id &&
+      U.grooves().some(function (x) { return x.id === gn.drum; });
+  });
+  ok(gOk, "every genre uses known patterns / grooves and survives cleaning (and is recognised again)");
+  var gsq = U.seqClean({ bpm: 90, rows: [{ type: "chord", name: "C", len: "w", style: "q" }, { type: "chord", name: "G", len: "w" }] });
+  U.applyGenre(gsq, "jazz", false);
+  ok(gsq.bpm === 90 && gsq.swing === 0.67 && gsq.style === "q" && gsq.tracks.bass.pattern === "walk" && gsq.tracks.pad.on === false && gsq.rows[0].style === "q", "jazz: walking bass, ride, swing; tempo kept when asked; row styles untouched", gsq);
+  U.applyGenre(gsq, "reggae", true);
+  ok(gsq.bpm === 76 && gsq.pattern === "xUxUxUxU" && gsq.tracks.pad.on && gsq.tracks.pad.prog === 16 && gsq.tracks.bass.prog === 33, "reggae: offbeat strum, organ pad, finger bass, tempo 76", gsq.tracks);
+  ok(U.genreOf(U.seqClean({})) === "", "a plain song matches no genre");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }] }); U.applyGenre(st0.cur, "bossa", true); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-genre="bossa"') > 0 && /uke-chip active" data-genre="bossa"/.test(hs) && hs.indexOf('data-genre="random"') > 0 && hs.indexOf('data-genre="waltz"') < 0, "genre buttons are shown (current one lit, 3/4 ones hidden in 4/4)", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §191 ベースとドラムのパターン =====
   function bassOf(pattern, rowsB, meterB) {
     var sq = U.seqClean({ countIn: false, meter: meterB || 4, rows: rowsB, tracks: { bass: { on: true, pattern: pattern } } });
