@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.01** |
+| 現在バージョン | **v1.02** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.02] ➕ 追加トラック**（§193）: `tracks.xs`（並び）＋ `tracks.x1`〜`x8`（`ukeXClean`）。ループは `ukeTrackIds(tracks)` を使う（UKE_TRACK_IDS 直書きは決まったトラックだけ）。`ukeXEvents`（beat・dur つき）・`UKE_X_PRESETS` / `UKE_X_PLAYS` / `UKE_X_CH`・ピアノロールは `ukeRoll.track`（`ukeRollT`）
 - **[v1.01] 🎼 ジャンル**（§192）: `UKE_GENRES`（配列の行）→ `ukeGenre` / `ukeGenresFor(meter)` / `ukeApplyGenre(seq, id, withBpm)` / `ukeGenreOf`。button[data-genre]（再生中なら play を呼び直す）・ukeUi.genreBpm
 - **[v1.00] 🎸 ベースとドラムを増やす**（§191）: `UKE_BASS_STEPS`（文字のパターン・`ukeBassStep` / `ukeBassTok`）を `UKE_BASS_PATTERNS` に連結。`UKE_MORE_GROOVES` を `ukeGrooves()` の後ろに（UGMelody.grooves は変えない）。data-seq="bandprev"
 - **[v0.99.9] 🎸 パターンを増やす**（§190）: `SEQ_PATTERNS` に kind（"s"/"a"）と meter。パターン文字に 1〜4（pluck・string は 4−n）と P（string 0 と 3）。`ukePatterns(meter, kind)`・data-seq="patprev"（2小節の試聴）・select.uke-seq-rpsel
@@ -149,7 +150,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（529項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（543項目）。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

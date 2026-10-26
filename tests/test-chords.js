@@ -646,6 +646,49 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §193 トラックを追加 =====
+  var xt = U.tracksClean(null);
+  ok(xt.xs.length === 0 && U.trackIds(xt).length === 7, "no extra tracks at first");
+  var x1 = U.xAdd(xt, "strings"), x2 = U.xAdd(xt, "arp"), x3 = U.xAdd(xt, "mel");
+  ok(x1 === "x1" && x2 === "x2" && x3 === "x3" && xt.x1.prog === 48 && xt.x1.play === "hold" && xt.x2.play === "arpud" && xt.x3.kind === "notes" && xt.x1.name === "ストリングス", "add tracks from presets (strings / synth arpeggio / melody)", xt.x1);
+  ok(U.xMove(xt, "x3", -1) && xt.xs.join() === "x1,x3,x2" && !U.xMove(xt, "x1", -1) && U.xRemove(xt, "x1") && xt.xs.join() === "x3,x2" && xt.x1 === undefined && U.xAdd(xt, "piano") === "x1", "move / remove tracks, ids are reused", xt.xs);
+  for (var xa = 0; xa < 10; xa++) { U.xAdd(xt, "organ"); }
+  ok(xt.xs.length === 8 && U.xAdd(xt, "organ") === null, "up to 8 extra tracks", xt.xs.length);
+  var xc = U.tracksClean({ xs: ["x2", "x2", "x9", "x5", "x4"], x2: { preset: "synpad", play: "zz", oct: 5, vol: 300, name: "あいうえおかきくけこさしすせ" }, x5: { preset: "mel", notes: [[0, 1, 60], [1, 99, 61], ["a", 1, 62]] } });
+  ok(xc.xs.join() === "x2,x5" && xc.x2.play === "hold" && xc.x2.oct === 0 && xc.x2.vol === 100 && xc.x2.name.length === 12 && xc.x5.notes.length === 1, "extra tracks are cleaned (bad ids, styles, notes dropped)", xc);
+  function xEv(preset, rows, more) {
+    var tr0 = U.tracksClean(null), id0 = U.xAdd(tr0, preset), k0;
+    for (k0 in (more || {})) { tr0[id0][k0] = more[k0]; }
+    var sq0 = U.seqClean({ countIn: false, rows: rows, tracks: tr0 });
+    return U.seqSchedule(sq0, false).events.filter(function (e) { return e.track === id0; });
+  }
+  var es = xEv("strings", [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }]);
+  ok(es.length === 6 && es[0].midi === 60 && es.slice(0, 3).map(function (e) { return e.midi; }).join() === "60,64,67" && es[3].beat === 4 && es[0].dur === 4, "strings hold the chord tones (C → C4 E4 G4) for each bar", es.map(function (e) { return e.midi + "@" + e.beat; }));
+  var ea = xEv("arp", [{ type: "chord", name: "C", len: "h" }]);
+  ok(ea.map(function (e) { return e.midi; }).join() === "60,64,67,64,60,64,67,64" && Math.abs(ea[1].beat - 0.25) < 1e-9, "synth arpeggio goes up and down in 16ths", ea.map(function (e) { return e.midi; }));
+  var eo = xEv("poly", [{ type: "chord", name: "G", len: "w" }]);
+  ok(eo.length === 12 && eo[0].beat === 0.5 && eo.every(function (e) { return e.dur <= 0.5; }), "offbeat synth plays only the 'and's", eo.length);
+  var eb = xEv("brass", [{ type: "chord", name: "F", len: "w" }], { oct: 1 });
+  ok(eb.length === 6 && eb[3].beat === 1.5 && eb.slice(0, 3).map(function (e) { return e.midi; }).join() === "69,72,77", "brass hits on 1 and the and-of-2, an octave up", eb.map(function (e) { return e.midi + "@" + e.beat; }));
+  var en = xEv("mel", [{ type: "chord", name: "C", len: "w" }], { notes: [[0, 1, 72], [1, 0.5, 74]] });
+  ok(en.length === 2 && en[1].midi === 74 && en[1].dur === 0.5, "a piano-roll track plays its notes", en);
+  var xm = U.tracksClean(null); U.xAdd(xm, "strings"); U.xAdd(xm, "synmel"); xm.x2.notes = [[0, 1, 70]];
+  var mb = U.midiBytes(U.seqClean({ countIn: false, rows: [{ type: "chord", name: "C", len: "w" }], tracks: xm }), false), mtc = 0;
+  for (var mi9 = 0; mi9 + 3 < mb.length; mi9++) { if (mb[mi9] === 0x4D && mb[mi9 + 1] === 0x54 && mb[mi9 + 2] === 0x72 && mb[mi9 + 3] === 0x6B) { mtc++; } }
+  var pcCh = []; for (mi9 = 0; mi9 + 1 < mb.length; mi9++) { if ((mb[mi9] & 0xF0) === 0xC0 && (mb[mi9] & 15) !== 0 && mb[mi9 - 1] === 0) { pcCh.push((mb[mi9] & 15) + ":" + mb[mi9 + 1]); } }
+  ok(mtc === 4 && pcCh.indexOf("3:48") >= 0 && pcCh.indexOf("7:80") >= 0, "MIDI: each extra track is its own MTrk on channels 3, 7…", [mtc, pcCh]);
+  var wr = U.seqRec(U.seqClean({ countIn: false, rows: [{ type: "chord", name: "C", len: "w" }], tracks: xm }), false);
+  ok(wr.prog.x1 === 48 && wr.prog.x2 === 80 && wr.notes.some(function (n9) { return n9[2] === "x1"; }), "WAV: extra tracks are rendered with their own sound", wr.prog);
+  xm.x1.solo = true;
+  ok(U.trackAudible(xm, "x1") && !U.trackAudible(xm, "uke") && !U.trackAudible(xm, "x2"), "solo works with extra tracks");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }], tracks: { mel: { on: true }, xs: ["x1", "x2"], x1: { preset: "strings" }, x2: { preset: "synmel", notes: [[0, 1, 70]] } } }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.roll.track = "x2";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-xadd="synpad"') > 0 && hs.indexOf('data-xdel="x1"') > 0 && hs.indexOf('data-xmove="x2:-1"') > 0 && hs.indexOf("uke-roll-trk") > 0 && hs.indexOf('<option value="x2" selected>') > 0 && hs.indexOf('data-xroll="x2"') > 0 && hs.indexOf("（2 / 8本）") > 0, "mixer shows extra tracks, the add buttons, and the piano roll track picker", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play"; U.roll.track = "mel";
+
   // ===== §192 ジャンルでおまかせ伴奏 =====
   ok(U.GENRES.length === 21 && U.genresFor(4).length === 18 && U.genresFor(3).length === 3, "21 genres (18 in 4/4, 3 in 3/4)");
   var gOk = U.GENRES.every(function (gg) {
