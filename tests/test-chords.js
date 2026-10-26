@@ -646,6 +646,37 @@ module.exports = async function () {
   ok(root.innerHTML.indexOf("ハイブリッド（鳴らしたら次の押さえで入れかえ）") > 0, "play tab offers the hybrid fingering mode", null);
   W.UGArcade.stop();
 
+  // ===== §191 ベースとドラムのパターン =====
+  function bassOf(pattern, rowsB, meterB) {
+    var sq = U.seqClean({ countIn: false, meter: meterB || 4, rows: rowsB, tracks: { bass: { on: true, pattern: pattern } } });
+    return U.seqSchedule(sq, false).events.filter(function (e) { return e.track === "bass"; });
+  }
+  ok(U.seqClean({ tracks: { bass: { pattern: "funk" } } }).tracks.bass.pattern === "funk" && U.seqClean({ tracks: { bass: { pattern: "zz" } } }).tracks.bass.pattern === "root", "new bass patterns are kept, unknown ones fall back to root");
+  var bo = bassOf("oct", [{ type: "chord", name: "C", len: "w" }]);
+  ok(bo.map(function (e) { return e.midi; }).join() === "48,60,48,60,48,60,48,60", "bass: octave pattern (C → 48 / 60 in 8ths)", bo.map(function (e) { return e.midi; }));
+  var bb = bassOf("boogie", [{ type: "chord", name: "C7", len: "w" }]);
+  ok(bb.map(function (e) { return e.midi; }).join() === "48,52,55,57,58,57,55,52", "bass: boogie climbs R 3 5 6 ♭7", bb.map(function (e) { return e.midi; }));
+  var bw = bassOf("walk2", [{ type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }]);
+  ok(bw.map(function (e) { return e.midi; }).join() === "45,48,52,40,41,45,48,48", "bass: walking with a half-step approach to the next root (Am → F)", bw.map(function (e) { return e.midi; }));
+  var bdim = bassOf("arp", [{ type: "chord", name: "Bdim", len: "h" }]);
+  ok(bdim.map(function (e) { return e.midi; }).join() === "47,50,53,59", "bass: chord tones follow the chord (Bdim → minor 3rd, flat 5th)", bdim.map(function (e) { return e.midi; }));
+  var brg = bassOf("reggae", [{ type: "chord", name: "C", len: "w" }]);
+  ok(brg.length === 4 && Math.abs(brg[0].t - brg[1].t) > 0.5, "bass: a pattern that starts with a rest still plays the root when the chord starts", brg.length);
+  var bwz = bassOf("waltz", [{ type: "chord", name: "G", len: "h." }], 3);
+  ok(bwz.map(function (e) { return e.midi; }).join() === "43,50,50", "bass: 3/4 waltz pattern", bwz.map(function (e) { return e.midi; }));
+  var grs = U.grooves(), gids = grs.map(function (x) { return x.id; });
+  ok(grs.length === 26 && gids.indexOf("funk") >= 0 && gids.indexOf("jwaltz") >= 0 && grs.every(function (x) { return x.hits.every(function (hh) { return hh[1].every(function (st9) { return st9 >= 0 && st9 < 16; }); }); }), "26 drum grooves (plus my rhythm), all steps within a bar", gids.length);
+  ok(W.UGMelody.grooves.length === 7, "the melody game's groove list is unchanged");
+  var dro = U.seqSchedule(U.seqClean({ countIn: false, rows: [{ type: "chord", name: "C", len: "w" }], tracks: { drum: { on: true, groove: "rock" } } }), false).events.filter(function (e) { return e.track === "drum"; });
+  ok(dro.filter(function (e) { return e.midi === 36; }).length === 4 && dro.filter(function (e) { return e.midi === 42; }).length === 8, "drums: the rock groove plays", dro.length);
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }], tracks: { bass: { on: true, pattern: "funk" }, drum: { on: true, groove: "samba" } } }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-seq="bandprev"') > 0 && hs.indexOf('<option value="funk" selected>') > 0 && hs.indexOf('<option value="samba" selected>') > 0 && hs.indexOf("ギャロップ") > 0, "the mixer lists the new bass patterns and drum grooves, with a preview button", null);
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §190 ストロークパターン・アルペジオパターン =====
   ok(C.SEQ_PATTERNS.length === 28 && C.SEQ_PATTERNS.every(function (pp) { return C.seqPattern(pp.p) === pp.p && pp.p.length === (pp.meter === 3 ? 6 : pp.p.length); }), "28 patterns, all valid (3/4 ones are 6 steps)");
   ok(U.patterns(4, "s").length === 15 && U.patterns(4, "a").length === 9 && U.patterns(3).length === 4, "patterns are split by kind and meter", null);
