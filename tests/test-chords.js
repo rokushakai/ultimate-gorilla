@@ -766,6 +766,13 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §199 ピアノロールの範囲選択 =====
+  var bxn = [[0, 1, 60], [1, 2, 62], [4, 1, 64], [5, 0.5, 72]];
+  ok(U.rollBox(bxn, 0.5, 3, 60, 62).join() === "0:60,1:62" && U.rollBox(bxn, 3, 0.5, 62, 60).join() === "0:60,1:62", "box picks notes that touch it (either drag direction)", U.rollBox(bxn, 0.5, 3, 60, 62));
+  ok(U.rollBox(bxn, 2.9, 4.1, 0, 127).join() === "1:62,4:64" && U.rollBox(bxn, 3, 4, 0, 127).length === 0 && U.rollBox(bxn, 0, 9, 63, 71).join() === "4:64", "a note only touching the box edge is left out; rows between are included");
+  ok(U.rollBox(bxn, 6, 9, 0, 127).length === 0 && U.rollBox([], 0, 9, 0, 127).length === 0, "an empty box picks nothing");
+  ok(U.roll.box === null, "no box is shown at the start");
+
   // ===== §198 ピアノロールの改善 =====
   var rn = [[0, 1, 60], [1, 1, 62], [2, 0.5, 64, 1], [5, 1, 67]];
   var rs = U.rollOp(rn, ["0:60", "1:62"], "copy", 0, 4);
