@@ -951,7 +951,7 @@
       master.connect(off.destination);
       var fx = melodyBuildFx(off, master);
       if (fx.revSend) { fx.revSend.gain.value = MELODY_REV_SEND[(rec.fxRev >= 0 && rec.fxRev <= 3) ? rec.fxRev : 1]; }
-      if (fx.dlySend) { fx.dlySend.gain.value = MELODY_DLY_SEND[melodyAudio.fxDly || 0]; }
+      if (fx.dlySend) { fx.dlySend.gain.value = MELODY_DLY_SEND[(rec.fxDly >= 0 && rec.fxDly <= 3) ? rec.fxDly : (melodyAudio.fxDly || 0)]; }
       melodyAudio.ctx = off; melodyAudio.master = master; melodyAudio.bus = fx.bus; melodyAudio.revSend = fx.revSend; melodyAudio.dlySend = fx.dlySend;
       for (i = 0; i < rec.notes.length; i++) {
         var nt = rec.notes[i], t = nt[0] / 1000;

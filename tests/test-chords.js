@@ -766,6 +766,37 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §197 ジャンルごとの響き =====
+  ok(U.seqClean({}).rev === -1 && U.seqClean({}).dly === -1 && U.seqClean({ rev: 3, dly: 0 }).rev === 3 && U.seqClean({ rev: 3, dly: 0 }).dly === 0 && U.seqClean({ rev: 9 }).rev === -1, "reverb / delay are cleaned (old songs: the usual setting)");
+  var fxs = U.seqClean({});
+  U.applyGenre(fxs, "edm", true); var fxEdm = [fxs.rev, fxs.dly].join();
+  U.applyGenre(fxs, "folk", true); var fxFolk = [fxs.rev, fxs.dly].join();
+  U.applyGenre(fxs, "ambient", true); var fxAmb = [fxs.rev, fxs.dly].join();
+  U.applyGenre(fxs, "rockabilly", true);
+  ok(fxEdm === "2,2" && fxFolk === "0,0" && fxAmb === "3,3" && [fxs.rev, fxs.dly].join() === "1,2" && U.genreFx("jpop").join() === "1,0" && U.genreFx("house").join() === "2,1", "a genre sets the song's reverb / delay (EDM wet, folk dry, rockabilly slapback)", [fxEdm, fxFolk, fxAmb]);
+  var MG = W.UGMelody;
+  MG.audioInit(); MG.setFx(1, 0);
+  U.seqStart(U.seqClean({ rev: 3, dly: 2, countIn: false, rows: wBars(1) }), false, null, null);
+  var fxOn = [MG.audio.fxRev, MG.audio.fxDly].join();
+  U.seqStop();
+  ok(fxOn === "3,2" && [MG.audio.fxRev, MG.audio.fxDly].join() === "1,0", "playing uses the song's reverb / delay, stopping puts the usual setting back", fxOn);
+  U.seqStart(U.seqClean({ countIn: false, rows: wBars(1) }), false, null, null);
+  var fxKeep = [MG.audio.fxRev, MG.audio.fxDly].join();
+  U.seqStart(U.seqClean({ rev: 0, countIn: false, rows: wBars(1) }), false, null, null);
+  var fxMix = [MG.audio.fxRev, MG.audio.fxDly].join();
+  U.seqStop();
+  ok(fxKeep === "1,0" && fxMix === "0,0" && [MG.audio.fxRev, MG.audio.fxDly].join() === "1,0", "'usual setting' changes nothing; only the set one changes", [fxKeep, fxMix]);
+  var rqw = U.seqRec(U.seqClean({ rev: 3, dly: 2, rows: wBars(1) }), false), rqd = U.seqRec(U.seqClean({ rows: wBars(1) }), false);
+  ok(rqw.fxRev === 3 && rqw.fxDly === 2 && rqd.fxRev === 1 && rqd.fxDly === undefined, "WAV uses the song's reverb / delay (usual setting: as before)", [rqw.fxRev, rqw.fxDly, rqd.fxRev]);
+  function hasCC91(bytes, v) { for (var q9 = 0; q9 + 2 < bytes.length; q9++) { if ((bytes[q9] & 0xF0) === 0xB0 && bytes[q9 + 1] === 91 && bytes[q9 + 2] === v) { return true; } } return false; }
+  ok(hasCC91(U.midiBytes(U.seqClean({ rev: 3, rows: wBars(1) }), false), 100) && !hasCC91(U.midiBytes(U.seqClean({ rows: wBars(1) }), false), 30), "MIDI writes the reverb as CC91 (none for the usual setting)");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rev: 2 }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf('data-set="rev"') > 0 && root.innerHTML.indexOf('data-set="dly"') > 0 && /<option value="2" selected>ふつう/.test(root.innerHTML), "mixer shows the reverb / delay selects");
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §196 おまかせ作曲 =====
   function seqRnd(list) { var q9 = 0; return function () { return q9 < list.length ? list[q9++] : 0; }; }
   function rowText(sq) { return sq.rows.map(function (r9) { return r9.type === "sec" ? "[" + r9.name + "]" : r9.name; }).join(" "); }
