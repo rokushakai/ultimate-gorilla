@@ -1218,3 +1218,5 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-xadd { border: 1px dashed rgba(116, 185, 255, 0.45); border-radius: 8px; padding: 6px; margin-top: 6px; }
 .uke-trk-x { border-left: 3px solid #81ecec; }
 .uke-trk-body input[type="text"] { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 4px; }
+.uke-genre-cat { font-size: 11px; color: #ffd166; margin: 6px 0 2px; font-weight: bold; }
+.uke-genre summary { cursor: pointer; }

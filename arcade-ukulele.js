@@ -578,7 +578,7 @@
     var pr = ukeXPreset(s0.preset) || UKE_X_PRESETS[0], o = {
       preset: pr[0], kind: s0.kind === "notes" ? "notes" : (s0.kind === "chord" ? "chord" : pr[3]),
       name: String(s0.name === undefined ? pr[1].replace(/&#x[0-9A-F]+;/g, "").replace(/^\s+/, "") : s0.name).slice(0, 12),
-      on: s0.on === undefined ? true : !!s0.on, mute: !!s0.mute, solo: !!s0.solo,
+      on: s0.on === undefined ? true : !!s0.on, mute: !!s0.mute, solo: !!s0.solo, genre: !!s0.genre,
       vol: Math.max(0, Math.min(100, Math.round(s0.vol === undefined ? pr[6] : Number(s0.vol) || 0))),
       pan: [-0.6, 0, 0.6].indexOf(Number(s0.pan)) >= 0 ? Number(s0.pan) : 0,
       prog: Math.max(0, Math.min(127, Math.round(s0.prog === undefined ? pr[2] : Number(s0.prog) || 0))),
@@ -689,21 +689,71 @@
     ["soul", "&#x1F49C; ソウル", 104, "D-DU-UDU", "motown", "beat16", 4],
     ["waltz", "&#x1F483; ワルツ", 140, "D-DUDU", "waltz", "waltz", -1, 32, 0.5, 0.5, 3],
     ["jwaltz", "&#x1F3B7; ジャズワルツ", 120, "D-D-D-", "waltz2", "jwaltz", -1, 32, 0.67, 0.5, 3],
-    ["ballad3", "&#x1F319; 3拍子バラード", 72, "321212", "waltz2", "ballad3", 48, 32, 0.5, 0.5, 3]
+    ["ballad3", "&#x1F319; 3拍子バラード", 72, "321212", "waltz2", "ballad3", 48, 32, 0.5, 0.5, 3],
+    // §194 v1.03: [11] ジャンルの楽器（追加トラックの楽器 id。"楽器:音色:名前" で音色と名前を変える）。ドラム "" はドラムなし
+    ["jpop", "&#x1F3A4; J-POP", 140, "D-DUD-DU", "oct", "beat16", -1, 33, 0.5, 0.5, 4, ["strings", "piano"]],
+    ["anison", "&#x1F31F; アニソン", 175, "DDUUDDUU", "rock", "rock", -1, 34, 0.5, 0.5, 4, ["strings8", "lead"]],
+    ["citypop", "&#x1F303; シティポップ", 110, "D-xU-UxU", "motown", "beat16", -1, 33, 0.5, 0.5, 4, ["ep", "brass"]],
+    ["idol", "&#x1F380; アイドル", 160, "D-DUD-DU", "oct", "four", -1, 38, 0.5, 0.5, 4, ["arp", "strings"]],
+    ["pballad", "&#x1F525; パワーバラード", 76, "D---D-DU", "ballad", "halftime", -1, 32, 0.5, 0.5, 4, ["strings", "piano"]],
+    ["sprint", "&#x1F3C3; 疾走ロック", 180, "DDDDDDDD", "rock", "rock", -1, 34, 0.5, 0.5, 4, ["strings8"]],
+    ["hardrock", "&#x1F918; ハードロック", 120, "D--D--D-D-DUxUDU", "rock", "rock", -1, 34, 0.5, 0.5, 4, ["organ"]],
+    ["edm", "&#x1F4A5; EDM", 128, "D-D-D-D-", "oct", "four", -1, 38, 0.5, 0.5, 4, ["arp", "synpad", "poly"]],
+    ["house", "&#x1F3E0; ハウス", 124, "xUxUxUxU", "sync", "four", -1, 38, 0.5, 0.5, 4, ["poly", "synpad"]],
+    ["technopop", "&#x1F916; テクノポップ", 132, "DUDUDUDU", "oct", "disco", -1, 38, 0.5, 0.5, 4, ["lead", "poly"]],
+    ["eurobeat", "&#x1F3CE;&#xFE0F; ユーロビート", 155, "D-xUD-xU", "oct", "four", -1, 38, 0.5, 0.5, 4, ["arp", "brass"]],
+    ["synthwave", "&#x1F306; シンセウェーブ", 100, "D---D-DU", "gallop", "rock", -1, 38, 0.5, 0.5, 4, ["synpad", "arp"]],
+    ["trap", "&#x1F48E; トラップ", 140, "4-3-2-1-", "ballad", "halftime", -1, 38, 0.5, 0.5, 4, ["bell", "warm"]],
+    ["chillout", "&#x1F3D6;&#xFE0F; チルアウト", 90, "3-21D-DU", "ballad", "shaker", -1, 32, 0.5, 0.5, 4, ["warm", "bell"]],
+    ["rnb", "&#x1F48B; R&amp;B", 88, "D---D-DU", "sync", "hiphop", -1, 33, 0.58, 0.25, 4, ["ep", "strings"]],
+    ["neosoul", "&#x1F33F; ネオソウル", 78, "3-21D-DU", "funk", "hiphop", -1, 33, 0.62, 0.25, 4, ["ep"]],
+    ["gospel", "&#x26EA; ゴスペル", 70, "D-UD-UD-UD-U", "shuffle", "shuffle", -1, 32, 0.5, 0.5, 4, ["organ", "choir"]],
+    ["acidjazz", "&#x1F3A9; アシッドジャズ", 108, "D-DUxUDUD-DUxUDU", "funk", "funk", -1, 33, 0.5, 0.5, 4, ["organ", "brass"]],
+    ["doowop", "&#x1F399;&#xFE0F; ドゥーワップ", 72, "D-UD-UD-UD-U", "shuffle", "ballad", -1, 32, 0.5, 0.5, 4, ["choir", "piano"]],
+    ["swing", "&#x1F3BA; スウィング", 160, "q", "walk", "jazz", -1, 32, 0.67, 0.5, 4, ["brass", "piano"]],
+    ["jballad", "&#x1F303; ジャズバラード", 64, "43214321", "two", "jazz", -1, 32, 0.67, 0.5, 4, ["piano"]],
+    ["bluesrock", "&#x1F525; ブルースロック", 110, "D-UD-UD-UD-U", "boogie", "shuffle", -1, 34, 0.5, 0.5, 4, ["organ"]],
+    ["rockabilly", "&#x1F576;&#xFE0F; ロカビリー", 180, "DUDUDUDU", "walk2", "train", -1, 32, 0.62, 0.5, 4, []],
+    ["salsa", "&#x1F336;&#xFE0F; サルサ", 180, "D-xU-UxU", "sync", "latin", -1, 32, 0.5, 0.5, 4, ["piano", "brass"]],
+    ["cumbia", "&#x1F99C; クンビア", 95, "xUxUxUxU", "r5", "latin", -1, 33, 0.5, 0.5, 4, ["organ:21:アコーディオン"]],
+    ["tango", "&#x1F339; タンゴ", 120, "D--D--D-", "sync", "march", -1, 32, 0.5, 0.5, 4, ["organ:23:バンドネオン", "pizz"]],
+    ["celtic", "&#x2618;&#xFE0F; ケルト", 110, "DUDUDUDU", "two", "cajon", -1, 32, 0.5, 0.5, 4, ["strings8:40:フィドル"]],
+    ["afro", "&#x1F30D; アフロビート", 110, "D-xU-UxU", "funk", "tribal", -1, 33, 0.5, 0.5, 4, ["organ", "brass"]],
+    ["okinawa", "&#x1F33A; 沖縄", 120, "D-DU-UDU", "two", "shaker", -1, 32, 0.67, 0.5, 4, ["bell:106:三線風"]],
+    ["enka", "&#x1F376; 演歌", 70, "D---D-DU", "ballad", "ballad", -1, 32, 0.62, 0.5, 4, ["strings", "bell:107:琴"]],
+    ["ondo", "&#x1F3EE; 音頭", 120, "D-D-D-D-", "two", "tribal", -1, 32, 0.67, 0.5, 4, ["bell:72:笛"]],
+    ["bluegrass", "&#x1FA95; ブルーグラス", 170, "D-xUD-xU", "country", "train", -1, 32, 0.5, 0.5, 4, ["arp:105:バンジョー", "strings8:40:フィドル"]],
+    ["campfire", "&#x1F525; キャンプファイヤー", 96, "D-DU-UDU", "r5", "shaker", -1, 32, 0.5, 0.5, 4, []],
+    ["lullaby", "&#x1F37C; 子守唄", 60, "4-3-2-1-", "ballad", "", -1, 32, 0.5, 0.5, 4, ["bell"]],
+    ["ambient", "&#x1F30C; アンビエント", 70, "4-3-2-1-", "ballad", "", -1, 32, 0.5, 0.5, 4, ["warm", "bell"]],
+    ["minuet", "&#x1F3BB; メヌエット", 110, "321212", "waltz", "", -1, 32, 0.5, 0.5, 3, ["strings"]],
+    ["cwaltz", "&#x1F920; カントリーワルツ", 100, "D-DUDU", "waltz2", "waltz", -1, 32, 0.5, 0.5, 3, []],
+    ["chanson", "&#x1F956; シャンソン", 140, "D-D-D-", "waltz2", "swaltz", -1, 32, 0.5, 0.5, 3, ["organ:21:アコーディオン"]]
+  ];
+  // §194: ジャンルの見出し
+  var UKE_GENRE_GROUPS = [
+    ["J-POP・ロック", ["pop", "jpop", "anison", "citypop", "idol", "ballad", "pballad", "rock", "sprint", "hardrock", "punk"]],
+    ["ダンス・電子", ["disco", "edm", "house", "technopop", "eurobeat", "synthwave", "trap", "lofi", "chillout"]],
+    ["ソウル・ファンク", ["soul", "funk", "rnb", "neosoul", "gospel", "acidjazz", "doowop"]],
+    ["ジャズ・ブルース", ["jazz", "swing", "jballad", "blues", "bluesrock", "rockabilly"]],
+    ["ワールド", ["hawaii", "reggae", "ska", "bossa", "samba", "salsa", "cumbia", "tango", "celtic", "afro", "okinawa", "enka", "ondo"]],
+    ["アコースティック・その他", ["country", "bluegrass", "folk", "campfire", "march", "lullaby", "ambient"]],
+    ["3拍子", ["waltz", "jwaltz", "ballad3", "minuet", "cwaltz", "chanson"]]
   ];
   function ukeGenre(id) {
     for (var i = 0; i < UKE_GENRES.length; i++) {
       var gg = UKE_GENRES[i];
       if (gg[0] === id) {
         var isPat = gg[3].length > 2;
-        return { id: gg[0], name: gg[1], bpm: gg[2], style: isPat ? "pat" : gg[3], pattern: isPat ? gg[3] : "", bass: gg[4], drum: gg[5], pad: gg[6], bassProg: gg[7] === undefined ? 32 : gg[7], swing: gg[8] || 0.5, swingGrid: gg[9] || 0.5, meter: gg[10] || 4 };
+        var layers = (gg[11] || []).map(function (ly) { var lp = ly.split(":"); return { preset: lp[0], prog: lp[1] === undefined ? -1 : Number(lp[1]), name: lp[2] || "" }; });
+        return { id: gg[0], name: gg[1], bpm: gg[2], style: isPat ? "pat" : gg[3], pattern: isPat ? gg[3] : "", bass: gg[4], drum: gg[5], pad: gg[6], bassProg: gg[7] === undefined ? 32 : gg[7], swing: gg[8] || 0.5, swingGrid: gg[9] || 0.5, meter: gg[10] || 4, layers: layers };
       }
     }
     return null;
   }
   function ukeGenresFor(meter) { return UKE_GENRES.map(function (gg) { return ukeGenre(gg[0]); }).filter(function (gn) { return gn.meter === (meter === 3 ? 3 : 4); }); }
-  // 曲にジャンルを当てる（withBpm: テンポも）。行ごとの奏法は変えない
-  function ukeApplyGenre(seq, id, withBpm) {
+  // 曲にジャンルを当てる（withBpm: テンポも / withLayers: ジャンルの楽器も。省略はする）。行ごとの奏法は変えない
+  function ukeApplyGenre(seq, id, withBpm, withLayers) {
     var gn = ukeGenre(id);
     if (!gn) { return false; }
     seq.tracks = ukeTracksClean(seq.tracks);
@@ -712,18 +762,35 @@
     seq.swing = gn.swing; seq.swingGrid = gn.swingGrid;
     if (withBpm) { seq.bpm = gn.bpm; }
     seq.tracks.bass.on = true; seq.tracks.bass.pattern = gn.bass; seq.tracks.bass.prog = gn.bassProg;
-    seq.tracks.drum.on = true; seq.tracks.drum.groove = gn.drum;
+    seq.tracks.drum.on = !!gn.drum;
+    if (gn.drum) { seq.tracks.drum.groove = gn.drum; }
     seq.tracks.pad.on = gn.pad >= 0;
     if (gn.pad >= 0) { seq.tracks.pad.prog = gn.pad; }
+    // §194: 前のジャンルの楽器（🎼）を消して、このジャンルの楽器を足す
+    var tr = seq.tracks, i;
+    for (i = tr.xs.length - 1; i >= 0; i--) { if (tr[tr.xs[i]].genre) { ukeXRemove(tr, tr.xs[i]); } }
+    if (withLayers !== false) {
+      for (i = 0; i < gn.layers.length; i++) {
+        var nid = ukeXAdd(tr, gn.layers[i].preset);
+        if (!nid) { break; }
+        if (gn.layers[i].prog >= 0) { tr[nid].prog = gn.layers[i].prog; }
+        if (gn.layers[i].name) { tr[nid].name = gn.layers[i].name; }
+        tr[nid].genre = true;
+      }
+    }
     return true;
   }
   // いまの曲がどのジャンルと同じか（なければ ""）
   function ukeGenreOf(seq) {
     var tr = seq.tracks, list = ukeGenresFor(seq.meter);
-    if (!tr || !tr.bass.on || !tr.drum.on) { return ""; }
+    if (!tr || !tr.bass.on) { return ""; }
+    // §194: ジャンルの楽器（🎼 のトラック）があれば、それも同じこと
+    var gly = (tr.xs || []).filter(function (x) { return tr[x].genre; }).map(function (x) { return tr[x].preset; }).join();
     for (var i = 0; i < list.length; i++) {
       var gn = list[i];
-      if (seq.style === gn.style && (!gn.pattern || seq.pattern === gn.pattern) && tr.bass.pattern === gn.bass && tr.drum.groove === gn.drum) { return gn.id; }
+      if (gly && gly !== gn.layers.map(function (ly) { return ly.preset; }).join()) { continue; }
+      if (Math.abs((seq.swing || 0.5) - gn.swing) > 1e-6) { continue; }
+      if (seq.style === gn.style && (!gn.pattern || seq.pattern === gn.pattern) && tr.bass.pattern === gn.bass && (gn.drum ? tr.drum.on && tr.drum.groove === gn.drum : !tr.drum.on)) { return gn.id; }
     }
     return "";
   }
@@ -1879,7 +1946,8 @@
         '<span class="uke-trk-ms">' +
         (isX ? '<button class="arcade-mini-btn" data-xmove="' + id + ':-1" title="上へ"' + (tr.xs.indexOf(id) === 0 ? " disabled" : "") + '>&#x25B2;</button>' +
           '<button class="arcade-mini-btn" data-xmove="' + id + ':1" title="下へ"' + (tr.xs.indexOf(id) === tr.xs.length - 1 ? " disabled" : "") + '>&#x25BC;</button>' +
-          '<button class="arcade-mini-btn" data-xdel="' + id + '" title="トラックを消す">&#x1F5D1;&#xFE0F;</button>' : '') +
+          '<button class="arcade-mini-btn" data-xdel="' + id + '" title="トラックを消す">&#x1F5D1;&#xFE0F;</button>' +
+          (t.genre ? '<button class="arcade-mini-btn on" data-trk="' + id + '" data-tk="genre" title="ジャンルの楽器（次のジャンルで入れかわる）。押すとずっと残す">&#x1F3BC;</button>' : '') : '') +
         '<button class="arcade-mini-btn' + (t.mute ? " on" : "") + '" data-trk="' + id + '" data-tk="mute" title="ミュート">M</button>' +
         '<button class="arcade-mini-btn' + (t.solo ? " on" : "") + '" data-trk="' + id + '" data-tk="solo" title="ソロ">S</button>' +
         '<span class="uke-trk-led' + (au ? " on" : "") + '"></span></span></div>';
@@ -1929,10 +1997,16 @@
     var gNow = ukeGenreOf(seq);
     h += '<p class="small" style="color:#adb5bd;margin:0 0 6px;">コードを並べて伴奏を流そう。長さは音符で、Key・転調・スイング・奏法も選べるよ。</p>' +
       // §192: ジャンルでおまかせ伴奏
-      '<div class="uke-genre"><div class="uke-label">&#x1F3BC; ジャンル（ウクレレ・ベース・ドラムをまとめて。再生中なら切りかわる）</div>' +
-      ukeChips(ukeGenresFor(seq.meter).map(function (gn) { return { v: gn.id, t: gn.name }; }), function (v) { return v === gNow; }, "genre") +
+      // §194: たためる（見出しにいまのジャンル）
+      '<details class="uke-genre"' + (ukeUi.genreOpen ? " open" : "") + '><summary class="uke-label">&#x1F3BC; ジャンル' + (gNow ? "（いま: " + ukeGenre(gNow).name + "）" : "") + '</summary>' +
+      '<p class="small" style="color:#adb5bd;margin:2px 0;">ウクレレ・ベース・ドラム・楽器をまとめて切りかえ。再生中なら、そのジャンルで鳴らし直します。</p>' +
+      UKE_GENRE_GROUPS.map(function (gp) {
+        var gl = gp[1].map(ukeGenre).filter(function (gn) { return gn && gn.meter === (seq.meter === 3 ? 3 : 4); });
+        return gl.length ? '<div class="uke-genre-cat">' + gp[0] + '</div>' + ukeChips(gl.map(function (gn) { return { v: gn.id, t: gn.name }; }), function (v) { return v === gNow; }, "genre") : '';
+      }).join("") +
       '<div class="uke-chips"><button class="uke-chip" data-genre="random">&#x1F3B2; おまかせ</button>' +
-      '<label class="uke-genre-bpm"><input type="checkbox" class="uke-genre-bpm-on"' + (ukeUi.genreBpm ? " checked" : "") + '> テンポもジャンルに合わせる</label></div></div>' +
+      '<label class="uke-genre-bpm"><input type="checkbox" class="uke-genre-bpm-on"' + (ukeUi.genreBpm ? " checked" : "") + '> テンポもジャンルに合わせる</label>' +
+      '<label class="uke-genre-bpm"><input type="checkbox" class="uke-genre-ly-on"' + (ukeUi.genreLayers ? " checked" : "") + '> ジャンルの楽器も足す</label></div></details>' +
       '<div class="uke-seq-set">' +
       '<label>BPM<input type="number" min="40" max="240" data-set="bpm" value="' + seq.bpm + '"></label>' +
       '<label>Key（全体）' + sel('data-set="key"', semiOpts, seq.key) + '</label>' +
@@ -2072,13 +2146,16 @@
     all("input.uke-seq-pat", "onchange", function (ev) { seq.pattern = C.seqPattern(ev.currentTarget.value); save(true); });
     // §192: ジャンル（再生中なら、そのジャンルで鳴らし直す）
     all("input.uke-genre-bpm-on", "onchange", function (ev) { ukeUi.genreBpm = !!ev.currentTarget.checked; });
+    all("input.uke-genre-ly-on", "onchange", function (ev) { ukeUi.genreLayers = !!ev.currentTarget.checked; });
+    var gD = root.querySelector("details.uke-genre");
+    if (gD && gD.addEventListener) { gD.addEventListener("toggle", function () { ukeUi.genreOpen = !!gD.open; }); }
     all("button[data-genre]", "onclick", function (ev) {
       var gid = ev.currentTarget.getAttribute("data-genre"), playing = !!ukeSeqPlayer;
       if (gid === "random") {
         var cand = ukeGenresFor(seq.meter).filter(function (gn) { return gn.id !== ukeGenreOf(seq); });
         gid = cand[Math.floor(Math.random() * cand.length)].id;
       }
-      if (!ukeApplyGenre(seq, gid, ukeUi.genreBpm)) { return; }
+      if (!ukeApplyGenre(seq, gid, ukeUi.genreBpm, ukeUi.genreLayers)) { return; }
       ctx.toast(ukeGenre(gid).name + " にしました");
       save(true);
       if (playing) { var pb = root.querySelector('button[data-seq="play"]'); if (pb && pb.onclick) { pb.onclick({ currentTarget: pb }); } }
@@ -2281,7 +2358,7 @@
     function trkSet(id, k, v) {
       var t = seq.tracks[id];
       if (!t) { return; }
-      if (k === "mute" || k === "solo") { t[k] = !t[k]; }
+      if (k === "mute" || k === "solo" || k === "genre") { t[k] = !t[k]; }
       else if (k === "on") { t.on = !!v; }
       else if (k === "pattern" || k === "groove" || k === "quant" || k === "play") { t[k] = v; }
       else if (k === "name") { t.name = String(v || "").slice(0, 12); }
@@ -2495,7 +2572,7 @@
   }
 
   // ---------- 設定画面（タブ: あそぶ / コード辞典 / カスタム / マイコード / シーケンサー） ----------
-  var ukeUi = { tab: "play", genreBpm: true, setOpen: false, drillOpen: false, markBig: false, vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
+  var ukeUi = { tab: "play", genreBpm: true, genreLayers: true, genreOpen: true, setOpen: false, drillOpen: false, markBig: false, vPos: "auto", dRoot: 0, dQual: "maj", dVoice: 0, pRoot: 0, pParts: [], pBass: -1, pVoice: 0, sMode: "parts", sShape: [0, 0, 0, 3], sName: "" };
   var UKE_TABS = [["play", "&#x1F3B8; あそぶ"], ["dict", "&#x1F4DA; コード辞典"], ["custom", "&#x1F6E0;&#xFE0F; カスタム"], ["my", "&#x2B50; マイコード"], ["seq", "&#x1F39B;&#xFE0F; シーケンサー"]];
   function ukeSelect(attr, opts, cur) {
     var o = '<select ' + attr + '>';
@@ -3644,7 +3721,7 @@
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
-    strumNotes: ukeStrumNotes, patterns: ukePatterns, GENRES: UKE_GENRES, genre: ukeGenre, genresFor: ukeGenresFor, applyGenre: ukeApplyGenre, genreOf: ukeGenreOf, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
+    strumNotes: ukeStrumNotes, patterns: ukePatterns, GENRES: UKE_GENRES, GENRE_GROUPS: UKE_GENRE_GROUPS, genre: ukeGenre, genresFor: ukeGenresFor, applyGenre: ukeApplyGenre, genreOf: ukeGenreOf, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
     statsLoad: ukeStatsLoad, statsAdd: ukeStatsAdd, weakList: ukeWeakList, rhythmGrade: ukeRhythmGrade, STATS_KEY: UKE_STATS_KEY,
     countKeys: ukeCountKeys,
     markSet: ukeMarkSet, MARK_FRETS: UKE_MARK_FRETS,

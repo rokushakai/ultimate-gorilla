@@ -690,26 +690,44 @@ module.exports = async function () {
   U.ui.tab = "play"; U.roll.track = "mel";
 
   // ===== §192 ジャンルでおまかせ伴奏 =====
-  ok(U.GENRES.length === 21 && U.genresFor(4).length === 18 && U.genresFor(3).length === 3, "21 genres (18 in 4/4, 3 in 3/4)");
-  var gOk = U.GENRES.every(function (gg) {
+  ok(U.GENRES.length === 59 && U.genresFor(4).length === 53 && U.genresFor(3).length === 6, "59 genres (53 in 4/4, 6 in 3/4)");
+  var grpIds = [];
+  U.GENRE_GROUPS.forEach(function (gp) { grpIds = grpIds.concat(gp[1]); });
+  ok(grpIds.length === 59 && U.GENRES.every(function (gg) { return grpIds.indexOf(gg[0]) >= 0; }), "every genre is in exactly one heading", grpIds.length);
+  ok(U.GENRES.every(function (gg) { return U.genre(gg[0]).layers.every(function (ly) { return U.X_PRESETS.some(function (p) { return p[0] === ly.preset; }) && ly.prog < 128; }); }), "genre instruments use known track presets");
+  var gBad = U.GENRES.filter(function (gg) {
     var gn = U.genre(gg[0]), sq = U.seqClean({ meter: gn.meter });
     U.applyGenre(sq, gn.id, true);
     var cl = U.seqClean(sq);
-    return cl.tracks.bass.pattern === gn.bass && cl.tracks.drum.groove === gn.drum && cl.style === gn.style && (!gn.pattern || cl.pattern === gn.pattern) && cl.bpm === gn.bpm && U.genreOf(cl) === gn.id &&
-      U.grooves().some(function (x) { return x.id === gn.drum; });
-  });
-  ok(gOk, "every genre uses known patterns / grooves and survives cleaning (and is recognised again)");
+    return cl.tracks.bass.pattern === gn.bass && (gn.drum ? cl.tracks.drum.on && cl.tracks.drum.groove === gn.drum : !cl.tracks.drum.on) && cl.style === gn.style && (!gn.pattern || cl.pattern === gn.pattern) && cl.bpm === gn.bpm && U.genreOf(cl) === gn.id &&
+      (!gn.drum || U.grooves().some(function (x) { return x.id === gn.drum; })) && cl.tracks.xs.length === gn.layers.length ? false : true;
+  }).map(function (gg) { return gg[0]; });
+  ok(gBad.length === 0, "every genre uses known patterns / grooves and survives cleaning (and is recognised again)", gBad);
   var gsq = U.seqClean({ bpm: 90, rows: [{ type: "chord", name: "C", len: "w", style: "q" }, { type: "chord", name: "G", len: "w" }] });
   U.applyGenre(gsq, "jazz", false);
   ok(gsq.bpm === 90 && gsq.swing === 0.67 && gsq.style === "q" && gsq.tracks.bass.pattern === "walk" && gsq.tracks.pad.on === false && gsq.rows[0].style === "q", "jazz: walking bass, ride, swing; tempo kept when asked; row styles untouched", gsq);
   U.applyGenre(gsq, "reggae", true);
   ok(gsq.bpm === 76 && gsq.pattern === "xUxUxUxU" && gsq.tracks.pad.on && gsq.tracks.pad.prog === 16 && gsq.tracks.bass.prog === 33, "reggae: offbeat strum, organ pad, finger bass, tempo 76", gsq.tracks);
   ok(U.genreOf(U.seqClean({})) === "", "a plain song matches no genre");
-  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }] }); U.applyGenre(st0.cur, "bossa", true); U.seqSave(st0);
+  // §194: ジャンルの楽器
+  var lsq = U.seqClean({});
+  U.xAdd(lsq.tracks, "bell"); lsq.tracks.x1.name = "じぶんの";
+  U.applyGenre(lsq, "edm", true);
+  ok(lsq.tracks.xs.length === 4 && lsq.tracks.x1.name === "じぶんの" && !lsq.tracks.x1.genre && lsq.tracks.x2.genre && lsq.tracks.x2.preset === "arp", "EDM adds its synths as genre tracks (my own track stays)", lsq.tracks.xs);
+  U.applyGenre(lsq, "tango", true);
+  var tnames = lsq.tracks.xs.map(function (x9) { return lsq.tracks[x9].name; });
+  ok(lsq.tracks.xs.length === 3 && tnames.join() === "じぶんの,バンドネオン,ピチカート" && lsq.tracks[lsq.tracks.xs[1]].prog === 23, "the next genre swaps the genre tracks (tango: bandoneon 024)", tnames);
+  lsq.tracks[lsq.tracks.xs[1]].genre = false;
+  U.applyGenre(lsq, "lullaby", true, false);
+  ok(lsq.tracks.xs.length === 2 && !lsq.tracks.drum.on && U.genreOf(U.seqClean(lsq)) === "lullaby", "kept tracks stay, 'no instruments' adds none, lullaby has no drums", lsq.tracks.xs);
+  for (var fx = 0; fx < 7; fx++) { U.xAdd(lsq.tracks, "piano"); }
+  U.applyGenre(lsq, "edm", true);
+  ok(lsq.tracks.xs.length === 8, "genre instruments stop at 8 tracks", lsq.tracks.xs.length);
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: [{ type: "chord", name: "C", len: "w" }] }); U.applyGenre(st0.cur, "citypop", true); U.seqSave(st0);
   U.ui.tab = "seq";
   W.UGArcade.start("ukulele", root, { onExit: function () {} });
   hs = root.innerHTML;
-  ok(hs.indexOf('data-genre="bossa"') > 0 && /uke-chip active" data-genre="bossa"/.test(hs) && hs.indexOf('data-genre="random"') > 0 && hs.indexOf('data-genre="waltz"') < 0, "genre buttons are shown (current one lit, 3/4 ones hidden in 4/4)", null);
+  ok(hs.indexOf('data-genre="bossa"') > 0 && /uke-chip active" data-genre="citypop"/.test(hs) && hs.indexOf('data-genre="random"') > 0 && hs.indexOf('data-genre="waltz"') < 0 && hs.indexOf("ダンス・電子") > 0 && hs.indexOf("uke-genre-ly-on") > 0 && hs.indexOf('data-tk="genre"') > 0, "genre buttons are shown (current one lit, 3/4 ones hidden in 4/4)", null);
   W.UGArcade.stop();
   U.ui.tab = "play";
 
