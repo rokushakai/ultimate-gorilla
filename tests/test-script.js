@@ -88,7 +88,11 @@ module.exports = function () {
 
   // --- セーブ項目（ゲームセンター系が saveGame と loadGame の両方にある） ---
   var saveSrc = slice("function saveGame()", "function loadGame()"), loadSrc = slice("function loadGame()", "\n  function ");
-  ["arcadeHighScores", "arcadeMedals", "arcadeMedalsTotal", "companionTechnique2LearnedNotices"].forEach(function (key) {
+  ["arcadeHighScores", "arcadeMedals", "arcadeMedalsTotal", "companionTechnique2LearnedNotices", "fieldItemsTaken"].forEach(function (key) {
     ok(saveSrc.indexOf(key + ":") >= 0 && loadSrc.indexOf("data." + key) >= 0, "save/load both handle " + key);
   });
+  // §200: 拾ったフィールドのアイテムは記録して、ロードで消す（再読み込みで復活しない）
+  var stepSrc = slice("    // アイテム取得判定", "    // アレルギー中は");
+  ok(stepSrc.indexOf("state.fieldItemsTaken[key] = true") >= 0 && stepSrc.indexOf("state.fieldItemsTaken[key] = true") < stepSrc.indexOf("pickupItem("), "picking up a field item records it before pickupItem saves");
+  ok(/fieldItemsTaken\[_fik\]\) \{ delete state\.items\[_fik\]/.test(loadSrc), "loadGame removes picked-up field items from the map");
 };

@@ -1301,7 +1301,8 @@
     playerName: "", // §126 v0.49: 主人公名（永続・saveする。空文字の場合 getPlayerDisplayName() が "冒険者" を返す）
     normalReturnX: 2, // §129 v0.51: ワープ帰還X座標（既定値は既存ゲート出口と同じ）
     normalReturnY: 4, // §129 v0.51: ワープ帰還Y座標
-    stageWarpPlazaIntroduced: false // §131 v0.51.2: ワープ広場初回到達フラグ（永続・never demote）
+    stageWarpPlazaIntroduced: false, // §131 v0.51.2: ワープ広場初回到達フラグ（永続・never demote）
+    fieldItemsTaken: {} // §200 v1.09: 拾ったフィールドのアイテム（"x,y" → true。永続・saveする）
   };
 
   // ---------------------------------------------------------
@@ -3129,8 +3130,10 @@
     // アイテム取得判定
     var key = nx + "," + ny;
     if (state.items[key]) {
-      pickupItem(state.items[key]);
+      var _fieldItem = state.items[key];
       delete state.items[key];
+      state.fieldItemsTaken[key] = true; // §200 v1.09: pickupItem の saveGame より前に記録
+      pickupItem(_fieldItem);
     }
 
     // アレルギー中はフィールドを1歩歩くごとに少しHPが減る(§13.5)
@@ -17687,7 +17690,8 @@
         arcadeHighScores: state.arcadeHighScores || {}, // §146 v0.65: ゲームセンターのハイスコア
         arcadeMedals: state.arcadeMedals || 0, // §153 v0.72: ゲームセンターのメダル所持数
         arcadeMedalsTotal: state.arcadeMedalsTotal || 0, // §153 v0.72: メダル累計獲得数
-        companionBags: state.companionBags || {} // §142 v0.61: 仲間個人バッグ
+        companionBags: state.companionBags || {}, // §142 v0.61: 仲間個人バッグ
+        fieldItemsTaken: state.fieldItemsTaken || {} // §200 v1.09: 拾ったフィールドのアイテム
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -17837,6 +17841,11 @@
       if (!state.finalCompanionSideStoryUnlockNotified && isFinalCompanionSideStoryUnlocked()) {
         _pendingFinalCompanionStoryUnlockNotice = true;
       }
+      // §200 v1.09: 拾ったフィールドのアイテムは出さない（旧セーブは {}）
+      state.fieldItemsTaken = (data.fieldItemsTaken && typeof data.fieldItemsTaken === "object" && !Array.isArray(data.fieldItemsTaken)) ? data.fieldItemsTaken : {};
+      for (var _fik in state.fieldItemsTaken) {
+        if (state.fieldItemsTaken.hasOwnProperty(_fik) && state.fieldItemsTaken[_fik]) { delete state.items[_fik]; }
+      }
       // §142 v0.61: 仲間個人バッグ（旧セーブはundefined→{}補完）
       state.companionBags = data.companionBags || {};
       normalizeCompanionBags();
@@ -17880,9 +17889,8 @@
       return false;
     }
   }
-  // TODO: マップ上のプレイヤー座標や取得済みフィールドアイテムまでは
-  // セーブ対象にしていない(再読込時は村の入口からスタートする)。
-  // 必要であれば state.player.x/y と state.items の差分も保存対象に加える。
+  // TODO: 通常マップ上のプレイヤー座標はセーブ対象にしていない(再読込時は村の入口からスタートする)。
+  // 取得済みフィールドアイテムは §200 v1.09 から state.fieldItemsTaken で保存している。
 
   // ---------------------------------------------------------
   // 23. 入力(十字キー / スワイプ / キーボード)
