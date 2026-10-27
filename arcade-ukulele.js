@@ -2011,7 +2011,7 @@
           '<button class="arcade-mini-btn" data-roll="semi:1">半音&#x2191;</button><button class="arcade-mini-btn" data-roll="semi:-1">半音&#x2193;</button>' +
           '<button class="arcade-mini-btn" data-roll="semi:12">8va&#x2191;</button><button class="arcade-mini-btn" data-roll="semi:-12">8va&#x2193;</button>' +
           '<button class="arcade-mini-btn" data-roll="del" title="選んだ音を消す">&#x1F5D1;&#xFE0F;</button><button class="arcade-mini-btn" data-roll="none">選ぶのをやめる</button>' : '') + '</div>' : '') +
-      '<canvas class="uke-roll"></canvas>' +
+      '<canvas class="uke-roll' + (tool !== "pen" ? " uke-roll-lock" : "") + '"></canvas>' +
       '<p class="small" style="color:#adb5bd;margin:2px 0;">' + hint + '（' + rt.notes.length + '音）</p>' +
       '<label class="uke-genre-bpm"><input type="checkbox" class="uke-roll-guide"' + (ukeRoll.guide ? " checked" : "") + '> &#x1F3AF; コードの音を色で表示</label>' +
       (ro.length && ukeRoll.track === "mel" ? '<div class="uke-tl-tools"><span class="uke-label">メロディくずしの録音</span>' + sel('class="uke-roll-imp"', ro, ro[0][0]) + '<button class="uke-chip" data-roll="import">取り込む</button></div>' : '');

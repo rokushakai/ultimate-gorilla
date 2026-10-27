@@ -1167,6 +1167,7 @@ canvas.uke-tl { display: block; width: 100%; height: 150px; border-radius: 8px; 
 .uke-roll-tools .uke-label { margin-top: 0; white-space: nowrap; }
 .uke-roll-tools .arcade-mini-btn { padding: 0 6px; }
 canvas.uke-roll { display: block; width: 100%; height: 312px; border-radius: 8px; border: 1px solid #3d3d5c; touch-action: pan-y; /* §180: 縦はスクロール */ }
+canvas.uke-roll.uke-roll-lock { touch-action: none; } /* §199: 選ぶ・動かす は縦ドラッグもピアノロールで使う */
 .uke-rec-btn { background: #6c2a2a; border-color: #ff7675; opacity: 1; }
 /* ===== §179 v0.98: 曲の構成・歌詞・プロジェクト ===== */
 .uke-arr .uke-chip { opacity: 1; }

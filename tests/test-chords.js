@@ -772,6 +772,11 @@ module.exports = async function () {
   ok(U.rollBox(bxn, 2.9, 4.1, 0, 127).join() === "1:62,4:64" && U.rollBox(bxn, 3, 4, 0, 127).length === 0 && U.rollBox(bxn, 0, 9, 63, 71).join() === "4:64", "a note only touching the box edge is left out; rows between are included");
   ok(U.rollBox(bxn, 6, 9, 0, 127).length === 0 && U.rollBox([], 0, 9, 0, 127).length === 0, "an empty box picks nothing");
   ok(U.roll.box === null, "no box is shown at the start");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: wBars(1), tracks: { mel: { on: true, notes: [[0, 1, 60]] } } }); U.seqSave(st0);
+  U.ui.tab = "seq"; var lk = [];
+  ["pen", "move", "sel"].forEach(function (tl) { U.roll.tool = tl; W.UGArcade.start("ukulele", root, { onExit: function () {} }); lk.push(root.innerHTML.indexOf("uke-roll uke-roll-lock") > 0); W.UGArcade.stop(); });
+  U.ui.tab = "play"; U.roll.tool = "pen";
+  ok(lk.join() === "false,true,true", "select / move tools stop page scrolling on the roll (pen still scrolls)", lk);
 
   // ===== §198 ピアノロールの改善 =====
   var rn = [[0, 1, 60], [1, 1, 62], [2, 0.5, 64, 1], [5, 1, 67]];
