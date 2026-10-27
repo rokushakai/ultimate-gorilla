@@ -592,8 +592,8 @@
     };
     var mn = o.kind === "notes" && Array.isArray(s0.notes) ? s0.notes : [];
     for (var q = 0; q < mn.length && o.notes.length < UKE_MEL_MAX; q++) {
-      var b1 = mn[q] && ukeNum(mn[q][0], 0, 4096), d1 = mn[q] && ukeNum(mn[q][1], 0.0625, 32), m1 = mn[q] && ukeNum(mn[q][2], 0, 127);
-      if (b1 !== null && d1 !== null && m1 !== null) { o.notes.push([b1, d1, Math.round(m1)]); }
+      var b1 = mn[q] && ukeNum(mn[q][0], 0, 4096), d1 = mn[q] && ukeNum(mn[q][1], 0.0625, 32), m1 = mn[q] && ukeNum(mn[q][2], 0, 127), v1 = mn[q] && ukeNum(mn[q][3], 0.1, 1);
+      if (b1 !== null && d1 !== null && m1 !== null) { o.notes.push(v1 !== null && v1 !== 0.8 ? [b1, d1, Math.round(m1), v1] : [b1, d1, Math.round(m1)]); }
     }
     return o;
   }
@@ -974,8 +974,8 @@
         o.notes = [];
         var mn = Array.isArray(s0.notes) ? s0.notes : [];
         for (var q = 0; q < mn.length && o.notes.length < UKE_MEL_MAX; q++) {
-          var b1 = mn[q] && ukeNum(mn[q][0], 0, 4096), d1 = mn[q] && ukeNum(mn[q][1], 0.0625, 32), m1 = mn[q] && ukeNum(mn[q][2], 0, 127);
-          if (b1 !== null && d1 !== null && m1 !== null) { o.notes.push([b1, d1, Math.round(m1)]); }
+          var b1 = mn[q] && ukeNum(mn[q][0], 0, 4096), d1 = mn[q] && ukeNum(mn[q][1], 0.0625, 32), m1 = mn[q] && ukeNum(mn[q][2], 0, 127), v1 = mn[q] && ukeNum(mn[q][3], 0.1, 1);
+          if (b1 !== null && d1 !== null && m1 !== null) { o.notes.push(v1 !== null && v1 !== 0.8 ? [b1, d1, Math.round(m1), v1] : [b1, d1, Math.round(m1)]); }
         }
       }
       out[id] = o;
@@ -1072,7 +1072,7 @@
     if (tr.mel && tr.mel.on && tr.mel.notes) {
       for (k = 0; k < tr.mel.notes.length; k++) {
         var mnote = tr.mel.notes[k];
-        out.push({ t: tm(mnote[0]), kind: "note", track: "mel", midi: mnote[2], level: 0.8, beat: mnote[0], dur: mnote[1] });
+        out.push({ t: tm(mnote[0]), kind: "note", track: "mel", midi: mnote[2], level: ukeNoteVel(mnote), beat: mnote[0], dur: mnote[1] });
       }
     }
     // §193: 追加トラック
@@ -1140,7 +1140,7 @@
     var out = [], i, k;
     if (!x || !x.on) { return out; }
     if (x.kind === "notes") {
-      for (k = 0; k < x.notes.length; k++) { out.push({ t: tm(x.notes[k][0]), kind: "note", track: id, midi: x.notes[k][2], level: 0.8, beat: x.notes[k][0], dur: x.notes[k][1] }); }
+      for (k = 0; k < x.notes.length; k++) { out.push({ t: tm(x.notes[k][0]), kind: "note", track: id, midi: x.notes[k][2], level: ukeNoteVel(x.notes[k]), beat: x.notes[k][0], dur: x.notes[k][1] }); }
       return out;
     }
     var P = { hold: [meter, 0], half: [2, 0], q: [1, 0], e: [0.5, 0], off: [0.5, 0], stab: [0.5, 0], arp8: [0.5, 1], arp16: [0.25, 1], arpud: [0.25, 2] }[x.play] || [meter, 0];
@@ -1918,8 +1918,51 @@
   }
 
   // §178 v0.97: ピアノロール（メロディトラック）。横はタイムラインと同じズーム・スクロール
-  var UKE_ROLL_ROWS = 16, UKE_ROLL_RH = 10;
-  var ukeRoll = { low: 60, len: 0.5, redraw: null, track: "mel" };
+  var UKE_ROLL_ROWS = 24, UKE_ROLL_RH = 13;
+  // §198: tool＝"pen" 書く / "move" 動かす / "sel" 選ぶ。sel は選んだ音符の "拍:音" の一覧
+  var ukeRoll = { low: 60, len: 0.5, redraw: null, track: "mel", tool: "pen", sel: [], vel: 0.8, guide: true };
+  var UKE_ROLL_VELS = [[0.4, "弱い"], [0.6, "やや弱い"], [0.8, "ふつう"], [1, "強い"]];
+  function ukeNoteKey(n) { return n[0] + ":" + n[2]; }
+  function ukeNoteVel(n) { return n[3] === undefined ? 0.8 : n[3]; }
+  // 拍・音の位置にある音符の番号（なければ -1）
+  function ukeRollHit(ns, beat, midi) {
+    for (var i = 0; i < ns.length; i++) { if (ns[i][2] === midi && beat >= ns[i][0] - 1e-6 && beat < ns[i][0] + ns[i][1]) { return i; } }
+    return -1;
+  }
+  function ukeRollSort(ns) { ns.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; }); }
+  // §198: 選んだ音符への操作（ns をその場で変える）。新しい選択を返す
+  function ukeRollOp(ns, sel, op, arg, meter) {
+    var picked = [], i, out = [];
+    for (i = 0; i < ns.length; i++) { if (sel.indexOf(ukeNoteKey(ns[i])) >= 0) { picked.push(ns[i]); } }
+    if (op === "all") { return ns.map(ukeNoteKey); }
+    if (!picked.length) { return []; }
+    if (op === "del") {
+      for (i = ns.length - 1; i >= 0; i--) { if (picked.indexOf(ns[i]) >= 0) { ns.splice(i, 1); } }
+      return [];
+    }
+    if (op === "semi") {
+      for (i = 0; i < picked.length; i++) { picked[i][2] = Math.max(0, Math.min(127, picked[i][2] + arg)); }
+    } else if (op === "vel") {
+      for (i = 0; i < picked.length; i++) { if (arg === 0.8) { picked[i].length = 3; } else { picked[i][3] = arg; } }
+    } else if (op === "copy") {
+      var a = Infinity, b = 0;
+      for (i = 0; i < picked.length; i++) { a = Math.min(a, picked[i][0]); b = Math.max(b, picked[i][0] + picked[i][1]); }
+      var m = meter === 3 ? 3 : 4, off = Math.max(1, Math.ceil((b - a) / m - 1e-6)) * m, have = {};
+      for (i = 0; i < ns.length; i++) { have[ukeNoteKey(ns[i])] = true; }
+      for (i = 0; i < picked.length && ns.length < UKE_MEL_MAX; i++) {
+        var c = picked[i].slice();
+        c[0] = picked[i][0] + off;
+        if (c[0] > 4096 || have[ukeNoteKey(c)]) { continue; }
+        have[ukeNoteKey(c)] = true;
+        ns.push(c);
+        out.push(c);
+      }
+      ukeRollSort(ns);
+      return out.map(ukeNoteKey);
+    }
+    ukeRollSort(ns);
+    return picked.map(ukeNoteKey);
+  }
   // §193: ピアノロールで編集するトラック（メロディ・追加の打ち込みトラック。オンのものだけ）
   function ukeRollIds(seq) {
     var t = seq.tracks, out = [];
@@ -1931,7 +1974,7 @@
   function ukeRollT(seq) {
     var ids = ukeRollIds(seq);
     if (!ids.length) { return null; }
-    if (ids.indexOf(ukeRoll.track) < 0) { ukeRoll.track = ids[0]; }
+    if (ids.indexOf(ukeRoll.track) < 0) { ukeRoll.track = ids[0]; ukeRoll.sel = []; }
     return seq.tracks[ukeRoll.track];
   }
   function ukeRollHtml(seq, sel) {
@@ -1939,18 +1982,35 @@
     if (!rt) { return ""; }
     var recs = (window.UGMelody && window.UGMelody.loadRecs) ? window.UGMelody.loadRecs() : [], ro = [];
     for (var i = 0; i < recs.length; i++) { ro.push([recs[i].id, new Date(recs[i].date).getMonth() + 1 + "/" + new Date(recs[i].date).getDate() + " " + recs[i].notes.length + "音"]); }
+    // 選んだ音符が消えていたら外す
+    var keys = rt.notes.map(ukeNoteKey);
+    ukeRoll.sel = ukeRoll.sel.filter(function (k) { return keys.indexOf(k) >= 0; });
+    var ns = ukeRoll.sel.length, tool = ukeRoll.tool;
+    var hint = tool === "move" ? "音符をドラッグで動かす・右はしをドラッグで長さを変える・空いた所の横ドラッグでスクロール" :
+      (tool === "sel" ? "音符をタップで選ぶ／外す・空いた所をタップで全部外す" : "空いたマスをタップで音符を置く・音符をタップで消す・横ドラッグでスクロール");
     return '<h4 class="arcade-prize-cat">&#x1F3B5; ピアノロール</h4>' +
       (rids.length > 1 ? '<div class="uke-tl-tools"><span class="uke-label">編集するトラック</span>' + sel('class="uke-roll-trk"', rids.map(function (rid) { return [rid, rid === "mel" ? "メロディ" : seq.tracks[rid].name]; }), ukeRoll.track) + '</div>' : '') +
-      '<div class="uke-tl-tools"><span class="uke-label">置く長さ</span>' + sel('class="uke-roll-len"', [[0.25, "1/4拍"], [0.5, "1/2拍"], [1, "1拍"], [2, "2拍"]], ukeRoll.len) +
+      '<div class="uke-chips">' + [["pen", "&#x270F;&#xFE0F; 書く"], ["move", "&#x270B; 動かす・のばす"], ["sel", "&#x2B1A; 選ぶ"]].map(function (tl) {
+        return '<button class="uke-chip' + (tool === tl[0] ? " active" : "") + '" data-rolltool="' + tl[0] + '">' + tl[1] + '</button>';
+      }).join("") + '</div>' +
+      '<div class="uke-tl-tools uke-roll-tools"><span class="uke-label">置く長さ</span>' + sel('class="uke-roll-len"', [[0.25, "1/4拍"], [0.5, "1/2拍"], [1, "1拍"], [2, "2拍"]], ukeRoll.len) +
+      '<span class="uke-label">強さ</span>' + sel('class="uke-roll-vel"', UKE_ROLL_VELS, ukeRoll.vel) +
       '<button class="arcade-mini-btn" data-roll="up" title="音域を上へ">&#x25B2;</button><button class="arcade-mini-btn" data-roll="down" title="音域を下へ">&#x25BC;</button>' +
       '<button class="arcade-mini-btn" data-roll="clear" title="全部消す">&#x1F5D1;&#xFE0F;</button></div>' +
+      (tool === "sel" || ns ? '<div class="uke-tl-tools uke-roll-tools uke-roll-selbar"><span class="uke-label">選んだ音 ' + ns + '</span>' +
+        '<button class="arcade-mini-btn" data-roll="all">全部選ぶ</button>' +
+        (ns ? '<button class="arcade-mini-btn" data-roll="copy" title="うしろにコピー">&#x29C9; うしろにコピー</button>' +
+          '<button class="arcade-mini-btn" data-roll="semi:1">半音&#x2191;</button><button class="arcade-mini-btn" data-roll="semi:-1">半音&#x2193;</button>' +
+          '<button class="arcade-mini-btn" data-roll="semi:12">8va&#x2191;</button><button class="arcade-mini-btn" data-roll="semi:-12">8va&#x2193;</button>' +
+          '<button class="arcade-mini-btn" data-roll="del" title="選んだ音を消す">&#x1F5D1;&#xFE0F;</button><button class="arcade-mini-btn" data-roll="none">選ぶのをやめる</button>' : '') + '</div>' : '') +
       '<canvas class="uke-roll"></canvas>' +
-      '<p class="small" style="color:#adb5bd;margin:2px 0;">空いたマスをタップで音符を置く・音符をタップで消す・横ドラッグでスクロール（' + rt.notes.length + '音）</p>' +
+      '<p class="small" style="color:#adb5bd;margin:2px 0;">' + hint + '（' + rt.notes.length + '音）</p>' +
+      '<label class="uke-genre-bpm"><input type="checkbox" class="uke-roll-guide"' + (ukeRoll.guide ? " checked" : "") + '> &#x1F3AF; コードの音を色で表示</label>' +
       (ro.length && ukeRoll.track === "mel" ? '<div class="uke-tl-tools"><span class="uke-label">メロディくずしの録音</span>' + sel('class="uke-roll-imp"', ro, ro[0][0]) + '<button class="uke-chip" data-roll="import">取り込む</button></div>' : '');
   }
   function ukeRollDraw(cv, seq, sched) {
     if (!cv || !cv.getContext) { return; }
-    var w = cv.clientWidth || 330, k = 2, H = UKE_ROLL_ROWS * UKE_ROLL_RH, ctx = cv.getContext("2d"), ppb = ukeTlPpb(), sx = ukeTl.scroll, meter = seq.meter === 3 ? 3 : 4, i;
+    var w = cv.clientWidth || 330, k = 2, H = UKE_ROLL_ROWS * UKE_ROLL_RH, ctx = cv.getContext("2d"), ppb = ukeTlPpb(), sx = ukeTl.scroll, meter = seq.meter === 3 ? 3 : 4, i, j;
     if (cv.width !== w * k) { cv.width = w * k; cv.height = H * k; }
     ctx.setTransform(k, 0, 0, k, 0, 0);
     ctx.fillStyle = "#0b1626"; ctx.fillRect(0, 0, w, H);
@@ -1959,6 +2019,24 @@
       ctx.fillStyle = black ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.03)";
       ctx.fillRect(0, y, w, UKE_ROLL_RH);
       ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.fillRect(0, y, w, 1);
+    }
+    // §198: そのとき鳴っているコードの音の行をうすく（根音は少し濃く）
+    if (ukeRoll.guide && C) {
+      for (i = 0; i < sched.rows.length; i++) {
+        var cr = sched.rows[i];
+        if (cr.type !== "chord" || !cr.ok) { continue; }
+        var x0 = cr.start * ppb - sx, x1 = cr.end * ppb - sx;
+        if (x1 < 0 || x0 > w) { continue; }
+        var hm = ukeRowHarmony(cr, false);
+        if (!hm) { continue; }
+        var pcs = hm.pcs.map(function (p) { return C.pcOf(p); }), rootPc = C.pcOf(hm.root);
+        for (j = 0; j < UKE_ROLL_ROWS; j++) {
+          var pc = (ukeRoll.low + j) % 12;
+          if (pcs.indexOf(pc) < 0) { continue; }
+          ctx.fillStyle = pc === rootPc ? "rgba(255,209,102,0.16)" : "rgba(116,185,255,0.11)";
+          ctx.fillRect(x0, H - (j + 1) * UKE_ROLL_RH + 1, x1 - x0, UKE_ROLL_RH - 1);
+        }
+      }
     }
     var total = Math.max(sched.beats, meter * 4);
     for (var b = 0; b <= total + meter; b++) {
@@ -1971,16 +2049,22 @@
     for (i = 0; i < ns.length; i++) {
       var row = ns[i][2] - ukeRoll.low;
       if (row < 0 || row >= UKE_ROLL_ROWS) { continue; }
-      var nx = ns[i][0] * ppb - sx;
+      var nx = ns[i][0] * ppb - sx, nw = Math.max(3, ns[i][1] * ppb - 2), ny = H - (row + 1) * UKE_ROLL_RH + 1;
       if (nx > w || nx + ns[i][1] * ppb < 0) { continue; }
-      ctx.fillStyle = "#fd79a8";
-      ctx.fillRect(nx + 1, H - (row + 1) * UKE_ROLL_RH + 1, Math.max(3, ns[i][1] * ppb - 2), UKE_ROLL_RH - 2);
+      var picked = ukeRoll.sel.indexOf(ukeNoteKey(ns[i])) >= 0;
+      ctx.globalAlpha = 0.45 + 0.55 * ukeNoteVel(ns[i]);
+      ctx.fillStyle = picked ? "#ffeaa7" : "#fd79a8";
+      ctx.fillRect(nx + 1, ny, nw, UKE_ROLL_RH - 2);
+      ctx.globalAlpha = 1;
+      if (picked) { ctx.strokeStyle = "#fdcb6e"; ctx.lineWidth = 1; ctx.strokeRect(nx + 1.5, ny + 0.5, nw - 1, UKE_ROLL_RH - 3); }
+      // 長さを変えられる右はしのしるし
+      if (ukeRoll.tool === "move" && nw > 8) { ctx.fillStyle = "rgba(11,22,38,0.55)"; ctx.fillRect(nx + nw - 2, ny + 2, 2, UKE_ROLL_RH - 6); }
     }
     // 音名（C は強く）
-    ctx.font = "8px sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.font = "9px sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
     for (i = 0; i < UKE_ROLL_ROWS; i++) {
       var mm = ukeRoll.low + i, isC = mm % 12 === 0;
-      ctx.fillStyle = "rgba(11,22,38,0.8)"; ctx.fillRect(0, H - (i + 1) * UKE_ROLL_RH, 24, UKE_ROLL_RH);
+      ctx.fillStyle = "rgba(11,22,38,0.8)"; ctx.fillRect(0, H - (i + 1) * UKE_ROLL_RH, 26, UKE_ROLL_RH);
       ctx.fillStyle = isC ? "#ffd166" : "#adb5bd";
       ctx.fillText(ukeNoteName(mm) + (isC ? Math.floor(mm / 12) - 1 : ""), 2, H - (i + 0.5) * UKE_ROLL_RH);
     }
@@ -1990,12 +2074,29 @@
     var cv = root.querySelector("canvas.uke-roll");
     var all = function (sel, ev, fn) { var els = root.querySelectorAll(sel); for (var i = 0; i < els.length; i++) { els[i][ev] = fn; } };
     all("select.uke-roll-len", "onchange", function (ev) { ukeRoll.len = Number(ev.currentTarget.value); });
-    all("select.uke-roll-trk", "onchange", function (ev) { ukeRoll.track = ev.currentTarget.value; ctx.render(); });
+    all("select.uke-roll-trk", "onchange", function (ev) { ukeRoll.track = ev.currentTarget.value; ukeRoll.sel = []; ctx.render(); });
+    all("button[data-rolltool]", "onclick", function (ev) { ukeRoll.tool = ev.currentTarget.getAttribute("data-rolltool"); ctx.render(); });
+    all("input.uke-roll-guide", "onchange", function (ev) { ukeRoll.guide = !!ev.currentTarget.checked; if (ukeRoll.redraw) { ukeRoll.redraw(); } });
+    all("select.uke-roll-vel", "onchange", function (ev) {
+      ukeRoll.vel = Number(ev.currentTarget.value);
+      var rtv = ukeRollT(seq);
+      if (rtv && ukeRoll.sel.length) { ukeRoll.sel = ukeRollOp(rtv.notes, ukeRoll.sel, "vel", ukeRoll.vel, seq.meter); save(true); }
+    });
     all("button[data-roll]", "onclick", function (ev) {
-      var a = ev.currentTarget.getAttribute("data-roll");
+      var a = ev.currentTarget.getAttribute("data-roll"), rto = ukeRollT(seq);
       if (a === "up") { ukeRoll.low = Math.min(72, ukeRoll.low + 12); ctx.render(); return; }
-      if (a === "down") { ukeRoll.low = Math.max(48, ukeRoll.low - 12); ctx.render(); return; }
-      if (a === "clear") { var rtc = ukeRollT(seq); if (rtc) { rtc.notes = []; } save(true); return; }
+      if (a === "down") { ukeRoll.low = Math.max(36, ukeRoll.low - 12); ctx.render(); return; }
+      if (a === "clear") { if (rto) { rto.notes = []; } ukeRoll.sel = []; save(true); return; }
+      if (a === "none") { ukeRoll.sel = []; ctx.render(); return; }
+      if (a === "all" || a === "copy" || a === "del" || a.indexOf("semi:") === 0) {
+        if (!rto) { return; }
+        var op = a.indexOf("semi:") === 0 ? "semi" : a, n0 = rto.notes.length;
+        ukeRoll.sel = ukeRollOp(rto.notes, ukeRoll.sel, op, op === "semi" ? Number(a.split(":")[1]) : 0, seq.meter);
+        if (op === "all") { ctx.render(); return; }
+        if (op === "copy" && rto.notes.length === n0) { ctx.toast("コピーできる場所がありません（" + UKE_MEL_MAX + "音まで）"); }
+        save(true);
+        return;
+      }
       if (a === "import") {
         var selEl = root.querySelector("select.uke-roll-imp"), id = selEl ? Number(selEl.value) : 0;
         var n = ukeRollImport(seq, id, ctx.lowG);
@@ -2006,48 +2107,88 @@
     if (!cv || !cv.addEventListener) { ukeRoll.redraw = null; return; }
     var sched = ukeSeqSchedule(seq, ctx.lowG), drag = null, H = UKE_ROLL_ROWS * UKE_ROLL_RH;
     function pt(ev) { var r = cv.getBoundingClientRect(), src = ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0] : ev; return { x: src.clientX - r.left, y: src.clientY - r.top }; }
-    function down(ev) { if (ev.cancelable) { ev.preventDefault(); } var p0 = pt(ev); drag = { x0: p0.x, y0: p0.y, s0: ukeTl.scroll, moved: false }; }
+    function at(p) { return { beat: (p.x + ukeTl.scroll) / ukeTlPpb(), midi: ukeRoll.low + Math.floor((H - p.y) / UKE_ROLL_RH) }; }
+    function sound(midi, prog, v) { var UG = window.UGMelody, ac2 = UG && UG.audioInit(); if (ac2) { try { UG.synth(midi, prog, 0, v || 0.8); } catch (e) {} } }
+    function down(ev) {
+      if (ev.cancelable) { ev.preventDefault(); }
+      var p0 = pt(ev), q = at(p0), rtd = ukeRollT(seq);
+      drag = { x0: p0.x, y0: p0.y, s0: ukeTl.scroll, moved: false, grab: null };
+      // §198: 動かす — 音符をつかむ（右の3割なら長さ）
+      if (ukeRoll.tool === "move" && rtd) {
+        var hi = ukeRollHit(rtd.notes, q.beat, q.midi);
+        if (hi >= 0) {
+          var hn = rtd.notes[hi], inSel = ukeRoll.sel.indexOf(ukeNoteKey(hn)) >= 0;
+          var grp = inSel ? rtd.notes.filter(function (n) { return ukeRoll.sel.indexOf(ukeNoteKey(n)) >= 0; }) : [hn];
+          drag.grab = { len: q.beat > hn[0] + hn[1] * 0.7, notes: grp, orig: grp.map(function (n) { return [n[0], n[1], n[2]]; }), keepSel: inSel, prog: rtd.prog, lastM: hn[2] };
+        }
+      }
+    }
     function move(ev) {
       if (!drag) { return; }
       var p1 = pt(ev);
-      if (Math.abs(p1.x - drag.x0) > 6) { drag.moved = true; }
-      if (drag.moved) {
-        ukeTl.scroll = Math.max(0, drag.s0 - (p1.x - drag.x0));
+      if (Math.abs(p1.x - drag.x0) > 6 || (drag.grab && Math.abs(p1.y - drag.y0) > 6)) { drag.moved = true; }
+      if (!drag.moved) { return; }
+      if (drag.grab) {
+        var g = ukeTl.snap, gb = drag.grab, db = Math.round((p1.x - drag.x0) / ukeTlPpb() / g) * g, dm = -Math.round((p1.y - drag.y0) / UKE_ROLL_RH), i;
+        for (i = 0; i < gb.notes.length; i++) {
+          var o = gb.orig[i];
+          if (gb.len) { gb.notes[i][1] = Math.max(Math.min(g, 0.25), Math.min(32, o[1] + db)); }
+          else { gb.notes[i][0] = Math.max(0, o[0] + db); gb.notes[i][2] = Math.max(0, Math.min(127, o[2] + dm)); }
+        }
+        if (!gb.len && gb.notes[0][2] !== gb.lastM) { gb.lastM = gb.notes[0][2]; sound(gb.lastM, gb.prog, 0.5); }
+        if (gb.keepSel) { ukeRoll.sel = gb.notes.map(ukeNoteKey); }
         ukeRollDraw(cv, seq, sched);
-        if (ukeTl.redraw) { ukeTl.redraw(true); }
+        return;
       }
+      ukeTl.scroll = Math.max(0, drag.s0 - (p1.x - drag.x0));
+      ukeRollDraw(cv, seq, sched);
+      if (ukeTl.redraw) { ukeTl.redraw(true); }
     }
     function up() {
       if (!drag) { return; }
       var d = drag;
       drag = null;
-      if (d.moved) { return; }
-      var ppb = ukeTlPpb(), beat = (d.x0 + ukeTl.scroll) / ppb, midi = ukeRoll.low + Math.floor((H - d.y0) / UKE_ROLL_RH);
-      if (midi < ukeRoll.low || midi >= ukeRoll.low + UKE_ROLL_ROWS) { return; }
       var rtu = ukeRollT(seq);
       if (!rtu) { return; }
       var ns = rtu.notes;
-      for (var i = 0; i < ns.length; i++) {
-        if (ns[i][2] === midi && beat >= ns[i][0] - 1e-6 && beat < ns[i][0] + ns[i][1]) { ns.splice(i, 1); save(true); return; }
+      if (d.grab) {
+        if (d.moved) { ukeRollSort(ns); if (d.grab.keepSel) { ukeRoll.sel = d.grab.notes.map(ukeNoteKey); } save(true); }
+        else { sound(d.grab.notes[0][2], d.grab.prog, ukeNoteVel(d.grab.notes[0])); }
+        return;
       }
+      if (d.moved) { return; }
+      var q = at({ x: d.x0, y: d.y0 });
+      if (q.midi < ukeRoll.low || q.midi >= ukeRoll.low + UKE_ROLL_ROWS) { return; }
+      var hit = ukeRollHit(ns, q.beat, q.midi);
+      if (ukeRoll.tool === "sel") {
+        // §198: 選ぶ — タップで選ぶ／外す。空いた所で全部外す
+        if (hit < 0) { if (ukeRoll.sel.length) { ukeRoll.sel = []; ctx.render(); } return; }
+        var key = ukeNoteKey(ns[hit]), at0 = ukeRoll.sel.indexOf(key);
+        if (at0 >= 0) { ukeRoll.sel.splice(at0, 1); } else { ukeRoll.sel.push(key); sound(ns[hit][2], rtu.prog, ukeNoteVel(ns[hit])); }
+        ctx.render();
+        return;
+      }
+      if (ukeRoll.tool === "move") { return; }
+      if (hit >= 0) { ns.splice(hit, 1); save(true); return; }
       if (ns.length >= UKE_MEL_MAX) { ctx.toast("メロディは" + UKE_MEL_MAX + "音までです"); return; }
-      var g = ukeTl.snap, nb = Math.max(0, Math.floor(beat / g + 1e-6) * g);
-      ns.push([nb, ukeRoll.len, midi]);
-      ns.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; });
-      var UG = window.UGMelody, ac2 = UG && UG.audioInit();
-      if (ac2) { try { UG.synth(midi, rtu.prog, 0, 0.8); } catch (e) {} }
+      var g = ukeTl.snap, nb = Math.max(0, Math.floor(q.beat / g + 1e-6) * g), nn = [nb, ukeRoll.len, q.midi];
+      if (ukeRoll.vel !== 0.8) { nn.push(ukeRoll.vel); }
+      ns.push(nn);
+      ukeRollSort(ns);
+      sound(q.midi, rtu.prog, ukeRoll.vel);
       save(true);
     }
     if (window.PointerEvent) {
       cv.addEventListener("pointerdown", function (ev) { try { cv.setPointerCapture(ev.pointerId); } catch (e) {} down(ev); });
       cv.addEventListener("pointermove", move);
       cv.addEventListener("pointerup", up);
-      cv.addEventListener("pointercancel", function () { drag = null; });
+      cv.addEventListener("pointercancel", function () { if (drag && drag.grab) { for (var i = 0; i < drag.grab.notes.length; i++) { var o = drag.grab.orig[i]; drag.grab.notes[i][0] = o[0]; drag.grab.notes[i][1] = o[1]; drag.grab.notes[i][2] = o[2]; } ukeRollDraw(cv, seq, sched); } drag = null; });
     } else {
       cv.addEventListener("touchstart", down, { passive: false });
       cv.addEventListener("touchmove", move, { passive: false });
       cv.addEventListener("touchend", up);
       cv.addEventListener("mousedown", down);
+      cv.addEventListener("mousemove", move);
       cv.addEventListener("mouseup", up);
     }
     ukeRollDraw(cv, seq, sched);
@@ -3911,7 +4052,7 @@
     STRX: UKE_STRX, NUT_Y: UKE_NUT_Y, FH: UKE_FH, STRUM_Y: UKE_STRUM_Y,
     fingering: ukeFingering, velocity: ukeVelocity, stringOut: ukeStringOut, earBtn: ukeEarBtn, prefs: ukePrefs,
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
-    roll: ukeRoll, rollImport: ukeRollImport,
+    roll: ukeRoll, rollImport: ukeRollImport, rollOp: ukeRollOp, rollHit: ukeRollHit,
     tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
     arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,

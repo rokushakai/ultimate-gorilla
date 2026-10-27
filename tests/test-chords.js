@@ -766,6 +766,35 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §198 ピアノロールの改善 =====
+  var rn = [[0, 1, 60], [1, 1, 62], [2, 0.5, 64, 1], [5, 1, 67]];
+  var rs = U.rollOp(rn, ["0:60", "1:62"], "copy", 0, 4);
+  ok(rn.map(function (n) { return n[0] + ":" + n[2]; }).join() === "0:60,1:62,2:64,4:60,5:62,5:67" && rs.join() === "4:60,5:62", "copy: the picked notes go one bar later, and the copy becomes the selection", [rn.map(function (n) { return n[0] + ":" + n[2]; }), rs]);
+  rs = U.rollOp(rn, rs, "copy", 0, 4);
+  ok(rs.join() === "8:60,9:62" && rn.length === 8, "copy again continues the repeat", rs);
+  rs = U.rollOp(rn, ["0:60", "2:64"], "semi", 12, 4);
+  ok(rs.join() === "0:72,2:76" && rn[0][2] === 72, "transpose an octave up (selection follows)", rs);
+  rs = U.rollOp(rn, ["0:72"], "semi", 99, 4);
+  ok(rs.join() === "0:127", "transpose stays in 0–127", rs);
+  rs = U.rollOp(rn, ["0:127", "2:76"], "vel", 0.4, 4);
+  ok(rn[0][3] === 0.4 && U.rollOp(rn, ["2:76"], "vel", 0.8, 4) && rn.filter(function (n) { return n[0] === 2; })[0].length === 3, "strength is set on picked notes (0.8 = the old 3-number form)", rn[0]);
+  var nBefore = rn.length;
+  rs = U.rollOp(rn, ["0:127", "9:62"], "del", 0, 4);
+  ok(rs.length === 0 && rn.length === nBefore - 2 && U.rollOp(rn, [], "all", 0, 4).length === rn.length, "delete removes the picked notes; 'all' selects every note");
+  ok(U.rollOp([[0, 3, 60], [2, 3, 62]], ["0:60", "2:62"], "copy", 0, 3).join() === "6:60,8:62" && U.rollHit([[1, 2, 60]], 2.5, 60) === 0 && U.rollHit([[1, 2, 60]], 3, 60) === -1, "3/4: copy rounds the span up to whole bars (5 beats → 2 bars); hit test covers the note length");
+  var vs = U.seqClean({ tracks: { mel: { on: true, notes: [[0, 1, 60, 0.4], [1, 1, 62, 0.8], [2, 1, 64, 7]] } } });
+  ok(JSON.stringify(vs.tracks.mel.notes) === "[[0,1,60,0.4],[1,1,62],[2,1,64]]", "saved notes keep a strength other than 0.8", vs.tracks.mel.notes);
+  var vx = U.seqClean({ tracks: { xs: ["x1"], x1: { preset: "piano", kind: "notes", notes: [[0, 1, 60, 1]] } } });
+  var vev = U.seqSchedule(U.seqClean({ countIn: false, rows: wBars(1), tracks: { mel: { on: true, notes: [[0, 1, 60, 0.4]] }, xs: ["x1"], x1: vx.tracks.x1 } }), false).events;
+  ok(vev.filter(function (e) { return e.track === "mel"; })[0].level === 0.4 && vev.filter(function (e) { return e.track === "x1"; })[0].level === 1, "strength plays on the melody and extra note tracks");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: wBars(2), tracks: { mel: { on: true, notes: [[0, 1, 60], [1, 1, 64]] } } }); U.seqSave(st0);
+  U.ui.tab = "seq"; U.roll.tool = "sel"; U.roll.sel = ["0:60", "3:99"];
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-rolltool="move"') > 0 && hs.indexOf('uke-chip active" data-rolltool="sel"') > 0 && hs.indexOf("選んだ音 1") > 0 && hs.indexOf('data-roll="copy"') > 0 && hs.indexOf("uke-roll-vel") > 0 && hs.indexOf("uke-roll-guide") > 0 && U.roll.sel.join() === "0:60", "roll shows the tools, the selection bar (missing notes dropped) and the strength / chord guide");
+  W.UGArcade.stop();
+  U.ui.tab = "play"; U.roll.tool = "pen"; U.roll.sel = [];
+
   // ===== §197 ジャンルごとの響き =====
   ok(U.seqClean({}).rev === -1 && U.seqClean({}).dly === -1 && U.seqClean({ rev: 3, dly: 0 }).rev === 3 && U.seqClean({ rev: 3, dly: 0 }).dly === 0 && U.seqClean({ rev: 9 }).rev === -1, "reverb / delay are cleaned (old songs: the usual setting)");
   var fxs = U.seqClean({});
