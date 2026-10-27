@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.09** |
+| 現在バージョン | **v1.09.1** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.09.1] 🛠️ デバッグ点検**（§201）: 点検ボタンは続けて押すと前の結果が残って FAIL に見えることがある（例: 仲間わざ・通知順序）。1つずつ新しいセーブで確かめること
 - **[v1.09] 🔧 フィールドのアイテム**（§200）: 拾った つるぎ・やくそう のマスは `state.fieldItemsTaken`（"x,y"）。loadGame で `state.items` から消す。これがなかったころは再読み込みで復活していた
 - **[v1.08] ⬚ 範囲選択**（§199）: 選ぶ の道具のドラッグは枠（`ukeRoll.box`、キャンバスの座標）。離すと `ukeRollBox(notes, 拍, 拍, 音, 音)` でかかった音符を選択に足す。選ぶ・動かす のときキャンバスに `uke-roll-lock`（touch-action: none）。これがないとスマホで縦ドラッグがページのスクロールになり pointercancel で打ち切られる
 - **[v1.07] 🎹 ピアノロール**（§198）: `ukeRoll.tool`（pen/move/sel）・`ukeRoll.sel`（"拍:音" の一覧）。選んだ音符の操作は `ukeRollOp`。音符は [拍, 長さ, 音, 強さ?]（0.8 は書かない）。キャンバスの CSS の高さ 312px は UKE_ROLL_ROWS × UKE_ROLL_RH と同じにすること（ずれるとタップ位置がずれる）

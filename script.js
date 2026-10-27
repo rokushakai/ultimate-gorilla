@@ -12835,8 +12835,16 @@
           celeb3: state.companionSideStoryChapter3AllCompleteCelebrated,
           p1: _pendingCompanionStoryAllCompleteNotice,
           p2: _pendingCompanionStoryChapter2AllCompleteNotice,
-          p3: _pendingCompanionStoryChapter3AllCompleteNotice
+          p3: _pendingCompanionStoryChapter3AllCompleteNotice,
+          f1: JSON.stringify(state.companionSideStoryFlags || {}),
+          f2: JSON.stringify(state.companionSideStoryChapter2Flags || {}),
+          f3: JSON.stringify(state.companionSideStoryChapter3Flags || {})
         };
+        // §201 v1.09.1: 演出は全員が読み終えていないと出ない（正しいガード）ので、確認のあいだだけ3話とも完了にする
+        var _all54ord = { juritani: true, shurittani: true, norio: true, harumi: true };
+        state.companionSideStoryFlags = JSON.parse(JSON.stringify(_all54ord));
+        state.companionSideStoryChapter2Flags = JSON.parse(JSON.stringify(_all54ord));
+        state.companionSideStoryChapter3Flags = JSON.parse(JSON.stringify(_all54ord));
         // 3話全pending設定
         state.companionSideStoryAllCompleteCelebrated = true;
         state.companionSideStoryChapter2AllCompleteCelebrated = true;
@@ -12862,6 +12870,9 @@
         _pendingCompanionStoryAllCompleteNotice = _snap54ord.p1;
         _pendingCompanionStoryChapter2AllCompleteNotice = _snap54ord.p2;
         _pendingCompanionStoryChapter3AllCompleteNotice = _snap54ord.p3;
+        state.companionSideStoryFlags = JSON.parse(_snap54ord.f1);
+        state.companionSideStoryChapter2Flags = JSON.parse(_snap54ord.f2);
+        state.companionSideStoryChapter3Flags = JSON.parse(_snap54ord.f3);
         if (_companionStoryCompletionNoticeQueueTimer) {
           clearTimeout(_companionStoryCompletionNoticeQueueTimer);
           _companionStoryCompletionNoticeQueueTimer = null;
@@ -15919,13 +15930,14 @@
         var _pass = (
           !Array.isArray(_eq) && typeof _eq === "object" &&
           _eq["juritani"] === null &&
-          _inv["hotblood_bandana"] === 0 &&
-          _inv["capture_gloves"] === 0 &&
-          _inv["observation_glasses"] === 0 &&
-          _inv["healing_ribbon"] === 0 &&
-          typeof state.companionGearVersion === "number" && !isNaN(state.companionGearVersion)
+          // §201 v1.09.1: 壊れた版は 0 として読み、スターターを1個ずつ配り直す（§108）
+          _inv["hotblood_bandana"] === 1 &&
+          _inv["capture_gloves"] === 1 &&
+          _inv["observation_glasses"] === 1 &&
+          _inv["healing_ribbon"] === 1 &&
+          state.companionGearVersion === 3
         );
-        showToast("[DEBUG] 破損確認: " + (_pass ? "PASS ✅ すべて補正済み" : "FAIL ❌ コンソール確認"));
+        showToast("[DEBUG] 破損確認: " + (_pass ? "PASS ✅ すべて補正済み（スターター各1・ver=3）" : "FAIL ❌ コンソール確認"));
         if (!_pass) { console.log("[DEBUG] eq:", JSON.stringify(_eq), "inv:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
         renderStatusBody();
       };
@@ -15940,11 +15952,12 @@
         var _pass = (
           _inv["hotblood_bandana"]    === 1 && _inv["capture_gloves"]      === 1 &&
           _inv["observation_glasses"] === 1 && _inv["healing_ribbon"]      === 1 &&
-          _inv["critical_bracelet"]   === 1 && _inv["net_master_belt"]     === 1 &&
-          _inv["research_notebook"]   === 1 && _inv["prayer_brooch"]       === 1 &&
-          state.companionGearVersion  === 2
+          // §201 v1.09.1: 特化装備はステージ報酬なので配らない（§109）
+          !_inv["critical_bracelet"]  && !_inv["net_master_belt"] &&
+          !_inv["research_notebook"]  && !_inv["prayer_brooch"] &&
+          state.companionGearVersion  === 3
         );
-        showToast("[DEBUG] 増殖防止確認: " + (_pass ? "PASS ✅ 全8種×1個・ver=2" : "FAIL ❌ コンソール確認"));
+        showToast("[DEBUG] 増殖防止確認: " + (_pass ? "PASS ✅ スターター4種×1個・特化装備なし・ver=3" : "FAIL ❌ コンソール確認"));
         if (!_pass) { console.log("[DEBUG] inv after ×3:", JSON.stringify(_inv), "ver:", state.companionGearVersion); }
         renderStatusBody();
       };
@@ -15961,13 +15974,13 @@
         var _inv2 = state.companionGearInventory;
         var _pass2 = (
           _inv2["hotblood_bandana"]    === _prevInvJ &&   // 既存数維持
-          _inv2["critical_bracelet"]   === 1 &&
-          _inv2["net_master_belt"]     === 1 &&
-          _inv2["research_notebook"]   === 1 &&
-          _inv2["prayer_brooch"]       === 1 &&
-          state.companionGearVersion   === 2
+          // §201 v1.09.1: v1 → v3 は特化装備を配らない（ステージ初回クリアで取得 §109）
+          !_inv2["critical_bracelet"]  && !_inv2["net_master_belt"] &&
+          !_inv2["research_notebook"]  && !_inv2["prayer_brooch"] &&
+          state.companionGearRewardFlags.critical_bracelet === false &&
+          state.companionGearVersion   === 3
         );
-        showToast("[DEBUG] v1→v2移行確認: " + (_pass2 ? "PASS ✅ 新装備各1個・既存維持・ver=2" : "FAIL ❌ コンソール確認"));
+        showToast("[DEBUG] v1→v3移行確認: " + (_pass2 ? "PASS ✅ 特化装備なし・既存維持・ver=3" : "FAIL ❌ コンソール確認"));
         if (!_pass2) { console.log("[DEBUG] inv:", JSON.stringify(_inv2), "ver:", state.companionGearVersion); }
         renderStatusBody();
       };
@@ -16030,6 +16043,10 @@
           norio: state.companionEquipment["norio"],
           harumi: state.companionEquipment["harumi"]
         };
+        // §201 v1.09.1: 持っていない装備は効かない（getCompanionEquippedGear）ので、確認のあいだだけ全8種を持たせる
+        var _oldInvB = JSON.stringify(state.companionGearInventory);
+        var _allGearB = ["hotblood_bandana", "critical_bracelet", "capture_gloves", "net_master_belt", "observation_glasses", "research_notebook", "healing_ribbon", "prayer_brooch"];
+        for (var _agb = 0; _agb < _allGearB.length; _agb++) { state.companionGearInventory[_allGearB[_agb]] = Math.max(1, state.companionGearInventory[_allGearB[_agb]] || 0); }
         var _lines = [];
         var _allPass = true;
         function _chk(cid, gid, type, ak, exp) {
@@ -16038,11 +16055,11 @@
           return val === exp;
         }
         // ジュリタニ 熱血バンダナ: damage attack/s1/s2/magic = 2/2/0/2
-        var jb = [_chk("juritani","hotblood_bandana","damage","attack",2), _chk("juritani","hotblood_bandana","damage","special1",2), _chk("juritani","hotblood_bandana","damage","special2",0), _chk("juritani","hotblood_bandana","damage","magic",2)];
+        var jb = [_chk("juritani","hotblood_bandana","damage","attack",2), _chk("juritani","hotblood_bandana","damage","special1",2), _chk("juritani","hotblood_bandana","damage","special2",2), _chk("juritani","hotblood_bandana","damage","magic",2)];
         var jbP = jb[0]&&jb[1]&&jb[2]&&jb[3]; if(!jbP){_allPass=false;}
         state.companionEquipment["juritani"] = "hotblood_bandana";
         var jbVals = [getCompanionEquipmentBonus("juritani","damage","attack"),getCompanionEquipmentBonus("juritani","damage","special1"),getCompanionEquipmentBonus("juritani","damage","special2"),getCompanionEquipmentBonus("juritani","damage","magic")];
-        _lines.push("熱血バンダナ:" + jbVals.join("/") + (jbP?" ✅":" ❌(exp 2/2/0/2)"));
+        _lines.push("熱血バンダナ:" + jbVals.join("/") + (jbP?" ✅（かばうは getter を呼ばないので戦闘では+0）":" ❌(exp 2/2/2/2)"));
         // ジュリタニ 会心の腕輪: 0/5/0/0
         state.companionEquipment["juritani"] = "critical_bracelet";
         var jcVals = [getCompanionEquipmentBonus("juritani","damage","attack"),getCompanionEquipmentBonus("juritani","damage","special1"),getCompanionEquipmentBonus("juritani","damage","special2"),getCompanionEquipmentBonus("juritani","damage","magic")];
@@ -16085,6 +16102,7 @@
         state.companionEquipment["shurittani"] = _oldEq.shurittani;
         state.companionEquipment["norio"]      = _oldEq.norio;
         state.companionEquipment["harumi"]     = _oldEq.harumi;
+        state.companionGearInventory = JSON.parse(_oldInvB);
         console.log("[DEBUG] 行動別ボーナス全確認 (attack/special1/special2/magic):\n" + _lines.join("\n"));
         showToast("[DEBUG] ボーナス全確認: " + (_allPass ? "全PASS ✅" : "FAIL ❌ あり") + " (詳細はコンソール)");
         renderStatusBody();
@@ -16093,6 +16111,10 @@
       document.getElementById("btn-debug-gear-switch-check").onclick = function () {
         ensureCompanionGearState();
         var _oldJ = state.companionEquipment["juritani"];
+        // §201 v1.09.1: 持っていない装備は効かないので、確認のあいだだけ持たせる
+        var _oldInvS = JSON.stringify(state.companionGearInventory);
+        state.companionGearInventory.hotblood_bandana = Math.max(1, state.companionGearInventory.hotblood_bandana || 0);
+        state.companionGearInventory.critical_bracelet = Math.max(1, state.companionGearInventory.critical_bracelet || 0);
         // Step1: 熱血バンダナ
         state.companionEquipment["juritani"] = "hotblood_bandana";
         var s1a = getCompanionEquipmentBonus("juritani","damage","attack");
@@ -16117,6 +16139,7 @@
           "装備なし: atk=" + s4a + " s1=" + s4s1 + (s4a===0&&s4s1===0?" ✅":" ❌(exp 0/0)")
         ];
         state.companionEquipment["juritani"] = _oldJ;
+        state.companionGearInventory = JSON.parse(_oldInvS);
         console.log("[DEBUG] 装備切替残留チェック:\n" + _lines.join("\n"));
         showToast("[DEBUG] 切替残留: " + (_pass ? "PASS ✅ 旧効果なし" : "FAIL ❌ 残留あり") + " (詳細はコンソール)");
         renderStatusBody();
