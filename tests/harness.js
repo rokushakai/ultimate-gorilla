@@ -8,6 +8,22 @@ var vm = require("vm");
 
 var ROOT = path.join(__dirname, "..");
 
+// ---------- 乱数の種 ----------
+// テストもゲーム本体（vm の中）も同じ種から乱数を作る。失敗したら UG_SEED=<種> で同じ結果を再現できる
+var SEED = process.env.UG_SEED ? (parseInt(process.env.UG_SEED, 10) >>> 0) : (Math.floor(Math.random() * 1e9) >>> 0);
+function makeRandom(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+Math.random = makeRandom(SEED);
+var loadCount = 0;
+
 // ---------- 小さなアサーション ----------
 var results = [];
 var currentSuite = "";
@@ -155,6 +171,8 @@ function load(opts) {
     addEventListener: function () {}, removeEventListener: function () {}
   };
   var ctx = vm.createContext(sandbox);
+  // vm の中の Math は別物なので、読み込みごとに種から決まる乱数に差し替える
+  vm.runInContext("Math", ctx).random = makeRandom(SEED + (++loadCount) * 7919);
   // opts.patch(src, file): テストだけで中身をのぞくための置換（本体のファイルは変更しない）
   (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js"]).forEach(function (f) {
     var src = fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -223,4 +241,4 @@ function es5Problems(file) {
   return out;
 }
 
-module.exports = { load: load, suite: suite, ok: ok, summary: summary, es5Problems: es5Problems, ROOT: ROOT, makeEl: makeEl };
+module.exports = { SEED: SEED, load: load, suite: suite, ok: ok, summary: summary, es5Problems: es5Problems, ROOT: ROOT, makeEl: makeEl };

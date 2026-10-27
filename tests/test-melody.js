@@ -174,7 +174,9 @@ module.exports = async function () {
   ok(!!M.midi.out, "Web MIDI: output port can be selected");
   sent.length = 0;
   M.startPlayback({ id: 11, date: Date.now(), prog: { b: 73 }, notes: [[0, 60, "b"], [100, 64, "b"], [200, 67, "b", 0.5]] }, function () {});
-  await env.wait(1600);
+  // 実時間のスケジューラで鳴るので、決め打ちで待たずに3音届くまで（最大5秒）待つ
+  for (var mw = 0; mw < 50 && sent.filter(function (e) { return (e.b[0] & 0xF0) === 0x90; }).length < 3; mw++) { await env.wait(100); }
+  await env.wait(100);
   var noteOns = sent.filter(function (e) { return (e.b[0] & 0xF0) === 0x90; });
   ok(noteOns.length === 3 && noteOns[2].b[2] === 50 && sent.some(function (e) { return e.b[0] === 0xC0 && e.b[1] === 73; }), "Web MIDI: playback sends program change and notes", noteOns.length);
   M.selectOutput("synth");

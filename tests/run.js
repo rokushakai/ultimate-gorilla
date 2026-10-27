@@ -12,6 +12,6 @@ var suites = [require("./test-core"), require("./test-melody"), require("./test-
   var s = H.summary(), bySuite = {};
   s.results.forEach(function (r) { var k = r.suite; bySuite[k] = bySuite[k] || { pass: 0, fail: 0 }; bySuite[k][r.pass ? "pass" : "fail"]++; });
   Object.keys(bySuite).forEach(function (k) { console.log("  " + k + ": " + bySuite[k].pass + " passed" + (bySuite[k].fail ? ", " + bySuite[k].fail + " FAILED" : "")); });
-  console.log((s.fail ? "FAIL" : "OK") + " — " + s.pass + " passed, " + s.fail + " failed (" + ((Date.now() - t0) / 1000).toFixed(1) + "s)");
+  console.log((s.fail ? "FAIL" : "OK") + " — " + s.pass + " passed, " + s.fail + " failed (" + ((Date.now() - t0) / 1000).toFixed(1) + "s)" + (s.fail ? "  再現: UG_SEED=" + H.SEED + " node tests/run.js  失敗: " + s.results.filter(function (r) { return !r.pass; }).map(function (r) { return "[" + r.suite + "] " + r.name; }).join(" / ") : ""));
   process.exit(s.fail ? 1 : 0);
 })();
