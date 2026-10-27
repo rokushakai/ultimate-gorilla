@@ -731,6 +731,41 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §195 フィルと展開 =====
+  ok(U.seqClean({}).tracks.drum.fill === "off" && U.seqClean({ tracks: { drum: { fill: "sec" } } }).tracks.drum.fill === "sec" && U.seqClean({ tracks: { drum: { fill: "zz" } } }).tracks.drum.fill === "off" && U.seqClean({}).dyn === false && U.seqClean({ dyn: 1 }).dyn === true, "fill / dyn are cleaned (old data: no fill, no dyn)");
+  function wBars(n, name) { var a9 = []; for (var i9 = 0; i9 < n; i9++) { a9.push({ type: "chord", name: name || "C", len: "w" }); } return a9; }
+  function drumsOf(o) {
+    var sq = U.seqClean({ bpm: 60, countIn: false, metronome: false, loop: !!o.loop, dyn: !!o.dyn, meter: o.meter || 4, rows: o.rows, tracks: { drum: { on: true, groove: "8beat", fill: o.fill }, bass: { on: !!o.bass } } });
+    return U.seqSchedule(sq, false).events;
+  }
+  function at(evs, midi) { return evs.filter(function (e) { return e.kind === "drum" && e.midi === midi; }).map(function (e) { return Math.round(e.t * 100) / 100; }); }
+  var f0 = drumsOf({ rows: wBars(8) });
+  ok(at(f0, 49).length === 0 && at(f0, 45).length === 0 && at(f0, 36).indexOf(28) >= 0 && at(f0, 42).indexOf(31.5) >= 0, "fill off: drums play as before (no crash, no toms, last bar keeps the groove)", at(f0, 49));
+  var f4 = drumsOf({ rows: wBars(8), fill: "4" });
+  ok(at(f4, 47).join() === "15.5,27.5" && at(f4, 45).join() === "15.75,27.75" && at(f4, 42).indexOf(15) < 0 && at(f4, 42).indexOf(14.5) >= 0, "every 4 bars: a fill on the last beat (bar 4) and before the ending", [at(f4, 47), at(f4, 45)]);
+  ok(at(f4, 49).join() === "16,28" && f4.filter(function (e) { return e.kind === "drum" && e.t > 28.01; }).length === 0, "crash after the fill, and the last bar is one 'crash + kick' ending", at(f4, 49));
+  var fl4 = drumsOf({ rows: wBars(4), fill: "4", loop: true });
+  ok(at(fl4, 47).join() === "15.5" && at(fl4, 49).length === 0 && at(fl4, 42).indexOf(14.5) >= 0, "with repeat: a fill on the last bar leading back to the top (no ending)", [at(fl4, 47), at(fl4, 49)]);
+  var fs = drumsOf({ rows: [{ type: "sec", name: "イントロ" }].concat(wBars(2), [{ type: "sec", name: "Aメロ" }], wBars(2), [{ type: "sec", name: "サビ" }], wBars(3)), fill: "sec" });
+  ok(at(fs, 50).join() === "14.5,14.75" && at(fs, 47).join() === "7.5,23.5" && at(fs, 49).join() === "8,16,24", "section changes: a short fill before Aメロ, a long fill (high tom…) before サビ, crash on each", [at(fs, 50), at(fs, 47), at(fs, 49)]);
+  var f3 = drumsOf({ rows: [{ type: "chord", name: "C", len: "h." }, { type: "chord", name: "C", len: "h." }, { type: "chord", name: "C", len: "h." }, { type: "chord", name: "C", len: "h." }, { type: "chord", name: "C", len: "h." }], fill: "4", meter: 3 });
+  ok(at(f3, 47).join() === "11.5" && at(f3, 49).join() === "12" && f3.filter(function (e) { return e.kind === "drum" && e.t > 12.01; }).length === 0, "3/4: the fill is on the last beat of the 12-step bar", [at(f3, 47), at(f3, 49)]);
+  ok(U.drumFills("sec", [], 9, 4, false).fill[7] === "s" && U.drumFills("sec", [], 9, 4, false).crash[8] && U.secEnergy("Ａメロ") === 1 && U.secEnergy("サビ2") === 3 && U.secEnergy("アウトロ") === 0 && U.secEnergy("Bメロ") === 2, "no sections: 'section changes' falls back to every 8 bars; section names → strength");
+  var dyRows = [{ type: "sec", name: "イントロ" }].concat(wBars(1), [{ type: "sec", name: "サビ" }], wBars(1));
+  var dOff = drumsOf({ rows: dyRows, bass: true }), dOn = drumsOf({ rows: dyRows, bass: true, dyn: true });
+  var bassLv = function (evs) { return evs.filter(function (e) { return e.track === "bass"; }).map(function (e) { return Math.round(e.level * 100) / 100; }); };
+  ok(bassLv(dOff).join() === "0.9,0.9" && bassLv(dOn).join() === "0.63,1", "dyn: intro bass ×0.7, chorus ×1.12 (capped at 1)", bassLv(dOn));
+  ok(at(dOn, 38).join() === "5,7" && at(dOn, 37).join() === "1,3" && at(dOn, 49).join() === "4" && at(dOff, 49).length === 0, "dyn: intro snare becomes a rim click, the chorus starts with a crash", [at(dOn, 38), at(dOn, 37), at(dOn, 49)]);
+  var ukeLv = function (evs) { return evs.filter(function (e) { return e.track === "uke"; }).map(function (e) { return e.level; }).join(); };
+  ok(ukeLv(dOn) === ukeLv(dOff) && bassLv(drumsOf({ rows: wBars(2), bass: true, dyn: true })).join() === "0.9,0.9", "dyn leaves the ukulele alone and does nothing without sections");
+  st0 = U.seqLoad(); st0.cur = U.seqClean({ rows: wBars(2), tracks: { drum: { on: true, fill: "8" } } }); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  hs = root.innerHTML;
+  ok(hs.indexOf('data-tk="fill"') > 0 && hs.indexOf('data-set="dyn"') > 0 && hs.indexOf('data-seq="fillprev"') > 0 && /<option value="8" selected>8小節ごと/.test(hs), "mixer shows the fill select, the dyn checkbox and the fill preview");
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §191 ベースとドラムのパターン =====
   function bassOf(pattern, rowsB, meterB) {
     var sq = U.seqClean({ countIn: false, meter: meterB || 4, rows: rowsB, tracks: { bass: { on: true, pattern: pattern } } });
