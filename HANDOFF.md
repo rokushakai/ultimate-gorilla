@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.04** |
+| 現在バージョン | **v1.05** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.05] 🎹 おまかせ作曲**（§196）: `ukeCompose(seq, genreId, rnd, withBpm, withLayers)`。進行の候補は `UKE_COMPOSE_PROGS`（UKE_GENRE_GROUPS と同じ順）、ブルース系は `UKE_COMPOSE_BLUES`。ボタンは data-seq="compose"
 - **[v1.04] 🥁 フィルと 📈 展開**（§195）: `tracks.drum.fill`（off/4/8/sec）を `ukeDrumFills` が小節ごとのフィル・クラッシュ・終わりの「ジャーン」に。曲の `dyn` がオンなら `ukeSecEnergy`（セクションの名前→強さ）で ukeTrackEvents の最後に強さを変える
 - **[v1.03] 🎼 ジャンル59**（§194）: `UKE_GENRES[i][11]` がジャンルの楽器（"楽器:音色:名前"）。足したトラックは `genre: true`（`ukeApplyGenre` が入れかえる）。`UKE_GENRE_GROUPS` が見出し。ドラム "" はドラムなし
 - **[v1.02] ➕ 追加トラック**（§193）: `tracks.xs`（並び）＋ `tracks.x1`〜`x8`（`ukeXClean`）。ループは `ukeTrackIds(tracks)` を使う（UKE_TRACK_IDS 直書きは決まったトラックだけ）。`ukeXEvents`（beat・dur つき）・`UKE_X_PRESETS` / `UKE_X_PLAYS` / `UKE_X_CH`・ピアノロールは `ukeRoll.track`（`ukeRollT`）
@@ -152,7 +153,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（561項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（569項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

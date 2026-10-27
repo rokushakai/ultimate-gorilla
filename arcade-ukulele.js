@@ -781,6 +781,44 @@
     }
     return true;
   }
+  // §196: おまかせ作曲（系統ごとの Aメロ・サビの進行の候補。UKE_GENRE_GROUPS と同じ順）
+  var UKE_COMPOSE_PROGS = [
+    [["fifties", "letitbe", "i37", "canon", "setsunai"], ["ohdo", "ohdo37", "komuro", "letitbe", "canonbass"]],
+    [["setsunai", "komuro", "letitbe"], ["ohdo", "komuro", "setsunai", "b67"]],
+    [["ohdo7", "marusa", "gyaku"], ["marusa", "ohdo7", "junkan"]],
+    [["251", "junkan", "gyaku"], ["rhythm", "kareha", "junkan"]],
+    [["three", "fifties", "andalusia"], ["letitbe", "three", "andalusia"]],
+    [["three", "fifties", "canon"], ["letitbe", "fifties", "ohdo"]],
+    [["fifties", "canon", "three"], ["ohdo", "letitbe", "sdm"]]
+  ];
+  var UKE_COMPOSE_BLUES = ["blues", "bluesrock", "rockabilly"];
+  var UKE_COMPOSE_KEYS = [[0, "C"], [7, "G"], [5, "F"], [2, "D"], [9, "A"]];
+  // 曲の行をジャンルに合わせて作りなおす。rnd は 0〜1 の乱数。{ genre, a, s, key } を返す（作れなければ null）
+  function ukeCompose(seq, gid, rnd, withBpm, withLayers) {
+    rnd = rnd || Math.random;
+    function pick(a) { return a[Math.floor(rnd() * a.length) % a.length]; }
+    var meter = seq.meter === 3 ? 3 : 4;
+    if (!gid || !ukeGenre(gid) || ukeGenre(gid).meter !== meter) { gid = pick(ukeGenresFor(meter)).id; }
+    var gi = 0, i, j;
+    for (i = 0; i < UKE_GENRE_GROUPS.length; i++) { if (UKE_GENRE_GROUPS[i][1].indexOf(gid) >= 0) { gi = i; } }
+    var blues = UKE_COMPOSE_BLUES.indexOf(gid) >= 0, cand = UKE_COMPOSE_PROGS[gi];
+    var pa = ukeProgression(blues ? "blues" : pick(cand[0])), ps = ukeProgression(blues ? "blues" : pick(cand[1]));
+    for (i = 0; !blues && ps.id === pa.id && i < 6; i++) { ps = ukeProgression(pick(cand[1])); }
+    var kk = pick(UKE_COMPOSE_KEYS), len = meter === 3 ? "h." : "w", rows = [];
+    var end = blues ? ["G7", "F7", "C7"] : (gi === 3 ? ["Dm7", "G7", "Cmaj7"] : ["F", "G7", "C"]);
+    function add(chords, times) { for (var t = 0; t < times; t++) { for (var c = 0; c < chords.length; c++) { rows.push({ type: "chord", name: chords[c], len: len }); } } }
+    rows.push({ type: "sec", name: "イントロ" }); add(ps.chords.slice(0, 2), 1);
+    rows.push({ type: "sec", name: "Aメロ" }); add(pa.chords, pa.chords.length >= 8 ? 1 : 2);
+    rows.push({ type: "sec", name: "サビ" }); add(ps.chords, ps.chords.length >= 8 ? 1 : 2);
+    rows.push({ type: "sec", name: "アウトロ" }); add(end, 1);
+    ukeApplyGenre(seq, gid, withBpm, withLayers);
+    seq.rows = rows.slice(0, UKE_SEQ_MAX_ROWS);
+    seq.arr = []; seq.loopOn = false; seq.loopA = 0; seq.loopB = 0; seq.loop = false;
+    seq.key = kk[0]; seq.dyn = true;
+    seq.tracks.drum.fill = "sec";
+    for (j = 0; j < seq.rows.length; j++) { if (seq.rows[j].type === "chord") { seq.rows[j].pos = "auto"; seq.rows[j].style = "song"; seq.rows[j].pattern = ""; } }
+    return { genre: gid, a: pa.name, s: ps.name, key: kk[1] };
+  }
   // いまの曲がどのジャンルと同じか（なければ ""）
   function ukeGenreOf(seq) {
     var tr = seq.tracks, list = ukeGenresFor(seq.meter);
@@ -2089,6 +2127,7 @@
         return gl.length ? '<div class="uke-genre-cat">' + gp[0] + '</div>' + ukeChips(gl.map(function (gn) { return { v: gn.id, t: gn.name }; }), function (v) { return v === gNow; }, "genre") : '';
       }).join("") +
       '<div class="uke-chips"><button class="uke-chip" data-genre="random">&#x1F3B2; おまかせ</button>' +
+      '<button class="uke-chip" data-seq="compose" title="いまのジャンルで イントロ→Aメロ→サビ→アウトロ の曲を作る（↶ で戻せる）">&#x1F3B9; おまかせ作曲</button>' +
       '<label class="uke-genre-bpm"><input type="checkbox" class="uke-genre-bpm-on"' + (ukeUi.genreBpm ? " checked" : "") + '> テンポもジャンルに合わせる</label>' +
       '<label class="uke-genre-bpm"><input type="checkbox" class="uke-genre-ly-on"' + (ukeUi.genreLayers ? " checked" : "") + '> ジャンルの楽器も足す</label></div></details>' +
       '<div class="uke-seq-set">' +
@@ -2386,6 +2425,15 @@
         bv.tracks.mel.on = false; bv.tracks.rec1.on = false; bv.tracks.rec2.on = false;
         bv.tracks.drum.fill = "off"; bv.dyn = false;
         if (!ukeSeqStart(bv, ctx.lowG, null, null)) { ctx.toast("鳴らせるコードがありません"); }
+        return;
+      }
+      if (a === "compose") {
+        // §196: いまのジャンルで曲を作る（再生中なら鳴らし直す）
+        var cPlaying = !!ukeSeqPlayer, cr = ukeCompose(seq, ukeGenreOf(seq), Math.random, ukeUi.genreBpm, ukeUi.genreLayers);
+        if (!cr) { return; }
+        ctx.toast("&#x1F3B9; " + ukeGenre(cr.genre).name + "で作曲: Aメロ " + cr.a + " / サビ " + cr.s + "（Key " + cr.key + "）");
+        save(true);
+        if (cPlaying) { var cpb = root.querySelector('button[data-seq="play"]'); if (cpb && cpb.onclick) { cpb.onclick({ currentTarget: cpb }); } }
         return;
       }
       if (a === "fillprev") {
@@ -3818,7 +3866,7 @@
     fingering: ukeFingering, velocity: ukeVelocity, stringOut: ukeStringOut, earBtn: ukeEarBtn, prefs: ukePrefs,
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
     roll: ukeRoll, rollImport: ukeRollImport,
-    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
+    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
     arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,

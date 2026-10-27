@@ -766,6 +766,33 @@ module.exports = async function () {
   W.UGArcade.stop();
   U.ui.tab = "play";
 
+  // ===== §196 おまかせ作曲 =====
+  function seqRnd(list) { var q9 = 0; return function () { return q9 < list.length ? list[q9++] : 0; }; }
+  function rowText(sq) { return sq.rows.map(function (r9) { return r9.type === "sec" ? "[" + r9.name + "]" : r9.name; }).join(" "); }
+  var cp = U.seqClean({ rows: wBars(2, "Dm"), loop: true, loopOn: true, arr: ["x"] });
+  var cr = U.compose(cp, "jpop", seqRnd([]), true, true);
+  ok(cr.genre === "jpop" && cr.a === "50年代進行" && cr.s === "王道進行" && cr.key === "C" && rowText(cp) === "[イントロ] F G7 [Aメロ] C Am F G7 C Am F G7 [サビ] F G7 Em Am F G7 Em Am [アウトロ] F G7 C", "compose: intro → A (twice) → chorus (twice) → outro cadence, progressions from the genre family", [cr, rowText(cp)]);
+  cp = U.seqClean(cp);
+  ok(cp.dyn && cp.tracks.drum.fill === "sec" && !cp.loop && !cp.loopOn && cp.arr.length === 0 && cp.bpm === 140 && U.genreOf(cp) === "jpop" && cp.rows.every(function (r9) { return r9.type === "sec" || r9.len === "w"; }), "compose turns on fills and dynamics, clears the arrangement / loops, and keeps the genre", [cp.dyn, cp.tracks.drum.fill, cp.bpm, U.genreOf(cp)]);
+  var cs = U.seqSchedule(U.seqClean({ countIn: false, bpm: 60, rows: cp.rows, dyn: true, tracks: cp.tracks }), false).events;
+  ok(at(cs, 49).join() === "8,40,72,80" && at(cs, 50).join() === "38.5,38.75" && cs.filter(function (e) { return e.kind === "drum" && e.t > 80.01; }).length === 0, "the composed song plays with a crash on each section, a long fill before the chorus and an ending on bar 21", [at(cs, 49), at(cs, 50)]);
+  var cp2 = U.seqClean({});
+  var cr2 = U.compose(cp2, "pop", seqRnd([0.2, 0.6, 0, 0.3]), false, false);
+  ok(cr2.a === "レット・イット・ビー風" && cr2.s === "王道進行" && cr2.key === "G" && cp2.key === 7 && cp2.bpm === 90 && cp2.tracks.xs.length === 0, "compose picks a different chorus progression than the verse; Key is random; tempo / instruments follow the checkboxes", cr2);
+  var cb = U.seqClean({}); U.compose(cb, "blues", seqRnd([]), true, true);
+  ok(rowText(cb).split(" ").length === 4 + 2 + 12 + 12 + 3 && /\[アウトロ\] G7 F7 C7$/.test(rowText(cb)), "blues genres use the 12-bar blues once each and a V7–IV7–I7 ending", rowText(cb));
+  var cj = U.seqClean({}); U.compose(cj, "jazz", seqRnd([]), true, true);
+  ok(/^\[イントロ\] Cmaj7 A7 \[Aメロ\] Dm7 G7 Cmaj7 Cmaj7/.test(rowText(cj)) && /Dm7 G7 Cmaj7$/.test(rowText(cj)), "jazz: ii-V-I verse, rhythm-changes chorus, ii-V-I ending", rowText(cj));
+  var c3 = U.seqClean({ meter: 3 }), cr3 = U.compose(c3, "", seqRnd([]), true, true);
+  var c4 = U.seqClean({}), cr4 = U.compose(c4, "waltz", seqRnd([]), true, true);
+  ok(U.genre(cr3.genre).meter === 3 && c3.rows.every(function (r9) { return r9.type === "sec" || r9.len === "h."; }) && U.genre(cr4.genre).meter === 4, "3/4 songs get a 3/4 genre and dotted halves; a genre of the wrong meter is not used", [cr3.genre, cr4.genre]);
+  st0 = U.seqLoad(); st0.cur = U.seqClean({}); U.seqSave(st0);
+  U.ui.tab = "seq";
+  W.UGArcade.start("ukulele", root, { onExit: function () {} });
+  ok(root.innerHTML.indexOf('data-seq="compose"') > 0, "the genre panel has the compose button");
+  W.UGArcade.stop();
+  U.ui.tab = "play";
+
   // ===== §191 ベースとドラムのパターン =====
   function bassOf(pattern, rowsB, meterB) {
     var sq = U.seqClean({ countIn: false, meter: meterB || 4, rows: rowsB, tracks: { bass: { on: true, pattern: pattern } } });
