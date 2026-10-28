@@ -13,7 +13,7 @@ module.exports = function () {
   function slice(a, b) { var i = s.indexOf(a), j = s.indexOf(b, i); if (i < 0 || j < 0) { throw new Error("slice " + a); } return s.slice(i, j); }
 
   // --- 構文・ES5 ---
-  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js"];
+  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js"];
   jsFiles.forEach(function (f) {
     var err = null;
     try { new vm.Script(fs.readFileSync(path.join(ROOT, f), "utf8"), { filename: f }); } catch (e) { err = e.message; }
@@ -79,11 +79,14 @@ module.exports = function () {
   // --- メニューの分類タブ（§161） ---
   var counts = {};
   sandbox.realList.forEach(function (g) { counts[g.cat] = (counts[g.cat] || 0) + 1; });
-  ["all", "action", "puzzle", "music"].forEach(function (c) {
+  ["all", "action", "puzzle", "music", "quiz"].forEach(function (c) {
     T.setCat(c); T.render("games");
     var shown = (T.html().match(/data-arcade-game="/g) || []).length;
     ok(shown === (c === "all" ? sandbox.realList.length : counts[c]), "menu tab '" + c + "' shows its games", shown);
   });
+  T.setCat("quiz"); T.render("games");
+  ok(T.html().indexOf('data-arcade-game="quiz"') >= 0, "quiz tab has the quiz game");
+  T.setCat("music"); T.render("games");
   ok(T.html().indexOf('data-arcade-game="melody"') >= 0 && T.html().indexOf('data-arcade-game="lyrics"') >= 0, "music tab has melody and lyrics");
 
   // --- セーブ項目（ゲームセンター系が saveGame と loadGame の両方にある） ---

@@ -962,6 +962,23 @@ html, body {
   font-size: 13px;
   font-weight: bold;
 }
+/* ===== §202 v1.10: ゴリラクイズ（表示欄に問題と4択） ===== */
+.arcade-panel.quiz-panel { max-height: none; background: #14213d; color: #f1f2f6; padding: 8px; }
+.quiz-q { font-size: 15px; font-weight: bold; line-height: 1.5; margin: 0 0 8px; }
+.quiz-choices { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.quiz-choice { text-align: left; min-height: 44px; padding: 8px 10px; font-size: 14px; line-height: 1.35; border-radius: 8px; border: 1px solid #4a6fa5; background: #1b2b4a; color: #ffffff; touch-action: manipulation; }
+.quiz-choice b { color: #ffd166; margin-right: 4px; }
+.quiz-choice.ok { background: #1e6b4f; border-color: #55efc4; }
+.quiz-choice.ng { background: #7a2633; border-color: #ff7675; }
+.quiz-choice.dim { opacity: 0.5; }
+.quiz-choice:disabled { color: #ffffff; }
+.quiz-note { margin: 8px 0; padding: 8px; border-radius: 8px; font-size: 13px; line-height: 1.5; background: rgba(255,255,255,0.06); }
+.quiz-note.ok { border-left: 4px solid #55efc4; }
+.quiz-note.ng { border-left: 4px solid #ff7675; }
+.quiz-review { margin: 0; padding-left: 1.6em; font-size: 13px; line-height: 1.45; }
+.quiz-review li { margin-bottom: 6px; }
+.quiz-ans { color: #ffd166; }
+.quiz-cat-btn.active { border-color: #ffd166; }
 /* ===== §160 v0.79: 歌詞くずし ===== */
 .arcade-panel {
   margin: 6px auto 0;

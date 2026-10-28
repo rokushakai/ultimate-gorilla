@@ -19270,7 +19270,7 @@
   // §146 v0.65: ゲームセンター（ミニゲーム本体は arcade.js / window.UGArcade）
   // ---------------------------------------------------------
   var ARCADE_GAME_IDS = ["blocks", "shooter", "pinball", "breakout", "snake", "tennis", "crossing", "mole", "sweeper",
-    "g2048", "reversi", "slide", "memory", "meteor", "defense", "melody", "lyrics", "gomoku", "sudoku", "solitaire", "batting", "ukulele"]; // §147 v0.66 / §148 v0.67: 6本ずつ追加 / §150 v0.69: melody / §160 v0.79: lyrics / §167 v0.86: batting・ukulele
+    "g2048", "reversi", "slide", "memory", "meteor", "defense", "melody", "lyrics", "gomoku", "sudoku", "solitaire", "batting", "ukulele", "quiz"]; // §202 v1.10: quiz / §147 v0.66 / §148 v0.67: 6本ずつ追加 / §150 v0.69: melody / §160 v0.79: lyrics / §167 v0.86: batting・ukulele
 
   // ハイスコアを正規化（欠損・数値以外・負数→0。値は下げない）
   function normalizeArcadeHighScores() {
@@ -19307,7 +19307,7 @@
   // §153 v0.72: メダル（スコア÷換算値、最大100枚/プレイ、ハイスコア更新+5）
   var ARCADE_MEDAL_RATE = {
     blocks: 100, shooter: 75, pinball: 250, breakout: 80, melody: 80, snake: 8, tennis: 30, crossing: 15,
-    mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75, lyrics: 30, gomoku: 50, sudoku: 150, solitaire: 200, batting: 40, ukulele: 25
+    mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75, lyrics: 30, gomoku: 50, sudoku: 150, solitaire: 200, batting: 40, ukulele: 25, quiz: 60 // §202 v1.10
   };
   var ARCADE_MEDAL_MAX_PER_PLAY = 100, ARCADE_MEDAL_HISCORE_BONUS = 5;
   // §153 v0.72: 景品（メダル1枚 ≒ 5G）。伝説装備・ウクレレ・仲間報酬装備・商人で買える装備は扱わない
@@ -19343,7 +19343,8 @@
   // §161 v0.80: メニューの分類タブ（各ゲーム定義の cat と対応）
   var ARCADE_CATS = [
     { id: "all", name: "すべて" }, { id: "action", name: "🏃 アクション" },
-    { id: "puzzle", name: "🧩 パズル" }, { id: "music", name: "🎵 音楽・創作" }
+    { id: "puzzle", name: "🧩 パズル" }, { id: "music", name: "🎵 音楽・創作" },
+    { id: "quiz", name: "❓ クイズ" } // §202 v1.10
   ];
   var _arcadeCat = "all";
 

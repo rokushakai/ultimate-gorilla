@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.09.1** |
+| 現在バージョン | **v1.10** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.10] ❓ ゴリラクイズ**（§202）: `arcade-quiz.js`（index.html では arcade-ukulele.js の次）。問題は `QUIZ_CATS[].qs` に [問題, 正解, ×, ×, ×, 解説]。トレンド系は年を問題文に入れ、答えが変わらない事実だけ（新しい年の話題は足していく）。表示欄（panel）に問題と4択、キャンバスは高さ170。メニューのタブ `quiz`、メダル `quiz: 60`
 - **[v1.09.1] 🛠️ デバッグ点検**（§201）: 点検ボタンは続けて押すと前の結果が残って FAIL に見えることがある（例: 仲間わざ・通知順序）。1つずつ新しいセーブで確かめること
 - **[v1.09] 🔧 フィールドのアイテム**（§200）: 拾った つるぎ・やくそう のマスは `state.fieldItemsTaken`（"x,y"）。loadGame で `state.items` から消す。これがなかったころは再読み込みで復活していた
 - **[v1.08] ⬚ 範囲選択**（§199）: 選ぶ の道具のドラッグは枠（`ukeRoll.box`、キャンバスの座標）。離すと `ukeRollBox(notes, 拍, 拍, 音, 音)` でかかった音符を選択に足す。選ぶ・動かす のときキャンバスに `uke-roll-lock`（touch-action: none）。これがないとスマホで縦ドラッグがページのスクロールになり pointercancel で打ち切られる
@@ -158,7 +159,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（594項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（613項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

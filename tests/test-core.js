@@ -44,8 +44,8 @@ module.exports = function () {
   });
   ok(ids.indexOf("melody") === ids.indexOf("breakout") + 1 && ids.indexOf("lyrics") === ids.indexOf("melody") + 1, "melody and lyrics listed right after breakout");
   ok(A.internal && typeof A.internal.register === "function" && typeof A.internal.saveBlob === "function", "internal API exposed");
-  var badCat = A.list().filter(function (g) { return ["action", "puzzle", "music"].indexOf(g.cat) < 0; }).map(function (g) { return g.id; });
-  ok(badCat.length === 0, "every game has a menu category (action/puzzle/music)", badCat);
+  var badCat = A.list().filter(function (g) { return ["action", "puzzle", "music", "quiz"].indexOf(g.cat) < 0; }).map(function (g) { return g.id; });
+  ok(badCat.length === 0, "every game has a menu category (action/puzzle/music/quiz)", badCat);
 
   // --- 全ゲームのスモーク（例外なく動く） ---
   ids.filter(function (id) { return ["melody", "lyrics", "sudoku", "batting", "ukulele"].indexOf(id) < 0; }).forEach(function (id) {
