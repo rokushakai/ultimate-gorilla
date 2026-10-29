@@ -77,4 +77,81 @@ module.exports = function () {
   var st3 = null;
   env3.run("quiz", { config: { cat: "fad" } }, 15 * 60 + 120, function () { st3 = env3.window.__quiz && env3.window.__quiz(); });
   ok(st3 && st3.phase === "result" && st3.idx === 0 && st3.t === 0, "time runs out after 15s and waits on the answer note", st3);
+
+  // --- §205: にがて問題・図鑑・ヒント・サドンデス・問題数・メモ ---
+  var done = {}, miss = {};
+  Q.record("uke:3", false, done, miss);
+  ok(miss["uke:3"] === Q.MISS_CLEAR && !done["uke:3"], "a wrong answer goes into にがて問題");
+  Q.record("uke:3", true, done, miss);
+  ok(miss["uke:3"] === 1 && done["uke:3"] === 1, "a right answer counts for the 図鑑 and once toward leaving にがて");
+  Q.record("uke:3", false, done, miss);
+  Q.record("uke:3", true, done, miss); Q.record("uke:3", true, done, miss);
+  ok(!("uke:3" in miss), "two right answers in a row (after the last miss) take it out of にがて");
+  var pm = Q.pickMiss({ "ai:2": 2, "sci:5": 1, "nope:1": 2, "ai:9999": 2 }, 10, Math.random);
+  ok(pm.length === 2 && pm.every(function (q) { return q.key === "ai:2" || q.key === "sci:5"; }), "にがて問題 picks only real missed questions", pm.map(function (q) { return q.key; }));
+  var cp = Q.complete({ "uke:0": 1, "uke:1": 1, "ai:0": 1 }, "uke"), cpAll = Q.complete({ "uke:0": 1, "ai:0": 1 }, "mix");
+  ok(cp.n === 2 && cp.all === Q.catOf("uke").qs.length && cpAll.n === 2 && cpAll.all > 300, "図鑑 counts per genre and in total", [cp, cpAll]);
+  var hq = Q.pick("game", 1, Math.random, {})[0], hh = Q.hint(hq);
+  ok(hh.length === 2 && hh.indexOf(hq.answer) < 0 && hh[0] !== hh[1], "50:50 hides two wrong choices");
+  ok(Q.bestKey("uke", 10) === "uke" && Q.bestKey("uke", 5) === "uke@5", "best for 10 questions keeps the old key; other counts get their own");
+
+  function hooked() {
+    return H.load({ patch: function (src, file) {
+      if (file === "arcade-quiz.js") { src = src.split("      var panel = api.panel;").join("      var panel = api.panel; window.__quiz = { st: function () { return { q: qs[idx], qs: qs, phase: phase, right: right, hidden: hidden, hintUsed: hintUsed, bonus: bonus, results: results }; }, hint: useHint, flag: toggleFlag };"); }
+      return src;
+    } });
+  }
+  // 5問・ヒントなしで全問正解 → ボーナス、図鑑とベストが残る
+  var e4 = hooked(), last4 = null;
+  var r4 = e4.run("quiz", { config: { cat: "stat", n: 5 } }, 20000, function (f) {
+    var h = e4.window.__quiz; if (!h) { return; }
+    var st = h.st(); last4 = st;
+    if (st.phase === "ask" && f % 10 === 0) { press(e4, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e4, "Enter"); }
+  });
+  last4 = e4.window.__quiz.st();
+  var best4 = JSON.parse(e4.store.ugQuizBest || "{}"), done4 = JSON.parse(e4.store.ugQuizDone || "{}");
+  ok(last4 && last4.qs.length === 5 && last4.bonus === Q.HINT_BONUS && e4.lastTitle() === "CLEAR!", "5-question game; no hint used → bonus", last4 && [last4.qs.length, last4.bonus]);
+  ok(best4["stat@5"] === 5 && Object.keys(done4).length === 5, "best for 5 questions and the 図鑑 are saved", [best4, Object.keys(done4).length]);
+
+  // ヒント: 2つ消え、消えた答えは押せない。使うとボーナスなし
+  var e5 = hooked(), st5 = null, tried = false;
+  e5.run("quiz", { config: { cat: "uke", n: 5 } }, 20000, function (f) {
+    var h = e5.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.phase === "ask" && !st.hintUsed && f === 3) { press(e5, "h"); }
+    if (st.phase === "ask" && st.hidden.length && !tried) { tried = true; press(e5, String(st.hidden[0] + 1)); st5 = h.st().phase; }
+    if (st.phase === "ask" && f % 10 === 0 && f > 3) { press(e5, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e5, "Enter"); }
+  });
+  st5 = { pressedHidden: st5, bonus: e5.window.__quiz.st().bonus, phase: e5.window.__quiz.st().phase };
+  ok(st5.pressedHidden === "ask" && st5.phase === "end" && st5.bonus === 0, "H key = 50:50; a hidden choice can't be picked; using it means no bonus", st5);
+
+  // サドンデス: 1問目でまちがえると終わり。にがて問題に入る。メモ（🚩）は保存される
+  var e6 = hooked(), st6 = null, flagged = false;
+  e6.run("quiz", { config: { cat: "money", mode: "sudden" } }, 4000, function (f) {
+    var h = e6.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.phase === "ask" && f === 5) { press(e6, String(((st.q.answer + 1) % 4) + 1)); }
+    if (st.phase === "result" && !flagged) { flagged = true; h.flag(); }
+    if (st.phase === "result" && f === 30) { press(e6, "Enter"); }
+    st6 = st;
+  });
+  st6 = e6.window.__quiz.st();
+  var miss6 = JSON.parse(e6.store.ugQuizMiss || "{}"), flag6 = JSON.parse(e6.store.ugQuizFlag || "{}"), surv6 = JSON.parse(e6.store.ugQuizSurv || "{}");
+  ok(st6 && st6.phase === "end" && st6.results.length === 1 && st6.qs.length === Q.catOf("money").qs.length, "sudden death ends at the first miss (pool is the whole genre)", st6 && [st6.phase, st6.results.length]);
+  ok(miss6[st6.q.key] === Q.MISS_CLEAR && flag6[st6.q.key] === 1 && surv6.money === 0, "the miss goes into にがて問題, 🚩 memo is saved, best streak saved", [miss6, flag6, surv6]);
+
+  // にがて問題モード: 入っている問題だけ出る
+  var e7 = hooked(), keys7 = {};
+  e7.store.ugQuizMiss = JSON.stringify({ "fad:1": 2, "uma:4": 1, "sci:0": 2 });
+  e7.run("quiz", { config: { cat: "miss", n: 10 } }, 20000, function (f) {
+    var h = e7.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.q) { keys7[st.q.key] = 1; }
+    if (st.phase === "ask" && f % 10 === 0) { press(e7, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e7, "Enter"); }
+  });
+  var miss7 = JSON.parse(e7.store.ugQuizMiss || "{}");
+  ok(Object.keys(keys7).sort().join() === "fad:1,sci:0,uma:4" && !miss7["uma:4"] && miss7["fad:1"] === 1, "にがて問題 mode asks only missed questions and counts them down", [Object.keys(keys7), miss7]);
 };

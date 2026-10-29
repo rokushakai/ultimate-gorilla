@@ -356,16 +356,34 @@
     ] }
   ];
   var QUIZ_MIX = { id: "mix", name: "&#x1F3B2; ミックス" };
+  // §205 v1.13: にがて問題（まちがえた問題だけ）
+  var QUIZ_MISS = { id: "miss", name: "&#x1F4D5; にがて問題" };
+  var QUIZ_DONE_KEY = "ugQuizDone", QUIZ_MISS_KEY = "ugQuizMiss", QUIZ_FLAG_KEY = "ugQuizFlag", QUIZ_SURV_KEY = "ugQuizSurv";
+  var QUIZ_COUNTS = [5, 10, 20], QUIZ_MISS_CLEAR = 2, QUIZ_HINT_BONUS = 300, QUIZ_ALL = 9999;
+  var QUIZ_DEBUG = (function () { try { return /(^|[?&])debug=1(&|$)/.test(window.location.search || ""); } catch (e) { return false; } })();
 
   function quizCat(id) {
     for (var i = 0; i < QUIZ_CATS.length; i++) { if (QUIZ_CATS[i].id === id) { return QUIZ_CATS[i]; } }
+    if (id === "miss") { return QUIZ_MISS; }
     return id === "mix" ? QUIZ_MIX : QUIZ_CATS[0];
   }
   function quizShuffle(a, rnd) {
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
-  function quizSeen() { var v = lsGet(QUIZ_SEEN_KEY, {}); return v && typeof v === "object" && !(v instanceof Array) ? v : {}; }
+  function quizObj(k) { var v = lsGet(k, {}); return v && typeof v === "object" && !(v instanceof Array) ? v : {}; }
+  function quizSeen() { return quizObj(QUIZ_SEEN_KEY); }
+  // "uke:3" → { key, cat, q }（ない問題は null）。問題は各ジャンルの後ろに足していくので、番号は変わらない
+  function quizByKey(key) {
+    var p = String(key).split(":"), c = null, i;
+    for (i = 0; i < QUIZ_CATS.length; i++) { if (QUIZ_CATS[i].id === p[0]) { c = QUIZ_CATS[i]; } }
+    var n = Number(p[1]);
+    return c && p.length === 2 && n >= 0 && n < c.qs.length && Math.floor(n) === n ? { key: key, cat: c, q: c.qs[n] } : null;
+  }
+  function quizMake(item, rnd) {
+    var q = item.q, ch = quizShuffle([q[1], q[2], q[3], q[4]], rnd);
+    return { key: item.key, cat: item.cat.id, catName: item.cat.name, text: q[0], choices: ch, answer: ch.indexOf(q[1]), note: q[5] };
+  }
   // まだ出ていない問題から n 問。seen は { "uke:3": 1, ... }（全部出たジャンルはリセット）。戻り値は問題の配列（選択肢はまぜ済み）
   function quizPick(catId, n, rnd, seen) {
     rnd = rnd || Math.random;
@@ -385,38 +403,137 @@
     quizShuffle(fresh, rnd); quizShuffle(old, rnd);
     var pool = fresh.concat(old).slice(0, n), out = [];
     for (i = 0; i < pool.length; i++) {
-      var q = pool[i].q, ch = quizShuffle([q[1], q[2], q[3], q[4]], rnd);
       seen[pool[i].key] = 1;
-      out.push({ key: pool[i].key, cat: pool[i].cat.id, catName: pool[i].cat.name, text: q[0], choices: ch, answer: ch.indexOf(q[1]), note: q[5] });
+      out.push(quizMake(pool[i], rnd));
     }
     return out;
   }
+  // にがて問題から n 問（miss は { "uke:3": あと何回正解で外れるか }）
+  function quizPickMiss(miss, n, rnd) {
+    rnd = rnd || Math.random;
+    var pool = [], k, i;
+    for (k in miss) { if (miss.hasOwnProperty(k)) { var it = quizByKey(k); if (it) { pool.push(it); } } }
+    quizShuffle(pool, rnd);
+    pool = pool.slice(0, n);
+    for (i = 0; i < pool.length; i++) { pool[i] = quizMake(pool[i], rnd); }
+    return pool;
+  }
+  function quizMissCount(miss) {
+    var n = 0, k;
+    for (k in miss) { if (miss.hasOwnProperty(k) && quizByKey(k)) { n++; } }
+    return n;
+  }
+  // 答えを記録: 正解したことがある問題（図鑑）と、にがて問題（まちがえると入り、続けて2回正解で外れる）
+  function quizRecord(key, good, done, miss) {
+    if (good) {
+      done[key] = 1;
+      if (miss[key]) { miss[key]--; if (miss[key] <= 0) { delete miss[key]; } }
+    } else {
+      miss[key] = QUIZ_MISS_CLEAR;
+    }
+  }
+  // 「正解したことがある問題」の数（mix は全ジャンル）
+  function quizComplete(done, catId) {
+    var cats = catId === "mix" ? QUIZ_CATS : [quizCat(catId)], n = 0, all = 0, c, i;
+    for (c = 0; c < cats.length; c++) {
+      if (!cats[c].qs) { continue; }
+      for (i = 0; i < cats[c].qs.length; i++) { all++; if (done[cats[c].id + ":" + i]) { n++; } }
+    }
+    return { n: n, all: all };
+  }
+  function quizBestKey(catId, n) { return n === QUIZ_N ? catId : catId + "@" + n; }
   // 1問の点数（left: 残り秒、combo: この問題を入れた連続正解数）
   function quizPoints(correct, left, combo) {
     if (!correct) { return 0; }
     return 100 + Math.max(0, Math.min(QUIZ_SEC, Math.ceil(left))) * 10 + Math.min(180, Math.max(0, combo - 1) * 20);
   }
+  // 50:50 で消す2つ（まちがいの選択肢から）
+  function quizHint(q, rnd) {
+    var w = [], i;
+    for (i = 0; i < q.choices.length; i++) { if (i !== q.answer) { w.push(i); } }
+    return quizShuffle(w, rnd || Math.random).slice(0, 2);
+  }
+  // 効果音（BGMとは別。ゲームセンターの音の設定がオンのときだけ）
+  function quizSound(on, kind) {
+    if (!on || !window.UGMelody || !window.UGMelody.audioInit) { return; }
+    try {
+      var ac = window.UGMelody.audioInit();
+      if (!ac || !ac.createOscillator) { return; }
+      var out = (window.UGMelody.audio && window.UGMelody.audio.master) || ac.destination;
+      var seq = kind === "ok" ? [[880, 0], [1319, 0.09]] : (kind === "ng" ? [[233, 0], [196, 0.13]] : [[660, 0], [990, 0.06]]);
+      for (var i = 0; i < seq.length; i++) {
+        var o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + seq[i][1];
+        o.type = kind === "ng" ? "square" : "triangle";
+        o.frequency.value = seq[i][0];
+        g.gain.setValueAtTime(kind === "ng" ? 0.25 : 0.5, t0);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.2);
+        o.connect(g); g.connect(out);
+        o.start(t0); o.stop(t0 + 0.22);
+      }
+    } catch (e) {}
+  }
 
   function quizSetup(root, ctl) {
-    var pref = lsGet(QUIZ_PREF_KEY, {}), best = lsGet(QUIZ_BEST_KEY, {}) || {}, cats = QUIZ_CATS.concat([QUIZ_MIX]), i;
-    var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x2753; ゴリラクイズ</h3>' +
-      '<p class="small" style="color:#adb5bd;margin:0 0 8px;">4択クイズを' + QUIZ_N + '問。1問' + QUIZ_SEC + '秒。早く答えるほど、続けて正解するほど点が高くなります。答えのあとに解説が出ます。</p>';
-    for (i = 0; i < cats.length; i++) {
-      var n = cats[i].qs ? cats[i].qs.length : 0, b = best[cats[i].id];
-      html += '<button class="modal-btn quiz-cat-btn' + (pref && pref.cat === cats[i].id ? " active" : "") + '" data-cat="' + cats[i].id + '" style="width:100%;">' + cats[i].name +
-        ' <span class="small" style="color:#6b4f00;">' + (n ? n + "問" : "全ジャンル") + (b ? "・最高 " + b + "/" + QUIZ_N : "") + '</span></button>';
+    var pref = quizObj(QUIZ_PREF_KEY);
+    var mode = pref.mode === "sudden" ? "sudden" : "normal", count = QUIZ_COUNTS.indexOf(pref.n) >= 0 ? pref.n : QUIZ_N;
+    function savePref() { lsSet(QUIZ_PREF_KEY, { cat: pref.cat, mode: mode, n: count }); }
+    function draw() {
+      var best = quizObj(QUIZ_BEST_KEY), surv = quizObj(QUIZ_SURV_KEY), done = quizObj(QUIZ_DONE_KEY), miss = quizObj(QUIZ_MISS_KEY);
+      var cats = QUIZ_CATS.concat([QUIZ_MIX]), i, all = quizComplete(done, "mix");
+      var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x2753; ゴリラクイズ</h3>' +
+        '<p class="small" style="color:#adb5bd;margin:0 0 8px;">4択クイズ。1問' + QUIZ_SEC + '秒。早く答えるほど、続けて正解するほど点が高くなります。答えのあとに解説が出ます。' +
+        '&#x1F98D; ヒント（50:50）は1回だけ。使わずに半分以上正解するとボーナス +' + QUIZ_HINT_BONUS + '。</p>';
+      html += '<div class="quiz-opts">' +
+        '<button class="modal-btn quiz-opt' + (mode === "normal" ? " active" : "") + '" data-mode="normal">&#x1F3AF; ふつう</button>' +
+        '<button class="modal-btn quiz-opt' + (mode === "sudden" ? " active" : "") + '" data-mode="sudden">&#x26A1; サドンデス</button></div>';
+      if (mode === "normal") {
+        html += '<div class="quiz-opts">';
+        for (i = 0; i < QUIZ_COUNTS.length; i++) {
+          html += '<button class="modal-btn quiz-opt' + (count === QUIZ_COUNTS[i] ? " active" : "") + '" data-n="' + QUIZ_COUNTS[i] + '">' + QUIZ_COUNTS[i] + '問</button>';
+        }
+        html += '</div>';
+      } else {
+        html += '<p class="small" style="color:#adb5bd;margin:0 0 8px;">1問まちがえたらおしまい。何問続けて正解できるかな？</p>';
+      }
+      html += '<p class="small quiz-dex">&#x1F4D6; クイズ図鑑: 正解したことがある問題 <b>' + all.n + ' / ' + all.all + '</b></p>';
+      for (i = 0; i < cats.length; i++) {
+        var id = cats[i].id, cp = quizComplete(done, id), b = mode === "sudden" ? surv[id] : best[quizBestKey(id, count)];
+        html += '<button class="modal-btn quiz-cat-btn' + (pref.cat === id ? " active" : "") + '" data-cat="' + id + '" style="width:100%;">' + cats[i].name +
+          ' <span class="small" style="color:#6b4f00;">' + (id === "mix" ? "全ジャンル" : "&#x1F4D6;" + cp.n + "/" + cp.all + (cp.n === cp.all ? " &#x1F451;" : "")) +
+          (b ? (mode === "sudden" ? "・最高 " + b + "連続" : "・最高 " + b + "/" + count) : "") + '</span></button>';
+      }
+      var mc = quizMissCount(miss);
+      html += '<button class="modal-btn quiz-cat-btn" data-cat="miss" style="width:100%;"' + (mc ? "" : " disabled") + '>' + QUIZ_MISS.name +
+        ' <span class="small" style="color:#6b4f00;">' + (mc ? mc + "問（続けて" + QUIZ_MISS_CLEAR + "回正解で卒業）" : "まだありません") + '</span></button>';
+      if (QUIZ_DEBUG) {
+        var flags = quizObj(QUIZ_FLAG_KEY), fl = [], k;
+        for (k in flags) { if (flags.hasOwnProperty(k)) { var it = quizByKey(k); if (it) { fl.push(it); } } }
+        html += '<details class="quiz-flags"><summary>&#x1F6A9; あやしい問題のメモ（' + fl.length + '件）</summary><ol>';
+        for (i = 0; i < fl.length; i++) {
+          html += '<li><b>' + escHtml(fl[i].key) + '</b> ' + escHtml(fl[i].q[0]) + '<br>答え: ' + escHtml(fl[i].q[1]) + '</li>';
+        }
+        html += '</ol>' + (fl.length ? '<button class="modal-btn" data-flagclear="1" style="width:100%;">&#x1F5D1;&#xFE0F; メモをすべて消す</button>' : "") + '</details>';
+      }
+      html += '<button class="modal-btn" data-cat="back" style="width:100%;margin-top:14px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
+      root.innerHTML = html;
+      var btns = root.querySelectorAll("button"), j;
+      for (j = 0; j < btns.length; j++) {
+        btns[j].onclick = function (ev) {
+          var el = ev.currentTarget, v = el.getAttribute("data-mode");
+          if (v) { mode = v; savePref(); draw(); return; }
+          v = el.getAttribute("data-n");
+          if (v) { count = Number(v); savePref(); draw(); return; }
+          if (el.getAttribute("data-flagclear")) { lsSet(QUIZ_FLAG_KEY, {}); draw(); return; }
+          v = el.getAttribute("data-cat");
+          if (!v) { return; }
+          if (v === "back") { ctl.back(); return; }
+          if (v !== "miss") { pref.cat = v; }
+          savePref();
+          ctl.done({ cat: v, mode: mode, n: count, sound: !!ctl.soundEnabled });
+        };
+      }
     }
-    html += '<button class="modal-btn" data-cat="back" style="width:100%;margin-top:14px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
-    root.innerHTML = html;
-    var btns = root.querySelectorAll("button[data-cat]");
-    for (i = 0; i < btns.length; i++) {
-      btns[i].onclick = function (ev) {
-        var v = ev.currentTarget.getAttribute("data-cat");
-        if (v === "back") { ctl.back(); return; }
-        lsSet(QUIZ_PREF_KEY, { cat: v });
-        ctl.done({ cat: v });
-      };
-    }
+    draw();
   }
 
   I.register({
@@ -425,18 +542,24 @@
     cat: "quiz",
     name: "ゴリラクイズ",
     icon: "&#x2753;",
-    desc: "ウクレレ・音楽・AI・社会・金融・流行もの。4択クイズで物知りゴリラを目指せ",
-    help: "答えをタップ（1〜4キー）/ 答えのあとは「次の問題へ」（Enter・Space）/ P一時停止",
+    desc: "ウクレレ・AI・トレンド・統計学など11ジャンル。4択クイズで物知りゴリラを目指せ",
+    help: "答えをタップ（1〜4キー）/ H ヒント（50:50）/ 答えのあとは「次の問題へ」（Enter・Space）/ P一時停止",
     controls: [],
-    keys: { "1": "a0", "2": "a1", "3": "a2", "4": "a3", "Enter": "next", " ": "next" },
+    keys: { "1": "a0", "2": "a1", "3": "a2", "4": "a3", "h": "hint", "H": "hint", "Enter": "next", " ": "next" },
     setup: quizSetup,
     setupLabel: "ジャンルを変える",
     panel: true,
     create: function (api, cfg) {
-      var catId = (cfg && cfg.cat) || "mix", cat = quizCat(catId), seen = quizSeen();
-      var qs = quizPick(cat.id, QUIZ_N, Math.random, seen);
-      lsSet(QUIZ_SEEN_KEY, seen);
+      cfg = cfg || {};
+      var catId = cfg.cat || "mix", cat = quizCat(catId), sudden = cfg.mode === "sudden";
+      var count = QUIZ_COUNTS.indexOf(cfg.n) >= 0 ? cfg.n : QUIZ_N, sound = !!cfg.sound;
+      var done = quizObj(QUIZ_DONE_KEY), miss = quizObj(QUIZ_MISS_KEY), flags = quizObj(QUIZ_FLAG_KEY), qs;
+      if (cat.id === "miss") { qs = quizPickMiss(miss, sudden ? QUIZ_ALL : count, Math.random); }
+      else if (sudden) { qs = quizPick(cat.id, QUIZ_ALL, Math.random, {}); }
+      else { var seen = quizSeen(); qs = quizPick(cat.id, count, Math.random, seen); lsSet(QUIZ_SEEN_KEY, seen); }
+      if (!qs.length) { cat = QUIZ_MIX; qs = quizPick("mix", count, Math.random, {}); } // にがて問題がもうないとき
       var idx = 0, phase = "ask", t = QUIZ_SEC * 60, picked = -1, combo = 0, right = 0, results = [], flash = 0, lastPts = 0, ended = false;
+      var hintUsed = false, hidden = [], bonus = 0, missAtEnd = 0;
       var panel = api.panel;
       api.setCanvasHeight(QUIZ_H);
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
@@ -446,35 +569,60 @@
         if (!panel) { return; }
         var q = cur(), html, i;
         if (phase === "end") {
-          html = '<div class="quiz-q">結果: <b>' + right + ' / ' + qs.length + '</b> 問正解</div><ol class="quiz-review">';
-          for (i = 0; i < qs.length; i++) {
+          html = '<div class="quiz-q">' + (sudden ? "&#x26A1; <b>" + right + "</b> 問連続正解" : "結果: <b>" + right + " / " + qs.length + "</b> 問正解") + '</div>';
+          if (bonus) { html += '<div class="quiz-note ok">&#x1F98D; ヒントなしボーナス +' + bonus + '</div>'; }
+          html += '<ol class="quiz-review">';
+          for (i = 0; i < results.length; i++) {
             html += '<li>' + (results[i] ? "&#x2B55;" : "&#x274C;") + ' ' + escHtml(qs[i].text) + '<br><span class="quiz-ans">答え: ' + escHtml(qs[i].choices[qs[i].answer]) + '</span></li>';
           }
-          panel.innerHTML = html + '</ol>';
+          html += '</ol><p class="small quiz-dex">&#x1F4D5; にがて問題: ' + missAtEnd + '問（ジャンル選びの「にがて問題」で復習できます）</p>';
+          panel.innerHTML = html;
           return;
         }
         html = '<div class="quiz-q">' + escHtml(q.text) + '</div><div class="quiz-choices">';
         for (i = 0; i < q.choices.length; i++) {
-          var cls = "quiz-choice";
+          var cls = "quiz-choice", off = hidden.indexOf(i) >= 0;
           if (phase === "result") { cls += i === q.answer ? " ok" : (i === picked ? " ng" : " dim"); }
-          html += '<button class="' + cls + '" data-qa="' + i + '"' + (phase === "result" ? " disabled" : "") + '><b>' + (i + 1) + '</b> ' + escHtml(q.choices[i]) + '</button>';
+          else if (off) { cls += " gone"; }
+          html += '<button class="' + cls + '" data-qa="' + i + '"' + (phase === "result" || off ? " disabled" : "") + '><b>' + (i + 1) + '</b> ' + escHtml(q.choices[i]) + '</button>';
         }
         html += '</div>';
+        if (phase === "ask") {
+          html += '<button class="modal-btn quiz-hint" data-qa="hint"' + (hintUsed ? " disabled" : "") + '>&#x1F98D; ' + (hintUsed ? "ヒントは使いました" : "ヒント（50:50）") + '</button>';
+        }
         if (phase === "result") {
+          var last = sudden && picked !== q.answer;
           html += '<div class="quiz-note ' + (picked === q.answer ? "ok" : "ng") + '">' + (picked === q.answer ? "&#x2B55; 正解！ +" + lastPts : (picked < 0 ? "&#x23F0; 時間切れ" : "&#x274C; ざんねん")) +
-            '<br>' + escHtml(q.note) + '</div><button class="modal-btn quiz-next" data-qa="next" style="width:100%;">' + (idx + 1 < qs.length ? "次の問題へ &#x25B6;" : "結果を見る &#x1F3C1;") + '</button>';
+            '<br>' + escHtml(q.note) + '</div>' +
+            '<button class="modal-btn quiz-flag' + (flags[q.key] ? " on" : "") + '" data-qa="flag">&#x1F6A9; ' + (flags[q.key] ? "メモしました（取り消す）" : "あやしい問題としてメモ") + '</button>' +
+            '<button class="modal-btn quiz-next" data-qa="next" style="width:100%;">' + (idx + 1 < qs.length && !last ? "次の問題へ &#x25B6;" : "結果を見る &#x1F3C1;") + '</button>';
         }
         panel.innerHTML = html;
         var bs = panel.querySelectorAll ? panel.querySelectorAll("button[data-qa]") : [];
         for (i = 0; i < bs.length; i++) {
           bs[i].onclick = function (ev) {
             var v = ev.currentTarget.getAttribute("data-qa");
-            if (v === "next") { next(); } else { answer(Number(v)); }
+            if (v === "next") { next(); } else if (v === "hint") { useHint(); } else if (v === "flag") { toggleFlag(); } else { answer(Number(v)); }
           };
         }
       }
+      function useHint() {
+        if (ended || phase !== "ask" || hintUsed) { return; }
+        hintUsed = true;
+        hidden = quizHint(cur());
+        quizSound(sound, "hint");
+        render();
+      }
+      function toggleFlag() {
+        if (phase !== "result") { return; }
+        var k = cur().key;
+        flags = quizObj(QUIZ_FLAG_KEY);
+        if (flags[k]) { delete flags[k]; } else { flags[k] = 1; }
+        lsSet(QUIZ_FLAG_KEY, flags);
+        render();
+      }
       function answer(i) {
-        if (ended || phase !== "ask") { return; }
+        if (ended || phase !== "ask" || hidden.indexOf(i) >= 0) { return; }
         var q = cur();
         picked = i;
         var good = i === q.answer;
@@ -483,23 +631,36 @@
         lastPts = quizPoints(good, t / 60, combo);
         if (lastPts) { api.addScore(lastPts); }
         results.push(good);
+        quizRecord(q.key, good, done, miss);
+        lsSet(QUIZ_DONE_KEY, done); lsSet(QUIZ_MISS_KEY, miss);
+        quizSound(sound, good ? "ok" : "ng");
         phase = "result";
         flash = 40;
         render();
       }
+      function finish() {
+        phase = "end";
+        ended = true;
+        if (sudden) {
+          var surv = quizObj(QUIZ_SURV_KEY);
+          if (!(surv[cat.id] >= right)) { surv[cat.id] = right; lsSet(QUIZ_SURV_KEY, surv); }
+        } else {
+          if (!hintUsed && right * 2 >= qs.length) { bonus = QUIZ_HINT_BONUS; api.addScore(bonus); }
+          if (cat.id !== "miss") {
+            var best = quizObj(QUIZ_BEST_KEY), bk = quizBestKey(cat.id, count);
+            if (!(best[bk] >= right)) { best[bk] = right; lsSet(QUIZ_BEST_KEY, best); }
+          }
+        }
+        missAtEnd = quizMissCount(miss);
+        render();
+        api.gameOver(right === qs.length ? "CLEAR!" : (sudden ? right + "問連続正解" : right + "/" + qs.length + " 正解"));
+      }
       function next() {
         if (ended || phase !== "result") { return; }
+        if (sudden && !results[results.length - 1]) { finish(); return; }
         idx++;
-        if (idx >= qs.length) {
-          phase = "end";
-          ended = true;
-          var best = lsGet(QUIZ_BEST_KEY, {}) || {};
-          if (!(best[cat.id] >= right)) { best[cat.id] = right; lsSet(QUIZ_BEST_KEY, best); }
-          render();
-          api.gameOver(right === qs.length ? "CLEAR!" : right + "/" + qs.length + " 正解");
-          return;
-        }
-        phase = "ask"; picked = -1; t = QUIZ_SEC * 60;
+        if (idx >= qs.length) { finish(); return; }
+        phase = "ask"; picked = -1; hidden = []; t = QUIZ_SEC * 60;
         render();
       }
       render();
@@ -508,6 +669,7 @@
         input: function (action, down) {
           if (!down || ended) { return; }
           if (action === "next") { next(); }
+          else if (action === "hint") { useHint(); }
           else if (action.charAt(0) === "a") { answer(Number(action.substring(1))); }
         },
         pointer: function () {},
@@ -523,16 +685,27 @@
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, QUIZ_H);
           var q = cur() || qs[qs.length - 1];
-          hudText(ctx, (phase === "end" ? "おしまい" : "Q" + (idx + 1) + " / " + qs.length), 8, 14, "left");
+          hudText(ctx, (phase === "end" ? "おしまい" : (sudden ? "⚡ Q" + (idx + 1) : "Q" + (idx + 1) + " / " + qs.length)), 8, 14, "left");
           hudText(ctx, q ? q.catName.replace(/&#x[0-9A-F]+;\s*/gi, "") : "", W - 8, 14, "right");
-          // 司会のゴリラ
-          emojiAt(ctx, "🦍", 46, 74, 46);
-          emojiAt(ctx, "🎤", 74, 92, 18);
+          // 司会のゴリラ（正解でぴょんぴょん、まちがいでしょんぼり）
+          var good = phase === "end" ? right === qs.length : (phase === "result" && picked === q.answer);
+          var gy = 74;
+          if (phase === "result" && flash > 0) { gy += good ? -Math.abs(Math.sin(flash * 0.35)) * 12 : 5; }
+          emojiAt(ctx, "🦍", 46, gy, 46);
+          emojiAt(ctx, "🎤", 74, gy + 18, 18);
+          if (phase === "result" && !good) { emojiAt(ctx, "💦", 76, gy - 22, 16); }
+          if (hidden.length && phase === "ask") { emojiAt(ctx, "💡", 18, gy - 26, 16); }
           // ⭕ / ❌
           if (phase === "result" || phase === "end") {
-            var good = phase === "end" ? right === qs.length : picked === q.answer;
             if (phase === "result" || flash > 0) {
               emojiAt(ctx, good ? "⭕" : "❌", 160, 70, 52 + (flash > 30 ? (flash - 30) : 0));
+            }
+            if (phase === "result" && good && combo >= 3) {
+              ctx.fillStyle = "#ffd166";
+              ctx.font = "bold " + (18 + (flash > 30 ? flash - 30 : 0)) + "px sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText("🔥" + combo + "連続！", 160, 112);
             }
           } else {
             ctx.fillStyle = "#ffffff";
@@ -554,5 +727,9 @@
     }
   });
 
-  window.UGQuiz = { cats: QUIZ_CATS, pick: quizPick, points: quizPoints, N: QUIZ_N, SEC: QUIZ_SEC, catOf: quizCat };
+  window.UGQuiz = {
+    cats: QUIZ_CATS, pick: quizPick, points: quizPoints, N: QUIZ_N, SEC: QUIZ_SEC, catOf: quizCat,
+    pickMiss: quizPickMiss, record: quizRecord, complete: quizComplete, byKey: quizByKey, hint: quizHint, bestKey: quizBestKey,
+    COUNTS: QUIZ_COUNTS, HINT_BONUS: QUIZ_HINT_BONUS, MISS_CLEAR: QUIZ_MISS_CLEAR
+  };
 })();

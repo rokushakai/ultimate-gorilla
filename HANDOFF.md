@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.12** |
+| 現在バージョン | **v1.13** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.13] ❓ クイズのブラッシュアップ**（§205）: localStorage `ugQuizDone`（図鑑）・`ugQuizMiss`（にがて）・`ugQuizFlag`（🚩メモ、?debug=1 で一覧）・`ugQuizSurv`（サドンデス）。cfg = { cat, mode: "normal"/"sudden", n: 5/10/20, sound }。**問題は各ジャンルの最後に足すこと**（キーが「ジャンル:番号」なので途中に入れると記録がずれる）
 - **[v1.12] ❓ 📊 統計学・トレンド問題追加**（§204）: `stat` を追加、合計11ジャンル317問
 - **[v1.11] ❓ クイズ10ジャンル**（§203）: animal・uma・game・sci を追加、合計256問。ジャンルを足すときは `QUIZ_CATS` に行を足し、tests/test-quiz.js のジャンル順の確認も直す
 - **[v1.10] ❓ ゴリラクイズ**（§202）: `arcade-quiz.js`（index.html では arcade-ukulele.js の次）。問題は `QUIZ_CATS[].qs` に [問題, 正解, ×, ×, ×, 解説]。トレンド系は年を問題文に入れ、答えが変わらない事実だけ（新しい年の話題は足していく）。表示欄（panel）に問題と4択、キャンバスは高さ170。メニューのタブ `quiz`、メダル `quiz: 60`
@@ -161,7 +162,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（613項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（626項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
