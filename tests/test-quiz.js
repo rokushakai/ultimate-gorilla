@@ -14,7 +14,7 @@ module.exports = function () {
 
   // --- 問題データ ---
   var ids = Q.cats.map(function (c) { return c.id; });
-  ok(ids.join() === "uke,music,ai,social,money,fad,animal,uma,game,sci,stat", "eleven genres in order", ids);
+  ok(ids.join() === "uke,music,ai,social,money,fad,animal,uma,game,sci,stat,it", "twelve genres in order", ids);
   var bad = [], texts = {};
   Q.cats.forEach(function (c) {
     if (c.qs.length < 20) { bad.push(c.id + " has " + c.qs.length); }
@@ -90,7 +90,7 @@ module.exports = function () {
   var pm = Q.pickMiss({ "ai:2": 2, "sci:5": 1, "nope:1": 2, "ai:9999": 2 }, 10, Math.random);
   ok(pm.length === 2 && pm.every(function (q) { return q.key === "ai:2" || q.key === "sci:5"; }), "にがて問題 picks only real missed questions", pm.map(function (q) { return q.key; }));
   var cp = Q.complete({ "uke:0": 1, "uke:1": 1, "ai:0": 1 }, "uke"), cpAll = Q.complete({ "uke:0": 1, "ai:0": 1 }, "mix");
-  ok(cp.n === 2 && cp.all === Q.catOf("uke").qs.length && cpAll.n === 2 && cpAll.all > 300, "図鑑 counts per genre and in total", [cp, cpAll]);
+  ok(cp.n === 2 && cp.all === Q.catOf("uke").qs.length && cpAll.n === 2 && cpAll.all > 340, "図鑑 counts per genre and in total", [cp, cpAll]);
   var hq = Q.pick("game", 1, Math.random, {})[0], hh = Q.hint(hq);
   ok(hh.length === 2 && hh.indexOf(hq.answer) < 0 && hh[0] !== hh[1], "50:50 hides two wrong choices");
   ok(Q.bestKey("uke", 10) === "uke" && Q.bestKey("uke", 5) === "uke@5", "best for 10 questions keeps the old key; other counts get their own");
