@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.11** |
+| 現在バージョン | **v1.12** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.12] ❓ 📊 統計学・トレンド問題追加**（§204）: `stat` を追加、合計11ジャンル317問
 - **[v1.11] ❓ クイズ10ジャンル**（§203）: animal・uma・game・sci を追加、合計256問。ジャンルを足すときは `QUIZ_CATS` に行を足し、tests/test-quiz.js のジャンル順の確認も直す
 - **[v1.10] ❓ ゴリラクイズ**（§202）: `arcade-quiz.js`（index.html では arcade-ukulele.js の次）。問題は `QUIZ_CATS[].qs` に [問題, 正解, ×, ×, ×, 解説]。トレンド系は年を問題文に入れ、答えが変わらない事実だけ（新しい年の話題は足していく）。表示欄（panel）に問題と4択、キャンバスは高さ170。メニューのタブ `quiz`、メダル `quiz: 60`
 - **[v1.09.1] 🛠️ デバッグ点検**（§201）: 点検ボタンは続けて押すと前の結果が残って FAIL に見えることがある（例: 仲間わざ・通知順序）。1つずつ新しいセーブで確かめること
