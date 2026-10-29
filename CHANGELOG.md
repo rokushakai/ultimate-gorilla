@@ -5,6 +5,11 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [1.15] - 2026-10-30 — ❓ 💻 IT の問題追加 (§207)
+
+### Added
+- 💻 IT に32問追加（28→60問）: データの単位・ENIAC・ARPANET・Apple・Amazon・富岳・絵文字・Bluetooth の名前の由来・USB・IoT・VR・Cookie・CAPTCHA・スパムの語源・Excel・JPEG・オープンソース・JavaScript・SQL・Git・情報モラル など。合計12ジャンル・377問
+
 ## [1.14] - 2026-10-30 — ❓ 💻 IT ジャンル (§206)
 
 ### Added
