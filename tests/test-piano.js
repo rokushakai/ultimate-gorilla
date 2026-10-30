@@ -110,6 +110,9 @@ module.exports = function () {
   // --- §213: よこ向き ---
   var LD = P.LAND;
   ok(LD.h < P.H && P.keyAt(1, LD.h - 5, 60, LD) === 60 && P.keyAt(ww * 0.95, LD.kb + 5, 60, LD) === 61 && P.keyAt(100, LD.kb - 5, 60, LD) === -1, "landscape layout: a shorter screen, same keys");
+  var phone = P.landLayout(P.landH(844, 390)), pc = P.landLayout(P.landH(1400, 820)), tiny = P.landLayout(P.landH(500, 120));
+  ok(phone.h >= 80 && phone.h < 100 && pc.h > phone.h && tiny.h === 80 && phone.kb === LD.kb && phone.bh > 0 && phone.bh < phone.h - phone.kb,
+    "landscape height follows the screen so the keyboard spans edge to edge with the buttons below", [phone.h, pc.h, tiny.h]);
   var cls = [], lroot = H.makeEl("div"), lparts = {};
   lroot.classList = { add: function (c) { cls.push("+" + c); }, remove: function (c) { cls.push("-" + c); }, contains: function () { return false; } };
   lroot.querySelector = function (sel) {

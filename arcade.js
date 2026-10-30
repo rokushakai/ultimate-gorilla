@@ -385,7 +385,7 @@
       panel: def.panel ? rootEl.querySelector(".arcade-panel") : null,
       // §181 v0.99: ゲーム画面の高さ（論理）を変える（幅は 240 のまま。引きのビューなどで縦に長く）
       setCanvasHeight: function (h) {
-        if (!host || !(h >= 100 && h <= 640)) { return; }
+        if (!host || !(h >= 80 && h <= 640)) { return; }
         host.h = h;
         canvas.height = h * SCALE;
         canvas.style.aspectRatio = W + " / " + h;

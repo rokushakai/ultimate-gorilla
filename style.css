@@ -1273,20 +1273,22 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .piano-take { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
 .piano-take > span { flex: 1; text-align: left; font-size: 13px; }
 .piano-take .modal-btn { margin: 0; padding: 6px 8px; }
-/* ===== §213 v1.21: 横向き表示（api.setLandscape）。縦持ちのときは 90° 回す ===== */
+/* ===== §213 v1.21 / §214 v1.22: 横向き表示（api.setLandscape）。上にゲーム画面（端から端まで）、下にボタン。縦持ちのときは 90° 回す ===== */
 .arcade-land {
   position: fixed; top: 0; left: 0; z-index: 2000; box-sizing: border-box;
-  width: 100vw; height: 100vh; padding: 6px; background: #0b1020;
-  display: grid; grid-template-columns: minmax(0, 1fr) 156px; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; align-items: center;
+  width: 100vw; height: 100vh; padding: 4px; background: #0b1020;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); gap: 4px; align-content: start;
 }
 .arcade-land .arcade-hud, .arcade-land .arcade-controls, .arcade-land .arcade-help { display: none !important; }
-.arcade-land .arcade-canvas { grid-column: 1; grid-row: 1 / span 2; justify-self: center; margin: 0; width: min(100%, calc((100vh - 16px) * 2)) !important; }
-.arcade-land .arcade-panel { grid-column: 2; grid-row: 1; align-self: stretch; max-width: none; max-height: none; margin: 0; overflow-y: auto; }
-.arcade-land .arcade-sys { grid-column: 2; grid-row: 2; display: flex; gap: 4px; }
-.arcade-land .arcade-sys .modal-btn { flex: 1; margin: 0; padding: 6px 2px; font-size: 12px; }
-.arcade-land .piano-row { flex-wrap: wrap; }
-.arcade-land .piano-row .modal-btn { min-height: 34px; padding: 4px 2px; font-size: 12px; }
+.arcade-land .arcade-canvas { grid-column: 1 / span 2; grid-row: 1; margin: 0; width: 100% !important; border-width: 1px; }
+.arcade-land .arcade-panel { grid-column: 1; grid-row: 2; max-width: none; max-height: none; margin: 0; padding: 4px 6px; overflow-y: auto;
+  display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; align-content: flex-start; }
+.arcade-land .arcade-panel > p { margin: 0 !important; }
+.arcade-land .arcade-sys { grid-column: 2; grid-row: 2; display: flex; gap: 4px; align-self: start; }
+.arcade-land .arcade-sys .modal-btn { margin: 0; padding: 6px 10px; font-size: 12px; }
+.arcade-land .piano-row { margin: 0; flex-wrap: nowrap; }
+.arcade-land .piano-row .modal-btn { flex: 0 0 auto; min-height: 34px; padding: 4px 10px; font-size: 12px; }
+.arcade-land .piano-row > span { min-width: 0; padding: 0 2px; }
 @media (orientation: portrait) {
   .arcade-land { width: 100vh; height: 100vw; transform-origin: 0 0; transform: translateX(100vw) rotate(90deg); }
-  .arcade-land .arcade-canvas { width: min(100%, calc((100vw - 16px) * 2)) !important; }
 }

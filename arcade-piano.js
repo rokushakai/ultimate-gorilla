@@ -12,8 +12,20 @@
   var W = I.W, hudText = I.hudText, emojiAt = I.emojiAt, lsGet = I.lsGet, lsSet = I.lsSet, escHtml = I.escHtml;
 
   var PIANO_H = 300, PIANO_KB_Y = 170, PIANO_WHITE = 14, PIANO_BLACK_H = 78;
-  // §213: 画面の形。縦 240×300 / 横 240×120（よこ向きで大きく見せる）。kb ＝ 鍵盤の上のはし、bh ＝ 黒鍵の長さ
-  var PIANO_PORT = { h: PIANO_H, kb: PIANO_KB_Y, bh: PIANO_BLACK_H, land: false }, PIANO_LAND = { h: 120, kb: 46, bh: 44, land: true };
+  // §213: 画面の形。縦 240×300 / 横 240×h（よこ向きで大きく見せる）。kb ＝ 鍵盤の上のはし、bh ＝ 黒鍵の長さ
+  // §214 v1.22: よこの高さ h は画面の縦横の比で決める（鍵盤が端から端まで・下にボタン）
+  var PIANO_LAND_KB = 44, PIANO_LAND_MIN = 80, PIANO_LAND_MAX = 160, PIANO_LAND_CTRL = 84;
+  function pianoLandLayout(h) {
+    h = Math.max(PIANO_LAND_MIN, Math.min(PIANO_LAND_MAX, Math.round(h) || 120));
+    return { h: h, kb: PIANO_LAND_KB, bh: Math.round((h - PIANO_LAND_KB) * 0.6), land: true };
+  }
+  // 画面いっぱいの枠の大きさ（CSS ピクセル）→ 鍵盤の下にボタンの段（PIANO_LAND_CTRL）を残したときのゲーム画面の高さ
+  function pianoLandH(boxW, boxH) {
+    if (!(boxW > 0 && boxH > 0)) { return 120; }
+    return W * (boxH - 8 - PIANO_LAND_CTRL) / (boxW - 8);
+  }
+  var PIANO_PORT = { h: PIANO_H, kb: PIANO_KB_Y, bh: PIANO_BLACK_H, land: false }, PIANO_LAND = pianoLandLayout(120);
+  var pianoResize = null;
   var PIANO_PREFS_KEY = "ultimateGorillaPianoPrefsV1", PIANO_TAKES_KEY = "ultimateGorillaPianoTakesV1", PIANO_BEST_KEY = "ultimateGorillaPianoBestV1";
   var PIANO_TAKES_MAX = 10, PIANO_NOTES_MAX = 1000, PIANO_SONG_LOW = 60, PIANO_BASE_MIN = 36, PIANO_BASE_MAX = 72;
   var PIANO_LEAD = 2, PIANO_LOOK = 1.6, PIANO_SPEEDS = [70, 85, 100];
@@ -224,7 +236,10 @@
       }
     } catch (e) {}
   }
-  I.addStopHook(function () { pianoLock(false); });
+  I.addStopHook(function () {
+    pianoLock(false);
+    if (pianoResize) { window.removeEventListener("resize", pianoResize); pianoResize = null; }
+  });
   function pianoBest() { var o = lsGet(PIANO_BEST_KEY); return o && typeof o === "object" ? o : {}; }
 
   function pianoSetup(root, ctl) {
@@ -350,10 +365,19 @@
       function now() { return frame / 60; }
       // §213: 横向き（鍵盤を大きく）
       function applyLand() {
-        api.setCanvasHeight(L.h);
         if (api.setLandscape) { api.setLandscape(L.land); }
+        if (L.land) {
+          var box = panel && panel.parentNode;
+          L = pianoLandLayout(box ? pianoLandH(box.clientWidth, box.clientHeight) : 120);
+        }
+        api.setCanvasHeight(L.h);
       }
       applyLand();
+      if (window.addEventListener) {
+        if (pianoResize) { window.removeEventListener("resize", pianoResize); }
+        pianoResize = function () { if (L.land) { allOff(); applyLand(); } };
+        window.addEventListener("resize", pianoResize);
+      }
       if (L.land) { pianoLock(true); }
       function setLand(on) {
         allOff();
@@ -789,7 +813,7 @@
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
     keyAt: pianoKeyAt, keyRect: pianoKeyRect, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
-    backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND,
+    backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,
     TAKES_KEY: PIANO_TAKES_KEY, TAKES_MAX: PIANO_TAKES_MAX, BEST_KEY: PIANO_BEST_KEY, PREFS_KEY: PIANO_PREFS_KEY
   };
