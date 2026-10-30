@@ -1262,3 +1262,14 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-trk-body input[type="text"] { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 4px; }
 .uke-genre-cat { font-size: 11px; color: #ffd166; margin: 6px 0 2px; font-weight: bold; }
 .uke-genre summary { cursor: pointer; }
+/* ===== §212 v1.20: ゴリラピアノ ===== */
+.piano-opts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 0 0 8px; }
+.piano-opts .quiz-opt { margin: 0; padding: 8px 2px; font-size: 13px; opacity: 0.6; }
+.piano-opts .quiz-opt.active { opacity: 1; box-shadow: 0 0 0 2px #ffffff inset; }
+.piano-row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.piano-row .modal-btn { flex: 1; margin: 0; padding: 8px 4px; min-height: 40px; }
+.piano-row > span { min-width: 72px; text-align: center; font-size: 13px; }
+.piano-row .modal-btn.piano-rec-on { background: #ff6b6b; color: #ffffff; }
+.piano-take { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.piano-take > span { flex: 1; text-align: left; font-size: 13px; }
+.piano-take .modal-btn { margin: 0; padding: 6px 8px; }
