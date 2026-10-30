@@ -991,6 +991,11 @@ html, body {
 .arcade-panel.quiz-panel .quiz-flag.on { background: #7a2633; }
 .quiz-flags { margin-top: 10px; font-size: 12px; color: #f1f2f6; text-align: left; }
 .quiz-flags ol { padding-left: 1.6em; }
+/* §208 v1.16: ジャンルボタンは2列 */
+.quiz-cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.quiz-cat-grid .quiz-cat-btn { margin: 0; padding: 8px 4px; font-size: 14px; line-height: 1.3; }
+.quiz-cat-grid .quiz-cat-btn span { display: block; }
+.quiz-cat-grid .quiz-cat-btn.wide { grid-column: 1 / -1; }
 /* ===== §160 v0.79: 歌詞くずし ===== */
 .arcade-panel {
   margin: 6px auto 0;

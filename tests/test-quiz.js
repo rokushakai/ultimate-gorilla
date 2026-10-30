@@ -14,7 +14,7 @@ module.exports = function () {
 
   // --- 問題データ ---
   var ids = Q.cats.map(function (c) { return c.id; });
-  ok(ids.join() === "uke,music,ai,social,money,fad,animal,uma,game,sci,stat,it", "twelve genres in order", ids);
+  ok(ids.join() === "uke,music,ai,social,money,fad,animal,uma,game,sci,stat,it,geo,hist,food,sport,word", "seventeen genres in order", ids);
   var bad = [], texts = {};
   Q.cats.forEach(function (c) {
     if (c.qs.length < 20) { bad.push(c.id + " has " + c.qs.length); }

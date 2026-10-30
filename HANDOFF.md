@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.15** |
+| 現在バージョン | **v1.16** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.16] ❓ クイズ5ジャンル追加**（§208）: geo・hist・food・sport・word、合計17ジャンル477問。ジャンルボタンは `.quiz-cat-grid` の2列
 - **[v1.15] ❓ 💻 IT の問題追加**（§207）: it を60問に、合計12ジャンル377問
 - **[v1.14] ❓ 💻 IT ジャンル**（§206）: `it` を追加、合計12ジャンル345問
 - **[v1.13] ❓ クイズのブラッシュアップ**（§205）: localStorage `ugQuizDone`（図鑑）・`ugQuizMiss`（にがて）・`ugQuizFlag`（🚩メモ、?debug=1 で一覧）・`ugQuizSurv`（サドンデス）。cfg = { cat, mode: "normal"/"sudden", n: 5/10/20, sound }。**問題は各ジャンルの最後に足すこと**（キーが「ジャンル:番号」なので途中に入れると記録がずれる）
