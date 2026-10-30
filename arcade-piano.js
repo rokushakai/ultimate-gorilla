@@ -35,6 +35,8 @@
   var PIANO_CDE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   var PIANO_VOICES = [[0, "&#x1F3B9; ピアノ"], [4, "&#x1F3B9; エレピ"], [8, "&#x2728; チェレスタ"], [11, "&#x1F514; ビブラフォン"], [12, "&#x1FAB5; マリンバ"], [46, "&#x1F3BC; ハープ"]];
   var PIANO_NAMES = [["do", "ドレミ"], ["cde", "CDE"], ["none", "なし"]];
+  // §217 v1.25: コードの別の読み方をいくつ出すか（99 ＝ すべて）
+  var PIANO_ALTS_ALL = 99, PIANO_ALTS = [[0, "なし"], [1, "1つ"], [2, "2つ"], [3, "3つ"], [PIANO_ALTS_ALL, "すべて"]];
   var PIANO_MODES = [["free", "&#x1F3B9; じゆう"], ["practice", "&#x1F4D6; れんしゅう"], ["rhythm", "&#x1F3AE; リズム"]];
   var PIANO_WHITE_PC = [0, 2, 4, 5, 7, 9, 11];
   var PIANO_WHITE_OF = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
@@ -120,10 +122,11 @@
     for (k in press) { if (press.hasOwnProperty(k) && out.indexOf(press[k]) < 0) { out.push(press[k]); } }
     return out.sort(function (a, b) { return a - b; });
   }
-  function pianoChord(midis) {
+  // maxAlts: 別の読み方をいくつまで（§217。省略で 3、PIANO_ALTS_ALL ですべて）
+  function pianoChord(midis, maxAlts) {
     var C = window.UGChords;
     if (!midis || midis.length < 2 || !C || !C.detectNotes) { return null; }
-    var d = C.detectNotes(midis);
+    var d = C.detectNotes(midis, { maxAlts: maxAlts === PIANO_ALTS_ALL ? Infinity : (maxAlts >= 0 ? maxAlts : 3) });
     return d && (d.name || d.interval) ? d : null;
   }
   // ずれ（秒）→ 判定の番号（0 PERFECT / 1 GREAT / 2 GOOD）。外れたら -1
@@ -142,6 +145,7 @@
       mode: p.mode === "practice" || p.mode === "rhythm" ? p.mode : "free",
       prog: pianoProgOk(Number(p.prog)) ? Number(p.prog) : 0,
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
+      alts: [0, 1, 2, 3, PIANO_ALTS_ALL].indexOf(Number(p.alts)) >= 0 ? Number(p.alts) : 3,
       speed: PIANO_SPEEDS.indexOf(Number(p.speed)) >= 0 ? Number(p.speed) : 100,
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))),
       metro: p.metro !== false,
@@ -272,6 +276,10 @@
       for (i = 0; i < PIANO_NAMES.length; i++) {
         html += '<button class="modal-btn quiz-opt' + (p.names === PIANO_NAMES[i][0] ? " active" : "") + '" data-names="' + PIANO_NAMES[i][0] + '">' + PIANO_NAMES[i][1] + '</button>';
       }
+      html += '</div><p class="small" style="margin:4px 0 2px;">コードの別の読み方（C6 ＝ Am7/C など）</p><div class="quiz-opts">';
+      for (i = 0; i < PIANO_ALTS.length; i++) {
+        html += '<button class="modal-btn quiz-opt' + (p.alts === PIANO_ALTS[i][0] ? " active" : "") + '" data-alts="' + PIANO_ALTS[i][0] + '">' + PIANO_ALTS[i][1] + '</button>';
+      }
       html += '</div><p class="small" style="margin:4px 0 2px;">画面の向き</p><div class="quiz-opts">' +
         '<button class="modal-btn quiz-opt' + (!p.land ? " active" : "") + '" data-land="0">&#x1F4F1; たて</button>' +
         '<button class="modal-btn quiz-opt' + (p.land ? " active" : "") + '" data-land="1">&#x2194;&#xFE0F; よこ（鍵盤が大きい）</button></div>';
@@ -321,6 +329,7 @@
           if ((v = el.getAttribute("data-mode"))) { p.mode = v; pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-prog")) !== null) { p.prog = Number(v); pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; pianoSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-alts")) !== null) { p.alts = Number(v); pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-land"))) { p.land = v === "1"; pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; pianoSavePrefs(p); draw(); return; }
@@ -714,6 +723,19 @@
           ctx.fillRect(r.x, top, r.w, L.bh);
         }
       }
+      // 「＝ A ／ B ／ C」を幅で折り返した行の配列（maxLines 行まで。あふれたら最後の行にまとめて小さく出す）
+      function wrapList(ctx, items, head, size, maxW, maxLines) {
+        var lines = [], cur = head, i;
+        ctx.font = "bold " + size + "px sans-serif";
+        for (i = 0; i < items.length; i++) {
+          var add = (cur === head ? "" : " ／ ") + items[i];
+          var mw = cur !== head && ctx.measureText ? ctx.measureText(cur + add) : null;
+          if (mw && mw.width > maxW && lines.length < maxLines - 1) { lines.push(cur); cur = "　" + items[i]; }
+          else { cur += add; }
+        }
+        lines.push(cur);
+        return lines;
+      }
       // 幅に入りきらなければ小さくする（measureText がなければそのまま）
       function fitText(ctx, s, x, y, size, color, maxW) {
         ctx.font = "bold " + size + "px sans-serif";
@@ -782,19 +804,29 @@
               var held = pianoHeld(press), k;
               // 再生中は鳴っている音（押していないとき）
               if (!held.length && play) { var lk = litKeys(); for (k in lk) { if (lk.hasOwnProperty(k) && lk[k] === "play") { held.push(Number(k)); } } held.sort(function (a, b) { return a - b; }); }
-              var cd = pianoChord(held), top = cd ? cd.name || cd.interval : "", noteLine = held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ");
+              var cd = pianoChord(held, prefs.alts), top = cd ? cd.name || cd.interval : "", noteLine = held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ");
               if (top) {
                 // §215: コード名（オンコードは「C/E」と、下に「C on E」）
                 // §216: どちらとも読めるコードは「＝ 別の読み方」も出す
                 var alt = cd.name && cd.alts.length ? "＝ " + cd.alts.join(" ／ ") : "", onTxt = cd.onBass ? cd.name.split("/")[0] + " on " + cd.onBass : "";
                 if (land) {
-                  fitText(ctx, top + (alt ? "　" + alt : ""), W / 2, 21, cd.name ? 17 : 12, "#ffd166", W - 12);
-                  fitText(ctx, (onTxt ? onTxt + "　" : "") + noteLine, W / 2, 37, 8, "#ffffff", W - 12);
+                  // 別の読み方が2つまでなら1行目に、多いときは2行目に分ける
+                  if (!alt || cd.alts.length <= 2) {
+                    fitText(ctx, top + (alt ? "　" + alt : ""), W / 2, 21, cd.name ? 17 : 12, "#ffd166", W - 12);
+                    fitText(ctx, (onTxt ? onTxt + "　" : "") + noteLine, W / 2, 37, 8, "#ffffff", W - 12);
+                  } else {
+                    fitText(ctx, top + (onTxt ? "（" + onTxt + "）" : "") + "　" + noteLine, W / 2, 18, 13, "#ffd166", W - 12);
+                    fitText(ctx, alt, W / 2, 34, 9, "#ffe8a3", W - 8);
+                  }
                 } else {
-                  fitText(ctx, top, W / 2, alt ? 48 : 56, cd.name ? 30 : 18, "#ffd166", W - 16);
-                  if (alt) { fitText(ctx, alt, W / 2, 75, 13, "#ffe8a3", W - 16); }
-                  if (onTxt) { fitText(ctx, onTxt + "（ベースは " + pianoName(held[0], "do") + "）", W / 2, alt ? 95 : 86, 11, "#ffffff", W - 16); }
-                  fitText(ctx, noteLine, W / 2, alt ? 116 : 112, 13, "#ffffff", W - 16);
+                  // 別の読み方は幅で折り返す（4行まで。入りきらなければ文字を小さく）
+                  var al = alt ? wrapList(ctx, cd.alts, "＝ ", 12, W - 16, 4) : [], y0 = al.length ? 42 : 56, li;
+                  fitText(ctx, top, W / 2, y0, cd.name ? (al.length > 2 ? 24 : 28) : 18, "#ffd166", W - 16);
+                  var yy = y0 + (al.length ? 22 : 30);
+                  for (li = 0; li < al.length; li++) { fitText(ctx, al[li], W / 2, yy, 12, "#ffe8a3", W - 16); yy += 14; }
+                  if (al.length) { yy += 4; }
+                  if (onTxt) { fitText(ctx, onTxt + "（ベースは " + pianoName(held[0], "do") + "）", W / 2, yy, 11, "#ffffff", W - 16); yy += 18; }
+                  fitText(ctx, noteLine, W / 2, Math.max(yy, al.length ? 0 : 112), 13, "#ffffff", W - 16);
                 }
               } else {
                 if (!land) { emojiAt(ctx, play || bk ? "🎶" : "🦍", W / 2, 60, 40); }
@@ -846,7 +878,7 @@
 
   window.UGPiano = {
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
-    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
+    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,

@@ -380,7 +380,9 @@
   // §216: 鍵盤のときだけ足す種類（Gsus4add9 ＝ ソ・ド・レ・ラ）
   var NOTE_EXTRA_PARTS = [["sus4", "add9"]];
   var INTERVAL_NAMES = ["オクターブ", "短2度", "長2度", "短3度", "長3度", "完全4度", "増4度", "完全5度", "短6度", "長6度", "短7度", "長7度"];
-  function detectNotes(midis) {
+  // opts.maxAlts: 別の読み方をいくつまで返すか（省略で 3。Infinity ですべて）
+  function detectNotes(midis, opts) {
+    var maxAlts = opts && opts.maxAlts >= 0 ? opts.maxAlts : 3;
     var sounding = {}, list = [], low = 999, i;
     for (i = 0; i < (midis || []).length; i++) {
       var m = Math.round(Number(midis[i]));
@@ -423,11 +425,14 @@
     out.name = names[0].name;
     out.spec = names[0].spec;
     out.onBass = names[0].spec.bass === null ? "" : ROOTS[names[0].spec.bass];
-    var seen = {};
+    // 同じ根音・同じ構成音・同じベースの書き方ちがい（Am11 と Am7(11) など）は1つにまとめる
+    var seen = {}, sameKey = function (sp) { return sp.root + ":" + chordPcs(sp).slice().sort(function (a, b) { return a - b; }).join(",") + "/" + sp.bass; };
     seen[out.name] = true;
-    for (i = 1; i < names.length && out.alts.length < 3; i++) {
+    seen[sameKey(names[0].spec)] = true;
+    for (i = 1; i < names.length && out.alts.length < maxAlts; i++) {
       if (!names[0].miss && names[i].miss) { continue; }
-      if (!seen[names[i].name]) { seen[names[i].name] = true; out.alts.push(names[i].name); }
+      var sk = sameKey(names[i].spec);
+      if (!seen[names[i].name] && !seen[sk]) { seen[names[i].name] = true; seen[sk] = true; out.alts.push(names[i].name); }
     }
     return out;
   }

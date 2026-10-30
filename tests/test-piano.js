@@ -179,6 +179,19 @@ module.exports = function () {
     if (f === 2) { ["a", "d", "g", "h"].forEach(function (k) { e10.key("keydown", k); }); }
   });
   ok(e10.counters.texts.indexOf("C6") >= 0 && e10.counters.texts.indexOf("＝ Am7/C") >= 0, "both readings are shown on the screen (C6 ＝ Am7/C)", e10.counters.texts.slice(-6));
+  var dAll = CH.detectNotes([60, 63, 66, 69], { maxAlts: Infinity }), d69 = CH.detectNotes([60, 62, 64, 67, 69], { maxAlts: Infinity });
+  ok(CH.detectNotes([60, 63, 66, 69], { maxAlts: 0 }).alts.length === 0 && CH.detectNotes([60, 63, 66, 69], { maxAlts: 1 }).alts.length === 1 && dAll.alts.length >= 4,
+    "how many other readings: none / 1 / … / all", dAll.alts);
+  ok(d69.alts.indexOf("Am11/C") >= 0 && d69.alts.indexOf("Am7(11)/C") < 0, "spellings of the same chord (Am11 / Am7(11)) are shown once", d69.alts);
+  function altTexts(n) {
+    var e = hooked();
+    e.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ alts: n });
+    e.run("piano", { config: { mode: "free" } }, 12, function (f) { if (f === 2) { ["a", "e", "t", "h"].forEach(function (k) { e.key("keydown", k); }); } });
+    return e.counters.texts.filter(function (t) { return t.indexOf("＝ ") === 0; });
+  }
+  var t0 = altTexts(0), tA = altTexts(P.ALTS_ALL), t1 = altTexts(1);
+  ok(t0.length === 0 && t1.length && t1[t1.length - 1].split("／").length === 1 && tA.length && tA[tA.length - 1].split("／").length >= 4,
+    "the setting decides how many readings appear on the screen (none / 1 / all)", [t1.slice(-1), tA.slice(-1)]);
   var e9 = hooked();
   e9.run("piano", { config: { mode: "free" } }, 12, function (f) {
     if (f === 2) { e9.key("keydown", "d"); e9.key("keydown", "g"); e9.key("keydown", "k"); }
