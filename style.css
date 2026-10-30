@@ -996,6 +996,9 @@ html, body {
 .quiz-cat-grid .quiz-cat-btn { margin: 0; padding: 8px 4px; font-size: 14px; line-height: 1.3; }
 .quiz-cat-grid .quiz-cat-btn span { display: block; }
 .quiz-cat-grid .quiz-cat-btn.wide { grid-column: 1 / -1; }
+/* §210 v1.18: 今日のクイズ・まちがえた問題の解説 */
+.quiz-cat-btn.quiz-daily { background: #ff9f43; margin-bottom: 4px; }
+.quiz-why { display: inline-block; margin-top: 2px; color: #ced4da; font-size: 12px; }
 /* ===== §160 v0.79: 歌詞くずし ===== */
 .arcade-panel {
   margin: 6px auto 0;

@@ -154,4 +154,33 @@ module.exports = function () {
   });
   var miss7 = JSON.parse(e7.store.ugQuizMiss || "{}");
   ok(Object.keys(keys7).sort().join() === "fad:1,sci:0,uma:4" && !miss7["uma:4"] && miss7["fad:1"] === 1, "にがて問題 mode asks only missed questions and counts them down", [Object.keys(keys7), miss7]);
+
+  // --- §210: トレンドミックス・まなびミックス・称号・今日のクイズ ---
+  var trendIds = Q.catsOf("trend").map(function (c) { return c.id; }), tp = Q.pick("trend", 20, Math.random, {});
+  ok(trendIds.join() === "ai,social,money,fad" && tp.length === 20 && tp.every(function (q) { return trendIds.indexOf(q.cat) >= 0; }), "トレンドミックス asks only the four trend genres", trendIds);
+  var studyAll = 0;
+  Q.catsOf("study").forEach(function (c) { studyAll += c.qs.length; });
+  ok(Q.catsOf("study").length === 6 && Q.complete({}, "study").all === studyAll, "まなびミックス has six genres and its own 図鑑 count");
+  var d20 = {}, dAll = {};
+  Q.cats.forEach(function (c) { c.qs.forEach(function (q, i) { dAll[c.id + ":" + i] = 1; if (Object.keys(d20).length < 20) { d20[c.id + ":" + i] = 1; } }); });
+  var r0 = Q.rank({}), r20 = Q.rank(d20), rAll = Q.rank(dAll);
+  ok(r0.name === Q.RANKS[0][1] && r0.next === 20 && r20.name === Q.RANKS[1][1] && rAll.name === Q.RANK_TOP && rAll.next === 0, "称号 goes up with the 図鑑; every question right → the top title", [r0, r20, rAll]);
+  ok(Q.today(new Date(2026, 9, 31)) === "2026-10-31" && Q.prevDay("2026-3-1") === "2026-2-28" && Q.prevDay("2026-1-1") === "2025-12-31", "dates for 今日のクイズ (and the day before)");
+  var dk1 = Q.dailyPick("2026-10-31").map(function (q) { return q.key; }), dk2 = Q.dailyPick("2026-10-31").map(function (q) { return q.key; }), dk3 = Q.dailyPick("2026-11-1").map(function (q) { return q.key; });
+  ok(dk1.length === Q.DAILY_N && dk1.join() === dk2.join() && dk1.join() !== dk3.join(), "今日のクイズ: same questions all day, different the next day", [dk1, dk3]);
+  var dr1 = Q.dailyRecord({}, "2026-10-30", 3), dr1b = Q.dailyRecord(dr1, "2026-10-30", 5), dr2 = Q.dailyRecord(dr1, "2026-10-31", 4), dr3 = Q.dailyRecord(dr2, "2026-11-2", 5);
+  ok(dr1.streak === 1 && dr1b === dr1 && dr2.streak === 2 && dr2.right === 4 && dr3.streak === 1 && dr3.top === 2, "the daily record counts once a day; playing the next day continues the streak, skipping a day resets it", [dr1, dr2, dr3]);
+  ok(Q.dailyStreak(dr2, "2026-11-1") === 2 && Q.dailyStreak(dr2, "2026-11-2") === 0, "the streak shows until the day after, then drops to 0");
+  var e8 = hooked(), last8 = null;
+  e8.store.ugQuizDaily = JSON.stringify({ last: "2026-10-30", right: 2, streak: 4, top: 4 });
+  e8.run("quiz", { config: { cat: "daily", mode: "sudden", n: 20, day: "2026-10-31" } }, 20000, function (f) {
+    var h = e8.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.phase === "ask" && f % 10 === 0) { press(e8, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e8, "Enter"); }
+  });
+  last8 = e8.window.__quiz.st();
+  var daily8 = JSON.parse(e8.store.ugQuizDaily || "{}"), best8 = JSON.parse(e8.store.ugQuizBest || "{}");
+  ok(last8.qs.map(function (q) { return q.key; }).join() === dk1.join() && last8.phase === "end" && last8.right === Q.DAILY_N, "今日のクイズ is the day's 5 questions (never sudden death)", [last8.phase, last8.right]);
+  ok(daily8.last === "2026-10-31" && daily8.streak === 5 && daily8.right === Q.DAILY_N && !("daily" in best8), "today's result and the streak are saved (not in the genre bests)", [daily8, best8]);
 };

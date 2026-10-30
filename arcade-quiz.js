@@ -570,14 +570,32 @@
   var QUIZ_MIX = { id: "mix", name: "&#x1F3B2; ミックス" };
   // §205 v1.13: にがて問題（まちがえた問題だけ）
   var QUIZ_MISS = { id: "miss", name: "&#x1F4D5; にがて問題" };
+  // §210 v1.18: 近いジャンルだけのミックス・今日のクイズ・称号
+  var QUIZ_GROUPS = [
+    { id: "trend", name: "&#x1F525; トレンドミックス", ids: ["ai", "social", "money", "fad"] },
+    { id: "study", name: "&#x1F4DA; まなびミックス", ids: ["sci", "stat", "it", "geo", "hist", "word"] }
+  ];
+  var QUIZ_DAILY = { id: "daily", name: "&#x1F4C5; 今日のクイズ" }, QUIZ_DAILY_KEY = "ugQuizDaily", QUIZ_DAILY_N = 5;
+  var QUIZ_RANKS = [[0, "見習いゴリラ"], [20, "ものしりの芽"], [50, "ものしりゴリラ"], [100, "はかせゴリラ"], [200, "大はかせゴリラ"], [350, "クイズ王ゴリラ"]];
+  var QUIZ_RANK_TOP = "究極の物知りゴリラ";
   var QUIZ_DONE_KEY = "ugQuizDone", QUIZ_MISS_KEY = "ugQuizMiss", QUIZ_FLAG_KEY = "ugQuizFlag", QUIZ_SURV_KEY = "ugQuizSurv";
   var QUIZ_COUNTS = [5, 10, 20], QUIZ_MISS_CLEAR = 2, QUIZ_HINT_BONUS = 300, QUIZ_ALL = 9999;
   var QUIZ_DEBUG = (function () { try { return /(^|[?&])debug=1(&|$)/.test(window.location.search || ""); } catch (e) { return false; } })();
 
   function quizCat(id) {
     for (var i = 0; i < QUIZ_CATS.length; i++) { if (QUIZ_CATS[i].id === id) { return QUIZ_CATS[i]; } }
+    for (i = 0; i < QUIZ_GROUPS.length; i++) { if (QUIZ_GROUPS[i].id === id) { return QUIZ_GROUPS[i]; } }
     if (id === "miss") { return QUIZ_MISS; }
+    if (id === "daily") { return QUIZ_DAILY; }
     return id === "mix" ? QUIZ_MIX : QUIZ_CATS[0];
+  }
+  // 出題に使うジャンルの配列（ミックス・今日のクイズは全ジャンル）
+  function quizCatsOf(id) {
+    if (id === "mix" || id === "daily") { return QUIZ_CATS; }
+    var c = quizCat(id), out = [], i;
+    if (!c.ids) { return [c]; }
+    for (i = 0; i < c.ids.length; i++) { out.push(quizCat(c.ids[i])); }
+    return out;
   }
   function quizShuffle(a, rnd) {
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
@@ -600,11 +618,11 @@
   function quizPick(catId, n, rnd, seen) {
     rnd = rnd || Math.random;
     seen = seen || {};
-    var cats = catId === "mix" ? QUIZ_CATS : [quizCat(catId)], fresh = [], old = [], c, i;
+    var cats = quizCatsOf(catId), fresh = [], old = [], c, i;
     for (c = 0; c < cats.length; c++) {
       var left = 0;
       for (i = 0; i < cats[c].qs.length; i++) { if (!seen[cats[c].id + ":" + i]) { left++; } }
-      if (left < (catId === "mix" ? 2 : n)) {
+      if (left < (cats.length > 1 ? 2 : n)) {
         for (i = 0; i < cats[c].qs.length; i++) { delete seen[cats[c].id + ":" + i]; }
       }
       for (i = 0; i < cats[c].qs.length; i++) {
@@ -646,12 +664,43 @@
   }
   // 「正解したことがある問題」の数（mix は全ジャンル）
   function quizComplete(done, catId) {
-    var cats = catId === "mix" ? QUIZ_CATS : [quizCat(catId)], n = 0, all = 0, c, i;
+    var cats = quizCatsOf(catId), n = 0, all = 0, c, i;
     for (c = 0; c < cats.length; c++) {
       if (!cats[c].qs) { continue; }
       for (i = 0; i < cats[c].qs.length; i++) { all++; if (done[cats[c].id + ":" + i]) { n++; } }
     }
     return { n: n, all: all };
+  }
+  // 称号（図鑑の数で上がる。全問正解したことがあれば最高の称号）。next は次の称号まであと何問
+  function quizRank(done) {
+    var c = quizComplete(done, "mix"), name = QUIZ_RANKS[0][1], next = 0, i;
+    for (i = 0; i < QUIZ_RANKS.length; i++) {
+      if (c.n >= QUIZ_RANKS[i][0]) { name = QUIZ_RANKS[i][1]; } else if (!next) { next = QUIZ_RANKS[i][0] - c.n; }
+    }
+    if (c.n >= c.all) { return { name: QUIZ_RANK_TOP, next: 0 }; }
+    return { name: name, next: next || c.all - c.n };
+  }
+  // 今日のクイズ: 日付 "2026-10-31" と、その前の日
+  function quizToday(d) { d = d || new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function quizPrevDay(day) { var p = String(day).split("-"); return quizToday(new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) - 1)); }
+  // 日付から決まる乱数（同じ日はだれが遊んでも同じ問題）
+  function quizDayRnd(day) {
+    var h = 7, i;
+    for (i = 0; i < day.length; i++) { h = (h * 31 + day.charCodeAt(i)) % 2147483647; }
+    h = h || 1;
+    return function () { h = (h * 48271) % 2147483647; return h / 2147483647; };
+  }
+  function quizDailyPick(day) { return quizPick("daily", QUIZ_DAILY_N, quizDayRnd(day), {}); }
+  // 1日1回だけ記録。前の日も遊んでいれば連続日数 +1
+  function quizDailyRecord(rec, day, right) {
+    rec = rec || {};
+    if (rec.last === day) { return rec; }
+    var streak = rec.last === quizPrevDay(day) ? (rec.streak || 0) + 1 : 1;
+    return { last: day, right: right, streak: streak, top: Math.max(rec.top || 0, streak) };
+  }
+  // いま続いている連続日数（きのうも今日も遊んでいなければ 0）
+  function quizDailyStreak(rec, day) {
+    return rec && (rec.last === day || rec.last === quizPrevDay(day)) ? rec.streak || 0 : 0;
   }
   function quizBestKey(catId, n) { return n === QUIZ_N ? catId : catId + "@" + n; }
   // 1問の点数（left: 残り秒、combo: この問題を入れた連続正解数）
@@ -691,7 +740,8 @@
     function savePref() { lsSet(QUIZ_PREF_KEY, { cat: pref.cat, mode: mode, n: count }); }
     function draw() {
       var best = quizObj(QUIZ_BEST_KEY), surv = quizObj(QUIZ_SURV_KEY), done = quizObj(QUIZ_DONE_KEY), miss = quizObj(QUIZ_MISS_KEY);
-      var cats = QUIZ_CATS.concat([QUIZ_MIX]), i, all = quizComplete(done, "mix");
+      var cats = QUIZ_CATS.concat([QUIZ_MIX], QUIZ_GROUPS), i, all = quizComplete(done, "mix"), rank = quizRank(done);
+      var day = quizToday(), drec = quizObj(QUIZ_DAILY_KEY), dst = quizDailyStreak(drec, day);
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x2753; ゴリラクイズ</h3>' +
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">4択クイズ。1問' + QUIZ_SEC + '秒。早く答えるほど、続けて正解するほど点が高くなります。答えのあとに解説が出ます。' +
         '&#x1F98D; ヒント（50:50）は1回だけ。使わずに半分以上正解するとボーナス +' + QUIZ_HINT_BONUS + '。</p>';
@@ -707,7 +757,11 @@
       } else {
         html += '<p class="small" style="color:#adb5bd;margin:0 0 8px;">1問まちがえたらおしまい。何問続けて正解できるかな？</p>';
       }
-      html += '<p class="small quiz-dex">&#x1F4D6; クイズ図鑑: 正解したことがある問題 <b>' + all.n + ' / ' + all.all + '</b></p>';
+      html += '<button class="modal-btn quiz-cat-btn quiz-daily" data-cat="daily" style="width:100%;">' + QUIZ_DAILY.name +
+        ' <span class="small" style="color:#6b4f00;">' + (drec.last === day ? "&#x2705; 今日は " + drec.right + "/" + QUIZ_DAILY_N + " 正解" : QUIZ_DAILY_N + "問・毎日かわる") +
+        (dst ? "・&#x1F525;" + dst + "日連続" : "") + '</span></button>';
+      html += '<p class="small quiz-dex">&#x1F393; 称号: <b>' + rank.name + '</b>' + (rank.next ? "（次の称号まで あと" + rank.next + "問）" : "") +
+        '<br>&#x1F4D6; クイズ図鑑: 正解したことがある問題 <b>' + all.n + ' / ' + all.all + '</b></p>';
       html += '<div class="quiz-cat-grid">';
       for (i = 0; i < cats.length; i++) {
         var id = cats[i].id, cp = quizComplete(done, id), b = mode === "sudden" ? surv[id] : best[quizBestKey(id, count)];
@@ -741,9 +795,9 @@
           v = el.getAttribute("data-cat");
           if (!v) { return; }
           if (v === "back") { ctl.back(); return; }
-          if (v !== "miss") { pref.cat = v; }
+          if (v !== "miss" && v !== "daily") { pref.cat = v; }
           savePref();
-          ctl.done({ cat: v, mode: mode, n: count, sound: !!ctl.soundEnabled });
+          ctl.done({ cat: v, mode: v === "daily" ? "normal" : mode, n: v === "daily" ? QUIZ_DAILY_N : count, sound: !!ctl.soundEnabled });
         };
       }
     }
@@ -765,15 +819,17 @@
     panel: true,
     create: function (api, cfg) {
       cfg = cfg || {};
-      var catId = cfg.cat || "mix", cat = quizCat(catId), sudden = cfg.mode === "sudden";
-      var count = QUIZ_COUNTS.indexOf(cfg.n) >= 0 ? cfg.n : QUIZ_N, sound = !!cfg.sound;
+      var catId = cfg.cat || "mix", cat = quizCat(catId), daily = cat.id === "daily", sudden = cfg.mode === "sudden" && !daily;
+      var count = daily ? QUIZ_DAILY_N : (QUIZ_COUNTS.indexOf(cfg.n) >= 0 ? cfg.n : QUIZ_N), sound = !!cfg.sound;
+      var day = cfg.day || quizToday(), dailyRec = null;
       var done = quizObj(QUIZ_DONE_KEY), miss = quizObj(QUIZ_MISS_KEY), flags = quizObj(QUIZ_FLAG_KEY), qs;
-      if (cat.id === "miss") { qs = quizPickMiss(miss, sudden ? QUIZ_ALL : count, Math.random); }
+      if (daily) { qs = quizDailyPick(day); }
+      else if (cat.id === "miss") { qs = quizPickMiss(miss, sudden ? QUIZ_ALL : count, Math.random); }
       else if (sudden) { qs = quizPick(cat.id, QUIZ_ALL, Math.random, {}); }
       else { var seen = quizSeen(); qs = quizPick(cat.id, count, Math.random, seen); lsSet(QUIZ_SEEN_KEY, seen); }
       if (!qs.length) { cat = QUIZ_MIX; qs = quizPick("mix", count, Math.random, {}); } // にがて問題がもうないとき
       var idx = 0, phase = "ask", t = QUIZ_SEC * 60, picked = -1, combo = 0, right = 0, results = [], flash = 0, lastPts = 0, ended = false;
-      var hintUsed = false, hidden = [], bonus = 0, missAtEnd = 0;
+      var hintUsed = false, hidden = [], bonus = 0, missAtEnd = 0, rank0 = quizRank(done).name, rankUp = "";
       var panel = api.panel;
       api.setCanvasHeight(QUIZ_H);
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
@@ -785,9 +841,15 @@
         if (phase === "end") {
           html = '<div class="quiz-q">' + (sudden ? "&#x26A1; <b>" + right + "</b> 問連続正解" : "結果: <b>" + right + " / " + qs.length + "</b> 問正解") + '</div>';
           if (bonus) { html += '<div class="quiz-note ok">&#x1F98D; ヒントなしボーナス +' + bonus + '</div>'; }
+          if (rankUp) { html += '<div class="quiz-note ok">&#x1F389; 称号アップ！「<b>' + rankUp + '</b>」になりました</div>'; }
+          if (dailyRec) {
+            html += '<div class="quiz-note ok">&#x1F4C5; ' + (dailyRec.fresh ? "今日のクイズ クリア！ &#x1F525;" + dailyRec.streak + "日連続" : "今日の記録はもうついています（" + dailyRec.right + "/" + QUIZ_DAILY_N + "）") +
+              '<br>あしたは別の問題が出ます</div>';
+          }
           html += '<ol class="quiz-review">';
           for (i = 0; i < results.length; i++) {
-            html += '<li>' + (results[i] ? "&#x2B55;" : "&#x274C;") + ' ' + escHtml(qs[i].text) + '<br><span class="quiz-ans">答え: ' + escHtml(qs[i].choices[qs[i].answer]) + '</span></li>';
+            html += '<li>' + (results[i] ? "&#x2B55;" : "&#x274C;") + ' ' + escHtml(qs[i].text) + '<br><span class="quiz-ans">答え: ' + escHtml(qs[i].choices[qs[i].answer]) + '</span>' +
+              (results[i] ? "" : '<br><span class="quiz-why">' + escHtml(qs[i].note) + '</span>') + '</li>';
           }
           html += '</ol><p class="small quiz-dex">&#x1F4D5; にがて問題: ' + missAtEnd + '問（ジャンル選びの「にがて問題」で復習できます）</p>';
           panel.innerHTML = html;
@@ -860,12 +922,18 @@
           if (!(surv[cat.id] >= right)) { surv[cat.id] = right; lsSet(QUIZ_SURV_KEY, surv); }
         } else {
           if (!hintUsed && right * 2 >= qs.length) { bonus = QUIZ_HINT_BONUS; api.addScore(bonus); }
-          if (cat.id !== "miss") {
+          if (daily) {
+            var drec = quizObj(QUIZ_DAILY_KEY), nrec = quizDailyRecord(drec, day, right);
+            if (nrec !== drec) { lsSet(QUIZ_DAILY_KEY, nrec); }
+            dailyRec = { right: nrec.right, streak: nrec.streak, fresh: nrec !== drec };
+          } else if (cat.id !== "miss") {
             var best = quizObj(QUIZ_BEST_KEY), bk = quizBestKey(cat.id, count);
             if (!(best[bk] >= right)) { best[bk] = right; lsSet(QUIZ_BEST_KEY, best); }
           }
         }
         missAtEnd = quizMissCount(miss);
+        var r1 = quizRank(done).name;
+        if (r1 !== rank0) { rankUp = r1; }
         render();
         api.gameOver(right === qs.length ? "CLEAR!" : (sudden ? right + "問連続正解" : right + "/" + qs.length + " 正解"));
       }
@@ -944,6 +1012,8 @@
   window.UGQuiz = {
     cats: QUIZ_CATS, pick: quizPick, points: quizPoints, N: QUIZ_N, SEC: QUIZ_SEC, catOf: quizCat,
     pickMiss: quizPickMiss, record: quizRecord, complete: quizComplete, byKey: quizByKey, hint: quizHint, bestKey: quizBestKey,
-    COUNTS: QUIZ_COUNTS, HINT_BONUS: QUIZ_HINT_BONUS, MISS_CLEAR: QUIZ_MISS_CLEAR
+    COUNTS: QUIZ_COUNTS, HINT_BONUS: QUIZ_HINT_BONUS, MISS_CLEAR: QUIZ_MISS_CLEAR,
+    groups: QUIZ_GROUPS, catsOf: quizCatsOf, rank: quizRank, RANKS: QUIZ_RANKS, RANK_TOP: QUIZ_RANK_TOP,
+    today: quizToday, prevDay: quizPrevDay, dailyPick: quizDailyPick, dailyRecord: quizDailyRecord, dailyStreak: quizDailyStreak, DAILY_N: QUIZ_DAILY_N
   };
 })();
