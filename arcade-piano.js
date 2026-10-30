@@ -114,6 +114,18 @@
     var wi = Math.max(0, Math.min(PIANO_WHITE - 1, Math.floor(x / ww)));
     return base + Math.floor(wi / 7) * 12 + PIANO_WHITE_PC[wi % 7];
   }
+  // §215 v1.23: 押している鍵盤（低い順・重なりなし）と、そのコード名（2音以上。UGChords.detectNotes）
+  function pianoHeld(press) {
+    var out = [], k;
+    for (k in press) { if (press.hasOwnProperty(k) && out.indexOf(press[k]) < 0) { out.push(press[k]); } }
+    return out.sort(function (a, b) { return a - b; });
+  }
+  function pianoChord(midis) {
+    var C = window.UGChords;
+    if (!midis || midis.length < 2 || !C || !C.detectNotes) { return null; }
+    var d = C.detectNotes(midis);
+    return d && (d.name || d.interval) ? d : null;
+  }
   // ずれ（秒）→ 判定の番号（0 PERFECT / 1 GREAT / 2 GOOD）。外れたら -1
   function pianoJudge(dt) {
     dt = Math.abs(dt);
@@ -760,11 +772,19 @@
               text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC", W / 2, land ? 24 : 60, land ? 14 : 20, "#ff6b6b");
               text(ctx, rb < 0 ? "カウントのあとに弾いてね" : (Math.floor(rb / meter) + 1) + "小節目・" + rec.notes.length + "音", W / 2, land ? 38 : 90, land ? 9 : 12, "#ffffff");
             } else {
-              if (!land) { emojiAt(ctx, play || bk ? "🎶" : "🦍", W / 2, 60, 40); }
-              var held = [], k;
-              for (k in press) { if (press.hasOwnProperty(k) && held.indexOf(press[k]) < 0) { held.push(press[k]); } }
-              held.sort(function (a, b) { return a - b; });
-              text(ctx, held.length ? held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ") : (play ? "再生中…" : (bk ? "伴奏中…" : "鍵盤をタップして弾こう")), W / 2, land ? 28 : 112, land ? 11 : 14, "#ffffff");
+              var held = pianoHeld(press), k;
+              // 再生中は鳴っている音（押していないとき）
+              if (!held.length && play) { var lk = litKeys(); for (k in lk) { if (lk.hasOwnProperty(k) && lk[k] === "play") { held.push(Number(k)); } } held.sort(function (a, b) { return a - b; }); }
+              var cd = pianoChord(held), top = cd ? cd.name || cd.interval : "", noteLine = held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ");
+              if (top) {
+                // §215: コード名（オンコードは「C/E」と、下に「C on E」）
+                text(ctx, top, W / 2, land ? 21 : 56, cd.name ? (land ? 17 : 30) : (land ? 12 : 18), "#ffd166");
+                if (cd.onBass && !land) { text(ctx, cd.name.split("/")[0] + " on " + cd.onBass + "（ベースは " + pianoName(held[0], "do") + "）", W / 2, 86, 11, "#ffffff"); }
+                text(ctx, (land && cd.onBass ? cd.name.split("/")[0] + " on " + cd.onBass + "　" : "") + noteLine, W / 2, land ? 37 : 112, land ? 8 : 13, "#ffffff");
+              } else {
+                if (!land) { emojiAt(ctx, play || bk ? "🎶" : "🦍", W / 2, 60, 40); }
+                text(ctx, held.length ? noteLine : (play ? "再生中…" : (bk ? "伴奏中…" : "鍵盤をタップして弾こう")), W / 2, land ? 28 : 112, land ? 11 : 14, "#ffffff");
+              }
             }
           } else if (mode === "practice") {
             hudText(ctx, "📖 " + song.name, 8, land ? 8 : 10, "left");
@@ -811,7 +831,7 @@
 
   window.UGPiano = {
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
-    keyAt: pianoKeyAt, keyRect: pianoKeyRect, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
+    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,

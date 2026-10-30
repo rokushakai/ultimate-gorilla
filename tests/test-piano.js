@@ -163,4 +163,17 @@ module.exports = function () {
   var sr9 = P6.sendToSeq(P6.takesLoad()[0]);
   ok(!sr9.ok && U6.seqLoad().cur.tracks.xs.length === 8 && P6.sendToSeq({ name: "x", notes: [] }).ok === false, "no more than 8 extra tracks; empty takes are not sent", sr9.msg);
   ok(U6.X_PRESETS.some(function (p) { return p[0] === "pnotes" && p[2] === 0 && p[3] === "notes"; }), "the sequencer has a 🎹 piano notes track preset");
+  // --- §215: 押した鍵盤のコード名（オンコードも） ---
+  var CH = W.UGChords, cn = function (ns) { var d = CH.detectNotes(ns); return d ? d.name || d.interval : null; };
+  ok(cn([60, 64, 67]) === "C" && cn([64, 67, 72]) === "C/E" && cn([55, 60, 64, 67]) === "C/G" && cn([57, 60, 64, 67]) === "Am7" && cn([60, 64, 67, 69]) === "C6",
+    "chord names from piano keys (lowest note is the bass; inversions are on-chords)");
+  ok(cn([55, 65, 69, 72]) === "F/G" && cn([50, 60, 64, 67]) === "C/D" && cn([62, 67, 71, 74, 77]) === "G7/D" && CH.detectNotes([64, 67, 72]).onBass === "E",
+    "on-chords with a bass outside the chord (F/G, C/D) and the bass note is reported");
+  ok(cn([60, 67]) === "C5" && cn([60, 64]) === "長3度" && cn([60, 65]) === "完全4度" && cn([59, 62, 65, 69]) === "Bm7(♭5)" && cn([60, 63, 66, 69]) === "Cdim7" && P.chord([60]) === null,
+    "two notes show a power chord or the interval; one note shows no chord");
+  var e9 = hooked();
+  e9.run("piano", { config: { mode: "free" } }, 12, function (f) {
+    if (f === 2) { e9.key("keydown", "d"); e9.key("keydown", "g"); e9.key("keydown", "k"); }
+  });
+  ok(e9.counters.texts.indexOf("C/E") >= 0 && e9.counters.texts.some(function (t) { return t.indexOf("C on E") === 0; }), "holding E-G-C shows C/E and 'C on E' on the screen", e9.counters.texts.slice(-6));
 };

@@ -375,6 +375,61 @@
     return { name: names[0].name, alts: alts, tones: tones, spec: names[0].spec };
   }
 
+  // §215 v1.23: 鍵盤で押した音（MIDI）→ コード名（いちばん低い音がベース。根音でなければオンコード「C/E」）
+  // ベースだけがコードの外の音でもよい（F/G など）。→ { name, alts, tones, spec, onBass, interval } / null（音がない）
+  var INTERVAL_NAMES = ["オクターブ", "短2度", "長2度", "短3度", "長3度", "完全4度", "増4度", "完全5度", "短6度", "長6度", "短7度", "長7度"];
+  function detectNotes(midis) {
+    var sounding = {}, list = [], low = 999, i;
+    for (i = 0; i < (midis || []).length; i++) {
+      var m = Math.round(Number(midis[i]));
+      if (!isFinite(m)) { continue; }
+      var pc = pcOf(m);
+      if (!sounding[pc]) { sounding[pc] = true; list.push(pc); }
+      if (m < low) { low = m; }
+    }
+    if (!list.length) { return null; }
+    var bass = pcOf(low), tones = [], names = [], r, q;
+    for (i = 0; i < list.length; i++) { tones.push(ROOTS[list[i]]); }
+    for (r = 0; r < 12; r++) {
+      if (!sounding[r]) { continue; }
+      for (q = 0; q < DETECT_PARTS.length; q++) {
+        var parts = DETECT_PARTS[q], ivs = intervals(parts), chordSet = {}, miss = 0, extra = 0, bassOut = false;
+        for (i = 0; i < ivs.length; i++) {
+          var p = pcOf(r + ivs[i].iv);
+          chordSet[p] = true;
+          if (!sounding[p]) { miss += ivs[i].omit > 0 ? 1 : 100; }
+        }
+        for (i = 0; i < list.length; i++) { if (!chordSet[list[i]]) { if (list[i] === bass) { bassOut = true; } else { extra++; } } }
+        // ベースだけがコードの外の音（オンコード）は、上に3つ以上の音があるときだけ
+        if (extra || miss >= 100 || (bassOut && list.length < 4)) { continue; }
+        // テンションつきのコードの転回形（Fadd9/G など）より、オンコード（F/G）を先に
+        var tens = has(parts, "add9") || has(parts, "9") || has(parts, "b9") || has(parts, "s9") || has(parts, "11") || has(parts, "s11") || has(parts, "13") || has(parts, "b13");
+        var score = miss * 3 + parts.length + (r === bass ? 0 : 2) + (bassOut ? 3 : 0) + (has(parts, "6") ? 2 : 0) + (tens && r !== bass ? 3 : 0);
+        names.push({ name: chordName({ root: r, parts: parts, bass: r === bass ? null : bass }), score: score, miss: miss, spec: { root: r, parts: parts.slice(), bass: r === bass ? null : bass } });
+      }
+    }
+    names.sort(function (a, b) { return a.score - b.score; });
+    var out = { name: "", alts: [], tones: tones, spec: null, onBass: "", interval: "" };
+    if (list.length === 2 && (!names.length || !has(names[0].spec.parts, "pow") || names[0].spec.bass !== null)) {
+      var hi = -1;
+      for (i = 0; i < midis.length; i++) { if (pcOf(midis[i]) !== bass) { hi = pcOf(midis[i]); } }
+      out.interval = INTERVAL_NAMES[pcOf(hi - bass)];
+      return out;
+    }
+    if (list.length === 1) { return out; }
+    if (!names.length) { return out; }
+    out.name = names[0].name;
+    out.spec = names[0].spec;
+    out.onBass = names[0].spec.bass === null ? "" : ROOTS[names[0].spec.bass];
+    var seen = {};
+    seen[out.name] = true;
+    for (i = 1; i < names.length && out.alts.length < 3; i++) {
+      if (!names[0].miss && names[i].miss) { continue; }
+      if (!seen[names[i].name]) { seen[names[i].name] = true; out.alts.push(names[i].name); }
+    }
+    return out;
+  }
+
   // ---------- 移調 ----------
   function transpose(spec, n) {
     if (!spec) { return spec; }
@@ -552,7 +607,7 @@
   window.UGChords = {
     ROOTS: ROOTS, PARTS: PARTS, PART_CLASH: PART_CLASH, QUALITIES: QUALITIES,
     intervals: intervals, suffix: suffix, name: chordName, pcs: chordPcs, tones: chordTones, parse: parseName, addPart: addPart,
-    voicings: voicings, voicingsAt: voicingsAt, posOf: posOf, fingerCount: fingerCount, span: shapeSpan, detect: detect, transpose: transpose, shiftShape: shiftShape,
+    voicings: voicings, voicingsAt: voicingsAt, posOf: posOf, fingerCount: fingerCount, span: shapeSpan, detect: detect, detectNotes: detectNotes, transpose: transpose, shiftShape: shiftShape,
     shapeMidis: shapeMidis, openMidis: openMidis, pcOf: pcOf,
     SEQ_LENGTHS: SEQ_LENGTHS, SEQ_STYLES: SEQ_STYLES, SEQ_SWINGS: SEQ_SWINGS, SEQ_PATTERNS: SEQ_PATTERNS, seqPattern: seqPattern, seqLen: seqLen, lenId: lenId, swingBeat: swingBeat, transposeName: transposeName, schedule: seqSchedule
   };
