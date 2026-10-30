@@ -377,6 +377,8 @@
 
   // §215 v1.23: 鍵盤で押した音（MIDI）→ コード名（いちばん低い音がベース。根音でなければオンコード「C/E」）
   // ベースだけがコードの外の音でもよい（F/G など）。→ { name, alts, tones, spec, onBass, interval } / null（音がない）
+  // §216: 鍵盤のときだけ足す種類（Gsus4add9 ＝ ソ・ド・レ・ラ）
+  var NOTE_EXTRA_PARTS = [["sus4", "add9"]];
   var INTERVAL_NAMES = ["オクターブ", "短2度", "長2度", "短3度", "長3度", "完全4度", "増4度", "完全5度", "短6度", "長6度", "短7度", "長7度"];
   function detectNotes(midis) {
     var sounding = {}, list = [], low = 999, i;
@@ -388,12 +390,12 @@
       if (m < low) { low = m; }
     }
     if (!list.length) { return null; }
-    var bass = pcOf(low), tones = [], names = [], r, q;
+    var bass = pcOf(low), tones = [], names = [], r, q, kinds = DETECT_PARTS.concat(NOTE_EXTRA_PARTS);
     for (i = 0; i < list.length; i++) { tones.push(ROOTS[list[i]]); }
     for (r = 0; r < 12; r++) {
       if (!sounding[r]) { continue; }
-      for (q = 0; q < DETECT_PARTS.length; q++) {
-        var parts = DETECT_PARTS[q], ivs = intervals(parts), chordSet = {}, miss = 0, extra = 0, bassOut = false;
+      for (q = 0; q < kinds.length; q++) {
+        var parts = kinds[q], ivs = intervals(parts), chordSet = {}, miss = 0, extra = 0, bassOut = false;
         for (i = 0; i < ivs.length; i++) {
           var p = pcOf(r + ivs[i].iv);
           chordSet[p] = true;

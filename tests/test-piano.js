@@ -171,6 +171,14 @@ module.exports = function () {
     "on-chords with a bass outside the chord (F/G, C/D) and the bass note is reported");
   ok(cn([60, 67]) === "C5" && cn([60, 64]) === "長3度" && cn([60, 65]) === "完全4度" && cn([59, 62, 65, 69]) === "Bm7(♭5)" && cn([60, 63, 66, 69]) === "Cdim7" && P.chord([60]) === null,
     "two notes show a power chord or the interval; one note shows no chord");
+  var dg = CH.detectNotes([55, 57, 60, 62]), d6 = CH.detectNotes([60, 64, 67, 69]);
+  ok(dg.name === "Gsus4add9" && dg.alts.indexOf("D7sus4/G") >= 0 && d6.alts.indexOf("Am7/C") >= 0 && CH.detectNotes([60, 64, 67]).alts.length === 0,
+    "chords that can be read two ways keep the other readings (alts)", [dg, d6.alts]);
+  var e10 = hooked();
+  e10.run("piano", { config: { mode: "free" } }, 12, function (f) {
+    if (f === 2) { ["a", "d", "g", "h"].forEach(function (k) { e10.key("keydown", k); }); }
+  });
+  ok(e10.counters.texts.indexOf("C6") >= 0 && e10.counters.texts.indexOf("＝ Am7/C") >= 0, "both readings are shown on the screen (C6 ＝ Am7/C)", e10.counters.texts.slice(-6));
   var e9 = hooked();
   e9.run("piano", { config: { mode: "free" } }, 12, function (f) {
     if (f === 2) { e9.key("keydown", "d"); e9.key("keydown", "g"); e9.key("keydown", "k"); }

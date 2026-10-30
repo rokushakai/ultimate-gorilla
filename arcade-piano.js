@@ -714,6 +714,13 @@
           ctx.fillRect(r.x, top, r.w, L.bh);
         }
       }
+      // 幅に入りきらなければ小さくする（measureText がなければそのまま）
+      function fitText(ctx, s, x, y, size, color, maxW) {
+        ctx.font = "bold " + size + "px sans-serif";
+        var mw = ctx.measureText ? ctx.measureText(s) : null;
+        while (mw && mw.width > maxW && size > 6) { size--; ctx.font = "bold " + size + "px sans-serif"; mw = ctx.measureText(s); }
+        text(ctx, s, x, y, size, color);
+      }
       function text(ctx, s, x, y, size, color) {
         ctx.fillStyle = color;
         ctx.font = "bold " + size + "px sans-serif";
@@ -778,9 +785,17 @@
               var cd = pianoChord(held), top = cd ? cd.name || cd.interval : "", noteLine = held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ");
               if (top) {
                 // §215: コード名（オンコードは「C/E」と、下に「C on E」）
-                text(ctx, top, W / 2, land ? 21 : 56, cd.name ? (land ? 17 : 30) : (land ? 12 : 18), "#ffd166");
-                if (cd.onBass && !land) { text(ctx, cd.name.split("/")[0] + " on " + cd.onBass + "（ベースは " + pianoName(held[0], "do") + "）", W / 2, 86, 11, "#ffffff"); }
-                text(ctx, (land && cd.onBass ? cd.name.split("/")[0] + " on " + cd.onBass + "　" : "") + noteLine, W / 2, land ? 37 : 112, land ? 8 : 13, "#ffffff");
+                // §216: どちらとも読めるコードは「＝ 別の読み方」も出す
+                var alt = cd.name && cd.alts.length ? "＝ " + cd.alts.join(" ／ ") : "", onTxt = cd.onBass ? cd.name.split("/")[0] + " on " + cd.onBass : "";
+                if (land) {
+                  fitText(ctx, top + (alt ? "　" + alt : ""), W / 2, 21, cd.name ? 17 : 12, "#ffd166", W - 12);
+                  fitText(ctx, (onTxt ? onTxt + "　" : "") + noteLine, W / 2, 37, 8, "#ffffff", W - 12);
+                } else {
+                  fitText(ctx, top, W / 2, alt ? 48 : 56, cd.name ? 30 : 18, "#ffd166", W - 16);
+                  if (alt) { fitText(ctx, alt, W / 2, 75, 13, "#ffe8a3", W - 16); }
+                  if (onTxt) { fitText(ctx, onTxt + "（ベースは " + pianoName(held[0], "do") + "）", W / 2, alt ? 95 : 86, 11, "#ffffff", W - 16); }
+                  fitText(ctx, noteLine, W / 2, alt ? 116 : 112, 13, "#ffffff", W - 16);
+                }
               } else {
                 if (!land) { emojiAt(ctx, play || bk ? "🎶" : "🦍", W / 2, 60, 40); }
                 text(ctx, held.length ? noteLine : (play ? "再生中…" : (bk ? "伴奏中…" : "鍵盤をタップして弾こう")), W / 2, land ? 28 : 112, land ? 11 : 14, "#ffffff");

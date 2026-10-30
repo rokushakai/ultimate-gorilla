@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.23** |
+| 現在バージョン | **v1.24** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.24] 🎹 コードの別の読み方も表示**（§216）: `detectNotes` の alts を表示。鍵盤だけの種類は `NOTE_EXTRA_PARTS`
 - **[v1.23] 🎹 押した鍵盤のコード名**（§215）: `UGChords.detectNotes(midis)`（arcade-chords.js）→ `pianoChord()` で表示。いちばん低い音がベース（オンコード）
 - **[v1.22] 🎹 よこ向きの鍵盤を端から端まで**（§214）: `pianoLandH()`／`pianoLandLayout()` で高さを決める。CSS `.arcade-land` は上にゲーム画面・下にパネルと一時停止/やめる
 - **[v1.21] 🎹 ピアノとシーケンサーの統合・よこ向き**（§213）: 伴奏は `pianoBacking()`（expand → seqAtRate → seqSchedule）をフレームで鳴らす（`UGUkulele.seqPlayEvent`）。送るは `pianoSendToSeq()`（`xAdd(..., "pnotes")`）。よこ向きは arcade.js の `api.setLandscape` ＋ CSS `.arcade-land`（縦持ちなら 90° 回す。`pos()` が回転を見て座標を回す）
@@ -172,7 +173,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（679項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（681項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
