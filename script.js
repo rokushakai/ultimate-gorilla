@@ -19310,6 +19310,7 @@
     mole: 25, sweeper: 120, g2048: 100, reversi: 45, slide: 200, memory: 200, meteor: 100, defense: 75, lyrics: 30, gomoku: 50, sudoku: 150, solitaire: 200, batting: 40, ukulele: 25, quiz: 60 // §202 v1.10
   };
   var ARCADE_MEDAL_MAX_PER_PLAY = 100, ARCADE_MEDAL_HISCORE_BONUS = 5;
+  var ARCADE_MEDAL_BONUS_MAX = 400; // §211 v1.19: ゲームがくれる特別なメダル（クイズの称号アップなど）の1回の上限
   // §153 v0.72: 景品（メダル1枚 ≒ 5G）。伝説装備・ウクレレ・仲間報酬装備・商人で買える装備は扱わない
   var ARCADE_PRIZES = [
     { id: "g50", cat: "gold", kind: "gold", amount: 50, cost: 10 },
@@ -19533,13 +19534,13 @@
   }
 
   // ゲーム終了（ゲームオーバー or やめる）時に1回だけ呼ばれる。獲得メダル数を返す（§153 v0.72）
-  function onArcadeGameEnd(gameId, score) {
+  function onArcadeGameEnd(gameId, score, bonus) {
     if (ARCADE_GAME_IDS.indexOf(gameId) < 0) { return 0; }
     score = Math.floor(score) || 0;
     var isHi = score > getArcadeHighScore(gameId);
     if (isHi) { state.arcadeHighScores[gameId] = score; }
     normalizeArcadeMedals();
-    var medals = calcArcadeMedals(gameId, score, isHi);
+    var medals = calcArcadeMedals(gameId, score, isHi) + Math.max(0, Math.min(ARCADE_MEDAL_BONUS_MAX, Math.floor(bonus) || 0));
     state.arcadeMedals += medals;
     state.arcadeMedalsTotal += medals;
     if (isHi || medals > 0) { saveGame(); }

@@ -214,7 +214,8 @@ function load(opts) {
     var o = startOpts || {};
     o.hiScore = o.hiScore || 0;
     var userEnd = o.onEnd;
-    o.onEnd = function (g, s) { ended = s; return userEnd ? userEnd(g, s) : 7; };
+    var bonus = 0;
+    o.onEnd = function (g, s, b) { ended = s; bonus = b; return userEnd ? userEnd(g, s, b) : 7; };
     o.onExit = o.onExit || function () {};
     sandbox.UGArcade.start(gameId, root, o);
     env.canvas = parts[".arcade-canvas"];
@@ -225,7 +226,7 @@ function load(opts) {
       if (rafCb) { rafCb(t); }
     }
     sandbox.UGArcade.stop();
-    return { ended: ended, frames: f };
+    return { ended: ended, frames: f, bonus: bonus };
   };
   // setTimeout を待つ
   env.wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms || 0); }); };

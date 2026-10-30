@@ -183,4 +183,41 @@ module.exports = function () {
   var daily8 = JSON.parse(e8.store.ugQuizDaily || "{}"), best8 = JSON.parse(e8.store.ugQuizBest || "{}");
   ok(last8.qs.map(function (q) { return q.key; }).join() === dk1.join() && last8.phase === "end" && last8.right === Q.DAILY_N, "今日のクイズ is the day's 5 questions (never sudden death)", [last8.phase, last8.right]);
   ok(daily8.last === "2026-10-31" && daily8.streak === 5 && daily8.right === Q.DAILY_N && !("daily" in best8), "today's result and the streak are saved (not in the genre bests)", [daily8, best8]);
+
+  // --- §211: 正答率・得意/苦手・ボーナスメダル ---
+  var st9 = {};
+  Q.statRecord(st9, "it", true); Q.statRecord(st9, "it", true); Q.statRecord(st9, "it", false); Q.statRecord(st9, "it", true);
+  ok(st9.it.join() === "3,4" && Q.rate(st9, "it") === -1, "正答率 is counted per genre (shown after " + Q.STAT_MIN + " answers)", st9);
+  Q.statRecord(st9, "it", true);
+  st9.stat = [1, 5];
+  ok(Q.rate(st9, "it") === 80 && Q.strength(st9).best.id === "it" && Q.strength(st9).worst.id === "stat" && Q.strength({ it: [4, 5] }) === null, "得意 and 苦手 genres come from the rates", Q.strength(st9));
+  ok(Q.rankMedals(0, 1) === Q.RANK_MEDALS[1] && Q.rankMedals(2, 2) === 0 && Q.rankMedals(4, Q.RANKS.length) === Q.RANK_MEDALS[5] + Q.TOP_MEDALS, "title-up medals (skipped titles count too)");
+  ok(Q.dailyMedals(1, Q.DAILY_N) === 6 && Q.dailyMedals(30, 2) === 13, "今日のクイズ medals grow with the streak (up to 10 days), +2 for all right");
+  var cw = {};
+  Q.catOf("word").qs.forEach(function (q, i) { cw["word:" + i] = 1; });
+  ok(Q.crowns(cw).join() === "word" && Q.crowns({}).length === 0, "👑 genres are the ones with every question answered right");
+  var day10 = "2026-11-5", dk10 = Q.dailyPick(day10).map(function (q) { return q.key; }), d19 = {}, e10 = hooked(), r10;
+  Q.cats.forEach(function (c) { c.qs.forEach(function (q, i) { var k = c.id + ":" + i; if (Object.keys(d19).length < 19 && dk10.indexOf(k) < 0) { d19[k] = 1; } }); });
+  e10.store.ugQuizDone = JSON.stringify(d19);
+  e10.store.ugQuizDaily = JSON.stringify({ last: "2026-11-4", right: 3, streak: 2, top: 2 });
+  r10 = e10.run("quiz", { config: { cat: "daily", day: day10 } }, 20000, function (f) {
+    var h = e10.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.phase === "ask" && f % 10 === 0) { press(e10, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e10, "Enter"); }
+  });
+  var stat10 = JSON.parse(e10.store.ugQuizStat || "{}"), n10 = 0, html10 = e10.root.querySelector(".arcade-panel").innerHTML || "";
+  Object.keys(stat10).forEach(function (k) { n10 += stat10[k][1]; });
+  ok(r10.bonus === Q.dailyMedals(3, Q.DAILY_N) + Q.RANK_MEDALS[1], "bonus medals go to the game center: 今日のクイズ (3 days) + title up", r10.bonus);
+  ok(n10 === Q.DAILY_N && html10.indexOf("ボーナスメダル") >= 0 && html10.indexOf("称号アップ") >= 0, "answers are counted for 正答率 and the result shows the medals", [n10]);
+  var e11 = hooked(), r11;
+  e11.store.ugQuizDone = e10.store.ugQuizDone;
+  e11.store.ugQuizDaily = e10.store.ugQuizDaily;
+  r11 = e11.run("quiz", { config: { cat: "daily", day: day10 } }, 20000, function (f) {
+    var h = e11.window.__quiz; if (!h) { return; }
+    var st = h.st();
+    if (st.phase === "ask" && f % 10 === 0) { press(e11, String(st.q.answer + 1)); }
+    if (st.phase === "result" && f % 10 === 5) { press(e11, "Enter"); }
+  });
+  ok(r11.ended !== null && r11.bonus === 0, "playing 今日のクイズ again the same day gives no more bonus medals", r11.bonus);
 };

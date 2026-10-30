@@ -55,6 +55,8 @@ module.exports = function () {
   ok(T.ids.every(function (id) { return !!T.rate[id]; }), "every arcade game has a medal rate");
   ok(T.calc("blocks", 2000, false) === 20 && T.calc("g2048", 999999, false) === 100 && T.calc("mole", 500, true) === 25 && T.calc("mole", 0, true) === 0, "medal calculation (rate, cap 100, high score +5)");
   ok(T.end("blocks", 2000) === 25 && T.end("blocks", 1500) === 15 && T.end("nope", 9999) === 0, "onArcadeGameEnd returns medals and ignores unknown games");
+  var m0 = st.arcadeMedals;
+  ok(T.end("blocks", 1500, 18) === 33 && st.arcadeMedals === m0 + 33 && T.end("blocks", 0, 9999) === 400 && T.end("blocks", 0, -5) === 0, "bonus medals from a game (quiz titles etc.) are added, capped at 400");
   var badPrize = T.prizes.filter(function (p) {
     if (p.kind !== "equip") { return false; }
     var eq = T.findById(T.findEquipSlot(p.slot).data(), p.equipId);

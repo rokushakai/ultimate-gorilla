@@ -89,7 +89,7 @@
     host.reported = true;
     if (host.game && typeof host.game.finish === "function") { host.game.finish(host.score); }
     if (host.opts && typeof host.opts.onEnd === "function") {
-      var earned = host.opts.onEnd(host.gameId, host.score);
+      var earned = host.opts.onEnd(host.gameId, host.score, host.bonusMedals);
       host.earned = typeof earned === "number" ? earned : null; // §153 v0.72: 獲得メダル数
     }
   }
@@ -365,6 +365,7 @@
       paused: false,
       over: false,
       reported: false,
+      bonusMedals: 0, // §211 v1.19: ゲームがくれる特別なメダル（称号アップなど）
       acc: 0,
       last: null,
       rafId: null,
@@ -376,6 +377,8 @@
       H: H,
       addScore: function (n) { if (host) { setScore(host.score + n); } },
       getScore: function () { return host ? host.score : 0; },
+      // §211 v1.19: スコアとは別にメダルを足す（gameOver の前に呼ぶ）
+      addMedals: function (n) { if (host && !host.reported && n > 0) { host.bonusMedals += Math.floor(n); } },
       gameOver: gameOver,
       panel: def.panel ? rootEl.querySelector(".arcade-panel") : null,
       // §181 v0.99: ゲーム画面の高さ（論理）を変える（幅は 240 のまま。引きのビューなどで縦に長く）

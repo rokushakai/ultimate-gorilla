@@ -578,6 +578,9 @@
   var QUIZ_DAILY = { id: "daily", name: "&#x1F4C5; 今日のクイズ" }, QUIZ_DAILY_KEY = "ugQuizDaily", QUIZ_DAILY_N = 5;
   var QUIZ_RANKS = [[0, "見習いゴリラ"], [20, "ものしりの芽"], [50, "ものしりゴリラ"], [100, "はかせゴリラ"], [200, "大はかせゴリラ"], [350, "クイズ王ゴリラ"]];
   var QUIZ_RANK_TOP = "究極の物知りゴリラ";
+  // §211 v1.19: ジャンルごとの正答率・クイズでもらえる特別なメダル
+  var QUIZ_STAT_KEY = "ugQuizStat", QUIZ_STAT_MIN = 5;
+  var QUIZ_RANK_MEDALS = [0, 10, 20, 30, 50, 80], QUIZ_TOP_MEDALS = 200, QUIZ_CROWN_MEDALS = 30;
   var QUIZ_DONE_KEY = "ugQuizDone", QUIZ_MISS_KEY = "ugQuizMiss", QUIZ_FLAG_KEY = "ugQuizFlag", QUIZ_SURV_KEY = "ugQuizSurv";
   var QUIZ_COUNTS = [5, 10, 20], QUIZ_MISS_CLEAR = 2, QUIZ_HINT_BONUS = 300, QUIZ_ALL = 9999;
   var QUIZ_DEBUG = (function () { try { return /(^|[?&])debug=1(&|$)/.test(window.location.search || ""); } catch (e) { return false; } })();
@@ -673,12 +676,49 @@
   }
   // 称号（図鑑の数で上がる。全問正解したことがあれば最高の称号）。next は次の称号まであと何問
   function quizRank(done) {
-    var c = quizComplete(done, "mix"), name = QUIZ_RANKS[0][1], next = 0, i;
+    var c = quizComplete(done, "mix"), name = QUIZ_RANKS[0][1], next = 0, idx = 0, i;
     for (i = 0; i < QUIZ_RANKS.length; i++) {
-      if (c.n >= QUIZ_RANKS[i][0]) { name = QUIZ_RANKS[i][1]; } else if (!next) { next = QUIZ_RANKS[i][0] - c.n; }
+      if (c.n >= QUIZ_RANKS[i][0]) { name = QUIZ_RANKS[i][1]; idx = i; } else if (!next) { next = QUIZ_RANKS[i][0] - c.n; }
     }
-    if (c.n >= c.all) { return { name: QUIZ_RANK_TOP, next: 0 }; }
-    return { name: name, next: next || c.all - c.n };
+    if (c.n >= c.all) { return { name: QUIZ_RANK_TOP, next: 0, idx: QUIZ_RANKS.length }; }
+    return { name: name, next: next || c.all - c.n, idx: idx };
+  }
+  // 称号が from から to に上がったときのメダル（飛びこえた称号の分も）
+  function quizRankMedals(from, to) {
+    var n = 0, k;
+    for (k = from + 1; k <= to; k++) { n += k >= QUIZ_RANKS.length ? QUIZ_TOP_MEDALS : QUIZ_RANK_MEDALS[k]; }
+    return n;
+  }
+  // 全問正解したことがある（👑）ジャンルの id
+  function quizCrowns(done) {
+    var out = [], i, cp;
+    for (i = 0; i < QUIZ_CATS.length; i++) { cp = quizComplete(done, QUIZ_CATS[i].id); if (cp.n === cp.all) { out.push(QUIZ_CATS[i].id); } }
+    return out;
+  }
+  // 今日のクイズのメダル（連続日数が長いほど多い。10日で頭打ち）
+  function quizDailyMedals(streak, right) { return 3 + Math.min(10, streak || 0) + (right === QUIZ_DAILY_N ? 2 : 0); }
+  // 正答率: stat は { "ai": [正解数, 答えた数] }
+  function quizStatRecord(stat, catId, good) {
+    var a = stat[catId] && stat[catId].length === 2 ? stat[catId] : [0, 0];
+    a[1]++;
+    if (good) { a[0]++; }
+    stat[catId] = a;
+  }
+  function quizRate(stat, catId) {
+    var a = stat[catId];
+    return a && a.length === 2 && a[1] >= QUIZ_STAT_MIN ? Math.round(a[0] * 100 / a[1]) : -1;
+  }
+  // 得意・苦手ジャンル（QUIZ_STAT_MIN 問以上答えたジャンルが2つ以上あるとき）
+  function quizStrength(stat) {
+    var best = null, worst = null, n = 0, i, r;
+    for (i = 0; i < QUIZ_CATS.length; i++) {
+      r = quizRate(stat, QUIZ_CATS[i].id);
+      if (r < 0) { continue; }
+      n++;
+      if (!best || r > best.pct) { best = { id: QUIZ_CATS[i].id, name: QUIZ_CATS[i].name, pct: r }; }
+      if (!worst || r < worst.pct) { worst = { id: QUIZ_CATS[i].id, name: QUIZ_CATS[i].name, pct: r }; }
+    }
+    return n >= 2 && best.pct > worst.pct ? { best: best, worst: worst } : null;
   }
   // 今日のクイズ: 日付 "2026-10-31" と、その前の日
   function quizToday(d) { d = d || new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
@@ -741,7 +781,7 @@
     function draw() {
       var best = quizObj(QUIZ_BEST_KEY), surv = quizObj(QUIZ_SURV_KEY), done = quizObj(QUIZ_DONE_KEY), miss = quizObj(QUIZ_MISS_KEY);
       var cats = QUIZ_CATS.concat([QUIZ_MIX], QUIZ_GROUPS), i, all = quizComplete(done, "mix"), rank = quizRank(done);
-      var day = quizToday(), drec = quizObj(QUIZ_DAILY_KEY), dst = quizDailyStreak(drec, day);
+      var day = quizToday(), drec = quizObj(QUIZ_DAILY_KEY), dst = quizDailyStreak(drec, day), stat = quizObj(QUIZ_STAT_KEY), sw = quizStrength(stat);
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x2753; ゴリラクイズ</h3>' +
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">4択クイズ。1問' + QUIZ_SEC + '秒。早く答えるほど、続けて正解するほど点が高くなります。答えのあとに解説が出ます。' +
         '&#x1F98D; ヒント（50:50）は1回だけ。使わずに半分以上正解するとボーナス +' + QUIZ_HINT_BONUS + '。</p>';
@@ -761,13 +801,14 @@
         ' <span class="small" style="color:#6b4f00;">' + (drec.last === day ? "&#x2705; 今日は " + drec.right + "/" + QUIZ_DAILY_N + " 正解" : QUIZ_DAILY_N + "問・毎日かわる") +
         (dst ? "・&#x1F525;" + dst + "日連続" : "") + '</span></button>';
       html += '<p class="small quiz-dex">&#x1F393; 称号: <b>' + rank.name + '</b>' + (rank.next ? "（次の称号まで あと" + rank.next + "問）" : "") +
-        '<br>&#x1F4D6; クイズ図鑑: 正解したことがある問題 <b>' + all.n + ' / ' + all.all + '</b></p>';
+        '<br>&#x1F4D6; クイズ図鑑: 正解したことがある問題 <b>' + all.n + ' / ' + all.all + '</b>' +
+        (sw ? '<br>&#x1F4AA; 得意: ' + sw.best.name + '（' + sw.best.pct + '%）　&#x1F613; 苦手: ' + sw.worst.name + '（' + sw.worst.pct + '%）' : "") + '</p>';
       html += '<div class="quiz-cat-grid">';
       for (i = 0; i < cats.length; i++) {
-        var id = cats[i].id, cp = quizComplete(done, id), b = mode === "sudden" ? surv[id] : best[quizBestKey(id, count)];
+        var id = cats[i].id, cp = quizComplete(done, id), b = mode === "sudden" ? surv[id] : best[quizBestKey(id, count)], rate = quizRate(stat, id);
         html += '<button class="modal-btn quiz-cat-btn' + (pref.cat === id ? " active" : "") + (id === "mix" ? " wide" : "") + '" data-cat="' + id + '" style="width:100%;">' + cats[i].name +
           ' <span class="small" style="color:#6b4f00;">' + (id === "mix" ? "全ジャンル" : "&#x1F4D6;" + cp.n + "/" + cp.all + (cp.n === cp.all ? " &#x1F451;" : "")) +
-          (b ? (mode === "sudden" ? "・最高 " + b + "連続" : "・最高 " + b + "/" + count) : "") + '</span></button>';
+          (b ? (mode === "sudden" ? "・最高 " + b + "連続" : "・最高 " + b + "/" + count) : "") + (rate >= 0 ? "・正答" + rate + "%" : "") + '</span></button>';
       }
       html += '</div>';
       var mc = quizMissCount(miss);
@@ -829,7 +870,8 @@
       else { var seen = quizSeen(); qs = quizPick(cat.id, count, Math.random, seen); lsSet(QUIZ_SEEN_KEY, seen); }
       if (!qs.length) { cat = QUIZ_MIX; qs = quizPick("mix", count, Math.random, {}); } // にがて問題がもうないとき
       var idx = 0, phase = "ask", t = QUIZ_SEC * 60, picked = -1, combo = 0, right = 0, results = [], flash = 0, lastPts = 0, ended = false;
-      var hintUsed = false, hidden = [], bonus = 0, missAtEnd = 0, rank0 = quizRank(done).name, rankUp = "";
+      var hintUsed = false, hidden = [], bonus = 0, missAtEnd = 0, rank0 = quizRank(done), rankUp = "";
+      var stat = quizObj(QUIZ_STAT_KEY), crowns0 = quizCrowns(done), medals = [];
       var panel = api.panel;
       api.setCanvasHeight(QUIZ_H);
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
@@ -842,6 +884,11 @@
           html = '<div class="quiz-q">' + (sudden ? "&#x26A1; <b>" + right + "</b> 問連続正解" : "結果: <b>" + right + " / " + qs.length + "</b> 問正解") + '</div>';
           if (bonus) { html += '<div class="quiz-note ok">&#x1F98D; ヒントなしボーナス +' + bonus + '</div>'; }
           if (rankUp) { html += '<div class="quiz-note ok">&#x1F389; 称号アップ！「<b>' + rankUp + '</b>」になりました</div>'; }
+          if (medals.length) {
+            var mt = 0, ml = [];
+            for (i = 0; i < medals.length; i++) { mt += medals[i][1]; ml.push(medals[i][0] + " +" + medals[i][1]); }
+            html += '<div class="quiz-note ok">&#x1FA99; ボーナスメダル <b>+' + mt + '枚</b><br><span class="small">' + ml.join("・") + '</span></div>';
+          }
           if (dailyRec) {
             html += '<div class="quiz-note ok">&#x1F4C5; ' + (dailyRec.fresh ? "今日のクイズ クリア！ &#x1F525;" + dailyRec.streak + "日連続" : "今日の記録はもうついています（" + dailyRec.right + "/" + QUIZ_DAILY_N + "）") +
               '<br>あしたは別の問題が出ます</div>';
@@ -908,7 +955,8 @@
         if (lastPts) { api.addScore(lastPts); }
         results.push(good);
         quizRecord(q.key, good, done, miss);
-        lsSet(QUIZ_DONE_KEY, done); lsSet(QUIZ_MISS_KEY, miss);
+        quizStatRecord(stat, q.cat, good);
+        lsSet(QUIZ_DONE_KEY, done); lsSet(QUIZ_MISS_KEY, miss); lsSet(QUIZ_STAT_KEY, stat);
         quizSound(sound, good ? "ok" : "ng");
         phase = "result";
         flash = 40;
@@ -926,14 +974,19 @@
             var drec = quizObj(QUIZ_DAILY_KEY), nrec = quizDailyRecord(drec, day, right);
             if (nrec !== drec) { lsSet(QUIZ_DAILY_KEY, nrec); }
             dailyRec = { right: nrec.right, streak: nrec.streak, fresh: nrec !== drec };
+            if (dailyRec.fresh) { medals.push(["今日のクイズ", quizDailyMedals(nrec.streak, right)]); }
           } else if (cat.id !== "miss") {
             var best = quizObj(QUIZ_BEST_KEY), bk = quizBestKey(cat.id, count);
             if (!(best[bk] >= right)) { best[bk] = right; lsSet(QUIZ_BEST_KEY, best); }
           }
         }
         missAtEnd = quizMissCount(miss);
-        var r1 = quizRank(done).name;
-        if (r1 !== rank0) { rankUp = r1; }
+        var r1 = quizRank(done), crowns1 = quizCrowns(done), k;
+        if (r1.idx > rank0.idx) { rankUp = r1.name; medals.push(["称号アップ", quizRankMedals(rank0.idx, r1.idx)]); }
+        for (k = 0; k < crowns1.length; k++) {
+          if (crowns0.indexOf(crowns1[k]) < 0) { medals.push(["&#x1F451; " + quizCat(crowns1[k]).name + " 制覇", QUIZ_CROWN_MEDALS]); }
+        }
+        for (k = 0; k < medals.length; k++) { if (api.addMedals) { api.addMedals(medals[k][1]); } }
         render();
         api.gameOver(right === qs.length ? "CLEAR!" : (sudden ? right + "問連続正解" : right + "/" + qs.length + " 正解"));
       }
@@ -1014,6 +1067,8 @@
     pickMiss: quizPickMiss, record: quizRecord, complete: quizComplete, byKey: quizByKey, hint: quizHint, bestKey: quizBestKey,
     COUNTS: QUIZ_COUNTS, HINT_BONUS: QUIZ_HINT_BONUS, MISS_CLEAR: QUIZ_MISS_CLEAR,
     groups: QUIZ_GROUPS, catsOf: quizCatsOf, rank: quizRank, RANKS: QUIZ_RANKS, RANK_TOP: QUIZ_RANK_TOP,
-    today: quizToday, prevDay: quizPrevDay, dailyPick: quizDailyPick, dailyRecord: quizDailyRecord, dailyStreak: quizDailyStreak, DAILY_N: QUIZ_DAILY_N
+    today: quizToday, prevDay: quizPrevDay, dailyPick: quizDailyPick, dailyRecord: quizDailyRecord, dailyStreak: quizDailyStreak, DAILY_N: QUIZ_DAILY_N,
+    rankMedals: quizRankMedals, crowns: quizCrowns, dailyMedals: quizDailyMedals, statRecord: quizStatRecord, rate: quizRate, strength: quizStrength,
+    STAT_MIN: QUIZ_STAT_MIN, RANK_MEDALS: QUIZ_RANK_MEDALS, TOP_MEDALS: QUIZ_TOP_MEDALS, CROWN_MEDALS: QUIZ_CROWN_MEDALS
   };
 })();
