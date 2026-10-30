@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.16** |
+| 現在バージョン | **v1.17** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.17] ❓ トレンド問題の追加**（§209）: ai/social/money/fad に41問、合計517問。トレンド問題は問題文に年を入れて答えが古くならないようにする
 - **[v1.16] ❓ クイズ5ジャンル追加**（§208）: geo・hist・food・sport・word、合計17ジャンル477問。ジャンルボタンは `.quiz-cat-grid` の2列
 - **[v1.15] ❓ 💻 IT の問題追加**（§207）: it を60問に、合計12ジャンル377問
 - **[v1.14] ❓ 💻 IT ジャンル**（§206）: `it` を追加、合計12ジャンル345問
