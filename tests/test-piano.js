@@ -41,7 +41,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-piano.js") { src = src.split("      var panel = api.panel;").join("      var panel = api.panel; window.__piano = function () { return { t: now(), rn: rn, counts: counts, ended: ended, pi: pi, miss: miss, rec: rec, play: play, take: take, base: base, notes: notes }; };"); }
+      if (file === "arcade-piano.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__piano = function () { return { t: now(), rn: rn, counts: counts, ended: ended, pi: pi, miss: miss, rec: rec, play: play, take: take, base: base, notes: notes, back: back, bk: bk, L: L, press: press }; };"); }
       return src;
     } });
   }
@@ -106,4 +106,58 @@ module.exports = function () {
     if (f === 4) { var h = e5.window.__piano; base5.push(h().base); press(e5, "z"); press(e5, "z"); base5.push(h().base); }
   });
   ok(base5.join() === "72,48" && JSON.parse(e5.store.ultimateGorillaPianoPrefsV1).base === 48, "Z / X move the keyboard by an octave (remembered)", base5);
+
+  // --- §213: よこ向き ---
+  var LD = P.LAND;
+  ok(LD.h < P.H && P.keyAt(1, LD.h - 5, 60, LD) === 60 && P.keyAt(ww * 0.95, LD.kb + 5, 60, LD) === 61 && P.keyAt(100, LD.kb - 5, 60, LD) === -1, "landscape layout: a shorter screen, same keys");
+  var cls = [], lroot = H.makeEl("div"), lparts = {};
+  lroot.classList = { add: function (c) { cls.push("+" + c); }, remove: function (c) { cls.push("-" + c); }, contains: function () { return false; } };
+  lroot.querySelector = function (sel) {
+    if (!lparts[sel]) {
+      lparts[sel] = H.makeEl(sel);
+      if (sel === ".arcade-canvas") { lparts[sel].getContext = function () { return new Proxy({}, { get: function (t, k) { return t[k] !== undefined ? t[k] : function () {}; }, set: function (t, k, v) { t[k] = v; return true; } }); }; }
+    }
+    return lparts[sel];
+  };
+  env.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ land: true });
+  W.UGArcade.start("piano", lroot, { config: { mode: "free" }, onExit: function () {} });
+  var lh = lparts[".arcade-canvas"].height;
+  W.UGArcade.stop();
+  ok(cls.indexOf("+arcade-land") >= 0 && cls.indexOf("-arcade-land") > cls.indexOf("+arcade-land") && lh < 300 * 2, "landscape: the screen goes sideways while playing and back after", [cls, lh]);
+  // 回して見せているとき（見えている形が縦長）もタッチの位置が合う
+  function landTap(rect, cx, cy) {
+    var e = hooked(), got = null;
+    e.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ land: true });
+    e.run("piano", { config: { mode: "free" } }, 4, function (f) {
+      if (f === 0) { e.canvas.getBoundingClientRect = function () { return rect; }; e.ptr("down", cx, cy, 5); }
+      if (f === 1) { var h = e.window.__piano(); got = h.press[5]; e.ptr("up", cx, cy, 5); }
+    });
+    return got;
+  }
+  var want = P.keyAt(100, 110, 60, LD);
+  ok(want === 69 && landTap({ left: 0, top: 0, width: 240, height: 480, right: 240 }, 240 - 110 * 2, 100 * 2) === want && landTap({ left: 0, top: 0, width: 480, height: 240, right: 480 }, 200, 220) === want,
+    "touches land on the right key whether the screen is turned by CSS or the phone is held sideways", want);
+
+  // --- §213: シーケンサーと統合 ---
+  var e6 = hooked(), U6 = e6.window.UGUkulele, P6 = e6.window.UGPiano;
+  e6.store[U6.SEQ_KEY] = JSON.stringify({ cur: U6.seqClean(null), songs: [{ id: 3, name: "ぼくの曲", seq: U6.seqClean(null) }] });
+  var bl = P6.backList();
+  ok(bl.map(function (b) { return b[0]; }).join() === "cur,s:3" && bl[1][1] === "ぼくの曲" && P6.backing("s:3").s.events.length > 0 && P6.backing("s:99") === null, "backing songs: the one being edited and the saved ones");
+  // 伴奏に合わせて録音: 3拍目（beat 2）で弾く → 拍が合って保存され、曲が終わると止まる
+  var S6 = P6.backing("cur").s, f0 = -1, k6 = -1, mid6 = null;
+  e6.run("piano", { config: { mode: "free", backing: "cur" } }, 1400, function (f) {
+    if (f === 5) { press(e6, "r"); f0 = f; }
+    if (f0 >= 0 && k6 < 0 && (f - f0) / 60 >= S6.lead + 2 * S6.spb) { e6.key("keydown", "d"); k6 = f; mid6 = e6.window.__piano(); }
+    if (k6 >= 0 && f === k6 + 30) { e6.key("keyup", "d"); }
+  });
+  var end6 = e6.window.__piano(), t6 = JSON.parse(e6.store.ultimateGorillaPianoTakesV1 || "[]")[0];
+  ok(mid6 && mid6.bk && mid6.rec && mid6.rec.back && !end6.rec && !end6.bk, "recording with the backing runs the song and stops when it ends", [!!(mid6 && mid6.bk), !!end6.bk]);
+  ok(t6 && t6.song === "編集中の曲" && t6.bpm === 90 && t6.notes.length === 1 && t6.notes[0][2] === 64 && Math.abs(t6.notes[0][0] - 2) < 0.05, "the take is saved in the song's beats", t6);
+  // テイクをシーケンサーへ送る（🎹 ピアノ打ち込みトラック）
+  var sr = P6.sendToSeq(P6.takesLoad()[0]), sq6 = U6.seqLoad().cur.tracks, x6 = sq6[sq6.xs[0]];
+  ok(sr.ok && sq6.xs.length === 1 && x6.preset === "pnotes" && x6.kind === "notes" && JSON.stringify(x6.notes) === JSON.stringify(t6.notes) && x6.name === t6.name, "a take goes into the sequencer as a piano notes track", [sr, x6]);
+  for (var k7 = 0; k7 < 7; k7++) { P6.sendToSeq(P6.takesLoad()[0]); }
+  var sr9 = P6.sendToSeq(P6.takesLoad()[0]);
+  ok(!sr9.ok && U6.seqLoad().cur.tracks.xs.length === 8 && P6.sendToSeq({ name: "x", notes: [] }).ok === false, "no more than 8 extra tracks; empty takes are not sent", sr9.msg);
+  ok(U6.X_PRESETS.some(function (p) { return p[0] === "pnotes" && p[2] === 0 && p[3] === "notes"; }), "the sequencer has a 🎹 piano notes track preset");
 };

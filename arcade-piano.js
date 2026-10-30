@@ -1,7 +1,8 @@
 // =========================================================
 // 究極ゴリラ ゲームセンター: 🎹 ゴリラピアノ（§212）
 // arcade.js・arcade-melody.js の後に読み込む。音は window.UGMelody（サンプル）を使う。
-// 録音（テイク）はシーケンサーのメロディと同じ [拍, 長さ（拍）, MIDI] の形で保存する（v1.21 でシーケンサーへ送る予定）
+// 録音（テイク）はシーケンサーのメロディと同じ [拍, 長さ（拍）, MIDI] の形で保存する
+// §213 v1.21: ゴリラウクレレのシーケンサーの曲を伴奏にする・テイクをシーケンサーへ送る・よこ向き表示
 // =========================================================
 (function () {
   "use strict";
@@ -11,6 +12,8 @@
   var W = I.W, hudText = I.hudText, emojiAt = I.emojiAt, lsGet = I.lsGet, lsSet = I.lsSet, escHtml = I.escHtml;
 
   var PIANO_H = 300, PIANO_KB_Y = 170, PIANO_WHITE = 14, PIANO_BLACK_H = 78;
+  // §213: 画面の形。縦 240×300 / 横 240×120（よこ向きで大きく見せる）。kb ＝ 鍵盤の上のはし、bh ＝ 黒鍵の長さ
+  var PIANO_PORT = { h: PIANO_H, kb: PIANO_KB_Y, bh: PIANO_BLACK_H, land: false }, PIANO_LAND = { h: 120, kb: 46, bh: 44, land: true };
   var PIANO_PREFS_KEY = "ultimateGorillaPianoPrefsV1", PIANO_TAKES_KEY = "ultimateGorillaPianoTakesV1", PIANO_BEST_KEY = "ultimateGorillaPianoBestV1";
   var PIANO_TAKES_MAX = 10, PIANO_NOTES_MAX = 1000, PIANO_SONG_LOW = 60, PIANO_BASE_MIN = 36, PIANO_BASE_MAX = 72;
   var PIANO_LEAD = 2, PIANO_LOOK = 1.6, PIANO_SPEEDS = [70, 85, 100];
@@ -84,11 +87,12 @@
     if (pianoIsBlack(m)) { return { x: (wi + 1) * ww - ww * 0.3, w: ww * 0.6, black: true }; }
     return { x: wi * ww, w: ww, black: false };
   }
-  // 座標 → MIDI（鍵盤の外は -1）。黒鍵が上にあるので先に調べる
-  function pianoKeyAt(x, y, base) {
-    if (y < PIANO_KB_Y || y > PIANO_H || x < 0 || x > W) { return -1; }
+  // 座標 → MIDI（鍵盤の外は -1）。黒鍵が上にあるので先に調べる。L は画面の形（省略で縦）
+  function pianoKeyAt(x, y, base, L) {
+    L = L || PIANO_PORT;
+    if (y < L.kb || y > L.h || x < 0 || x > W) { return -1; }
     var ww = W / PIANO_WHITE, m;
-    if (y < PIANO_KB_Y + PIANO_BLACK_H) {
+    if (y < L.kb + L.bh) {
       for (m = base; m < base + 24; m++) {
         if (!pianoIsBlack(m)) { continue; }
         var r = pianoKeyRect(m, base);
@@ -117,7 +121,8 @@
       speed: PIANO_SPEEDS.indexOf(Number(p.speed)) >= 0 ? Number(p.speed) : 100,
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))),
       metro: p.metro !== false,
-      base: base >= PIANO_BASE_MIN && base <= PIANO_BASE_MAX && base % 12 === 0 ? base : PIANO_SONG_LOW
+      base: base >= PIANO_BASE_MIN && base <= PIANO_BASE_MAX && base % 12 === 0 ? base : PIANO_SONG_LOW,
+      land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
   function pianoSavePrefs(p) { return lsSet(PIANO_PREFS_KEY, p); }
@@ -137,7 +142,8 @@
     return {
       id: Math.max(1, Math.round(Number(t.id)) || i + 1), name: String(t.name || "テイク").slice(0, 20),
       bpm: Math.max(40, Math.min(240, Math.round(Number(t.bpm) || 90))), meter: t.meter === 3 ? 3 : 4,
-      prog: pianoProgOk(Number(t.prog)) ? Number(t.prog) : 0, notes: pianoNotesClean(t.notes)
+      prog: pianoProgOk(Number(t.prog)) ? Number(t.prog) : 0, notes: pianoNotesClean(t.notes),
+      song: typeof t.song === "string" ? t.song.slice(0, 20) : ""
     };
   }
   function pianoTakesLoad() {
@@ -151,18 +157,78 @@
   function pianoTakeAdd(list, t) {
     var id = 0, i;
     for (i = 0; i < list.length; i++) { id = Math.max(id, list[i].id); }
-    var take = pianoTakeClean({ id: id + 1, name: t.name || "テイク " + (id + 1), bpm: t.bpm, meter: t.meter, prog: t.prog, notes: t.notes }, 0);
+    var take = pianoTakeClean({ id: id + 1, name: t.name || "テイク " + (id + 1), bpm: t.bpm, meter: t.meter, prog: t.prog, notes: t.notes, song: t.song }, 0);
     list.unshift(take);
     if (list.length > PIANO_TAKES_MAX) { list.length = PIANO_TAKES_MAX; }
     return take;
   }
   function pianoTakeById(list, id) { for (var i = 0; i < list.length; i++) { if (list[i].id === id) { return list[i]; } } return null; }
-  // シーケンサーの追加トラック（種類 "notes"）にそのまま入れられる音の配列（v1.21 で使う）
+  // シーケンサーの追加トラック（種類 "notes"）にそのまま入れられる音の配列
   function pianoToSeqNotes(take) { return pianoNotesClean(take && take.notes); }
+
+  // ---------- §213 v1.21: ゴリラウクレレのシーケンサーとつなぐ ----------
+  function pianoSeqApi() { var U = window.UGUkulele; return U && U.seqLoad && U.seqSchedule ? U : null; }
+  // 伴奏にえらべる曲 [[id, 名前], ...]（"cur" ＝ 編集中の曲、"s:番号" ＝ 保存した曲）
+  function pianoBackList() {
+    var U = pianoSeqApi(), out = [], st, i;
+    if (!U) { return out; }
+    st = U.seqLoad();
+    out.push(["cur", "編集中の曲"]);
+    for (i = 0; i < st.songs.length; i++) { out.push(["s:" + st.songs[i].id, st.songs[i].name]); }
+    return out;
+  }
+  // 伴奏の曲（構成どおりに並べ、練習テンポも反映）→ { name, seq, s: 予定, lowG }。なければ null
+  function pianoBacking(id) {
+    var U = pianoSeqApi(), st, sq = null, name = "", lowG = false, i;
+    if (!U || !id) { return null; }
+    st = U.seqLoad();
+    if (id === "cur") { sq = st.cur; name = "編集中の曲"; }
+    for (i = 0; i < st.songs.length; i++) { if ("s:" + st.songs[i].id === id) { sq = st.songs[i].seq; name = st.songs[i].name; } }
+    if (!sq || !sq.rows || !sq.rows.length) { return null; }
+    sq = U.expand(U.seqClean(sq));
+    sq.loop = false;
+    if (U.seqAtRate) { sq = U.seqAtRate(sq, sq.rate); }
+    try { lowG = !!U.prefs().lowG; } catch (e) {}
+    var sc = U.seqSchedule(sq, lowG);
+    return sc && sc.events && sc.events.length ? { name: name, seq: sq, s: sc, lowG: lowG } : null;
+  }
+  // テイクを、シーケンサーの編集中の曲へ「🎹 ピアノ打ち込み」トラックとして送る → { ok, id, msg }
+  function pianoSendToSeq(take) {
+    var U = pianoSeqApi();
+    if (!U || !U.xAdd) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
+    if (!take || !take.notes || !take.notes.length) { return { ok: false, msg: "音のないテイクは送れません" }; }
+    var st = U.seqLoad(), id = U.xAdd(st.cur.tracks, "pnotes");
+    if (!id) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
+    var t = st.cur.tracks[id];
+    t.name = String(take.name).slice(0, 12);
+    t.prog = take.prog;
+    t.notes = pianoToSeqNotes(take);
+    U.seqSave(st);
+    return { ok: true, id: id, msg: "「" + take.name + "」を、ゴリラウクレレのシーケンサー（編集中の曲）に 🎹 ピアノ打ち込みトラックとして送りました" };
+  }
+  // よこ向きのとき、できる端末では全画面＋画面の向きを横に固定する（できなければ CSS で回して見せる）
+  var pianoLocked = false;
+  function pianoLock(on) {
+    try {
+      var d = document.documentElement, so = window.screen && window.screen.orientation;
+      if (on && !pianoLocked) {
+        pianoLocked = true;
+        if (d.requestFullscreen && !document.fullscreenElement) {
+          var pr = d.requestFullscreen();
+          if (pr && pr.then) { pr.then(function () { if (so && so.lock) { var l = so.lock("landscape"); if (l && l["catch"]) { l["catch"](function () {}); } } }, function () {}); }
+        }
+      } else if (!on && pianoLocked) {
+        pianoLocked = false;
+        if (so && so.unlock) { so.unlock(); }
+        if (document.fullscreenElement && document.exitFullscreen) { var ex = document.exitFullscreen(); if (ex && ex["catch"]) { ex["catch"](function () {}); } }
+      }
+    } catch (e) {}
+  }
+  I.addStopHook(function () { pianoLock(false); });
   function pianoBest() { var o = lsGet(PIANO_BEST_KEY); return o && typeof o === "object" ? o : {}; }
 
   function pianoSetup(root, ctl) {
-    var p = pianoPrefs();
+    var p = pianoPrefs(), note = "";
     function draw() {
       var best = pianoBest(), takes = pianoTakesLoad(), i;
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F3B9; ゴリラピアノ</h3>' +
@@ -179,14 +245,28 @@
       for (i = 0; i < PIANO_NAMES.length; i++) {
         html += '<button class="modal-btn quiz-opt' + (p.names === PIANO_NAMES[i][0] ? " active" : "") + '" data-names="' + PIANO_NAMES[i][0] + '">' + PIANO_NAMES[i][1] + '</button>';
       }
-      html += '</div>';
+      html += '</div><p class="small" style="margin:4px 0 2px;">画面の向き</p><div class="quiz-opts">' +
+        '<button class="modal-btn quiz-opt' + (!p.land ? " active" : "") + '" data-land="0">&#x1F4F1; たて</button>' +
+        '<button class="modal-btn quiz-opt' + (p.land ? " active" : "") + '" data-land="1">&#x2194;&#xFE0F; よこ（鍵盤が大きい）</button></div>';
       if (p.mode === "free") {
+        var bl = pianoBackList();
+        if (bl.length) {
+          html += '<p class="small" style="margin:4px 0 2px;">&#x1F3B8; 伴奏（ゴリラウクレレのシーケンサーの曲）</p><div class="piano-opts">' +
+            '<button class="modal-btn quiz-opt' + (!p.backing ? " active" : "") + '" data-backing="-">なし</button>';
+          for (i = 0; i < bl.length; i++) {
+            html += '<button class="modal-btn quiz-opt' + (p.backing === bl[i][0] ? " active" : "") + '" data-backing="' + bl[i][0] + '">' + escHtml(bl[i][1]) + '</button>';
+          }
+          html += '</div>';
+        }
         html += '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F3B9; はじめる</button>';
         html += '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + PIANO_TAKES_MAX + '）</p>';
+        if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
         if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。じゆうに弾く画面の「🔴 録音」で録れます。</p>'; }
         for (i = 0; i < takes.length; i++) {
-          html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm + '</span></span>' +
+          html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm +
+            (takes[i].song ? '・&#x1F3B8; ' + escHtml(takes[i].song) : "") + '</span></span>' +
             '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button>' +
+            '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
             '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
         }
       } else {
@@ -215,6 +295,14 @@
           if ((v = el.getAttribute("data-prog")) !== null) { p.prog = Number(v); pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); pianoSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-land"))) { p.land = v === "1"; pianoSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; pianoSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-send"))) {
+            var res = pianoSendToSeq(pianoTakeById(pianoTakesLoad(), Number(v)));
+            note = (res.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(res.msg);
+            draw();
+            return;
+          }
           if ((v = el.getAttribute("data-del"))) {
             var list = pianoTakesLoad(), t = pianoTakeById(list, Number(v));
             if (!t || (window.confirm && !window.confirm("「" + t.name + "」を消しますか？"))) { return; }
@@ -224,8 +312,8 @@
             return;
           }
           if (el.getAttribute("data-back")) { ctl.back(); return; }
-          if (el.getAttribute("data-go")) { ctl.done({ mode: "free" }); return; }
-          if ((v = el.getAttribute("data-open"))) { ctl.done({ mode: "free", take: Number(v) }); return; }
+          if (el.getAttribute("data-go")) { ctl.done({ mode: "free", backing: p.backing }); return; }
+          if ((v = el.getAttribute("data-open"))) { ctl.done({ mode: "free", take: Number(v), backing: p.backing }); return; }
           if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: p.mode, song: v, speed: p.speed }); }
         };
       }
@@ -244,7 +332,7 @@
     music: true,
     name: "ゴリラピアノ",
     icon: "&#x1F3B9;",
-    desc: "鍵盤で自由に弾いて録音・光る鍵盤でれんしゅう・落ちてくる音符のリズムゲーム",
+    desc: "鍵盤で自由に弾いて録音・光る鍵盤でれんしゅう・落ちてくる音符のリズムゲーム。ウクレレのシーケンサーの曲を伴奏にも",
     help: "鍵盤をタップ（和音・すべらせてもOK）/ A W S E D F T G Y H U J K O L で弾く / Z X オクターブ / R 録音 / V 再生 / P一時停止",
     controls: [],
     keys: PIANO_KEYS,
@@ -257,10 +345,25 @@
       var prog = prefs.prog, names = prefs.names, base = mode === "free" ? prefs.base : PIANO_SONG_LOW;
       var song = mode === "free" ? null : pianoSong(cfg.song), notes = song ? song.notes : [];
       var frame = 0, press = {}, ended = false, msg = "", shake = 0;
-      var panel = api.panel;
-      api.setCanvasHeight(PIANO_H);
+      var panel = api.panel, L = prefs.land ? PIANO_LAND : PIANO_PORT;
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
       function now() { return frame / 60; }
+      // §213: 横向き（鍵盤を大きく）
+      function applyLand() {
+        api.setCanvasHeight(L.h);
+        if (api.setLandscape) { api.setLandscape(L.land); }
+      }
+      applyLand();
+      if (L.land) { pianoLock(true); }
+      function setLand(on) {
+        allOff();
+        L = on ? PIANO_LAND : PIANO_PORT;
+        prefs.land = on;
+        pianoSavePrefs(prefs);
+        applyLand();
+        pianoLock(on);
+        render();
+      }
 
       // --- 音 ---
       var UG = window.UGMelody, audioOk = false;
@@ -274,15 +377,60 @@
       // --- じゆうに弾く: 録音・再生 ---
       var bpm = prefs.bpm, meter = 4, metro = prefs.metro, takes = mode === "free" ? pianoTakesLoad() : [];
       var take = cfg.take ? pianoTakeById(takes, cfg.take) : null, rec = null, play = null;
-      if (take) { msg = "「" + take.name + "」をひらきました。▶ 再生で聴けます"; }
-      function recBeat() { return rec ? (now() - rec.t0) * bpm / 60 : 0; }
+      // §213: 伴奏（シーケンサーの曲）。bk ＝ 鳴らしているあいだの状態
+      var back = mode === "free" && cfg.backing ? pianoBacking(cfg.backing) : null, bk = null;
+      if (back) { bpm = back.seq.bpm; meter = back.seq.meter; }
+      if (take) { msg = "「" + escHtml(take.name) + "」をひらきました。▶ 再生で聴けます"; }
+      else if (back) { msg = "&#x1F3B8; 伴奏に合わせて弾こう。「🔴 合わせて録音」で録れます"; }
+      else if (mode === "free" && cfg.backing) { msg = "伴奏の曲が見つかりませんでした（ゴリラウクレレのシーケンサーで曲を作ってね）"; }
+      function backT() { return bk ? (frame - bk.f0) / 60 : 0; }
+      // 伴奏の上の拍（カウントインのあいだはマイナス）
+      function backBeat() {
+        var S = back.s, t = backT();
+        if (t < S.lead) { return (t - S.lead) / S.spb; }
+        return S.beatAt ? S.beatAt(t) : (t - S.lead) / S.spb;
+      }
+      function backStart() {
+        backStop();
+        audio();
+        var U = pianoSeqApi();
+        bk = { f0: frame, idx: 0, outs: [null, null, null, null], mix: null, fx: false };
+        if (audioOk && U && U.fxPush) { try { U.fxPush(back.seq); bk.fx = true; } catch (e) {} }
+      }
+      function backStop() {
+        if (!bk) { return; }
+        var U = pianoSeqApi();
+        if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        bk = null;
+      }
+      function backStep() {
+        var S = back.s, t = backT(), U = pianoSeqApi(), ac = audioOk && UG.audio ? UG.audio.ctx : null, ev;
+        while (bk.idx < S.events.length && (ev = S.events[bk.idx]).t <= t + 0.1) {
+          var on = ev.kind === "click" ? (back.seq.metronome || ev.t < S.lead) : true;
+          if (on && ac && U && U.seqPlayEvent) {
+            try {
+              if (!bk.mix) { bk.mix = U.mixer(UG, ac, S.tracks); }
+              U.seqPlayEvent(UG, ac, ev, ac.currentTime + Math.max(0, ev.t - t), back.lowG, 0.55, bk.outs, bk.mix, S.tracks);
+            } catch (e) {}
+          }
+          bk.idx++;
+        }
+        if (t >= S.time) {
+          if (rec) { recStop(); }
+          backStop();
+          play = null;
+          render();
+        }
+      }
+      function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
       function recToggle() {
         if (mode !== "free") { return; }
         if (rec) { recStop(); return; }
         playStop();
         audio();
-        rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 };
+        if (back) { backStart(); rec = { back: true, notes: [], open: {}, beat: -99 }; }
+        else { rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 }; }
         msg = "";
         render();
       }
@@ -299,34 +447,47 @@
         rec.notes.push([r3(o[0]), r3(Math.max(0.0625, recBeat() - o[0])), o[1]]);
       }
       function recStop() {
-        var ks = [], k;
+        var ks = [], k, wasBack = rec.back;
         for (k in rec.open) { if (rec.open.hasOwnProperty(k)) { ks.push(k); } }
         for (k = 0; k < ks.length; k++) { recOff(ks[k]); }
         var n = rec.notes;
         rec = null;
+        if (wasBack) { backStop(); }
         if (n.length) {
-          take = pianoTakeAdd(takes, { bpm: bpm, meter: meter, prog: prog, notes: n });
+          take = pianoTakeAdd(takes, { bpm: bpm, meter: meter, prog: prog, notes: n, song: wasBack ? back.name : "" });
           pianoTakesSave(takes);
-          msg = "&#x1F4BE; 「" + take.name + "」に保存しました（" + take.notes.length + "音）";
+          msg = "&#x1F4BE; 「" + escHtml(take.name) + "」に保存しました（" + take.notes.length + "音）" + (wasBack ? "<br>はじめの画面の「🎸 送る」でシーケンサーに入れられます" : "");
         } else {
           msg = "音がなかったので保存しませんでした";
         }
         render();
       }
-      // 再生（お手本も同じ）: 毎フレーム、時間が来た音を鳴らす
-      function playStart(ns, pbpm) { play = { t0: now() + 0.1, notes: ns, bpm: pbpm, idx: 0 }; audio(); render(); }
-      function playStop() { if (play) { play = null; render(); } }
-      function playBeat() { return play ? (now() - play.t0) * play.bpm / 60 : 0; }
+      // 再生（お手本も同じ）: 毎フレーム、時間が来た音を鳴らす。伴奏があれば伴奏といっしょに
+      function playStart(ns, pbpm, withBack) {
+        play = { t0: now() + 0.1, notes: ns, bpm: pbpm, idx: 0, back: !!withBack };
+        if (withBack) { backStart(); }
+        audio();
+        render();
+      }
+      function playStop() { if (play) { if (play.back) { backStop(); } play = null; render(); } }
+      function playBeat() { return play ? (play.back ? backBeat() : (now() - play.t0) * play.bpm / 60) : 0; }
       function playToggle() {
         if (play) { playStop(); return; }
         if (mode === "free") {
           if (rec) { return; }
           if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音してみよう"; render(); return; }
-          playStart(take.notes, take.bpm);
+          playStart(take.notes, take.bpm, !!back);
         } else if (mode === "practice") {
           pi = 0; missHere = false;
-          playStart(notes, song.bpm);
+          playStart(notes, song.bpm, false);
         }
+      }
+      // 伴奏だけ鳴らす（弾いてみる）
+      function backToggle() {
+        if (!back || rec) { return; }
+        if (play) { playStop(); }
+        if (bk) { backStop(); } else { backStart(); }
+        render();
       }
 
       // --- れんしゅう ---
@@ -433,10 +594,12 @@
       function action(v) {
         if (v === "octdown") { octave(-1); } else if (v === "octup") { octave(1); }
         else if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
+        else if (v === "back") { backToggle(); }
+        else if (v === "land") { setLand(!L.land); }
         else if (v === "restart" && mode === "practice") { playStop(); pi = 0; missHere = false; render(); }
         else if (v === "metro") { metro = !metro; prefs.metro = metro; pianoSavePrefs(prefs); render(); }
         else if (v === "bpmdown" || v === "bpmup") {
-          if (rec) { return; }
+          if (rec || back) { return; }
           bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5)));
           prefs.bpm = bpm;
           pianoSavePrefs(prefs);
@@ -446,21 +609,27 @@
 
       function render() {
         if (!panel) { return; }
-        var html = "";
+        var html = "", landBtn = '<div class="piano-row"><button class="modal-btn" data-pa="land">' + (L.land ? "&#x1F4F1; たて向きにもどす" : "&#x2194;&#xFE0F; よこ向き（鍵盤を大きく）") + '</button></div>';
         if (mode === "free") {
           html += '<div class="piano-row"><button class="modal-btn" data-pa="octdown">&#x25C0; 低く</button><span>' + pianoName(base, "cde") + '〜' + pianoName(base + 23, "cde") + '</span>' +
             '<button class="modal-btn" data-pa="octup">高く &#x25B6;</button></div>' +
-            '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-pa="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
-            '<button class="modal-btn" data-pa="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button></div>' +
-            '<div class="piano-row"><button class="modal-btn" data-pa="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-pa="bpmup">&#xFF0B;</button>' +
-            '<button class="modal-btn" data-pa="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+            '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-pa="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
+            '<button class="modal-btn" data-pa="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button></div>';
+          if (back) {
+            html += '<div class="piano-row"><button class="modal-btn" data-pa="back"' + (rec ? " disabled" : "") + '>' + (bk && !play ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button></div>' +
+              '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子）</p>';
+          } else {
+            html += '<div class="piano-row"><button class="modal-btn" data-pa="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-pa="bpmup">&#xFF0B;</button>' +
+              '<button class="modal-btn" data-pa="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+          }
+          html += landBtn;
           if (take && !rec) { html += '<p class="small" style="margin:4px 0 0;">いまのテイク: ' + escHtml(take.name) + '（' + take.notes.length + '音・BPM ' + take.bpm + '）</p>'; }
         } else if (mode === "practice") {
           html += '<div class="piano-row"><button class="modal-btn" data-pa="play"' + (ended ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x1F50A; お手本") + '</button>' +
-            '<button class="modal-btn" data-pa="restart"' + (ended ? " disabled" : "") + '>&#x21BA; はじめから</button></div>' +
+            '<button class="modal-btn" data-pa="restart"' + (ended ? " disabled" : "") + '>&#x21BA; はじめから</button></div>' + landBtn +
             '<p class="small" style="margin:4px 0 0;">' + escHtml(song.name) + '・' + Math.min(pi, notes.length) + ' / ' + notes.length + '音・ミス ' + miss + '</p>';
         } else {
-          html += '<p class="small" style="margin:0;">' + escHtml(song.name) + '（速さ ' + Math.round(rate * 100) + '%）・' + rn.length + '音</p>';
+          html += landBtn + '<p class="small" style="margin:4px 0 0;">' + escHtml(song.name) + '（速さ ' + Math.round(rate * 100) + '%）・' + rn.length + '音</p>';
         }
         if (msg) { html += '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>'; }
         panel.innerHTML = html;
@@ -483,22 +652,22 @@
         return out;
       }
       function drawKeys(ctx) {
-        var lit = litKeys(), m, r, top = PIANO_KB_Y, col;
+        var lit = litKeys(), m, r, top = L.kb, col;
         var white = { press: "#ffd166", next: "#55efc4", play: "#74c0fc" }, black = { press: "#e0a800", next: "#1e9e6a", play: "#2f7dd1" };
         for (m = base; m < base + 24; m++) {
           if (pianoIsBlack(m)) { continue; }
           r = pianoKeyRect(m, base);
           ctx.fillStyle = white[lit[m]] || "#fdfdfd";
-          ctx.fillRect(r.x + 0.5, top, r.w - 1, PIANO_H - top);
+          ctx.fillRect(r.x + 0.5, top, r.w - 1, L.h - top);
           ctx.strokeStyle = "#555";
-          ctx.strokeRect(r.x + 0.5, top, r.w - 1, PIANO_H - top);
+          ctx.strokeRect(r.x + 0.5, top, r.w - 1, L.h - top);
           var nm = pianoName(m, names);
           if (nm) {
             ctx.fillStyle = pianoPc(m) === 0 ? "#c0392b" : "#555";
             ctx.font = (nm.length > 2 ? 7 : 8) + "px sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText(nm, r.x + r.w / 2, PIANO_H - 9);
+            ctx.fillText(nm, r.x + r.w / 2, L.h - (L.land ? 7 : 9));
           }
         }
         for (m = base; m < base + 24; m++) {
@@ -506,8 +675,15 @@
           r = pianoKeyRect(m, base);
           col = black[lit[m]] || "#222";
           ctx.fillStyle = col;
-          ctx.fillRect(r.x, top, r.w, PIANO_BLACK_H);
+          ctx.fillRect(r.x, top, r.w, L.bh);
         }
+      }
+      function text(ctx, s, x, y, size, color) {
+        ctx.fillStyle = color;
+        ctx.font = "bold " + size + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(s, x, y);
       }
 
       return {
@@ -520,10 +696,10 @@
           if (down && !ended) { action(a); }
         },
         pointer: function (type, x, y, id) {
-          if (type === "down") { noteOn(id, pianoKeyAt(x, y, base)); }
+          if (type === "down") { noteOn(id, pianoKeyAt(x, y, base, L)); }
           else if (type === "move") {
             if (press[id] === undefined) { return; }
-            var m = pianoKeyAt(x, y, base);
+            var m = pianoKeyAt(x, y, base, L);
             if (m >= 0 && m !== press[id]) { noteOn(id, m); }
           } else { noteOff(id); }
         },
@@ -531,102 +707,76 @@
           frame++;
           if (shake > 0) { shake--; }
           if (judgeFrames > 0) { judgeFrames--; }
+          if (bk) { backStep(); }
           if (play) {
             var pb = playBeat(), last = 0, i;
             while (play.idx < play.notes.length && play.notes[play.idx][0] <= pb) { sound(play.notes[play.idx][2], 0.8); play.idx++; }
             for (i = 0; i < play.notes.length; i++) { last = Math.max(last, play.notes[i][0] + play.notes[i][1]); }
-            if (play.idx >= play.notes.length && pb > last) { play = null; render(); }
+            if (!play.back && play.idx >= play.notes.length && pb > last) { play = null; render(); }
           }
-          if (rec && metro) {
+          if (rec && !rec.back) {
             var rb = Math.floor(recBeat());
-            if (rb !== rec.beat) { rec.beat = rb; click(((rb % meter) + meter) % meter === 0); }
-          } else if (rec) {
-            var rb2 = Math.floor(recBeat());
-            if (rb2 < 0 && rb2 !== rec.beat) { rec.beat = rb2; click(((rb2 % meter) + meter) % meter === 0); }
+            if (rb !== rec.beat && (metro || rb < 0)) { click(((rb % meter) + meter) % meter === 0); }
+            rec.beat = rb;
           }
           if (mode === "rhythm" && !ended) { rhythmStep(); }
         },
         draw: function (ctx) {
-          var g = ctx.createLinearGradient ? ctx.createLinearGradient(0, 0, 0, PIANO_KB_Y) : null;
+          var A = L.kb, land = L.land;
+          var g = ctx.createLinearGradient ? ctx.createLinearGradient(0, 0, 0, A) : null;
           if (g) { g.addColorStop(0, "#1b1f3b"); g.addColorStop(1, "#2d1b4e"); }
           ctx.fillStyle = g || "#1b263b";
-          ctx.fillRect(0, 0, W, PIANO_KB_Y);
+          ctx.fillRect(0, 0, W, A);
           var i, sx = shake ? (shake % 2 ? 3 : -3) : 0;
           if (mode === "free") {
-            hudText(ctx, "🎹 " + pianoName(base, "cde") + "〜" + pianoName(base + 23, "cde"), 8, 10, "left");
-            hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
+            hudText(ctx, "🎹 " + pianoName(base, "cde") + "〜" + pianoName(base + 23, "cde"), 8, land ? 8 : 10, "left");
+            hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, land ? 8 : 10, "right");
             if (rec) {
               var rb = recBeat();
-              ctx.fillStyle = "#ff6b6b";
-              ctx.font = "bold 20px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(rb < 0 ? String(Math.ceil(-rb)) : "● REC", W / 2, 60);
-              ctx.fillStyle = "#ffffff";
-              ctx.font = "12px sans-serif";
-              ctx.fillText(rb < 0 ? "カウントのあとに弾いてね" : (Math.floor(rb / meter) + 1) + "小節目・" + rec.notes.length + "音", W / 2, 90);
+              text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC", W / 2, land ? 24 : 60, land ? 14 : 20, "#ff6b6b");
+              text(ctx, rb < 0 ? "カウントのあとに弾いてね" : (Math.floor(rb / meter) + 1) + "小節目・" + rec.notes.length + "音", W / 2, land ? 38 : 90, land ? 9 : 12, "#ffffff");
             } else {
-              emojiAt(ctx, play ? "🎶" : "🦍", W / 2, 60, 40);
+              if (!land) { emojiAt(ctx, play || bk ? "🎶" : "🦍", W / 2, 60, 40); }
               var held = [], k;
               for (k in press) { if (press.hasOwnProperty(k) && held.indexOf(press[k]) < 0) { held.push(press[k]); } }
               held.sort(function (a, b) { return a - b; });
-              ctx.fillStyle = "#ffffff";
-              ctx.font = "bold 14px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(held.length ? held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ") : (play ? "再生中…" : "鍵盤をタップして弾こう"), W / 2, 112);
+              text(ctx, held.length ? held.map(function (m) { return pianoName(m, names === "none" ? "do" : names); }).join(" ") : (play ? "再生中…" : (bk ? "伴奏中…" : "鍵盤をタップして弾こう")), W / 2, land ? 28 : 112, land ? 11 : 14, "#ffffff");
             }
           } else if (mode === "practice") {
-            hudText(ctx, "📖 " + song.name, 8, 10, "left");
-            hudText(ctx, "ミス " + miss, W - 8, 10, "right");
+            hudText(ctx, "📖 " + song.name, 8, land ? 8 : 10, "left");
+            hudText(ctx, "ミス " + miss, W - 8, land ? 8 : 10, "right");
             // これから弾く音
             for (i = 0; i < 6 && pi + i < notes.length; i++) {
-              var cx = 40 + i * 34 + (i === 0 ? sx : 0), big = i === 0 && !play;
+              var cx = (land ? 30 : 40) + i * (land ? 30 : 34) + (i === 0 ? sx : 0), big = i === 0 && !play, cy = land ? 27 : 70;
               ctx.fillStyle = big ? "#55efc4" : "rgba(255,255,255,0.15)";
               ctx.beginPath();
-              ctx.arc(cx, 70, big ? 18 : 13, 0, Math.PI * 2);
+              ctx.arc(cx, cy, big ? (land ? 11 : 18) : (land ? 8 : 13), 0, Math.PI * 2);
               ctx.fill();
-              ctx.fillStyle = big ? "#14213d" : "#ffffff";
-              ctx.font = "bold " + (big ? 12 : 10) + "px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(pianoName(notes[pi + i][2], names === "none" ? "do" : names), cx, 70);
+              text(ctx, pianoName(notes[pi + i][2], names === "none" ? "do" : names), cx, cy, big ? (land ? 9 : 12) : (land ? 7 : 10), big ? "#14213d" : "#ffffff");
             }
             ctx.fillStyle = "rgba(255,255,255,0.15)";
-            ctx.fillRect(10, 120, W - 20, 6);
+            ctx.fillRect(10, land ? 41 : 120, W - 20, land ? 3 : 6);
             ctx.fillStyle = "#55efc4";
-            ctx.fillRect(10, 120, (W - 20) * (notes.length ? Math.min(pi, notes.length) / notes.length : 0), 6);
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "11px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(play ? "お手本を聴いてね（青く光る鍵盤）" : (ended ? "おしまい！" : "緑に光る鍵盤を押そう"), W / 2, 145);
+            ctx.fillRect(10, land ? 41 : 120, (W - 20) * (notes.length ? Math.min(pi, notes.length) / notes.length : 0), land ? 3 : 6);
+            if (!land) { text(ctx, play ? "お手本を聴いてね（青く光る鍵盤）" : (ended ? "おしまい！" : "緑に光る鍵盤を押そう"), W / 2, 145, 11, "#ffffff"); }
           } else {
-            hudText(ctx, "🎮 " + song.name, 8, 10, "left");
-            hudText(ctx, combo >= 2 ? combo + " COMBO" : "", W - 8, 10, "right");
-            var t = now();
+            hudText(ctx, "🎮 " + song.name, 8, land ? 8 : 10, "left");
+            hudText(ctx, combo >= 2 ? combo + " COMBO" : "", W - 8, land ? 8 : 10, "right");
+            var t = now(), fall = A - 14;
             for (i = 0; i < rn.length; i++) {
               var n = rn[i];
               if (n.j >= 0 || n.t - t > PIANO_LOOK) { continue; }
-              var y = PIANO_KB_Y - (n.t - t) / PIANO_LOOK * (PIANO_KB_Y - 20), h = Math.max(8, n.d / PIANO_LOOK * (PIANO_KB_Y - 20) * 0.8), r = pianoKeyRect(n.m, base);
-              if (y - h > PIANO_KB_Y) { continue; }
+              var y = A - (n.t - t) / PIANO_LOOK * fall, h = Math.max(land ? 4 : 8, n.d / PIANO_LOOK * fall * 0.8), r = pianoKeyRect(n.m, base);
+              if (y - h > A) { continue; }
               ctx.fillStyle = n.j === -1 ? "rgba(255,118,117,0.5)" : (pianoIsBlack(n.m) ? "#a29bfe" : "#55efc4");
               ctx.fillRect(r.x + 1, y - h, r.w - 2, h);
             }
             ctx.fillStyle = "#ffd166";
-            ctx.fillRect(0, PIANO_KB_Y - 2, W, 2);
-            if (t < PIANO_LEAD) {
-              ctx.fillStyle = "#ffffff";
-              ctx.font = "bold 28px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(String(Math.ceil(PIANO_LEAD - t)), W / 2, 70);
-            }
+            ctx.fillRect(0, A - 2, W, 2);
+            if (t < PIANO_LEAD) { text(ctx, String(Math.ceil(PIANO_LEAD - t)), W / 2, land ? 26 : 70, land ? 18 : 28, "#ffffff"); }
             if (judgeFrames > 0) {
-              ctx.fillStyle = judgeText === "MISS" ? "#ff7675" : (judgeText === "PERFECT" ? "#ffd166" : "#55efc4");
-              ctx.font = "bold " + (16 + Math.max(0, judgeFrames - 24)) + "px sans-serif";
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.fillText(judgeText, W / 2, 120);
+              text(ctx, judgeText, W / 2, land ? 28 : 120, (land ? 12 : 16) + Math.max(0, judgeFrames - 24) * (land ? 0.5 : 1),
+                judgeText === "MISS" ? "#ff7675" : (judgeText === "PERFECT" ? "#ffd166" : "#55efc4"));
             }
           }
           drawKeys(ctx);
@@ -639,6 +789,7 @@
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
     keyAt: pianoKeyAt, keyRect: pianoKeyRect, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
+    backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,
     TAKES_KEY: PIANO_TAKES_KEY, TAKES_MAX: PIANO_TAKES_MAX, BEST_KEY: PIANO_BEST_KEY, PREFS_KEY: PIANO_PREFS_KEY
   };

@@ -571,7 +571,8 @@
     ["poly", "&#x1F39B;&#xFE0F; ポリシンセ", 90, "chord", "off", 0, 55], ["piano", "&#x1F3B9; ピアノ", 0, "chord", "q", 0, 65],
     ["ep", "&#x1F3B9; エレピ", 4, "chord", "half", 0, 60], ["organ", "&#x1FA88; オルガン", 16, "chord", "hold", 0, 50],
     ["brass", "&#x1F3BA; ブラス", 61, "chord", "stab", 0, 60], ["bell", "&#x1F514; ベル", 9, "chord", "arp8", 1, 50],
-    ["mel", "&#x1F3B5; メロディ打ち込み", 73, "notes", "hold", 0, 75], ["synmel", "&#x1F39B;&#xFE0F; シンセメロディ打ち込み", 80, "notes", "hold", 0, 70]
+    ["mel", "&#x1F3B5; メロディ打ち込み", 73, "notes", "hold", 0, 75], ["synmel", "&#x1F39B;&#xFE0F; シンセメロディ打ち込み", 80, "notes", "hold", 0, 70],
+    ["pnotes", "&#x1F3B9; ピアノ打ち込み", 0, "notes", "hold", 0, 70] // §213 v1.21: ゴリラピアノのテイクを送るトラック
   ];
   var UKE_X_PLAYS = [["hold", "伸ばす（小節ごと）"], ["half", "2拍ごと"], ["q", "4分"], ["e", "8分"], ["off", "裏打ち"], ["stab", "キメ（1拍目と2拍目の裏）"],
     ["arp8", "アルペジオ8分（上り）"], ["arp16", "アルペジオ16分（上り）"], ["arpud", "アルペジオ16分（上り下り）"]];
@@ -4084,7 +4085,7 @@
     fingering: ukeFingering, velocity: ukeVelocity, stringOut: ukeStringOut, earBtn: ukeEarBtn, prefs: ukePrefs,
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
     roll: ukeRoll, rollImport: ukeRollImport, rollOp: ukeRollOp, rollHit: ukeRollHit, rollBox: ukeRollBox,
-    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
+    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, seqPlayEvent: ukeSeqPlayEvent, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
     arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
