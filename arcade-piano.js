@@ -152,7 +152,7 @@
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))),
       metro: p.metro !== false,
       base: base >= PIANO_BASE_MIN && base <= PIANO_BASE_MAX && base % 12 === 0 ? base : PIANO_SONG_LOW,
-      pad: !!p.pad, padArp: PIANO_ARPS.indexOf(p.padArp) >= 0 ? p.padArp : "chord", padRate: p.padRate === 16 ? 16 : 8, padHold: p.padHold === "once" ? "once" : "hold",
+      pad: !!p.pad, padArp: PIANO_ARPS.indexOf(p.padArp) >= 0 || (typeof p.padArp === "string" && /^my:\d+$/.test(p.padArp)) ? p.padArp : "chord", padRate: p.padRate === 16 ? 16 : 8, padHold: p.padHold === "once" ? "once" : "hold",
       land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
@@ -261,8 +261,28 @@
   });
   function pianoBest() { var o = lsGet(PIANO_BEST_KEY); return o && typeof o === "object" ? o : {}; }
 
+  // §222: パターンを C の和音（ド ミ ソ）で2回鳴らしてみる
+  function pianoPreview(pt, unit, prog, bpm) {
+    var UG = window.UGMelody, ac = UG && UG.audioInit ? UG.audioInit() : null;
+    if (!ac) { return false; }
+    try { UG.loadSamples([prog]); } catch (e) {}
+    var st = pianoPatSteps([60, 64, 67], pt, unit, false).steps, t0 = ac.currentTime + 0.08, sp = unit * 60 / (bpm || 90), r, i, k;
+    for (r = 0; r < 2; r++) {
+      for (i = 0; i < st.length; i++) {
+        if (!st[i]) { continue; }
+        for (k = 0; k < st[i].length; k++) { try { UG.synth(st[i][k], prog, t0 + (r * st.length + i) * sp, 0.7); } catch (e2) {} }
+      }
+    }
+    return true;
+  }
   function pianoSetup(root, ctl) {
-    var p = pianoPrefs(), note = "";
+    var p = pianoPrefs(), note = "", form = { id: 0, name: "", p: "", unit: 0.5 }, patNote = "";
+    function readForm() {
+      var n = root.querySelector("[data-my='name']"), t = root.querySelector("[data-my='p']"), u = root.querySelector("[data-my='unit']");
+      if (n) { form.name = n.value; }
+      if (t) { form.p = t.value; }
+      if (u) { form.unit = Number(u.value); }
+    }
     function draw() {
       var best = pianoBest(), takes = pianoTakesLoad(), i;
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F3B9; ゴリラピアノ</h3>' +
@@ -307,6 +327,27 @@
             '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
             '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
         }
+        // §222: じぶんの演奏パターン
+        var mine = pianoMyPatsLoad(), ui;
+        html += '<p class="small" style="margin:12px 0 2px;">&#x1F3BC; じぶんの演奏パターン（' + mine.length + ' / ' + PIANO_MYPATS_MAX + '）</p>' +
+          '<p class="small" style="color:#adb5bd;margin:0 0 4px;">文字で書きます: C 和音ぜんぶ / B ベース（1オクターブ下）/ H 右手 / F ベースの5度上 / U いちばん上の音 / 1〜9 下から何番目の音 / - のばす（例: B-H-F-H-）</p>';
+        if (patNote) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + patNote + '</p>'; }
+        for (i = 0; i < mine.length; i++) {
+          var un = "";
+          for (ui = 0; ui < PIANO_UNITS.length; ui++) { if (PIANO_UNITS[ui][0] === mine[i].unit) { un = PIANO_UNITS[ui][1]; } }
+          html += '<div class="piano-take"><span>' + escHtml(mine[i].name) + '<br><span class="small" style="color:#adb5bd;">' + escHtml(mine[i].p) + '・' + un + '</span></span>' +
+            '<button class="modal-btn" data-mytry="' + mine[i].id + '">&#x25B6;&#xFE0F; 試す</button>' +
+            '<button class="modal-btn" data-myedit="' + mine[i].id + '">&#x270F;&#xFE0F;</button>' +
+            '<button class="modal-btn" data-mydel="' + mine[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+        }
+        var uopts = "";
+        for (ui = 0; ui < PIANO_UNITS.length; ui++) { uopts += '<option value="' + PIANO_UNITS[ui][0] + '"' + (Math.abs(form.unit - PIANO_UNITS[ui][0]) < 1e-6 ? " selected" : "") + '>1文字 ＝ ' + PIANO_UNITS[ui][1] + '</option>'; }
+        html += '<div class="piano-myform">' + (form.id ? '<p class="small" style="margin:0;">✏️ なおしています</p>' : "") +
+          '<input type="text" data-my="name" maxlength="16" placeholder="名前（例: ぼくのリズム）" value="' + escHtml(form.name) + '">' +
+          '<input type="text" data-my="p" maxlength="32" placeholder="パターン（例: B-H-F-H-）" value="' + escHtml(form.p) + '" autocapitalize="characters">' +
+          '<select data-my="unit">' + uopts + '</select>' +
+          '<div class="piano-row"><button class="modal-btn" data-mytry="form">&#x25B6;&#xFE0F; C で試す</button><button class="modal-btn" data-mysave="1">&#x1F4BE; ' + (form.id ? "上書き保存" : "保存") + '</button>' +
+          (form.id ? '<button class="modal-btn" data-mynew="1">新しく作る</button>' : "") + '</div></div>';
       } else {
         if (p.mode === "rhythm") {
           html += '<p class="small" style="margin:4px 0 2px;">速さ</p><div class="quiz-opts">';
@@ -336,6 +377,44 @@
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-land"))) { p.land = v === "1"; pianoSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; pianoSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-mytry"))) {
+            readForm();
+            var tp = v === "form" ? { p: form.p, unit: form.unit } : null, ml = pianoMyPatsLoad(), mi;
+            for (mi = 0; mi < ml.length && !tp; mi++) { if (String(ml[mi].id) === v) { tp = ml[mi]; } }
+            if (tp && PIANO_PAT_RE.test(pianoPatText(tp.p))) { pianoPreview(pianoPatText(tp.p), pianoUnitOk(tp.unit), p.prog, p.bpm); patNote = ""; }
+            else { patNote = "&#x26A0;&#xFE0F; 使える文字は C B H F U 1〜9 - だけ（1〜32文字）です"; draw(); }
+            return;
+          }
+          if (el.getAttribute("data-mysave")) {
+            readForm();
+            var lst = pianoMyPatsLoad(), rs = pianoMyPatPut(lst, form);
+            if (rs.ok) { pianoMyPatsSave(lst); form = { id: 0, name: "", p: "", unit: form.unit }; }
+            patNote = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg) + (rs.ok ? "（ゲームの「🎼 鳴らし方」でえらべます）" : "");
+            draw();
+            return;
+          }
+          if ((v = el.getAttribute("data-myedit"))) {
+            var el2 = pianoMyPatsLoad(), ei;
+            for (ei = 0; ei < el2.length; ei++) { if (String(el2[ei].id) === v) { form = { id: el2[ei].id, name: el2[ei].name, p: el2[ei].p, unit: el2[ei].unit }; } }
+            patNote = "";
+            draw();
+            return;
+          }
+          if (el.getAttribute("data-mynew")) { form = { id: 0, name: "", p: "", unit: 0.5 }; patNote = ""; draw(); return; }
+          if ((v = el.getAttribute("data-mydel"))) {
+            var dl = pianoMyPatsLoad(), di;
+            for (di = 0; di < dl.length; di++) {
+              if (String(dl[di].id) !== v) { continue; }
+              if (window.confirm && !window.confirm("「" + dl[di].name + "」を消しますか？")) { return; }
+              dl.splice(di, 1);
+              pianoMyPatsSave(dl);
+              if (form.id === Number(v)) { form = { id: 0, name: "", p: "", unit: 0.5 }; }
+              if (p.padArp === "my:" + v) { p.padArp = "chord"; pianoSavePrefs(p); }
+              break;
+            }
+            draw();
+            return;
+          }
           if ((v = el.getAttribute("data-send"))) {
             var res = pianoSendToSeq(pianoTakeById(pianoTakesLoad(), Number(v)));
             note = (res.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(res.msg);
@@ -392,14 +471,58 @@
     ["shuffle", "シャッフル（3連）", "pat", "C-CC-CC-CC-C", 1 / 3], ["waltz", "ワルツ（3拍子）", "pat", "B-H-H-", 0.5],
     ["alberti", "アルベルティ・バス", "pat", "13231323", 0.5], ["broken", "分散（1-3-2-4）", "pat", "13241324", 0.5],
     ["wave", "16分の波", "pat", "1234543212345432", 0.25], ["tremolo", "トレモロ", "pat", "1414141414141414", 0.25],
-    ["roll", "ロール（ジャラーン）", "pat", "1234", 0.125, { acc: true }]
+    ["roll", "ロール（ジャラーン）", "pat", "1234", 0.125, { acc: true }],
+    // §222 v1.30: さらに14種類（F ＝ ベースの5度上、U ＝ いちばん上の音）
+    ["eightbeat", "8ビート（左右交互）", "pat", "B-HHB-HH", 0.5], ["sixteen", "16ビート", "pat", "C-CC-CC-C-CC-CC-", 0.25],
+    ["charleston", "チャールストン", "pat", "C--C----", 0.5], ["country", "カントリー（ブン・チャ）", "pat", "B-H-F-H-", 0.5],
+    ["gospel", "ゴスペル風", "pat", "C--C-CC-", 0.5], ["bass8", "ベース8分", "pat", "BBBBBBBB", 0.5], ["rootfifth", "ルートと5度", "pat", "B---F---", 0.5],
+    ["halftime", "ハーフタイム", "pat", "C-------H---H---", 0.25], ["six8", "6/8拍子（分散）", "pat", "132313", 1 / 3],
+    ["fifth8", "分散（1-5-8-5）", "pat", "13431343", 0.5], ["arp3", "アルペジオ3連", "pat", "123123123123", 1 / 3],
+    ["trill", "トリル（2-3）", "pat", "2323232323232323", 0.25], ["rolldown", "ロール↓（上から）", "pat", "4321", 0.125, { acc: true }],
+    ["upper", "右手だけ8分（上の音でメロディ）", "pat", "HHUHHHUH", 0.5]
   ];
+  // §222: じぶんの演奏パターン（"my:番号"。localStorage に16個まで）
+  var PIANO_MYPATS_KEY = "ultimateGorillaPianoPatsV1", PIANO_MYPATS_MAX = 16, PIANO_PAT_RE = /^[CBHFU1-9-]{1,32}$/;
+  var PIANO_UNITS = [[0.5, "8分"], [0.25, "16分"], [1 / 3, "3連"], [1, "4分"]];
+  function pianoUnitOk(u) { for (var i = 0; i < PIANO_UNITS.length; i++) { if (Math.abs(Number(u) - PIANO_UNITS[i][0]) < 1e-6) { return PIANO_UNITS[i][0]; } } return 0.5; }
+  function pianoPatText(p) { return String(p || "").toUpperCase().replace(/[\s　]/g, "").replace(/ー|－|―/g, "-"); }
+  function pianoMyPatsLoad() {
+    var a = lsGet(PIANO_MYPATS_KEY), out = [], i;
+    if (!a || !a.length) { return out; }
+    for (i = 0; i < a.length && out.length < PIANO_MYPATS_MAX; i++) {
+      var o = a[i], pt = o ? pianoPatText(o.p) : "";
+      if (o && PIANO_PAT_RE.test(pt)) { out.push({ id: Math.max(1, Math.round(Number(o.id)) || i + 1), name: String(o.name || "パターン").slice(0, 16) || "パターン", p: pt, unit: pianoUnitOk(o.unit) }); }
+    }
+    return out;
+  }
+  function pianoMyPatsSave(list) { return lsSet(PIANO_MYPATS_KEY, list.slice(0, PIANO_MYPATS_MAX)); }
+  // 足す・なおす（pat.id があれば上書き）→ { ok, id, msg }
+  function pianoMyPatPut(list, pat) {
+    var pt = pianoPatText(pat.p), name = String(pat.name || "").trim().slice(0, 16), i, id = 0, at = -1;
+    if (!PIANO_PAT_RE.test(pt)) { return { ok: false, msg: "使える文字は C B H F U 1〜9 - だけ（1〜32文字）です" }; }
+    for (i = 0; i < list.length; i++) { id = Math.max(id, list[i].id); if (pat.id && list[i].id === pat.id) { at = i; } }
+    if (at < 0 && list.length >= PIANO_MYPATS_MAX) { return { ok: false, msg: "じぶんのパターンは " + PIANO_MYPATS_MAX + " 個までです" }; }
+    var item = { id: at >= 0 ? list[at].id : id + 1, name: name || "パターン " + (at >= 0 ? list[at].id : id + 1), p: pt, unit: pianoUnitOk(pat.unit) };
+    if (at >= 0) { list[at] = item; } else { list.push(item); }
+    return { ok: true, id: item.id, msg: "「" + item.name + "」を保存しました" };
+  }
   var PIANO_ARPS = [], PIANO_ARP_NAMES = {};
   (function () { for (var i = 0; i < PIANO_PLAYS.length; i++) { PIANO_ARPS.push(PIANO_PLAYS[i][0]); PIANO_ARP_NAMES[PIANO_PLAYS[i][0]] = PIANO_PLAYS[i][1]; } })();
-  function pianoPlay(id) { for (var i = 0; i < PIANO_PLAYS.length; i++) { if (PIANO_PLAYS[i][0] === id) { return PIANO_PLAYS[i]; } } return PIANO_PLAYS[0]; }
+  function pianoPlay(id) {
+    var i;
+    for (i = 0; i < PIANO_PLAYS.length; i++) { if (PIANO_PLAYS[i][0] === id) { return PIANO_PLAYS[i]; } }
+    if (typeof id === "string" && id.indexOf("my:") === 0) {
+      var my = pianoMyPatsLoad();
+      for (i = 0; i < my.length; i++) { if ("my:" + my[i].id === id) { return [id, my[i].name, "my", my[i].p, my[i].unit]; } }
+    }
+    return PIANO_PLAYS[0];
+  }
+  function pianoPatSteps(notes, pt, unit, acc) {
+    return pianoPlaySteps(notes, null, 8, ["", "", "my", pt, unit, { acc: acc }]);
+  }
   // パッドの音とパターン → { steps: [[MIDI…] か null（のばす）], unit: 1つの長さ（拍）, acc }
-  function pianoPlaySteps(notes, id, rate) {
-    var pl = pianoPlay(id), ns = notes.slice().sort(function (a, b) { return a - b; }), steps = [], i;
+  function pianoPlaySteps(notes, id, rate, plDirect) {
+    var pl = plDirect || pianoPlay(id), ns = notes.slice().sort(function (a, b) { return a - b; }), steps = [], i;
     if (!ns.length || pl[2] === "chord") { return { steps: [ns], unit: 4, acc: false }; }
     if (pl[2] === "arp") {
       var od = pianoArpOrder(ns, id);
@@ -410,6 +533,8 @@
       var ch = pl[3].charAt(i), n;
       if (ch === "C") { steps.push(ns.slice()); }
       else if (ch === "B") { steps.push([Math.max(0, ns[0] - 12)]); }
+      else if (ch === "F") { steps.push([Math.max(0, ns[0] - 5)]); }
+      else if (ch === "U") { steps.push([ns[ns.length - 1]]); }
       else if (ch === "H") { steps.push(ns.length > 1 ? ns.slice(1) : ns.slice()); }
       else if (ch >= "1" && ch <= "9") { n = Number(ch) - 1; steps.push([Math.min(127, ns[n % ns.length] + 12 * Math.floor(n / ns.length))]); }
       else { steps.push(null); }
@@ -848,14 +973,16 @@
             (padView ? '<button class="modal-btn' + (padEdit ? " piano-pad-on" : "") + '" data-pa="padedit">&#x270F;&#xFE0F; 登録 ' + (padEdit ? "ON" : "OFF") + '</button>' : "") + '</div>';
           if (padView && !padEdit) {
             // §221: 鳴らし方は一覧から（和音・アルペジオ・演奏パターン）
-            var kindOf = pianoPlay(prefs.padArp)[2], groups = [["chord", "和音"], ["arp", "アルペジオ"], ["pat", "演奏パターン"]], gi, oi, opts = "";
+            var kindOf = pianoPlay(prefs.padArp)[2], groups = [["chord", "和音"], ["arp", "アルペジオ"], ["pat", "演奏パターン"], ["my", "じぶんのパターン"]], gi, oi, opts = "";
+            var all = PIANO_PLAYS.slice(), mine = pianoMyPatsLoad();
+            for (oi = 0; oi < mine.length; oi++) { all.push(["my:" + mine[oi].id, mine[oi].name, "my"]); }
             for (gi = 0; gi < groups.length; gi++) {
-              opts += '<optgroup label="' + groups[gi][1] + '">';
-              for (oi = 0; oi < PIANO_PLAYS.length; oi++) {
-                if (PIANO_PLAYS[oi][2] !== groups[gi][0]) { continue; }
-                opts += '<option value="' + PIANO_PLAYS[oi][0] + '"' + (prefs.padArp === PIANO_PLAYS[oi][0] ? " selected" : "") + '>' + PIANO_PLAYS[oi][1] + '</option>';
+              var gopts = "";
+              for (oi = 0; oi < all.length; oi++) {
+                if (all[oi][2] !== groups[gi][0]) { continue; }
+                gopts += '<option value="' + all[oi][0] + '"' + (prefs.padArp === all[oi][0] ? " selected" : "") + '>' + escHtml(all[oi][1]) + '</option>';
               }
-              opts += '</optgroup>';
+              if (gopts) { opts += '<optgroup label="' + groups[gi][1] + '">' + gopts + '</optgroup>'; }
             }
             html += '<div class="piano-row"><label class="piano-select">&#x1F3BC; 鳴らし方 <select data-ps="1">' + opts + '</select></label></div><div class="piano-row">' +
               '<button class="modal-btn" data-pa="arprate"' + (kindOf === "arp" ? "" : " disabled") + '>' + (prefs.padRate === 16 ? "16分" : "8分") + '</button>' +
@@ -1142,7 +1269,8 @@
 
   window.UGPiano = {
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
-    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, arpOrder: pianoArpOrder, ARPS: PIANO_ARPS, PLAYS: PIANO_PLAYS, playSteps: pianoPlaySteps, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
+    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, arpOrder: pianoArpOrder, ARPS: PIANO_ARPS, PLAYS: PIANO_PLAYS, playSteps: pianoPlaySteps, patSteps: pianoPatSteps, play: pianoPlay,
+    myPatsLoad: pianoMyPatsLoad, myPatsSave: pianoMyPatsSave, myPatPut: pianoMyPatPut, MYPATS_KEY: PIANO_MYPATS_KEY, MYPATS_MAX: PIANO_MYPATS_MAX, UNITS: PIANO_UNITS, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
     PAD_DEFAULT: PIANO_PAD_DEFAULT, PAD_N: PIANO_PAD_N, PADS_KEY: PIANO_PADS_KEY, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,

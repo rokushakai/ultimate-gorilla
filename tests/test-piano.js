@@ -281,10 +281,32 @@ module.exports = function () {
   ok(P.PLAYS.length >= 20 && j("bunch") === "[[48],null,[64,67],null,[48],null,[64,67],null]" && j("alberti") === "[[60],[67],[64],[67],[60],[67],[64],[67]]" &&
     j("tremolo").indexOf("[60],[72]") === 1 && P.playSteps([60, 64, 67], "waltz").steps.length === 6 && P.playSteps([60, 64, 67], "shuffle").unit === 1 / 3,
     "patterns from letters: B = bass an octave down, H = right hand, 1-9 = n-th note (wrapping an octave up), - = hold", j("bunch"));
-  var badP = P.PLAYS.filter(function (pl) { return pl[2] === "pat" && !(pl[5] && pl[5].acc) && (!/^[CBH1-9-]+$/.test(pl[3]) || !(pl[4] > 0) || Math.abs(pl[3].length * pl[4] - Math.round(pl[3].length * pl[4])) > 1e-9); });
+  var badP = P.PLAYS.filter(function (pl) { return pl[2] === "pat" && !(pl[5] && pl[5].acc) && (!/^[CBHFU1-9-]+$/.test(pl[3]) || !(pl[4] > 0) || Math.abs(pl[3].length * pl[4] - Math.round(pl[3].length * pl[4])) > 1e-9); });
   ok(badP.length === 0, "every pattern uses known letters and fills whole beats", badP.map(function (b) { return b[0]; }));
   var a5 = arpRun({ pad: true, padArp: "bunch", bpm: 120 }, 100, 130);
   ok(a5.seq.slice(0, 4).join() === "48,64+67,48,64+67" && Object.keys(a5.e.window.__piano().press).length === 0, "pad pattern 'ブンチャッ' plays bass and chord in turn (and stops on release)", a5.seq);
   var a6 = arpRun({ pad: true, padArp: "roll", bpm: 120 }, 40, 70);
   ok(a6.seq.join() === "60,60+64,60+64+67,60+64+67+72" && Object.keys(a6.e.window.__piano().press).length === 0, "roll: notes pile up quickly and ring until released", a6.seq);
+  // --- §222: パターン追加・じぶんの演奏パターン ---
+  ok(P.PLAYS.length >= 34 && j("country") === "[[48],null,[64,67],null,[55],null,[64,67],null]" && JSON.stringify(P.patSteps([60, 64, 67], "U-F-", 0.5).steps) === "[[67],null,[55],null]",
+    "30 patterns; F = the bass's fifth, U = the top note", j("country"));
+  var my = [];
+  var r1 = P.myPatPut(my, { name: "ぼくの", p: "b-h ー u-", unit: 0.25 }), r2 = P.myPatPut(my, { name: "", p: "XYZ" }), r3 = P.myPatPut(my, { id: r1.id, name: "なおした", p: "C---", unit: 0.5 });
+  ok(r1.ok && !r2.ok && r3.ok && my.length === 1 && my[0].name === "なおした" && my[0].p === "C---" && my[0].unit === 0.5, "my patterns: letters are tidied (lower case, spaces, ー), bad ones refused, editing keeps the same one", my);
+  for (var k8 = 0; k8 < 20; k8++) { P.myPatPut(my, { p: "C" }); }
+  ok(my.length === P.MYPATS_MAX && !P.myPatPut(my, { p: "C" }).ok, "16 of my patterns at most");
+  var e15 = hooked(), P15 = e15.window.UGPiano, l15 = [];
+  P15.myPatPut(l15, { name: "ぼくのリズム", p: "B-U-", unit: 0.5 });
+  P15.myPatsSave(l15);
+  ok(P15.play("my:1")[1] === "ぼくのリズム" && P15.play("my:9")[0] === "chord" && P15.myPatsLoad()[0].p === "B-U-", "saved patterns are found by id (a missing one falls back to the chord)");
+  e15.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true, padArp: "my:1", bpm: 120 });
+  var seq15 = [], last15 = null;
+  e15.run("piano", { config: { mode: "free" } }, 80, function (f) {
+    if (f === 2) { e15.key("keydown", "1"); }
+    if (f === 70) { e15.key("keyup", "1"); }
+    var h = e15.window.__piano; if (!h) { return; }
+    var pr = h().press, ks = Object.keys(pr), cur = ks.map(function (k) { return pr[k]; }).join("+");
+    if (cur !== last15) { if (cur) { seq15.push(cur); } last15 = cur; }
+  });
+  ok(seq15.join() === "48,67,48", "a pad plays my own pattern (B-U- = bass, top note …)", seq15);
 };
