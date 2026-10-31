@@ -28,3 +28,17 @@
 - 配布元: [sfzinstruments/virtuosity_drums](https://github.com/sfzinstruments/virtuosity_drums)
 - ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
 - 変更点: 「mid」マイクの音から9つ（キックは「kickmic」のマイクの音に mid を少し混ぜた）（キック・スネア・クロススティック・ハイハット（クローズ/オープン）・タム（高）・フロアタム・クラッシュ・ライド）を1つずつ選び、モノラル 22050Hz・16bit に変換し、頭をそろえて短く切ってフェードをつけ、音量をそろえて JavaScript ファイルにまとめた。タム（中）などは近い太鼓の高さを変えて鳴らしている
+
+### ビンテージ・ブラシ: `samples/drums_rusty.js`・`samples/drums_brush.js`
+
+- 音源: **Big Rusty Drums** — Karoryfer Samples
+- 配布元: [sfzinstruments/karoryfer.big-rusty-drums](https://github.com/sfzinstruments/karoryfer.big-rusty-drums)
+- ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
+- 変更点: キック（24"）・スネア（14"）・サイドスティック・ハイハット（クローズ/オープン）・タム（14"/15"/18"）・クラッシュ（17"）・ライド（22"）から1打ずつ（ビンテージはスティック、ブラシはブラシで叩いた音。強さは上から2番目くらい）を選び、近くのマイクと天井のマイクを混ぜてモノラル 22050Hz・16bit にし、頭をそろえて短く切ってフェードをつけ、音量をそろえて JavaScript ファイルにまとめた
+
+### ルーム: `samples/drums_swirly.js`
+
+- 音源: **Swirly Drums** — Karoryfer Samples（サイドスティックだけ Big Rusty Drums）
+- 配布元: [sfzinstruments/karoryfer.swirly-drums](https://github.com/sfzinstruments/karoryfer.swirly-drums)
+- ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
+- 変更点: キック・スネア・ハイハット（クローズ/オープン）・タム3つ・クラッシュ・ライドから1打ずつ選び、乾いた音と部屋の響きの音（wet）を混ぜてモノラル 22050Hz・16bit にし、頭をそろえて短く切ってフェードをつけ、音量をそろえて JavaScript ファイルにまとめた

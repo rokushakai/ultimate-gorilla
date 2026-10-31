@@ -1118,7 +1118,7 @@
       if (!names.length) { return "選んだ音色に🎙はありません（合成音で鳴ります）"; }
       if (loading) { return "🎙 本物の音を読み込み中…（" + ready + "/" + names.length + "）"; }
       if (err) { return "🎙 一部の音を読み込めませんでした（合成音で鳴ります）"; }
-      return "🎙 本物の音 準備OK（" + ready + "音色） ／ FluidR3 GM・CC BY 3.0 ／ ドラム: DRSKit・CC BY 4.0、Virtuosity Drums・CC0";
+      return "🎙 本物の音 準備OK（" + ready + "音色） ／ FluidR3 GM・CC BY 3.0 ／ ドラム: DRSKit・CC BY 4.0、Virtuosity Drums・Big Rusty Drums・Swirly Drums・CC0";
     }
     // 選んだ音色のサンプルを読み込み、終わったら（まだこの画面なら）表示を更新
     function loadSamplesForPrefs() {
@@ -1537,7 +1537,9 @@
     41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12]
   };
   // §230 v1.38: ドラムセット [id, ファイル, 名前]。はじめはロック
-  var MELODY_DRUM_KITS = [["drs", "drums_drs", "ロック（DRSKit）"], ["virtuosity", "drums_virtuosity", "ジャズ（Virtuosity Drums）"]];
+  // §236 v1.44: ビンテージ・ブラシ・ルーム（Karoryfer・CC0）を追加
+  var MELODY_DRUM_KITS = [["drs", "drums_drs", "ロック（DRSKit）"], ["virtuosity", "drums_virtuosity", "ジャズ（Virtuosity Drums）"],
+    ["rusty", "drums_rusty", "ビンテージ（Big Rusty Drums）"], ["brush", "drums_brush", "ブラシ（Big Rusty Drums）"], ["swirly", "drums_swirly", "ルーム（Swirly Drums）"]];
   melodySamples.drumKit = "drs";
   melodySamples.kickRate = 1;
   function melodySetDrumKit(id) {

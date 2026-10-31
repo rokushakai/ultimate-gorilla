@@ -138,14 +138,14 @@ module.exports = function () {
   var used = D.pads.map(function (pd) { return pd[0]; }).concat(D.extra.map(function (x) { return x[0]; })).filter(function (m) { return m !== 39; });
   ok(UG.sampleFiles[UG.DRUM] === "drums_drs" && used.every(function (m) { return !!UG.drumMap[m]; }) && !UG.drumMap[39] && typeof UG.setDrumSamples === "function",
     "every drum (except the clap) has a real drum sample; rock (DRSKit) is the default kit", used.filter(function (m) { return !UG.drumMap[m]; }));
-  ok(UG.drumKits.length === 2 && UG.setDrumKit("virtuosity") && UG.sampleFiles[UG.DRUM] === "drums_virtuosity" && !UG.setDrumKit("nope") && UG.setDrumKit("drs") && UG.sampleFiles[UG.DRUM] === "drums_drs",
+  ok(UG.drumKits.length === 5 && UG.setDrumKit("swirly") && UG.sampleFiles[UG.DRUM] === "drums_swirly" && UG.setDrumKit("virtuosity") && UG.sampleFiles[UG.DRUM] === "drums_virtuosity" && !UG.setDrumKit("nope") && UG.setDrumKit("drs") && UG.sampleFiles[UG.DRUM] === "drums_drs",
     "choosing a kit switches the sample file");
-  [["drums_drs", /CC BY 4\.0/, 10], ["drums_virtuosity", /CC0/, 9]].forEach(function (kf) {
+  [["drums_drs", /CC BY 4\.0/, 10], ["drums_virtuosity", /CC0/, 9], ["drums_rusty", /CC0/, 10], ["drums_brush", /CC0/, 10], ["drums_swirly", /CC0/, 10]].forEach(function (kf) {
     var js = fs.readFileSync(path.join(__dirname, "..", "samples", kf[0] + ".js"), "utf8"), keys = (js.match(/"(\d+)": "/g) || []).map(function (k) { return Number(k.replace(/\D/g, "")); });
     ok(kf[1].test(js) && keys.length === kf[2] && Object.keys(UG.drumMap).every(function (m) { return keys.indexOf(Number(m)) >= 0 || keys.indexOf(UG.drumMap[m][0]) >= 0; }) && js.length < 700 * 1024, kf[0] + ": license noted, every mapped drum has a sound, small file", keys);
   });
   var cr = fs.readFileSync(path.join(__dirname, "..", "CREDITS.md"), "utf8");
-  ok(/Virtuosity Drums/.test(cr) && /DRSKit/.test(cr) && /CC BY 4\.0/.test(cr), "CREDITS.md names both drum sample sets (DRSKit needs attribution)");
+  ok(/Virtuosity Drums/.test(cr) && /Big Rusty Drums/.test(cr) && /Swirly Drums/.test(cr) && /DRSKit/.test(cr) && /CC BY 4\.0/.test(cr), "CREDITS.md names both drum sample sets (DRSKit needs attribution)");
   var pr = JSON.parse(JSON.stringify(D.prefs()));
   ok(pr.kitId === "drs" && pr.deep === false && pr.real === true, "drum game defaults: real drums, rock kit, normal kick", pr);
   // --- §231: 読みこみが止まったらやりなおす ---
@@ -162,8 +162,20 @@ module.exports = function () {
   U9.loadSamples([U9.DRUM]);
   ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
   // --- §233: 演奏パターン ---
-  ok(D.PATPAD_DEFAULT.length === 16 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 6 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
-    "16 pattern pads: grooves loop, fills play one bar");
+  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 11 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
+    "32 pattern pads (2 pages): grooves loop, fills play one bar");
+  // --- §236: 音色とパターンを追加 ---
+  var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
+  ok(jz && jz.some(function (x) { return x[0] === 51 && x[1].length >= 4; }) && jz.some(function (x) { return x[0] === 42; }) && mt && mt[0][1].length === 16 &&
+    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 11,
+    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 11 drum-only loops added");
+  var e18 = hooked();
+  e18.store[D.PATPADS_KEY] = JSON.stringify(D.PATPAD_DEFAULT.slice(0, 16).reverse());
+  e18.store[D.PREFS_KEY] = JSON.stringify({ kitId: "rusty" });
+  var pp18 = e18.window.UGDrum.patPadsLoad(), pr18 = e18.window.UGDrum.prefs();
+  e18.store[D.PREFS_KEY] = JSON.stringify({ kitId: "nope" });
+  ok(pp18[0] === "f:crash" && pp18[16] === "d:metal" && pp18[31] === "f:kime4" && pr18.kitId === "rusty" && e18.window.UGDrum.prefs().kitId === "drs" && D.kits.length === 5,
+    "an old 16-pad save keeps its pads and gets the new second page; new kits can be chosen (unknown → rock)", [pp18[0], pp18[16], pr18.kitId]);
   var my2 = []; D.listAdd(my2, { name: "ぼくの", bpm: 100, steps: D.stepsFrom("funk") }, D.PATS_MAX, D.patClean, "リズム");
   var e10 = hooked(); e10.store[D.PATS_KEY] = JSON.stringify(my2);
   ok(e10.window.UGDrum.patternList().some(function (pt) { return pt.id === "p:1" && pt.name === "ぼくの" && pt.group === "じぶんのリズム"; }), "saved step rhythms can be used as patterns");
