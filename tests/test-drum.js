@@ -191,4 +191,36 @@ module.exports = function () {
   });
   var t11 = JSON.parse(e11.store[D.TAKES_KEY] || "[]")[0];
   ok(t11 && t11.notes.map(function (n) { return n[1]; }).sort().join() === "36,38,49", "pattern hits are recorded too (the ending = kick + snare + crash)", t11 && t11.notes);
+  // --- §234: 強弱・オートフィル・鳴らさないパート・音量・タップテンポ ---
+  ok(D.patVel(42, 0) > D.patVel(42, 2) && D.patVel(42, 2) > D.patVel(42, 1) && D.patVel(38, 3) < D.patVel(38, 4) * 0.5 && D.patVel(38, 15, true) > D.patVel(38, 8, true) &&
+    D.partOf(36) === "kick" && D.partOf(46) === "hh" && D.partOf(45) === "tom" && D.patVol("s") < D.patVol("m") && D.patVol("m") < D.patVol("l"),
+    "pattern dynamics: hi-hat on the beat is louder, snare 16th offbeats are ghost notes, fills get louder");
+  var e12 = hooked();
+  e12.store[D.PREFS_KEY] = JSON.stringify({ autoFill: 5, patVol: "x", mute: ["hh", "nope", "hh", "kick"] });
+  var pr12 = e12.window.UGDrum.prefs();
+  ok(pr12.autoFill === 0 && pr12.patVol === "l" && pr12.mute.join() === "hh,kick", "bad pattern settings are cleaned (auto fill / volume / muted parts)", pr12);
+  // オートフィル 4小節（BPM 120 → 1小節 120フレーム）: 3小節 8ビート → 4小節目にフィル → もどってクラッシュ。ハイハットは鳴らさない・音は少し先に予約
+  var e13 = hooked(), log13 = [], snd = [], fr = 0, autoSeen = false;
+  e13.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, autoFill: 4, mute: ["hh"], patVol: "m" });
+  e13.run("drum", { config: { mode: "free" } }, 620, function (f) {
+    fr = f;
+    var h = e13.window.__drum; if (!h) { return; }
+    if (f === 1) { var U = e13.window.UGMelody, s0 = U.synth; U.synth = function (m, p, when, lv) { snd.push([fr, m, when, lv]); return s0.apply(U, arguments); }; }
+    if (f === 2) { h().patTap(0); }
+    var pr = h().patRun, id = pr ? pr.id : "-";
+    if (pr && pr.auto) { autoSeen = true; }
+    if (log13[log13.length - 1] !== id) { log13.push(id); }
+  });
+  var crashAfter = snd.filter(function (s) { return s[1] === 49 && s[0] > 470 && s[0] < 490; });
+  ok(log13.join() === "-,g:8beat,f:snare,g:8beat" && autoSeen && crashAfter.length === 1, "auto fill plays a fill in the last bar of every 4 bars, then the loop comes back with a crash", [log13, crashAfter]);
+  ok(snd.length > 20 && !snd.some(function (s) { return s[1] === 42 || s[1] === 46; }) && snd.some(function (s) { return s[2] > 1; }) && snd.every(function (s) { return s[3] <= 0.75 * 0.86; }),
+    "muted parts are skipped, pattern hits are scheduled slightly ahead, and the volume setting applies", snd.slice(0, 6));
+  // タップテンポ: 0.5秒ごと（30フレーム）に4回 → BPM 120
+  var e14 = hooked();
+  e14.store[D.PREFS_KEY] = JSON.stringify({ bpm: 80 });
+  e14.run("drum", { config: { mode: "free" } }, 120, function (f) {
+    var h = e14.window.__drum; if (!h) { return; }
+    if (f === 10 || f === 40 || f === 70 || f === 100) { h().act("tap"); }
+  });
+  ok(Math.abs(e14.window.UGDrum.prefs().bpm - 120) <= 1, "tap tempo sets the BPM from the taps", e14.window.UGDrum.prefs().bpm);
 };

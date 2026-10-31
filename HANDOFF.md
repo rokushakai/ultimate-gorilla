@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.41** |
+| 現在バージョン | **v1.42** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.42] 🥁 演奏パターンのブラッシュアップ**（§234）: `patStep()` が `DRUM_PAT_LOOK` 秒先まで `patPlay(k, ahead)` で予約（`hit(m, lv, ahead)` → `UG.synth` の when・`flashAt`）。`patRun.pos` は毎フレーム加算。`drumPatVel`・`DRUM_PARTS`・オートフィル（`patRun.bar`）・`tapTempo()`
 - **[v1.41] 🥁 ドラムの演奏パターン**（§233）: `patRun`（いまのパターン・queue・ret）を `patStep()` で16分ずつ進める（伴奏があれば `backBeat`）。`DRUM_FILLS`・`drumPatternList/Steps`
 - **[v1.40] 🥁 生ドラムの読みこみを調べる表示**（§232）: `?debug=1` でドラムのパネルに `drumDebugText()`。iPhone でジャズが鳴らなかったのは古いファイルが残っていたため（解決）
 - **[v1.39] 🥁 生ドラムの読みこみの立てなおし**（§231）: `melodyLoadSamples` は止まって10秒たった読みこみをやりなおす（`samples.loadAt`）。ドラムは叩くたびに未準備なら読みこむ。※ジャズが鳴らない報告は手元で再現せず（端末・ブラウザ未確認）
@@ -190,7 +191,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（757項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（762項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
