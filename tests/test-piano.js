@@ -41,7 +41,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-piano.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__piano = function () { return { t: now(), rn: rn, counts: counts, ended: ended, pi: pi, miss: miss, rec: rec, play: play, take: take, base: base, notes: notes, back: back, bk: bk, L: L, press: press }; };"); }
+      if (file === "arcade-piano.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__piano = function () { return { t: now(), rn: rn, counts: counts, ended: ended, pi: pi, miss: miss, rec: rec, play: play, take: take, base: base, notes: notes, back: back, bk: bk, L: L, press: press, act: action, pads: pads, padSel: padSel, padEdit: padEdit, padView: padView }; };"); }
       return src;
     } });
   }
@@ -197,4 +197,49 @@ module.exports = function () {
     if (f === 2) { e9.key("keydown", "d"); e9.key("keydown", "g"); e9.key("keydown", "k"); }
   });
   ok(e9.counters.texts.indexOf("C/E") >= 0 && e9.counters.texts.some(function (t) { return t.indexOf("C on E") === 0; }), "holding E-G-C shows C/E and 'C on E' on the screen", e9.counters.texts.slice(-6));
+  // --- §218: パッド（和音を仕込んで1タップで鳴らす） ---
+  var dl = P.PAD_DEFAULT.map(function (pd) { return P.padLabel(pd); });
+  ok(P.PAD_DEFAULT.length === 16 && dl.join() === "C,Dm,Em,F,G,Am,G7,C/E,Fmaj7,Am7,Dm7,E7,C7,Fm,Gsus4,Cadd9" && P.PAD_DEFAULT.every(function (pd) { return pd.every(function (m) { return m >= 60 && m <= 83; }); }),
+    "16 pads start with common chords in C (all on the C4–B5 keyboard)", dl);
+  var pc0 = P.padsClean([[67, 60, 64, 60, "x"], [], null]);
+  ok(pc0.length === 16 && pc0[0].join() === "60,64,67" && pc0[1].length === 0 && pc0[15].length === 0 && P.padsLoad().length === 16, "pads are cleaned (sorted, no repeats) and default to the starter chords");
+  var rp = P.padRects(P.PORT, false), rl = P.padRects(LD, false), re = P.padRects(LD, true);
+  ok(rp.length === 16 && rp.every(function (r) { return r.y >= 14 && r.y + r.h <= P.KB_Y; }) && rp[4].y > rp[0].y && rp[1].x > rp[0].x && rl[8].y > rl[0].y && rl[7].x > rl[6].x && rl[15].y + rl[15].h > LD.kb && re.every(function (r) { return r.y + r.h <= LD.kb; }),
+    "pad layout: 4×4 above the keys / 8×2 filling the landscape screen / 16 in a row while registering sideways");
+  ok(P.padAt(rp[5].x + 5, rp[5].y + 5, rp) === 5 && P.padAt(1, 1, rp) === -1, "a tap finds its pad");
+  // たて: パッドを押すと和音が鳴り、録音にも入る
+  var e11 = hooked(), held11 = null, after11 = null;
+  e11.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true, bpm: 120 });
+  e11.run("piano", { config: { mode: "free" } }, 400, function (f) {
+    var h = e11.window.__piano;
+    if (f === 2) { e11.ptr("down", rp[0].x + rp[0].w / 2, (rp[0].y + rp[0].h / 2) * 320 / P.H, 7); held11 = h().press; held11 = Object.keys(held11).map(function (k) { return held11[k]; }).sort(); }
+    if (f === 4) { e11.ptr("up", 0, 0, 7); after11 = Object.keys(h().press).length; }
+    if (f === 10) { press(e11, "r"); }
+    if (f === 200) { e11.key("keydown", "6"); }
+    if (f === 230) { e11.key("keyup", "6"); }
+    if (f === 260) { press(e11, "r"); }
+  });
+  var t11 = JSON.parse(e11.store.ultimateGorillaPianoTakesV1 || "[]")[0];
+  ok(held11 && held11.join() === "60,64,67" && after11 === 0, "tapping a pad plays its chord (keys light up) and lets go on release", held11);
+  ok(t11 && t11.notes.length === 3 && t11.notes.map(function (n) { return n[2]; }).sort().join() === "69,72,76" && t11.notes[0][0] === t11.notes[2][0], "pads are recorded too (number key 6 = Am, all notes on the same beat)", t11 && t11.notes);
+  // 登録: 鍵盤で音を選んで（もう一度で外す）、パッドをタップ
+  var e12 = hooked(), st12 = null;
+  e12.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true });
+  e12.run("piano", { config: { mode: "free" } }, 30, function (f) {
+    var h = e12.window.__piano;
+    if (f === 1) { h().act("padedit"); }
+    [62, 65, 69, 71, 71].forEach(function (m, n) { if (f === 3 + n * 2) { var c = center(m); e12.ptr("down", c[0], c[1], 8); e12.ptr("up", c[0], c[1], 8); } });
+    if (f === 16) { st12 = h().padSel.slice(); e12.ptr("down", rp[15].x + 4, (rp[15].y + 4) * 320 / P.H, 9); e12.ptr("up", 0, 0, 9); }
+  });
+  var pads12 = JSON.parse(e12.store.ultimateGorillaPianoPadsV1 || "[]");
+  ok(st12 && st12.join() === "62,65,69" && pads12[15] && pads12[15].join() === "62,65,69" && P.padLabel(pads12[15]) === "Dm" && e12.window.__piano().padSel.length === 0,
+    "registering: pick notes on the keyboard (tap again to remove) and tap a pad to store them", [st12, pads12[15]]);
+  // よこ: 演奏中は鍵盤をかくしてパッドが画面いっぱい
+  var e13 = hooked(), g13 = null;
+  e13.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true, land: true });
+  e13.run("piano", { config: { mode: "free" } }, 6, function (f) {
+    if (f === 0) { e13.canvas.getBoundingClientRect = function () { return { left: 0, top: 0, width: 480, height: 240, right: 480 }; }; }
+    if (f === 2) { e13.ptr("down", rl[12].x * 2 + 10, (rl[12].y + rl[12].h / 2) * 2, 3); var p13 = e13.window.__piano().press; g13 = Object.keys(p13).map(function (k) { return p13[k]; }).sort().join(); }
+  });
+  ok(g13 === "60,64,67,70", "landscape: pads fill the screen (pad 13 = C7 where the keys would be)", g13);
 };

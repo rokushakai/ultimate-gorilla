@@ -150,7 +150,7 @@
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))),
       metro: p.metro !== false,
       base: base >= PIANO_BASE_MIN && base <= PIANO_BASE_MAX && base % 12 === 0 ? base : PIANO_SONG_LOW,
-      land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
+      pad: !!p.pad, land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
   function pianoSavePrefs(p) { return lsSet(PIANO_PREFS_KEY, p); }
@@ -357,9 +357,47 @@
     draw();
   }
 
+  // ---------- §218 v1.26: パッド（和音を仕込んでおいて、1タップで鳴らす）----------
+  var PIANO_PADS_KEY = "ultimateGorillaPianoPadsV1", PIANO_PAD_N = 16, PIANO_PAD_MAX_NOTES = 10;
+  // はじめに入っている16個（C のキーでよく使うコード。すべて C4〜B5）
+  var PIANO_PAD_DEFAULT = [[60, 64, 67], [62, 65, 69], [64, 67, 71], [65, 69, 72], [67, 71, 74], [69, 72, 76], [67, 71, 74, 77], [64, 67, 72],
+    [65, 69, 72, 76], [69, 72, 76, 79], [62, 65, 69, 72], [64, 68, 71, 74], [60, 64, 67, 70], [65, 68, 72], [67, 72, 74], [60, 64, 67, 74]];
+  function pianoPadsClean(a) {
+    var out = [], i, j;
+    for (i = 0; i < PIANO_PAD_N; i++) {
+      var src = a && a[i] && a[i].length ? a[i] : [], pad = [];
+      for (j = 0; j < src.length && pad.length < PIANO_PAD_MAX_NOTES; j++) {
+        var m = Math.round(Number(src[j]));
+        if (isFinite(m) && m >= 0 && m <= 127 && pad.indexOf(m) < 0) { pad.push(m); }
+      }
+      out.push(pad.sort(function (x, y) { return x - y; }));
+    }
+    return out;
+  }
+  function pianoPadsLoad() { var a = lsGet(PIANO_PADS_KEY); return pianoPadsClean(a && a.length ? a : PIANO_PAD_DEFAULT); }
+  function pianoPadsSave(p) { return lsSet(PIANO_PADS_KEY, p); }
+  // パッドの位置。たて: 鍵盤の上に 4×4 / よこ: 演奏は画面いっぱいに 8×2、登録中は鍵盤の上に 16×1
+  function pianoPadRects(L, edit) {
+    var out = [], i, cols = !L.land ? 4 : (edit ? 16 : 8), rows = PIANO_PAD_N / cols;
+    var top = L.land ? 14 : 18, bottom = L.land && !edit ? L.h - 2 : L.kb - 3, cw = (W - 4) / cols, rh = (bottom - top) / rows;
+    for (i = 0; i < PIANO_PAD_N; i++) { out.push({ x: 2 + (i % cols) * cw + 1, y: top + Math.floor(i / cols) * rh + 1, w: cw - 2, h: rh - 2 }); }
+    return out;
+  }
+  function pianoPadAt(x, y, rects) {
+    for (var i = 0; i < rects.length; i++) { var r = rects[i]; if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } }
+    return -1;
+  }
+  // パッドに出す名前（コード名。名前がなければ音名）
+  function pianoPadLabel(notes) {
+    if (!notes || !notes.length) { return ""; }
+    var d = pianoChord(notes, 0);
+    return d ? d.name || d.interval : notes.map(function (m) { return pianoName(m, "do"); }).join("");
+  }
+
   // PC のキー → 鍵盤（左の C から 0, 1, 2…）
   var PIANO_KEYS = { a: "k0", w: "k1", s: "k2", e: "k3", d: "k4", f: "k5", t: "k6", g: "k7", y: "k8", h: "k9", u: "k10", j: "k11", k: "k12", o: "k13", l: "k14",
-    z: "octdown", x: "octup", r: "rec", v: "play" };
+    z: "octdown", x: "octup", r: "rec", v: "play",
+    "1": "p0", "2": "p1", "3": "p2", "4": "p3", "5": "p4", "6": "p5", "7": "p6", "8": "p7", "9": "p8", "0": "p9" };
 
   I.register({
     id: "piano",
@@ -424,6 +462,43 @@
       var take = cfg.take ? pianoTakeById(takes, cfg.take) : null, rec = null, play = null;
       // §213: 伴奏（シーケンサーの曲）。bk ＝ 鳴らしているあいだの状態
       var back = mode === "free" && cfg.backing ? pianoBacking(cfg.backing) : null, bk = null;
+      // §218: パッド（padHeld: 指・キー → 押しているパッド、padSel: 登録中に選んだ音）
+      var padView = mode === "free" && prefs.pad, pads = mode === "free" ? pianoPadsLoad() : [], padEdit = false, padDel = false, padSel = [], padHeld = {}, padFlash = {};
+      function padRectsNow() { return pianoPadRects(L, padEdit); }
+      function keysHidden() { return padView && L.land && !padEdit; }
+      function numSort(a, b) { return a - b; }
+      function padPress(id, i) {
+        if (!(i >= 0 && i < PIANO_PAD_N)) { return; }
+        padFlash[i] = 12;
+        if (padEdit) {
+          if (padDel) { pads[i] = []; padDel = false; pianoPadsSave(pads); msg = "パッド " + (i + 1) + " を空にしました"; }
+          else if (padSel.length) {
+            pads[i] = padSel.slice().sort(numSort);
+            pianoPadsSave(pads);
+            msg = "パッド " + (i + 1) + " に「" + escHtml(pianoPadLabel(pads[i])) + "」を登録しました";
+            padSel = [];
+          } else if (pads[i].length) { padSel = pads[i].slice(); msg = "パッド " + (i + 1) + " の音を選びました。鍵盤で直して、パッドをタップすると登録"; }
+          render();
+          return;
+        }
+        if (!pads[i].length) { return; }
+        padRelease(id);
+        padHeld[id] = i;
+        for (var k = 0; k < pads[i].length; k++) { noteOn(id + ":" + k, pads[i][k]); }
+      }
+      function padRelease(id) {
+        var i = padHeld[id];
+        if (i === undefined) { return; }
+        delete padHeld[id];
+        for (var k = 0; k < pads[i].length; k++) { noteOff(id + ":" + k); }
+      }
+      // 登録中: 鍵盤をタップすると音を選ぶ（もう一度で外す）
+      function selToggle(m) {
+        if (!padView || !padEdit || m < 0) { return; }
+        var at = padSel.indexOf(m);
+        if (at >= 0) { padSel.splice(at, 1); } else if (padSel.length < PIANO_PAD_MAX_NOTES) { padSel.push(m); padSel.sort(numSort); }
+        render();
+      }
       if (back) { bpm = back.seq.bpm; meter = back.seq.meter; }
       if (take) { msg = "「" + escHtml(take.name) + "」をひらきました。▶ 再生で聴けます"; }
       else if (back) { msg = "&#x1F3B8; 伴奏に合わせて弾こう。「🔴 合わせて録音」で録れます"; }
@@ -641,6 +716,14 @@
         else if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
         else if (v === "back") { backToggle(); }
         else if (v === "land") { setLand(!L.land); }
+        else if (v === "pad") { allOff(); padView = !padView; padEdit = false; padDel = false; padSel = []; prefs.pad = padView; pianoSavePrefs(prefs); msg = ""; render(); }
+        else if (v === "padedit") { allOff(); padEdit = !padEdit; padDel = false; padSel = []; msg = ""; render(); }
+        else if (v === "paddel") { padDel = !padDel; render(); }
+        else if (v === "padclear") { padSel = []; render(); }
+        else if (v === "padreset") {
+          if (window.confirm && !window.confirm("パッドを はじめのコードにもどしますか？")) { return; }
+          pads = pianoPadsClean(PIANO_PAD_DEFAULT); pianoPadsSave(pads); msg = "パッドを はじめのコードにもどしました"; render();
+        }
         else if (v === "restart" && mode === "practice") { playStop(); pi = 0; missHere = false; render(); }
         else if (v === "metro") { metro = !metro; prefs.metro = metro; pianoSavePrefs(prefs); render(); }
         else if (v === "bpmdown" || v === "bpmup") {
@@ -666,6 +749,14 @@
           } else {
             html += '<div class="piano-row"><button class="modal-btn" data-pa="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-pa="bpmup">&#xFF0B;</button>' +
               '<button class="modal-btn" data-pa="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+          }
+          html += '<div class="piano-row"><button class="modal-btn' + (padView ? " piano-pad-on" : "") + '" data-pa="pad">' + (padView ? "&#x1F3B9; 鍵盤だけにする" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
+            (padView ? '<button class="modal-btn' + (padEdit ? " piano-pad-on" : "") + '" data-pa="padedit">&#x270F;&#xFE0F; 登録 ' + (padEdit ? "ON" : "OFF") + '</button>' : "") + '</div>';
+          if (padView && padEdit) {
+            html += '<div class="piano-row"><button class="modal-btn' + (padDel ? " piano-rec-on" : "") + '" data-pa="paddel">&#x1F5D1;&#xFE0F; ' + (padDel ? "消すパッドをタップ" : "パッドを空にする") + '</button>' +
+              '<button class="modal-btn" data-pa="padclear">選んだ音をはずす</button><button class="modal-btn" data-pa="padreset">&#x21BA; はじめのコード</button></div>' +
+              '<p class="small" style="margin:4px 0 0;">鍵盤をタップして音を選び（もう一度で外す）、パッドをタップして登録。選んだ音: ' +
+              (padSel.length ? padSel.map(function (m) { return pianoName(m, "cde"); }).join(" ") + (pianoPadLabel(padSel) ? "（" + escHtml(pianoPadLabel(padSel)) + "）" : "") : "まだありません") + '</p>';
           }
           html += landBtn;
           if (take && !rec) { html += '<p class="small" style="margin:4px 0 0;">いまのテイク: ' + escHtml(take.name) + '（' + take.notes.length + '音・BPM ' + take.bpm + '）</p>'; }
@@ -693,6 +784,7 @@
           for (i = 0; i < play.notes.length; i++) { var n = play.notes[i]; if (n[0] <= pb && pb < n[0] + Math.max(0.25, n[1])) { out[n[2]] = "play"; } }
         }
         if (mode === "practice" && !play && pi < notes.length && !ended) { out[notes[pi][2]] = "next"; }
+        if (padView && padEdit) { for (i = 0; i < padSel.length; i++) { out[padSel[i]] = "next"; } }
         for (k in press) { if (press.hasOwnProperty(k)) { out[press[k]] = "press"; } }
         return out;
       }
@@ -736,6 +828,27 @@
         lines.push(cur);
         return lines;
       }
+      function drawPads(ctx) {
+        var rs = padRectsNow(), on = {}, i, k;
+        for (k in padHeld) { if (padHeld.hasOwnProperty(k)) { on[padHeld[k]] = true; } }
+        if (keysHidden()) { ctx.fillStyle = "#1b1f3b"; ctx.fillRect(0, L.kb, W, L.h - L.kb); }
+        for (i = 0; i < rs.length; i++) {
+          var r = rs[i], has = pads[i].length > 0, hot = on[i] || padFlash[i] > 0;
+          ctx.fillStyle = hot ? "#ffd166" : (has ? (padEdit ? "#2f4a6e" : "#4c3a8f") : "#262a45");
+          ctx.fillRect(r.x, r.y, r.w, r.h);
+          ctx.strokeStyle = padEdit ? (padDel ? "#ff7675" : "#55efc4") : "#7d6bd6";
+          ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+          if (r.w > 20) {
+            ctx.fillStyle = hot ? "#14213d" : "rgba(255,255,255,0.45)";
+            ctx.font = "7px sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            ctx.fillText(String(i + 1), r.x + 2, r.y + 1);
+          }
+          var lb = pianoPadLabel(pads[i]) || (padEdit ? "＋" : "");
+          if (lb) { fitText(ctx, lb, r.x + r.w / 2, r.y + r.h / 2 + (r.h > 20 ? 2 : 0), Math.max(6, Math.min(12, Math.floor(r.h * 0.42))), hot ? "#14213d" : "#ffffff", r.w - 3); }
+        }
+      }
       // 幅に入りきらなければ小さくする（measureText がなければそのまま）
       function fitText(ctx, s, x, y, size, color, maxW) {
         ctx.font = "bold " + size + "px sans-serif";
@@ -755,23 +868,34 @@
         input: function (a, down) {
           if (a.charAt(0) === "k") {
             var id = "key" + a.substring(1);
-            if (down) { noteOn(id, base + Number(a.substring(1))); } else { noteOff(id); }
+            if (down) { selToggle(base + Number(a.substring(1))); noteOn(id, base + Number(a.substring(1))); } else { noteOff(id); }
+            return;
+          }
+          if (/^p\d+$/.test(a) && mode === "free") {
+            if (down) { padPress("kp" + a.substring(1), Number(a.substring(1))); } else { padRelease("kp" + a.substring(1)); }
             return;
           }
           if (down && !ended) { action(a); }
         },
         pointer: function (type, x, y, id) {
-          if (type === "down") { noteOn(id, pianoKeyAt(x, y, base, L)); }
+          if (type === "down") {
+            // §218: パッドの場所ならパッド、鍵盤なら鍵盤（登録中は音を選ぶ）
+            if (padView && (y < L.kb || keysHidden())) { padPress(id, pianoPadAt(x, y, padRectsNow())); return; }
+            var km = pianoKeyAt(x, y, base, L);
+            selToggle(km);
+            noteOn(id, km);
+          }
           else if (type === "move") {
-            if (press[id] === undefined) { return; }
+            if (press[id] === undefined || padHeld[id] !== undefined) { return; }
             var m = pianoKeyAt(x, y, base, L);
             if (m >= 0 && m !== press[id]) { noteOn(id, m); }
-          } else { noteOff(id); }
+          } else { padRelease(id); noteOff(id); }
         },
         step: function () {
           frame++;
           if (shake > 0) { shake--; }
           if (judgeFrames > 0) { judgeFrames--; }
+          for (var pf in padFlash) { if (padFlash.hasOwnProperty(pf) && padFlash[pf] > 0) { padFlash[pf]--; } }
           if (bk) { backStep(); }
           if (play) {
             var pb = playBeat(), last = 0, i;
@@ -796,7 +920,15 @@
           if (mode === "free") {
             hudText(ctx, "🎹 " + pianoName(base, "cde") + "〜" + pianoName(base + 23, "cde"), 8, land ? 8 : 10, "left");
             hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, land ? 8 : 10, "right");
-            if (rec) {
+            if (padView) {
+              // §218: 上のまん中に、録音・登録・いま鳴っているコード
+              var ph = pianoHeld(press), pc2 = pianoChord(ph, 0), hl = "";
+              if (padEdit) { hl = padDel ? "🗑 消すパッドをタップ" : "✏️ " + (padSel.length ? (pianoPadLabel(padSel) || "") + " " + padSel.map(function (m) { return pianoName(m, "do"); }).join("") : "鍵盤で音をえらぶ"); }
+              else if (rec) { var rb2 = recBeat(); hl = rb2 < 0 ? "● " + Math.ceil(-rb2) : "● REC " + (Math.floor(rb2 / meter) + 1) + "小節・" + rec.notes.length + "音"; }
+              else if (pc2) { hl = pc2.name || pc2.interval; }
+              if (hl) { fitText(ctx, hl, W / 2, land ? 8 : 10, 10, rec && !padEdit ? "#ff6b6b" : "#ffffff", 104); }
+              drawPads(ctx);
+            } else if (rec) {
               var rb = recBeat();
               text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC", W / 2, land ? 24 : 60, land ? 14 : 20, "#ff6b6b");
               text(ctx, rb < 0 ? "カウントのあとに弾いてね" : (Math.floor(rb / meter) + 1) + "小節目・" + rec.notes.length + "音", W / 2, land ? 38 : 90, land ? 9 : 12, "#ffffff");
@@ -870,7 +1002,7 @@
                 judgeText === "MISS" ? "#ff7675" : (judgeText === "PERFECT" ? "#ffd166" : "#55efc4"));
             }
           }
-          drawKeys(ctx);
+          if (!keysHidden()) { drawKeys(ctx); }
         }
       };
     }
@@ -878,7 +1010,8 @@
 
   window.UGPiano = {
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
-    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
+    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
+    PAD_DEFAULT: PIANO_PAD_DEFAULT, PAD_N: PIANO_PAD_N, PADS_KEY: PIANO_PADS_KEY, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,
