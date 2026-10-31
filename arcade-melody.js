@@ -496,10 +496,11 @@
   var MELODY_SAMPLE_FILES = {
     0: "acoustic_grand_piano", 4: "electric_piano_1", 8: "celesta", 11: "vibraphone", 12: "marimba",
     24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "violin", 46: "orchestral_harp",
-    48: "string_ensemble_1", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto"
+    48: "string_ensemble_1", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto",
+    128: "drums_virtuosity" // §229 v1.37: 生ドラム（Virtuosity Drums, CC0）。MIDI ごとの音（近い太鼓は高さを変えて使う）
   };
   // 鳴らす長さ（秒）: 減衰する楽器は長め、持続する楽器は短く切ってフェード
-  var MELODY_SAMPLE_HOLD = { 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
+  var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 6;
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {} };
@@ -1519,7 +1520,31 @@
     76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2]
   };
   // dest（省略可・§177 v0.96）: 出口の GainNode。指定すると level の GainNode をそこへつなぐ
+  // §229 v1.37: 生ドラムのサンプル。[使う音, 再生の速さ（高さ）]。ないものは合成音
+  var MELODY_DRUM_MAP = {
+    35: [36, 0.94], 36: [36, 1], 37: [37, 1], 38: [38, 1], 40: [38, 1.06], 42: [42, 1], 44: [42, 0.94], 46: [46, 1],
+    41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12]
+  };
+  var melodyOpenHat = null; // 鳴っているオープンハイハット（クローズ・ペダルで止める）
+  function melodyDrumSample(ac, m, t, level, dest) {
+    var mp = MELODY_DRUM_MAP[m], bank = melodySamples.buffers.drums_virtuosity;
+    if (!mp || melodySamples.drumOff || !melodySamples.enabled || !bank || !bank[mp[0]]) { return false; }
+    var src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = bank[mp[0]];
+    src.playbackRate.value = mp[1];
+    g.gain.value = 1.4;
+    src.connect(g);
+    g.connect(dest ? (function () { var o = ac.createGain(); o.gain.value = (level > 0 && level < 1) ? level : 1; o.connect(dest); return o; })() : melodyLevelOut(ac, level));
+    if ((m === 42 || m === 44) && melodyOpenHat) {
+      try { melodyOpenHat.g.gain.setTargetAtTime(0.0001, t, 0.02); melodyOpenHat.src.stop(t + 0.15); } catch (e) {}
+      melodyOpenHat = null;
+    }
+    if (m === 46) { melodyOpenHat = { src: src, g: g }; }
+    src.start(t);
+    return true;
+  }
   function melodyDrum(ac, m, t, level, dest) {
+    if (melodyDrumSample(ac, m, t, level, dest)) { return; }
     var env = ac.createGain(), out;
     if (dest) { out = ac.createGain(); out.gain.value = (level > 0 && level < 1) ? level : 1; out.connect(dest); }
     else { out = melodyLevelOut(ac, level); }
@@ -1960,7 +1985,7 @@
     buildLayout: melodyBuildLayout, scale: melodyScale, scales: MELODY_SCALES, posDegree: melodyPosDegree, degreeToMidi: melodyDegreeToMidi,
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
     synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
-    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
+    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,

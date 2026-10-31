@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.36** |
+| 現在バージョン | **v1.37** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.37] 🥁 生ドラムの音**（§229）: `samples/drums_virtuosity.js`（CC0）。`melodyDrum` が `melodyDrumSample`（`MELODY_DRUM_MAP`）を先に試す。読みこみは `loadSamples([UGMelody.DRUM])`（ドラムゲームの audio()・シーケンサー再生）。作りなおすときは sfzinstruments/virtuosity_drums の Samples/mid の FLAC を WebAudio で 22050Hz モノラル WAV に
 - **[v1.36] 🥁 ドラムセットの形**（§228）: `DRUM_KIT`（200×110 の中の楕円）→ `drumKitBox`・`drumKitAt`。よこ向きは `drumLandH`＋`api.setLandscape`
 - **[v1.35] 🥁 ドラムとシーケンサーの統合**（§227）: `drumBacking()`（ピアノと同じ作り）・`drumBackEventOn()`（曲のドラムを鳴らすか）・`drumSendSteps()` / `drumStepsFromSeq()`（`seq.tracks.drum` の groove "custom" と custom）
 - **[v1.34] 🥁 ゴリラドラム**（§226）: `arcade-drum.js`（index.html では arcade-piano.js の次）。localStorage `ultimateGorillaDrumPrefsV1`・`ultimateGorillaDrumTakesV1`・`ultimateGorillaDrumPatsV1`・`ultimateGorillaDrumBestV1`。ステップは [[MIDI, [マス]]]（マイリズムと同じ。`toSeqCustom` で送れる形に）、録音は [拍, MIDI, 強さ]。**次（v1.35）はシーケンサー統合**: 伴奏で叩く（ピアノの `pianoBacking` と同じやり方）・ステップを `seq.tracks.drum.custom` ＋ groove "custom" へ
@@ -185,7 +186,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（745項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（748項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

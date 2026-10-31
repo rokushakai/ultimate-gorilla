@@ -159,7 +159,8 @@
       speed: DRUM_SPEEDS.indexOf(Number(p.speed)) >= 0 ? Number(p.speed) : 100,
       steps: p.steps ? drumStepsClean(p.steps) : drumStepsFrom("8beat"),
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backDrum: !!p.backDrum,
-      kit: !!p.kit, land: !!p.land // §228: ドラムセットの形・よこ向き（じゆう）
+      kit: !!p.kit, land: !!p.land, // §228: ドラムセットの形・よこ向き（じゆう）
+      real: p.real !== false // §229: 音色（true ＝ 生ドラムのサンプル / false ＝ 電子音（合成））
     };
   }
   function drumSavePrefs(p) { return lsSet(DRUM_PREFS_KEY, p); }
@@ -272,7 +273,9 @@
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F941; ゴリラドラム</h3>' +
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">パッドを叩こう（同時押しもOK）。パソコンは Q W E R / A S D F（Space もキック）。</p><div class="quiz-opts">', i;
       for (i = 0; i < DRUM_MODES.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.mode === DRUM_MODES[i][0] ? " active" : "") + '" data-mode="' + DRUM_MODES[i][0] + '">' + DRUM_MODES[i][1] + '</button>'; }
-      html += '</div>';
+      html += '</div><p class="small" style="margin:4px 0 2px;">音色</p><div class="quiz-opts">' +
+        '<button class="modal-btn quiz-opt' + (p.real ? " active" : "") + '" data-real="1">&#x1F941; 生ドラム</button>' +
+        '<button class="modal-btn quiz-opt' + (!p.real ? " active" : "") + '" data-real="0">&#x1F39B;&#xFE0F; 電子ドラム</button></div>';
       if (p.mode === "free") {
         var takes = drumTakesLoad(), bl = drumBackList();
         if (bl.length) {
@@ -322,6 +325,7 @@
           if ((v = el.getAttribute("data-mode"))) { p.mode = v; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; drumSavePrefs(p); draw(); return; }
           if (el.getAttribute("data-backdrum")) { p.backDrum = !p.backDrum; drumSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-real"))) { p.real = v === "1"; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-level"))) { p.level = v; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
@@ -382,7 +386,17 @@
 
       // --- 音 ---
       var UG = window.UGMelody, audioOk = false;
-      function audio() { if (audioOk || !UG || !UG.audioInit) { return; } try { if (UG.audioInit()) { audioOk = true; } } catch (e) {} }
+      // §229: 生ドラムのサンプルを読みこむ（読みこむまでは合成音）
+      function audio() {
+        if (audioOk || !UG || !UG.audioInit) { return; }
+        try {
+          if (UG.audioInit()) {
+            audioOk = true;
+            if (UG.setDrumSamples) { UG.setDrumSamples(prefs.real); }
+            if (prefs.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); }
+          }
+        } catch (e) {}
+      }
       function hitSound(m, lv) { audio(); if (audioOk) { try { UG.synth(m, UG.DRUM, 0, lv || 0.9); } catch (e) {} } }
       function click(accent) { if (audioOk) { try { UG.synth(accent ? 76 : 77, UG.DRUM, 0, accent ? 0.7 : 0.5); } catch (e) {} } }
 

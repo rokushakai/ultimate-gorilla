@@ -1290,6 +1290,7 @@
     var progs = [UKE_PROG];
     var tids = ukeTrackIds(sched.tracks);
     for (var ti = 0; ti < tids.length; ti++) { var tt = sched.tracks[tids[ti]]; if (tt.on && tt.prog !== undefined) { progs.push(tt.prog); } }
+    if (sched.tracks.drum && sched.tracks.drum.on && UG.DRUM !== undefined) { progs.push(UG.DRUM); } // §229: 生ドラム
     try { UG.loadSamples(progs); } catch (e3) {}
     pl.timer = setInterval(function () {
       var now = ac.currentTime - pl.startAt, ev;
