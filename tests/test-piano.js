@@ -242,4 +242,38 @@ module.exports = function () {
     if (f === 2) { e13.ptr("down", rl[12].x * 2 + 10, (rl[12].y + rl[12].h / 2) * 2, 3); var p13 = e13.window.__piano().press; g13 = Object.keys(p13).map(function (k) { return p13[k]; }).sort().join(); }
   });
   ok(g13 === "60,64,67,70", "landscape: pads fill the screen (pad 13 = C7 where the keys would be)", g13);
+  // --- §220: パッドのアルペジオ ---
+  ok(P.arpOrder([67, 60, 64], "up").join() === "60,64,67" && P.arpOrder([60, 64, 67], "down").join() === "67,64,60" && P.arpOrder([60, 64, 67], "updown").join() === "60,64,67,64" && P.arpOrder([60, 64], "updown").join() === "60,64",
+    "arpeggio order: up / down / up-down (no repeated ends)");
+  function arpRun(prefs, holdFrames, total) {
+    var e = hooked(), seq = [], last = null;
+    e.store.ultimateGorillaPianoPrefsV1 = JSON.stringify(prefs);
+    e.run("piano", { config: { mode: "free" } }, total, function (f) {
+      if (f === 2) { e.key("keydown", "1"); }
+      if (f === 2 + holdFrames) { e.key("keyup", "1"); }
+      var h = e.window.__piano; if (!h) { return; }
+      var pr = h().press, ks = Object.keys(pr), cur = ks.length ? ks.map(function (k) { return pr[k]; }).join("+") : "";
+      if (cur !== last) { if (cur) { seq.push(cur); } last = cur; }
+    });
+    return { seq: seq, e: e };
+  }
+  // BPM 120・8分 ＝ 0.25秒（15フレーム）ごと。押しているあいだくりかえす
+  var a1 = arpRun({ pad: true, padArp: "up", padRate: 8, bpm: 120 }, 70, 120);
+  ok(a1.seq.join() === "60,64,67,60,64" && Object.keys(a1.e.window.__piano().press).length === 0, "pad arpeggio (up, 8ths) repeats while held and stops on release", a1.seq);
+  var a2 = arpRun({ pad: true, padArp: "updown", padRate: 16, bpm: 120 }, 40, 80);
+  ok(a2.seq.slice(0, 6).join() === "60,64,67,64,60,64", "up-down in 16ths (twice as fast)", a2.seq);
+  // 1回だけ: 押しっぱなしでも3音で止まる / すぐはなしても最後まで
+  var a3 = arpRun({ pad: true, padArp: "down", padHold: "once", bpm: 120 }, 100, 140), a4 = arpRun({ pad: true, padArp: "up", padHold: "once", bpm: 120 }, 3, 80);
+  ok(a3.seq.join() === "67,64,60" && a4.seq.join() === "60,64,67", "once: plays the pattern one time (even if released early)", [a3.seq, a4.seq]);
+  // 録音: アルペジオの音が1音ずつ、半拍ずつずれて入る
+  var e14 = hooked();
+  e14.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true, padArp: "up", padRate: 8, padHold: "once", bpm: 120 });
+  e14.run("piano", { config: { mode: "free" } }, 300, function (f) {
+    if (f === 2) { press(e14, "r"); }
+    if (f === 140) { press(e14, "1"); }
+    if (f === 220) { press(e14, "r"); }
+  });
+  var n14 = JSON.parse(e14.store.ultimateGorillaPianoTakesV1 || "[]")[0].notes;
+  ok(n14.length === 3 && n14.map(function (n) { return n[2]; }).join() === "60,64,67" && Math.abs(n14[1][0] - n14[0][0] - 0.5) < 0.02 && Math.abs(n14[0][1] - 0.5) < 0.02,
+    "arpeggios are recorded note by note (8ths = half a beat apart)", n14);
 };

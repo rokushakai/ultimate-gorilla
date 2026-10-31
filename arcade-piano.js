@@ -152,7 +152,8 @@
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))),
       metro: p.metro !== false,
       base: base >= PIANO_BASE_MIN && base <= PIANO_BASE_MAX && base % 12 === 0 ? base : PIANO_SONG_LOW,
-      pad: !!p.pad, land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
+      pad: !!p.pad, padArp: PIANO_ARPS.indexOf(p.padArp) >= 0 ? p.padArp : "chord", padRate: p.padRate === 16 ? 16 : 8, padHold: p.padHold === "once" ? "once" : "hold",
+      land: !!p.land, backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
   function pianoSavePrefs(p) { return lsSet(PIANO_PREFS_KEY, p); }
@@ -376,6 +377,16 @@
     }
     return out;
   }
+  // §220 v1.28: パッドのアルペジオ（chord ＝ 同時に鳴らす）
+  var PIANO_ARPS = ["chord", "up", "down", "updown"];
+  var PIANO_ARP_NAMES = { chord: "&#x1F3B9; 和音", up: "アルペジオ↑", down: "アルペジオ↓", updown: "アルペジオ↑↓" };
+  // 鳴らす順（上り下りは両はしをくりかえさない: ド ミ ソ → ド ミ ソ ミ）
+  function pianoArpOrder(notes, style) {
+    var up = notes.slice().sort(function (a, b) { return a - b; }), i;
+    if (style === "down") { return up.reverse(); }
+    if (style === "updown") { for (i = up.length - 2; i >= 1; i--) { up.push(up[i]); } }
+    return up;
+  }
   function pianoPadsLoad() { var a = lsGet(PIANO_PADS_KEY); return pianoPadsClean(a && a.length ? a : PIANO_PAD_DEFAULT); }
   function pianoPadsSave(p) { return lsSet(PIANO_PADS_KEY, p); }
   // パッドの位置。たて: 鍵盤の上に 4×4 / よこ: 8×2（演奏は画面いっぱい、登録中は鍵盤の上。§219）
@@ -488,13 +499,37 @@
         if (!pads[i].length) { return; }
         padRelease(id);
         padHeld[id] = i;
+        if (prefs.padArp !== "chord") {
+          // §220: アルペジオ（1音目はすぐ。あとは step で BPM に合わせて）
+          arps[id] = { pad: i, order: pianoArpOrder(pads[i], prefs.padArp), idx: 0, next: now(), once: prefs.padHold === "once", released: false };
+          arpTick(id);
+          return;
+        }
         for (var k = 0; k < pads[i].length; k++) { noteOn(id + ":" + k, pads[i][k]); }
       }
       function padRelease(id) {
         var i = padHeld[id];
+        if (arps[id]) {
+          // 1回モードは、はなしても最後まで鳴らす
+          if (arps[id].once) { arps[id].released = true; } else { noteOff(id + ":a"); delete arps[id]; }
+        }
         if (i === undefined) { return; }
         delete padHeld[id];
         for (var k = 0; k < pads[i].length; k++) { noteOff(id + ":" + k); }
+      }
+      // アルペジオ: 1音ずつ（前の音をはなしてから次）。録音にも1音ずつ入る
+      var arps = {};
+      function arpStep() { return 60 / bpm / (prefs.padRate === 16 ? 4 : 2); }
+      function arpTick(id) {
+        var a = arps[id];
+        noteOff(id + ":a");
+        if (a.idx >= a.order.length) {
+          if (a.once) { delete arps[id]; return; }
+          a.idx = 0;
+        }
+        noteOn(id + ":a", a.order[a.idx]);
+        a.idx++;
+        a.next += arpStep();
       }
       // 登録中: 鍵盤をタップすると音を選ぶ（もう一度で外す）
       function selToggle(m) {
@@ -704,7 +739,7 @@
         delete press[id];
         if (mode === "free") { recOff(id); }
       }
-      function allOff() { var ks = [], k; for (k in press) { if (press.hasOwnProperty(k)) { ks.push(k); } } for (k = 0; k < ks.length; k++) { noteOff(ks[k]); } }
+      function allOff() { var ks = [], k; for (k in press) { if (press.hasOwnProperty(k)) { ks.push(k); } } for (k = 0; k < ks.length; k++) { noteOff(ks[k]); } arps = {}; padHeld = {}; }
       function octave(d) {
         if (mode !== "free") { return; }
         var nb = base + d * 12;
@@ -724,6 +759,14 @@
         else if (v === "padedit") { allOff(); padEdit = !padEdit; padDel = false; padSel = []; msg = ""; if (L.land) { applyLand(); } render(); }
         else if (v === "paddel") { padDel = !padDel; render(); }
         else if (v === "padclear") { padSel = []; render(); }
+        else if (v === "arp" || v === "arprate" || v === "arphold") {
+          allOff();
+          if (v === "arp") { prefs.padArp = PIANO_ARPS[(PIANO_ARPS.indexOf(prefs.padArp) + 1) % PIANO_ARPS.length]; }
+          else if (v === "arprate") { prefs.padRate = prefs.padRate === 16 ? 8 : 16; }
+          else { prefs.padHold = prefs.padHold === "once" ? "hold" : "once"; }
+          pianoSavePrefs(prefs);
+          render();
+        }
         else if (v === "padreset") {
           if (window.confirm && !window.confirm("パッドを はじめのコードにもどしますか？")) { return; }
           pads = pianoPadsClean(PIANO_PAD_DEFAULT); pianoPadsSave(pads); msg = "パッドを はじめのコードにもどしました"; render();
@@ -756,6 +799,12 @@
           }
           html += '<div class="piano-row"><button class="modal-btn' + (padView ? " piano-pad-on" : "") + '" data-pa="pad">' + (padView ? "&#x1F3B9; 鍵盤だけにする" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
             (padView ? '<button class="modal-btn' + (padEdit ? " piano-pad-on" : "") + '" data-pa="padedit">&#x270F;&#xFE0F; 登録 ' + (padEdit ? "ON" : "OFF") + '</button>' : "") + '</div>';
+          if (padView && !padEdit) {
+            var arpOn = prefs.padArp !== "chord";
+            html += '<div class="piano-row"><button class="modal-btn' + (arpOn ? " piano-pad-on" : "") + '" data-pa="arp">' + PIANO_ARP_NAMES[prefs.padArp] + '</button>' +
+              '<button class="modal-btn" data-pa="arprate"' + (arpOn ? "" : " disabled") + '>' + (prefs.padRate === 16 ? "16分" : "8分") + '</button>' +
+              '<button class="modal-btn" data-pa="arphold"' + (arpOn ? "" : " disabled") + '>' + (prefs.padHold === "once" ? "1回だけ" : "くりかえし") + '</button></div>';
+          }
           if (padView && padEdit) {
             html += '<div class="piano-row"><button class="modal-btn' + (padDel ? " piano-rec-on" : "") + '" data-pa="paddel">&#x1F5D1;&#xFE0F; ' + (padDel ? "消すパッドをタップ" : "パッドを空にする") + '</button>' +
               '<button class="modal-btn" data-pa="padclear">選んだ音をはずす</button><button class="modal-btn" data-pa="padreset">&#x21BA; はじめのコード</button></div>' +
@@ -919,6 +968,7 @@
           if (shake > 0) { shake--; }
           if (judgeFrames > 0) { judgeFrames--; }
           for (var pf in padFlash) { if (padFlash.hasOwnProperty(pf) && padFlash[pf] > 0) { padFlash[pf]--; } }
+          for (var ai in arps) { while (arps[ai] && now() >= arps[ai].next - 1e-6) { arpTick(ai); } }
           if (bk) { backStep(); }
           if (play) {
             var pb = playBeat(), last = 0, i;
@@ -949,6 +999,7 @@
               if (padEdit) { hl = padDel ? "🗑 消すパッドをタップ" : "✏️ " + (padSel.length ? (pianoPadLabel(padSel) || "") + " " + padSel.map(function (m) { return pianoName(m, "do"); }).join("") : "鍵盤で音をえらぶ"); }
               else if (rec) { var rb2 = recBeat(); hl = rb2 < 0 ? "● " + Math.ceil(-rb2) : "● REC " + (Math.floor(rb2 / meter) + 1) + "小節・" + rec.notes.length + "音"; }
               else if (pc2) { hl = pc2.name || pc2.interval; }
+              else { for (var ak in arps) { if (arps.hasOwnProperty(ak)) { hl = pianoPadLabel(pads[arps[ak].pad]) + " ♪"; } } }
               if (hl) { fitText(ctx, hl, W / 2, land ? 8 : 10, 10, rec && !padEdit ? "#ff6b6b" : "#ffffff", 104); }
               drawPads(ctx);
             } else if (rec) {
@@ -1033,7 +1084,7 @@
 
   window.UGPiano = {
     songs: PIANO_SONGS, song: pianoSong, parse: pianoParse, midiOf: pianoMidi, name: pianoName, isBlack: pianoIsBlack,
-    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
+    keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, arpOrder: pianoArpOrder, ARPS: PIANO_ARPS, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
     PAD_DEFAULT: PIANO_PAD_DEFAULT, PAD_N: PIANO_PAD_N, PADS_KEY: PIANO_PADS_KEY, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
     takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
