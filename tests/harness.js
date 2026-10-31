@@ -72,7 +72,9 @@ function makeAudio(counters) {
       value: 0,
       setValueAtTime: function (v, t) { if (isNaN(v) || isNaN(t)) { counters.errors.push(name + " setValue NaN"); } },
       exponentialRampToValueAtTime: function (v, t) { if (!(v > 0)) { counters.errors.push(name + " expRamp to " + v); } if (isNaN(t)) { counters.errors.push(name + " ramp NaN time"); } },
-      linearRampToValueAtTime: function () {}
+      linearRampToValueAtTime: function () {},
+      setTargetAtTime: function (v, t, tau) { if (isNaN(v) || isNaN(t) || !(tau > 0)) { counters.errors.push(name + " setTarget NaN"); } counters.targets.push({ name: name, v: v, t: t, tau: tau }); },
+      cancelScheduledValues: function () {}
     };
   }
   function makeNode(kind, ctxKind) {
@@ -122,7 +124,7 @@ function makeAudio(counters) {
 // opts.files: 読み込む JS（ROOT からの相対パス）。opts.midiPort: 偽の Web MIDI 出力ポート
 function load(opts) {
   opts = opts || {};
-  var counters = { osc: 0, src: [], decodes: 0, errors: [], nodes: {}, offline: [], stopped: 0, texts: [], downloads: [], shared: [], scripts: [] };
+  var counters = { osc: 0, src: [], decodes: 0, errors: [], nodes: {}, offline: [], targets: [], stopped: 0, texts: [], downloads: [], shared: [], scripts: [] };
   var audio = makeAudio(counters);
   var store = {};
   var winListeners = {};

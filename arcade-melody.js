@@ -1628,6 +1628,34 @@
     }, (0.8 + 10 * 0.6 + 0.6) * 1000);
   }
   var melodyOpenHat = null; // 鳴っているオープンハイハット（クローズ・ペダルで止める）
+  // §242 v1.50: ハイハットの閉じ方（auto ＝ 開いていた長さで / tight ＝ キュッ / bark ＝ ツッ / sizzle ＝ シュワッ）
+  var MELODY_HAT_CLOSES = ["auto", "tight", "bark", "sizzle"], melodyHatClose = "auto";
+  // 開いていた長さ（秒）→ 閉じ方。すぐ閉じる ＝ キュッ、8分くらい ＝ ツッ（バーク）、長く開ける ＝ シュワッ
+  function melodyHatStyle(hold, setting) {
+    if (setting && setting !== "auto" && MELODY_HAT_CLOSES.indexOf(setting) >= 0) { return setting; }
+    return hold < 0.12 ? "tight" : (hold < 0.45 ? "bark" : "sizzle");
+  }
+  // 閉じ方ごとの [音が消える速さ（秒）, 閉じるあいだの音量のふくらみ, ふくらむ時間, 高い音だけ残すフィルタの行き先（Hz）, ペダルの「チッ」の大きさ]
+  var MELODY_HAT_SHAPES = { tight: [0.012, 1, 0, 6000, 1], bark: [0.03, 1.3, 0.025, 3500, 0.55], sizzle: [0.07, 1.25, 0.09, 2500, 0.35] };
+  // 鳴っているオープンハイハットを閉じる。オープンの音を「しぼる」（高い音だけ残してすぼめる）ので、ただ止めるより「ツッ」「シュワッ」と聞こえる
+  function melodyHatChoke(ac, t, m) {
+    var oh = melodyOpenHat, st, sh, d;
+    melodyOpenHat = null;
+    if (!oh || oh.ac !== ac) { return 1; }
+    st = melodyHatStyle(Math.max(0, t - oh.t), melodyHatClose);
+    sh = MELODY_HAT_SHAPES[st];
+    d = sh[2];
+    try {
+      var g = oh.g.gain, now = Math.max(t, ac.currentTime);
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(1.4, now);
+      if (d > 0) { g.linearRampToValueAtTime(1.4 * sh[1], now + d); }
+      g.setTargetAtTime(0.0001, now + d, sh[0]);
+      if (oh.f) { oh.f.frequency.cancelScheduledValues(now); oh.f.frequency.setValueAtTime(30, now); oh.f.frequency.exponentialRampToValueAtTime(sh[3], now + d + sh[0] * 2); }
+      oh.src.stop(now + d + sh[0] * 8 + 0.05);
+    } catch (e) {}
+    return m === 44 ? sh[4] : 1; // スティックで叩いて閉じる（42）ときは、叩く音はそのまま
+  }
   function melodyDrumSample(ac, m, t, level, dest) {
     var bank = melodySamples.buffers[MELODY_SAMPLE_FILES[MELODY_DRUM]], mp = bank && bank[m] ? [m, 1] : MELODY_DRUM_MAP[m];
     if (!mp || melodySamples.drumOff || !melodySamples.enabled || !bank || !bank[mp[0]]) { return false; }
@@ -1635,13 +1663,12 @@
     src.buffer = bank[mp[0]];
     src.playbackRate.value = mp[1] * (m === 35 || m === 36 ? melodySamples.kickRate : 1); // §230: キックを太く
     g.gain.value = 1.4;
-    src.connect(g);
+    var hf = null;
+    if (m === 46 && ac.createBiquadFilter) { hf = ac.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = 30; src.connect(hf); hf.connect(g); } // 閉じるときにしぼる
+    else { src.connect(g); }
     g.connect(dest ? (function () { var o = ac.createGain(); o.gain.value = (level > 0 && level < 1) ? level : 1; o.connect(dest); return o; })() : melodyLevelOut(ac, level));
-    if ((m === 42 || m === 44) && melodyOpenHat) {
-      try { melodyOpenHat.g.gain.setTargetAtTime(0.0001, t, 0.02); melodyOpenHat.src.stop(t + 0.15); } catch (e) {}
-      melodyOpenHat = null;
-    }
-    if (m === 46) { melodyOpenHat = { src: src, g: g }; }
+    if ((m === 42 || m === 44) && melodyOpenHat) { g.gain.value = 1.4 * melodyHatChoke(ac, t, m); }
+    if (m === 46) { if (melodyOpenHat) { melodyHatChoke(ac, t, 42); } melodyOpenHat = { src: src, g: g, f: hf, t: t, ac: ac }; }
     src.start(t);
     return true;
   }
@@ -2089,6 +2116,7 @@
     synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
+    hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,

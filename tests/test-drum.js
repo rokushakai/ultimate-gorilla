@@ -167,8 +167,11 @@ module.exports = function () {
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
   ok(jz && jz.some(function (x) { return x[0] === 51 && x[1].length >= 4; }) && jz.some(function (x) { return x[0] === 42; }) && mt && mt[0][1].length === 16 &&
-    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 11,
-    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 11 drum-only loops added");
+    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 14,
+    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 14 drum-only loops added");
+  // §242: オープン・クローズのパターン（開けて、すぐペダル 44 で閉じる）
+  ok(["d:tsuchi", "d:bark", "d:sizzle"].every(function (id) { var st = D.patternSteps(id); return D.pattern(id).kind === "loop" && st.some(function (x) { return x[0] === 46; }) && st.some(function (x) { return x[0] === 44; }); }) &&
+    D.HH_STYLES.map(function (x) { return x[0]; }).join() === "auto,tight,bark,sizzle", "open-close patterns (ツッチー・バーク・シュワッ) open the hi-hat and close it with the pedal");
   var e18 = hooked();
   e18.store[D.PATPADS_KEY] = JSON.stringify(D.PATPAD_DEFAULT.slice(0, 16).reverse());
   e18.store[D.PREFS_KEY] = JSON.stringify({ kitId: "rusty" });
@@ -432,6 +435,19 @@ module.exports = function () {
     });
     return snd.join();
   }
+  // §242: ハイハットの閉じ方の設定を、音を出すときに UGMelody へ
+  function hsRun(st) {
+    var e = hooked(), got = null;
+    e.store[D.PREFS_KEY] = JSON.stringify({ hhStyle: st });
+    e.run("drum", { config: { mode: "free" } }, 12, function (f) {
+      var c = padXY(1);
+      if (f === 3) { e.ptr("down", c[0], c[1], 4); e.ptr("up", c[0], c[1], 4); }
+      if (f === 8) { got = e.window.UGMelody.hatClose(); }
+    });
+    return got;
+  }
+  var hs1 = hsRun("sizzle"), hs0 = hsRun("nope");
+  ok(hs1 === "sizzle" && hs0 === "auto", "the hi-hat close style is saved and handed to the sound engine (unknown → おまかせ)", [hs1, hs0]);
   var oh1 = ohRun(true), oh0 = ohRun(false);
   ok(oh1 === "46,44" && oh0 === "46", "open hi-hat pad: ringing while held, closed (44) when the finger is lifted; OFF keeps the old way", [oh1, oh0]);
   // セットのペダル（左下）: 押しているあいだ ハイハット＝オープン、はなすと閉じる

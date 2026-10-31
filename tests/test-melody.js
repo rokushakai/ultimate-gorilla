@@ -155,6 +155,23 @@ module.exports = async function () {
   env.counters.src.length = 0;
   for (var nn = 34; nn <= 98; nn++) { M.synth(nn, 0, 0, 1); }
   ok(env.counters.src.length === 65 && env.counters.src.every(function (s) { return Math.abs(12 * Math.log(s.rate) / Math.log(2)) <= 2.0001; }), "sample notes pitch-shift at most 2 semitones in range");
+  // §242: オープンハイハットを閉じる（開いていた長さで閉じ方が変わる）
+  var fakeBuf = { length: 100, duration: 1 };
+  M.samples.buffers[M.sampleFiles[M.DRUM]] = { 42: fakeBuf, 44: fakeBuf, 46: fakeBuf };
+  function hatTau(hold, setting) {
+    M.setHatClose(setting || "auto");
+    env.counters.targets.length = 0;
+    M.synth(46, M.DRUM, 5, 1); M.synth(44, M.DRUM, 5 + hold, 1);
+    var g = env.counters.targets.filter(function (x) { return x.name === "gain"; });
+    return g.length ? g[g.length - 1].tau : 0;
+  }
+  ok(hatTau(0.05) === 0.012 && hatTau(0.25) === 0.03 && hatTau(0.8) === 0.07 && hatTau(0.05, "sizzle") === 0.07 && hatTau(0.8, "tight") === 0.012 && M.hatClose() === "tight",
+    "closing an open hi-hat: quick ＝ tight, an eighth ＝ bark, long ＝ sizzle; a fixed style overrides", [hatTau(0.05), hatTau(0.25), hatTau(0.8)]);
+  M.setHatClose("nope");
+  ok(M.hatClose() === "auto" && M.hatStyle(0.3, "auto") === "bark" && M.hatStyle(0.3, "sizzle") === "sizzle" && M.hatCloses.length === 4, "hat close styles: unknown falls back to auto");
+  env.counters.targets.length = 0; M.synth(42, M.DRUM, 6, 1);
+  ok(env.counters.targets.length === 0, "a closed hi-hat with nothing open chokes nothing");
+  delete M.samples.buffers[M.sampleFiles[M.DRUM]];
   await new Promise(function (res) { M.loadSamples([4, 8, 11, 24, 25, 32, 40], res); });
   ok(Object.keys(M.samples.buffers).length <= 7, "sample memory is capped (old instruments evicted)", Object.keys(M.samples.buffers).length);
 

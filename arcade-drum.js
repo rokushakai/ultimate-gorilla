@@ -179,6 +179,7 @@
       // §241 v1.49: パターンの切りかえ（now ＝ すぐ / 1・2・4 ＝ その小節の区切りで）・オープンHH は押しているあいだ開く
       patSwitch: DRUM_SWITCHES.some(function (w) { return w[0] === p.patSwitch; }) ? p.patSwitch : "1",
       hhHold: p.hhHold !== false,
+      hhStyle: DRUM_HH_STYLES.some(function (w) { return w[0] === p.hhStyle; }) ? p.hhStyle : "auto", // §242: ハイハットの閉じ方
       mute: (p.mute && p.mute.length ? p.mute : []).filter(function (id, i, a) { return drumPartOk(id) && a.indexOf(id) === i; })
     };
   }
@@ -416,6 +417,10 @@
     ["jungle", "ジャングル", [[36, [0, 8]], [43, [0, 3, 6, 8, 11, 14]], [48, [4, 12]]]],
     ["ghost", "ゴーストノート", [[36, [0, 10]], [38, [1, 4, 7, 9, 12, 15]], [42, DRUM_E8]]],
     ["rideroc", "ライドのロック", [[36, [0, 6, 8, 10]], [38, [4, 12]], [51, DRUM_E8], [49, [0]]]],
+    // §242 v1.50: オープン・クローズ（開けて、すぐペダルで閉じる 44）
+    ["tsuchi", "ツッチー", [[36, DRUM_Q4], [38, [4, 12]], [42, [0, 4, 8, 12]], [46, [2, 6, 10, 14]], [44, [3, 7, 11, 15]]]],
+    ["bark", "ファンクのバーク", [[36, [0, 3, 10]], [38, [4, 12]], [42, [1, 2, 4, 5, 9, 10, 12, 13]], [46, [6, 14]], [44, [0, 8]]]],
+    ["sizzle", "シュワッと閉じる", [[36, [0, 8, 10]], [38, [4, 12]], [42, [0, 2, 8, 10]], [46, [4, 12]], [44, [7, 15]]]],
     // §240 v1.48: 3拍子・6/8（12マス＝1小節。4つめ＝マスの数）
     ["waltz", "ワルツ", [[36, [0]], [38, [4, 8]], [42, [0, 4, 8]]], 12],
     ["waltzbig", "ワルツ（強め）", [[36, [0, 6]], [38, [4, 8]], [51, [0, 2, 4, 6, 8, 10]], [49, [0]]], 12],
@@ -665,6 +670,8 @@
   // §237 v1.45: ソング（パターンをつなげた曲）[[パターンの id, 小節]]
   var DRUM_SONG_KEY = "ultimateGorillaDrumSongV1", DRUM_SONG_MAX = 32, DRUM_SONG_BARS = 128;
   var DRUM_SONG_DEFAULT = [["g:8beat", 3], ["f:snare", 1], ["g:beat16", 3], ["f:toms", 1], ["g:rock", 3], ["f:roll", 1], ["g:8beat", 2], ["f:crash", 1]];
+  // §242 v1.50: ハイハットの閉じ方（UGMelody.setHatClose へ）
+  var DRUM_HH_STYLES = [["auto", "おまかせ"], ["tight", "キュッ"], ["bark", "ツッ"], ["sizzle", "シュワッ"]];
   var DRUM_SWITCHES = [["now", "すぐ"], ["1", "1小節"], ["2", "2小節"], ["4", "4小節"]]; // §241
   // §241: 切りかえまで あと何小節か（いまの小節を1と数える）。ループは区切りの頭、フィルは区切りの最後の小節から
   function drumSwitchWait(sw, barNo, kind) {
@@ -736,6 +743,7 @@
             if (UG.setDrumSamples) { UG.setDrumSamples(prefs.real); }
             if (UG.setDrumKit) { UG.setDrumKit(prefs.kitId); }
             if (UG.setKickRate) { UG.setKickRate(prefs.deep ? 0.86 : 1); }
+            if (UG.setHatClose) { UG.setHatClose(prefs.hhStyle); }
             if (prefs.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); }
           }
         } catch (e) {}
@@ -973,6 +981,7 @@
         else if (v === "pat") { prefs.pat = !prefs.pat; drumSavePrefs(prefs); if (!prefs.pat) { patStop(); patEdit = false; } render(); }
         else if (v === "patstop") { patStop(); render(); }
         else if (v.indexOf("psw:") === 0) { prefs.patSwitch = v.substring(4); drumSavePrefs(prefs); render(); }
+        else if (v.indexOf("hhs:") === 0) { prefs.hhStyle = v.substring(4); drumSavePrefs(prefs); if (UG && UG.setHatClose) { UG.setHatClose(prefs.hhStyle); } hitSound(46, 0.7); hitSound(44, 0.35, prefs.hhStyle === "tight" ? 0.07 : (prefs.hhStyle === "sizzle" ? 0.6 : 0.25)); render(); } // 試し聞き（録音しない）
         else if (v === "hhhold") { prefs.hhHold = !prefs.hhHold; drumSavePrefs(prefs); render(); }
         else if (v === "patset") { prefs.patSet = !prefs.patSet; drumSavePrefs(prefs); render(); }
         else if (v === "human") { prefs.human = !prefs.human; drumSavePrefs(prefs); render(); }
@@ -1291,6 +1300,7 @@
           h += '<div class="piano-row"><button class="modal-btn' + (kit ? " piano-pad-on" : "") + '" data-da="kit">' + (kit ? "&#x1F39B;&#xFE0F; パッドにする" : "&#x1F941; ドラムセットにする") + '</button>' +
             (kit ? '<button class="modal-btn' + (pedalLatch ? " piano-pad-on" : "") + '" data-da="pedal">&#x1F9B6; ハイハット ' + (pedalLatch ? "開けたまま" : "ペダルで開く") + '</button>' :
               '<button class="modal-btn' + (prefs.hhHold ? " piano-pad-on" : "") + '" data-da="hhhold">&#x1F9B6; OH は押すあいだ ' + (prefs.hhHold ? "ON" : "OFF") + '</button>') + '</div>' +
+            hhStyleChips() +
             '<div class="piano-row"><button class="modal-btn" data-da="land">' + (landOn ? "&#x1F4F1; たて向きにもどす" : "&#x2194;&#xFE0F; よこ向き（大きく）") + '</button></div>';
           // §233: 演奏パターン
           h += '<div class="piano-row"><button class="modal-btn' + (prefs.pat ? " piano-pad-on" : "") + '" data-da="pat">&#x1F3BC; 演奏パターン ' + (prefs.pat ? "ON" : "OFF") + '</button>' +
@@ -1445,6 +1455,12 @@
       }
       // §234: 鳴っているパターンの名前（次のパターン）と、いまのマス（16マス・4拍ごとに区切り）
       // §241: 「（あと2小節）」（すぐ・1小節・いまの小節で切りかわるときは出さない）
+      // §242: ハイハットの閉じ方のボタン
+      function hhStyleChips() {
+        var h = '<div class="uke-chips2 drum-hhs"><span class="small">&#x1F9B6; 閉じ方</span>', i;
+        for (i = 0; i < DRUM_HH_STYLES.length; i++) { h += '<button class="modal-btn' + (prefs.hhStyle === DRUM_HH_STYLES[i][0] ? " piano-pad-on" : "") + '" data-da="hhs:' + DRUM_HH_STYLES[i][0] + '">' + DRUM_HH_STYLES[i][1] + '</button>'; }
+        return h + '</div>';
+      }
       function patWaitText(q) {
         if (prefs.patSwitch === "now" || prefs.patSwitch === "1") { return ""; }
         var w = drumSwitchWait(prefs.patSwitch, patRun.barNo, q.kind);
@@ -1617,7 +1633,7 @@
     backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
     kit: DRUM_KIT, kitKeys: DRUM_KIT_KEYS, kitBox: drumKitBox, kitShape: drumKitShape, kitAt: drumKitAt, kitPiece: drumKitPiece, extra: DRUM_EXTRA, pad: drumPad, landH: drumLandH,
     fills: DRUM_FILLS, patternList: drumPatternList, pattern: drumPattern, patternSteps: drumPatternSteps, patPadsLoad: drumPatPadsLoad, PATPAD_DEFAULT: DRUM_PATPAD_DEFAULT, PATPADS_KEY: DRUM_PATPADS_KEY,
-    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, SWITCHES: DRUM_SWITCHES, switchWait: drumSwitchWait, kitPedal: drumKitPedal, patLen: drumPatLen, grooves3: drumGrooves3, secPattern3: drumSecPattern3, seqParts: drumSeqParts, secKind: drumSecKind, secPattern: drumSecPattern, songFromSeq: drumSongFromSeq, songFit: drumSongFit, takeFromSeq: drumTakeFromSeq, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
+    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, SWITCHES: DRUM_SWITCHES, HH_STYLES: DRUM_HH_STYLES, switchWait: drumSwitchWait, kitPedal: drumKitPedal, patLen: drumPatLen, grooves3: drumGrooves3, secPattern3: drumSecPattern3, seqParts: drumSeqParts, secKind: drumSecKind, secPattern: drumSecPattern, songFromSeq: drumSongFromSeq, songFit: drumSongFit, takeFromSeq: drumTakeFromSeq, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
     SONG_KEY: DRUM_SONG_KEY, SONG_DEFAULT: DRUM_SONG_DEFAULT, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
     swings: DRUM_SWINGS, swingOff: drumSwingOff,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,
