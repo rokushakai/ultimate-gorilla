@@ -503,7 +503,7 @@
   var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 6;
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
-  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {} };
+  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
@@ -543,8 +543,10 @@
     melodySamples.state[name] = "decoding";
     var keys = Object.keys(bank.notes), left = keys.length, bufs = {}, hold = (MELODY_SAMPLE_HOLD[bank.prog] || 1) + MELODY_SAMPLE_FADE + 0.05;
     function one(k, ab) {
-      function ok(buf) { try { bufs[k] = melodyTrimBuffer(ac, buf, hold); } catch (e) {} done(); }
-      function ng() { done(); }
+      // §232: 失敗した数と理由をのこす（?debug=1 のドラムの画面で見る）
+      function note(e) { melodySamples.err[name] = (melodySamples.err[name] || 0) + 1; melodySamples.errMsg[name] = String((e && (e.message || e.name)) || e || "decode error").slice(0, 80); }
+      function ok(buf) { try { bufs[k] = melodyTrimBuffer(ac, buf, hold); } catch (e) { note(e); } done(); }
+      function ng(e) { note(e); done(); }
       try {
         var pr = ac.decodeAudioData(ab, ok, ng);
         if (pr && pr.catch) { pr.catch(function () {}); }

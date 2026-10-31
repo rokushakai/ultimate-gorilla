@@ -353,6 +353,7 @@
     draw();
   }
 
+  var DRUM_DEBUG = (function () { try { return /(^|[?&])debug=1(&|$)/.test(window.location.search || ""); } catch (e) { return false; } })();
   var DRUM_KEYS = { q: "d0", w: "d1", e: "d2", r: "d3", a: "d4", s: "d5", d: "d6", f: "d7", " ": "d4", z: "rec", x: "play", c: "pedal" };
   // ドラムセットのときのキー（Q W E R / A S D F の順）
   var DRUM_KIT_KEYS = ["hh", "crash", "tom1", "tom2", "kick", "snare", "floor", "ride"];
@@ -406,6 +407,20 @@
         } catch (e) {}
       }
       // §231: 生ドラムの音がまだ（または捨てられた・止まった）なら、叩くたびに読みこみをためす（止まっていなければ何もしない）
+      // §232: ?debug=1 のとき、生ドラムの読みこみの中身を出す（iPhone だけ鳴らない、などを調べる）
+      function drumDebugText() {
+        var o = [], S = UG && UG.samples, i;
+        if (!S) { return "UGMelody なし"; }
+        o.push("ua: " + (navigator.userAgent || "").slice(0, 90));
+        o.push("ctx: " + (UG.audio && UG.audio.ctx ? UG.audio.ctx.state + " " + UG.audio.ctx.sampleRate + "Hz" : "なし") + " / real=" + prefs.real + " kit=" + prefs.kitId + " file=" + UG.sampleFiles[UG.DRUM] + " off=" + !!S.drumOff);
+        var kits = UG.drumKits || [];
+        for (i = 0; i < kits.length; i++) {
+          var f = kits[i][1], at = S.loadAt[f];
+          o.push(f + ": " + (S.state[f] || "なし") + (at ? "（" + Math.round((Date.now() - at) / 1000) + "秒前）" : "") + " 音=" + (S.buffers[f] ? Object.keys(S.buffers[f]).length : 0) +
+            " 失敗=" + (S.err[f] || 0) + (S.errMsg[f] ? " " + S.errMsg[f] : "") + " 未展開=" + !!(window.UGMelodySamples && window.UGMelodySamples.banks[f]));
+        }
+        return o.join(" ｜ ");
+      }
       function drumSampleState() {
         if (!prefs.real || !UG || !UG.samples || !UG.sampleFiles) { return "off"; }
         return UG.samples.state[UG.sampleFiles[UG.DRUM]] || "none";
@@ -583,6 +598,14 @@
         else if (v === "back") { backToggle(); }
         else if (v === "kit") { kit = !kit; prefs.kit = kit; drumSavePrefs(prefs); render(); }
         else if (v === "pedal") { if (kit) { hhOpen = !hhOpen; render(); } }
+        else if (v === "dbg") { render(); }
+        else if (v === "dbgreload") {
+          audio();
+          if (UG && UG.samples) { var fn = UG.sampleFiles[UG.DRUM]; delete UG.samples.state[fn]; UG.samples.waiting[fn] = []; UG.samples.err[fn] = 0; }
+          if (UG && UG.setDrumKit) { UG.setDrumKit(prefs.kitId); }
+          if (UG && UG.loadSamples) { UG.loadSamples([UG.DRUM], function () { render(); }); }
+          render();
+        }
         else if (v === "land") { landOn = !landOn; prefs.land = landOn; drumSavePrefs(prefs); applyLand(); render(); }
         else if (v === "send") { var rs = drumSendSteps(steps); msg = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); render(); }
         else if (v === "fromseq") {
@@ -638,6 +661,7 @@
             (mode === "free" ? '<button class="modal-btn" data-da="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button>' : "") + '</div>';
         }
         if (msg) { h += '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>'; }
+        if (DRUM_DEBUG && mode !== "rhythm") { h += '<div class="piano-row"><button class="modal-btn" data-da="dbgreload">&#x1F527; 生ドラムを読みなおす</button><button class="modal-btn" data-da="dbg">&#x1F527; 状態を更新</button></div><pre class="drum-dbg">' + escHtml(drumDebugText()).split(" ｜ ").join("<br>") + '</pre>'; }
         panel.innerHTML = h;
         if (!panel.querySelectorAll) { return; }
         var bs = panel.querySelectorAll("button[data-da]");

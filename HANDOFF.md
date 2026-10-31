@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.39** |
+| 現在バージョン | **v1.40** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.40] 🥁 生ドラムの読みこみを調べる表示**（§232）: `?debug=1` でドラムのパネルに `drumDebugText()`。**未解決: iPhone（Vivaldi）でジャズの生ドラムが鳴らない（Android は鳴る）**
 - **[v1.39] 🥁 生ドラムの読みこみの立てなおし**（§231）: `melodyLoadSamples` は止まって10秒たった読みこみをやりなおす（`samples.loadAt`）。ドラムは叩くたびに未準備なら読みこむ。※ジャズが鳴らない報告は手元で再現せず（端末・ブラウザ未確認）
 - **[v1.38] 🥁 ドラムの音色を追加**（§230）: `samples/drums_drs.js`（DRSKit・CC BY 4.0 → クレジット必須）。`MELODY_DRUM_KITS`・`setDrumKit`・`setKickRate`。DRSKit はマイクごとのファイルなので、近いマイク＋OH を混ぜて作った（sfzinstruments/DrumGizmo.DRSKit の Samples/<楽器>/<番号>-<楽器>-<マイク>.flac。番号が大きいほど強い）
 - **[v1.37] 🥁 生ドラムの音**（§229）: `samples/drums_virtuosity.js`（CC0）。`melodyDrum` が `melodyDrumSample`（`MELODY_DRUM_MAP`）を先に試す。読みこみは `loadSamples([UGMelody.DRUM])`（ドラムゲームの audio()・シーケンサー再生）。作りなおすときは sfzinstruments/virtuosity_drums の Samples/mid の FLAC を WebAudio で 22050Hz モノラル WAV に
