@@ -206,7 +206,8 @@
   // 伴奏のイベントを鳴らすか（クリックは曲のメトロノームかカウントインのとき。noDrum: 曲のドラムを鳴らさない）
   function drumBackEventOn(ev, seq, lead, noDrum) {
     if (ev.kind === "click") { return !!seq.metronome || ev.t < lead; }
-    return !(noDrum && ev.track === "drum");
+    var xt = seq && seq.tracks && ev.track ? seq.tracks[ev.track] : null;
+    return !(noDrum && (ev.track === "drum" || (xt && xt.prog === 128))); // §238: ドラム打ち込みトラックも
   }
   // ステップを、シーケンサーの編集中の曲のドラム（マイリズム）へ送る → { ok, msg }
   function drumSendSteps(steps) {
@@ -488,20 +489,113 @@
     }
     return out.sort(function (x, y) { return x[0] - y[0]; });
   }
-  // §237: ソングをシーケンサーの編集中の曲へ（🥁 ドラム打ち込みトラック）
+  // ---------- §238 v1.46: シーケンサーの曲とソングをつなぐ ----------
+  // 曲の区切り（Aメロ・サビ…）ごとの拍 { meter, beats, bpm, parts: [{ name, beats }] }
+  function drumSeqParts(seq) {
+    var U = drumSeqApi();
+    if (!U || !seq || !U.expand) { return null; }
+    var S = U.seqSchedule(U.expand(seq)), out = [], cur = { name: "", beats: 0 }, i;
+    for (i = 0; i < S.rows.length; i++) {
+      var r = S.rows[i];
+      if (r.type === "sec") { if (cur.beats > 0) { out.push(cur); } cur = { name: String(r.name || ""), beats: 0 }; continue; }
+      if (r.type === "key" || r.type === "tempo") { continue; }
+      cur.beats += Math.max(0, r.end - r.start);
+    }
+    if (cur.beats > 0) { out.push(cur); }
+    return { meter: S.meter || seq.meter || 4, beats: S.beats, bpm: seq.bpm, parts: out };
+  }
+  // 区切りの名前 → 種類（サビ・B・イントロ・アウトロ・間奏・ほか＝A）
+  function drumSecKind(name) {
+    var n = String(name || "");
+    if (/サビ|chorus|コーラス|hook/i.test(n)) { return "chorus"; }
+    if (/Bメロ|Cメロ|^B$|^C$|pre|ブリッジ|bridge/i.test(n)) { return "b"; }
+    if (/イントロ|intro/i.test(n)) { return "intro"; }
+    if (/アウトロ|outro|エンディング|ending/i.test(n)) { return "outro"; }
+    if (/間奏|solo|ソロ|interlude/i.test(n)) { return "solo"; }
+    return "a";
+  }
+  // 曲のリズム（base）から、区切りの種類のパターン（サビは強め・B は少し細かく）
+  var DRUM_SEC_BIG = { "8beat": "g:rock", "beat16": "g:rock", "rock": "g:beat16", "four": "g:disco", "halftime": "g:8beat", "ballad": "g:8beat", "shuffle": "d:rnr" };
+  var DRUM_SEC_B = { "8beat": "g:beat16", "ballad": "g:halftime", "rock": "g:8beat" };
+  function drumSecPattern(base, kind) {
+    var id = "g:" + base;
+    if (kind === "chorus" && DRUM_SEC_BIG[base]) { id = DRUM_SEC_BIG[base]; }
+    if (kind === "b" && DRUM_SEC_B[base]) { id = DRUM_SEC_B[base]; }
+    return drumPattern(id) ? id : (drumPattern("g:" + base) ? "g:" + base : "g:8beat");
+  }
+  // シーケンサーの曲の構成から、長さがぴったりのソングを作る → { ok, song, bpm, msg }
+  function drumSongFromSeq(seq) {
+    var info = drumSeqParts(seq), i, k;
+    if (!info) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
+    if (info.meter === 3) { return { ok: false, msg: "3拍子の曲には、まだ合わせられません（ドラムのパターンは4拍子）" }; }
+    if (!info.parts.length) { return { ok: false, msg: "シーケンサーの曲にコードがありません" }; }
+    var d = seq.tracks && seq.tracks.drum, base = d && d.on && d.groove && drumPattern("g:" + d.groove) ? d.groove : "8beat";
+    var raw = [], odd = false, rot = 0, rots = ["f:snare", "f:roll"], names = [];
+    for (i = 0; i < info.parts.length; i++) {
+      var p = info.parts[i], bars = Math.max(1, Math.round(p.beats / 4)), kind = drumSecKind(p.name), last = i === info.parts.length - 1;
+      if (Math.abs(p.beats - bars * 4) > 1e-6) { odd = true; }
+      var pat = drumSecPattern(base, kind), next = info.parts[i + 1] ? drumSecKind(info.parts[i + 1].name) : "";
+      var fill = last ? "f:crash" : (next === "chorus" ? "f:toms" : rots[rot++ % rots.length]);
+      var body = bars >= 2 || last ? bars - 1 : bars;
+      for (k = body; k > 0; k -= 16) { raw.push([pat, Math.min(16, k)]); }
+      if (bars >= 2 || last) { raw.push([fill, 1]); }
+      names.push((p.name || "はじめ") + " " + bars + "小節");
+    }
+    var song = drumSongClean(raw), want = drumSongBars(raw);
+    return { ok: true, song: song, bpm: info.bpm,
+      msg: "シーケンサーの曲（" + names.join("・") + "）に合わせてソングを作りました" + (drumSongBars(song) < want ? "（128小節までにしました）" : "") + (odd ? "（4拍でわりきれない区切りがあるので、少しずれるかも）" : "") };
+  }
+  // ソングの長さを bars 小節に合わせる（最後のフィル・エンディングは残して、その前のループを足す・けずる）
+  function drumSongFit(song, bars) {
+    var list = [], out = [], i, b;
+    for (i = 0; i < song.length; i++) { for (b = 0; b < song[i][1]; b++) { list.push(song[i][0]); } }
+    if (!list.length || bars < 1) { return song.slice(); }
+    var tail = list.length;
+    while (tail > 0 && drumPattern(list[tail - 1]).kind === "fill") { tail--; }
+    var loop = tail > 0 ? list[tail - 1] : "g:8beat";
+    while (list.length < bars) { list.splice(tail, 0, loop); tail++; }
+    while (list.length > bars && tail > 0) { list.splice(tail - 1, 1); tail--; }
+    while (list.length > bars) { list.pop(); }
+    for (i = 0; i < list.length; i++) { var o = out[out.length - 1]; if (o && o[0] === list[i] && o[1] < 16) { o[1]++; } else { out.push([list[i], 1]); } }
+    return out;
+  }
+  // ソングをシーケンサーの編集中の曲へ（🥁 ドラム打ち込みトラック。前に送ったものがあれば置きかえ・曲の長さに合わせる）
   function drumSongSend(song, swing, name) {
     var U = drumSeqApi();
     if (!U || !U.xAdd) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
-    var notes = drumSongNotes(song, swing);
+    if (!drumSongBars(song)) { return { ok: false, msg: "ソングに音がありません" }; }
+    var st = U.seqLoad(), info = drumSeqParts(st.cur), fit = "", sg = song, i;
+    if (info && info.meter !== 3 && info.beats >= 4) {
+      var target = Math.round(info.beats / 4), have = drumSongBars(song);
+      if (target !== have) { sg = drumSongFit(song, target); fit = "曲の長さ（" + target + "小節）に合わせて" + (target > have ? "のばし" : "けずり") + "ました（ソングは " + have + "小節）。"; }
+    } else if (info && info.meter === 3) { fit = "（シーケンサーの曲は3拍子なので、合わないかも）"; }
+    var notes = drumSongNotes(sg, swing);
     if (!notes.length) { return { ok: false, msg: "ソングに音がありません" }; }
-    var st = U.seqLoad(), id = U.xAdd(st.cur.tracks, "dnotes");
+    var id = null, tr = st.cur.tracks;
+    for (i = 0; tr.xs && i < tr.xs.length; i++) { if (tr[tr.xs[i]].preset === "dnotes") { id = tr.xs[i]; break; } }
+    var again = !!id;
+    if (!id) { id = U.xAdd(tr, "dnotes"); }
     if (!id) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
-    var t = st.cur.tracks[id], cut = notes.length > 1000;
-    t.name = String(name || "ドラム").slice(0, 12);
+    var t = tr[id], cut = notes.length > 1000;
+    if (!again) { t.name = String(name || "ドラム").slice(0, 12); }
     t.notes = notes.slice(0, 1000).map(function (n) { return [n[0], 0.25, n[1], Math.max(0.1, Math.min(1, n[2]))]; });
     U.seqSave(st);
-    return { ok: true, id: id, msg: "ソング（" + drumSongBars(song) + "小節）を、シーケンサーの編集中の曲に 🥁 ドラム打ち込みトラックとして送りました" + (cut ? "（1000打より後ろは入りません）" : "") +
-      "。曲の長さが足りないと後ろは鳴りません。シーケンサーのドラムといっしょに鳴らさないなら、ドラムのトラックをオフにしてね" };
+    return { ok: true, id: id, replaced: again, bars: drumSongBars(sg),
+      msg: "ソングを、シーケンサーの編集中の曲の 🥁 ドラム打ち込みトラック" + (again ? "に上書きしました（前に送ったものと置きかえ）" : "として送りました") + "。" + fit + (cut ? "（1000打より後ろは入りません）" : "") +
+        "シーケンサーのドラムといっしょに鳴らさないなら、ドラムのトラックをオフにしてね" };
+  }
+  // シーケンサーの 🥁 ドラム打ち込みトラックを読みもどす → { ok, notes: [[拍, MIDI, 強さ]], bpm, msg }
+  function drumTakeFromSeq() {
+    var U = drumSeqApi();
+    if (!U) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
+    var st = U.seqLoad(), tr = st.cur.tracks, i;
+    for (i = 0; tr.xs && i < tr.xs.length; i++) {
+      var t = tr[tr.xs[i]];
+      if (t.prog !== 128 || !t.notes || !t.notes.length) { continue; }
+      var notes = drumNotesClean(t.notes.map(function (n) { return [n[0], n[2], n.length > 3 ? n[3] : 0.8]; }));
+      return { ok: true, notes: notes, bpm: st.cur.bpm, msg: "シーケンサーの「" + t.name + "」（" + notes.length + "打）を読みこみました" };
+    }
+    return { ok: false, msg: "シーケンサーの編集中の曲に 🥁 ドラム打ち込みトラックがありません（ソングの「🎸 シーケンサーへ送る」で作れます）" };
   }
   // 楽器ごとの強さ（シンバル類は小さめ）
   function drumPatLevel(m) { return m === 42 || m === 46 || m === 44 ? 0.55 : (m === 51 || m === 49 ? 0.6 : 0.85); }
@@ -835,6 +929,26 @@
           }
           render();
         }
+        else if (v === "songfromseq") {
+          var U2 = drumSeqApi(), fr = U2 ? drumSongFromSeq(back ? back.seq : U2.seqLoad().cur) : { ok: false, msg: "ゴリラウクレレが読みこめませんでした" };
+          if (fr.ok) {
+            if (dsong.length && window.confirm && !window.confirm("いまのソングを、シーケンサーの曲に合わせたソングに入れかえますか？")) { return; }
+            if (patRun && patRun.song) { patStop(); }
+            dsong = fr.song; songSave();
+            if (!back && fr.bpm) { bpm = Math.max(40, Math.min(240, Math.round(fr.bpm))); prefs.bpm = bpm; drumSavePrefs(prefs); }
+          }
+          msg = (fr.ok ? "&#x1FA84; " : "&#x26A0;&#xFE0F; ") + escHtml(fr.msg);
+          render();
+        }
+        else if (v === "songload") {
+          var tf = drumTakeFromSeq();
+          if (tf.ok) {
+            take = drumListAdd(takes, { bpm: Math.max(40, Math.min(240, Math.round(tf.bpm || bpm))), notes: tf.notes, song: "" }, DRUM_TAKES_MAX, drumTakeClean, "シーケンサー");
+            drumTakesSave(takes);
+          }
+          msg = (tf.ok ? "&#x1F4E5; " + escHtml(tf.msg) + "。「" + escHtml(take.name) + "」として保存しました（▶ 再生で聴けます）" : "&#x26A0;&#xFE0F; " + escHtml(tf.msg));
+          render();
+        }
         else if (v === "songtake") {
           var sn = drumSongNotes(dsong, prefs.swing);
           if (!sn.length) { msg = "ソングに音がありません"; render(); return; }
@@ -905,11 +1019,14 @@
       var dsong = mode === "free" ? drumSongLoad() : [], songPick = ""; // §237: ソング・足すパターン
       function songSave() { drumSongSave(dsong); dsong = drumSongLoad(); }
       function songPlay() {
-        if (patRun && patRun.song) { patStop(); render(); return; }
+        if (patRun && patRun.song) { var sb = patRun.song.bk; patStop(); if (sb && bk && !rec) { backStop(); } render(); return; }
         if (!dsong.length) { msg = "ソングが空です。パターンを足してね"; render(); return; }
         patStop();
+        // §238: 伴奏があれば、伴奏も頭から鳴らしてそろえる
+        var withBk = !!back && !rec;
+        if (withBk) { play = null; backStart(); }
         patBegin(dsong[0][0], null);
-        if (patRun) { patRun.song = { i: 0, left: dsong[0][1] }; }
+        if (patRun) { patRun.song = { i: 0, left: dsong[0][1], bk: withBk }; }
         render();
       }
       var patPads = mode === "free" ? drumPatPadsLoad() : [], patPage = prefs.patPage, patRun = null, patEdit = false, patPick = "", taps = [];
@@ -1003,7 +1120,7 @@
           sg.left--;
           if (sg.left <= 0) {
             sg.i++;
-            if (sg.i >= dsong.length) { patStop(); msg = "&#x1F3BC; ソングを最後まで鳴らしました"; render(); return; }
+            if (sg.i >= dsong.length) { patStop(); if (sg.bk && bk && !rec) { backStop(); } msg = "&#x1F3BC; ソングを最後まで鳴らしました"; render(); return; }
             sg.left = dsong[sg.i][1];
             patBegin(dsong[sg.i][0], null);
           }
@@ -1113,6 +1230,9 @@
               }
               h += '</div><div class="piano-row"><label class="piano-select"><select data-dsong="1">' + so + '</optgroup></select></label><button class="modal-btn" data-da="songadd">&#xFF0B; 足す</button></div>' +
                 '<div class="piano-row"><button class="modal-btn" data-da="songtake">&#x1F4BE; テイクにする</button><button class="modal-btn" data-da="songsend">&#x1F3B8; シーケンサーへ送る</button></div>' +
+                '<div class="piano-row"><button class="modal-btn" data-da="songfromseq">&#x1FA84; シーケンサーの曲に合わせて作る</button></div>' +
+                '<div class="piano-row"><button class="modal-btn" data-da="songload">&#x1F4E5; シーケンサーのドラム打ち込みを読みこむ</button></div>' +
+                (back ? '<p class="small" style="margin:2px 0 0;">&#x1F3B8; 伴奏があるときは、▶ ソングで伴奏も頭からいっしょに鳴ります</p>' : "") +
                 '<div class="piano-row"><button class="modal-btn" data-da="songreset">&#x21BA; お手本</button><button class="modal-btn" data-da="songclear">&#x1F9F9; 空にする</button></div>';
             }
             // §234: オートフィル・音量・鳴らさないパート
@@ -1363,7 +1483,7 @@
     backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
     kit: DRUM_KIT, kitKeys: DRUM_KIT_KEYS, kitBox: drumKitBox, kitShape: drumKitShape, kitAt: drumKitAt, kitPiece: drumKitPiece, extra: DRUM_EXTRA, pad: drumPad, landH: drumLandH,
     fills: DRUM_FILLS, patternList: drumPatternList, pattern: drumPattern, patternSteps: drumPatternSteps, patPadsLoad: drumPatPadsLoad, PATPAD_DEFAULT: DRUM_PATPAD_DEFAULT, PATPADS_KEY: DRUM_PATPADS_KEY,
-    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
+    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, seqParts: drumSeqParts, secKind: drumSecKind, secPattern: drumSecPattern, songFromSeq: drumSongFromSeq, songFit: drumSongFit, takeFromSeq: drumTakeFromSeq, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
     SONG_KEY: DRUM_SONG_KEY, SONG_DEFAULT: DRUM_SONG_DEFAULT, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
     swings: DRUM_SWINGS, swingOff: drumSwingOff,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,

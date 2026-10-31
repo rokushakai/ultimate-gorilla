@@ -316,4 +316,40 @@ module.exports = function () {
   });
   var uniq = lv22.filter(function (v, i, a) { return a.indexOf(v) === i; });
   ok(lv22.length > 10 && uniq.length > 6, "humanize varies the level of each hit", uniq.length);
+  // --- §238: シーケンサーの曲とソングをつなぐ ---
+  ok(D.secKind("サビ") === "chorus" && D.secKind("Bメロ") === "b" && D.secKind("イントロ") === "intro" && D.secKind("Aメロ") === "a" && D.secKind("アウトロ") === "outro" &&
+    D.secPattern("8beat", "chorus") === "g:rock" && D.secPattern("8beat", "b") === "g:beat16" && D.secPattern("bossa", "chorus") === "g:bossa" && D.secPattern("nope", "a") === "g:8beat",
+    "section names map to kinds, and each kind picks a pattern from the song's groove");
+  var e23 = hooked(), U23 = e23.window.UGUkulele, st23 = U23.seqLoad(), c4 = st23.cur.rows.slice(0, 4);
+  st23.cur.rows = [{ type: "sec", name: "Aメロ" }].concat(c4).concat([{ type: "sec", name: "サビ" }]).concat(c4.slice(0, 2));
+  st23.cur.tracks.drum.on = true; st23.cur.tracks.drum.groove = "8beat";
+  U23.seqSave(st23);
+  var fs23 = e23.window.UGDrum.songFromSeq(U23.seqLoad().cur);
+  ok(fs23.ok && JSON.stringify(fs23.song) === JSON.stringify([["g:8beat", 3], ["f:toms", 1], ["g:rock", 1], ["f:crash", 1]]) && fs23.bpm === st23.cur.bpm,
+    "a song is made from the sequencer's sections (A: 8beat + fill into the chorus, chorus: rock + ending), same length", fs23.song);
+  ok(JSON.stringify(D.songFit([["g:8beat", 2], ["f:crash", 1]], 5)) === JSON.stringify([["g:8beat", 4], ["f:crash", 1]]) &&
+    JSON.stringify(D.songFit([["g:8beat", 2], ["f:snare", 1], ["g:rock", 3], ["f:crash", 1]], 4)) === JSON.stringify([["g:8beat", 2], ["f:snare", 1], ["f:crash", 1]]),
+    "fitting a song to a length keeps the ending and stretches or trims the loops before it");
+  // 送る: 曲の長さ（6小節）に合わせる・2回目は同じトラックに上書き・読みもどせる
+  var D23 = e23.window.UGDrum, r1 = D23.songSend([["g:8beat", 2], ["f:crash", 1]], "0", "A"), r2 = D23.songSend([["g:rock", 9], ["f:crash", 1]], "0", "B");
+  var tr23 = U23.seqLoad().cur.tracks, dn = tr23.xs.filter(function (x) { return tr23[x].preset === "dnotes"; });
+  var maxB = Math.max.apply(null, tr23[dn[0]].notes.map(function (n) { return n[0]; })), tk23 = D23.takeFromSeq();
+  ok(r1.ok && r2.ok && r2.replaced && dn.length === 1 && r2.bars === 6 && maxB >= 20 && maxB < 24 && tk23.ok && tk23.notes.length === tr23[dn[0]].notes.length,
+    "sending fits the song to the sequencer song's length, replaces the earlier drum-notes track, and can be read back as a take", [r2.msg, maxB]);
+  ok(D.backEventOn({ track: "x1", kind: "note" }, { tracks: { x1: { prog: 128 } } }, 0, true) === false && D.backEventOn({ track: "x1", kind: "note" }, { tracks: { x1: { prog: 0 } } }, 0, true) === true &&
+    D.backEventOn({ track: "x1", kind: "note" }, { tracks: { x1: { prog: 128 } } }, 0, false) === true,
+    "'don't play the song's drums' also mutes the drum-notes track in the backing");
+  // ピアノロール: ドラム打ち込みトラックは楽器の段
+  var sq23 = U23.seqLoad().cur; sq23.tracks.mel.on = false;
+  var lay = U23.rollLay(sq23);
+  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1, "the piano roll shows drum-notes tracks as drum lanes", lay.n);
+  // 伴奏といっしょにソング: 伴奏も頭から鳴る
+  var e24 = hooked(), ok24 = null;
+  e24.store[D.PREFS_KEY] = JSON.stringify({ pat: true, songOpen: true });
+  e24.run("drum", { config: { mode: "free", backing: "cur" } }, 60, function (f) {
+    var h = e24.window.__drum; if (!h) { return; }
+    if (f === 2) { h().act("songplay"); }
+    if (f === 30) { var st = h(); ok24 = !!(st.bk && st.patRun && st.patRun.song && st.patRun.song.bk); h().act("songplay"); ok24 = ok24 && !e24.window.__drum().bk && !e24.window.__drum().patRun; }
+  });
+  ok(ok24 === true, "with backing, the song starts the backing from the top and stopping the song stops it", ok24);
 };
