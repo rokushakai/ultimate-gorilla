@@ -34,7 +34,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action }; };"); }
+      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk }; };"); }
       return src;
     } });
   }
@@ -88,4 +88,30 @@ module.exports = function () {
   e4.run("drum", { config: { mode: "rhythm", song: "four", level: "easy", speed: 70 } }, 3000);
   var s4 = e4.window.__drum();
   ok(s4.ended && s4.counts[3] === s4.rn.length, "rhythm: doing nothing → all MISS and the game ends", s4.counts);
+  // --- §227: シーケンサーと統合 ---
+  var e5 = hooked(), U5 = e5.window.UGUkulele, D5 = e5.window.UGDrum;
+  e5.store[U5.SEQ_KEY] = JSON.stringify({ cur: U5.seqClean(null), songs: [{ id: 4, name: "ぼくの曲", seq: U5.seqClean(null) }] });
+  var bl5 = D5.backList();
+  ok(bl5.map(function (b) { return b[0]; }).join() === "cur,s:4" && D5.backing("s:4").s.events.length > 0 && D5.backing("s:9") === null, "backing songs: the one being edited and the saved ones");
+  var S5 = D5.backing("cur"), dEv = { kind: "drum", track: "drum", t: 5 }, cEv = { kind: "click", t: 0 };
+  ok(!D5.backEventOn(dEv, S5.seq, S5.s.lead, true) && D5.backEventOn(dEv, S5.seq, S5.s.lead, false) && D5.backEventOn({ kind: "strum", track: "uke", t: 5 }, S5.seq, S5.s.lead, true) && D5.backEventOn(cEv, S5.seq, S5.s.lead, true),
+    "the song's own drums can be left out of the backing (count-in clicks stay)");
+  // 伴奏に合わせて録音: 3拍目（beat 2）で叩く → 曲の拍で保存、曲が終わると止まる
+  var g0 = -1, k5 = -1, mid5 = null;
+  e5.run("drum", { config: { mode: "free", backing: "cur" } }, 1400, function (f) {
+    if (f === 5) { press(e5, "z"); g0 = f; }
+    if (g0 >= 0 && k5 < 0 && (f - g0) / 60 >= S5.s.lead + 2 * S5.s.spb) { press(e5, "s"); k5 = f; mid5 = e5.window.__drum(); }
+  });
+  var end5 = e5.window.__drum(), t5 = JSON.parse(e5.store[D5.TAKES_KEY] || "[]")[0];
+  ok(mid5 && mid5.bk && mid5.rec && mid5.rec.back && !end5.rec && !end5.bk, "recording with the backing runs the song and stops when it ends");
+  ok(t5 && t5.song === "編集中の曲" && t5.notes.length === 1 && t5.notes[0][1] === 38 && Math.abs(t5.notes[0][0] - 2) < 0.05, "the take is saved in the song's beats", t5);
+  // ステップを送る・読みこむ
+  var my = D5.stepsFrom("funk");
+  D5.stepToggle(my, 47, 3);
+  var sr = D5.sendSteps(my), dr = U5.seqLoad().cur.tracks.drum;
+  ok(sr.ok && dr.on && dr.groove === "custom" && JSON.stringify(dr.custom) === JSON.stringify(U5.drumCustomClean(D5.toSeqCustom(my))) && sr.msg.indexOf("タム") >= 0, "steps go to the sequencer's drum as 'my rhythm' (toms/crash left out, with a note)", sr.msg);
+  var back5 = D5.stepsFromSeq();
+  ok(D5.stepOn(back5, 36, 0) && !D5.stepOn(back5, 47, 3) && JSON.stringify(D5.toSeqCustom(back5)) === JSON.stringify(D5.toSeqCustom(my)) && !D5.sendSteps(D5.stepsClean([[47, [0]]])).ok, "the sequencer's drum can be read back into steps; only toms/crash can't be sent");
+  var st6 = U5.seqLoad(); st6.cur.tracks.drum.groove = "bossa"; U5.seqSave(st6);
+  ok(JSON.stringify(D5.stepsFromSeq()) === JSON.stringify(D5.stepsFrom("bossa")), "when the sequencer uses a built-in rhythm, reading gives that rhythm's steps");
 };

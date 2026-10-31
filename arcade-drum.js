@@ -89,7 +89,8 @@
     return out.sort(function (x, y) { return x[0] - y[0]; });
   }
   function drumTakeClean(t, i) {
-    return { id: Math.max(1, Math.round(Number(t.id)) || i + 1), name: String(t.name || "テイク").slice(0, 20), bpm: Math.max(40, Math.min(240, Math.round(Number(t.bpm) || 100))), notes: drumNotesClean(t.notes) };
+    return { id: Math.max(1, Math.round(Number(t.id)) || i + 1), name: String(t.name || "テイク").slice(0, 20), bpm: Math.max(40, Math.min(240, Math.round(Number(t.bpm) || 100))), notes: drumNotesClean(t.notes),
+      song: typeof t.song === "string" ? t.song.slice(0, 20) : "" };
   }
   function drumListLoad(key, max, clean) {
     var a = lsGet(key), out = [], i;
@@ -122,10 +123,66 @@
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       level: p.level === "normal" || p.level === "hard" ? p.level : "easy",
       speed: DRUM_SPEEDS.indexOf(Number(p.speed)) >= 0 ? Number(p.speed) : 100,
-      steps: p.steps ? drumStepsClean(p.steps) : drumStepsFrom("8beat")
+      steps: p.steps ? drumStepsClean(p.steps) : drumStepsFrom("8beat"),
+      backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backDrum: !!p.backDrum
     };
   }
   function drumSavePrefs(p) { return lsSet(DRUM_PREFS_KEY, p); }
+
+  // ---------- §227 v1.35: ゴリラウクレレのシーケンサーとつなぐ ----------
+  function drumSeqApi() { var U = window.UGUkulele; return U && U.seqLoad && U.seqSchedule ? U : null; }
+  // 伴奏にえらべる曲 [[id, 名前]]（"cur" ＝ 編集中の曲、"s:番号" ＝ 保存した曲）
+  function drumBackList() {
+    var U = drumSeqApi(), out = [], st, i;
+    if (!U) { return out; }
+    st = U.seqLoad();
+    out.push(["cur", "編集中の曲"]);
+    for (i = 0; i < st.songs.length; i++) { out.push(["s:" + st.songs[i].id, st.songs[i].name]); }
+    return out;
+  }
+  // 伴奏の曲（ウクレレの「合わせて弾く」と同じく、構成どおり・練習テンポ・くりかえしなし）→ { name, seq, s: 予定, lowG }
+  function drumBacking(id) {
+    var U = drumSeqApi(), st, sq = null, name = "", lowG = false, i;
+    if (!U || !id) { return null; }
+    st = U.seqLoad();
+    if (id === "cur") { sq = st.cur; name = "編集中の曲"; }
+    for (i = 0; i < st.songs.length; i++) { if ("s:" + st.songs[i].id === id) { sq = st.songs[i].seq; name = st.songs[i].name; } }
+    if (!sq || !sq.rows || !sq.rows.length) { return null; }
+    sq = U.expand(U.seqClean(sq));
+    sq.loop = false;
+    if (U.seqAtRate) { sq = U.seqAtRate(sq, sq.rate); }
+    try { lowG = !!U.prefs().lowG; } catch (e) {}
+    var sc = U.seqSchedule(sq, lowG);
+    return sc && sc.events && sc.events.length ? { name: name, seq: sq, s: sc, lowG: lowG } : null;
+  }
+  // 伴奏のイベントを鳴らすか（クリックは曲のメトロノームかカウントインのとき。noDrum: 曲のドラムを鳴らさない）
+  function drumBackEventOn(ev, seq, lead, noDrum) {
+    if (ev.kind === "click") { return !!seq.metronome || ev.t < lead; }
+    return !(noDrum && ev.track === "drum");
+  }
+  // ステップを、シーケンサーの編集中の曲のドラム（マイリズム）へ送る → { ok, msg }
+  function drumSendSteps(steps) {
+    var U = drumSeqApi();
+    if (!U) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
+    var cu = drumToSeqCustom(steps), any = false, i, st = U.seqLoad(), dropped = 0;
+    for (i = 0; i < cu.length; i++) { if (cu[i][1].length) { any = true; } }
+    if (!any) { return { ok: false, msg: "シーケンサーで鳴らせる楽器（キック・スネア・ハイハット・オープンHH・クラップ・リム）が入っていません" }; }
+    var c0 = drumStepsClean(steps);
+    for (i = 0; i < c0.length; i++) { if (DRUM_SEQ_ROWS.indexOf(c0[i][0]) < 0 && c0[i][1].length) { dropped++; } }
+    st.cur.tracks.drum.on = true;
+    st.cur.tracks.drum.groove = "custom";
+    st.cur.tracks.drum.custom = cu;
+    U.seqSave(st);
+    return { ok: true, msg: "シーケンサーの編集中の曲のドラムに「マイリズム」として入れました" + (dropped ? "（タム・クラッシュはシーケンサーにないので外しました）" : "") };
+  }
+  // シーケンサーの編集中の曲のドラムを、ステップとして読みこむ（マイリズムでなければ、そのリズムのお手本）
+  function drumStepsFromSeq() {
+    var U = drumSeqApi();
+    if (!U) { return null; }
+    var d = U.seqLoad().cur.tracks.drum;
+    if (d.groove === "custom") { return drumStepsClean(d.custom); }
+    return drumGroove(d.groove) ? drumStepsFrom(d.groove) : null;
+  }
   function drumBest() { var o = lsGet(DRUM_BEST_KEY); return o && typeof o === "object" ? o : {}; }
 
   // ---------- リズムゲームの譜面 ----------
@@ -176,12 +233,19 @@
       for (i = 0; i < DRUM_MODES.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.mode === DRUM_MODES[i][0] ? " active" : "") + '" data-mode="' + DRUM_MODES[i][0] + '">' + DRUM_MODES[i][1] + '</button>'; }
       html += '</div>';
       if (p.mode === "free") {
-        var takes = drumTakesLoad();
+        var takes = drumTakesLoad(), bl = drumBackList();
+        if (bl.length) {
+          html += '<p class="small" style="margin:6px 0 2px;">&#x1F3B8; 伴奏（ゴリラウクレレのシーケンサーの曲）</p><div class="piano-opts">' +
+            '<button class="modal-btn quiz-opt' + (!p.backing ? " active" : "") + '" data-backing="-">なし</button>';
+          for (i = 0; i < bl.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.backing === bl[i][0] ? " active" : "") + '" data-backing="' + bl[i][0] + '">' + escHtml(bl[i][1]) + '</button>'; }
+          html += '</div>';
+          if (p.backing) { html += '<div class="quiz-opts"><button class="modal-btn quiz-opt' + (p.backDrum ? " active" : "") + '" data-backdrum="1">伴奏のドラムも鳴らす ' + (p.backDrum ? "ON" : "OFF") + '</button></div>'; }
+        }
         html += '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F941; はじめる</button>' +
           '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + DRUM_TAKES_MAX + '）</p>';
         if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。じゆうの画面の「🔴 録音」で録れます。</p>'; }
         for (i = 0; i < takes.length; i++) {
-          html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '打・BPM ' + takes[i].bpm + '</span></span>' +
+          html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '打・BPM ' + takes[i].bpm + (takes[i].song ? '・&#x1F3B8; ' + escHtml(takes[i].song) : "") + '</span></span>' +
             '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button><button class="modal-btn" data-del="t' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
         }
       } else if (p.mode === "step") {
@@ -215,6 +279,8 @@
         btns[j].onclick = function (ev) {
           var el = ev.currentTarget, v;
           if ((v = el.getAttribute("data-mode"))) { p.mode = v; drumSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; drumSavePrefs(p); draw(); return; }
+          if (el.getAttribute("data-backdrum")) { p.backDrum = !p.backDrum; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-level"))) { p.level = v; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
@@ -226,8 +292,8 @@
             return;
           }
           if (el.getAttribute("data-back")) { ctl.back(); return; }
-          if (el.getAttribute("data-go")) { ctl.done({ mode: p.mode }); return; }
-          if ((v = el.getAttribute("data-open"))) { ctl.done({ mode: "free", take: Number(v) }); return; }
+          if (el.getAttribute("data-go")) { ctl.done({ mode: p.mode, backing: p.mode === "free" ? p.backing : "" }); return; }
+          if ((v = el.getAttribute("data-open"))) { ctl.done({ mode: "free", take: Number(v), backing: p.backing }); return; }
           if ((v = el.getAttribute("data-pat"))) { ctl.done({ mode: "step", pat: Number(v) }); return; }
           if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.level, speed: p.speed }); }
         };
@@ -272,21 +338,70 @@
       var take = cfg.take ? drumById(takes, cfg.take) : null, rec = null, play = null;
       if (take) { msg = "「" + escHtml(take.name) + "」をひらきました。▶ 再生で聴けます"; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
-      function recBeat() { return rec ? (now() - rec.t0) * bpm / 60 : 0; }
+      // §227: 伴奏（シーケンサーの曲）。bk ＝ 鳴らしているあいだ
+      var back = mode === "free" && cfg.backing ? drumBacking(cfg.backing) : null, bk = null;
+      if (back) { bpm = back.seq.bpm; meter = back.seq.meter; if (!take) { msg = "&#x1F3B8; 伴奏に合わせて叩こう。「🔴 合わせて録音」で録れます"; } }
+      else if (mode === "free" && cfg.backing) { msg = "伴奏の曲が見つかりませんでした（ゴリラウクレレのシーケンサーで曲を作ってね）"; }
+      function backT() { return bk ? (frame - bk.f0) / 60 : 0; }
+      function backBeat() {
+        var S = back.s, t = backT();
+        if (t < S.lead) { return (t - S.lead) / S.spb; }
+        return S.beatAt ? S.beatAt(t) : (t - S.lead) / S.spb;
+      }
+      function backStart() {
+        backStop();
+        audio();
+        var U = drumSeqApi();
+        bk = { f0: frame, idx: 0, outs: [null, null, null, null], mix: null, fx: false };
+        if (audioOk && U && U.fxPush) { try { U.fxPush(back.seq); bk.fx = true; } catch (e) {} }
+      }
+      function backStop() {
+        if (!bk) { return; }
+        var U = drumSeqApi();
+        if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        bk = null;
+      }
+      function backStep() {
+        var S = back.s, t = backT(), U = drumSeqApi(), ac = audioOk && UG.audio ? UG.audio.ctx : null, ev;
+        while (bk.idx < S.events.length && (ev = S.events[bk.idx]).t <= t + 0.1) {
+          if (ac && U && U.seqPlayEvent && drumBackEventOn(ev, back.seq, S.lead, !prefs.backDrum)) {
+            try {
+              if (!bk.mix) { bk.mix = U.mixer(UG, ac, S.tracks); }
+              U.seqPlayEvent(UG, ac, ev, ac.currentTime + Math.max(0, ev.t - t), back.lowG, 0.55, bk.outs, bk.mix, S.tracks);
+            } catch (e) {}
+          }
+          bk.idx++;
+        }
+        if (t >= S.time) {
+          if (rec) { recStop(); }
+          backStop();
+          play = null;
+          render();
+        }
+      }
+      function backToggle() {
+        if (!back || rec) { return; }
+        play = null;
+        if (bk) { backStop(); } else { backStart(); }
+        render();
+      }
+      function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function recToggle() {
         if (mode !== "free") { return; }
         if (rec) { recStop(); return; }
         play = null;
         audio();
-        rec = { t0: now() + meter * 60 / bpm, notes: [], beat: -meter - 1 };
+        if (back) { backStart(); rec = { back: true, notes: [], beat: -99 }; }
+        else { rec = { t0: now() + meter * 60 / bpm, notes: [], beat: -meter - 1 }; }
         msg = "";
         render();
       }
       function recStop() {
-        var n = rec.notes;
+        var n = rec.notes, wasBack = rec.back;
         rec = null;
+        if (wasBack) { backStop(); }
         if (n.length) {
-          take = drumListAdd(takes, { bpm: bpm, notes: n }, DRUM_TAKES_MAX, drumTakeClean, "テイク");
+          take = drumListAdd(takes, { bpm: bpm, notes: n, song: wasBack ? back.name : "" }, DRUM_TAKES_MAX, drumTakeClean, "テイク");
           drumTakesSave(takes);
           msg = "&#x1F4BE; 「" + escHtml(take.name) + "」に保存しました（" + take.notes.length + "打）";
         } else { msg = "叩かなかったので保存しませんでした"; }
@@ -295,10 +410,11 @@
       function playToggle() {
         if (mode === "step") { stepToggle(); return; }
         if (mode !== "free" || rec) { return; }
-        if (play) { play = null; render(); return; }
+        if (play) { if (play.back) { backStop(); } play = null; render(); return; }
         if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音してみよう"; render(); return; }
         audio();
-        play = { t0: now() + 0.1, notes: take.notes, bpm: take.bpm, idx: 0 };
+        play = { t0: now() + 0.1, notes: take.notes, bpm: take.bpm, idx: 0, back: !!back };
+        if (back) { backStart(); }
         render();
       }
 
@@ -374,9 +490,16 @@
       }
       function action(v) {
         if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
+        else if (v === "back") { backToggle(); }
+        else if (v === "send") { var rs = drumSendSteps(steps); msg = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); render(); }
+        else if (v === "fromseq") {
+          var fs = drumStepsFromSeq();
+          if (fs) { steps = fs; stepSave(); msg = "シーケンサーの編集中の曲のドラムを読みこみました"; } else { msg = "シーケンサーのドラムが読みこめませんでした"; }
+          render();
+        }
         else if (v === "metro") { metro = !metro; prefs.metro = metro; drumSavePrefs(prefs); render(); }
         else if (v === "bpmdown" || v === "bpmup") {
-          if (rec) { return; }
+          if (rec || back) { return; }
           bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5)));
           prefs.bpm = bpm; drumSavePrefs(prefs); render();
         }
@@ -395,19 +518,24 @@
         if (!panel) { return; }
         var h = "", i;
         if (mode === "free") {
-          h += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-da="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
-            '<button class="modal-btn" data-da="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button></div>';
+          h += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-da="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
+            '<button class="modal-btn" data-da="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button></div>';
+          if (back) {
+            h += '<div class="piano-row"><button class="modal-btn" data-da="back"' + (rec ? " disabled" : "") + '>' + (bk && !play ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button></div>' +
+              '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子' + (prefs.backDrum ? "" : "・曲のドラムは鳴らさない") + '）</p>';
+          }
         } else if (mode === "step") {
           var gs = drumGrooves(), opts = '<option value="">お手本を読みこむ…</option>';
           for (i = 0; i < gs.length; i++) { opts += '<option value="' + gs[i].id + '">' + escHtml(gs[i].name) + '</option>'; }
           h += '<div class="piano-row"><button class="modal-btn' + (stepRun ? " piano-pad-on" : "") + '" data-da="play">' + (stepRun ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生（ループ）") + '</button>' +
             '<button class="modal-btn" data-da="clear">&#x1F9F9; ぜんぶ消す</button></div>' +
             '<div class="piano-row"><label class="piano-select">&#x1F4DA; <select data-dgroove="1">' + opts + '</select></label></div>' +
+            '<div class="piano-row"><button class="modal-btn" data-da="send">&#x1F3B8; シーケンサーへ送る</button><button class="modal-btn" data-da="fromseq">&#x1F4E5; シーケンサーから読みこむ</button></div>' +
             '<div class="piano-row"><input type="text" class="drum-name" data-dname="1" maxlength="16" placeholder="名前（なくてもOK）"><button class="modal-btn" data-da="save">&#x1F4BE; 保存</button></div>';
         } else {
           h += '<p class="small" style="margin:0;">' + escHtml((drumGroove(song[0]) || { name: song[0] }).name) + '（' + (level === "easy" ? "かんたん" : (level === "normal" ? "ふつう" : "むずかしい")) + '・速さ ' + Math.round(rate * 100) + '%）・' + rn.length + '打</p>';
         }
-        if (mode !== "rhythm") {
+        if (mode !== "rhythm" && !back) {
           h += '<div class="piano-row"><button class="modal-btn" data-da="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-da="bpmup">&#xFF0B;</button>' +
             (mode === "free" ? '<button class="modal-btn" data-da="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button>' : "") + '</div>';
         }
@@ -499,12 +627,13 @@
           var k;
           for (k in flash) { if (flash.hasOwnProperty(k) && flash[k] > 0) { flash[k]--; } }
           if (judgeFrames > 0) { judgeFrames--; }
+          if (bk) { backStep(); }
           if (play) {
-            var pb = (now() - play.t0) * play.bpm / 60;
+            var pb = play.back ? backBeat() : (now() - play.t0) * play.bpm / 60;
             while (play.idx < play.notes.length && play.notes[play.idx][0] <= pb) { var pn = play.notes[play.idx]; hitSound(pn[1], pn[2]); flash[pn[1]] = 8; play.idx++; }
-            if (play.idx >= play.notes.length) { play = null; render(); }
+            if (!play.back && play.idx >= play.notes.length) { play = null; render(); }
           }
-          if (rec) {
+          if (rec && !rec.back) {
             var rb = Math.floor(recBeat());
             if (rb !== rec.beat && (metro || rb < 0)) { audio(); click(((rb % meter) + meter) % meter === 0); }
             rec.beat = rb;
@@ -517,11 +646,11 @@
           ctx.fillRect(0, 0, W, DRUM_H);
           if (mode === "free") {
             hudText(ctx, "🥁 じゆう", 8, 10, "left");
-            hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
+            hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, 10, "right");
             if (rec) {
               var rb = recBeat();
               text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "打", W / 2, 38, rb < 0 ? 22 : 14, "#ff6b6b");
-            } else { text(ctx, play ? "再生中…" : (last || "パッドを叩こう"), W / 2, 38, last && !play ? 20 : 13, "#ffffff"); }
+            } else { text(ctx, play ? "再生中…" : (last || (bk ? "伴奏中…" : "パッドを叩こう")), W / 2, 38, last && !play ? 20 : 13, "#ffffff"); }
             drawPads(ctx);
           } else if (mode === "step") {
             hudText(ctx, "🎛️ ステップ（16マス＝1小節）", 8, 10, "left");
@@ -541,6 +670,7 @@
   window.UGDrum = {
     pads: DRUM_PADS, rows: DRUM_ROWS, SEQ_ROWS: DRUM_SEQ_ROWS, songs: DRUM_SONGS, levels: DRUM_LEVELS, grooves: drumGrooves, groove: drumGroove,
     stepsClean: drumStepsClean, stepsFrom: drumStepsFrom, stepOn: drumStepOn, stepToggle: drumStepToggle, toSeqCustom: drumToSeqCustom, toSeqRec: drumToSeqRec,
+    backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,
     takesLoad: drumTakesLoad, takesSave: drumTakesSave, patsLoad: drumPatsLoad, patsSave: drumPatsSave, listAdd: drumListAdd, takeClean: drumTakeClean, patClean: drumPatClean,
     H: DRUM_H, TOP: DRUM_TOP, LEAD: DRUM_LEAD, STEPS: DRUM_STEPS, BARS: DRUM_BARS, SPEEDS: DRUM_SPEEDS, JUDGE: DRUM_JUDGE,
