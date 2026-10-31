@@ -266,6 +266,20 @@
     return ukePosOk(pos) ? C.voicingsAt(spec, pos, { lowG: lowG, preferred: UKE_PREFERRED, count: 6 }) : ukeVoice(spec, lowG);
   }
   // 押さえ方 → 名前（定番を優先し、なければエンジンで当てる）
+  // §225 v1.33: 名前と別名（max: 別名の数、99 ＝ すべて / onc: いちばん低い音をベースにした読み方「Am/C」なども別名に足す）
+  // High-G は音の高さの順がばらばらなので、大きく出す名前はいつもの読み方のまま
+  function ukeDetectMore(frets, lowG, max, onc) {
+    var nm = ukeChordName(frets), d = C ? C.detect(frets, { lowG: lowG, preferred: UKE_PREFERRED, maxAlts: Infinity }) : null;
+    var name = nm || (d ? d.name : ""), cand = d ? d.alts.slice() : [], out = [], seen = {}, i;
+    if (nm && d && d.name && d.name !== nm) { cand.unshift(d.name); }
+    if (onc && C && C.detectNotes) {
+      var ms = C.shapeMidis(frets, lowG).filter(function (m) { return m !== null; }), dn = C.detectNotes(ms, { maxAlts: Infinity });
+      if (dn && dn.name) { cand = cand.concat([dn.name], dn.alts); }
+    }
+    seen[name] = true;
+    for (i = 0; i < cand.length && out.length < (max === 99 ? Infinity : max); i++) { if (cand[i] && !seen[cand[i]]) { seen[cand[i]] = true; out.push(cand[i]); } }
+    return { name: name, alts: out, tones: d ? d.tones : [] };
+  }
   function ukeDetect(frets, lowG) {
     var nm = ukeChordName(frets);
     var d = C ? C.detect(frets, { lowG: lowG, preferred: UKE_PREFERRED }) : null;
@@ -3275,7 +3289,9 @@
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))), hold: p.hold === "once" ? "once" : "hold",
       // §224: 表示（並び方・パッドの大きさ・下のボタン・説明）
       view: UKE_VIEWS.some(function (v) { return v[0] === p.view; }) ? p.view : "below", size: p.size === "s" || p.size === "l" ? p.size : "m",
-      ctrl: p.ctrl !== false, help: p.help !== false };
+      ctrl: p.ctrl !== false, help: p.help !== false,
+      // §225: 別名の数（0〜3、99 ＝ すべて）・オンコードも読む（いちばん低い音をベースに）
+      alts: [0, 1, 2, 3, 99].indexOf(Number(p.alts)) >= 0 ? Number(p.alts) : 3, onc: !!p.onc };
   }
   // §224 v1.32: 並び方 [id, 名前]
   var UKE_VIEWS = [["below", "下にパッド"], ["top", "パッドを上に"], ["side", "横ならび"], ["small", "指板を小さく"]];
@@ -3825,6 +3841,8 @@
         else if (v.indexOf("size:") === 0) { padP.size = v.substring(5); }
         else if (v === "ctrl") { padP.ctrl = !padP.ctrl; }
         else if (v === "help") { padP.help = !padP.help; }
+        else if (v.indexOf("alts:") === 0) { padP.alts = Number(v.substring(5)); }
+        else if (v === "onc") { padP.onc = !padP.onc; }
         else if (v === "edit") { padEdit = !padEdit; padPlay = null; padMsg = padEdit ? "指板を押さえて（ホールドがおすすめ）、パッドをタップすると その押さえ方を登録" : ""; }
         else if (v === "hold") { padP.hold = padP.hold === "once" ? "hold" : "once"; }
         else if (v === "bpmdown" || v === "bpmup") { padP.bpm = Math.max(40, Math.min(240, padP.bpm + (v === "bpmup" ? 5 : -5))); }
@@ -3919,7 +3937,12 @@
           '<button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">パッド ' + (padP.pad ? "ON" : "OFF") + '</button>' +
           '<button class="modal-btn' + (padP.chord ? " piano-pad-on" : "") + '" data-uact="chord">コード名 ' + (padP.chord ? "ON" : "OFF") + '</button>' +
           '<button class="modal-btn' + (padP.ctrl ? " piano-pad-on" : "") + '" data-uact="ctrl">下のボタン ' + (padP.ctrl ? "ON" : "OFF") + '</button>' +
-          '<button class="modal-btn' + (padP.help ? " piano-pad-on" : "") + '" data-uact="help">説明 ' + (padP.help ? "ON" : "OFF") + '</button></div></details>';
+          '<button class="modal-btn' + (padP.help ? " piano-pad-on" : "") + '" data-uact="help">説明 ' + (padP.help ? "ON" : "OFF") + '</button></div>';
+        // §225: コードの別名（ほかの読み方）の数とオンコード
+        vh += '<p class="small" style="margin:4px 0 2px;">コードの別名（ほかの読み方）</p><div class="uke-chips2">';
+        var altOpts = [[0, "なし"], [1, "1つ"], [2, "2つ"], [3, "3つ"], [99, "すべて"]];
+        for (vk = 0; vk < altOpts.length; vk++) { vh += '<button class="modal-btn' + (padP.alts === altOpts[vk][0] ? " piano-pad-on" : "") + '" data-uact="alts:' + altOpts[vk][0] + '">' + altOpts[vk][1] + '</button>'; }
+        vh += '</div><div class="uke-chips2" style="margin-top:4px;"><button class="modal-btn' + (padP.onc ? " piano-pad-on" : "") + '" data-uact="onc">オンコードも読む（低い音をベースに: Am/C など）' + (padP.onc ? " ON" : " OFF") + '</button></div></details>';
         h += vh;
         if (padMsg) { h += '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + I.escHtml(padMsg) + '</p>'; }
         panel.innerHTML = h;
@@ -3941,6 +3964,21 @@
         if (sel) { sel.onchange = function (ev) { padP.play = ev.currentTarget.value; ukePadPrefsSave(padP); padPlay = null; if (ev.currentTarget.blur) { ev.currentTarget.blur(); } }; }
       }
 
+      // §225: 右上の「別名」。右はしにそろえ、入りきらなければ小さくして、それでも長ければ2行にする
+      function altText(ctx, s) {
+        var maxW = W - 90, size = 11, mw;
+        function measure() { ctx.font = "bold " + size + "px sans-serif"; mw = ctx.measureText ? ctx.measureText(s) : null; return mw && mw.width ? mw.width : 0; }
+        while (size > 7 && measure() > maxW) { size--; }
+        var lines = [s];
+        if (measure() > maxW) {
+          var parts = s.split(" / "), half = Math.ceil(parts.length / 2);
+          lines = [parts.slice(0, half).join(" / ") + " /", parts.slice(half).join(" / ")];
+        }
+        ctx.fillStyle = "#ffd166";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (var li = 0; li < lines.length; li++) { ctx.font = "bold " + size + "px sans-serif"; ctx.fillText(lines[li], W - 6, 22 + li * (size + 2)); }
+      }
       // dir: "up" なら A→G の順に、少しやわらかく（§182）
       function strumAll(dir) {
         if (ear) { earPlay(0); return; }
@@ -4213,7 +4251,7 @@
             for (s = 0; s < 4; s++) { ctx.fillText(ukeNoteName(ukeMidi(s, cur[s], lowG)), UKE_STRX[s], L.nut + L.frets * L.fh + 10); }
           }
           // 上の表示
-          var det = ukeDetect(cur, lowG), name = det.name;
+          var det = padOn ? ukeDetectMore(cur, lowG, padP.alts, padP.onc) : ukeDetect(cur, lowG), name = det.name;
           ctx.textAlign = "left";
           if (strumP || calibP) {
             var nowD = (frames - MODE_START) / 60;
@@ -4309,7 +4347,7 @@
             // §223: コード名の表示はオン・オフできる（パネルの 🏷️）。別名は入るだけ並べる
             ctx.fillText(padP.chord || !padOn ? name || "♪" : "♪", 8, 12);
             hudText(ctx, "フリー演奏" + (lowG ? "（Low-G）" : ""), W - 6, 9, "right");
-            if ((padP.chord || !padOn) && det.alts && det.alts.length) { hudText(ctx, "別名: " + det.alts.join(" / "), W - 6, 22, "right"); }
+            if ((padP.chord || !padOn) && det.alts && det.alts.length) { altText(ctx, "別名: " + det.alts.join(" / ")); }
           }
           if (seqCount > 0) {
             ctx.fillStyle = "#ffd166";
@@ -4346,7 +4384,7 @@
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
-    padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, VIEWS: UKE_VIEWS, PAD_SIZES: UKE_PAD_SIZES, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
+    padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, detectMore: ukeDetectMore, VIEWS: UKE_VIEWS, PAD_SIZES: UKE_PAD_SIZES, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
     myPatsLoad: ukeMyPatsLoad, myPatsSave: ukeMyPatsSave, myPatPut: ukeMyPatPut, MYPATS_KEY: UKE_MYPATS_KEY,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
     strumNotes: ukeStrumNotes, patterns: ukePatterns, GENRES: UKE_GENRES, GENRE_GROUPS: UKE_GENRE_GROUPS, genre: ukeGenre, genresFor: ukeGenresFor, applyGenre: ukeApplyGenre, genreOf: ukeGenreOf, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,

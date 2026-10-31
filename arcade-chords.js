@@ -330,7 +330,7 @@
   // shape: 各弦のフレット（null = 鳴らさない）→ { name, alts: [別名], tones: [音名], spec } / null
   function detect(shape, opts) {
     opts = opts || {};
-    var open = openMidis(opts.lowG), sounding = {}, list = [], low = 999, lowPc = -1, i;
+    var open = openMidis(opts.lowG), sounding = {}, list = [], low = 999, lowPc = -1, i, maxAlts = opts.maxAlts >= 0 ? opts.maxAlts : 3; // §225: 別名の数（Infinity ですべて）
     for (i = 0; i < 4; i++) {
       if (shape[i] === null || shape[i] === undefined || shape[i] < 0) { continue; }
       var mm = open[i] + shape[i], pc = pcOf(mm);
@@ -367,7 +367,7 @@
     if (!names.length) { return { name: "", alts: [], tones: tones, spec: null }; }
     var alts = [], seen = {};
     seen[names[0].name] = true;
-    for (i = 1; i < names.length && alts.length < 3; i++) {
+    for (i = 1; i < names.length && alts.length < maxAlts; i++) {
       // 1つ目が全部の音そろっているなら、音が足りない別名は出さない
       if (!names[0].miss && names[i].miss) { continue; }
       if (!seen[names[i].name]) { seen[names[i].name] = true; alts.push(names[i].name); }

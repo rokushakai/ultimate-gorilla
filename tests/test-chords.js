@@ -1185,4 +1185,13 @@ module.exports = async function () {
     vcls.lastIndexOf("-uke-v-top") > vcls.indexOf("+uke-v-top") && vcls.lastIndexOf("-uke-hide-ctrl") > vcls.indexOf("+uke-hide-ctrl"), "views and hide switches are set on the screen and removed when leaving", vcls);
   ok(vhtml.indexOf("uke-pads size-l") >= 0 && vhtml.indexOf("表示の設定") >= 0 && vpref.view === "top" && vpref.size === "l" && vpref.ctrl === false, "pad size and view are remembered", vpref);
   ok(U.VIEWS.length === 4 && U.PAD_SIZES.length === 3, "4 views and 3 pad sizes");
+  // --- §225: ウクレレの別名の数・オンコード ---
+  var dm0 = U.detectMore([0, 0, 0, 0], false, 99, false), dm1 = U.detectMore([0, 0, 0, 0], false, 1, false), dmO = U.detectMore([2, 0, 0, 0], false, 99, true), dmG = U.detectMore([0, 0, 0, 3], true, 99, true);
+  ok(dm0.name === "Am7" && dm0.alts.join() === "C6" && dm1.alts.length === 1 && U.detectMore([0, 0, 0, 0], false, 0, true).alts.length === 0, "ukulele: how many other names (none / 1 / … / all)", dm0);
+  ok(dmO.name === "Am" && dmO.alts.indexOf("Am/C") >= 0 && dmG.name === "C" && dmG.alts.indexOf("C/G") >= 0 && U.detectMore([2, 0, 0, 0], false, 99, false).alts.indexOf("Am/C") < 0,
+    "on-chord readings (lowest note as the bass) are added as other names only when switched on; the big name stays the usual one", [dmO, dmG]);
+  var ae = ukeHooked(), aU = ae.window.UGUkulele;
+  ae.store[aU.PADPREFS_KEY] = JSON.stringify({ alts: 99, onc: true });
+  ae.run("ukulele", { config: { mode: "free" } }, 5);
+  ok(ae.counters.texts.some(function (tx) { return tx.indexOf("別名: C6 / Am7/C") === 0; }), "the screen shows all the other names including on-chords", ae.counters.texts.filter(function (tx) { return tx.indexOf("別名") === 0; }).slice(-1));
 };
