@@ -13,7 +13,7 @@ module.exports = function () {
   function slice(a, b) { var i = s.indexOf(a), j = s.indexOf(b, i); if (i < 0 || j < 0) { throw new Error("slice " + a); } return s.slice(i, j); }
 
   // --- 構文・ES5 ---
-  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js", "arcade-piano.js"];
+  var jsFiles = ["script.js", "arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js", "arcade-piano.js", "arcade-drum.js"];
   jsFiles.forEach(function (f) {
     var err = null;
     try { new vm.Script(fs.readFileSync(path.join(ROOT, f), "utf8"), { filename: f }); } catch (e) { err = e.message; }
