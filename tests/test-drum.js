@@ -133,12 +133,19 @@ module.exports = function () {
   var t7 = JSON.parse(e7.store[D.TAKES_KEY] || "[]")[0];
   ok(got7[0] === "43" && t7 && t7.notes.map(function (n) { return n[1]; }).join() === "42,46,51", "kit: tapping the floor tom hits it; keys Q (hi-hat), C (pedal opens it → open hi-hat), F (ride) are recorded", [got7, t7 && t7.notes]);
   ok(D.landH(844, 390) >= 90 && D.landH(844, 390) < D.landH(1400, 820) + 1, "landscape height follows the screen");
-  // --- §229: 生ドラムのサンプル ---
+  // --- §229 / §230: 生ドラムのサンプル（ロック DRSKit・ジャズ Virtuosity） ---
   var UG = W.UGMelody, fs = require("fs"), path = require("path");
   var used = D.pads.map(function (pd) { return pd[0]; }).concat(D.extra.map(function (x) { return x[0]; })).filter(function (m) { return m !== 39; });
-  ok(UG.sampleFiles[UG.DRUM] === "drums_virtuosity" && used.every(function (m) { return !!UG.drumMap[m]; }) && !UG.drumMap[39] && typeof UG.setDrumSamples === "function",
-    "every drum (except the clap) has a real drum sample; the clap stays synthesized", used.filter(function (m) { return !UG.drumMap[m]; }));
-  var js = fs.readFileSync(path.join(__dirname, "..", "samples", "drums_virtuosity.js"), "utf8"), keys = (js.match(/"(\d+)": "/g) || []).map(function (k) { return Number(k.replace(/\D/g, "")); });
-  ok(/CC0/.test(js) && keys.length === 9 && Object.keys(UG.drumMap).every(function (m) { return keys.indexOf(UG.drumMap[m][0]) >= 0; }) && js.length < 700 * 1024, "the sample file (CC0) has the 9 sounds the map uses and stays small", keys);
-  ok(/Virtuosity Drums/.test(fs.readFileSync(path.join(__dirname, "..", "CREDITS.md"), "utf8")), "CREDITS.md names the drum samples");
+  ok(UG.sampleFiles[UG.DRUM] === "drums_drs" && used.every(function (m) { return !!UG.drumMap[m]; }) && !UG.drumMap[39] && typeof UG.setDrumSamples === "function",
+    "every drum (except the clap) has a real drum sample; rock (DRSKit) is the default kit", used.filter(function (m) { return !UG.drumMap[m]; }));
+  ok(UG.drumKits.length === 2 && UG.setDrumKit("virtuosity") && UG.sampleFiles[UG.DRUM] === "drums_virtuosity" && !UG.setDrumKit("nope") && UG.setDrumKit("drs") && UG.sampleFiles[UG.DRUM] === "drums_drs",
+    "choosing a kit switches the sample file");
+  [["drums_drs", /CC BY 4\.0/, 10], ["drums_virtuosity", /CC0/, 9]].forEach(function (kf) {
+    var js = fs.readFileSync(path.join(__dirname, "..", "samples", kf[0] + ".js"), "utf8"), keys = (js.match(/"(\d+)": "/g) || []).map(function (k) { return Number(k.replace(/\D/g, "")); });
+    ok(kf[1].test(js) && keys.length === kf[2] && Object.keys(UG.drumMap).every(function (m) { return keys.indexOf(Number(m)) >= 0 || keys.indexOf(UG.drumMap[m][0]) >= 0; }) && js.length < 700 * 1024, kf[0] + ": license noted, every mapped drum has a sound, small file", keys);
+  });
+  var cr = fs.readFileSync(path.join(__dirname, "..", "CREDITS.md"), "utf8");
+  ok(/Virtuosity Drums/.test(cr) && /DRSKit/.test(cr) && /CC BY 4\.0/.test(cr), "CREDITS.md names both drum sample sets (DRSKit needs attribution)");
+  var pr = JSON.parse(JSON.stringify(D.prefs()));
+  ok(pr.kitId === "drs" && pr.deep === false && pr.real === true, "drum game defaults: real drums, rock kit, normal kick", pr);
 };

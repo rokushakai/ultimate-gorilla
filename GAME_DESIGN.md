@@ -10578,3 +10578,15 @@ var COMPANION_TECHNIQUE2_DATA = {
   - `UGMelody.setDrumSamples(on)` でサンプルを使う・使わない
 - ゴリラドラムのはじめの画面に「音色: 🥁 生ドラム / 🎛️ 電子ドラム」（prefs の `real`。はじめは生ドラム）。音を出しはじめるときにサンプルを読みこむ
 - ゴリラウクレレのシーケンサーも、ドラムトラックがオンなら再生のときにサンプルを読みこむ（生ドラムで鳴る）
+
+## §230 v1.38 — 🥁 ドラムの音色を追加（ロック）・キックを太く
+
+- ジャズのセット（Virtuosity）のキックがタムのように聞こえる（ジャズ用の小さめで高めのバスドラム）ため、ロック向けのセットを追加してはじめの音色にする
+- **ロック: DRSKit**（DrumGizmo チームと DRSDrums の Jes Eiler、sfz 版 kinwie。[sfzinstruments/DrumGizmo.DRSKit](https://github.com/sfzinstruments/DrumGizmo.DRSKit)。**CC BY 4.0**＝クレジット表記が必要 → CREDITS.md・メロディくずしの設定の「本物の音」の行）
+  - `samples/drums_drs.js`（約600KB・10音）: キック 36・スネア 38・リム 37・ハイハット 42 / 46・タム 48 / 45 / 43・クラッシュ 49・ライド 51。各楽器を強さの順に並べて上から2割くらいの1打をえらび、近くのマイクと天井のマイク（OH。クラッシュは部屋のマイクも）を混ぜた
+- **ジャズ: Virtuosity**: キックを、キックのそばのマイク（kickmic）に mid マイクを少し混ぜた音に作りなおし（低い音を多めに）
+- `arcade-melody.js`: `MELODY_DRUM_KITS`（drs / virtuosity）と `UGMelody.setDrumKit(id)`（`MELODY_SAMPLE_FILES[128]` を切りかえる）。セットにその MIDI の音があればそのまま、なければ `MELODY_DRUM_MAP` で近い太鼓の高さを変える
+- **キックを太く**: `UGMelody.setKickRate(r)`。ON のときキック（35・36）を 0.86 倍の速さで鳴らして低く・長く
+- ゴリラドラムのはじめの画面の音色: 🥁 ロック / 🎷 ジャズ / 🎛️ 電子（prefs の `kitId`・`real`）と「キックを太く（低く）ON/OFF」（`deep`）
+- シーケンサーのドラムは、いまえらんでいるセット（はじめはロック）で鳴る
+- 素材づくりの道具（作業用）: FLAC を Chrome の WebAudio で読み、マイクを混ぜて 22050Hz モノラル WAV にする（ffmpeg なし）

@@ -160,7 +160,8 @@
       steps: p.steps ? drumStepsClean(p.steps) : drumStepsFrom("8beat"),
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backDrum: !!p.backDrum,
       kit: !!p.kit, land: !!p.land, // §228: ドラムセットの形・よこ向き（じゆう）
-      real: p.real !== false // §229: 音色（true ＝ 生ドラムのサンプル / false ＝ 電子音（合成））
+      real: p.real !== false, // §229: 音色（true ＝ 生ドラムのサンプル / false ＝ 電子音（合成））
+      kitId: p.kitId === "virtuosity" ? "virtuosity" : "drs", deep: !!p.deep // §230: 生ドラムのセット・キックを太く
     };
   }
   function drumSavePrefs(p) { return lsSet(DRUM_PREFS_KEY, p); }
@@ -273,9 +274,12 @@
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F941; ゴリラドラム</h3>' +
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">パッドを叩こう（同時押しもOK）。パソコンは Q W E R / A S D F（Space もキック）。</p><div class="quiz-opts">', i;
       for (i = 0; i < DRUM_MODES.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.mode === DRUM_MODES[i][0] ? " active" : "") + '" data-mode="' + DRUM_MODES[i][0] + '">' + DRUM_MODES[i][1] + '</button>'; }
+      // §230: 音色（生ドラムのセット・電子ドラム）とキックを太く
       html += '</div><p class="small" style="margin:4px 0 2px;">音色</p><div class="quiz-opts">' +
-        '<button class="modal-btn quiz-opt' + (p.real ? " active" : "") + '" data-real="1">&#x1F941; 生ドラム</button>' +
-        '<button class="modal-btn quiz-opt' + (!p.real ? " active" : "") + '" data-real="0">&#x1F39B;&#xFE0F; 電子ドラム</button></div>';
+        '<button class="modal-btn quiz-opt' + (p.real && p.kitId === "drs" ? " active" : "") + '" data-kit="drs">&#x1F941; ロック</button>' +
+        '<button class="modal-btn quiz-opt' + (p.real && p.kitId === "virtuosity" ? " active" : "") + '" data-kit="virtuosity">&#x1F3B7; ジャズ</button>' +
+        '<button class="modal-btn quiz-opt' + (!p.real ? " active" : "") + '" data-real="0">&#x1F39B;&#xFE0F; 電子</button></div>' +
+        (p.real ? '<div class="quiz-opts"><button class="modal-btn quiz-opt' + (p.deep ? " active" : "") + '" data-deep="1">キックを太く（低く）' + (p.deep ? " ON" : " OFF") + '</button></div>' : "");
       if (p.mode === "free") {
         var takes = drumTakesLoad(), bl = drumBackList();
         if (bl.length) {
@@ -326,6 +330,8 @@
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; drumSavePrefs(p); draw(); return; }
           if (el.getAttribute("data-backdrum")) { p.backDrum = !p.backDrum; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-real"))) { p.real = v === "1"; drumSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-kit"))) { p.real = true; p.kitId = v; drumSavePrefs(p); draw(); return; }
+          if (el.getAttribute("data-deep")) { p.deep = !p.deep; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-level"))) { p.level = v; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
@@ -393,6 +399,8 @@
           if (UG.audioInit()) {
             audioOk = true;
             if (UG.setDrumSamples) { UG.setDrumSamples(prefs.real); }
+            if (UG.setDrumKit) { UG.setDrumKit(prefs.kitId); }
+            if (UG.setKickRate) { UG.setKickRate(prefs.deep ? 0.86 : 1); }
             if (prefs.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); }
           }
         } catch (e) {}

@@ -497,7 +497,7 @@
     0: "acoustic_grand_piano", 4: "electric_piano_1", 8: "celesta", 11: "vibraphone", 12: "marimba",
     24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "violin", 46: "orchestral_harp",
     48: "string_ensemble_1", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto",
-    128: "drums_virtuosity" // §229 v1.37: 生ドラム（Virtuosity Drums, CC0）。MIDI ごとの音（近い太鼓は高さを変えて使う）
+    128: "drums_drs" // §229 v1.37 / §230 v1.38: 生ドラム。いまえらんでいるドラムセット（MELODY_DRUM_KITS）のファイル
   };
   // 鳴らす長さ（秒）: 減衰する楽器は長め、持続する楽器は短く切ってフェード
   var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
@@ -1107,7 +1107,7 @@
       if (!names.length) { return "選んだ音色に🎙はありません（合成音で鳴ります）"; }
       if (loading) { return "🎙 本物の音を読み込み中…（" + ready + "/" + names.length + "）"; }
       if (err) { return "🎙 一部の音を読み込めませんでした（合成音で鳴ります）"; }
-      return "🎙 本物の音 準備OK（" + ready + "音色） ／ FluidR3 GM・CC BY 3.0";
+      return "🎙 本物の音 準備OK（" + ready + "音色） ／ FluidR3 GM・CC BY 3.0 ／ ドラム: DRSKit・CC BY 4.0、Virtuosity Drums・CC0";
     }
     // 選んだ音色のサンプルを読み込み、終わったら（まだこの画面なら）表示を更新
     function loadSamplesForPrefs() {
@@ -1525,13 +1525,23 @@
     35: [36, 0.94], 36: [36, 1], 37: [37, 1], 38: [38, 1], 40: [38, 1.06], 42: [42, 1], 44: [42, 0.94], 46: [46, 1],
     41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12]
   };
+  // §230 v1.38: ドラムセット [id, ファイル, 名前]。はじめはロック
+  var MELODY_DRUM_KITS = [["drs", "drums_drs", "ロック（DRSKit）"], ["virtuosity", "drums_virtuosity", "ジャズ（Virtuosity Drums）"]];
+  melodySamples.drumKit = "drs";
+  melodySamples.kickRate = 1;
+  function melodySetDrumKit(id) {
+    for (var i = 0; i < MELODY_DRUM_KITS.length; i++) {
+      if (MELODY_DRUM_KITS[i][0] === id) { melodySamples.drumKit = id; MELODY_SAMPLE_FILES[MELODY_DRUM] = MELODY_DRUM_KITS[i][1]; return true; }
+    }
+    return false;
+  }
   var melodyOpenHat = null; // 鳴っているオープンハイハット（クローズ・ペダルで止める）
   function melodyDrumSample(ac, m, t, level, dest) {
-    var mp = MELODY_DRUM_MAP[m], bank = melodySamples.buffers.drums_virtuosity;
+    var bank = melodySamples.buffers[MELODY_SAMPLE_FILES[MELODY_DRUM]], mp = bank && bank[m] ? [m, 1] : MELODY_DRUM_MAP[m];
     if (!mp || melodySamples.drumOff || !melodySamples.enabled || !bank || !bank[mp[0]]) { return false; }
     var src = ac.createBufferSource(), g = ac.createGain();
     src.buffer = bank[mp[0]];
-    src.playbackRate.value = mp[1];
+    src.playbackRate.value = mp[1] * (m === 35 || m === 36 ? melodySamples.kickRate : 1); // §230: キックを太く
     g.gain.value = 1.4;
     src.connect(g);
     g.connect(dest ? (function () { var o = ac.createGain(); o.gain.value = (level > 0 && level < 1) ? level : 1; o.connect(dest); return o; })() : melodyLevelOut(ac, level));
@@ -1985,7 +1995,8 @@
     buildLayout: melodyBuildLayout, scale: melodyScale, scales: MELODY_SCALES, posDegree: melodyPosDegree, degreeToMidi: melodyDegreeToMidi,
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
     synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
-    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
+    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
+    drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
