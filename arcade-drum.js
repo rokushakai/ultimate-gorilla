@@ -179,7 +179,8 @@
       // §241 v1.49: パターンの切りかえ（now ＝ すぐ / 1・2・4 ＝ その小節の区切りで）・オープンHH は押しているあいだ開く
       patSwitch: DRUM_SWITCHES.some(function (w) { return w[0] === p.patSwitch; }) ? p.patSwitch : "1",
       hhHold: p.hhHold !== false,
-      tapFollow: DRUM_TAP_FOLLOWS.some(function (w) { return w[0] === p.tapFollow; }) ? p.tapFollow : "mid", // §243: タップへのついていき方
+      // §245 v1.53: はじめは「すぐ」（v1.50 までと同じ）。v1.51・v1.52 で保存された tapFollow は読まない（名前を tapMode に）
+      tapMode: DRUM_TAP_FOLLOWS.some(function (w) { return w[0] === p.tapMode; }) ? p.tapMode : "now",
       hhStyle: DRUM_HH_STYLES.some(function (w) { return w[0] === p.hhStyle; }) ? p.hhStyle : "auto", // §242: ハイハットの閉じ方
       mute: (p.mute && p.mute.length ? p.mute : []).filter(function (id, i, a) { return drumPartOk(id) && a.indexOf(id) === i; })
     };
@@ -674,8 +675,8 @@
   // §243 v1.51: 演奏中のタップテンポ。タップから「目標の BPM」を決めて、いまの BPM を少しずつそこへ近づける
   // [id, 名前, 1秒で差の何割ちぢめるか, 1秒で変わる BPM の上限]（now ＝ これまでどおり、すぐその BPM に）
   // §244 v1.52: v1.51 はにぶすぎたので、すぐ（v1.50 まで）とのあいだくらいに強めた
-  var DRUM_TAP_FOLLOWS = [["soft", "ゆったり", 1.2, 8], ["mid", "ふつう", 3, 20], ["quick", "きびきび", 6, 40], ["now", "すぐ", 0, 0]];
-  function drumTapFollow(id) { for (var i = 0; i < DRUM_TAP_FOLLOWS.length; i++) { if (DRUM_TAP_FOLLOWS[i][0] === id) { return DRUM_TAP_FOLLOWS[i]; } } return DRUM_TAP_FOLLOWS[1]; }
+  var DRUM_TAP_FOLLOWS = [["now", "すぐ", 0, 0], ["quick", "きびきび", 6, 40], ["mid", "ふつう", 3, 20], ["soft", "ゆったり", 1.2, 8]]; // §245: すぐ（はじめ）から並べる
+  function drumTapFollow(id) { for (var i = 0; i < DRUM_TAP_FOLLOWS.length; i++) { if (DRUM_TAP_FOLLOWS[i][0] === id) { return DRUM_TAP_FOLLOWS[i]; } } return DRUM_TAP_FOLLOWS[0]; }
   // タップの時刻（秒）→ 目標の BPM（いまの BPM をもとに、8分・2分で叩いたぶんは直し、はずれた間かくは使わない。間かくのまん中の値）
   function drumTapBpm(taps, cur) {
     var beat = 60 / cur, iv = [], i, r, d;
@@ -1009,7 +1010,7 @@
         else if (v === "pat") { prefs.pat = !prefs.pat; drumSavePrefs(prefs); if (!prefs.pat) { patStop(); patEdit = false; } render(); }
         else if (v === "patstop") { patStop(); render(); }
         else if (v.indexOf("psw:") === 0) { prefs.patSwitch = v.substring(4); drumSavePrefs(prefs); render(); }
-        else if (v.indexOf("tapf:") === 0) { prefs.tapFollow = v.substring(5); drumSavePrefs(prefs); render(); }
+        else if (v.indexOf("tapf:") === 0) { prefs.tapMode = v.substring(5); drumSavePrefs(prefs); render(); }
         else if (v.indexOf("hhs:") === 0) { prefs.hhStyle = v.substring(4); drumSavePrefs(prefs); if (UG && UG.setHatClose) { UG.setHatClose(prefs.hhStyle); } hitSound(46, 0.7); hitSound(44, 0.35, prefs.hhStyle === "tight" ? 0.07 : (prefs.hhStyle === "sizzle" ? 0.6 : 0.25)); render(); } // 試し聞き（録音しない）
         else if (v === "hhhold") { prefs.hhHold = !prefs.hhHold; drumSavePrefs(prefs); render(); }
         else if (v === "patset") { prefs.patSet = !prefs.patSet; drumSavePrefs(prefs); render(); }
@@ -1285,7 +1286,7 @@
       // §234: タップテンポ（2回目から、最近のタップの間かくの平均で BPM を決める）
       // §243: 演奏パターンが鳴っているときは、目標（tapTarget）を決めて少しずつ近づける（drumTapGlide）
       function tapTempo() {
-        var t = now(), playing = patRun && !(bk && back) && prefs.tapFollow !== "now";
+        var t = now(), playing = patRun && !(bk && back) && prefs.tapMode !== "now";
         if (taps.length && t - taps[taps.length - 1] > 2) { taps = []; }
         taps.push(t);
         if (taps.length > 8) { taps.shift(); }
@@ -1295,7 +1296,7 @@
           var tb = drumTapBpm(taps, bpm);
           if (tb === null) { msg = "&#x1F446; いまのテンポに近い速さでタップしてね"; render(); return; }
           tapTarget = tb;
-          msg = "&#x1F446; BPM " + Math.round(bpm) + " → " + Math.round(tb) + "（" + drumTapFollow(prefs.tapFollow)[1] + "）";
+          msg = "&#x1F446; BPM " + Math.round(bpm) + " → " + Math.round(tb) + "（" + drumTapFollow(prefs.tapMode)[1] + "）";
           render();
           return;
         }
@@ -1310,14 +1311,14 @@
         if (tapTarget === null) { return; }
         if (!patRun || (bk && back)) { tapTarget = null; bpm = Math.round(bpm); return; }
         var was = Math.round(bpm);
-        bpm = drumTapGlide(bpm, tapTarget, prefs.tapFollow, 1 / 60);
+        bpm = drumTapGlide(bpm, tapTarget, prefs.tapMode, 1 / 60);
         if (bpm === tapTarget) { bpm = Math.round(bpm); tapTarget = null; prefs.bpm = bpm; drumSavePrefs(prefs); render(); }
         else if (Math.round(bpm) !== was && frame % 6 === 0) { render(); }
       }
       // ついていき方のボタン
       function tapFollowChips() {
         var o = '<div class="uke-chips2 drum-tapf"><span class="small">&#x1F446; 追従</span>', i;
-        for (i = 0; i < DRUM_TAP_FOLLOWS.length; i++) { o += '<button class="modal-btn' + (prefs.tapFollow === DRUM_TAP_FOLLOWS[i][0] ? " piano-pad-on" : "") + '" data-da="tapf:' + DRUM_TAP_FOLLOWS[i][0] + '">' + DRUM_TAP_FOLLOWS[i][1] + '</button>'; }
+        for (i = 0; i < DRUM_TAP_FOLLOWS.length; i++) { o += '<button class="modal-btn' + (prefs.tapMode === DRUM_TAP_FOLLOWS[i][0] ? " piano-pad-on" : "") + '" data-da="tapf:' + DRUM_TAP_FOLLOWS[i][0] + '">' + DRUM_TAP_FOLLOWS[i][1] + '</button>'; }
         return o + '</div>';
       }
 

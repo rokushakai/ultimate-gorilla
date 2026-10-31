@@ -248,7 +248,7 @@ module.exports = function () {
     "tempo glide: up to 20 BPM a second (ふつう), faster when きびきび, 'すぐ' jumps", [g0, gq]);
   function tfRun(follow) {
     var e = hooked(), tr = [];
-    e.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 100, tapFollow: follow });
+    e.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 100, tapMode: follow });
     e.run("drum", { config: { mode: "free" } }, 400, function (f) {
       var h = e.window.__drum; if (!h) { return; }
       if (f === 2) { h().patTap(0); }
@@ -257,8 +257,8 @@ module.exports = function () {
     });
     return tr.concat([e.window.UGDrum.prefs().bpm]);
   }
-  var tfm = tfRun("mid"), tfn = tfRun("now");
-  ok(tfm[0] > 101 && tfm[0] < 115 && tfm[1] === 120 && tfm[2] === 120 && tfn[0] === 120, "while a pattern plays, tapping moves the BPM gradually to the tapped tempo (saved when it arrives); 'すぐ' jumps", [tfm, tfn]);
+  var tfm = tfRun("mid"), tfn = tfRun("now"), tfd = tfRun("old-saved");
+  ok(tfm[0] > 101 && tfm[0] < 115 && tfm[1] === 120 && tfm[2] === 120 && tfn[0] === 120 && tfd[0] === 120, "while a pattern plays, tapping moves the BPM gradually to the tapped tempo (saved when it arrives); 'すぐ' (the default) jumps", [tfm, tfn]);
   // --- §235: ハネ・じぶんのフィル・ステップの予約再生・練習の判定 ---
   ok(D.swingOff("0", 1) === 0 && D.swingOff("16b", 1) === 0.33 && D.swingOff("16b", 2) === 0 && D.swingOff("8b", 2) === 0.66 && D.swingOff("8b", 0) === 0 && D.swingOff("8a", 1) === 0.17,
     "swing delays the offbeats (16th or 8th, light or triplet feel)");
