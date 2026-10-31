@@ -276,4 +276,15 @@ module.exports = function () {
   var n14 = JSON.parse(e14.store.ultimateGorillaPianoTakesV1 || "[]")[0].notes;
   ok(n14.length === 3 && n14.map(function (n) { return n[2]; }).join() === "60,64,67" && Math.abs(n14[1][0] - n14[0][0] - 0.5) < 0.02 && Math.abs(n14[0][1] - 0.5) < 0.02,
     "arpeggios are recorded note by note (8ths = half a beat apart)", n14);
+  // --- §221: 演奏パターン ---
+  var j = function (id) { return JSON.stringify(P.playSteps([60, 64, 67], id, 8).steps); };
+  ok(P.PLAYS.length >= 20 && j("bunch") === "[[48],null,[64,67],null,[48],null,[64,67],null]" && j("alberti") === "[[60],[67],[64],[67],[60],[67],[64],[67]]" &&
+    j("tremolo").indexOf("[60],[72]") === 1 && P.playSteps([60, 64, 67], "waltz").steps.length === 6 && P.playSteps([60, 64, 67], "shuffle").unit === 1 / 3,
+    "patterns from letters: B = bass an octave down, H = right hand, 1-9 = n-th note (wrapping an octave up), - = hold", j("bunch"));
+  var badP = P.PLAYS.filter(function (pl) { return pl[2] === "pat" && !(pl[5] && pl[5].acc) && (!/^[CBH1-9-]+$/.test(pl[3]) || !(pl[4] > 0) || Math.abs(pl[3].length * pl[4] - Math.round(pl[3].length * pl[4])) > 1e-9); });
+  ok(badP.length === 0, "every pattern uses known letters and fills whole beats", badP.map(function (b) { return b[0]; }));
+  var a5 = arpRun({ pad: true, padArp: "bunch", bpm: 120 }, 100, 130);
+  ok(a5.seq.slice(0, 4).join() === "48,64+67,48,64+67" && Object.keys(a5.e.window.__piano().press).length === 0, "pad pattern 'ブンチャッ' plays bass and chord in turn (and stops on release)", a5.seq);
+  var a6 = arpRun({ pad: true, padArp: "roll", bpm: 120 }, 40, 70);
+  ok(a6.seq.join() === "60,60+64,60+64+67,60+64+67+72" && Object.keys(a6.e.window.__piano().press).length === 0, "roll: notes pile up quickly and ring until released", a6.seq);
 };
