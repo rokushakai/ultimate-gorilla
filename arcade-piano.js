@@ -435,6 +435,11 @@
           if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: p.mode, song: v, speed: p.speed }); }
         };
       }
+      // §240: タイミング補正（リズムゲームのとき）
+      if (p.mode === "rhythm" && window.UGMelody && window.UGMelody.latencyUi) {
+        var lb = document.createElement("div"), back0 = root.querySelector("[data-back]");
+        if (back0 && back0.parentNode) { back0.parentNode.insertBefore(lb, back0); window.UGMelody.latencyUi(lb); }
+      }
     }
     draw();
   }
@@ -843,8 +848,10 @@
       if (mode === "rhythm") {
         for (var ni = 0; ni < notes.length; ni++) { rn.push({ t: PIANO_LEAD + notes[ni][0] * spb, d: notes[ni][1] * spb, m: notes[ni][2], j: -2 }); }
       }
+      // §240: タイミング補正（音・タップのおくれのぶん、判定をおそくする）
+      var LAT = window.UGMelody && window.UGMelody.latency ? window.UGMelody.latency() / 1000 : 0;
       function rhythmHit(m) {
-        var t = now(), best = null, i;
+        var t = now() - LAT, best = null, i;
         for (i = 0; i < rn.length; i++) {
           var n = rn[i];
           if (n.t - t > PIANO_JUDGE[2][0]) { break; }
@@ -862,7 +869,7 @@
         judgeFrames = 30;
       }
       function rhythmStep() {
-        var t = now(), i, left = 0;
+        var t = now() - LAT, i, left = 0;
         for (i = 0; i < rn.length; i++) {
           var n = rn[i];
           if (n.j === -2 && t - n.t > PIANO_JUDGE[2][0]) { n.j = -1; counts[3]++; combo = 0; judgeText = "MISS"; judgeFrames = 30; }

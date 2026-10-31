@@ -1550,6 +1550,83 @@
     }
     return false;
   }
+  // ---------- §240 v1.48: タイミング補正（音が聞こえるまで・タップが届くまでの遅れ。ms。リズムの判定をこの分おそくする）----------
+  var MELODY_LAT_KEY = "ultimateGorillaLatencyV1", MELODY_LAT_MAX = 300;
+  function melodyLatency() {
+    try { var v = Math.round(Number(window.localStorage.getItem(MELODY_LAT_KEY))); return isFinite(v) ? Math.max(0, Math.min(MELODY_LAT_MAX, v)) : 0; } catch (e) { return 0; }
+  }
+  function melodySetLatency(ms) {
+    var v = Math.max(0, Math.min(MELODY_LAT_MAX, Math.round(Number(ms) || 0)));
+    try { window.localStorage.setItem(MELODY_LAT_KEY, String(v)); } catch (e) {}
+    return v;
+  }
+  // 測った結果（音の時刻・タップの時刻。秒）→ 補正（ms）。はじめの2回の音は使わない・±0.3秒より外れたタップは捨てる・まん中の値。4回たりなければ null
+  function melodyLatencyFrom(clicks, taps) {
+    var d = [], i, j;
+    for (i = 0; i < taps.length; i++) {
+      var best = null;
+      for (j = 2; j < clicks.length; j++) { var x = taps[i] - clicks[j]; if (best === null || Math.abs(x) < Math.abs(best)) { best = x; } }
+      if (best !== null && Math.abs(best) <= 0.3) { d.push(best); }
+    }
+    if (d.length < 4) { return null; }
+    d.sort(function (a, b) { return a - b; });
+    var mid = d.length % 2 ? d[(d.length - 1) / 2] : (d[d.length / 2 - 1] + d[d.length / 2]) / 2;
+    return Math.max(0, Math.min(MELODY_LAT_MAX, Math.round(mid * 1000)));
+  }
+  // はじめの画面に出す「⏱️ タイミング補正」（box の中を書きかえる）。測るときは 0.6秒ごとに10回鳴らして、タップの時刻をくらべる
+  var melodyLat = { box: null, run: null, note: "" };
+  function melodyLatencyUi(box) {
+    melodyLat.box = box;
+    melodyLatDraw();
+  }
+  function melodyLatDraw() {
+    var box = melodyLat.box, run = melodyLat.run;
+    if (!box) { return; }
+    box.innerHTML = '<p class="small" style="margin:10px 0 2px;">&#x23F1;&#xFE0F; タイミング補正（イヤホンなどで音がおくれて聞こえるとき）: <b>' + melodyLatency() + 'ms</b></p>' +
+      (run ? '<button class="modal-btn ug-lat-tap" style="width:100%;min-height:72px;font-size:18px;">&#x1F941; 音に合わせてタップ（' + run.taps.length + '）</button>' :
+        '<div class="quiz-opts"><button class="modal-btn quiz-opt" data-lat="-10">&minus;10</button><button class="modal-btn quiz-opt" data-lat="10">&#xFF0B;10</button>' +
+        '<button class="modal-btn quiz-opt" data-lat="measure">&#x1F442; 測る</button><button class="modal-btn quiz-opt" data-lat="zero">0 にもどす</button></div>') +
+      '<p class="small" style="margin:2px 0 0;">' + (melodyLat.note || "リズムゲーム（ピアノ・ドラム）とドラムの練習の判定を、この分だけおそくします") + '</p>';
+    var bs = box.querySelectorAll ? box.querySelectorAll("button[data-lat]") : [], i;
+    for (i = 0; i < bs.length; i++) {
+      bs[i].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-lat");
+        if (v === "measure") { melodyLatStart(); return; }
+        melodySetLatency(v === "zero" ? 0 : melodyLatency() + Number(v));
+        melodyLat.note = "";
+        melodyLatDraw();
+      };
+    }
+    var tb = box.querySelector ? box.querySelector(".ug-lat-tap") : null;
+    if (tb) {
+      var tap = function (ev) {
+        if (ev && ev.cancelable) { ev.preventDefault(); }
+        var r = melodyLat.run;
+        if (!r) { return; }
+        var t = r.ac.currentTime;
+        if (r.taps.length && t - r.taps[r.taps.length - 1] < 0.1) { return; }
+        r.taps.push(t);
+        tb.innerHTML = "&#x1F941; 音に合わせてタップ（" + r.taps.length + "）";
+      };
+      if (window.PointerEvent) { tb.onpointerdown = tap; } else { tb.ontouchstart = tap; tb.onmousedown = tap; }
+    }
+  }
+  function melodyLatStart() {
+    var ac = melodyAudioInit();
+    if (!ac) { melodyLat.note = "音が出せませんでした"; melodyLatDraw(); return; }
+    var t0 = ac.currentTime + 0.8, clicks = [], i;
+    for (i = 0; i < 10; i++) { clicks.push(t0 + i * 0.6); try { melodyDrum(ac, i % 4 === 0 ? 76 : 77, t0 + i * 0.6, 0.9); } catch (e) {} }
+    melodyLat.run = { ac: ac, clicks: clicks, taps: [] };
+    melodyLat.note = "音が10回鳴ります。3回目くらいから、聞こえた音にぴったり合わせてタップしてね";
+    melodyLatDraw();
+    setTimeout(function () {
+      var r = melodyLat.run, ms = r ? melodyLatencyFrom(r.clicks, r.taps) : null;
+      melodyLat.run = null;
+      if (ms === null) { melodyLat.note = "&#x26A0;&#xFE0F; うまく測れませんでした（音に合わせて4回以上タップしてね）"; }
+      else { melodySetLatency(ms); melodyLat.note = "&#x2705; " + ms + "ms にしました"; }
+      melodyLatDraw();
+    }, (0.8 + 10 * 0.6 + 0.6) * 1000);
+  }
   var melodyOpenHat = null; // 鳴っているオープンハイハット（クローズ・ペダルで止める）
   function melodyDrumSample(ac, m, t, level, dest) {
     var bank = melodySamples.buffers[MELODY_SAMPLE_FILES[MELODY_DRUM]], mp = bank && bank[m] ? [m, 1] : MELODY_DRUM_MAP[m];
@@ -2011,6 +2088,7 @@
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
     synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
+    latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,

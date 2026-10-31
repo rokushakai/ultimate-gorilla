@@ -162,7 +162,7 @@ module.exports = function () {
   U9.loadSamples([U9.DRUM]);
   ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
   // --- §233: 演奏パターン ---
-  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 11 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
+  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 14 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
     "32 pattern pads (2 pages): grooves loop, fills play one bar");
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
@@ -352,4 +352,51 @@ module.exports = function () {
     if (f === 30) { var st = h(); ok24 = !!(st.bk && st.patRun && st.patRun.song && st.patRun.song.bk); h().act("songplay"); ok24 = ok24 && !e24.window.__drum().bk && !e24.window.__drum().patRun; }
   });
   ok(ok24 === true, "with backing, the song starts the backing from the top and stopping the song stops it", ok24);
+  // --- §240: タイミング補正・3拍子 ---
+  var UGm = W.UGMelody, clk = [0, 0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2, 4.8, 5.4];
+  ok(UGm.latencyFrom(clk, [0.05, 1.32, 1.92, 2.5, 3.13, 3.72, 9]) === 120 && UGm.latencyFrom(clk, [1.3, 1.9]) === null && UGm.latencyFrom(clk, [1.1, 1.7, 2.3, 2.9]) === 0,
+    "latency measuring: the middle offset of taps against the clicks (first two clicks and stray taps ignored, never below 0)");
+  // 補正 100ms: 100ms おくれて叩いても PERFECT
+  var e25 = hooked(), done25 = {};
+  e25.store[UGm.LAT_KEY] = "100";
+  e25.run("drum", { config: { mode: "rhythm", song: "8beat", level: "easy", speed: 100 } }, 2000, function () {
+    var h = e25.window.__drum; if (!h) { return; }
+    var st = h(), k;
+    for (k = 0; k < st.rn.length; k++) {
+      var n = st.rn[k];
+      if (n.j === -2 && st.t >= n.t + 0.095 && !done25[k]) {
+        done25[k] = 1;
+        var lane = st.chart.lanes.indexOf(n.m), lw = 240 / st.chart.lanes.length;
+        e25.ptr("down", lane * lw + lw / 2, 200, 9); e25.ptr("up", lane * lw + lw / 2, 200, 9);
+      }
+    }
+  });
+  var s25 = e25.window.__drum();
+  ok(s25.ended && s25.counts[0] === s25.rn.length, "with a 100 ms latency setting, hits 100 ms late are judged on time", s25.counts);
+  ok(D.patLen("d:waltz") === 12 && D.patLen("f:end3") === 12 && D.patLen("g:8beat") === 16 && D.patLen("g:waltz") === 12 &&
+    D.patternList().filter(function (pt) { return pt.group === "3拍子・6/8"; }).length >= 6 && D.patternSteps("g:jwaltz").some(function (x) { return x[0] === 51; }),
+    "3/4 and 6/8 patterns are 12 steps a bar (drum-only ones and the sequencer's 3/4 grooves)");
+  var sn3 = D.songNotes([["d:waltz", 2], ["f:end3", 1]], "0");
+  ok(sn3[sn3.length - 1][0] === 6 && sn3.some(function (n) { return n[0] === 3 && n[1] === 36; }), "song notes use 12-step bars for 3/4 patterns", sn3.slice(-3));
+  // 3拍子のループ＋オートフィル4小節（BPM 120 → 1小節 90フレーム）
+  var e26 = hooked(), log26 = [];
+  e26.store[D.PATPADS_KEY] = JSON.stringify(["d:waltz"]);
+  e26.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, autoFill: 4 });
+  e26.run("drum", { config: { mode: "free" } }, 470, function (f) {
+    var h = e26.window.__drum; if (!h) { return; }
+    if (f === 2) { h().patTap(0); }
+    var pr = h().patRun, id = pr ? pr.id + "@" + pr.len : "-";
+    if (!log26.length || log26[log26.length - 1].split("#")[0] !== id) { log26.push(id + "#" + f); }
+  });
+  var ids26 = log26.map(function (x) { return x.split("#")[0]; }), fillAt = Number((log26[2] || "").split("#")[1]);
+  ok(ids26.join() === "-,d:waltz@12,f:fill3@12,d:waltz@12" && fillAt > 260 && fillAt < 280, "a 3/4 loop has 12-step bars; auto fill uses a 3/4 fill in the 4th bar", log26);
+  // 3拍子の曲から
+  var e27 = hooked(), U27 = e27.window.UGUkulele, st27 = U27.seqLoad(), c27 = st27.cur.rows.slice(0, 4);
+  st27.cur.meter = 3;
+  st27.cur.rows = [{ type: "sec", name: "Aメロ" }].concat(c27).concat([{ type: "sec", name: "サビ" }]).concat(c27.slice(0, 2));
+  U27.seqSave(st27);
+  var fs27 = e27.window.UGDrum.songFromSeq(U27.seqLoad().cur);
+  // （全音符の行は3拍子でも4拍なので、Aメロ16拍＝5小節・サビ8拍＝3小節。わりきれないお知らせも出る）
+  ok(fs27.ok && JSON.stringify(fs27.song) === JSON.stringify([["d:waltz", 4], ["f:tom3", 1], ["d:waltzbig", 2], ["f:end3", 1]]) && /3拍子/.test(fs27.msg) && /3拍でわりきれない/.test(fs27.msg),
+    "a 3/4 sequencer song gets a waltz song with 3/4 fills (bars counted in 3 beats)", [fs27.msg, fs27.song]);
 };
