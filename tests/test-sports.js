@@ -60,9 +60,11 @@ module.exports = function () {
   ok(S.batFlight(S.batGrade(3), 3, Math.random).dir < 0 && S.batFlight(S.batGrade(-3), -3, Math.random).dir > 0, "early swing pulls left, late swing goes right");
 
   // ぴったり振るボット → 全部ホームラン、20球で終わる
+  // テスト用の時計はまれに1回で2フレーム進むので、ぴったり（0）を過ぎた最初のフレームで1球に1回だけ振る（1フレーム遅れもホームラン）
+  var swungAt = null;
   var r = env.run("batting", { config: { machine: "fast" } }, 20000, function (f, e) {
     var b = W.__bat();
-    if (b.phase === "pitch" && b.pitch.frames - b.t === 0) { press(e, " "); }
+    if (b.phase === "pitch" && b.pitch !== swungAt && b.pitch.frames - b.t <= 0) { swungAt = b.pitch; press(e, " "); }
   });
   var b = W.__bat();
   ok(r.ended !== null && b.hrs === 20 && b.left === 0, "perfect timing hits 20 home runs and the game ends after 20 pitches", { ended: r.ended, hrs: b.hrs, left: b.left });

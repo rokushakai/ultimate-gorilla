@@ -22,8 +22,14 @@ module.exports = function () {
     ok(probs.length === 0, "ES5 only: " + f, probs.slice(0, 3));
   });
   var html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  var order = ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "script.js"].map(function (f) { return html.indexOf('<script src="' + f + '">'); });
+  var order = ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "script.js"].map(function (f) { return html.indexOf('<script src="' + f + '?v='); });
   ok(order[0] > 0 && order[0] < order[1] && order[1] < order[2] && order[2] < order[3] && order[3] < order[4], "index.html loads arcade.js → melody → lyrics → table → script.js", order);
+
+  // §239: CSS・JS に同じ版（?v=）がついている（更新したら古いファイルが残らない）
+  var vers = (html.match(/(?:src|href)="[a-z\-]+\.(?:js|css)\?v=([0-9.]+)"/g) || []).map(function (t) { return t.replace(/^.*\?v=|"$/g, ""); });
+  var hand = fs.readFileSync(path.join(ROOT, "HANDOFF.md"), "utf8").match(/現在バージョン \| \*\*v([0-9.]+)\*\*/);
+  ok(vers.length === jsFiles.length + 1 && vers.every(function (v) { return v === vers[0]; }) && !/<script src="[a-z\-]+\.js">/.test(html) && hand && hand[1] === vers[0],
+    "index.html: every script and style.css carry the same ?v= version, equal to HANDOFF's current version", [vers.length, vers[0], hand && hand[1]]);
 
   // --- マップ ---
   var mapSrc = slice("var RAW_MAP = [", "];") + "];";

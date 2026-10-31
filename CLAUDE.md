@@ -20,6 +20,7 @@ GAME_DESIGN.md 更新 → TODO.md 更新 → 実装 → CHANGELOG.md 更新 → 
 - 外部ライブラリ・ビルドツール・サーバー不要
 - `file://` 直接起動 と GitHub Pages 両方で動作すること
 - 相対パスを壊さないこと（`index.html` / `style.css` / `script.js` が同じフォルダにある）
+- リリースのたびに `index.html` の CSS・JS の `?v=` を新しいバージョンにそろえる（HANDOFF.md の現在バージョンと同じ。テストで確認）。楽器サンプルを作りなおしたときは `arcade-melody.js` の `MELODY_SAMPLE_V` も上げる
 
 ## UI ルール
 

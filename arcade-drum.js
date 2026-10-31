@@ -169,6 +169,7 @@
       swing: drumSwing(p.swing)[0], // §235
       patPage: p.patPage === 1 ? 1 : 0, // §236: パターンのパッドのページ
       human: !!p.human, songOpen: !!p.songOpen, // §237: ゆらぎ・ソングの画面
+      patSet: !!p.patSet, // §239: パターンの設定を開いている
       mute: (p.mute && p.mute.length ? p.mute : []).filter(function (id, i, a) { return drumPartOk(id) && a.indexOf(id) === i; })
     };
   }
@@ -899,6 +900,7 @@
         else if (v === "dbg") { render(); }
         else if (v === "pat") { prefs.pat = !prefs.pat; drumSavePrefs(prefs); if (!prefs.pat) { patStop(); patEdit = false; } render(); }
         else if (v === "patstop") { patStop(); render(); }
+        else if (v === "patset") { prefs.patSet = !prefs.patSet; drumSavePrefs(prefs); render(); }
         else if (v === "human") { prefs.human = !prefs.human; drumSavePrefs(prefs); render(); }
         else if (v === "songopen") { prefs.songOpen = !prefs.songOpen; drumSavePrefs(prefs); render(); }
         else if (v === "songplay") { songPlay(); }
@@ -1235,8 +1237,17 @@
                 (back ? '<p class="small" style="margin:2px 0 0;">&#x1F3B8; 伴奏があるときは、▶ ソングで伴奏も頭からいっしょに鳴ります</p>' : "") +
                 '<div class="piano-row"><button class="modal-btn" data-da="songreset">&#x21BA; お手本</button><button class="modal-btn" data-da="songclear">&#x1F9F9; 空にする</button></div>';
             }
-            // §234: オートフィル・音量・鳴らさないパート
+            // §234: オートフィル・音量・鳴らさないパート（§239: 「⚙️ パターンの設定」でたたむ。たたんでいるときは、いまの設定を短く）
             var chip = function (act, label, on) { return '<button class="modal-btn' + (on ? " piano-pad-on" : "") + '" data-da="' + act + '">' + label + '</button>'; };
+            var sum = [];
+            if (prefs.autoFill) { sum.push("オートフィル " + prefs.autoFill + "小節"); }
+            if (prefs.patVol !== "l") { sum.push("音量 " + (prefs.patVol === "s" ? "小" : "中")); }
+            if (prefs.swing !== "0") { sum.push("ハネ " + drumSwing(prefs.swing)[1]); }
+            if (prefs.human) { sum.push("ゆらぎ"); }
+            for (i = 0; i < prefs.mute.length; i++) { for (var pi2 = 0; pi2 < DRUM_PARTS.length; pi2++) { if (DRUM_PARTS[pi2][0] === prefs.mute[i]) { sum.push(DRUM_PARTS[pi2][1] + "なし"); } } }
+            h += '<div class="piano-row"><button class="modal-btn' + (prefs.patSet ? " piano-pad-on" : "") + '" data-da="patset">&#x2699;&#xFE0F; パターンの設定' + (prefs.patSet ? " ▲" : " ▼") + '</button></div>' +
+              (!prefs.patSet && sum.length ? '<p class="small" style="margin:0 0 2px;color:#adb5bd;">' + escHtml(sum.join("・")) + '</p>' : "");
+            if (prefs.patSet) {
             h += '<p class="small" style="margin:4px 0 2px;">&#x1F501; オートフィル（最後の1小節をフィルに）</p><div class="uke-chips2">';
             for (i = 0; i < DRUM_AUTOFILL.length; i++) { h += chip("af:" + DRUM_AUTOFILL[i], DRUM_AUTOFILL[i] ? DRUM_AUTOFILL[i] + "小節ごと" : "なし", prefs.autoFill === DRUM_AUTOFILL[i]); }
             h += '</div><p class="small" style="margin:4px 0 2px;">&#x1F50A; パターンの音量</p><div class="uke-chips2">';
@@ -1245,6 +1256,7 @@
               '<p class="small" style="margin:4px 0 2px;">&#x1F507; 鳴らさないパート（そこは自分で叩こう）</p><div class="uke-chips2">';
             for (i = 0; i < DRUM_PARTS.length; i++) { h += chip("mute:" + DRUM_PARTS[i][0], DRUM_PARTS[i][1], prefs.mute.indexOf(DRUM_PARTS[i][0]) >= 0); }
             h += '</div>' + (prefs.mute.length ? '<p class="small" style="margin:2px 0 0;">&#x1F3AF; 鳴らさないパートを叩くと、ぴったり・はやい・おそいを判定します</p>' : "");
+            }
             if (patEdit) {
               var pl = drumPatternList(), grp = "", po = '<option value="">入れるパターンをえらぶ…</option>';
               for (i = 0; i < pl.length; i++) {

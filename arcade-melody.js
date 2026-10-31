@@ -505,6 +505,8 @@
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
+  // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
+  var MELODY_SAMPLE_V = "1.44";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -604,7 +606,7 @@
       if (window.UGMelodySamples.banks[name]) { melodyDecodeBank(name); continue; }
       try {
         var sc = document.createElement("script");
-        sc.src = "samples/" + name + ".js";
+        sc.src = "samples/" + name + ".js?v=" + MELODY_SAMPLE_V;
         sc.onerror = (function (n) { return function () { melodySampleFinish(n, false); }; })(name);
         (document.head || document.body).appendChild(sc);
       } catch (e) { melodySampleFinish(name, false); }

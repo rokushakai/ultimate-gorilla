@@ -160,7 +160,7 @@ function load(opts) {
   head.onAppend = function (sc) {
     counters.scripts.push(sc.src);
     setTimeout(function () {
-      var file = path.join(ROOT, sc.src);
+      var file = path.join(ROOT, String(sc.src).split("?")[0]);
       if (!fs.existsSync(file)) { if (sc.onerror) { sc.onerror(); } return; }
       vm.runInContext(fs.readFileSync(file, "utf8"), ctx, { filename: sc.src });
     }, 0);
