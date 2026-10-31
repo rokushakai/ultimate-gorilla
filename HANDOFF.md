@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.50** |
+| 現在バージョン | **v1.51** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.51] 👆 タップテンポの追従**（§243）: `drumTapBpm`（目標）・`drumTapGlide`（毎フレーム近づける）・`DRUM_TAP_FOLLOWS`・prefs `tapFollow`。近づいているあいだ `bpm` は小数（表示は `Math.round`）、`tapTarget` が目標。着いたら整数にして保存
 - **[v1.50] 🦶 ハイハットの閉じ方**（§242）: `arcade-melody.js` の `melodyHatChoke`・`melodyHatStyle`・`MELODY_HAT_SHAPES`。オープン（46）は highpass をはさんで鳴らし、`melodyOpenHat.t`（鳴らした時刻）からの長さで閉じ方を決める。`UGMelody.setHatClose`（ドラムの prefs `hhStyle`）。テストの harness の AudioParam に `setTargetAtTime`（`counters.targets` に記録）
 - **[v1.49] 🥁 切りかえタイミング・ハイハット**（§241）: `prefs.patSwitch`・`drumSwitchWait`・`patRun.barNo`。`patBegin` は queue を消さない（切りかえたところで消す）。ハイハットは `hhClose()`（44 を鳴らす＝オープンを止める）・`ohDown` / `pedalDown`（指の id）・`DRUM_KIT_PEDAL`
 - **[v1.48] ⏱️ タイミング補正・3拍子のパターン**（§240）: `UGMelody.latency()`（ms）・`latencyUi(box)`・`latencyFrom`。ゲームは create のときに `LAT`（秒）を読んで `now() - LAT` で判定。パターンは `len`（16 / 12）を持ち、`patRun.b0`（小節のはじめのマス）で小節を数える。`DRUM_MORE_LOOPS`・`DRUM_FILLS` の4つめが 12 なら3拍子
@@ -199,7 +200,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（805項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（808項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

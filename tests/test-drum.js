@@ -34,7 +34,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads, prac: prac }; };"); }
+      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads, prac: prac, bpm: bpm, tapTarget: tapTarget }; };"); }
       return src;
     } });
   }
@@ -238,6 +238,27 @@ module.exports = function () {
     if (f === 10 || f === 40 || f === 70 || f === 100) { h().act("tap"); }
   });
   ok(Math.abs(e14.window.UGDrum.prefs().bpm - 120) <= 1, "tap tempo sets the BPM from the taps", e14.window.UGDrum.prefs().bpm);
+  // --- §243: 演奏中のタップテンポは、少しずつ近づく ---
+  ok(Math.abs(D.tapBpm([0, 0.5, 1, 1.5], 100) - 120) < 0.01 && Math.abs(D.tapBpm([0, 0.25, 0.5, 0.75], 110) - 120) < 0.01 && Math.abs(D.tapBpm([0, 1, 2], 110) - 120) < 0.01 &&
+    Math.abs(D.tapBpm([0, 0.5, 1, 1.25, 1.75, 2.25], 120) - 120) < 0.01 && D.tapBpm([0, 3], 120) === null,
+    "tap BPM: the middle interval, eighths / half notes are folded to beats, a stray tap is ignored");
+  var g0 = 100, gq = 100, gi;
+  for (gi = 0; gi < 60; gi++) { g0 = D.tapGlide(g0, 130, "mid", 1 / 60); gq = D.tapGlide(gq, 130, "quick", 1 / 60); }
+  ok(g0 > 105 && g0 < 106.1 && gq > 112 && gq < 115.1 && D.tapGlide(100, 130, "now", 1 / 60) === 130 && D.tapGlide(129.8, 130, "soft", 1 / 60) === 130,
+    "tempo glide: about 6 BPM a second (ふつう), faster when きびきび, 'すぐ' jumps", [g0, gq]);
+  function tfRun(follow) {
+    var e = hooked(), tr = [];
+    e.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 100, tapFollow: follow });
+    e.run("drum", { config: { mode: "free" } }, 400, function (f) {
+      var h = e.window.__drum; if (!h) { return; }
+      if (f === 2) { h().patTap(0); }
+      if (f >= 40 && f <= 220 && (f - 40) % 30 === 0) { h().act("tap"); } // 0.5秒ごと ＝ BPM 120
+      if (f === 230 || f === 399) { tr.push(Math.round(h().bpm * 10) / 10); }
+    });
+    return tr.concat([e.window.UGDrum.prefs().bpm]);
+  }
+  var tfm = tfRun("mid"), tfn = tfRun("now");
+  ok(tfm[0] > 105 && tfm[0] < 119 && tfm[1] === 120 && tfm[2] === 120 && tfn[0] === 120, "while a pattern plays, tapping moves the BPM gradually to the tapped tempo (saved when it arrives); 'すぐ' jumps", [tfm, tfn]);
   // --- §235: ハネ・じぶんのフィル・ステップの予約再生・練習の判定 ---
   ok(D.swingOff("0", 1) === 0 && D.swingOff("16b", 1) === 0.33 && D.swingOff("16b", 2) === 0 && D.swingOff("8b", 2) === 0.66 && D.swingOff("8b", 0) === 0 && D.swingOff("8a", 1) === 0.17,
     "swing delays the offbeats (16th or 8th, light or triplet feel)");
