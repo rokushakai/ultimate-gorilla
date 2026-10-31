@@ -34,7 +34,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk }; };"); }
+      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads }; };"); }
       return src;
     } });
   }
@@ -161,4 +161,34 @@ module.exports = function () {
   S9.state[f9] = "error"; S9.loadAt[f9] = Date.now();
   U9.loadSamples([U9.DRUM]);
   ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
+  // --- §233: 演奏パターン ---
+  ok(D.PATPAD_DEFAULT.length === 16 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 6 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
+    "16 pattern pads: grooves loop, fills play one bar");
+  var my2 = []; D.listAdd(my2, { name: "ぼくの", bpm: 100, steps: D.stepsFrom("funk") }, D.PATS_MAX, D.patClean, "リズム");
+  var e10 = hooked(); e10.store[D.PATS_KEY] = JSON.stringify(my2);
+  ok(e10.window.UGDrum.patternList().some(function (pt) { return pt.id === "p:1" && pt.name === "ぼくの" && pt.group === "じぶんのリズム"; }), "saved step rhythms can be used as patterns");
+  // BPM 120: 16分 ＝ 7.5フレーム。8ビート → 小節の頭で フィル（キュー）→ 1小節後に 8ビートへもどる → もう一度押すと止まる
+  var log = [], qd = null;
+  e10.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120 });
+  e10.run("drum", { config: { mode: "free" } }, 400, function (f) {
+    var h = e10.window.__drum; if (!h) { return; }
+    var st = h();
+    if (f === 2) { st.patTap(0); }
+    if (f === 40) { st.patTap(10); qd = h().patRun.queue && h().patRun.queue.id; }
+    var pr = h().patRun, id = pr ? pr.id : "-";
+    if (log[log.length - 1] !== id) { log.push(id); }
+    if (f === 300) { h().patTap(0); }
+  });
+  ok(qd === "f:snare" && log.join() === "-,g:8beat,f:snare,g:8beat,-", "a loop starts at once; a fill waits for the next bar, plays one bar, then the loop comes back; tapping the loop again stops it", log);
+  // 録音中なら、パターンの音もテイクに入る
+  var e11 = hooked();
+  e11.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, metro: false });
+  e11.run("drum", { config: { mode: "free" } }, 300, function (f) {
+    var h = e11.window.__drum; if (!h) { return; }
+    if (f === 2) { press(e11, "z"); }
+    if (f === 120) { h().patTap(15); }
+    if (f === 250) { press(e11, "z"); }
+  });
+  var t11 = JSON.parse(e11.store[D.TAKES_KEY] || "[]")[0];
+  ok(t11 && t11.notes.map(function (n) { return n[1]; }).sort().join() === "36,38,49", "pattern hits are recorded too (the ending = kick + snare + crash)", t11 && t11.notes);
 };
