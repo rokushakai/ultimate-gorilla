@@ -148,4 +148,17 @@ module.exports = function () {
   ok(/Virtuosity Drums/.test(cr) && /DRSKit/.test(cr) && /CC BY 4\.0/.test(cr), "CREDITS.md names both drum sample sets (DRSKit needs attribution)");
   var pr = JSON.parse(JSON.stringify(D.prefs()));
   ok(pr.kitId === "drs" && pr.deep === false && pr.real === true, "drum game defaults: real drums, rock kit, normal kick", pr);
+  // --- §231: 読みこみが止まったらやりなおす ---
+  var e9 = H.load(), U9 = e9.window.UGMelody;
+  U9.audioInit();
+  var S9 = U9.samples, f9 = U9.sampleFiles[U9.DRUM];
+  S9.state[f9] = "loading"; S9.loadAt[f9] = Date.now();
+  U9.loadSamples([U9.DRUM]);
+  var fresh = S9.loadAt[f9];
+  S9.state[f9] = "decoding"; S9.loadAt[f9] = Date.now() - 60000;
+  U9.loadSamples([U9.DRUM]);
+  ok(S9.state[f9] === "loading" && S9.loadAt[f9] > Date.now() - 5000 && fresh > 0, "a sample load stuck for more than 10 s is started again (a fresh one is left alone)", [S9.state[f9]]);
+  S9.state[f9] = "error"; S9.loadAt[f9] = Date.now();
+  U9.loadSamples([U9.DRUM]);
+  ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
 };

@@ -405,7 +405,19 @@
           }
         } catch (e) {}
       }
-      function hitSound(m, lv) { audio(); if (audioOk) { try { UG.synth(m, UG.DRUM, 0, lv || 0.9); } catch (e) {} } }
+      // §231: 生ドラムの音がまだ（または捨てられた・止まった）なら、叩くたびに読みこみをためす（止まっていなければ何もしない）
+      function drumSampleState() {
+        if (!prefs.real || !UG || !UG.samples || !UG.sampleFiles) { return "off"; }
+        return UG.samples.state[UG.sampleFiles[UG.DRUM]] || "none";
+      }
+      function hitSound(m, lv) {
+        audio();
+        if (!audioOk) { return; }
+        if (prefs.real && drumSampleState() !== "ready" && UG.loadSamples) {
+          try { if (UG.setDrumKit) { UG.setDrumKit(prefs.kitId); } UG.loadSamples([UG.DRUM]); } catch (e0) {}
+        }
+        try { UG.synth(m, UG.DRUM, 0, lv || 0.9); } catch (e) {}
+      }
       function click(accent) { if (audioOk) { try { UG.synth(accent ? 76 : 77, UG.DRUM, 0, accent ? 0.7 : 0.5); } catch (e) {} } }
 
       // --- じゆう: 録音・再生 ---
@@ -785,6 +797,9 @@
         draw: function (ctx) {
           ctx.fillStyle = "#1b1f3b";
           ctx.fillRect(0, 0, W, Ld.h);
+          // §231: 生ドラムの読みこみの状態
+          var ss = audioOk ? drumSampleState() : "off", sl = ss === "loading" || ss === "decoding" || ss === "none" ? "🎙 生ドラムを読みこみ中…（いまは電子音）" : (ss === "error" ? "🎙 生ドラムを読みこめませんでした（電子音で鳴ります）" : "");
+          if (sl) { ctx.fillStyle = "#ffd166"; ctx.font = "7px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(sl, W / 2, Ld.land ? 13 : 20); }
           if (mode === "free") {
             hudText(ctx, "🥁 じゆう", 8, Ld.land ? 7 : 10, "left");
             hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, Ld.land ? 7 : 10, "right");

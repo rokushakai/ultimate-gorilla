@@ -503,7 +503,8 @@
   var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 6;
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
-  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {} };
+  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {} };
+  var MELODY_SAMPLE_RETRY_MS = 10000; // §231
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -516,6 +517,7 @@
   }
   function melodySampleFinish(name, ok) {
     melodySamples.state[name] = ok ? "ready" : "error";
+    melodySamples.loadAt[name] = Date.now();
     var w = melodySamples.waiting[name] || [];
     melodySamples.waiting[name] = [];
     for (var i = 0; i < w.length; i++) { w[i](); }
@@ -585,11 +587,18 @@
       names.push(name);
       melodySamples.used[name] = Date.now();
       var st = melodySamples.state[name];
+      // §231 v1.39: 読みこみ・展開が止まったまま（10秒）・読めなかったもの（10秒たったら）は、もう一度ためす
+      if (st && st !== "ready" && Date.now() - (melodySamples.loadAt[name] || 0) > MELODY_SAMPLE_RETRY_MS) {
+        st = undefined;
+        delete melodySamples.state[name];
+        melodySamples.waiting[name] = [];
+      }
       if (st === "ready" || st === "error") { continue; }
       pending++;
       (melodySamples.waiting[name] = melodySamples.waiting[name] || []).push(doneOne);
       if (st) { continue; }
       melodySamples.state[name] = "loading";
+      melodySamples.loadAt[name] = Date.now();
       if (window.UGMelodySamples.banks[name]) { melodyDecodeBank(name); continue; }
       try {
         var sc = document.createElement("script");
