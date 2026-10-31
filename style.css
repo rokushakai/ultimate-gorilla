@@ -1297,3 +1297,15 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 @media (orientation: portrait) {
   .arcade-land { width: 100vh; height: 100vw; transform-origin: 0 0; transform: translateX(100vw) rotate(90deg); }
 }
+/* ===== §223 v1.31: ウクレレのパッド・パターン ===== */
+.arcade-panel:empty { display: none; }
+.arcade-panel.uke-pad-panel { max-height: none; background: #14213d; color: #f1f2f6; padding: 6px; }
+.uke-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 4px 0; }
+.uke-pad { position: relative; min-height: 46px; border-radius: 8px; border: 2px solid #7d6bd6; background: #4c3a8f; color: #ffffff; font-weight: bold; font-size: 14px;
+  touch-action: none; -webkit-user-select: none; user-select: none; overflow: hidden; padding: 2px; word-break: break-all; }
+.uke-pad .n { position: absolute; left: 3px; top: 1px; font-size: 9px; font-weight: normal; opacity: 0.6; }
+.uke-pad.on { background: #ffd166; color: #14213d; }
+.uke-pad.empty { background: #262a45; }
+.uke-pads.edit .uke-pad { border-color: #55efc4; background: #2f4a6e; }
+.uke-mypat { margin-top: 6px; font-size: 13px; }
+.uke-mypat summary { cursor: pointer; }

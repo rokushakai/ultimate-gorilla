@@ -159,8 +159,11 @@
   }
 
   // ゲーム中のキーはフィールド側（移動・BGM切替）へ届けない（capture で受けて止める）
+  // §223: 入力欄（パターンの名前など）に文字を打っているときは、ゲームのキーにしない
+  function typing(ev) { var t = ev && ev.target; return !!(t && t.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)); }
   function onKeyDown(ev) {
     if (!host) { return; }
+    if (typing(ev)) { return; }
     ev.stopPropagation();
     if (ev.key === "p" || ev.key === "P") { togglePause(); return; }
     var act = host.def.keys[ev.key];
@@ -171,6 +174,7 @@
   }
   function onKeyUp(ev) {
     if (!host) { return; }
+    if (typing(ev)) { return; }
     ev.stopPropagation();
     var act = host.def.keys[ev.key];
     if (!act) { return; }

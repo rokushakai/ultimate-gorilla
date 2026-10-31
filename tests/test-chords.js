@@ -1139,4 +1139,30 @@ module.exports = async function () {
   st0 = U.seqLoad(); st0.cur.tracks.rec1.notes = []; U.seqSave(st0);
   env.run("ukulele", { config: { mode: "seq", seq: U.seqClean({ bpm: 60, countIn: false, rows: [{ type: "chord", name: "C", len: "b16" }] }), rec: "rec1" } }, 80, function (f, e) { if (f === 40) { e.key("keydown", "u"); e.key("keyup", "u"); } });
   ok(U.seqLoad().cur.tracks.rec1.notes.map(function (n) { return n[1]; }).join() === "69,64,60,67", "up stroke plays A→E→C→G", U.seqLoad().cur.tracks.rec1.notes.map(function (n) { return n[1]; }));
+  // --- §223: フリー演奏のパッド・演奏パターン・コード名の表示 ---
+  var uPads = U.padsLoad(false);
+  ok(uPads.length === 16 && uPads.map(function (pd) { return pd.name; }).join() === U.PAD_DEFAULT.join() && uPads.every(function (pd) { return pd.shape.length === 4; }), "16 ukulele pads start with common chords in C", uPads.map(function (pd) { return pd.name; }));
+  ok(U.padPlays()[0][0] === "once" && U.padPlays().length === 1 + C.SEQ_PATTERNS.length && U.padPlay("nope")[0] === "once", "pad playing styles: one strum + all the stroke / arpeggio patterns");
+  var umy = [], ur1 = U.myPatPut(umy, { name: "ぼくの", p: "d-du ー x", meter: 4 }), ur2 = U.myPatPut(umy, { p: "DZ" });
+  ok(ur1.ok && !ur2.ok && umy[0].p === "D-DU-x" && U.padPlays().length === 1 + C.SEQ_PATTERNS.length, "my ukulele patterns: letters are tidied (d → D, ー → -), bad ones refused", umy);
+  function ukeHooked() {
+    return H.load({ patch: function (src, file) {
+      src = patch(src, file);
+      if (file === "arcade-ukulele.js") { src = src.split("      padRender();\n\n      return {").join("      padRender(); window.__ukePad = { press: padPress, release: padRelease, act: padAction, st: function () { return { play: padPlay, cur: current(), pads: pads, prefs: padP, held: padHeldI }; } };\n\n      return {"); }
+      return src;
+    } });
+  }
+  var ue = ukeHooked(), uU = ue.window.UGUkulele, us = {};
+  ue.store[uU.PADPREFS_KEY] = JSON.stringify({ pad: true, play: "pat:D-D-D-D-:4", bpm: 120 });
+  ue.run("ukulele", { config: { mode: "free" } }, 120, function (f) {
+    var h = ue.window.__ukePad; if (!h) { return; }
+    if (f === 2) { h.press(0); us.a = h.st().cur.join(); }
+    if (f === 40) { us.idx = h.st().play && h.st().play.idx; }
+    if (f === 50) { h.release(0); us.b = h.st().play; }
+    if (f === 55) { h.press(5); us.c = h.st().cur.join(); h.act("edit"); h.press(15); }
+    if (f === 60) { h.act("chord"); }
+  });
+  var up15 = JSON.parse(ue.store[uU.PADS_KEY] || "[]")[15], upp = JSON.parse(ue.store[uU.PADPREFS_KEY] || "{}");
+  ok(us.a === uU.padsLoad(false)[0].shape.join() && us.idx === 3 && us.b === null, "a pad puts its chord on the fretboard and strums the pattern while held (4ths at BPM 120), stopping on release", us);
+  ok(up15 && up15.name === "Am" && up15.shape.join() === us.c && upp.chord === false, "registering stores the held fingering on a pad; the chord name can be turned off", [up15, upp]);
 };
