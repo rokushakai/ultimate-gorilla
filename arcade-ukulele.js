@@ -586,7 +586,8 @@
     ["ep", "&#x1F3B9; エレピ", 4, "chord", "half", 0, 60], ["organ", "&#x1FA88; オルガン", 16, "chord", "hold", 0, 50],
     ["brass", "&#x1F3BA; ブラス", 61, "chord", "stab", 0, 60], ["bell", "&#x1F514; ベル", 9, "chord", "arp8", 1, 50],
     ["mel", "&#x1F3B5; メロディ打ち込み", 73, "notes", "hold", 0, 75], ["synmel", "&#x1F39B;&#xFE0F; シンセメロディ打ち込み", 80, "notes", "hold", 0, 70],
-    ["pnotes", "&#x1F3B9; ピアノ打ち込み", 0, "notes", "hold", 0, 70] // §213 v1.21: ゴリラピアノのテイクを送るトラック
+    ["pnotes", "&#x1F3B9; ピアノ打ち込み", 0, "notes", "hold", 0, 70], // §213 v1.21: ゴリラピアノのテイクを送るトラック
+    ["dnotes", "&#x1F941; ドラム打ち込み", 128, "notes", "hold", 0, 80] // §237 v1.45: ゴリラドラムのソングを送るトラック（音色 128 ＝ ドラム）
   ];
   var UKE_X_PLAYS = [["hold", "伸ばす（小節ごと）"], ["half", "2拍ごと"], ["q", "4分"], ["e", "8分"], ["off", "裏打ち"], ["stab", "キメ（1拍目と2拍目の裏）"],
     ["arp8", "アルペジオ8分（上り）"], ["arp16", "アルペジオ16分（上り）"], ["arpud", "アルペジオ16分（上り下り）"]];
@@ -600,7 +601,7 @@
       on: s0.on === undefined ? true : !!s0.on, mute: !!s0.mute, solo: !!s0.solo, genre: !!s0.genre,
       vol: Math.max(0, Math.min(100, Math.round(s0.vol === undefined ? pr[6] : Number(s0.vol) || 0))),
       pan: [-0.6, 0, 0.6].indexOf(Number(s0.pan)) >= 0 ? Number(s0.pan) : 0,
-      prog: Math.max(0, Math.min(127, Math.round(s0.prog === undefined ? pr[2] : Number(s0.prog) || 0))),
+      prog: pr[2] === 128 ? 128 : Math.max(0, Math.min(127, Math.round(s0.prog === undefined ? pr[2] : Number(s0.prog) || 0))),
       play: UKE_X_PLAYS.some(function (p) { return p[0] === s0.play; }) ? s0.play : pr[4],
       oct: [-1, 0, 1].indexOf(Number(s0.oct)) >= 0 ? Number(s0.oct) : (s0.oct === undefined ? pr[5] : 0),
       notes: []
@@ -1407,9 +1408,10 @@
       var tid = mids[i], notes = per[tid];
       if (!notes || !notes.length) { continue; }
       var xat = tr.xs ? tr.xs.indexOf(tid) : -1;
-      var ch = xat >= 0 ? UKE_X_CH[xat] : UKE_MIDI_CH[tid], ev2 = [], nm = ukeUtf8(xat >= 0 ? tr[tid].name : UKE_MIDI_NAMES[tid]);
+      var xdrum = xat >= 0 && tr[tid].prog === 128; // §237: ドラム打ち込みは MIDI の 10ch
+      var ch = xdrum ? 9 : (xat >= 0 ? UKE_X_CH[xat] : UKE_MIDI_CH[tid]), ev2 = [], nm = ukeUtf8(xat >= 0 ? tr[tid].name : UKE_MIDI_NAMES[tid]);
       ev2.push([0, 0, [0xFF, 0x03].concat(ukeVlq(nm.length), nm)]);
-      if (tid !== "drum") { ev2.push([0, 1, [0xC0 | ch, tr[tid].prog]]); }
+      if (tid !== "drum" && !xdrum) { ev2.push([0, 1, [0xC0 | ch, tr[tid].prog]]); }
       ev2.push([0, 1, [0xB0 | ch, 7, Math.round(tr[tid].vol * 1.27)]]);
       ev2.push([0, 1, [0xB0 | ch, 10, Math.round(64 + tr[tid].pan * 63)]]);
       if (seq.rev >= 0) { ev2.push([0, 1, [0xB0 | ch, 91, UKE_REV_CC[seq.rev]]]); }

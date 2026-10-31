@@ -273,4 +273,47 @@ module.exports = function () {
   });
   ok(c17 && c17[0] >= 8 && c17[1] >= 1 && c17[2] === 0 && c17[3] >= 1 && e17.window.__drum().prac === null && e17.window.__drum().patRun === null,
     "practice mode judges hits on the muted part (on time / early / missed) and stopping shows the result", c17);
+  // --- §237: ソング・ずれ直し・ゆらぎ・シーケンサーへ ---
+  var sc = D.songClean([["g:8beat", 40], ["nope", 2], ["f:snare", 0], "x", ["g:rock", 4]]);
+  ok(sc.length === 3 && sc[0][1] === 16 && sc[1][1] === 1 && D.songBars(D.songLoad()) === 15 && D.songClean([["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16], ["g:8beat", 16]]).length === 8,
+    "song entries: unknown patterns are dropped, 1-16 bars each, up to 128 bars", sc);
+  var sn = D.songNotes(D.SONG_DEFAULT, "0");
+  ok(sn.length > 100 && sn.some(function (n) { return n[0] === 16 && n[1] === 49; }) && sn[sn.length - 1][0] < 60 && sn.every(function (n, i) { return !i || sn[i - 1][0] <= n[0]; }),
+    "a song becomes one note list (15 bars), with a crash after each fill");
+  var qz = D.quantize([[0.03, 36, 0.9], [0.26, 38, 0.8], [0.22, 38, 0.7], [1.1, 42, 0.5]]);
+  ok(JSON.stringify(qz) === JSON.stringify([[0, 36, 0.9], [0.25, 38, 0.8], [1, 42, 0.5]]), "quantize moves hits to the nearest 16th and merges doubles", qz);
+  // ソングを鳴らす: 8ビート 1小節 → スネアフィル 1小節 → ロック 1小節 → 止まる（BPM 120 ＝ 1小節 120フレーム）
+  var e19 = hooked(), log19 = [];
+  e19.store[D.SONG_KEY] = JSON.stringify([["g:8beat", 1], ["f:snare", 1], ["g:rock", 1]]);
+  e19.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, songOpen: true });
+  e19.run("drum", { config: { mode: "free" } }, 480, function (f) {
+    var h = e19.window.__drum; if (!h) { return; }
+    if (f === 2) { h().act("songplay"); }
+    var pr = h().patRun, id = pr ? pr.id + (pr.song ? "#" + pr.song.i : "") : "-";
+    if (log19[log19.length - 1] !== id) { log19.push(id); }
+  });
+  ok(log19.join() === "-,g:8beat#0,f:snare#1,g:rock#2,-", "the song plays each pattern for its bars, then stops", log19);
+  // テイクにする・ずれ直し
+  var e20 = hooked();
+  e20.store[D.SONG_KEY] = JSON.stringify([["g:8beat", 2]]);
+  e20.store[D.PREFS_KEY] = JSON.stringify({ pat: true });
+  e20.run("drum", { config: { mode: "free" } }, 10, function (f) { var h = e20.window.__drum; if (h && f === 2) { h().act("songtake"); h().act("quant"); } });
+  var tk20 = JSON.parse(e20.store[D.TAKES_KEY] || "[]");
+  ok(tk20.length === 2 && /ソング/.test(tk20[1].name) && /（直し）/.test(tk20[0].name) && tk20[1].notes.length === tk20[0].notes.length && tk20[1].notes[tk20[1].notes.length - 1][0] < 8,
+    "a song can be saved as a take, and a take can be quantized into a new take", tk20.map(function (t) { return t.name; }));
+  // シーケンサーへ: 🥁 ドラム打ち込みトラック（音色 128）
+  var e21 = hooked(), U21 = e21.window.UGUkulele, r21 = e21.window.UGDrum.songSend([["g:8beat", 2], ["f:crash", 1]], "0", "テスト");
+  var st21 = U21.seqLoad(), xid = st21.cur.tracks.xs[st21.cur.tracks.xs.length - 1], xt = st21.cur.tracks[xid];
+  ok(r21.ok && xt.preset === "dnotes" && xt.prog === 128 && xt.notes.length > 20 && xt.notes.every(function (n) { return n[1] === 0.25 && n[2] >= 36 && n[2] <= 51; }),
+    "a song can be sent to the sequencer as a drum-notes track", [r21.msg, xt && xt.prog]);
+  // ゆらぎ: 同じマスのハイハットでも強さが少しずつちがう
+  var e22 = hooked(), lv22 = [];
+  e22.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, human: true });
+  e22.run("drum", { config: { mode: "free" } }, 250, function (f) {
+    var h = e22.window.__drum; if (!h) { return; }
+    if (f === 1) { var U = e22.window.UGMelody, s0 = U.synth; U.synth = function (m, p, when, lv) { if (m === 42) { lv22.push(Math.round(lv * 1000)); } return s0.apply(U, arguments); }; }
+    if (f === 2) { h().patTap(0); }
+  });
+  var uniq = lv22.filter(function (v, i, a) { return a.indexOf(v) === i; });
+  ok(lv22.length > 10 && uniq.length > 6, "humanize varies the level of each hit", uniq.length);
 };

@@ -168,6 +168,7 @@
       patVol: p.patVol === "s" || p.patVol === "m" ? p.patVol : "l",
       swing: drumSwing(p.swing)[0], // §235
       patPage: p.patPage === 1 ? 1 : 0, // §236: パターンのパッドのページ
+      human: !!p.human, songOpen: !!p.songOpen, // §237: ゆらぎ・ソングの画面
       mute: (p.mute && p.mute.length ? p.mute : []).filter(function (id, i, a) { return drumPartOk(id) && a.indexOf(id) === i; })
     };
   }
@@ -440,6 +441,68 @@
     return out;
   }
   function drumPatPadsSave(p) { return lsSet(DRUM_PATPADS_KEY, p); }
+  // §237: ソング（なくなったパターンは外す・小節は 1〜16・ぜんぶで128小節まで）
+  function drumSongClean(a) {
+    var out = [], total = 0, i;
+    for (i = 0; a && a.length && i < a.length && out.length < DRUM_SONG_MAX; i++) {
+      if (!a[i] || typeof a[i][0] !== "string" || !drumPattern(a[i][0])) { continue; }
+      var b = Math.max(1, Math.min(16, Math.round(Number(a[i][1]) || 1)));
+      if (total + b > DRUM_SONG_BARS) { break; }
+      total += b;
+      out.push([a[i][0], b]);
+    }
+    return out;
+  }
+  function drumSongLoad() { var a = lsGet(DRUM_SONG_KEY); return drumSongClean(a && a.length !== undefined ? a : DRUM_SONG_DEFAULT); }
+  function drumSongSave(a) { return lsSet(DRUM_SONG_KEY, drumSongClean(a)); }
+  function drumSongBars(a) { var n = 0; for (var i = 0; i < a.length; i++) { n += a[i][1]; } return n; }
+  // ソングを音の並び [[拍, MIDI, 強さ]] にする（ハネ・強弱・フィルのあとのクラッシュも）
+  function drumSongNotes(song, swing) {
+    var out = [], bar = 0, prevFill = false, i, b, j, k;
+    for (i = 0; i < song.length; i++) {
+      var st = drumPatternSteps(song[i][0]), pt = drumPattern(song[i][0]), fill = pt.kind === "fill";
+      for (b = 0; b < song[i][1]; b++) {
+        var crash = b === 0 && prevFill && !fill;
+        for (j = 0; j < st.length; j++) {
+          for (k = 0; k < st[j][1].length; k++) {
+            var s = st[j][1][k];
+            if (st[j][0] === 49 && s === 0) { crash = false; }
+            out.push([Math.round((bar * 16 + s + drumSwingOff(swing, s)) / 4 * 1000) / 1000, st[j][0], Math.round(drumPatVel(st[j][0], s, fill) * 100) / 100]);
+          }
+        }
+        if (crash) { out.push([bar * 4, 49, Math.round(drumPatVel(49, 0, false) * 100) / 100]); }
+        bar++;
+      }
+      prevFill = fill;
+    }
+    return out.sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
+  }
+  // §237: テイクのずれ直し（16分＝0.25拍にそろえる。同じところの同じ楽器は1つに）
+  function drumQuantize(notes, grid) {
+    var g = grid || 0.25, out = [], seen = {}, i;
+    for (i = 0; i < notes.length; i++) {
+      var b = Math.round(Math.round(notes[i][0] / g) * g * 1000) / 1000, key = b + ":" + notes[i][1];
+      if (seen[key]) { continue; }
+      seen[key] = 1;
+      out.push([b, notes[i][1], notes[i][2]]);
+    }
+    return out.sort(function (x, y) { return x[0] - y[0]; });
+  }
+  // §237: ソングをシーケンサーの編集中の曲へ（🥁 ドラム打ち込みトラック）
+  function drumSongSend(song, swing, name) {
+    var U = drumSeqApi();
+    if (!U || !U.xAdd) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
+    var notes = drumSongNotes(song, swing);
+    if (!notes.length) { return { ok: false, msg: "ソングに音がありません" }; }
+    var st = U.seqLoad(), id = U.xAdd(st.cur.tracks, "dnotes");
+    if (!id) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
+    var t = st.cur.tracks[id], cut = notes.length > 1000;
+    t.name = String(name || "ドラム").slice(0, 12);
+    t.notes = notes.slice(0, 1000).map(function (n) { return [n[0], 0.25, n[1], Math.max(0.1, Math.min(1, n[2]))]; });
+    U.seqSave(st);
+    return { ok: true, id: id, msg: "ソング（" + drumSongBars(song) + "小節）を、シーケンサーの編集中の曲に 🥁 ドラム打ち込みトラックとして送りました" + (cut ? "（1000打より後ろは入りません）" : "") +
+      "。曲の長さが足りないと後ろは鳴りません。シーケンサーのドラムといっしょに鳴らさないなら、ドラムのトラックをオフにしてね" };
+  }
   // 楽器ごとの強さ（シンバル類は小さめ）
   function drumPatLevel(m) { return m === 42 || m === 46 || m === 44 ? 0.55 : (m === 51 || m === 49 ? 0.6 : 0.85); }
   // §234 v1.42: パート（鳴らさない切りかえ用）・強弱・オートフィル・音量
@@ -457,6 +520,9 @@
     return s % 4 === 2 ? w[3] * 2 : (s % 2 ? w[3] : 0);
   }
   var DRUM_PRAC_OK = 0.035, DRUM_PRAC_WIN = 0.15; // §235: 練習の判定（ぴったり ±35ms・判定する範囲 ±150ms）
+  // §237 v1.45: ソング（パターンをつなげた曲）[[パターンの id, 小節]]
+  var DRUM_SONG_KEY = "ultimateGorillaDrumSongV1", DRUM_SONG_MAX = 32, DRUM_SONG_BARS = 128;
+  var DRUM_SONG_DEFAULT = [["g:8beat", 3], ["f:snare", 1], ["g:beat16", 3], ["f:toms", 1], ["g:rock", 3], ["f:roll", 1], ["g:8beat", 2], ["f:crash", 1]];
   var DRUM_PATVOLS = [["s", "小", 0.55], ["m", "中", 0.75], ["l", "大", 1]];
   function drumPartOk(id) { for (var i = 0; i < DRUM_PARTS.length; i++) { if (DRUM_PARTS[i][0] === id) { return true; } } return false; }
   function drumPartOf(m) { for (var i = 0; i < DRUM_PARTS.length; i++) { if (DRUM_PARTS[i][2].indexOf(m) >= 0) { return DRUM_PARTS[i][0]; } } return ""; }
@@ -656,7 +722,7 @@
         while ((k = stepRun.n + 1) - p <= DRUM_PAT_LOOK * rate) {
           stepRun.n = k;
           var c = k % DRUM_STEPS, ahead = Math.max(0, (k + drumSwingOff(prefs.swing, c) - p) / rate);
-          for (i = 0; i < steps.length; i++) { if (steps[i][1].indexOf(c) >= 0) { soundAt(steps[i][0], 0.85, ahead); } }
+          for (i = 0; i < steps.length; i++) { if (steps[i][1].indexOf(c) >= 0) { soundAt(steps[i][0], humanLv(0.85), humanAt(ahead)); } }
         }
         stepRun.s = Math.floor(p + 1e-6) % DRUM_STEPS;
         stepRun.pos = p + rate / 60;
@@ -710,6 +776,9 @@
       function hitPiece(p) { if (p) { hit(p[0] === "hh" && hhOpen ? 46 : p[1], p[6] === "cym" ? 0.85 : 0.9); } }
       function kitBox() { return drumKitBox(Ld.land ? 14 : 58, Ld.h - (Ld.land ? 14 : 58) - 4); }
       var flashAt = []; // §234: 予約した音が鳴るフレームで光らせる [[フレーム, MIDI]]
+      // §237: 人間っぽいゆらぎ（強さ ±10%・タイミング 0〜12ms おくれ）
+      function humanLv(lv) { return prefs.human ? Math.max(0.05, Math.min(1, lv * (0.9 + Math.random() * 0.2))) : lv; }
+      function humanAt(ahead) { return prefs.human ? ahead + Math.random() * 0.012 : ahead; }
       // 鳴らして光らせるだけ（録音・判定はしない）
       function soundAt(m, lv, ahead) {
         hitSound(m, lv, ahead);
@@ -736,6 +805,54 @@
         else if (v === "dbg") { render(); }
         else if (v === "pat") { prefs.pat = !prefs.pat; drumSavePrefs(prefs); if (!prefs.pat) { patStop(); patEdit = false; } render(); }
         else if (v === "patstop") { patStop(); render(); }
+        else if (v === "human") { prefs.human = !prefs.human; drumSavePrefs(prefs); render(); }
+        else if (v === "songopen") { prefs.songOpen = !prefs.songOpen; drumSavePrefs(prefs); render(); }
+        else if (v === "songplay") { songPlay(); }
+        else if (v === "songadd") {
+          var pk = drumPattern(songPick);
+          if (!pk) { msg = "足すパターンを一覧からえらんでね"; }
+          else if (dsong.length >= DRUM_SONG_MAX || drumSongBars(dsong) + (pk.kind === "fill" ? 1 : 4) > DRUM_SONG_BARS) { msg = "ソングはこれ以上のばせません（" + DRUM_SONG_MAX + "こ・" + DRUM_SONG_BARS + "小節まで）"; }
+          else { dsong.push([songPick, pk.kind === "fill" ? 1 : 4]); songSave(); msg = ""; }
+          render();
+        }
+        else if (v === "songreset") {
+          if (window.confirm && !window.confirm("ソングを はじめのお手本にもどしますか？")) { return; }
+          try { window.localStorage.removeItem(DRUM_SONG_KEY); } catch (e1) {}
+          dsong = drumSongLoad(); render();
+        }
+        else if (v === "songclear") { if (window.confirm && !window.confirm("ソングを空にしますか？")) { return; } dsong = []; songSave(); render(); }
+        else if (v.indexOf("sg:") === 0) {
+          // sg:動き:行（plus / minus / up / down / del）
+          var sp = v.split(":"), si = Number(sp[2]);
+          if (dsong[si]) {
+            if (sp[1] === "plus" && dsong[si][1] < 16 && drumSongBars(dsong) < DRUM_SONG_BARS) { dsong[si][1]++; }
+            else if (sp[1] === "minus" && dsong[si][1] > 1) { dsong[si][1]--; }
+            else if (sp[1] === "up" && si > 0) { dsong.splice(si - 1, 0, dsong.splice(si, 1)[0]); }
+            else if (sp[1] === "down" && si < dsong.length - 1) { dsong.splice(si + 1, 0, dsong.splice(si, 1)[0]); }
+            else if (sp[1] === "del") { dsong.splice(si, 1); }
+            if (patRun && patRun.song) { patStop(); }
+            songSave();
+          }
+          render();
+        }
+        else if (v === "songtake") {
+          var sn = drumSongNotes(dsong, prefs.swing);
+          if (!sn.length) { msg = "ソングに音がありません"; render(); return; }
+          take = drumListAdd(takes, { bpm: bpm, notes: sn, song: "" }, DRUM_TAKES_MAX, drumTakeClean, "ソング");
+          drumTakesSave(takes);
+          msg = "&#x1F4BE; ソングを「" + escHtml(take.name) + "」として保存しました（" + take.notes.length + "打）。▶ 再生で聴けます";
+          render();
+        }
+        else if (v === "songsend") { var ss = drumSongSend(dsong, prefs.swing, "ドラムのソング"); msg = (ss.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(ss.msg); render(); }
+        else if (v === "quant") {
+          if (!take || !take.notes.length || rec || play) { return; }
+          var qn = drumQuantize(take.notes, 0.25), nm0 = take.name;
+          take = drumListAdd(takes, { bpm: take.bpm, notes: qn, song: take.song }, DRUM_TAKES_MAX, drumTakeClean, "テイク");
+          take.name = (nm0 + "（直し）").slice(0, 20);
+          drumTakesSave(takes);
+          msg = "&#x1F9F2; 16分にそろえて「" + escHtml(take.name) + "」に保存しました";
+          render();
+        }
         else if (v === "patpage") { patPage = patPage ? 0 : 1; prefs.patPage = patPage; drumSavePrefs(prefs); render(); }
         else if (v.indexOf("sw:") === 0) { prefs.swing = drumSwing(v.substring(3))[0]; drumSavePrefs(prefs); render(); }
         else if (v.indexOf("af:") === 0) { prefs.autoFill = DRUM_AUTOFILL.indexOf(Number(v.substring(3))) >= 0 ? Number(v.substring(3)) : 0; drumSavePrefs(prefs); render(); }
@@ -785,6 +902,16 @@
       }
 
       // --- §233: 演奏パターン（ループは次の小節の頭で切りかえ・フィルは1小節で元のループへ）---
+      var dsong = mode === "free" ? drumSongLoad() : [], songPick = ""; // §237: ソング・足すパターン
+      function songSave() { drumSongSave(dsong); dsong = drumSongLoad(); }
+      function songPlay() {
+        if (patRun && patRun.song) { patStop(); render(); return; }
+        if (!dsong.length) { msg = "ソングが空です。パターンを足してね"; render(); return; }
+        patStop();
+        patBegin(dsong[0][0], null);
+        if (patRun) { patRun.song = { i: 0, left: dsong[0][1] }; }
+        render();
+      }
       var patPads = mode === "free" ? drumPatPadsLoad() : [], patPage = prefs.patPage, patRun = null, patEdit = false, patPick = "", taps = [];
       // §234: いまの位置（マス・小数）。伴奏があれば曲の拍に合わせる。なければ毎フレーム BPM ぶん進める（BPM を変えてもとばない）
       var DRUM_PAT_LOOK = 0.06; // 何秒先まで予約するか
@@ -813,6 +940,7 @@
         if (!id) { return; }
         var pt = drumPattern(id);
         if (!pt) { return; }
+        if (patRun && patRun.song) { patRun.song = null; } // ソングのとちゅうでパッド → ふつうの演奏にもどる
         if (!patRun) { patBegin(id, null); render(); return; }
         if (patRun.id === id && pt.kind === "loop" && !patRun.queue) { patStop(); render(); return; } // 同じループをもう一度 → 止める
         // 鳴っているあいだは、次の小節の頭で切りかえる（フィルは そのあと元のループへ）
@@ -869,7 +997,19 @@
       function patMuted(m) { return prefs.mute.indexOf(drumPartOf(m)) >= 0; }
       function patPlay(k, ahead) {
         var sIdx = ((k % DRUM_STEPS) + DRUM_STEPS) % DRUM_STEPS, i, crash = false, af = prefs.autoFill;
-        if (sIdx === 0 && patRun.started) {
+        if (sIdx === 0 && patRun.started && patRun.song) {
+          // §237: ソング。決めた小節だけ鳴らしたら次のパターンへ。最後まで行ったら止める
+          var sg = patRun.song, sf = patRun.kind === "fill";
+          sg.left--;
+          if (sg.left <= 0) {
+            sg.i++;
+            if (sg.i >= dsong.length) { patStop(); msg = "&#x1F3BC; ソングを最後まで鳴らしました"; render(); return; }
+            sg.left = dsong[sg.i][1];
+            patBegin(dsong[sg.i][0], null);
+          }
+          crash = sf && patRun.kind === "loop";
+          render();
+        } else if (sIdx === 0 && patRun.started) {
           var wasFill = patRun.kind === "fill";
           patRun.bar++;
           if (patRun.queue) { var q = patRun.queue; patBegin(q.id, q.ret); if (patRun.kind === "loop") { patRun.bar = 0; } }
@@ -889,7 +1029,7 @@
           var m = patRun.steps[i][0];
           if (patRun.steps[i][1].indexOf(sIdx) < 0) { continue; }
           if (m === 49) { crash = false; }
-          if (!patMuted(m)) { hit(m, drumPatVel(m, sIdx, fill) * vol, ahead, true); } else { pracExpect(m, ahead); }
+          if (!patMuted(m)) { hit(m, humanLv(drumPatVel(m, sIdx, fill) * vol), humanAt(ahead), true); } else { pracExpect(m, ahead); }
         }
         if (crash) { if (!patMuted(49)) { hit(49, drumPatVel(49, 0, false) * vol, ahead, true); } else { pracExpect(49, ahead); } }
       }
@@ -919,6 +1059,9 @@
         if (mode === "free") {
           h += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-da="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
             '<button class="modal-btn" data-da="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button></div>';
+          if (take && take.notes.length) {
+            h += '<div class="piano-row"><button class="modal-btn" data-da="quant"' + (rec || play ? " disabled" : "") + '>&#x1F9F2; ずれ直し（16分にそろえる）</button></div>';
+          }
           if (back) {
             h += '<div class="piano-row"><button class="modal-btn" data-da="back"' + (rec ? " disabled" : "") + '>' + (bk && !play ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button></div>' +
               '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子' + (prefs.backDrum ? "" : "・曲のドラムは鳴らさない") + '）</p>';
@@ -951,13 +1094,35 @@
             }
             h += '</div><div class="piano-row"><button class="modal-btn' + (patEdit ? " piano-pad-on" : "") + '" data-da="patedit">&#x270F;&#xFE0F; 入れかえ ' + (patEdit ? "ON" : "OFF") + '</button>' +
               '<button class="modal-btn" data-da="patreset">&#x21BA; はじめのパターン</button></div>';
+            // §237: ソング
+            h += '<div class="piano-row"><button class="modal-btn' + (prefs.songOpen ? " piano-pad-on" : "") + '" data-da="songopen">&#x1F3BC; ソング（パターンをつなげる）' + (prefs.songOpen ? " ▲" : " ▼") + '</button></div>';
+            if (prefs.songOpen) {
+              var sgp = patRun && patRun.song ? patRun.song.i : -1;
+              h += '<div class="piano-row"><button class="modal-btn' + (sgp >= 0 ? " piano-pad-on" : "") + '" data-da="songplay">' + (sgp >= 0 ? "&#x23F9;&#xFE0F; ソングをとめる" : "&#x25B6;&#xFE0F; ソングを鳴らす") + '</button>' +
+                '<span class="small">' + dsong.length + 'こ・' + drumSongBars(dsong) + '小節</span></div><div class="drum-song">';
+              for (i = 0; i < dsong.length; i++) {
+                var sgt = drumPattern(dsong[i][0]);
+                h += '<div class="drum-song-row' + (i === sgp ? " on" : "") + (sgt.kind === "fill" ? " fill" : "") + '"><span class="n">' + (i + 1) + '</span><span class="nm">' + escHtml(sgt.name) + '</span>' +
+                  '<button class="modal-btn" data-da="sg:minus:' + i + '">&minus;</button><span class="bars">&times;' + dsong[i][1] + '</span><button class="modal-btn" data-da="sg:plus:' + i + '">&#xFF0B;</button>' +
+                  '<button class="modal-btn" data-da="sg:up:' + i + '">&#x2191;</button><button class="modal-btn" data-da="sg:down:' + i + '">&#x2193;</button><button class="modal-btn" data-da="sg:del:' + i + '">&#x1F5D1;&#xFE0F;</button></div>';
+              }
+              var sl2 = drumPatternList(), sgr = "", so = '<option value="">足すパターンをえらぶ…</option>';
+              for (i = 0; i < sl2.length; i++) {
+                if (sl2[i].group !== sgr) { so += (sgr ? "</optgroup>" : "") + '<optgroup label="' + sl2[i].group + '">'; sgr = sl2[i].group; }
+                so += '<option value="' + sl2[i].id + '"' + (songPick === sl2[i].id ? " selected" : "") + '>' + escHtml(sl2[i].name) + '</option>';
+              }
+              h += '</div><div class="piano-row"><label class="piano-select"><select data-dsong="1">' + so + '</optgroup></select></label><button class="modal-btn" data-da="songadd">&#xFF0B; 足す</button></div>' +
+                '<div class="piano-row"><button class="modal-btn" data-da="songtake">&#x1F4BE; テイクにする</button><button class="modal-btn" data-da="songsend">&#x1F3B8; シーケンサーへ送る</button></div>' +
+                '<div class="piano-row"><button class="modal-btn" data-da="songreset">&#x21BA; お手本</button><button class="modal-btn" data-da="songclear">&#x1F9F9; 空にする</button></div>';
+            }
             // §234: オートフィル・音量・鳴らさないパート
             var chip = function (act, label, on) { return '<button class="modal-btn' + (on ? " piano-pad-on" : "") + '" data-da="' + act + '">' + label + '</button>'; };
             h += '<p class="small" style="margin:4px 0 2px;">&#x1F501; オートフィル（最後の1小節をフィルに）</p><div class="uke-chips2">';
             for (i = 0; i < DRUM_AUTOFILL.length; i++) { h += chip("af:" + DRUM_AUTOFILL[i], DRUM_AUTOFILL[i] ? DRUM_AUTOFILL[i] + "小節ごと" : "なし", prefs.autoFill === DRUM_AUTOFILL[i]); }
             h += '</div><p class="small" style="margin:4px 0 2px;">&#x1F50A; パターンの音量</p><div class="uke-chips2">';
             for (i = 0; i < DRUM_PATVOLS.length; i++) { h += chip("pv:" + DRUM_PATVOLS[i][0], DRUM_PATVOLS[i][1], prefs.patVol === DRUM_PATVOLS[i][0]); }
-            h += '</div>' + swingChips() + '<p class="small" style="margin:4px 0 2px;">&#x1F507; 鳴らさないパート（そこは自分で叩こう）</p><div class="uke-chips2">';
+            h += '</div>' + swingChips() + '<div class="piano-row"><button class="modal-btn' + (prefs.human ? " piano-pad-on" : "") + '" data-da="human">&#x1F3B2; 人間っぽいゆらぎ ' + (prefs.human ? "ON" : "OFF") + '</button></div>' +
+              '<p class="small" style="margin:4px 0 2px;">&#x1F507; 鳴らさないパート（そこは自分で叩こう）</p><div class="uke-chips2">';
             for (i = 0; i < DRUM_PARTS.length; i++) { h += chip("mute:" + DRUM_PARTS[i][0], DRUM_PARTS[i][1], prefs.mute.indexOf(DRUM_PARTS[i][0]) >= 0); }
             h += '</div>' + (prefs.mute.length ? '<p class="small" style="margin:2px 0 0;">&#x1F3AF; 鳴らさないパートを叩くと、ぴったり・はやい・おそいを判定します</p>' : "");
             if (patEdit) {
@@ -984,6 +1149,8 @@
         for (i = 0; i < bs.length; i++) { bs[i].onclick = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(ev.currentTarget.getAttribute("data-da")); }; }
         var pbs = panel.querySelectorAll("button[data-dpat]");
         for (i = 0; i < pbs.length; i++) { pbs[i].onclick = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } patTap(Number(ev.currentTarget.getAttribute("data-dpat"))); }; }
+        var ssel = panel.querySelector("select[data-dsong]");
+        if (ssel) { ssel.onchange = function (ev) { songPick = ev.currentTarget.value; }; }
         var psel = panel.querySelector("select[data-dpick]");
         if (psel) { psel.onchange = function (ev) { patPick = ev.currentTarget.value; }; }
         var sel = panel.querySelector("select[data-dgroove]");
@@ -1046,7 +1213,7 @@
       // §234: 鳴っているパターンの名前（次のパターン）と、いまのマス（16マス・4拍ごとに区切り）
       function drawPat(ctx, ty) {
         var pt = drumPattern(patRun.id), q = patRun.queue ? drumPattern(patRun.queue.id) : null, fill = patRun.kind === "fill";
-        var nm = "🎼 " + (pt ? pt.name : "") + (patRun.auto ? "（オート）" : "") + (q ? " → " + q.name : "");
+        var nm = "🎼 " + (patRun.song ? "ソング " + (patRun.song.i + 1) + "/" + dsong.length + "・" : "") + (pt ? pt.name : "") + (patRun.auto ? "（オート）" : "") + (q ? " → " + q.name : "");
         var cur = Math.floor(patRun.pos + 1e-6), sIdx = cur < 0 ? -1 : cur % DRUM_STEPS, sw = Ld.land ? 7 : 9, sh = Ld.land ? 3 : 5;
         var x0 = W / 2 - sw * DRUM_STEPS / 2, y0 = Ld.land ? ty + 4 : ty + 7, s;
         text(ctx, nm, W / 2, Ld.land ? ty - 1 : ty - 5, Ld.land ? 7 : 11, fill ? "#fd79a8" : "#ffd166");
@@ -1196,7 +1363,8 @@
     backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
     kit: DRUM_KIT, kitKeys: DRUM_KIT_KEYS, kitBox: drumKitBox, kitShape: drumKitShape, kitAt: drumKitAt, kitPiece: drumKitPiece, extra: DRUM_EXTRA, pad: drumPad, landH: drumLandH,
     fills: DRUM_FILLS, patternList: drumPatternList, pattern: drumPattern, patternSteps: drumPatternSteps, patPadsLoad: drumPatPadsLoad, PATPAD_DEFAULT: DRUM_PATPAD_DEFAULT, PATPADS_KEY: DRUM_PATPADS_KEY,
-    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
+    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
+    SONG_KEY: DRUM_SONG_KEY, SONG_DEFAULT: DRUM_SONG_DEFAULT, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
     swings: DRUM_SWINGS, swingOff: drumSwingOff,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,
     takesLoad: drumTakesLoad, takesSave: drumTakesSave, patsLoad: drumPatsLoad, patsSave: drumPatsSave, listAdd: drumListAdd, takeClean: drumTakeClean, patClean: drumPatClean,

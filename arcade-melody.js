@@ -332,7 +332,7 @@
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
-    if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level); return; }
+    if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level, dest); return; } // §237: dest（シーケンサーのトラックの音量）も通す
     if (melodySampleNote(ac, midi, prog, t, level, dest)) { return; }
     var r = melodyRecipe(prog);
     var f = 440 * Math.pow(2, (midi - 69) / 12);

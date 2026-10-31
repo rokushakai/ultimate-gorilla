@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.44** |
+| 現在バージョン | **v1.45** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.45] 🥁 ソング・ずれ直し・ゆらぎ**（§237）: ソングは `dsong`（create の中。リズムゲームの `song` と別の名前にしている）・`patRun.song = { i, left }` を `patPlay` の小節の頭で進める。`drumSongNotes`・`drumSongSend`（X トラック `dnotes`）・`drumQuantize`。ピアノロールはC4から表示なので、ドラム打ち込みの音（36〜51）は下へスクロールすると見える
 - **[v1.44] 🥁 音色と演奏パターンを追加**（§236）: `samples/drums_rusty.js`・`drums_brush.js`・`drums_swirly.js`（Karoryfer・CC0。sfzinstruments/karoryfer.big-rusty-drums・swirly-drums の Samples/<楽器>/<奏法>/<マイク>/…_vlN_rrM。N が大きいほど強い）。`DRUM_MORE_LOOPS`（d:）・`drumGrooveSteps`・`DRUM_PATPAD_N` 32
 - **[v1.43] 🥁 ハネ・じぶんのフィル・練習の判定**（§235）: `drumSwingOff(id, s)`（予約の時刻に足す）。`soundAt(m, lv, ahead)`＝鳴らして光らせるだけ。`hit(m, lv, ahead, auto)` の auto＝パターンの音。練習は `prac`（`pracExpect`・`pracJudge`・`pracStep`）、止めるのは `patStop()`（結果を msg に）
 - **[v1.42] 🥁 演奏パターンのブラッシュアップ**（§234）: `patStep()` が `DRUM_PAT_LOOK` 秒先まで `patPlay(k, ahead)` で予約（`hit(m, lv, ahead)` → `UG.synth` の when・`flashAt`）。`patRun.pos` は毎フレーム加算。`drumPatVel`・`DRUM_PARTS`・オートフィル（`patRun.bar`）・`tapTempo()`
@@ -193,7 +194,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（771項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（778項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
