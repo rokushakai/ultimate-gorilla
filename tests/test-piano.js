@@ -205,7 +205,7 @@ module.exports = function () {
   ok(pc0.length === 16 && pc0[0].join() === "60,64,67" && pc0[1].length === 0 && pc0[15].length === 0 && P.padsLoad().length === 16, "pads are cleaned (sorted, no repeats) and default to the starter chords");
   var rp = P.padRects(P.PORT, false), rl = P.padRects(LD, false), re = P.padRects(LD, true);
   ok(rp.length === 16 && rp.every(function (r) { return r.y >= 14 && r.y + r.h <= P.KB_Y; }) && rp[4].y > rp[0].y && rp[1].x > rp[0].x && rl[8].y > rl[0].y && rl[7].x > rl[6].x && rl[15].y + rl[15].h > LD.kb && re.every(function (r) { return r.y + r.h <= LD.kb; }),
-    "pad layout: 4×4 above the keys / 8×2 filling the landscape screen / 16 in a row while registering sideways");
+    "pad layout: 4×4 above the keys / 8×2 filling the landscape screen / 8×2 above the keys while registering sideways");
   ok(P.padAt(rp[5].x + 5, rp[5].y + 5, rp) === 5 && P.padAt(1, 1, rp) === -1, "a tap finds its pad");
   // たて: パッドを押すと和音が鳴り、録音にも入る
   var e11 = hooked(), held11 = null, after11 = null;

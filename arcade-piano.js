@@ -15,9 +15,11 @@
   // §213: 画面の形。縦 240×300 / 横 240×h（よこ向きで大きく見せる）。kb ＝ 鍵盤の上のはし、bh ＝ 黒鍵の長さ
   // §214 v1.22: よこの高さ h は画面の縦横の比で決める（鍵盤が端から端まで・下にボタン）
   var PIANO_LAND_KB = 44, PIANO_LAND_MIN = 80, PIANO_LAND_MAX = 160, PIANO_LAND_CTRL = 84;
-  function pianoLandLayout(h) {
+  // kb（省略可・§219）: 鍵盤の上のはし。パッドの登録中は大きくしてパッドの段を高く
+  function pianoLandLayout(h, kb) {
     h = Math.max(PIANO_LAND_MIN, Math.min(PIANO_LAND_MAX, Math.round(h) || 120));
-    return { h: h, kb: PIANO_LAND_KB, bh: Math.round((h - PIANO_LAND_KB) * 0.6), land: true };
+    kb = Math.max(PIANO_LAND_KB, Math.min(h - 30, Math.round(kb) || PIANO_LAND_KB));
+    return { h: h, kb: kb, bh: Math.round((h - kb) * 0.6), land: true };
   }
   // 画面いっぱいの枠の大きさ（CSS ピクセル）→ 鍵盤の下にボタンの段（PIANO_LAND_CTRL）を残したときのゲーム画面の高さ
   function pianoLandH(boxW, boxH) {
@@ -376,9 +378,9 @@
   }
   function pianoPadsLoad() { var a = lsGet(PIANO_PADS_KEY); return pianoPadsClean(a && a.length ? a : PIANO_PAD_DEFAULT); }
   function pianoPadsSave(p) { return lsSet(PIANO_PADS_KEY, p); }
-  // パッドの位置。たて: 鍵盤の上に 4×4 / よこ: 演奏は画面いっぱいに 8×2、登録中は鍵盤の上に 16×1
+  // パッドの位置。たて: 鍵盤の上に 4×4 / よこ: 8×2（演奏は画面いっぱい、登録中は鍵盤の上。§219）
   function pianoPadRects(L, edit) {
-    var out = [], i, cols = !L.land ? 4 : (edit ? 16 : 8), rows = PIANO_PAD_N / cols;
+    var out = [], i, cols = !L.land ? 4 : 8, rows = PIANO_PAD_N / cols;
     var top = L.land ? 14 : 18, bottom = L.land && !edit ? L.h - 2 : L.kb - 3, cw = (W - 4) / cols, rh = (bottom - top) / rows;
     for (i = 0; i < PIANO_PAD_N; i++) { out.push({ x: 2 + (i % cols) * cw + 1, y: top + Math.floor(i / cols) * rh + 1, w: cw - 2, h: rh - 2 }); }
     return out;
@@ -428,6 +430,8 @@
         if (L.land) {
           var box = panel && panel.parentNode;
           L = pianoLandLayout(box ? pianoLandH(box.clientWidth, box.clientHeight) : 120);
+          // §219: よこ向きでパッドを登録しているあいだは、上のパッドの段を半分くらいまで高く
+          if (padView && padEdit) { L = pianoLandLayout(L.h, L.h * 0.5); }
         }
         api.setCanvasHeight(L.h);
       }
@@ -716,8 +720,8 @@
         else if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
         else if (v === "back") { backToggle(); }
         else if (v === "land") { setLand(!L.land); }
-        else if (v === "pad") { allOff(); padView = !padView; padEdit = false; padDel = false; padSel = []; prefs.pad = padView; pianoSavePrefs(prefs); msg = ""; render(); }
-        else if (v === "padedit") { allOff(); padEdit = !padEdit; padDel = false; padSel = []; msg = ""; render(); }
+        else if (v === "pad") { allOff(); padView = !padView; padEdit = false; padDel = false; padSel = []; prefs.pad = padView; pianoSavePrefs(prefs); msg = ""; if (L.land) { applyLand(); } render(); }
+        else if (v === "padedit") { allOff(); padEdit = !padEdit; padDel = false; padSel = []; msg = ""; if (L.land) { applyLand(); } render(); }
         else if (v === "paddel") { padDel = !padDel; render(); }
         else if (v === "padclear") { padSel = []; render(); }
         else if (v === "padreset") {
@@ -838,7 +842,7 @@
           ctx.fillRect(r.x, r.y, r.w, r.h);
           ctx.strokeStyle = padEdit ? (padDel ? "#ff7675" : "#55efc4") : "#7d6bd6";
           ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-          if (r.w > 20) {
+          if (r.w > 20 && r.h > 18) {
             ctx.fillStyle = hot ? "#14213d" : "rgba(255,255,255,0.45)";
             ctx.font = "7px sans-serif";
             ctx.textAlign = "left";
@@ -846,8 +850,27 @@
             ctx.fillText(String(i + 1), r.x + 2, r.y + 1);
           }
           var lb = pianoPadLabel(pads[i]) || (padEdit ? "＋" : "");
-          if (lb) { fitText(ctx, lb, r.x + r.w / 2, r.y + r.h / 2 + (r.h > 20 ? 2 : 0), Math.max(6, Math.min(12, Math.floor(r.h * 0.42))), hot ? "#14213d" : "#ffffff", r.w - 3); }
+          if (lb) { padLabel(ctx, lb, r, hot ? "#14213d" : "#ffffff"); }
         }
+      }
+      // §219: パッドの名前。1行で入らなければ2行（「A7sus4」「/G」）に分け、パッドの外には描かない
+      function textW(ctx, str, size) {
+        ctx.font = "bold " + size + "px sans-serif";
+        var mw = ctx.measureText ? ctx.measureText(str) : null;
+        return mw && mw.width ? mw.width : 0;
+      }
+      function padLabel(ctx, lb, r, color) {
+        var maxW = r.w - 3, cy = r.y + r.h / 2 + (r.h > 20 ? 2 : 0), big = Math.max(5, Math.min(12, Math.floor(r.h * 0.42))), size = big, lines = [lb];
+        while (size > 7 && textW(ctx, lb, size) > maxW) { size--; }
+        if (textW(ctx, lb, size) > maxW && lb.length > 2) {
+          var cut = lb.indexOf("/") > 0 ? lb.indexOf("/") : Math.ceil(lb.length / 2);
+          lines = [lb.substring(0, cut), lb.substring(cut)];
+          size = Math.min(big, Math.floor(r.h * 0.36));
+          while (size > 5 && Math.max(textW(ctx, lines[0], size), textW(ctx, lines[1], size)) > maxW) { size--; }
+        }
+        if (ctx.save) { ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); }
+        for (var n = 0; n < lines.length; n++) { text(ctx, lines[n], r.x + r.w / 2, cy + (n - (lines.length - 1) / 2) * (size + 1), size, color); }
+        if (ctx.restore) { ctx.restore(); }
       }
       // 幅に入りきらなければ小さくする（measureText がなければそのまま）
       function fitText(ctx, s, x, y, size, color, maxW) {

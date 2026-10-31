@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.26** |
+| 現在バージョン | **v1.27** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.27] 🎹 パッドの名前のはみ出し**（§219）: `padLabel()`（2行・clip）、よこ向きの登録中は `pianoLandLayout(h, kb)` で鍵盤を下げる
 - **[v1.26] 🎹 パッド**（§218）: localStorage `ultimateGorillaPianoPadsV1`。`pianoPadRects(L, edit)` で置き方、パッドの音は noteOn(指:番号) で鳴らす（録音にもそのまま入る）
 - **[v1.25] 🎹 別の読み方の数を選べる**（§217）: prefs `alts`（99 ＝ すべて）→ `detectNotes(midis, { maxAlts })`
 - **[v1.24] 🎹 コードの別の読み方も表示**（§216）: `detectNotes` の alts を表示。鍵盤だけの種類は `NOTE_EXTRA_PARTS`
