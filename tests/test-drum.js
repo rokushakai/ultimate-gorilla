@@ -34,7 +34,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads }; };"); }
+      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads, prac: prac }; };"); }
       return src;
     } });
   }
@@ -223,4 +223,42 @@ module.exports = function () {
     if (f === 10 || f === 40 || f === 70 || f === 100) { h().act("tap"); }
   });
   ok(Math.abs(e14.window.UGDrum.prefs().bpm - 120) <= 1, "tap tempo sets the BPM from the taps", e14.window.UGDrum.prefs().bpm);
+  // --- §235: ハネ・じぶんのフィル・ステップの予約再生・練習の判定 ---
+  ok(D.swingOff("0", 1) === 0 && D.swingOff("16b", 1) === 0.33 && D.swingOff("16b", 2) === 0 && D.swingOff("8b", 2) === 0.66 && D.swingOff("8b", 0) === 0 && D.swingOff("8a", 1) === 0.17,
+    "swing delays the offbeats (16th or 8th, light or triplet feel)");
+  var my3 = []; D.listAdd(my3, { name: "ぼくのフィル", bpm: 100, steps: D.stepsFrom("funk"), kind: "fill" }, D.PATS_MAX, D.patClean, "フィル");
+  D.listAdd(my3, { name: "ふつう", bpm: 100, steps: D.stepsFrom("funk") }, D.PATS_MAX, D.patClean, "リズム");
+  var e15 = hooked(); e15.store[D.PATS_KEY] = JSON.stringify(my3);
+  var pl15 = e15.window.UGDrum.patternList();
+  ok(my3[1].kind === "fill" && my3[0].kind === "loop" && pl15.some(function (pt) { return pt.id === "p:1" && pt.kind === "fill"; }) && pl15.some(function (pt) { return pt.id === "p:2" && pt.kind === "loop"; }),
+    "a step rhythm saved as a fill works as a fill pattern");
+  // ステップ: ハイハット16マス・BPM 120・16分しっかりハネ → 鳴る時刻の間かくが長い・短いをくりかえす
+  var e16 = hooked(), hh16 = [], fr16 = 0;
+  e16.store[D.PREFS_KEY] = JSON.stringify({ mode: "step", bpm: 120, swing: "16b", steps: [[42, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]] });
+  e16.run("drum", { config: { mode: "step" } }, 200, function (f) {
+    fr16 = f;
+    if (f === 1) { var U = e16.window.UGMelody, s0 = U.synth; U.synth = function (m, p, when) { if (m === 42) { hh16.push(e16.window.__drum().t + (when > 0 ? when - 1 : 0)); } return s0.apply(U, arguments); }; }
+    if (f === 3) { press(e16, "x"); }
+  });
+  var gaps = []; for (var gi = 2; gi < Math.min(14, hh16.length); gi++) { gaps.push(Math.round((hh16[gi] - hh16[gi - 1]) * 1000)); }
+  ok(hh16.length > 20 && gaps.every(function (g, j) { return Math.abs(g - (gaps[0] > 125 ? (j % 2 ? 84 : 166) : (j % 2 ? 166 : 84))) <= 6; }), "step playback is scheduled ahead and swings the 16th offbeats", gaps);
+  // 練習: ハイハットを鳴らさない 8ビート。予定どおりに叩く → ぴったり、50ms早く → はやい、叩かない → わすれ。止めると結果
+  var e17 = hooked(), seen = {}, n17 = 0, c17 = null;
+  e17.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, mute: ["hh"] });
+  e17.run("drum", { config: { mode: "free" } }, 300, function (f) {
+    var h = e17.window.__drum; if (!h) { return; }
+    var st = h();
+    if (f === 2) { st.patTap(0); return; }
+    if (!st.prac || f > 250) { return; }
+    for (var i = 0; i < st.prac.exp.length; i++) {
+      var x = st.prac.exp[i], key = Math.round(x.t * 1000), dt = x.t - st.t;
+      if (seen[key]) { continue; }
+      var k = n17 % 8;
+      if ((k === 6 && dt > 0.04 && dt < 0.07) || (k !== 6 && k !== 7 && dt >= 0 && dt < 1 / 60)) { seen[key] = 1; n17++; press(e17, "q"); }
+      else if (k === 7 && dt < 0) { seen[key] = 1; n17++; }
+    }
+    if (f === 250) { c17 = st.prac.c.slice(); st.act("patstop"); }
+  });
+  ok(c17 && c17[0] >= 8 && c17[1] >= 1 && c17[2] === 0 && c17[3] >= 1 && e17.window.__drum().prac === null && e17.window.__drum().patRun === null,
+    "practice mode judges hits on the muted part (on time / early / missed) and stopping shows the result", c17);
 };
