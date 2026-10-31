@@ -126,12 +126,12 @@ module.exports = function () {
     if (f === 2) { var c = kc("floor"); e7.ptr("down", c[0], c[1] * 320 / D.H, 3); e7.ptr("up", c[0], c[1] * 320 / D.H, 3); }
     if (f === 4) { press(e7, "z"); }
     if (f === 200) { press(e7, "q"); }
-    if (f === 210) { press(e7, "c"); press(e7, "q"); press(e7, "f"); }
+    if (f === 210) { e7.key("keydown", "c"); press(e7, "q"); e7.key("keyup", "c"); press(e7, "f"); } // §241: C を押しているあいだ開く・はなすと閉じる（44）
     if (f === 260) { press(e7, "z"); }
     if (f === 3) { got7.push(Object.keys(h().flash).filter(function (k) { return h().flash[k] > 0; }).join()); }
   });
   var t7 = JSON.parse(e7.store[D.TAKES_KEY] || "[]")[0];
-  ok(got7[0] === "43" && t7 && t7.notes.map(function (n) { return n[1]; }).join() === "42,46,51", "kit: tapping the floor tom hits it; keys Q (hi-hat), C (pedal opens it → open hi-hat), F (ride) are recorded", [got7, t7 && t7.notes]);
+  ok(got7[0] === "43" && t7 && t7.notes.map(function (n) { return n[1]; }).join() === "42,46,44,51", "kit: tapping the floor tom hits it; keys Q (hi-hat), holding C (pedal) opens it → open hi-hat, releasing closes it (44), F (ride) are recorded", [got7, t7 && t7.notes]);
   ok(D.landH(844, 390) >= 90 && D.landH(844, 390) < D.landH(1400, 820) + 1, "landscape height follows the screen");
   // --- §229 / §230: 生ドラムのサンプル（ロック DRSKit・ジャズ Virtuosity） ---
   var UG = W.UGMelody, fs = require("fs"), path = require("path");
@@ -399,4 +399,52 @@ module.exports = function () {
   // （全音符の行は3拍子でも4拍なので、Aメロ16拍＝5小節・サビ8拍＝3小節。わりきれないお知らせも出る）
   ok(fs27.ok && JSON.stringify(fs27.song) === JSON.stringify([["d:waltz", 4], ["f:tom3", 1], ["d:waltzbig", 2], ["f:end3", 1]]) && /3拍子/.test(fs27.msg) && /3拍でわりきれない/.test(fs27.msg),
     "a 3/4 sequencer song gets a waltz song with 3/4 fills (bars counted in 3 beats)", [fs27.msg, fs27.song]);
+  // --- §241: 切りかえのタイミング・ハイハット ---
+  ok(D.switchWait("2", 0, "loop") === 2 && D.switchWait("2", 1, "loop") === 1 && D.switchWait("4", 0, "fill") === 3 && D.switchWait("4", 3, "fill") === 4 &&
+    D.switchWait("4", 2, "fill") === 1 && D.switchWait("1", 5, "loop") === 1 && D.switchWait("now", 5, "fill") === 1,
+    "switch wait: loops change at the start of a 2/4-bar block, fills play in its last bar");
+  function swRun(sw, taps, frames) {
+    var e = hooked(), log = [];
+    e.store[D.PREFS_KEY] = JSON.stringify({ pat: true, bpm: 120, patSwitch: sw });
+    e.run("drum", { config: { mode: "free" } }, frames, function (f) {
+      var h = e.window.__drum; if (!h) { return; }
+      if (taps[f] !== undefined) { h().patTap(taps[f]); }
+      var pr = h().patRun, id = pr ? pr.id : "-";
+      if (!log.length || log[log.length - 1][0] !== id) { log.push([id, f]); }
+      if (f === frames - 1) { log.push(["q", pr && pr.queue ? pr.queue.id : null]); }
+    });
+    return log;
+  }
+  var l2 = swRun("2", { 2: 0, 20: 1 }, 300), l4 = swRun("4", { 2: 0, 20: 10 }, 520), ln = swRun("now", { 2: 0, 50: 1 }, 80), lc = swRun("4", { 2: 0, 20: 1, 30: 1 }, 60);
+  ok(l2[2] && l2[2][0] === "g:beat16" && l2[2][1] > 230 && l2[2][1] < 250, "2-bar switching: a new loop starts at the start of bar 3 (not bar 2)", l2);
+  ok(l4[2] && l4[2][0] === "f:snare" && l4[2][1] > 350 && l4[2][1] < 370 && l4[3] && l4[3][0] === "g:8beat" && l4[3][1] > 470 && l4[3][1] < 490, "4-bar switching: a fill plays in the 4th bar, then the loop comes back", l4);
+  ok(ln[2] && ln[2][0] === "g:beat16" && ln[2][1] >= 50 && ln[2][1] < 56, "'now' switching changes the pattern right away (mid-bar)", ln);
+  ok(lc[lc.length - 1][1] === null && lc[1][0] === "g:8beat" && lc.length === 3, "tapping the waiting pad again cancels the switch", lc);
+  // オープンHH のパッドを押しているあいだ開く → はなすと閉じる（44）。OFF なら閉じない
+  function ohRun(hold) {
+    var e = hooked(), snd = [];
+    e.store[D.PREFS_KEY] = JSON.stringify({ hhHold: hold });
+    e.run("drum", { config: { mode: "free" } }, 30, function (f) {
+      if (f === 1) { var U = e.window.UGMelody, s0 = U.synth; U.synth = function (m) { snd.push(m); return s0.apply(U, arguments); }; }
+      var c = padXY(1);
+      if (f === 3) { e.ptr("down", c[0], c[1], 4); }
+      if (f === 12) { e.ptr("up", c[0], c[1], 4); }
+    });
+    return snd.join();
+  }
+  var oh1 = ohRun(true), oh0 = ohRun(false);
+  ok(oh1 === "46,44" && oh0 === "46", "open hi-hat pad: ringing while held, closed (44) when the finger is lifted; OFF keeps the old way", [oh1, oh0]);
+  // セットのペダル（左下）: 押しているあいだ ハイハット＝オープン、はなすと閉じる
+  var kbp = D.kitBox(58, 300 - 58 - 4), pc = [kbp.x + 18 * kbp.sx, kbp.y + 99 * kbp.sy], e28 = hooked(), snd28 = [];
+  ok(D.kitPedal(pc[0], pc[1], kbp) && !D.kitPedal(kc("snare")[0], kc("snare")[1], kbp) && D.kitAt(pc[0], pc[1], kbp) === null, "the hi-hat pedal sits at the kit's lower left, clear of the drums");
+  e28.store[D.PREFS_KEY] = JSON.stringify({ kit: true });
+  e28.run("drum", { config: { mode: "free" } }, 30, function (f) {
+    if (f === 1) { var U = e28.window.UGMelody, s0 = U.synth; U.synth = function (m) { snd28.push(m); return s0.apply(U, arguments); }; }
+    var hh = kc("hh");
+    if (f === 3) { e28.ptr("down", pc[0], pc[1] * 320 / D.H, 5); }
+    if (f === 5) { e28.ptr("down", hh[0], hh[1] * 320 / D.H, 6); e28.ptr("up", hh[0], hh[1] * 320 / D.H, 6); }
+    if (f === 10) { e28.ptr("up", pc[0], pc[1] * 320 / D.H, 5); }
+    if (f === 15) { e28.ptr("down", hh[0], hh[1] * 320 / D.H, 6); e28.ptr("up", hh[0], hh[1] * 320 / D.H, 6); }
+  });
+  ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };
