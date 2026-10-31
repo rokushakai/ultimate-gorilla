@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.31** |
+| 現在バージョン | **v1.32** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.32] 🎸 ウクレレの表示の設定**（§224）: `applyView()` が `api.setRootClass` で uke-v-top / uke-v-side / uke-v-small / uke-hide-ctrl / uke-hide-help をつける（CSS で並びかえ）
 - **[v1.31] 🎸 ウクレレのパッド・演奏パターン**（§223）: ウクレレに `panel: true`（フリー演奏だけ中身、ほかは空でかくす）。パッドは押さえ方を sticky に置いて strumAll / pluck で鳴らす（`padTick`）。localStorage `ultimateGorillaUkulelePadsV1`・`ultimateGorillaUkulelePadPrefsV1`・`ultimateGorillaUkulelePatsV1`
 - **[v1.30] 🎹 パターン30種類・じぶんの演奏パターン**（§222）: localStorage `ultimateGorillaPianoPatsV1`。`pianoPlay('my:番号')` で読み、`pianoPatSteps()` で文字 → 音
 - **[v1.29] 🎹 パッドの演奏パターン**（§221）: `PIANO_PLAYS`（[id, 名前, 種類, 文字, 1文字の拍, {acc}]）→ `pianoPlaySteps()`。パターンを足すときは `PIANO_PLAYS` に1行
@@ -180,7 +181,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（711項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（714項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

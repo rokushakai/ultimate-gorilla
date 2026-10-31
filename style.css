@@ -1309,3 +1309,27 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .uke-pads.edit .uke-pad { border-color: #55efc4; background: #2f4a6e; }
 .uke-mypat { margin-top: 6px; font-size: 13px; }
 .uke-mypat summary { cursor: pointer; }
+/* ===== §224 v1.32: ウクレレの表示の設定（並び方・パッドの大きさ・下のボタン・説明） ===== */
+.uke-chips2 { display: flex; flex-wrap: wrap; gap: 4px; }
+.uke-chips2 .modal-btn { flex: 1 1 auto; margin: 0; padding: 6px 8px; font-size: 12px; min-height: 32px; }
+.uke-pads.size-s { grid-template-columns: repeat(8, 1fr); gap: 3px; }
+.uke-pads.size-s .uke-pad { min-height: 32px; font-size: 11px; border-width: 1px; border-radius: 6px; }
+.uke-pads.size-s .uke-pad .n { display: none; }
+.uke-pads.size-l .uke-pad { min-height: 68px; font-size: 18px; }
+.uke-hide-ctrl .arcade-controls, .uke-hide-help .arcade-help { display: none !important; }
+/* パッドを上に: パッドの欄を指板の上へ */
+.uke-v-top { display: flex; flex-direction: column; }
+.uke-v-top .arcade-hud { order: 0; } .uke-v-top .arcade-panel { order: 1; margin: 0 auto 6px; } .uke-v-top .arcade-canvas { order: 2; }
+.uke-v-top .arcade-controls { order: 3; } .uke-v-top .arcade-sys { order: 4; } .uke-v-top .arcade-help { order: 5; }
+/* 横ならび: 画面いっぱいに広げて、左に指板（高さいっぱい）、右にパッド */
+.uke-v-side { position: fixed; top: 0; left: 0; z-index: 2000; box-sizing: border-box; width: 100vw; height: 100vh; overflow-y: auto; padding: 6px; background: #0b1020;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: start; align-content: start; }
+.uke-v-side > * { grid-column: 1 / -1; }
+.uke-v-side .arcade-hud { grid-row: 1; }
+.uke-v-side .arcade-canvas { grid-column: 1; grid-row: 2 / span 3; height: calc(100vh - 44px) !important; width: auto !important; max-width: 62vw; margin: 0; }
+.uke-v-side .arcade-panel { grid-column: 2; grid-row: 2; margin: 0; max-width: none; }
+.uke-v-side .arcade-controls { grid-column: 2; grid-row: 3; }
+.uke-v-side .arcade-sys { grid-column: 2; grid-row: 4; }
+.uke-v-side .arcade-help { grid-column: 2; grid-row: 5; }
+/* 指板を小さく */
+.uke-v-small .arcade-canvas { width: min(60%, calc((100vh - 90px) * 0.75)) !important; }

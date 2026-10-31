@@ -1165,4 +1165,24 @@ module.exports = async function () {
   var up15 = JSON.parse(ue.store[uU.PADS_KEY] || "[]")[15], upp = JSON.parse(ue.store[uU.PADPREFS_KEY] || "{}");
   ok(us.a === uU.padsLoad(false)[0].shape.join() && us.idx === 3 && us.b === null, "a pad puts its chord on the fretboard and strums the pattern while held (4ths at BPM 120), stopping on release", us);
   ok(up15 && up15.name === "Am" && up15.shape.join() === us.c && upp.chord === false, "registering stores the held fingering on a pad; the chord name can be turned off", [up15, upp]);
+  // --- §224: 表示の設定（並び方・パッドの大きさ・下のボタン・説明） ---
+  var vcls = [], vroot = H.makeEl("div"), vparts = {}, ve = ukeHooked();
+  vroot.classList = { add: function (c) { vcls.push("+" + c); }, remove: function (c) { vcls.push("-" + c); }, contains: function () { return false; } };
+  vroot.querySelector = function (sel) {
+    if (!vparts[sel]) {
+      vparts[sel] = H.makeEl(sel);
+      if (sel === ".arcade-canvas") { vparts[sel].getContext = function () { return new Proxy({}, { get: function (t5, k5) { return t5[k5] !== undefined ? t5[k5] : function () {}; }, set: function (t5, k5, v5) { t5[k5] = v5; return true; } }); }; }
+    }
+    return vparts[sel];
+  };
+  ve.store[ve.window.UGUkulele.PADPREFS_KEY] = JSON.stringify({ pad: true, view: "side", size: "l", ctrl: false, help: true });
+  ve.window.UGArcade.start("ukulele", vroot, { config: { mode: "free" }, onExit: function () {} });
+  var vhtml = vparts[".arcade-panel"].innerHTML;
+  ve.window.__ukePad.act("view:top");
+  var vpref = JSON.parse(ve.store[ve.window.UGUkulele.PADPREFS_KEY]);
+  ve.window.UGArcade.stop();
+  ok(vcls.indexOf("+uke-v-side") >= 0 && vcls.indexOf("+uke-hide-ctrl") >= 0 && vcls.indexOf("+uke-hide-help") < 0 && vcls.indexOf("+uke-v-top") > vcls.indexOf("+uke-v-side") &&
+    vcls.lastIndexOf("-uke-v-top") > vcls.indexOf("+uke-v-top") && vcls.lastIndexOf("-uke-hide-ctrl") > vcls.indexOf("+uke-hide-ctrl"), "views and hide switches are set on the screen and removed when leaving", vcls);
+  ok(vhtml.indexOf("uke-pads size-l") >= 0 && vhtml.indexOf("表示の設定") >= 0 && vpref.view === "top" && vpref.size === "l" && vpref.ctrl === false, "pad size and view are remembered", vpref);
+  ok(U.VIEWS.length === 4 && U.PAD_SIZES.length === 3, "4 views and 3 pad sizes");
 };

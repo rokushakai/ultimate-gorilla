@@ -371,6 +371,7 @@
       paused: false,
       over: false,
       reported: false,
+      rootCls: [], // §224: setRootClass でつけたクラス
       bonusMedals: 0, // §211 v1.19: ゲームがくれる特別なメダル（称号アップなど）
       acc: 0,
       last: null,
@@ -398,7 +399,12 @@
       // §181 v0.99: 画面の飾り（下のボタン・説明）を減らしてゲーム画面を大きくする
       setCompact: function (on) { if (rootEl.classList) { if (on) { rootEl.classList.add("arcade-compact"); } else { rootEl.classList.remove("arcade-compact"); } } },
       // §213 v1.21: 横向き表示（画面いっぱい。縦持ちのときは 90° 回して見せる。CSS .arcade-land）
-      setLandscape: function (on) { if (rootEl.classList) { if (on) { rootEl.classList.add("arcade-land"); } else { rootEl.classList.remove("arcade-land"); } } }
+      setLandscape: function (on) { if (rootEl.classList) { if (on) { rootEl.classList.add("arcade-land"); } else { rootEl.classList.remove("arcade-land"); } } },
+      // §224 v1.32: 見た目用のクラスを画面全体につける・はずす（ゲームをやめると全部はずす）
+      setRootClass: function (cls, on) {
+        if (!rootEl.classList || !host) { return; }
+        if (on) { rootEl.classList.add(cls); if (host.rootCls.indexOf(cls) < 0) { host.rootCls.push(cls); } } else { rootEl.classList.remove(cls); }
+      }
     };
     host.game = def.create(api, opts.config || null);
     bindCanvas(canvas);
@@ -437,8 +443,9 @@
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("keyup", onKeyUp, true);
     document.removeEventListener("visibilitychange", onVisibility);
-    var root = host.root;
+    var root = host.root, rcls = host.rootCls || [];
     host = null;
+    if (root && root.classList) { for (var rc = 0; rc < rcls.length; rc++) { root.classList.remove(rcls[rc]); } }
     if (root) { root.innerHTML = ""; if (root.classList) { root.classList.remove("arcade-land"); root.classList.remove("arcade-compact"); } }
   }
 

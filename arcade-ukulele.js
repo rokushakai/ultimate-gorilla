@@ -3272,8 +3272,14 @@
   function ukePadPrefs() {
     var p = lsGet(UKE_PADPREFS_KEY) || {};
     return { pad: !!p.pad, chord: p.chord !== false, play: typeof p.play === "string" && p.play ? p.play : "once",
-      bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))), hold: p.hold === "once" ? "once" : "hold" };
+      bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 90))), hold: p.hold === "once" ? "once" : "hold",
+      // §224: 表示（並び方・パッドの大きさ・下のボタン・説明）
+      view: UKE_VIEWS.some(function (v) { return v[0] === p.view; }) ? p.view : "below", size: p.size === "s" || p.size === "l" ? p.size : "m",
+      ctrl: p.ctrl !== false, help: p.help !== false };
   }
+  // §224 v1.32: 並び方 [id, 名前]
+  var UKE_VIEWS = [["below", "下にパッド"], ["top", "パッドを上に"], ["side", "横ならび"], ["small", "指板を小さく"]];
+  var UKE_PAD_SIZES = [["s", "小"], ["m", "中"], ["l", "大"]];
   function ukePadPrefsSave(p) { return lsSet(UKE_PADPREFS_KEY, p); }
   // じぶんの演奏パターン（ウクレレのパターンの文字: D ダウン / U アップ / x ブラッシング / 1〜4 その弦 / P ピンチ / - 休み。1小節 3拍か4拍）
   var UKE_MYPAT_RE = /^[DUxP1-4-]{1,16}$/;
@@ -3751,7 +3757,7 @@
       }
       // ---------- §223: パッド・演奏パターン・コード名の表示（フリー演奏だけ） ----------
       var panel = api.panel, padOn = mode === "free", padP = ukePadPrefs(), pads = padOn ? ukePadsLoad(lowG) : [];
-      var padEdit = false, padPlay = null, padHeldI = -1, padMsg = "", myForm = { id: 0, name: "", p: "", meter: 4 };
+      var padEdit = false, padPlay = null, padHeldI = -1, padMsg = "", myForm = { id: 0, name: "", p: "", meter: 4 }, viewOpen = false;
       if (panel && panel.classList) { panel.classList.add("uke-pad-panel"); }
       function chuck() {
         if (!UG || !ac) { return; }
@@ -3815,6 +3821,10 @@
       function padAction(v) {
         if (v === "pad") { padP.pad = !padP.pad; padEdit = false; padPlay = null; padMsg = ""; }
         else if (v === "chord") { padP.chord = !padP.chord; }
+        else if (v.indexOf("view:") === 0) { padP.view = v.substring(5); }
+        else if (v.indexOf("size:") === 0) { padP.size = v.substring(5); }
+        else if (v === "ctrl") { padP.ctrl = !padP.ctrl; }
+        else if (v === "help") { padP.help = !padP.help; }
         else if (v === "edit") { padEdit = !padEdit; padPlay = null; padMsg = padEdit ? "指板を押さえて（ホールドがおすすめ）、パッドをタップすると その押さえ方を登録" : ""; }
         else if (v === "hold") { padP.hold = padP.hold === "once" ? "hold" : "once"; }
         else if (v === "bpmdown" || v === "bpmup") { padP.bpm = Math.max(40, Math.min(240, padP.bpm + (v === "bpmup" ? 5 : -5))); }
@@ -3854,12 +3864,22 @@
         if (t) { myForm.p = t.value; }
         if (m) { myForm.meter = Number(m.value) === 3 ? 3 : 4; }
       }
+      // §224: 並び方・下のボタン・説明を画面全体のクラスで切りかえる
+      function applyView() {
+        if (!padOn || !api.setRootClass) { return; }
+        for (var vi = 0; vi < UKE_VIEWS.length; vi++) { api.setRootClass("uke-v-" + UKE_VIEWS[vi][0], padP.view === UKE_VIEWS[vi][0] && UKE_VIEWS[vi][0] !== "below"); }
+        api.setRootClass("uke-hide-ctrl", !padP.ctrl);
+        api.setRootClass("uke-hide-help", !padP.help);
+      }
       function padRender() {
         if (!panel || !padOn) { return; }
+        applyView();
         var h = '<div class="piano-row"><button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">' + (padP.pad ? "&#x1F39B;&#xFE0F; パッドをしまう" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
           '<button class="modal-btn' + (padP.chord ? " piano-pad-on" : "") + '" data-uact="chord">&#x1F3F7;&#xFE0F; コード名 ' + (padP.chord ? "ON" : "OFF") + '</button></div>', i;
+        var vd = panel.querySelector ? panel.querySelector("details.uke-viewset") : null;
+        if (vd) { viewOpen = !!vd.open; }
         if (padP.pad) {
-          h += '<div class="uke-pads' + (padEdit ? " edit" : "") + '">';
+          h += '<div class="uke-pads size-' + padP.size + (padEdit ? " edit" : "") + '">';
           for (i = 0; i < UKE_PAD_N; i++) {
             h += '<button class="uke-pad' + (pads[i] ? "" : " empty") + '" data-upad="' + i + '"><span class="n">' + (i + 1) + '</span>' + (pads[i] ? I.escHtml(pads[i].name || pads[i].shape.join("")) : (padEdit ? "＋" : "")) + '</button>';
           }
@@ -3890,6 +3910,17 @@
             '<div class="piano-row"><button class="modal-btn" data-uact="mytry">&#x25B6;&#xFE0F; いまの押さえ方で試す</button><button class="modal-btn" data-uact="mysave">&#x1F4BE; ' + (myForm.id ? "上書き保存" : "保存") + '</button>' +
             (myForm.id ? '<button class="modal-btn" data-uact="mynew">新しく</button>' : "") + '</div></div></details>';
         }
+        // §224: 表示の設定
+        var vh = '<details class="uke-mypat uke-viewset"' + (viewOpen ? " open" : "") + '><summary>&#x1F441;&#xFE0F; 表示の設定</summary><p class="small" style="margin:4px 0 2px;">並び方</p><div class="uke-chips2">', vk;
+        for (vk = 0; vk < UKE_VIEWS.length; vk++) { vh += '<button class="modal-btn' + (padP.view === UKE_VIEWS[vk][0] ? " piano-pad-on" : "") + '" data-uact="view:' + UKE_VIEWS[vk][0] + '">' + UKE_VIEWS[vk][1] + '</button>'; }
+        vh += '</div><p class="small" style="margin:4px 0 2px;">パッドの大きさ</p><div class="uke-chips2">';
+        for (vk = 0; vk < UKE_PAD_SIZES.length; vk++) { vh += '<button class="modal-btn' + (padP.size === UKE_PAD_SIZES[vk][0] ? " piano-pad-on" : "") + '" data-uact="size:' + UKE_PAD_SIZES[vk][0] + '">' + UKE_PAD_SIZES[vk][1] + '</button>'; }
+        vh += '</div><p class="small" style="margin:4px 0 2px;">表示する・しない</p><div class="uke-chips2">' +
+          '<button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">パッド ' + (padP.pad ? "ON" : "OFF") + '</button>' +
+          '<button class="modal-btn' + (padP.chord ? " piano-pad-on" : "") + '" data-uact="chord">コード名 ' + (padP.chord ? "ON" : "OFF") + '</button>' +
+          '<button class="modal-btn' + (padP.ctrl ? " piano-pad-on" : "") + '" data-uact="ctrl">下のボタン ' + (padP.ctrl ? "ON" : "OFF") + '</button>' +
+          '<button class="modal-btn' + (padP.help ? " piano-pad-on" : "") + '" data-uact="help">説明 ' + (padP.help ? "ON" : "OFF") + '</button></div></details>';
+        h += vh;
         if (padMsg) { h += '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + I.escHtml(padMsg) + '</p>'; }
         panel.innerHTML = h;
         if (!panel.querySelectorAll) { return; }
@@ -4315,7 +4346,7 @@
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
     seqRec: ukeSeqRec, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
-    padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
+    padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, VIEWS: UKE_VIEWS, PAD_SIZES: UKE_PAD_SIZES, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
     myPatsLoad: ukeMyPatsLoad, myPatsSave: ukeMyPatsSave, myPatPut: ukeMyPatPut, MYPATS_KEY: UKE_MYPATS_KEY,
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
     strumNotes: ukeStrumNotes, patterns: ukePatterns, GENRES: UKE_GENRES, GENRE_GROUPS: UKE_GENRE_GROUPS, genre: ukeGenre, genresFor: ukeGenresFor, applyGenre: ukeApplyGenre, genreOf: ukeGenreOf, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
