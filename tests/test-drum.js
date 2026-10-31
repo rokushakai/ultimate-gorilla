@@ -114,4 +114,23 @@ module.exports = function () {
   ok(D5.stepOn(back5, 36, 0) && !D5.stepOn(back5, 47, 3) && JSON.stringify(D5.toSeqCustom(back5)) === JSON.stringify(D5.toSeqCustom(my)) && !D5.sendSteps(D5.stepsClean([[47, [0]]])).ok, "the sequencer's drum can be read back into steps; only toms/crash can't be sent");
   var st6 = U5.seqLoad(); st6.cur.tracks.drum.groove = "bossa"; U5.seqSave(st6);
   ok(JSON.stringify(D5.stepsFromSeq()) === JSON.stringify(D5.stepsFrom("bossa")), "when the sequencer uses a built-in rhythm, reading gives that rhythm's steps");
+  // --- §228: ドラムセットの形 ---
+  var kb = D.kitBox(58, 300 - 58 - 4);
+  function kc(id) { var r = D.kitShape(D.kitPiece(id), kb); return [r.cx, r.cy]; }
+  ok(D.kit.length === 8 && ["snare", "kick", "tom1", "floor", "ride", "crash", "hh", "tom2"].every(function (id) { var c = kc(id); var p = D.kitAt(c[0], c[1], kb); return p && p[0] === id; }), "every kit piece is hit at its center (front pieces win)");
+  ok(D.kitAt(2, 2, kb) === null && D.pad(51)[1] === "ライド" && D.pad(43)[2] === "FLOOR", "taps outside the kit hit nothing; ride / toms / floor tom have names");
+  var e7 = hooked(), got7 = [];
+  e7.store[D.PREFS_KEY] = JSON.stringify({ kit: true, bpm: 120 });
+  e7.run("drum", { config: { mode: "free" } }, 400, function (f) {
+    var h = e7.window.__drum; if (!h) { return; }
+    if (f === 2) { var c = kc("floor"); e7.ptr("down", c[0], c[1] * 320 / D.H, 3); e7.ptr("up", c[0], c[1] * 320 / D.H, 3); }
+    if (f === 4) { press(e7, "z"); }
+    if (f === 200) { press(e7, "q"); }
+    if (f === 210) { press(e7, "c"); press(e7, "q"); press(e7, "f"); }
+    if (f === 260) { press(e7, "z"); }
+    if (f === 3) { got7.push(Object.keys(h().flash).filter(function (k) { return h().flash[k] > 0; }).join()); }
+  });
+  var t7 = JSON.parse(e7.store[D.TAKES_KEY] || "[]")[0];
+  ok(got7[0] === "43" && t7 && t7.notes.map(function (n) { return n[1]; }).join() === "42,46,51", "kit: tapping the floor tom hits it; keys Q (hi-hat), C (pedal opens it → open hi-hat), F (ride) are recorded", [got7, t7 && t7.notes]);
+  ok(D.landH(844, 390) >= 90 && D.landH(844, 390) < D.landH(1400, 820) + 1, "landscape height follows the screen");
 };

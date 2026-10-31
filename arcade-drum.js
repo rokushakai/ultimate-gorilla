@@ -29,7 +29,41 @@
   var DRUM_SONGS = [["8beat", 100, 1], ["four", 110, 1], ["rock", 110, 2], ["halftime", 80, 1], ["shuffle", 100, 2],
     ["disco", 115, 2], ["beat16", 95, 3], ["funk", 95, 3], ["bossa", 110, 3], ["march", 110, 2]];
 
-  function drumPad(m) { for (var i = 0; i < DRUM_PADS.length; i++) { if (DRUM_PADS[i][0] === m) { return DRUM_PADS[i]; } } return null; }
+  // §228 v1.36: ドラムセットだけにある楽器 [MIDI, 名前, 短い名前, 色]
+  var DRUM_EXTRA = [[51, "ライド", "RIDE", "#ffeaa7"], [48, "タム（高）", "TOM1", "#fab1a0"], [45, "タム（中）", "TOM2", "#fd9b8a"], [43, "フロアタム", "FLOOR", "#e17055"]];
+  function drumPad(m) {
+    var i;
+    for (i = 0; i < DRUM_PADS.length; i++) { if (DRUM_PADS[i][0] === m) { return DRUM_PADS[i]; } }
+    for (i = 0; i < DRUM_EXTRA.length; i++) { if (DRUM_EXTRA[i][0] === m) { return DRUM_EXTRA[i]; } }
+    return null;
+  }
+  // ドラムセット（200×110 の中の位置）[id, MIDI, 中心x, 中心y, 横の半径, 縦の半径, 種類 "cym" | "drum" | "kick", キー]
+  // ハイハットはペダルが開いていれば 46（オープン）
+  var DRUM_KIT = [
+    ["kick", 36, 100, 80, 29, 27, "kick", "A"], ["ride", 51, 166, 20, 31, 9, "cym", "F"], ["crash", 49, 38, 15, 28, 8, "cym", "W"],
+    ["floor", 43, 158, 74, 23, 15, "drum", "D"], ["tom1", 48, 80, 40, 17, 12, "drum", "E"], ["tom2", 45, 119, 40, 17, 12, "drum", "R"],
+    ["hh", 42, 17, 52, 18, 6, "cym", "Q"], ["snare", 38, 52, 72, 21, 14, "drum", "S"]
+  ];
+  // 叩いたかを調べる順（手前から）
+  var DRUM_KIT_HIT = ["snare", "hh", "tom1", "tom2", "floor", "crash", "ride", "kick"];
+  function drumKitPiece(id) { for (var i = 0; i < DRUM_KIT.length; i++) { if (DRUM_KIT[i][0] === id) { return DRUM_KIT[i]; } } return null; }
+  // セットを置く場所（box: 描ける範囲）。横は縦の1.6倍まで、縦は横の1.1倍まで伸ばす
+  function drumKitBox(top, h) {
+    var sx = W / 200, sy = h / 110;
+    if (sx > sy * 1.6) { sx = sy * 1.6; }
+    if (sy > sx * 1.1) { sy = sx * 1.1; }
+    return { x: (W - 200 * sx) / 2, y: top + (h - 110 * sy) / 2, sx: sx, sy: sy };
+  }
+  function drumKitShape(p, b) { return { cx: b.x + p[2] * b.sx, cy: b.y + p[3] * b.sy, rx: p[4] * b.sx, ry: p[5] * b.sy }; }
+  // 座標 → セットの部品（シンバルは細いので上下を広めに）
+  function drumKitAt(x, y, b) {
+    for (var i = 0; i < DRUM_KIT_HIT.length; i++) {
+      var p = drumKitPiece(DRUM_KIT_HIT[i]), r = drumKitShape(p, b), ry = p[6] === "cym" ? r.ry * 1.9 : r.ry;
+      var dx = (x - r.cx) / r.rx, dy = (y - r.cy) / ry;
+      if (dx * dx + dy * dy <= 1) { return p; }
+    }
+    return null;
+  }
   function drumName(m) { var p = drumPad(m); return p ? p[1] : String(m); }
   function drumNum(v, lo, hi) { var n = Number(v); return isFinite(n) && n >= lo && n <= hi ? n : null; }
 
@@ -124,7 +158,8 @@
       level: p.level === "normal" || p.level === "hard" ? p.level : "easy",
       speed: DRUM_SPEEDS.indexOf(Number(p.speed)) >= 0 ? Number(p.speed) : 100,
       steps: p.steps ? drumStepsClean(p.steps) : drumStepsFrom("8beat"),
-      backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backDrum: !!p.backDrum
+      backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backDrum: !!p.backDrum,
+      kit: !!p.kit, land: !!p.land // §228: ドラムセットの形・よこ向き（じゆう）
     };
   }
   function drumSavePrefs(p) { return lsSet(DRUM_PREFS_KEY, p); }
@@ -208,13 +243,19 @@
 
   // ---------- 画面の位置 ----------
   // じゆう: 4×2 のパッド
-  function drumPadRect(i) {
-    var cw = (W - 6) / 4, rh = (DRUM_H - DRUM_TOP - 6) / 2;
-    return { x: 3 + (i % 4) * cw + 2, y: DRUM_TOP + 3 + Math.floor(i / 4) * rh + 2, w: cw - 4, h: rh - 4 };
+  // L（省略可）: 画面の形 { top, h }（§228 よこ向き）
+  function drumPadRect(i, L) {
+    var top = L ? L.top : DRUM_TOP, hh = L ? L.h : DRUM_H, cw = (W - 6) / 4, rh = (hh - top - 6) / 2;
+    return { x: 3 + (i % 4) * cw + 2, y: top + 3 + Math.floor(i / 4) * rh + 2, w: cw - 4, h: rh - 4 };
   }
-  function drumPadAt(x, y) {
-    for (var i = 0; i < DRUM_PADS.length; i++) { var r = drumPadRect(i); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } }
+  function drumPadAt(x, y, L) {
+    for (var i = 0; i < DRUM_PADS.length; i++) { var r = drumPadRect(i, L); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } }
     return -1;
+  }
+  // よこ向き: 画面いっぱいの枠 → ゲーム画面の高さ（下にボタンの段 84）
+  function drumLandH(boxW, boxH) {
+    if (!(boxW > 0 && boxH > 0)) { return 130; }
+    return Math.max(90, Math.min(170, Math.round(W * (boxH - 8 - 84) / (boxW - 8))));
   }
   // ステップ: 左に名前、16マス × 8段
   var STEP_X = 36, STEP_Y = 22, STEP_RH = 24;
@@ -302,7 +343,9 @@
     draw();
   }
 
-  var DRUM_KEYS = { q: "d0", w: "d1", e: "d2", r: "d3", a: "d4", s: "d5", d: "d6", f: "d7", " ": "d4", z: "rec", x: "play" };
+  var DRUM_KEYS = { q: "d0", w: "d1", e: "d2", r: "d3", a: "d4", s: "d5", d: "d6", f: "d7", " ": "d4", z: "rec", x: "play", c: "pedal" };
+  // ドラムセットのときのキー（Q W E R / A S D F の順）
+  var DRUM_KIT_KEYS = ["hh", "crash", "tom1", "tom2", "kick", "snare", "floor", "ride"];
 
   I.register({
     id: "drum",
@@ -323,7 +366,17 @@
       var prefs = drumPrefs(), mode = cfg.mode === "step" || cfg.mode === "rhythm" ? cfg.mode : "free";
       var frame = 0, ended = false, msg = "", flash = {}, last = "";
       var panel = api.panel;
-      api.setCanvasHeight(DRUM_H);
+      // §228: 画面の形（よこ向きはじゆうだけ）・ドラムセット・ハイハットのペダル
+      var kit = mode === "free" && prefs.kit, hhOpen = false, Ld = { top: DRUM_TOP, h: DRUM_H, land: false }, landOn = mode === "free" && prefs.land;
+      function applyLand() {
+        if (api.setLandscape) { api.setLandscape(landOn); }
+        if (landOn) {
+          var box = panel && panel.parentNode;
+          Ld = { top: 14, h: box ? drumLandH(box.clientWidth, box.clientHeight) : 130, land: true };
+        } else { Ld = { top: DRUM_TOP, h: DRUM_H, land: false }; }
+        api.setCanvasHeight(Ld.h);
+      }
+      applyLand();
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
       function now() { return frame / 60; }
 
@@ -478,6 +531,9 @@
       }
 
       // --- 叩く ---
+      // セットの部品を叩く（ハイハットはペダルで開け閉め）
+      function hitPiece(p) { if (p) { hit(p[0] === "hh" && hhOpen ? 46 : p[1], p[6] === "cym" ? 0.85 : 0.9); } }
+      function kitBox() { return drumKitBox(Ld.land ? 14 : 58, Ld.h - (Ld.land ? 14 : 58) - 4); }
       function hit(m, lv) {
         if (ended || !drumPad(m)) { return; }
         hitSound(m, lv || 0.9);
@@ -491,6 +547,9 @@
       function action(v) {
         if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
         else if (v === "back") { backToggle(); }
+        else if (v === "kit") { kit = !kit; prefs.kit = kit; drumSavePrefs(prefs); render(); }
+        else if (v === "pedal") { if (kit) { hhOpen = !hhOpen; render(); } }
+        else if (v === "land") { landOn = !landOn; prefs.land = landOn; drumSavePrefs(prefs); applyLand(); render(); }
         else if (v === "send") { var rs = drumSendSteps(steps); msg = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); render(); }
         else if (v === "fromseq") {
           var fs = drumStepsFromSeq();
@@ -535,6 +594,11 @@
         } else {
           h += '<p class="small" style="margin:0;">' + escHtml((drumGroove(song[0]) || { name: song[0] }).name) + '（' + (level === "easy" ? "かんたん" : (level === "normal" ? "ふつう" : "むずかしい")) + '・速さ ' + Math.round(rate * 100) + '%）・' + rn.length + '打</p>';
         }
+        if (mode === "free") {
+          h += '<div class="piano-row"><button class="modal-btn' + (kit ? " piano-pad-on" : "") + '" data-da="kit">' + (kit ? "&#x1F39B;&#xFE0F; パッドにする" : "&#x1F941; ドラムセットにする") + '</button>' +
+            (kit ? '<button class="modal-btn' + (hhOpen ? " piano-pad-on" : "") + '" data-da="pedal">&#x1F9B6; ハイハット ' + (hhOpen ? "開いている" : "閉じている") + '</button>' : "") + '</div>' +
+            '<div class="piano-row"><button class="modal-btn" data-da="land">' + (landOn ? "&#x1F4F1; たて向きにもどす" : "&#x2194;&#xFE0F; よこ向き（大きく）") + '</button></div>';
+        }
         if (mode !== "rhythm" && !back) {
           h += '<div class="piano-row"><button class="modal-btn" data-da="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-da="bpmup">&#xFF0B;</button>' +
             (mode === "free" ? '<button class="modal-btn" data-da="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button>' : "") + '</div>';
@@ -552,9 +616,58 @@
       function text(ctx, s, x, y, size, color) {
         ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y);
       }
+      // §228: ドラムセット（奥から描く）。叩いたところは光ってゆれる
+      function ell(ctx, cx, cy, rx, ry) {
+        ctx.beginPath();
+        if (ctx.ellipse) { ctx.ellipse(cx, cy, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2); } else { ctx.arc(cx, cy, Math.max(0.5, rx), 0, Math.PI * 2); }
+      }
+      function drawKit(ctx) {
+        var b = kitBox(), i;
+        for (i = 0; i < DRUM_KIT.length; i++) {
+          var p = DRUM_KIT[i], r = drumKitShape(p, b), f = p[0] === "hh" ? Math.max(flash[42] || 0, flash[46] || 0) : (flash[p[1]] || 0), pd = drumPad(p[0] === "hh" && hhOpen ? 46 : p[1]);
+          var wob = f > 0 ? Math.sin(f * 1.3) * f * 0.25 : 0;
+          if (p[6] === "cym") {
+            // スタンド
+            ctx.fillStyle = "#6c7a99";
+            ctx.fillRect(r.cx - 0.75, r.cy, 1.5, Math.max(0, b.y + 110 * b.sy - r.cy));
+            if (p[0] === "hh" && !hhOpen) { ctx.fillStyle = "#b8860b"; ell(ctx, r.cx, r.cy + 2, r.rx, r.ry); ctx.fill(); }
+            ctx.fillStyle = f > 0 ? "#fff3b0" : "#e1b12c";
+            ell(ctx, r.cx, r.cy + wob - (p[0] === "hh" && hhOpen ? 3 : 0), r.rx, r.ry + Math.abs(wob) * 0.3);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.35)";
+            ell(ctx, r.cx, r.cy + wob - (p[0] === "hh" && hhOpen ? 3 : 0), r.rx * 0.25, r.ry * 0.3);
+            ctx.fill();
+          } else if (p[6] === "kick") {
+            ctx.fillStyle = f > 0 ? "#ff7675" : "#a63d40";
+            ell(ctx, r.cx, r.cy, r.rx * (1 + f * 0.006), r.ry * (1 + f * 0.006));
+            ctx.fill();
+            ctx.fillStyle = f > 0 ? "#ffffff" : "#efe7d6";
+            ell(ctx, r.cx, r.cy, r.rx * 0.84, r.ry * 0.84);
+            ctx.fill();
+            ctx.font = Math.round(r.ry * 0.7) + "px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🦍", r.cx, r.cy - r.ry * 0.12);
+          } else {
+            // 胴（下）と打面（上）
+            var sh = r.ry * 0.9;
+            ctx.fillStyle = f > 0 ? pd[3] : "#7f2e31";
+            ctx.fillRect(r.cx - r.rx, r.cy, r.rx * 2, sh);
+            ell(ctx, r.cx, r.cy + sh, r.rx, r.ry);
+            ctx.fill();
+            ctx.fillStyle = f > 0 ? "#ffffff" : "#e8e4da";
+            ell(ctx, r.cx, r.cy + (f > 0 ? 1 : 0), r.rx, r.ry);
+            ctx.fill();
+            ctx.strokeStyle = "#9aa0b4";
+            ell(ctx, r.cx, r.cy + (f > 0 ? 1 : 0), r.rx, r.ry);
+            ctx.stroke();
+          }
+          text(ctx, pd[2] + " " + p[7], r.cx, p[6] === "cym" ? r.cy - r.ry - 4 : (p[6] === "kick" ? r.cy + r.ry * 0.6 : r.cy), Ld.land ? 5 : 6, p[6] === "drum" || p[6] === "kick" ? "#5a5f73" : "#ffffff");
+        }
+      }
       function drawPads(ctx) {
         for (var i = 0; i < DRUM_PADS.length; i++) {
-          var r = drumPadRect(i), pd = DRUM_PADS[i], on = flash[pd[0]] > 0;
+          var r = drumPadRect(i, Ld), pd = DRUM_PADS[i], on = flash[pd[0]] > 0;
           ctx.fillStyle = on ? pd[3] : "#262a45";
           ctx.fillRect(r.x, r.y, r.w, r.h);
           ctx.strokeStyle = pd[3];
@@ -609,14 +722,20 @@
       return {
         input: function (a, down) {
           if (a.charAt(0) === "d" && /^d\d$/.test(a)) {
-            if (down) { var pd = DRUM_PADS[Number(a.substring(1))]; if (pd) { hit(pd[0], 0.9); } }
+            if (down) {
+              if (kit) { hitPiece(drumKitPiece(DRUM_KIT_KEYS[Number(a.substring(1))])); }
+              else { var pd = DRUM_PADS[Number(a.substring(1))]; if (pd) { hit(pd[0], 0.9); } }
+            }
             return;
           }
           if (down && !ended) { action(a); }
         },
         pointer: function (type, x, y) {
           if (type !== "down") { return; }
-          if (mode === "free") { var pi = drumPadAt(x, y); if (pi >= 0) { hit(DRUM_PADS[pi][0], 0.9); } }
+          if (mode === "free") {
+            if (kit) { hitPiece(drumKitAt(x, y, kitBox())); }
+            else { var pi = drumPadAt(x, y, Ld); if (pi >= 0) { hit(DRUM_PADS[pi][0], 0.9); } }
+          }
           else if (mode === "step") {
             var c = drumCellAt(x, y);
             if (c) { if (drumStepToggle(steps, c.m, c.s)) { hitSound(c.m, 0.8); flash[c.m] = 8; } stepSave(); }
@@ -643,15 +762,16 @@
         },
         draw: function (ctx) {
           ctx.fillStyle = "#1b1f3b";
-          ctx.fillRect(0, 0, W, DRUM_H);
+          ctx.fillRect(0, 0, W, Ld.h);
           if (mode === "free") {
-            hudText(ctx, "🥁 じゆう", 8, 10, "left");
-            hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, 10, "right");
+            hudText(ctx, "🥁 じゆう", 8, Ld.land ? 7 : 10, "left");
+            hudText(ctx, (back ? "🎸 " : "") + "BPM " + bpm, W - 8, Ld.land ? 7 : 10, "right");
+            var ty = Ld.land ? 7 : (kit ? 34 : 38);
             if (rec) {
               var rb = recBeat();
-              text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "打", W / 2, 38, rb < 0 ? 22 : 14, "#ff6b6b");
-            } else { text(ctx, play ? "再生中…" : (last || (bk ? "伴奏中…" : "パッドを叩こう")), W / 2, 38, last && !play ? 20 : 13, "#ffffff"); }
-            drawPads(ctx);
+              text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "打", W / 2, ty, Ld.land ? 9 : (rb < 0 ? 22 : 14), "#ff6b6b");
+            } else { text(ctx, play ? "再生中…" : (last || (bk ? "伴奏中…" : (kit ? "ドラムを叩こう" : "パッドを叩こう"))), W / 2, ty, Ld.land ? 9 : (last && !play ? 20 : 13), "#ffffff"); }
+            if (kit) { drawKit(ctx); } else { drawPads(ctx); }
           } else if (mode === "step") {
             hudText(ctx, "🎛️ ステップ（16マス＝1小節）", 8, 10, "left");
             hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
@@ -671,6 +791,7 @@
     pads: DRUM_PADS, rows: DRUM_ROWS, SEQ_ROWS: DRUM_SEQ_ROWS, songs: DRUM_SONGS, levels: DRUM_LEVELS, grooves: drumGrooves, groove: drumGroove,
     stepsClean: drumStepsClean, stepsFrom: drumStepsFrom, stepOn: drumStepOn, stepToggle: drumStepToggle, toSeqCustom: drumToSeqCustom, toSeqRec: drumToSeqRec,
     backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
+    kit: DRUM_KIT, kitKeys: DRUM_KIT_KEYS, kitBox: drumKitBox, kitShape: drumKitShape, kitAt: drumKitAt, kitPiece: drumKitPiece, extra: DRUM_EXTRA, pad: drumPad, landH: drumLandH,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,
     takesLoad: drumTakesLoad, takesSave: drumTakesSave, patsLoad: drumPatsLoad, patsSave: drumPatsSave, listAdd: drumListAdd, takeClean: drumTakeClean, patClean: drumPatClean,
     H: DRUM_H, TOP: DRUM_TOP, LEAD: DRUM_LEAD, STEPS: DRUM_STEPS, BARS: DRUM_BARS, SPEEDS: DRUM_SPEEDS, JUDGE: DRUM_JUDGE,
