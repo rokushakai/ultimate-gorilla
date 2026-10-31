@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.51** |
+| 現在バージョン | **v1.52** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.52] 👆 追従を強める**（§244）: `DRUM_TAP_FOLLOWS` の数字だけ（ふつう 3・20）。`drumTapBpm` は最近3つ
 - **[v1.51] 👆 タップテンポの追従**（§243）: `drumTapBpm`（目標）・`drumTapGlide`（毎フレーム近づける）・`DRUM_TAP_FOLLOWS`・prefs `tapFollow`。近づいているあいだ `bpm` は小数（表示は `Math.round`）、`tapTarget` が目標。着いたら整数にして保存
 - **[v1.50] 🦶 ハイハットの閉じ方**（§242）: `arcade-melody.js` の `melodyHatChoke`・`melodyHatStyle`・`MELODY_HAT_SHAPES`。オープン（46）は highpass をはさんで鳴らし、`melodyOpenHat.t`（鳴らした時刻）からの長さで閉じ方を決める。`UGMelody.setHatClose`（ドラムの prefs `hhStyle`）。テストの harness の AudioParam に `setTargetAtTime`（`counters.targets` に記録）
 - **[v1.49] 🥁 切りかえタイミング・ハイハット**（§241）: `prefs.patSwitch`・`drumSwitchWait`・`patRun.barNo`。`patBegin` は queue を消さない（切りかえたところで消す）。ハイハットは `hhClose()`（44 を鳴らす＝オープンを止める）・`ohDown` / `pedalDown`（指の id）・`DRUM_KIT_PEDAL`

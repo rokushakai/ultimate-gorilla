@@ -673,7 +673,8 @@
   var DRUM_SONG_DEFAULT = [["g:8beat", 3], ["f:snare", 1], ["g:beat16", 3], ["f:toms", 1], ["g:rock", 3], ["f:roll", 1], ["g:8beat", 2], ["f:crash", 1]];
   // §243 v1.51: 演奏中のタップテンポ。タップから「目標の BPM」を決めて、いまの BPM を少しずつそこへ近づける
   // [id, 名前, 1秒で差の何割ちぢめるか, 1秒で変わる BPM の上限]（now ＝ これまでどおり、すぐその BPM に）
-  var DRUM_TAP_FOLLOWS = [["soft", "ゆったり", 0.5, 3], ["mid", "ふつう", 1, 6], ["quick", "きびきび", 2.2, 15], ["now", "すぐ", 0, 0]];
+  // §244 v1.52: v1.51 はにぶすぎたので、すぐ（v1.50 まで）とのあいだくらいに強めた
+  var DRUM_TAP_FOLLOWS = [["soft", "ゆったり", 1.2, 8], ["mid", "ふつう", 3, 20], ["quick", "きびきび", 6, 40], ["now", "すぐ", 0, 0]];
   function drumTapFollow(id) { for (var i = 0; i < DRUM_TAP_FOLLOWS.length; i++) { if (DRUM_TAP_FOLLOWS[i][0] === id) { return DRUM_TAP_FOLLOWS[i]; } } return DRUM_TAP_FOLLOWS[1]; }
   // タップの時刻（秒）→ 目標の BPM（いまの BPM をもとに、8分・2分で叩いたぶんは直し、はずれた間かくは使わない。間かくのまん中の値）
   function drumTapBpm(taps, cur) {
@@ -686,7 +687,7 @@
       if (r > 0.7 && r < 1.4) { iv.push(d); }
     }
     if (!iv.length) { return null; }
-    iv = iv.slice(-4).sort(function (a, b) { return a - b; });
+    iv = iv.slice(-3).sort(function (a, b) { return a - b; });
     d = iv.length % 2 ? iv[(iv.length - 1) / 2] : (iv[iv.length / 2 - 1] + iv[iv.length / 2]) / 2;
     return Math.max(40, Math.min(240, 60 / d));
   }
