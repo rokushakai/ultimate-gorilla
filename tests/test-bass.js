@@ -78,4 +78,41 @@ module.exports = function () {
   var tk = JSON.parse(f3.e.store[B.TAKES_KEY] || "[]");
   ok(tk.length === 1 && tk[0].notes.length === 1 && tk[0].notes[0][2] === 44 && Math.abs(tk[0].notes[0][0] - 0.93) < 0.05 && Math.abs(tk[0].notes[0][1] - 1) < 0.05 && tk[0].bpm === 120,
     "recording: after a 4-beat count, a held note is saved with its beat and length", tk[0] && tk[0].notes);
+
+  // --- §255: シーケンサーの曲に合わせて弾く ---
+  var am = B.songChord("Am", 0), g7s = B.songChord("G7", 0), ce = B.songChord("C/E", 0), bdim = B.songChord("Bdim", 0);
+  ok(JSON.stringify(am.notes) === "[33,36,40,43,28,35,41,45]" && JSON.stringify(g7s.notes) === "[31,35,38,41,26,33,40,43]" && B.songChord("★マイ", 0) === null,
+    "song chords: Am → A C E G / E(below) B F A(octave up) in C; G7 gets its own F", [am.notes, g7s.notes]);
+  ok(ce.root === 28 && ce.notes[0] === 28 && ce.notes[7] === 40 && ce.notes[1] === 40 && ce.notes[3] === 47 && bdim.notes[2] === 41 && bdim.notes[3] === 45,
+    "slash chords put E on the R pads (C/E); Bdim has F as its 5th and A as its 7th", [ce.notes, bdim.notes]);
+  function song(e, rows, extra) {
+    var U2 = e.window.UGUkulele, sq = U2.seqClean(null), k;
+    sq.rows = rows; sq.bpm = 120; sq.countIn = false; sq.loop = false;
+    for (k in extra || {}) { if (extra.hasOwnProperty(k)) { sq[k] = extra[k]; } }
+    e.store[U2.SEQ_KEY] = JSON.stringify({ cur: U2.seqClean(sq), songs: [{ id: 3, name: "ぼくの曲", seq: U2.seqClean(sq) }] });
+  }
+  var e4 = H.load(), B4 = e4.window.UGBass;
+  song(e4, [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "C", len: "w" }, { type: "rest", len: "w" }, { type: "chord", name: "Am", len: "w" }]);
+  var bk4 = B4.backing("cur"), cs = bk4 && bk4.chords;
+  ok(B4.backList().map(function (b) { return b[0]; }).join() === "cur,s:3" && B4.backing("s:9") === null && cs && cs.length === 2 && cs[0].name === "C" && cs[0].end === 12 && cs[1].start === 12 && bk4.key === 0 &&
+    B4.chordIdx(cs, -1) === 0 && B4.chordIdx(cs, 11.9) === 0 && B4.chordIdx(cs, 12) === 1,
+    "backing: the same chord in a row and rests stretch one chord; the chord at a beat", cs && cs.map(function (c) { return [c.name, c.start, c.end]; }));
+  ok(!B4.backEventOn({ kind: "note", track: "bass", t: 1 }, bk4.seq, 0, true) && B4.backEventOn({ kind: "note", track: "bass", t: 1 }, bk4.seq, 0, false) &&
+    !B4.backEventOn({ kind: "note", track: "x1", t: 1 }, { tracks: { x1: { prog: 33 } } }, 0, true) && B4.backEventOn({ kind: "strum", track: "uke", t: 1 }, bk4.seq, 0, true),
+    "the song's own bass (auto bass and bass-voice tracks) can be left out of the backing");
+  // 合わせて録音（パッド）: カウントインのない曲 → ベースが1小節数えてから曲。Am のところで R のパッド → A を鳴らし、曲の拍で保存。曲が終わると止まる
+  var e5 = H.load(), snd5 = [], st5 = null, g5 = -1;
+  song(e5, [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }]);
+  e5.store[B.PREFS_KEY] = JSON.stringify({ view: "pad" });
+  e5.run("bass", { config: { backing: "cur" } }, 420, function (f) {
+    if (f === 1) { var M = e5.window.UGMelody, s0 = M.synth; M.synth = function (m, p) { if (p === 33) { snd5.push(m); } return s0.apply(M, arguments); }; }
+    if (f === 3) { e5.key("keydown", "q"); e5.key("keyup", "q"); }
+    if (f === 5) { e5.key("keydown", "z"); e5.key("keyup", "z"); g5 = f; }
+    if (g5 > 0 && f === g5 + Math.round((2 + 2.3) * 60)) { e5.key("keydown", "q"); }
+    if (g5 > 0 && f === g5 + Math.round((2 + 2.8) * 60)) { e5.key("keyup", "q"); st5 = e5.window.UGBass ? JSON.parse(e5.store[B.TAKES_KEY] || "[]").length : -1; }
+  });
+  var tk5 = JSON.parse(e5.store[B.TAKES_KEY] || "[]")[0];
+  ok(snd5.join() === "36,33", "pads follow the song: C's root before playing, A once the song reaches Am (the song's bass is not played)", snd5);
+  ok(st5 === 0 && tk5 && tk5.bpm === 120 && tk5.notes.length === 1 && tk5.notes[0][2] === 33 && Math.abs(tk5.notes[0][0] - 4.6) < 0.1 && Math.abs(tk5.notes[0][1] - 1) < 0.1,
+    "recording along: a 1-bar count first, the note is saved in the song's beats, and the take is saved when the song ends", tk5 && tk5.notes);
 };

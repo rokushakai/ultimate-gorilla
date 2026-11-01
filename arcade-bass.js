@@ -75,6 +75,39 @@
     return d >= 0 && d < 7 ? d : -1;
   }
 
+  // ---------- §255: シーケンサーの曲のコード ----------
+  // コード名 → { name, root, notes }（パッドの MIDI 8つ）。key: 曲のキー（コードにない 7・2・6 を音階から選ぶ）。読めなければ null
+  function bassSongChord(name, key) {
+    var C = window.UGChords, sp = C && C.parse ? C.parse(name) : null, i;
+    if (!sp) { return null; }
+    var ivs = C.intervals(sp.parts), rpc = bassPc(sp.root), pow = ivs.length === 2;
+    var third = pow ? -1 : ivs[1].iv, fifth = pow ? 7 : ivs[2].iv, sev = -1;
+    for (i = 3; i < ivs.length; i++) { if (ivs[i].role === "7" || ivs[i].role === "♭7" || ivs[i].role === "°7") { sev = ivs[i].iv; } }
+    function pick(a, d) { for (var k = 0; k < a.length; k++) { if (BASS_SCALE.indexOf(bassPc(rpc + a[k] - key)) >= 0) { return a[k]; } } return d; }
+    if (third < 0) { third = pick([4, 3], 4); }
+    if (sev < 0) { sev = pick([10, 11], third === 3 ? 10 : 11); }
+    var root = 28 + bassPc(rpc - 4), low = sp.bass === null || sp.bass === undefined ? root : 28 + bassPc(sp.bass - 4);
+    return { name: String(name), root: low, notes: [low, root + third, root + fifth, root + sev, root + fifth - 12, root + pick([2, 1], 2), root + pick([9, 8], 9), low + 12] };
+  }
+  // 伴奏の予定 → コードの並び [{ start, end, name, ch }]（拍。休み・読めないコードは前のコードをのばす。同じコードが続けば1つに）
+  function bassSongChords(S, key) {
+    var out = [], i;
+    for (i = 0; i < S.rows.length; i++) {
+      var r = S.rows[i], last = out[out.length - 1];
+      if (r.type !== "chord" && r.type !== "rest") { continue; }
+      var ch = r.type === "chord" ? bassSongChord(r.name, key) : null;
+      if (ch && !(last && last.name === ch.name)) { out.push({ start: r.start, end: r.end, name: ch.name, ch: ch }); }
+      else if (last) { last.end = r.end; }
+    }
+    return out;
+  }
+  // 拍 beat のときのコードの番号（はじめのコードより前は 0）
+  function bassChordIdx(list, beat) {
+    var k = 0;
+    for (var i = 0; i < list.length; i++) { if (list[i].start <= beat + 1e-6) { k = i; } }
+    return k;
+  }
+
   // ---------- 設定・テイク ----------
   function bassProgOk(p) { for (var i = 0; i < BASS_VOICES.length; i++) { if (BASS_VOICES[i][0] === p) { return true; } } return false; }
   function bassPrefs() {
@@ -86,7 +119,8 @@
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0,
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
-      metro: p.metro !== false
+      metro: p.metro !== false,
+      backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass
     };
   }
   function bassSavePrefs(p) { return lsSet(BASS_PREFS_KEY, p); }
@@ -147,6 +181,41 @@
       (muted ? "。自動のベースは重ならないようにミュートしました（シーケンサーのミキサーでもどせます）" : "") };
   }
 
+  // ---------- §255: 伴奏（ゴリラドラムの §227 と同じ） ----------
+  function bassBackApi() { var U = window.UGUkulele; return U && U.seqLoad && U.seqSchedule && U.expand ? U : null; }
+  // 伴奏にえらべる曲 [[id, 名前]]（"cur" ＝ 編集中の曲、"s:番号" ＝ 保存した曲）
+  function bassBackList() {
+    var U = bassBackApi(), out = [], st, i;
+    if (!U) { return out; }
+    st = U.seqLoad();
+    out.push(["cur", "編集中の曲"]);
+    for (i = 0; i < st.songs.length; i++) { out.push(["s:" + st.songs[i].id, st.songs[i].name]); }
+    return out;
+  }
+  // 伴奏の曲（構成どおり・練習テンポ・くりかえしなし）→ { name, seq, s: 予定, lowG, key, chords }
+  function bassBacking(id) {
+    var U = bassBackApi(), st, sq = null, name = "", lowG = false, key = 0, i;
+    if (!U || !id) { return null; }
+    st = U.seqLoad();
+    if (id === "cur") { sq = st.cur; name = "編集中の曲"; }
+    for (i = 0; i < st.songs.length; i++) { if ("s:" + st.songs[i].id === id) { sq = st.songs[i].seq; name = st.songs[i].name; } }
+    if (!sq || !sq.rows || !sq.rows.length) { return null; }
+    sq = U.expand(U.seqClean(sq));
+    sq.loop = false;
+    if (U.seqAtRate) { sq = U.seqAtRate(sq, sq.rate); }
+    try { lowG = !!U.prefs().lowG; } catch (e) {}
+    var sc = U.seqSchedule(sq, lowG);
+    if (!sc || !sc.events || !sc.events.length) { return null; }
+    try { key = U.estimateKey ? U.estimateKey(sc.rows) : 0; } catch (e2) {}
+    return { name: name, seq: sq, s: sc, lowG: lowG, key: key, chords: bassSongChords(sc, key) };
+  }
+  // 伴奏のイベントを鳴らすか（クリックは曲のメトロノームかカウントインのとき。noBass: 曲のベースを鳴らさない）
+  function bassBackEventOn(ev, seq, lead, noBass) {
+    if (ev.kind === "click") { return !!seq.metronome || ev.t < lead; }
+    var xt = seq && seq.tracks && ev.track ? seq.tracks[ev.track] : null;
+    return !(noBass && (ev.track === "bass" || (xt && xt.prog >= 32 && xt.prog <= 39)));
+  }
+
   // ---------- はじめの画面 ----------
   function bassSetup(root, ctl) {
     var p = bassPrefs(), note = "";
@@ -166,7 +235,16 @@
       for (i = 0; i < BASS_NAMES.length; i++) {
         html += '<button class="modal-btn quiz-opt' + (p.names === BASS_NAMES[i][0] ? " active" : "") + '" data-names="' + BASS_NAMES[i][0] + '">' + BASS_NAMES[i][1] + '</button>';
       }
-      html += '</div><button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F3B8; はじめる</button>';
+      html += '</div>';
+      var bl = bassBackList();
+      if (bl.length) {
+        html += '<p class="small" style="margin:6px 0 2px;">&#x1F3B8; 伴奏（ゴリラウクレレのシーケンサーの曲）</p><div class="piano-opts">' +
+          '<button class="modal-btn quiz-opt' + (!p.backing ? " active" : "") + '" data-backing="-">なし</button>';
+        for (i = 0; i < bl.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.backing === bl[i][0] ? " active" : "") + '" data-backing="' + bl[i][0] + '">' + escHtml(bl[i][1]) + '</button>'; }
+        html += '</div>';
+        if (p.backing) { html += '<div class="quiz-opts"><button class="modal-btn quiz-opt' + (p.backBass ? " active" : "") + '" data-backbass="1">伴奏のベースも鳴らす ' + (p.backBass ? "ON" : "OFF") + '</button></div>'; }
+      }
+      html += '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F3B8; はじめる</button>';
       html += '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + BASS_TAKES_MAX + '）</p>';
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
@@ -185,6 +263,8 @@
           if ((v = el.getAttribute("data-view"))) { p.view = v; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-prog")) !== null) { p.prog = Number(v); bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; bassSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; bassSavePrefs(p); draw(); return; }
+          if (el.getAttribute("data-backbass")) { p.backBass = !p.backBass; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) {
             var rs = bassSendToSeq(bassTakeById(bassTakesLoad(), Number(v)));
             note = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg);
@@ -200,8 +280,8 @@
             return;
           }
           if (el.getAttribute("data-back")) { ctl.back(); return; }
-          if (el.getAttribute("data-go")) { ctl.done({}); return; }
-          if ((v = el.getAttribute("data-open"))) { ctl.done({ take: Number(v) }); }
+          if (el.getAttribute("data-go")) { ctl.done({ backing: p.backing }); return; }
+          if ((v = el.getAttribute("data-open"))) { ctl.done({ take: Number(v), backing: p.backing }); }
         };
       }
     }
@@ -248,13 +328,69 @@
       var bpm = prefs.bpm, meter = 4, metro = prefs.metro, takes = bassTakesLoad();
       var take = cfg.take ? bassTakeById(takes, cfg.take) : null, rec = null, play = null;
       if (take) { msg = "「" + escHtml(take.name) + "」をひらきました。▶ 再生で聴けます"; }
-      function recBeat() { return rec ? (now() - rec.t0) * bpm / 60 : 0; }
+      // §255: 伴奏（シーケンサーの曲）。bk ＝ 鳴らしているあいだ
+      var back = cfg.backing ? bassBacking(cfg.backing) : null, bk = null;
+      if (back) { bpm = back.seq.bpm; meter = back.seq.meter; if (!take) { msg = "&#x1F3B8; 伴奏に合わせて弾こう。パッドのコードは曲に合わせて変わります"; } }
+      else if (cfg.backing) { msg = "伴奏の曲が見つかりませんでした（ゴリラウクレレのシーケンサーで曲を作ってね）"; }
+      function backT() { return bk ? (frame - bk.f0) / 60 : 0; }
+      function backBeat() {
+        var S = back.s, t = backT();
+        return t < S.lead ? (t - S.lead) / S.spb : S.beatAt(t);
+      }
+      // pre: 伴奏の前に空ける秒（曲にカウントインがないときの録音）
+      function backStart(pre) {
+        backStop();
+        audio();
+        var U = bassBackApi(), progs = [24], ids, i;
+        bk = { f0: frame + Math.round((pre || 0) * 60), idx: 0, outs: [null, null, null, null], mix: null, fx: false };
+        if (!audioOk || !U) { return; }
+        try {
+          ids = U.trackIds(back.s.tracks);
+          for (i = 0; i < ids.length; i++) { if (back.s.tracks[ids[i]].on && back.s.tracks[ids[i]].prog !== undefined) { progs.push(back.s.tracks[ids[i]].prog); } }
+          UG.loadSamples(progs);
+        } catch (e0) {}
+        if (U.fxPush) { try { U.fxPush(back.seq); bk.fx = true; } catch (e) {} }
+      }
+      function backStop() {
+        if (!bk) { return; }
+        var U = bassBackApi();
+        if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        bk = null;
+      }
+      function backStep() {
+        var S = back.s, t = backT(), U = bassBackApi(), ac = audioOk && UG.audio ? UG.audio.ctx : null, ev;
+        while (bk.idx < S.events.length && (ev = S.events[bk.idx]).t <= t + 0.1) {
+          if (ac && U && U.seqPlayEvent && bassBackEventOn(ev, back.seq, S.lead, !prefs.backBass)) {
+            try {
+              if (!bk.mix) { bk.mix = U.mixer(UG, ac, S.tracks); }
+              U.seqPlayEvent(UG, ac, ev, ac.currentTime + Math.max(0, ev.t - t), back.lowG, 0.55, bk.outs, bk.mix, S.tracks);
+            } catch (e) {}
+          }
+          bk.idx++;
+        }
+        if (t >= S.time) {
+          if (rec) { recStop(); }
+          backStop();
+          play = null;
+          render();
+        }
+      }
+      // いまのコード（伴奏があるとき）の番号
+      function songIdx() { return back && back.chords.length ? bassChordIdx(back.chords, bk ? backBeat() : -1) : -1; }
+      function curChord() { var k = songIdx(); return k >= 0 ? back.chords[k].ch : bassChord(prefs.key, chordD); }
+      function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
       function recToggle() {
         if (rec) { recStop(); return; }
         playStop();
         audio();
-        rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 };
+        if (back) {
+          // 曲にカウントインがなければ、ベースが1小節ぶん数える
+          backStart(back.s.lead ? 0 : meter * back.s.spb);
+          rec = { back: true, notes: [], open: {}, beat: -99 };
+        } else {
+          rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 };
+        }
         msg = "";
         render();
       }
@@ -274,8 +410,9 @@
         var ks = [], k;
         for (k in rec.open) { if (rec.open.hasOwnProperty(k)) { ks.push(k); } }
         for (k = 0; k < ks.length; k++) { recOff(ks[k]); }
-        var n = rec.notes;
+        var n = rec.notes, wasBack = rec.back;
         rec = null;
+        if (wasBack) { backStop(); }
         if (n.length) {
           take = bassTakeAdd(takes, { bpm: bpm, meter: meter, prog: prog, notes: n });
           bassTakesSave(takes);
@@ -285,14 +422,22 @@
         }
         render();
       }
-      function playStop() { if (play) { play = null; render(); } }
-      function playBeat() { return play ? (now() - play.t0) * play.bpm / 60 : 0; }
+      function playStop() { if (play) { if (play.back) { backStop(); } play = null; render(); } }
+      function playBeat() { return play ? (play.back ? backBeat() : (now() - play.t0) * play.bpm / 60) : 0; }
       function playToggle() {
         if (play) { playStop(); return; }
         if (rec) { return; }
         if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音してみよう"; render(); return; }
-        play = { t0: now() + 0.1, notes: take.notes, bpm: take.bpm, idx: 0 };
+        // 伴奏があれば、テイクを伴奏といっしょに頭から
+        play = { t0: now() + 0.1, notes: take.notes, bpm: take.bpm, idx: 0, back: !!back };
+        if (back) { backStart(0); }
         audio();
+        render();
+      }
+      function backToggle() {
+        if (rec || !back) { return; }
+        if (play) { playStop(); }
+        if (bk) { backStop(); } else { backStart(0); }
         render();
       }
 
@@ -315,11 +460,12 @@
         if (!(i >= 0 && i < BASS_PAD_N)) { return; }
         padHeld[id] = i;
         flash["p" + i] = 10;
-        noteOn(id, bassChord(prefs.key, chordD).notes[i]);
+        noteOn(id, curChord().notes[i]);
       }
-      function setChord(d) { if (d >= 0 && d < 7) { chordD = d; flash["c" + d] = 10; } }
+      // 伴奏があるときは、コードは曲に合わせて変わる（自分では選ばない）
+      function setChord(d) { if (d >= 0 && d < 7 && !back) { chordD = d; flash["c" + d] = 10; } }
       function action(v) {
-        if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); }
+        if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); } else if (v === "back") { backToggle(); }
         else if (v === "view") { allOff(); padHeld = {}; view = view === "pad" ? "fret" : "pad"; prefs.view = view; bassSavePrefs(prefs); render(); }
         else if (v === "posdown" || v === "posup") {
           allOff();
@@ -345,14 +491,20 @@
 
       function render() {
         if (!panel) { return; }
-        var html = '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ba="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
-          '<button class="modal-btn" data-ba="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button></div>' +
-          '<div class="piano-row"><button class="modal-btn" data-ba="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ba="bpmup">&#xFF0B;</button>' +
-          '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+        var html = '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ba="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
+          '<button class="modal-btn" data-ba="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button></div>';
+        if (back) {
+          html += '<div class="piano-row"><button class="modal-btn" data-ba="back"' + (rec ? " disabled" : "") + '>' + (bk && !play && !rec ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button>' +
+            '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>' +
+            '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子' + (prefs.backBass ? "" : "・曲のベースは鳴らさない") + '）</p>';
+        } else {
+          html += '<div class="piano-row"><button class="modal-btn" data-ba="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ba="bpmup">&#xFF0B;</button>' +
+            '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+        }
         if (view === "fret") {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + BASS_COLS - 1) + " フレット" : "開放弦〜7 フレット") + '</span>' +
             '<button class="modal-btn" data-ba="posup">&#x25B6;</button></div>';
-        } else {
+        } else if (!back) {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + '</span>' +
             '<button class="modal-btn" data-ba="keyup">&#x25B6;</button></div>';
         }
@@ -403,12 +555,21 @@
           ctx.fillStyle = c === 1 && prefs.pos === 0 ? "#f5f0e6" : "#b8b8b8";
           ctx.fillRect(BASS_BOARD_X + c * cw - (c === 1 && prefs.pos === 0 ? 2 : 0.75), top, c === 1 && prefs.pos === 0 ? 4 : 1.5, bot - top);
         }
+        // §255: 伴奏があるときは、いまのコードの音（R・3・5）のマスに輪（ルートは太く）
+        var ch = back && back.chords.length ? curChord() : null, chPcs = {};
+        if (ch) { chPcs[bassPc(ch.notes[1])] = 1; chPcs[bassPc(ch.notes[2])] = 1; chPcs[bassPc(ch.root)] = 2; }
         // 弦と、押している・鳴っているマス
         for (s = 0; s < BASS_STRINGS.length; s++) {
           var sy = top + (s + 0.5) * rh;
           for (c = 0; c < BASS_COLS; c++) {
             var m = BASS_STRINGS[s][0] + bassFretOf(prefs.pos, c), st = lit[m];
             r = bassCellRect(s, c);
+            if (ch && chPcs[bassPc(m)]) {
+              ctx.strokeStyle = chPcs[bassPc(m)] === 2 ? "#ff922b" : "rgba(116,192,252,0.85)";
+              ctx.lineWidth = chPcs[bassPc(m)] === 2 ? 3 : 1.5;
+              ctx.beginPath(); ctx.arc(r.x + r.w / 2, sy, Math.min(r.w, r.h) * 0.36, 0, Math.PI * 2); ctx.stroke();
+              ctx.lineWidth = 1;
+            }
             if (st) {
               ctx.fillStyle = st === "press" ? "#ffd166" : "#74c0fc";
               ctx.beginPath(); ctx.arc(r.x + r.w / 2, sy, Math.min(r.w, r.h) * 0.36, 0, Math.PI * 2); ctx.fill();
@@ -426,9 +587,17 @@
         for (c = 0; c < BASS_COLS; c++) { var fn = bassFretOf(prefs.pos, c); text(ctx, fn === 0 ? "開放" : String(fn), BASS_BOARD_X + (c + 0.5) * cw, top - 7, 8, "#adb5bd"); }
       }
       function drawPads(ctx) {
-        var ch = bassChord(prefs.key, chordD), lit = litNotes(), i, on = {}, k;
+        var ch = curChord(), lit = litNotes(), i, on = {}, k, si = songIdx();
         for (k in padHeld) { if (padHeld.hasOwnProperty(k)) { on[padHeld[k]] = true; } }
-        for (i = 0; i < 7; i++) {
+        // §255: 伴奏があるときは、上の段に「いまのコード・次のコード3つ」
+        for (i = 0; si >= 0 && i < 4; i++) {
+          var sr = { x: 4 + i * (W - 8) / 4 + 1, y: BASS_CHORD_Y, w: (W - 8) / 4 - 2, h: BASS_CHORD_H }, sc = back.chords[si + i];
+          if (!sc) { continue; }
+          ctx.fillStyle = i === 0 ? "#ffd166" : "#2f4a6e";
+          ctx.fillRect(sr.x, sr.y, sr.w, sr.h);
+          text(ctx, (i === 1 ? "次 " : "") + sc.name, sr.x + sr.w / 2, sr.y + sr.h / 2, i === 0 ? 14 : 10, i === 0 ? "#14213d" : "#ffffff");
+        }
+        for (i = 0; si < 0 && i < 7; i++) {
           var cr = bassChordRect(i), cur = i === chordD;
           ctx.fillStyle = cur ? "#ffd166" : (flash["c" + i] > 0 ? "#fff3b0" : "#2f4a6e");
           ctx.fillRect(cr.x, cr.y, cr.w, cr.h);
@@ -480,20 +649,23 @@
             var pb = playBeat(), last = 0, i;
             while (play.idx < play.notes.length && play.notes[play.idx][0] <= pb) { sound(play.notes[play.idx][2], 0.8); play.idx++; }
             for (i = 0; i < play.notes.length; i++) { last = Math.max(last, play.notes[i][0] + play.notes[i][1]); }
-            if (play.idx >= play.notes.length && pb > last) { play = null; render(); }
+            if (play.idx >= play.notes.length && pb > last && !play.back) { play = null; render(); } // 伴奏といっしょなら伴奏の終わりまで
           }
           if (rec) {
-            var rb = Math.floor(recBeat());
-            if (rb !== rec.beat && (metro || rb < 0)) { click(((rb % meter) + meter) % meter === 0); }
+            // 伴奏で録るときのカウントは、曲にカウントインがなければベースが数える（あれば曲のクリック）
+            var rb = Math.floor(recBeat()), cnt = rec.back ? !back.s.lead : true;
+            if (rb !== rec.beat && ((metro && rb >= 0) || (rb < 0 && cnt))) { click(((rb % meter) + meter) % meter === 0); }
             rec.beat = rb;
           }
+          if (bk) { backStep(); }
         },
         draw: function (ctx) {
           var g = ctx.createLinearGradient ? ctx.createLinearGradient(0, 0, 0, BASS_H) : null;
           if (g) { g.addColorStop(0, "#1b1f3b"); g.addColorStop(1, "#2d1b4e"); }
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, BASS_H);
-          hudText(ctx, view === "pad" ? "🎛️ キー " + BASS_CDE[prefs.key] : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜"), 8, 10, "left");
+          var si = songIdx(), nx = si >= 0 ? back.chords[si + 1] : null;
+          hudText(ctx, view === "pad" ? (si >= 0 ? "🎸 伴奏" : "🎛️ キー " + BASS_CDE[prefs.key]) : (si >= 0 ? "🎸 " + back.chords[si].name + (nx ? " → " + nx.name : "") : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜")), 8, 10, "left");
           hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
           var held = [], k;
           for (k in press) { if (press.hasOwnProperty(k)) { held.push(press[k]); } }
@@ -504,11 +676,11 @@
             text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, view === "pad" ? 18 : 30, view === "pad" ? 11 : 16, "#ff6b6b");
           }
           if (view === "pad") {
-            if (!rec) { text(ctx, line || (play ? "再生中…" : "コード " + bassChord(prefs.key, chordD).name + " に合う音"), W / 2, 18, 10, "#ffffff"); }
+            if (!rec) { text(ctx, line || (play ? "再生中…" : (bk ? "伴奏中…" : "コード " + curChord().name + " に合う音")), W / 2, 18, 10, "#ffffff"); }
             drawPads(ctx);
           } else {
             if (!rec) { if (!line) { emojiAt(ctx, play ? "🎶" : "🦍", W / 2, 50, 34); } }
-            text(ctx, line || (play ? "再生中…" : "弦のマスをタップして弾こう"), W / 2, rec ? 62 : (line ? 60 : 92), line ? 20 : 12, line ? "#ffd166" : "#ffffff");
+            text(ctx, line || (play ? "再生中…" : (bk ? "伴奏中…（輪はいまのコードの音）" : "弦のマスをタップして弾こう")), W / 2, rec ? 62 : (line ? 60 : 92), line ? 20 : 12, line ? "#ffd166" : "#ffffff");
             drawFret(ctx);
           }
         }
@@ -520,6 +692,6 @@
     STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, KEYS: BASS_KEYS,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
-    sendToSeq: bassSendToSeq, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX
+    sendToSeq: bassSendToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX
   };
 })();
