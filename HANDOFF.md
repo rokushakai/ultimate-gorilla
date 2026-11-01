@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.56** |
+| 現在バージョン | **v1.57** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.57] 🥁 スネアのふちを広げる**（§249）: `drumKitRim` は 0.36 ≦ (正規化した距離)² ≦ 1.8。点線の輪は 0.6
 - **[v1.56] 🥁 ロックのリムショット・クロス**（§248）: DRSKit の 37 のサンプルは Snare_rim（リムショット）。`MELODY_RIM_IS_SHOT` のセットでは 24 ＝ 37 が主＋38 を小さく、37 ＝ lowpass・0.9 倍・すぐ消す。ほかのセットの 24 は peaking 2000Hz +7dB。サンプルを作りなおすなら DRSKit にはクロススティックの素材がない
 - **[v1.55] 🥁 スネアの奏法**（§247）: リムショット（ゴリラドラムだけの番号 24 → GM 40。スネア 38 のサンプルを 1.04 倍の速さ・大きめにして 37 を重ねる）・フラム（22 → GM 38。`melodyDrum` の頭で 38 を 0.4 の強さ → 30ms あとに本当の音）・クロススティック（37。もとからある）。ドラム側は `DRUM_HH_EXTRA` に 24・22、`drumKitRim`（スネアの打面の外がわの輪〜少し外）、prefs `rimSound`（セットのふち。はじめ 24）・`snSound`（パッドの SN。じゆうのときだけ。`padNote`）。ロールでは 40 もスネアの段
 - **[v1.54] 🦶 ハーフオープン・フットスプラッシュ**（§246）: ゴリラドラムだけの番号 23（ハーフ）・21（スプラッシュ）。音は `melodyDrumSample` の中（46 のサンプルの形を変える）。`UGMelody.gmDrum` で GM へ。ドラム側は `DRUM_HH_EXTRA`・`drumPadAny`（パッドのない音も鳴らして録る）・`DRUM_KIT_HALF`・prefs `ohSound`

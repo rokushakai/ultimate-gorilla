@@ -80,7 +80,7 @@
   // スネアのふち（打面の外がわの輪と、打面の少し外）か
   function drumKitRim(x, y, b) {
     var r = drumKitShape(drumKitPiece("snare"), b), dx = (x - r.cx) / r.rx, dy = (y - r.cy) / r.ry, d = dx * dx + dy * dy;
-    return d >= 0.5 && d <= 1.6;
+    return d >= 0.36 && d <= 1.8; // §249 v1.57: 輪を半径の 0.6 へ（0.71 では、本当に端でないと当たらなかった）
   }
   function drumKitAt(x, y, b) {
     for (var i = 0; i < DRUM_KIT_HIT.length; i++) {
@@ -1557,7 +1557,7 @@
         var sr = drumKitShape(drumKitPiece("snare"), b);
         if (ctx.setLineDash) { ctx.setLineDash([2, 2]); }
         ctx.strokeStyle = "#9aa0b4";
-        ell(ctx, sr.cx, sr.cy, sr.rx * 0.71, sr.ry * 0.71);
+        ell(ctx, sr.cx, sr.cy, sr.rx * 0.6, sr.ry * 0.6);
         ctx.stroke();
         if (ctx.setLineDash) { ctx.setLineDash([]); }
         // §241: ハイハットのペダル（押しているあいだ開く）

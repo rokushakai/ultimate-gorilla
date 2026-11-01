@@ -511,7 +511,7 @@ module.exports = function () {
   ok(snd30[0] === 23 && snd30.indexOf(44) > 0 && snd30.indexOf(46) > 0 && D.flashOf(23) === 46 && D.flashOf(44) === 42 && D.OH_SOUNDS.length === 3,
     "the OH pad can play half-open; pattern pedal hi-hats (44) sound (they were skipped before)", snd30.slice(0, 12));
   // §247: セットのスネアのふち ＝ えらんだ音（はじめはリムショット 24）、まん中 ＝ ふつう。パッドの SN の音
-  var sr31 = D.kitShape(D.kitPiece("snare"), kbp), rim31 = [sr31.cx + sr31.rx * 0.85, sr31.cy], mid31 = [sr31.cx, sr31.cy];
+  var sr31 = D.kitShape(D.kitPiece("snare"), kbp), rim31 = [sr31.cx + sr31.rx * 0.7, sr31.cy], mid31 = [sr31.cx, sr31.cy];
   function rimRun(pr, pts) {
     var e = hooked(), snd = [];
     e.store[D.PREFS_KEY] = JSON.stringify(pr);
