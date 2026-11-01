@@ -1531,17 +1531,20 @@
     65: ["skin", 520, 0.4], 66: ["skin", 380, 0.4], 67: ["bell", 920], 68: ["bell", 680], 69: ["shaker", 0.08], 70: ["shaker", 0.05],
     71: ["whistle", 0.12], 72: ["whistle", 0.45], 73: ["guiro", 0.12], 74: ["guiro", 0.4], 75: ["wood", 2500],
     76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2],
-    21: ["hat", 0.22], 23: ["hat", 0.3] // §246: フットスプラッシュ・ハーフオープン（ゴリラドラムだけの番号）
+    21: ["hat", 0.22], 23: ["hat", 0.3], // §246: フットスプラッシュ・ハーフオープン（ゴリラドラムだけの番号）
+    24: ["snare", 240] // §247: リムショット（内蔵音はふちの音を重ねる）
   };
   // §246 v1.54: ゴリラドラムだけの番号 → GM の番号（MIDI に書き出す・MIDI 機器へ送るとき）
-  var MELODY_GM_DRUM = { 21: 44, 23: 46 };
+  // §247 v1.55: リムショット（24）→ 40・フラム（22）→ 38
+  var MELODY_GM_DRUM = { 21: 44, 23: 46, 24: 40, 22: 38 };
   function melodyGmDrum(m) { return MELODY_GM_DRUM[m] || m; }
   // dest（省略可・§177 v0.96）: 出口の GainNode。指定すると level の GainNode をそこへつなぐ
   // §229 v1.37: 生ドラムのサンプル。[使う音, 再生の速さ（高さ）]。ないものは合成音
   var MELODY_DRUM_MAP = {
     35: [36, 0.94], 36: [36, 1], 37: [37, 1], 38: [38, 1], 40: [38, 1.06], 42: [42, 1], 44: [42, 0.94], 46: [46, 1],
     41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12],
-    21: [46, 1], 23: [46, 1] // §246: オープンの音を形を変えて鳴らす
+    21: [46, 1], 23: [46, 1], // §246: オープンの音を形を変えて鳴らす
+    24: [38, 1.04] // §247: リムショット（スネアを少し高く・大きく。ふちの音を重ねる）
   };
   // §230 v1.38: ドラムセット [id, ファイル, 名前]。はじめはロック
   // §236 v1.44: ビンテージ・ブラシ・ルーム（Karoryfer・CC0）を追加
@@ -1667,7 +1670,8 @@
     var src = ac.createBufferSource(), g = ac.createGain();
     src.buffer = bank[mp[0]];
     src.playbackRate.value = mp[1] * (m === 35 || m === 36 ? melodySamples.kickRate : 1); // §230: キックを太く
-    g.gain.value = 1.4;
+    g.gain.value = m === 24 ? 1.6 : 1.4;
+    if (m === 24) { melodyDrumSample(ac, 37, t, (level > 0 && level < 1 ? level : 1) * 0.75, dest); } // §247: ふちの「カン」
     var hf = null;
     var open = m === 46 || m === 23 || m === 21, env = null, t0 = t;
     if (open && ac.createBiquadFilter) { hf = ac.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = 30; src.connect(hf); hf.connect(g); } // 閉じるときにしぼる
@@ -1700,6 +1704,8 @@
     return true;
   }
   function melodyDrum(ac, m, t, level, dest) {
+    // §247 v1.55: フラム（22）＝ 小さい装飾音のすぐあとに本当の音
+    if (m === 22) { var fl = level > 0 && level < 1 ? level : 1; melodyDrum(ac, 38, t, fl * 0.4, dest); melodyDrum(ac, 38, t + 0.03, fl, dest); return; }
     if (melodyDrumSample(ac, m, t, level, dest)) { return; }
     var env = ac.createGain(), out;
     if (dest) { out = ac.createGain(); out.gain.value = (level > 0 && level < 1) ? level : 1; out.connect(dest); }
@@ -1721,7 +1727,7 @@
     }
     env.gain.setValueAtTime(1, t);
     if (type === "kick") { dur = 0.35; tone("sine", p, 42, 0.3, 0.95); melodyNoise(ac, t, 0.01, 0.3, env, "lowpass", 3000); }
-    else if (type === "snare") { dur = 0.22; melodyNoise(ac, t, 0.2, 0.7, env, "highpass", 1500); tone("triangle", p, p * 0.8, 0.1, 0.5); }
+    else if (type === "snare") { dur = 0.22; melodyNoise(ac, t, 0.2, 0.7, env, "highpass", 1500); tone("triangle", p, p * 0.8, 0.1, 0.5); if (m === 24) { tone("square", 1700, 1500, 0.04, 0.3); } }
     else if (type === "stick") { dur = 0.06; tone("square", 1700, 1500, 0.04, 0.35); melodyNoise(ac, t, 0.03, 0.4, env, "bandpass", 3000); }
     else if (type === "clap") {
       dur = 0.25;

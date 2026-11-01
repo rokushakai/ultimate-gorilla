@@ -32,9 +32,10 @@
   // §228 v1.36: ドラムセットだけにある楽器 [MIDI, 名前, 短い名前, 色]
   var DRUM_EXTRA = [[51, "ライド", "RIDE", "#ffeaa7"], [48, "タム（高）", "TOM1", "#fab1a0"], [45, "タム（中）", "TOM2", "#fd9b8a"], [43, "フロアタム", "FLOOR", "#e17055"]];
   // §246 v1.54: ハイハットの奏法（パッド・レーンはないが、鳴らして録音できる）。44 はペダルで閉じる音。23・21 はゴリラドラムだけの番号で、MIDI では 46・44
-  var DRUM_HH_EXTRA = [[44, "ペダルHH", "PEDAL", "#55efc4"], [23, "ハーフオープン", "HALF", "#81ecec"], [21, "フットスプラッシュ", "SPLASH", "#81ecec"]];
+  var DRUM_HH_EXTRA = [[44, "ペダルHH", "PEDAL", "#55efc4"], [23, "ハーフオープン", "HALF", "#81ecec"], [21, "フットスプラッシュ", "SPLASH", "#81ecec"],
+    [24, "リムショット", "RIMSHOT", "#74b9ff"], [22, "フラム", "FLAM", "#74b9ff"]]; // §247 v1.55: スネアの奏法。24・22 もゴリラドラムだけの番号で、MIDI では 40・38
   function drumPadAny(m) { var p = drumPad(m), i; for (i = 0; !p && i < DRUM_HH_EXTRA.length; i++) { if (DRUM_HH_EXTRA[i][0] === m) { p = DRUM_HH_EXTRA[i]; } } return p; }
-  function drumFlashOf(m) { return m === 44 ? 42 : (m === 23 || m === 21 ? 46 : m); } // 光らせるパッド
+  function drumFlashOf(m) { return m === 44 ? 42 : (m === 23 || m === 21 ? 46 : (m === 24 || m === 22 ? 38 : m)); } // 光らせるパッド
   function drumPad(m) {
     var i;
     for (i = 0; i < DRUM_PADS.length; i++) { if (DRUM_PADS[i][0] === m) { return DRUM_PADS[i]; } }
@@ -73,6 +74,14 @@
     return px >= DRUM_KIT_HALF[0] && px <= DRUM_KIT_HALF[0] + DRUM_KIT_HALF[2] && py >= DRUM_KIT_HALF[1] - 2 && py <= DRUM_KIT_HALF[1] + DRUM_KIT_HALF[3];
   }
   var DRUM_OH_SOUNDS = [[46, "オープン"], [23, "ハーフ"], [21, "スプラッシュ"]]; // §246: パッドの OH で鳴らす音
+  // §247 v1.55: セットのスネアのふちで鳴らす音・パッドの SN で鳴らす音
+  var DRUM_RIM_SOUNDS = [[24, "リムショット"], [37, "クロス"], [22, "フラム"], [38, "ふつう"]];
+  var DRUM_SN_SOUNDS = [[38, "ふつう"], [24, "リムショット"], [22, "フラム"]];
+  // スネアのふち（打面の外がわの輪と、打面の少し外）か
+  function drumKitRim(x, y, b) {
+    var r = drumKitShape(drumKitPiece("snare"), b), dx = (x - r.cx) / r.rx, dy = (y - r.cy) / r.ry, d = dx * dx + dy * dy;
+    return d >= 0.5 && d <= 1.6;
+  }
   function drumKitAt(x, y, b) {
     for (var i = 0; i < DRUM_KIT_HIT.length; i++) {
       var p = drumKitPiece(DRUM_KIT_HIT[i]), r = drumKitShape(p, b), ry = p[6] === "cym" ? r.ry * 1.9 : r.ry;
@@ -193,6 +202,8 @@
       // §245 v1.53: はじめは「すぐ」（v1.50 までと同じ）。v1.51・v1.52 で保存された tapFollow は読まない（名前を tapMode に）
       tapMode: DRUM_TAP_FOLLOWS.some(function (w) { return w[0] === p.tapMode; }) ? p.tapMode : "now",
       ohSound: DRUM_OH_SOUNDS.some(function (w) { return w[0] === p.ohSound; }) ? p.ohSound : 46, // §246
+      rimSound: DRUM_RIM_SOUNDS.some(function (w) { return w[0] === p.rimSound; }) ? p.rimSound : 24, // §247
+      snSound: DRUM_SN_SOUNDS.some(function (w) { return w[0] === p.snSound; }) ? p.snSound : 38,
       hhStyle: DRUM_HH_STYLES.some(function (w) { return w[0] === p.hhStyle; }) ? p.hhStyle : "auto", // §242: ハイハットの閉じ方
       mute: (p.mute && p.mute.length ? p.mute : []).filter(function (id, i, a) { return drumPartOk(id) && a.indexOf(id) === i; })
     };
@@ -412,6 +423,7 @@
     ["tomup", "タム上り", [[36, [0]], [42, [0, 2, 4, 6]], [43, [8, 9]], [45, [10, 11]], [48, [12, 13]], [38, [14, 15]]]],
     ["break", "ブレイク", [[36, [0, 6]], [42, [0, 2, 4, 6]], [38, [4]]]],
     ["kime4", "4分キメ", [[36, [0, 4, 8, 12]], [49, [0, 4, 8, 12]], [38, [12]]]],
+    ["flam", "フラムのフィル", [[36, [0]], [42, [0, 2, 4, 6]], [22, [8, 10, 12]], [38, [14, 15]]]], // §247
     // §240 v1.48: 3拍子のフィル（4つめ＝マスの数 12）
     ["fill3", "3拍子フィル", [[36, [0]], [42, [0, 2]], [38, [4, 6, 8, 9, 10, 11]]], 12],
     ["tom3", "3拍子タム回し", [[36, [0]], [42, [0, 2]], [38, [4, 5]], [48, [6, 7]], [45, [8, 9]], [43, [10, 11]]], 12],
@@ -438,6 +450,9 @@
     // §246 v1.54: ハーフオープン（23）・フットスプラッシュ（21）
     ["halfrock", "ハーフオープンのロック", [[36, [0, 7, 8]], [38, [4, 12]], [23, DRUM_E8], [49, [0]]]],
     ["splash", "ライドとフットスプラッシュ", [[36, [0, 10]], [38, [4, 12]], [51, [0, 4, 6, 8, 12, 14]], [21, [4, 12]]]],
+    // §247 v1.55: クロススティック（37）・リムショット（24）
+    ["crossbal", "クロススティックのバラード", [[36, [0, 8, 10]], [37, [4, 12]], [42, DRUM_E8]]],
+    ["rimrock", "リムショットのロック", [[36, [0, 6, 8]], [24, [4, 12]], [42, DRUM_E8], [49, [0]]]],
     // §240 v1.48: 3拍子・6/8（12マス＝1小節。4つめ＝マスの数）
     ["waltz", "ワルツ", [[36, [0]], [38, [4, 8]], [42, [0, 4, 8]]], 12],
     ["waltzbig", "ワルツ（強め）", [[36, [0, 6]], [38, [4, 8]], [51, [0, 2, 4, 6, 8, 10]], [49, [0]]], 12],
@@ -670,7 +685,7 @@
   // 楽器ごとの強さ（シンバル類は小さめ）
   function drumPatLevel(m) { return m === 42 || m === 46 || m === 44 || m === 23 || m === 21 ? 0.55 : (m === 51 || m === 49 ? 0.6 : 0.85); }
   // §234 v1.42: パート（鳴らさない切りかえ用）・強弱・オートフィル・音量
-  var DRUM_PARTS = [["kick", "キック", [35, 36]], ["snare", "スネア", [37, 38, 39, 40]], ["hh", "ハイハット", [42, 44, 46, 23, 21]],
+  var DRUM_PARTS = [["kick", "キック", [35, 36]], ["snare", "スネア", [37, 38, 39, 40, 24, 22]], ["hh", "ハイハット", [42, 44, 46, 23, 21]],
     ["cym", "シンバル", [49, 51, 52, 55, 57, 59]], ["tom", "タム", [41, 43, 45, 47, 48, 50]]];
   var DRUM_AUTOFILL = [0, 4, 8], DRUM_AUTOFILL_IDS = ["snare", "toms", "roll"];
   // §235 v1.43: ハネ（スウィング）[id, 名前, 何分（8/16）, おくらせる量（マスの何倍）]。しっかり ＝ 3連符のノリ
@@ -982,6 +997,8 @@
         if (p[0] === "hh") { pedalHit = true; hit(hhOpen ? 46 : (hhHalf ? 23 : 42), 0.85); return; } // §246: ½ を押していればハーフオープン
         hit(p[1], p[6] === "cym" ? 0.85 : 0.9);
       }
+      // パッドで鳴らす音（OH ＝ OH の音・§247 SN ＝ SN の音。SN はじゆうのときだけ）
+      function padNote(m) { return m === 46 ? prefs.ohSound : (m === 38 && mode === "free" ? prefs.snSound : m); }
       function kitBox() { return drumKitBox(Ld.land ? 14 : 58, Ld.h - (Ld.land ? 14 : 58) - 4); }
       var flashAt = []; // §234: 予約した音が鳴るフレームで光らせる [[フレーム, MIDI]]
       // §241: ハイハットを閉じる（ペダルの「チッ」。鳴っているオープンハイハットを止める）。録音中なら録る
@@ -1041,6 +1058,8 @@
         else if (v === "pat") { prefs.pat = !prefs.pat; drumSavePrefs(prefs); if (!prefs.pat) { patStop(); patEdit = false; } render(); }
         else if (v === "patstop") { patStop(); render(); }
         else if (v.indexOf("psw:") === 0) { prefs.patSwitch = v.substring(4); drumSavePrefs(prefs); render(); }
+        else if (v.indexOf("rims:") === 0) { prefs.rimSound = Number(v.substring(5)); drumSavePrefs(prefs); hitSound(prefs.rimSound, 0.9); render(); } // §247: 試し聞き
+        else if (v.indexOf("sns:") === 0) { prefs.snSound = Number(v.substring(4)); drumSavePrefs(prefs); hitSound(prefs.snSound, 0.9); render(); }
         else if (v.indexOf("ohs:") === 0) { prefs.ohSound = Number(v.substring(4)); drumSavePrefs(prefs); hitSound(prefs.ohSound, 0.8); render(); }
         else if (v.indexOf("tapf:") === 0) { prefs.tapMode = v.substring(5); drumSavePrefs(prefs); render(); }
         else if (v.indexOf("hhs:") === 0) { prefs.hhStyle = v.substring(4); drumSavePrefs(prefs); if (UG && UG.setHatClose) { UG.setHatClose(prefs.hhStyle); } hitSound(46, 0.7); hitSound(44, 0.35, prefs.hhStyle === "tight" ? 0.07 : (prefs.hhStyle === "sizzle" ? 0.6 : 0.25)); render(); } // 試し聞き（録音しない）
@@ -1494,7 +1513,7 @@
       function drawKit(ctx) {
         var b = kitBox(), i;
         for (i = 0; i < DRUM_KIT.length; i++) {
-          var p = DRUM_KIT[i], r = drumKitShape(p, b), f = p[0] === "hh" ? Math.max(flash[42] || 0, flash[46] || 0) : (flash[p[1]] || 0), pd = drumPad(p[0] === "hh" && hhOpen ? 46 : p[1]);
+          var p = DRUM_KIT[i], r = drumKitShape(p, b), f = p[0] === "hh" ? Math.max(flash[42] || 0, flash[46] || 0) : (p[0] === "snare" ? Math.max(flash[38] || 0, flash[37] || 0) : (flash[p[1]] || 0)), pd = drumPad(p[0] === "hh" && hhOpen ? 46 : p[1]);
           var wob = f > 0 ? Math.sin(f * 1.3) * f * 0.25 : 0;
           if (p[6] === "cym") {
             // スタンド
@@ -1534,6 +1553,13 @@
           }
           text(ctx, pd[2] + " " + p[7], r.cx, p[6] === "cym" ? r.cy - r.ry - 4 : (p[6] === "kick" ? r.cy + r.ry * 0.6 : r.cy), Ld.land ? 5 : 6, p[6] === "drum" || p[6] === "kick" ? "#5a5f73" : "#ffffff");
         }
+        // §247: スネアのふち（点線の輪の外がわ）
+        var sr = drumKitShape(drumKitPiece("snare"), b);
+        if (ctx.setLineDash) { ctx.setLineDash([2, 2]); }
+        ctx.strokeStyle = "#9aa0b4";
+        ell(ctx, sr.cx, sr.cy, sr.rx * 0.71, sr.ry * 0.71);
+        ctx.stroke();
+        if (ctx.setLineDash) { ctx.setLineDash([]); }
         // §241: ハイハットのペダル（押しているあいだ開く）
         var px = b.x + DRUM_KIT_PEDAL[0] * b.sx, py = b.y + DRUM_KIT_PEDAL[1] * b.sy, pw = DRUM_KIT_PEDAL[2] * b.sx, ph = DRUM_KIT_PEDAL[3] * b.sy;
         ctx.fillStyle = hhOpen ? "#55efc4" : "#3d4470";
@@ -1553,6 +1579,11 @@
       // §242: ハイハットの閉じ方のボタン
       function hhStyleChips() {
         var h = '', i;
+        // §247: スネアのふち（セット）・SN の音（パッド）
+        var sw = kit ? DRUM_RIM_SOUNDS : DRUM_SN_SOUNDS, sp = kit ? prefs.rimSound : prefs.snSound;
+        h += '<div class="uke-chips2 drum-sns"><span class="small">' + (kit ? "&#x1F941; ふち" : "SN の音") + '</span>';
+        for (i = 0; i < sw.length; i++) { h += '<button class="modal-btn' + (sp === sw[i][0] ? " piano-pad-on" : "") + '" data-da="' + (kit ? "rims:" : "sns:") + sw[i][0] + '">' + sw[i][1] + '</button>'; }
+        h += '</div>';
         if (!kit) {
           h += '<div class="uke-chips2 drum-ohs"><span class="small">OH の音</span>';
           for (i = 0; i < DRUM_OH_SOUNDS.length; i++) { h += '<button class="modal-btn' + (prefs.ohSound === DRUM_OH_SOUNDS[i][0] ? " piano-pad-on" : "") + '" data-da="ohs:' + DRUM_OH_SOUNDS[i][0] + '">' + DRUM_OH_SOUNDS[i][1] + '</button>'; }
@@ -1643,7 +1674,7 @@
             var pd = DRUM_PADS[Number(a.substring(1))];
             if (down) {
               if (kit) { hitPiece(drumKitPiece(DRUM_KIT_KEYS[Number(a.substring(1))])); }
-              else if (pd) { hit(pd[0] === 46 ? prefs.ohSound : pd[0], 0.9); if (pd[0] === 46) { ohDown["k" + a] = 1; } }
+              else if (pd) { hit(padNote(pd[0]), 0.9); if (pd[0] === 46) { ohDown["k" + a] = 1; } }
             } else if (!kit && pd && pd[0] === 46 && ohDown["k" + a]) {
               // §241: オープンHH のキーをはなしたら閉じる
               delete ohDown["k" + a];
@@ -1668,8 +1699,12 @@
           if (mode === "free") {
             if (kit && drumKitPedal(x, y, kitBox())) { pedalPress(pid); }
             else if (kit && drumKitHalf(x, y, kitBox())) { halfPress(pid); }
-            else if (kit) { hitPiece(drumKitAt(x, y, kitBox())); }
-            else { var pi = drumPadAt(x, y, Ld); if (pi >= 0) { hit(DRUM_PADS[pi][0] === 46 ? prefs.ohSound : DRUM_PADS[pi][0], 0.9); if (DRUM_PADS[pi][0] === 46) { ohDown[pid] = 1; } } }
+            else if (kit) {
+              // §247: スネアのふち（打面の少し外も。ほかの部品がないところ）
+              var kb = kitBox(), kp = drumKitAt(x, y, kb);
+              if ((!kp || kp[0] === "snare") && drumKitRim(x, y, kb)) { hit(prefs.rimSound, 0.9); } else { hitPiece(kp); }
+            }
+            else { var pi = drumPadAt(x, y, Ld); if (pi >= 0) { hit(padNote(DRUM_PADS[pi][0]), 0.9); if (DRUM_PADS[pi][0] === 46) { ohDown[pid] = 1; } } }
           }
           else if (mode === "step") {
             var c = drumCellAt(x, y);
@@ -1736,7 +1771,7 @@
     backList: drumBackList, backing: drumBacking, backEventOn: drumBackEventOn, sendSteps: drumSendSteps, stepsFromSeq: drumStepsFromSeq,
     kit: DRUM_KIT, kitKeys: DRUM_KIT_KEYS, kitBox: drumKitBox, kitShape: drumKitShape, kitAt: drumKitAt, kitPiece: drumKitPiece, extra: DRUM_EXTRA, pad: drumPad, landH: drumLandH,
     fills: DRUM_FILLS, patternList: drumPatternList, pattern: drumPattern, patternSteps: drumPatternSteps, patPadsLoad: drumPatPadsLoad, PATPAD_DEFAULT: DRUM_PATPAD_DEFAULT, PATPADS_KEY: DRUM_PATPADS_KEY,
-    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, SWITCHES: DRUM_SWITCHES, TAP_FOLLOWS: DRUM_TAP_FOLLOWS, tapBpm: drumTapBpm, tapGlide: drumTapGlide, HH_STYLES: DRUM_HH_STYLES, OH_SOUNDS: DRUM_OH_SOUNDS, HH_EXTRA: DRUM_HH_EXTRA, padAny: drumPadAny, kitHalf: drumKitHalf, flashOf: drumFlashOf, switchWait: drumSwitchWait, kitPedal: drumKitPedal, patLen: drumPatLen, grooves3: drumGrooves3, secPattern3: drumSecPattern3, seqParts: drumSeqParts, secKind: drumSecKind, secPattern: drumSecPattern, songFromSeq: drumSongFromSeq, songFit: drumSongFit, takeFromSeq: drumTakeFromSeq, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
+    parts: DRUM_PARTS, partOf: drumPartOf, patVel: drumPatVel, patVol: drumPatVol, AUTOFILL: DRUM_AUTOFILL, AUTOFILL_IDS: DRUM_AUTOFILL_IDS, SWITCHES: DRUM_SWITCHES, RIM_SOUNDS: DRUM_RIM_SOUNDS, SN_SOUNDS: DRUM_SN_SOUNDS, kitRim: drumKitRim, TAP_FOLLOWS: DRUM_TAP_FOLLOWS, tapBpm: drumTapBpm, tapGlide: drumTapGlide, HH_STYLES: DRUM_HH_STYLES, OH_SOUNDS: DRUM_OH_SOUNDS, HH_EXTRA: DRUM_HH_EXTRA, padAny: drumPadAny, kitHalf: drumKitHalf, flashOf: drumFlashOf, switchWait: drumSwitchWait, kitPedal: drumKitPedal, patLen: drumPatLen, grooves3: drumGrooves3, secPattern3: drumSecPattern3, seqParts: drumSeqParts, secKind: drumSecKind, secPattern: drumSecPattern, songFromSeq: drumSongFromSeq, songFit: drumSongFit, takeFromSeq: drumTakeFromSeq, songClean: drumSongClean, songLoad: drumSongLoad, songNotes: drumSongNotes, songSend: drumSongSend, songBars: drumSongBars, quantize: drumQuantize,
     SONG_KEY: DRUM_SONG_KEY, SONG_DEFAULT: DRUM_SONG_DEFAULT, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
     swings: DRUM_SWINGS, swingOff: drumSwingOff,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,

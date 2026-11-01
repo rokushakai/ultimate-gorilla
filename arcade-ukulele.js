@@ -1957,7 +1957,7 @@
       var n = UKE_ROLL_DRUMS.length;
       return { drum: true, n: n, rh: H / n, lw: 46,
         midi: function (i) { return i >= 0 && i < n ? UKE_ROLL_DRUMS[i][0] : -1; },
-        row: function (m) { var M = window.UGMelody; if (M && M.gmDrum) { m = M.gmDrum(m); } if (m === 44) { m = 42; } for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; }, // §246: ハーフオープンはオープンの段に
+        row: function (m) { var M = window.UGMelody; if (M && M.gmDrum) { m = M.gmDrum(m); } if (m === 44) { m = 42; } if (m === 40) { m = 38; } for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; }, // §246: ハーフオープンはオープンの段に・§247: リムショット（40）・フラムはスネアの段に
         label: function (i) { return UKE_ROLL_DRUMS[i][1]; }, hi: function () { return false; } };
     }
     return { drum: false, n: UKE_ROLL_ROWS, rh: UKE_ROLL_RH, lw: 26,
