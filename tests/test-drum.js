@@ -34,7 +34,7 @@ module.exports = function () {
 
   function hooked() {
     return H.load({ patch: function (src, file) {
-      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads, prac: prac, bpm: bpm, tapTarget: tapTarget }; };"); }
+      if (file === "arcade-drum.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__drum = function () { return { t: now(), rn: rn, counts: counts, ended: ended, rec: rec, play: play, take: take, steps: steps, stepRun: stepRun, flash: flash, chart: chart, act: action, back: back, bk: bk, patRun: patRun, patTap: patTap, patPads: patPads, prac: prac, bpm: bpm, tapTarget: tapTarget, guide: guideNotes }; };"); }
       return src;
     } });
   }
@@ -558,6 +558,23 @@ module.exports = function () {
   var kk2 = ckRun({}, [[3, "down", pk252], [30, "up", pk252]]);
   ok(kk1 === "36,36,25" && kk2 === "36,25" && D.partOf(25) === "kick" && D.KICK_HOLD === 0.15 && D.takeClean({ notes: [[0, 25, 0.5]] }, 0).notes.length === 1,
     "kick: a quick tap rings (ドーン), holding it mutes the ring (ドッ, 25) once", [kk1, kk2]);
+  // §253: 練習のガイドの輪（鳴らさないパートの音の前に出す。OFF なら出さない）
+  function gdRun(pr) {
+    var e = hooked(), seen = [];
+    e.store[D.PREFS_KEY] = JSON.stringify(pr);
+    e.store[D.PATPADS_KEY] = JSON.stringify(["d:crossbal"]);
+    e.run("drum", { config: { mode: "free" } }, 90, function (f) {
+      var h = e.window.__drum; if (!h) { return; }
+      if (f === 3) { h().patTap(0); }
+      if (f > 10) { h().guide().forEach(function (g) { seen.push(g); }); }
+    });
+    return seen;
+  }
+  var gd1 = gdRun({ kit: true, pat: true, bpm: 120, mute: ["snare"] }), gd0 = gdRun({ kit: true, pat: true, bpm: 120, mute: ["snare"], guide: false }), gd2 = gdRun({ kit: true, pat: true, bpm: 120 });
+  ok(gd1.length > 10 && gd1.every(function (g) { return g[0] === 37 && g[1] > -0.09 && g[1] <= g[2] + 0.01 && g[2] === 0.5; }) && gd0.length === 0 && gd2.length === 0 &&
+    D.guidePiece(53) === "ride" && D.guidePiece(43) === "floor" && D.guidePiece(23) === "hh" && D.guidePad(51) === 49 && D.guidePad(44) === 42 && D.guidePad(45) === 47 &&
+    D.noStrike(25) && D.noStrike(26) && !D.noStrike(36),
+    "practice guide rings: shown ahead of the muted part's notes (1 beat), none when OFF or nothing is muted; chokes / kick mutes are not judged", [gd1.length, gd1.slice(0, 2), gd0.length]);
   ok(D.takeClean({ notes: [[0, 23, 0.8], [1, 21, 0.8], [2, 44, 0.4]] }, 0).notes.map(function (n) { return n[1]; }).join() === "23,21,44", "takes keep half-open / foot splash / pedal notes");
   ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };
