@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.69** |
+| 現在バージョン | **v1.70** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.70] 🎼 ベースのキーとスケール**（§262）: `BASS_SCALES`（9つ）・`BASS_SCALE_GROUPS`・`bassScale(id)`（知らない id はメジャー）・`bassTriad`（3度と5度でコードの種類、度数の表記）。`bassChord(key, d, scale)` は `deg` も返す。`prefs.scale`。パネルの `select[data-bscale]` → action `scale:id`。キーの行は伴奏のないときフレットの画面にも
 - **[v1.69] 🎸 ベースのサンプル・おすすめパターン**（§261）: samples/ に electric_bass_finger・electric_bass_pick・fretless_bass・slap_bass_1・slap_bass_2・synth_bass_1・synth_bass_2 を追加、acoustic_bass を作りなおし（どれも C1〜C5 の短3度おき17音。作り方は build_samples.js の INSTR をベースにして PICK を 24〜72・3おき）。`MELODY_SAMPLE_FILES` 33〜39・`MELODY_SAMPLE_HOLD`・`MELODY_SAMPLE_TRIM`（展開時に残す秒。ベース 3）。`MELODY_SAMPLE_V` 1.69。`BASS_VOICES` 8つ。パターン14個（`BASS_PAT_GROUPS` にも）
 - **[v1.68] 🎼 ベースのパターン追加・一覧**（§260）: `UKE_BASS_STEPS` に22個（3拍子は 6 か 12 マス）。`BASS_PAT_GROUPS`・`bassPatGroups(list)`（のっていない id は「分散・そのほか」、3拍子は「3拍子」）。パネルの `select[data-bpat]` → action `patset:id`（知らない id は無視）。**パターンを足すときは `BASS_PAT_GROUPS` にも id を入れる**
 - **[v1.67] 🎼 ベースのパターンをわかりやすく・追加**（§259）: `drawSteps`（`BASS_STEP_Y`・`patCell()` でいまのマス）・`drawChords`（パッドとフレットで共通）。パターン中はパッドの上の端が `BASS_PAD_Y_PAT`（`bassPadRect(i, n, top)`・`padTop()`）、フレットの画面でもコードの段をタップできる。`bassPatLegend`（パネルの文字の意味）。パターンは `arcade-ukulele.js` の `UKE_BASS_STEPS` に12個追加（シーケンサーと共通）。`pat.lastCh`: 伴奏なしでコードが変わった小節の頭が休みならルート
@@ -218,7 +219,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（868項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（870項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

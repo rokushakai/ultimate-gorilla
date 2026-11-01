@@ -269,6 +269,25 @@ module.exports = function () {
   });
   ok(JSON.parse(e14.store[B.PREFS_KEY]).pat === "blues" && html14.indexOf('<option value="blues" selected>') > 0 && html14.indexOf('<optgroup label="ラテン・ワールド">') > 0,
     "picking from the genre list sets the pattern (unknown ids are ignored)", html14.length);
+  // --- §262: スケール（ダイアトニック・マイナー・教会旋法）---
+  var am9 = B.chord(9, 0, "minor"), sc9 = [B.chord(9, 2, "minor"), B.chord(9, 4, "harm"), B.chord(9, 2, "melo"), B.chord(2, 3, "dorian"), B.chord(4, 1, "phryg"),
+    B.chord(0, 1, "lydian"), B.chord(7, 6, "mixo"), B.chord(11, 0, "locrian"), B.chord(0, 0, "nope"), B.chord(0, 1)];
+  ok(am9.name === "Am" && am9.deg === "i" && am9.notes[1] === 36 && B.SCALES.length === 9 &&
+    sc9.map(function (c) { return c.name + "/" + c.deg; }).join() === "C/♭III,E/V,Caug/♭III+,G/IV,F/♭II,D/II,F/♭VII,Bdim/i°,C/I,Dm/ii",
+    "scales: chords and degrees follow the chosen scale (minor, harmonic/melodic minor, church modes; unknown is major)", sc9.map(function (c) { return c.name + "/" + c.deg; }));
+  // フレットの画面でもキーとスケールを変えられる（知らない id は無視）
+  var e15 = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } }), html15 = "";
+  e15.store[B.PREFS_KEY] = JSON.stringify({ pat: "pop", view: "fret" });
+  e15.run("bass", { config: {} }, 12, function (f) {
+    var w = e15.window;
+    if (f === 3) { w.__bassAct("pat"); w.__bassAct("scale:dorian"); w.__bassAct("scale:nope"); w.__bassAct("keyup"); w.__bassAct("keyup"); html15 = w.__bassPanel(); }
+  });
+  var pf15 = JSON.parse(e15.store[B.PREFS_KEY]);
+  ok(pf15.scale === "dorian" && pf15.key === 2 && html15.indexOf('<option value="dorian" selected>') > 0 && html15.indexOf('data-ba="keyup"') > 0 && html15.indexOf('<optgroup label="教会旋法">') > 0,
+    "key and scale can be changed in the fret view while a pattern plays", pf15);
   // --- §261: ベースの音源はぜんぶサンプル（C1〜C5 の17音）---
   var fs9 = require("fs"), path9 = require("path"), sf9 = env.window.UGMelody.sampleFiles, okv = B.VOICES.length === 8;
   B.VOICES.forEach(function (v) {
