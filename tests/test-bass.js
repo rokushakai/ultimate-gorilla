@@ -137,6 +137,57 @@ module.exports = function () {
   });
   ok(s7.join() === "thumb,stop,pop,stop,ghost,stop,stop,stop", "playback picks the technique from the velocity and stops each note at its length", s7);
 
+  // --- §258: 音がつづく・スライドが切れない・パッドの編集・16個 ---
+  var e10 = H.load(), M10 = e10.window.UGMelody;
+  M10.audioInit();
+  e10.counters.targets.length = 0;
+  var h10 = M10.synth(40, 33, 5, 0.8, undefined, 8), tg10 = e10.counters.targets.filter(function (x) { return x.name === "gain"; });
+  e10.counters.targets.length = 0;
+  M10.synth(40, 33, 5, 0.8);
+  var tg10b = e10.counters.targets.length;
+  ok(h10 && tg10.length === 3 && tg10[0].v < 0.6 * 0.4 && Math.abs(tg10[2].t - (5 + 8 - 0.3)) < 1e-6 && tg10b === 0 && !e10.counters.errors.length,
+    "engine: hold keeps the note sounding (decays to a low sustain) until hold seconds; without hold nothing changes", tg10);
+  var cC2 = B.chord(0, 0), am2 = B.songChord("Am", 0), ce2 = B.songChord("C/E", 0), pc2 = B.padsClean([[7, 0, 0], [1, 2, 1], "x"]);
+  ok(B.PAD_MAX === 16 && B.padLabel([6, -1, -1]) === "♭7↓" && B.padLabel([0, 2, 0]) === "R↑↑" && B.padNote(cC2, [3, 0, 0]) === 41 && B.padNote(cC2, [6, -1, -1]) === 34 &&
+    B.padNote(am2, [3, 0, 0]) === 38 && B.padNote(ce2, [0, 0, 0]) === 28 && B.padNote(ce2, [4, 0, 0]) === 43 &&
+    JSON.stringify(B.PAD_DEFS.slice(0, 8).map(function (pd) { return B.padNote(cC2, pd); })) === JSON.stringify(cC2.notes) &&
+    pc2.length === 16 && pc2[0].join() === "0,0,0" && pc2[1].join() === "1,2,1" && pc2[2].join() === "4,0,0",
+    "pad notes: degree / octave / half step from the chord (a slash chord keeps its bass as R); the first 8 are the old pads; bad data falls back");
+  // スライド: 0.6 段ずれても同じ弦のまま（G 弦 1F → 3F）。1 段ずれたら D 弦で鳴らしなおす
+  var r01 = B.cellRect(0, 1), r03 = B.cellRect(0, 3), sA = at(r01), sB = [at(r03)[0], (r03.y + r03.h * 1.1) * 320 / B.H], sC = [at(r03)[0], (r03.y + r03.h * 1.5) * 320 / B.H];
+  var f11 = run({ prog: 33 }, 20, function (f, e) {
+    if (f === 3) { e.ptr("down", sA[0], sA[1], 1); }
+    if (f === 5) { e.ptr("move", sB[0], sB[1], 1); }
+    if (f === 7) { e.ptr("move", sC[0], sC[1], 1); }
+    if (f === 9) { e.ptr("up", sC[0], sC[1], 1); }
+  });
+  ok(f11.snd.join() === "44@33,bend46,stop,41@33,stop", "slide stays on the held string when the finger drifts a little onto the next one", f11.snd);
+  // 16個: 13番目（2↑）をタップ、キー J（14番目・4↑）
+  var p12 = at(B.padRect(12, 16));
+  var f12 = run({ view: "pad", padN: 16 }, 20, function (f, e) {
+    if (f === 3) { e.ptr("down", p12[0], p12[1], 1); e.ptr("up", p12[0], p12[1], 1); }
+    if (f === 5) { e.key("keydown", "j"); e.key("keyup", "j"); }
+  });
+  ok(f12.snd.filter(function (x) { return x.indexOf("@") > 0; }).join() === "50@33,53@33" && B.padAt(p12[0], p12[1] * B.H / 320, 16) === 12,
+    "16 pads (4x4): the 13th pad plays 2 an octave up; key J plays the 14th", f12.snd);
+  // 編集: ✏️ → 4番のパッドをタップしてえらぶ → 度数 4・オクターブ ↑・♯ → キー R で鳴る。音は hold 8秒で鳴らす
+  var e13 = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } }), s13 = [], ph13 = [], pq = at(B.padRect(3));
+  e13.store[B.PREFS_KEY] = JSON.stringify({ view: "pad" });
+  e13.run("bass", { config: {} }, 30, function (f) {
+    var w = e13.window;
+    if (f === 1) { var M = w.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg !== M.DRUM) { s13.push(m + "/" + arguments[5]); } return s0.apply(M, arguments); }; }
+    if (f === 3) { w.__bassAct("edit"); ph13.push(w.__bassPanel()); e13.ptr("down", pq[0], pq[1], 1); e13.ptr("up", pq[0], pq[1], 1); ph13.push(w.__bassPanel()); }
+    if (f === 5) { w.__bassAct("pdeg:3"); w.__bassAct("poct:1"); w.__bassAct("psh:1"); }
+    if (f === 7) { w.__bassAct("edit"); e13.key("keydown", "r"); e13.key("keyup", "r"); }
+    if (f === 9) { w.__bassAct("padn"); }
+  });
+  var pf13 = JSON.parse(e13.store[B.PREFS_KEY]);
+  ok(s13.join() === "47/8,41/8,53/8,54/8,54/8" && pf13.pads[3].join() === "3,1,1" && pf13.padN === 16 && ph13[0].indexOf("タップしてね") > 0 && ph13[1].indexOf("4 番のパッド") > 0,
+    "editing a pad: tap to pick it, change degree / octave / half step (each change previews it), the pad keeps the new note; 8 ↔ 16 is saved", [s13, pf13.pads[3], ph13[1] && ph13[1].slice(0, 120)]);
+
   // --- §257: 演奏パターン ---
   var p4 = B.patterns(4), p3 = B.patterns(3);
   ok(p4.length === 20 && p3.length === 6 && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",

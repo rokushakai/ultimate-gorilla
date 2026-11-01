@@ -328,25 +328,31 @@
   }
 
   // dest（省略可・§171 v0.90）: 出口の GainNode。指定すると level は使わずそこへつなぐ（弦ごとに止めたいとき）
-  function melodySynth(midi, prog, when, level, dest) {
+  // hold（省略可・§258）: 秒。押さえているあいだ小さめの音でつづけ、voiceStop で止める（ゴリラベース）
+  function melodySynth(midi, prog, when, level, dest, hold) {
     var ac = melodyAudio.ctx;
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
     if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level, dest); return; } // §237: dest（シーケンサーのトラックの音量）も通す
-    var sh = melodySampleNote(ac, midi, prog, t, level, dest);
+    var sh = melodySampleNote(ac, midi, prog, t, level, dest, hold);
     if (sh) { return sh; }
     var r = melodyRecipe(prog), pitches = [];
     var f = 440 * Math.pow(2, (midi - 69) / 12);
-    var end = t + r.dur, i;
+    var hd = hold > r.dur ? hold : 0, end = t + (hd || r.dur), i;
     // エンベロープ
     var env = ac.createGain();
     env.gain.setValueAtTime(0.0001, t);
     env.gain.exponentialRampToValueAtTime(r.peak, t + r.a);
-    if (r.sus) {
+    if (hd) {
+      // §258: はじめに減衰 → ピークの3割くらい → ゆっくり1割くらいへ。おわりは hold 秒
+      env.gain.setTargetAtTime(r.peak * (r.sus || 0.3), t + r.a, r.sus ? 0.05 : r.dur * 0.3);
+      env.gain.setTargetAtTime(r.peak * 0.1, t + r.a + r.dur * 1.5, 2);
+      env.gain.setTargetAtTime(0.0001, end - 0.3, 0.06);
+    } else if (r.sus) {
       env.gain.exponentialRampToValueAtTime(r.peak * r.sus, t + r.a + 0.06);
       env.gain.setValueAtTime(r.peak * r.sus, t + Math.max(r.a + 0.07, r.dur - (r.rel || 0.1)));
     }
-    env.gain.exponentialRampToValueAtTime(0.0001, end);
+    if (!hd) { env.gain.exponentialRampToValueAtTime(0.0001, end); }
     var out = env;
     if (r.trem) {
       var tg = ac.createGain(), tl = ac.createOscillator(), tlg = ac.createGain();
@@ -684,16 +690,18 @@
   }
 
   // サンプルで鳴らせたら true（無い・読み込み中なら false → 合成音で鳴らす）
-  function melodySampleNote(ac, midi, prog, t, level, dest) {
+  // keep（省略可・§258）: 秒。サンプルの長さいっぱいまで（keep 秒まで）鳴らす
+  function melodySampleNote(ac, midi, prog, t, level, dest, keep) {
     if (!melodySamples.enabled || !melodySampleReady(prog)) { return false; }
     var name = MELODY_SAMPLE_FILES[prog], ks = melodySamples.keys[name], best = ks[0];
     for (var i = 1; i < ks.length; i++) { if (Math.abs(ks[i] - midi) < Math.abs(best - midi)) { best = ks[i]; } }
     var buf = melodySamples.buffers[name][best];
     if (!buf) { return false; }
-    var hold = MELODY_SAMPLE_HOLD[prog] || 1, vol = MELODY_SAMPLE_VOL;
+    var hold = MELODY_SAMPLE_HOLD[prog] || 1, vol = MELODY_SAMPLE_VOL, rate = Math.pow(2, (midi - best) / 12);
+    if (keep > 0 && buf.duration) { hold = Math.max(hold, Math.min(keep, buf.duration / rate - MELODY_SAMPLE_FADE)); }
     var src = ac.createBufferSource(), g = ac.createGain();
     src.buffer = buf;
-    src.playbackRate.value = Math.pow(2, (midi - best) / 12);
+    src.playbackRate.value = rate;
     g.gain.setValueAtTime(vol, t);
     g.gain.setValueAtTime(vol, t + hold);
     g.gain.exponentialRampToValueAtTime(0.0001, t + hold + MELODY_SAMPLE_FADE);
