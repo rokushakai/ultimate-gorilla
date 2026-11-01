@@ -145,6 +145,26 @@
     for (i = 0; i < st.length; i++) { if ((st[i][3] || 4) === meter) { out.push([st[i][0], st[i][1], st[i][2], meter]); } }
     return out;
   }
+  // §260: 一覧のジャンル（のっていないものは「分散・そのほか」。3拍子は「3拍子」）
+  var BASS_PAT_GROUPS = [
+    ["基本", ["root", "root8", "r5", "walk", "octslow", "lowroot", "ballad", "ballad3", "two", "sixteen", "sixteen5"]],
+    ["ロック・ポップス", ["pop", "rock", "rock5", "eighties", "sync", "motown", "soul", "rnr", "metal", "country"]],
+    ["ファンク・ダンス", ["funk", "slapfunk", "rnb", "oct", "house", "techno", "dnb", "hiphop", "gallop"]],
+    ["ジャズ・ブルース・シャッフル", ["walk2", "walkdown", "walkoct", "blues", "boogie", "boogie2", "shuffle", "shufoct", "trip"]],
+    ["ラテン・ワールド", ["bossa", "samba", "tumbao", "reggae", "habanera", "afro"]]
+  ];
+  // パターンの並び → [[ジャンル, [パターン…]]]（からのジャンルははぶく）
+  function bassPatGroups(list) {
+    var out = [], rest = [], i, j, k;
+    for (i = 0; i < BASS_PAT_GROUPS.length; i++) { out.push([BASS_PAT_GROUPS[i][0], []]); }
+    for (k = 0; k < list.length; k++) {
+      var gi = -1;
+      for (j = 0; j < BASS_PAT_GROUPS.length && list[k][3] !== 3; j++) { if (BASS_PAT_GROUPS[j][1].indexOf(list[k][0]) >= 0) { gi = j; } }
+      if (gi >= 0) { out[gi][1].push(list[k]); } else { rest.push(list[k]); }
+    }
+    out.push([list.length && list[0][3] === 3 ? "3拍子" : "分散・そのほか", rest]);
+    return out.filter(function (g) { return g[1].length > 0; });
+  }
   function bassPatById(list, id) {
     for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } }
     for (i = 0; i < list.length; i++) { if (list[i][0] === "pop") { return list[i]; } }
@@ -688,9 +708,11 @@
         }
         else if (/^tech:/.test(v)) { setTech(v.substring(5)); }
         else if (v === "pat") { patToggle(); }
-        else if (v === "patprev" || v === "patnext") {
+        else if (v === "patprev" || v === "patnext" || /^patset:/.test(v)) {
           var pl = bassPatterns(meter), pi = pl.indexOf(patDef());
-          prefs.pat = pl[(pi + (v === "patnext" ? 1 : pl.length - 1)) % pl.length][0];
+          // §260: 一覧からえらぶ（patset:id）
+          if (/^patset:/.test(v)) { var pick = bassPatById(pl, v.substring(7)); if (pick[0] !== v.substring(7)) { return; } prefs.pat = pick[0]; }
+          else { prefs.pat = pl[(pi + (v === "patnext" ? 1 : pl.length - 1)) % pl.length][0]; }
           bassSavePrefs(prefs);
           if (pat) { patStart(true); }
           render();
@@ -737,6 +759,16 @@
         h += '</div><div class="piano-row">' + btn("preset", false, "このパッドをもとに") + btn("presetall", false, "ぜんぶもとに") + '</div>';
         return h;
       }
+      // §260: パターンの一覧（ジャンルごと）
+      function patOptions() {
+        var gs = bassPatGroups(bassPatterns(meter)), cur = patDef()[0], h = "", i, j;
+        for (i = 0; i < gs.length; i++) {
+          h += '<optgroup label="' + escHtml(gs[i][0]) + '">';
+          for (j = 0; j < gs[i][1].length; j++) { var d = gs[i][1][j]; h += '<option value="' + d[0] + '"' + (d[0] === cur ? " selected" : "") + '>' + escHtml(d[1]) + '</option>'; }
+          h += '</optgroup>';
+        }
+        return h;
+      }
       function render() {
         if (!panel) { return; }
         var html = '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ba="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
@@ -763,6 +795,7 @@
         if (ed && view === "pad") { html += padEditor(); }
         else {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="patprev">&#x25C0;</button><span>&#x1F3BC; ' + patDef()[1] + '</span><button class="modal-btn" data-ba="patnext">&#x25B6;</button></div>' +
+            '<div class="piano-row"><label class="piano-select">&#x1F4DA; <select data-bpat="1">' + patOptions() + '</select></label></div>' +
             '<div class="piano-row"><button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
             '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>';
           // §259: パターンの説明と文字の意味
@@ -781,6 +814,8 @@
         for (i = 0; i < bs.length; i++) {
           bs[i].onclick = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(ev.currentTarget.getAttribute("data-ba")); };
         }
+        var psel = panel.querySelector ? panel.querySelector("select[data-bpat]") : null;
+        if (psel) { psel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("patset:" + ev.currentTarget.value); }; }
       }
       render();
 
@@ -999,7 +1034,7 @@
   });
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX

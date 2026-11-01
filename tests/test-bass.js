@@ -190,8 +190,8 @@ module.exports = function () {
 
   // --- §257: 演奏パターン ---
   var p4 = B.patterns(4), p3 = B.patterns(3);
-  ok(p4.length === 30 && p3.length === 8 && p4.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [8, 12, 16].indexOf(d[2].length) >= 0; }) && p3.every(function (d) { return d[2].length === 6; }) && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
-    "patterns: the sequencer's bass patterns for the meter (4/4: 30, 3/4: 8), all one bar long", [p4.length, p3.length]);
+  ok(p4.length === 48 && p3.length === 12 && p4.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [8, 12, 16].indexOf(d[2].length) >= 0; }) && p3.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [6, 12].indexOf(d[2].length) >= 0; }) && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
+    "patterns: the sequencer's bass patterns for the meter (4/4: 48, 3/4: 12), all one bar long", [p4.length, p3.length]);
   var cC = B.songChord("C", 0), cAm = B.songChord("Am", 0);
   ok(B.tokNote("R", cC, null, 9) === 36 && B.tokNote("5", cC, null, 9) === 43 && B.tokNote("8", cC, null, 9) === 48 && B.tokNote("v", cC, null, 9) === 31 &&
     B.tokNote("A", cC, cAm, 1) === 32 && B.tokNote("A", cC, cAm, 2) === 43 && B.tokNote("A", cC, null, 1) === 43 && B.tokLen("R--RR-5-", 0) === 3 && B.tokLen("R--RR-5-", 6) === 2,
@@ -250,6 +250,25 @@ module.exports = function () {
     if (f === 20) { e.ptr("down", pp5[0], pp5[1], 1); e.ptr("up", pp5[0], pp5[1], 1); }
   });
   ok(g6.snd.join() === "36,43", "pad view: the pads move down under the pattern cells while a pattern plays", g6.snd);
+  // --- §260: ジャンルの一覧 ---
+  var gp4 = B.patGroups(p4), gp3 = B.patGroups(p3), ids4 = [];
+  gp4.forEach(function (g9) { g9[1].forEach(function (d) { ids4.push(d[0]); }); });
+  var uniq = p4.every(function (d, i9) { return p4.map(function (x) { return x[0]; }).indexOf(d[0]) === i9; });
+  ok(gp4.length === 6 && gp4[0][0] === "基本" && gp4[5][0] === "分散・そのほか" && gp4[5][1].map(function (d) { return d[0]; }).join() === "arp,arpud,arp7" &&
+    ids4.length === 48 && uniq && gp3.length === 1 && gp3[0][0] === "3拍子" && gp3[0][1].length === 12,
+    "pattern list by genre: every 4/4 pattern once (unique ids), 3/4 in its own group", gp4.map(function (g9) { return g9[0] + ":" + g9[1].length; }));
+  // 一覧からえらぶ（patset）: 鳴らしているパターンが切りかわる。知らない id は無視
+  var e14 = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } }), html14 = "";
+  e14.store[B.PREFS_KEY] = JSON.stringify({ pat: "pop" });
+  e14.run("bass", { config: {} }, 12, function (f) {
+    var w = e14.window;
+    if (f === 3) { w.__bassAct("patset:blues"); w.__bassAct("patset:nope"); html14 = w.__bassPanel(); }
+  });
+  ok(JSON.parse(e14.store[B.PREFS_KEY]).pat === "blues" && html14.indexOf('<option value="blues" selected>') > 0 && html14.indexOf('<optgroup label="ラテン・ワールド">') > 0,
+    "picking from the genre list sets the pattern (unknown ids are ignored)", html14.length);
   // シーケンサーの自動のベースへ
   var e9 = H.load(), B9 = e9.window.UGBass, U9 = e9.window.UGUkulele, rs9 = B9.patToSeq(B9.patById(B9.patterns(4), "funk"), 36), b9 = U9.seqLoad().cur.tracks.bass;
   ok(rs9.ok && b9.on && !b9.mute && b9.pattern === "funk" && b9.prog === 36, "the pattern can be set as the sequencer's auto bass (on, unmuted, same voice)", b9);
