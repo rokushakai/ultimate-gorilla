@@ -1418,6 +1418,7 @@
       for (k = 0; k < notes.length; k++) {
         var on = tick(notes[k].t), off = Math.max(on + 1, tick(notes[k].t + Math.max(0.03, notes[k].d)));
         var nm2 = xdrum && window.UGMelody && window.UGMelody.gmDrum ? window.UGMelody.gmDrum(notes[k].m) : notes[k].m; // §246: ハーフオープンなど → GM の番号
+        if (!nm2) { continue; } // §250: チョークは書き出さない
         ev2.push([on, 3, [0x90 | ch, nm2, notes[k].v]]);
         ev2.push([off, 2, [0x80 | ch, nm2, 0]]);
       }
@@ -1957,7 +1958,7 @@
       var n = UKE_ROLL_DRUMS.length;
       return { drum: true, n: n, rh: H / n, lw: 46,
         midi: function (i) { return i >= 0 && i < n ? UKE_ROLL_DRUMS[i][0] : -1; },
-        row: function (m) { var M = window.UGMelody; if (M && M.gmDrum) { m = M.gmDrum(m); } if (m === 44) { m = 42; } if (m === 40) { m = 38; } for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; }, // §246: ハーフオープンはオープンの段に・§247: リムショット（40）・フラムはスネアの段に
+        row: function (m) { var M = window.UGMelody; if (M && M.gmDrum) { m = M.gmDrum(m); } if (m === 44) { m = 42; } if (m === 40) { m = 38; } if (m === 53) { m = 51; } for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; }, // §246: ハーフオープンはオープンの段に・§247: リムショット（40）・フラムはスネアの段に
         label: function (i) { return UKE_ROLL_DRUMS[i][1]; }, hi: function () { return false; } };
     }
     return { drum: false, n: UKE_ROLL_ROWS, rh: UKE_ROLL_RH, lw: 26,

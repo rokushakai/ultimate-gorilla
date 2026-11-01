@@ -162,13 +162,13 @@ module.exports = function () {
   U9.loadSamples([U9.DRUM]);
   ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
   // --- §233: 演奏パターン ---
-  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 15 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
+  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 16 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
     "32 pattern pads (2 pages): grooves loop, fills play one bar");
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
   ok(jz && jz.some(function (x) { return x[0] === 51 && x[1].length >= 4; }) && jz.some(function (x) { return x[0] === 42; }) && mt && mt[0][1].length === 16 &&
-    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 18,
-    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 18 drum-only loops added");
+    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 19,
+    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 19 drum-only loops added");
   // §242: オープン・クローズのパターン（開けて、すぐペダル 44 で閉じる）
   ok(["d:tsuchi", "d:bark", "d:sizzle"].every(function (id) { var st = D.patternSteps(id); return D.pattern(id).kind === "loop" && st.some(function (x) { return x[0] === 46; }) && st.some(function (x) { return x[0] === 44; }); }) &&
     D.HH_STYLES.map(function (x) { return x[0]; }).join() === "auto,tight,bark,sizzle", "open-close patterns (ツッチー・バーク・シュワッ) open the hi-hat and close it with the pedal");
@@ -366,7 +366,7 @@ module.exports = function () {
   // ピアノロール: ドラム打ち込みトラックは楽器の段
   var sq23 = U23.seqLoad().cur; sq23.tracks.mel.on = false;
   var lay = U23.rollLay(sq23);
-  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1 && lay.row(23) === lay.row(46) && lay.row(21) === lay.row(42) && lay.row(44) === lay.row(42) && lay.row(24) === lay.row(38) && lay.row(22) === lay.row(38) && lay.row(40) === lay.row(38), "the piano roll shows drum-notes tracks as drum lanes", lay.n);
+  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1 && lay.row(23) === lay.row(46) && lay.row(21) === lay.row(42) && lay.row(44) === lay.row(42) && lay.row(24) === lay.row(38) && lay.row(22) === lay.row(38) && lay.row(40) === lay.row(38) && lay.row(53) === lay.row(51) && lay.row(26) === -1, "the piano roll shows drum-notes tracks as drum lanes", lay.n);
   // 伴奏といっしょにソング: 伴奏も頭から鳴る
   var e24 = hooked(), ok24 = null;
   e24.store[D.PREFS_KEY] = JSON.stringify({ pat: true, songOpen: true });
@@ -527,6 +527,23 @@ module.exports = function () {
   var pd34 = padXY(5), sn34 = rimRun({ snSound: 22 }, [pd34]), sn35 = rimRun({}, [pd34]);
   ok(sn34 === "22" && sn35 === "38" && D.flashOf(24) === 38 && D.flashOf(22) === 38 && D.partOf(24) === "snare" && D.partOf(22) === "snare" &&
     D.takeClean({ notes: [[0, 24, 0.8], [1, 22, 0.8]] }, 0).notes.length === 2, "the SN pad can play a flam; rimshot / flam light the snare, count as snare and are kept in takes", [sn34, sn35]);
+  // §250: シンバルを長くおさえて はなす ＝ チョーク（26）・さっと叩けば鳴りつづける・ライドのまん中 ＝ ベル（53）・パッドの CR の音
+  function ckRun(pr, steps, n) {
+    var e = hooked(), snd = [];
+    e.store[D.PREFS_KEY] = JSON.stringify(pr);
+    e.run("drum", { config: { mode: "free" } }, n || 60, function (f) {
+      if (f === 1) { var U = e.window.UGMelody, s0 = U.synth; U.synth = function (m) { snd.push(m); return s0.apply(U, arguments); }; }
+      for (var i = 0; i < steps.length; i++) { if (steps[i][0] === f) { e.ptr(steps[i][1], steps[i][2][0], steps[i][2][1] * 320 / D.H, 9); } }
+    });
+    return snd.join();
+  }
+  var cr36 = kc("crash"), rd36 = D.kitShape(D.kitPiece("ride"), kbp), rdc = [rd36.cx, rd36.cy], rde = [rd36.cx + rd36.rx * 0.8, rd36.cy];
+  var ck1 = ckRun({ kit: true }, [[3, "down", cr36], [30, "up", cr36], [35, "down", cr36], [37, "up", cr36]]);
+  var ck2 = ckRun({ kit: true }, [[3, "down", rdc], [4, "up", rdc], [6, "down", rde], [7, "up", rde]]);
+  var pc36 = padXY(3), ck3 = ckRun({ crSound: 53 }, [[3, "down", pc36], [30, "up", pc36]]);
+  ok(ck1 === "49,26,49" && ck2 === "53,51" && ck3 === "53,26" && D.kitBell(rdc[0], rdc[1], kbp) && !D.kitBell(rde[0], rde[1], kbp) && D.partOf(26) === "cym" && D.flashOf(53) === 51 &&
+    D.takeClean({ notes: [[0, 53, 0.6], [1, 26, 0.5]] }, 0).notes.length === 2,
+    "cymbals: hold then let go chokes (26), a quick hit keeps ringing; the ride's middle is the bell (53); the CR pad can play the bell", [ck1, ck2, ck3]);
   ok(D.takeClean({ notes: [[0, 23, 0.8], [1, 21, 0.8], [2, 44, 0.4]] }, 0).notes.map(function (n) { return n[1]; }).join() === "23,21,44", "takes keep half-open / foot splash / pedal notes");
   ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };

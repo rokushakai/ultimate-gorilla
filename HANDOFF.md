@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.57** |
+| 現在バージョン | **v1.58** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.58] ✊ チョーク・🔔 ベル**（§250）: チョーク ＝ ゴリラドラムだけの番号 26（音なし）。`melodyCyms` に鳴っているシンバル（49・51・52・53・55・57・59）を覚え、`melodyCymChoke` で tau 0.03 で消す。`gmDrum(26)` ＝ 0 で MIDI（melodyNote・melodyMidiBytes・ウクレレの書き出し）から外す。ドラム側は `cymDown`・`cymPress`/`cymRelease`（`DRUM_CHOKE_HOLD` 0.2秒）・`choke()`（練習の判定なし）。ベル ＝ GM 53（51 のサンプル 1.12 倍・highpass 900・`melodyBellPing` の sine 3つ）。`drumKitBell`（ライドのまん中）・prefs `crSound`
 - **[v1.57] 🥁 スネアのふちを広げる**（§249）: `drumKitRim` は 0.36 ≦ (正規化した距離)² ≦ 1.8。点線の輪は 0.6
 - **[v1.56] 🥁 ロックのリムショット・クロス**（§248）: DRSKit の 37 のサンプルは Snare_rim（リムショット）。`MELODY_RIM_IS_SHOT` のセットでは 24 ＝ 37 が主＋38 を小さく、37 ＝ lowpass・0.9 倍・すぐ消す。ほかのセットの 24 は peaking 2000Hz +7dB。サンプルを作りなおすなら DRSKit にはクロススティックの素材がない
 - **[v1.55] 🥁 スネアの奏法**（§247）: リムショット（ゴリラドラムだけの番号 24 → GM 40。スネア 38 のサンプルを 1.04 倍の速さ・大きめにして 37 を重ねる）・フラム（22 → GM 38。`melodyDrum` の頭で 38 を 0.4 の強さ → 30ms あとに本当の音）・クロススティック（37。もとからある）。ドラム側は `DRUM_HH_EXTRA` に 24・22、`drumKitRim`（スネアの打面の外がわの輪〜少し外）、prefs `rimSound`（セットのふち。はじめ 24）・`snSound`（パッドの SN。じゆうのときだけ。`padNote`）。ロールでは 40 もスネアの段
@@ -206,7 +207,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（816項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（818項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
