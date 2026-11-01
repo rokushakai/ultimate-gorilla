@@ -11,6 +11,8 @@
 
 収録音色: Acoustic Grand Piano / Electric Piano 1 / Celesta / Vibraphone / Marimba / Acoustic Guitar (nylon) / Acoustic Guitar (steel) / Acoustic Bass / Violin / Orchestral Harp / String Ensemble 1 / Choir Aahs / Trumpet / Alto Sax / Flute / Koto
 
+ベース（v1.69〜。🎸 ゴリラベース・シーケンサーのベース）: Acoustic Bass / Electric Bass (finger) / Electric Bass (pick) / Fretless Bass / Slap Bass 1 / Slap Bass 2 / Synth Bass 1 / Synth Bass 2。ベースは C1〜C5 の短3度おき17音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
+
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）
 
 ### ロック: `samples/drums_drs.js`

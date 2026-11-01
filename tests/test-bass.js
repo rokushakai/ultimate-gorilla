@@ -190,8 +190,8 @@ module.exports = function () {
 
   // --- §257: 演奏パターン ---
   var p4 = B.patterns(4), p3 = B.patterns(3);
-  ok(p4.length === 48 && p3.length === 12 && p4.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [8, 12, 16].indexOf(d[2].length) >= 0; }) && p3.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [6, 12].indexOf(d[2].length) >= 0; }) && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
-    "patterns: the sequencer's bass patterns for the meter (4/4: 48, 3/4: 12), all one bar long", [p4.length, p3.length]);
+  ok(p4.length === 60 && p3.length === 14 && p4.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [8, 12, 16].indexOf(d[2].length) >= 0; }) && p3.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [6, 12].indexOf(d[2].length) >= 0; }) && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
+    "patterns: the sequencer's bass patterns for the meter (4/4: 60, 3/4: 14), all one bar long", [p4.length, p3.length]);
   var cC = B.songChord("C", 0), cAm = B.songChord("Am", 0);
   ok(B.tokNote("R", cC, null, 9) === 36 && B.tokNote("5", cC, null, 9) === 43 && B.tokNote("8", cC, null, 9) === 48 && B.tokNote("v", cC, null, 9) === 31 &&
     B.tokNote("A", cC, cAm, 1) === 32 && B.tokNote("A", cC, cAm, 2) === 43 && B.tokNote("A", cC, null, 1) === 43 && B.tokLen("R--RR-5-", 0) === 3 && B.tokLen("R--RR-5-", 6) === 2,
@@ -255,7 +255,7 @@ module.exports = function () {
   gp4.forEach(function (g9) { g9[1].forEach(function (d) { ids4.push(d[0]); }); });
   var uniq = p4.every(function (d, i9) { return p4.map(function (x) { return x[0]; }).indexOf(d[0]) === i9; });
   ok(gp4.length === 6 && gp4[0][0] === "基本" && gp4[5][0] === "分散・そのほか" && gp4[5][1].map(function (d) { return d[0]; }).join() === "arp,arpud,arp7" &&
-    ids4.length === 48 && uniq && gp3.length === 1 && gp3[0][0] === "3拍子" && gp3[0][1].length === 12,
+    ids4.length === 60 && uniq && gp3.length === 1 && gp3[0][0] === "3拍子" && gp3[0][1].length === 14,
     "pattern list by genre: every 4/4 pattern once (unique ids), 3/4 in its own group", gp4.map(function (g9) { return g9[0] + ":" + g9[1].length; }));
   // 一覧からえらぶ（patset）: 鳴らしているパターンが切りかわる。知らない id は無視
   var e14 = H.load({ patch: function (src, file) {
@@ -269,6 +269,14 @@ module.exports = function () {
   });
   ok(JSON.parse(e14.store[B.PREFS_KEY]).pat === "blues" && html14.indexOf('<option value="blues" selected>') > 0 && html14.indexOf('<optgroup label="ラテン・ワールド">') > 0,
     "picking from the genre list sets the pattern (unknown ids are ignored)", html14.length);
+  // --- §261: ベースの音源はぜんぶサンプル（C1〜C5 の17音）---
+  var fs9 = require("fs"), path9 = require("path"), sf9 = env.window.UGMelody.sampleFiles, okv = B.VOICES.length === 8;
+  B.VOICES.forEach(function (v) {
+    var nm = sf9[v[0]], fp = nm && path9.join(H.ROOT, "samples", nm + ".js"), src9 = fp && fs9.existsSync(fp) ? fs9.readFileSync(fp, "utf8") : "";
+    var keys9 = (src9.match(/^  "(\d+)":/gm) || []).map(function (k) { return Number(k.replace(/\D/g, "")); });
+    if (!src9 || keys9.length !== 17 || keys9[0] !== 24 || keys9[16] !== 72 || src9.indexOf("prog: " + v[0] + ",") < 0) { okv = false; }
+  });
+  ok(okv, "all 8 bass voices have sample files (17 notes C1..C5, right program)", B.VOICES.map(function (v) { return sf9[v[0]]; }));
   // シーケンサーの自動のベースへ
   var e9 = H.load(), B9 = e9.window.UGBass, U9 = e9.window.UGUkulele, rs9 = B9.patToSeq(B9.patById(B9.patterns(4), "funk"), 36), b9 = U9.seqLoad().cur.tracks.bass;
   ok(rs9.ok && b9.on && !b9.mute && b9.pattern === "funk" && b9.prog === 36, "the pattern can be set as the sequencer's auto bass (on, unmuted, same voice)", b9);

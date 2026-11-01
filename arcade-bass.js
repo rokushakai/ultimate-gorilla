@@ -21,8 +21,9 @@
   var BASS_VIEWS = [["fret", "&#x1F3B8; フレット"], ["pad", "&#x1F39B;&#xFE0F; パッド"]];
   // §256: 奏法
   var BASS_TECHS = [["normal", "ふつう"], ["slap", "&#x1F44D; スラップ"], ["mute", "&#x1F92B; ミュート"]];
-  // 音色 [GM の番号, 名前]（32 だけサンプル。ほかは合成音）
-  var BASS_VOICES = [[32, "&#x1F3BB; ウッドベース"], [33, "&#x1F3B8; エレキベース（指）"], [34, "&#x1F3B8; ピック"], [36, "&#x1F44D; スラップ"], [38, "&#x1F39B;&#xFE0F; シンセベース"]];
+  // 音色 [GM の番号, 名前]（§261: ぜんぶ本物の楽器のサンプル。読みこむまでは合成音）
+  var BASS_VOICES = [[32, "&#x1F3BB; ウッドベース"], [33, "&#x1F3B8; エレキベース（指）"], [34, "&#x1F3B8; ピック"], [35, "&#x1F3B8; フレットレス"],
+    [36, "&#x1F44D; スラップ"], [37, "&#x1F44D; スラップ2"], [38, "&#x1F39B;&#xFE0F; シンセベース"], [39, "&#x1F39B;&#xFE0F; シンセベース2"]];
 
   // ---------- フレット ----------
   // 弦（上から G・D・A・E）の開放弦の MIDI と名前
@@ -147,11 +148,11 @@
   }
   // §260: 一覧のジャンル（のっていないものは「分散・そのほか」。3拍子は「3拍子」）
   var BASS_PAT_GROUPS = [
-    ["基本", ["root", "root8", "r5", "walk", "octslow", "lowroot", "ballad", "ballad3", "two", "sixteen", "sixteen5"]],
-    ["ロック・ポップス", ["pop", "rock", "rock5", "eighties", "sync", "motown", "soul", "rnr", "metal", "country"]],
-    ["ファンク・ダンス", ["funk", "slapfunk", "rnb", "oct", "house", "techno", "dnb", "hiphop", "gallop"]],
-    ["ジャズ・ブルース・シャッフル", ["walk2", "walkdown", "walkoct", "blues", "boogie", "boogie2", "shuffle", "shufoct", "trip"]],
-    ["ラテン・ワールド", ["bossa", "samba", "tumbao", "reggae", "habanera", "afro"]]
+    ["基本", ["root", "root8", "r5", "r5eight", "walk", "octslow", "lowroot", "ballad", "ballad3", "two", "sixteen", "sixteen5"]],
+    ["ロック・ポップス", ["pop", "rock", "rock5", "punk", "eighties", "citypop", "anime", "sync", "motown", "rnr", "metal", "country", "cwalk"]],
+    ["ファンク・ソウル・ダンス", ["funk", "slapfunk", "soul", "gospel", "neosoul", "rnb", "oct", "house", "techno", "edm", "dnb", "hiphop", "trap", "gallop"]],
+    ["ジャズ・ブルース・シャッフル", ["walk2", "walkdown", "walkoct", "blues", "boogie", "boogie2", "shuffle", "shuf5", "shufoct", "trip"]],
+    ["ラテン・ワールド", ["bossa", "bossa2", "samba", "tumbao", "reggae", "reggaeton", "habanera", "afro"]]
   ];
   // パターンの並び → [[ジャンル, [パターン…]]]（からのジャンルははぶく）
   function bassPatGroups(list) {
