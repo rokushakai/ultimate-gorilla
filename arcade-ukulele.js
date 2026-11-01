@@ -4406,7 +4406,7 @@
     tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, seqPlayEvent: ukeSeqPlayEvent, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
     arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
-    seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick,
+    seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick, BASS_STEPS: UKE_BASS_STEPS, BASS_PATTERNS: UKE_BASS_PATTERNS,
     seqRec: ukeSeqRec, rollLay: ukeRollLay, ROLL_DRUMS: UKE_ROLL_DRUMS, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, detectMore: ukeDetectMore, VIEWS: UKE_VIEWS, PAD_SIZES: UKE_PAD_SIZES, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
     myPatsLoad: ukeMyPatsLoad, myPatsSave: ukeMyPatsSave, myPatPut: ukeMyPatPut, MYPATS_KEY: UKE_MYPATS_KEY,

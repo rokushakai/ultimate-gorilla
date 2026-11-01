@@ -137,6 +137,50 @@ module.exports = function () {
   });
   ok(s7.join() === "thumb,stop,pop,stop,ghost,stop,stop,stop", "playback picks the technique from the velocity and stops each note at its length", s7);
 
+  // --- §257: 演奏パターン ---
+  var p4 = B.patterns(4), p3 = B.patterns(3);
+  ok(p4.length === 20 && p3.length === 6 && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
+    "patterns: the sequencer's bass patterns for the meter (4/4: 20, 3/4: 6)", [p4.length, p3.length]);
+  var cC = B.songChord("C", 0), cAm = B.songChord("Am", 0);
+  ok(B.tokNote("R", cC, null, 9) === 36 && B.tokNote("5", cC, null, 9) === 43 && B.tokNote("8", cC, null, 9) === 48 && B.tokNote("v", cC, null, 9) === 31 &&
+    B.tokNote("A", cC, cAm, 1) === 32 && B.tokNote("A", cC, cAm, 2) === 43 && B.tokNote("A", cC, null, 1) === 43 && B.tokLen("R--RR-5-", 0) === 3 && B.tokLen("R--RR-5-", 6) === 2,
+    "pattern letters → notes (A walks a half step into the next chord in its last beat) and lengths");
+  function prun(prefs, frames, fn, cfg) {
+    var e = H.load(), snd = [];
+    e.store[B.PREFS_KEY] = JSON.stringify(prefs);
+    if (fn.pre) { fn.pre(e); }
+    e.run("bass", { config: cfg || {} }, frames, function (f) {
+      if (f === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === 33) { snd.push(m); } return s0.apply(M, arguments); }; }
+      fn(f, e);
+    });
+    return { snd: snd, e: e };
+  }
+  // 伴奏なし: ルート8分・BPM 120（8分 ＝ 0.25秒）。とちゅうでキー 6（Am）→ 次の音から A
+  var g1 = prun({ pat: "root8", bpm: 120, view: "fret" }, 80, function (f, e) {
+    if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 40) { e.key("keydown", "6"); e.key("keyup", "6"); }
+  });
+  var n36 = g1.snd.filter(function (m) { return m === 36; }).length, n33 = g1.snd.filter(function (m) { return m === 33; }).length;
+  ok(g1.snd.length >= 5 && g1.snd.length <= 7 && n36 >= 2 && n33 >= 2 && g1.snd.indexOf(33) > g1.snd.lastIndexOf(36),
+    "pattern without backing: eighth notes at the BPM on the current chord; changing the chord (key 6 → Am) moves the pattern", g1.snd);
+  // 録音中のパターンの音も録る（録音の頭にそろう）
+  var g2 = prun({ pat: "r5", bpm: 120 }, 330, function (f, e) {
+    if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 10) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (f === 10 + 120 + 105) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tk2 = JSON.parse(g2.e.store[B.TAKES_KEY] || "[]")[0];
+  ok(tk2 && tk2.notes.length === 4 && JSON.stringify(tk2.notes.map(function (n) { return [n[0], n[1], n[2]]; })) === "[[0,1,36],[1,1,43],[2,1,36],[3,1,43]]",
+    "recording while the pattern plays: the pattern restarts with the take and its notes are saved", tk2 && tk2.notes);
+  // 伴奏あり: ポップス（R--RR-5-）が曲のコード（C → Am）について行く。伴奏も頭から
+  function g3fn(f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } }
+  g3fn.pre = function (e) { song(e, [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }]); };
+  var g3 = prun({ pat: "pop", view: "pad" }, 300, g3fn, { backing: "cur" });
+  ok(g3.snd.join() === "36,36,36,43,33,33,33,40", "pattern with backing: starts the song and follows its chords (C → Am) to the end", g3.snd);
+  // シーケンサーの自動のベースへ
+  var e9 = H.load(), B9 = e9.window.UGBass, U9 = e9.window.UGUkulele, rs9 = B9.patToSeq(B9.patById(B9.patterns(4), "funk"), 36), b9 = U9.seqLoad().cur.tracks.bass;
+  ok(rs9.ok && b9.on && !b9.mute && b9.pattern === "funk" && b9.prog === 36, "the pattern can be set as the sequencer's auto bass (on, unmuted, same voice)", b9);
+
   // --- §255: シーケンサーの曲に合わせて弾く ---
   var am = B.songChord("Am", 0), g7s = B.songChord("G7", 0), ce = B.songChord("C/E", 0), bdim = B.songChord("Bdim", 0);
   ok(JSON.stringify(am.notes) === "[33,36,40,43,28,35,41,45]" && JSON.stringify(g7s.notes) === "[31,35,38,41,26,33,40,43]" && B.songChord("★マイ", 0) === null,
