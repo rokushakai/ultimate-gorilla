@@ -157,7 +157,7 @@ module.exports = async function () {
   ok(env.counters.src.length === 65 && env.counters.src.every(function (s) { return Math.abs(12 * Math.log(s.rate) / Math.log(2)) <= 2.0001; }), "sample notes pitch-shift at most 2 semitones in range");
   // §242: オープンハイハットを閉じる（開いていた長さで閉じ方が変わる）
   var fakeBuf = { length: 100, duration: 1 };
-  M.samples.buffers[M.sampleFiles[M.DRUM]] = { 37: { length: 100, duration: 1, id: 37 }, 38: { length: 100, duration: 1, id: 38 }, 49: fakeBuf, 51: fakeBuf, 42: fakeBuf, 44: fakeBuf, 46: fakeBuf };
+  M.samples.buffers[M.sampleFiles[M.DRUM]] = { 37: { length: 100, duration: 1, id: 37 }, 38: { length: 100, duration: 1, id: 38 }, 36: fakeBuf, 49: fakeBuf, 51: fakeBuf, 42: fakeBuf, 44: fakeBuf, 46: fakeBuf };
   function hatTau(hold, setting) {
     M.setHatClose(setting || "auto");
     env.counters.targets.length = 0;
@@ -197,6 +197,10 @@ module.exports = async function () {
   env.counters.src.length = 0; var osc0 = env.counters.osc; M.synth(53, M.DRUM, 15, 1);
   ok(ck250 === 1 && env.counters.src.length === 1 && env.counters.src[0].rate === 1.12 && env.counters.osc - osc0 === 3 && M.gmDrum(26) === 0 && M.gmDrum(53) === 53,
     "a choke stops the cymbals already ringing (not later ones); the ride bell is a brighter ride plus a ping; the choke is not sent to MIDI", [ck250, env.counters.osc - osc0]);
+  // §252: キックをおさえる（25）＝ 鳴っているキックだけ止める（シンバルは止めない）
+  env.counters.targets.length = 0; M.synth(36, M.DRUM, 20, 1); M.synth(49, M.DRUM, 20, 1); M.synth(25, M.DRUM, 20.2, 1);
+  var km252 = env.counters.targets.map(function (x) { return x.tau; });
+  ok(km252.join() === "0.035" && M.gmDrum(25) === 0, "holding the kick mutes only the ringing kick, not the cymbals; not sent to MIDI", km252);
   delete M.samples.buffers[M.sampleFiles[M.DRUM]];
   await new Promise(function (res) { M.loadSamples([4, 8, 11, 24, 25, 32, 40], res); });
   ok(Object.keys(M.samples.buffers).length <= 7, "sample memory is capped (old instruments evicted)", Object.keys(M.samples.buffers).length);

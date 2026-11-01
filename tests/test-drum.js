@@ -167,8 +167,8 @@ module.exports = function () {
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
   ok(jz && jz.some(function (x) { return x[0] === 51 && x[1].length >= 4; }) && jz.some(function (x) { return x[0] === 42; }) && mt && mt[0][1].length === 16 &&
-    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 19,
-    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 19 drum-only loops added");
+    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 20,
+    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 20 drum-only loops added");
   // §242: オープン・クローズのパターン（開けて、すぐペダル 44 で閉じる）
   ok(["d:tsuchi", "d:bark", "d:sizzle"].every(function (id) { var st = D.patternSteps(id); return D.pattern(id).kind === "loop" && st.some(function (x) { return x[0] === 46; }) && st.some(function (x) { return x[0] === 44; }); }) &&
     D.HH_STYLES.map(function (x) { return x[0]; }).join() === "auto,tight,bark,sizzle", "open-close patterns (ツッチー・バーク・シュワッ) open the hi-hat and close it with the pedal");
@@ -366,7 +366,7 @@ module.exports = function () {
   // ピアノロール: ドラム打ち込みトラックは楽器の段
   var sq23 = U23.seqLoad().cur; sq23.tracks.mel.on = false;
   var lay = U23.rollLay(sq23);
-  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1 && lay.row(23) === lay.row(46) && lay.row(21) === lay.row(42) && lay.row(44) === lay.row(42) && lay.row(24) === lay.row(38) && lay.row(22) === lay.row(38) && lay.row(40) === lay.row(38) && lay.row(53) === lay.row(51) && lay.row(26) === -1, "the piano roll shows drum-notes tracks as drum lanes", lay.n);
+  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1 && lay.row(23) === lay.row(46) && lay.row(21) === lay.row(42) && lay.row(44) === lay.row(42) && lay.row(24) === lay.row(38) && lay.row(22) === lay.row(38) && lay.row(40) === lay.row(38) && lay.row(53) === lay.row(51) && lay.row(26) === -1 && lay.row(25) === -1, "the piano roll shows drum-notes tracks as drum lanes", lay.n);
   // 伴奏といっしょにソング: 伴奏も頭から鳴る
   var e24 = hooked(), ok24 = null;
   e24.store[D.PREFS_KEY] = JSON.stringify({ pat: true, songOpen: true });
@@ -552,6 +552,12 @@ module.exports = function () {
     st.forEach(function (r) { if (!D.partOf(r[0])) { bad251.push(id + ":" + r[0]); } });
   });
   ok(bad251.length === 0, "8 new fills: one bar each, built only from kit sounds", bad251);
+  // §252: キックを 0.15秒以上おさえる ＝ 響きを止める（25）。さっと叩けば止めない。パッドの KICK も
+  var kk = kc("kick"), pk252 = padXY(4);
+  var kk1 = ckRun({ kit: true }, [[3, "down", kk], [5, "up", kk], [10, "down", kk], [30, "up", kk]]);
+  var kk2 = ckRun({}, [[3, "down", pk252], [30, "up", pk252]]);
+  ok(kk1 === "36,36,25" && kk2 === "36,25" && D.partOf(25) === "kick" && D.KICK_HOLD === 0.15 && D.takeClean({ notes: [[0, 25, 0.5]] }, 0).notes.length === 1,
+    "kick: a quick tap rings (ドーン), holding it mutes the ring (ドッ, 25) once", [kk1, kk2]);
   ok(D.takeClean({ notes: [[0, 23, 0.8], [1, 21, 0.8], [2, 44, 0.4]] }, 0).notes.map(function (n) { return n[1]; }).join() === "23,21,44", "takes keep half-open / foot splash / pedal notes");
   ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };
