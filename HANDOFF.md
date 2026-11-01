@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.66** |
+| 現在バージョン | **v1.67** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.67] 🎼 ベースのパターンをわかりやすく・追加**（§259）: `drawSteps`（`BASS_STEP_Y`・`patCell()` でいまのマス）・`drawChords`（パッドとフレットで共通）。パターン中はパッドの上の端が `BASS_PAD_Y_PAT`（`bassPadRect(i, n, top)`・`padTop()`）、フレットの画面でもコードの段をタップできる。`bassPatLegend`（パネルの文字の意味）。パターンは `arcade-ukulele.js` の `UKE_BASS_STEPS` に12個追加（シーケンサーと共通）。`pat.lastCh`: 伴奏なしでコードが変わった小節の頭が休みならルート
 - **[v1.66] 🎸 ベースの音がつづく・パッドの編集・16個**（§258）: `melodySynth(m, prog, when, level, dest, hold)`（hold 秒: setTargetAtTime でピークの3割→1割へ、`end - 0.3` で消す。サンプルは `melodySampleNote` の keep でサンプルの長さまで）。ベースは `BASS_HOLD`（8秒）でぜんぶ鳴らし、voiceStop で止める。スライドは押さえた弦の中心から 0.85 段以内なら同じ弦。パッドは `BASS_PAD_DEFS`（16個の [度数, オクターブ, 半音]）・`bassPadNote(ch, pd)`（コードに `r`・`iv` を追加）・`bassPadLabel`・prefs の `pads`・`padN`（8/16）。編集は `ed`（`padEditor()`・action の pdeg/poct/psh/preset/presetall/edit/padn）
 - **[v1.65] 🎼 ベースの演奏パターン**（§257）: `bassPatterns(meter)`（root/root8/r5/walk ＋ `UGUkulele.BASS_STEPS`）・`bassTokNote`（文字 → パッドの8音。A は次のコードへ半音）・`bassTokLen`。弾く画面の `pat`（`patStart(keep)`・`patStep` は 0.1秒先まで AudioContext の時刻で予約・`patTime(b)` は伴奏ありなら `back.s.tm(b)`）。伴奏を止めると（`backStop`）パターンも止まる。録音中は `pat.rec` でパターンの音もテイクへ。`bassPatToSeq` で tracks.bass の pattern/prog/on。prefs に `pat`。**次**: リズムゲーム・よこ向き
 - **[v1.64] 🎸 ベースの奏法**（§256）: `arcade-melody.js` の `melodySynth` がハンドル `{ ac, g, p: [[AudioParam, 元の値]], midi, cur }` を返す（サンプルは playbackRate・合成は発振器の周波数）。`UGMelody.voiceStop(h, t, tau)`・`voiceBend(h, midi, t, glide)`・`bassHit(kind)`（thumb/pop/ghost）。ベース側は `vo`（指 → { h, cur }。ハンマリングでは同じものを共有）・`pstr`（弦）・`holderOn`。prefs に `tech`。奏法は強さで録る（`velOf`/`howOfVel`）。**次**: リズムゲーム・よこ向き
@@ -215,7 +216,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（861項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（865項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

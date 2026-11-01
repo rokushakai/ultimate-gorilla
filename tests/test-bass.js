@@ -190,8 +190,8 @@ module.exports = function () {
 
   // --- §257: 演奏パターン ---
   var p4 = B.patterns(4), p3 = B.patterns(3);
-  ok(p4.length === 20 && p3.length === 6 && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
-    "patterns: the sequencer's bass patterns for the meter (4/4: 20, 3/4: 6)", [p4.length, p3.length]);
+  ok(p4.length === 30 && p3.length === 8 && p4.every(function (d) { return /^[R35678vA-]+$/.test(d[2]) && [8, 12, 16].indexOf(d[2].length) >= 0; }) && p3.every(function (d) { return d[2].length === 6; }) && B.patById(p4, "pop")[2] === "R--RR-5-" && B.patById(p4, "waltz")[0] === "pop" && B.patById(p3, "waltz")[2] === "R-5-5-" && B.patById(p4, "walk")[2] === "R-3-5-A-",
+    "patterns: the sequencer's bass patterns for the meter (4/4: 30, 3/4: 8), all one bar long", [p4.length, p3.length]);
   var cC = B.songChord("C", 0), cAm = B.songChord("Am", 0);
   ok(B.tokNote("R", cC, null, 9) === 36 && B.tokNote("5", cC, null, 9) === 43 && B.tokNote("8", cC, null, 9) === 48 && B.tokNote("v", cC, null, 9) === 31 &&
     B.tokNote("A", cC, cAm, 1) === 32 && B.tokNote("A", cC, cAm, 2) === 43 && B.tokNote("A", cC, null, 1) === 43 && B.tokLen("R--RR-5-", 0) === 3 && B.tokLen("R--RR-5-", 6) === 2,
@@ -228,6 +228,28 @@ module.exports = function () {
   g3fn.pre = function (e) { song(e, [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }]); };
   var g3 = prun({ pat: "pop", view: "pad" }, 300, g3fn, { backing: "cur" });
   ok(g3.snd.join() === "36,36,36,43,33,33,33,40", "pattern with backing: starts the song and follows its chords (C → Am) to the end", g3.snd);
+  // --- §259: わかりやすく・パターン追加 ---
+  ok(B.patLegend("R--RR-5-") === "R ルート・5 5度・－ のばす" && B.patLegend("R-5-A-").indexOf("→ 次のコードへ半音") > 0 && B.patLegend("R-v-R-v-").indexOf("5↓ 下の5度") > 0 &&
+    U.seqClean({ tracks: { bass: { pattern: "blues" } } }).tracks.bass.pattern === "blues" && U.seqClean({ tracks: { bass: { pattern: "waltzwalk" } } }).tracks.bass.pattern === "waltzwalk",
+    "pattern legend for the panel; the new patterns are sequencer auto-bass patterns too");
+  // 休みではじまるパターン（ハウス -R-R-R-R）も、はじめのコードの頭はルート
+  var g4 = prun({ pat: "house", bpm: 120, view: "fret" }, 60, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  ok(g4.snd.length >= 3 && g4.snd[0] === 36, "a pattern that starts with a rest still plays the root at the top of a new chord", g4.snd);
+  // フレットの画面: パターン中は上にコードの段（タップで Am）とマスの段（v は 5↓）
+  var cAm9 = at(B.chordRect(5));
+  var g5 = prun({ pat: "country", bpm: 120, view: "fret" }, 90, function (f, e) {
+    if (f === 2) { e.ptr("down", cAm9[0], cAm9[1], 1); e.ptr("up", cAm9[0], cAm9[1], 1); e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 40) { e.ptr("down", cAm9[0], cAm9[1], 1); e.ptr("up", cAm9[0], cAm9[1], 1); }
+  });
+  ok(g5.snd[0] === 36 && g5.snd.indexOf(33) > 0 && g5.snd.indexOf(33) > g5.snd.lastIndexOf(36) && g5.e.counters.texts.indexOf("5↓") >= 0,
+    "fret view: the chord strip appears while a pattern plays (tap Am → the pattern follows) with the pattern's cells", g5.snd);
+  // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
+  var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
+  var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
+    if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 20) { e.ptr("down", pp5[0], pp5[1], 1); e.ptr("up", pp5[0], pp5[1], 1); }
+  });
+  ok(g6.snd.join() === "36,43", "pad view: the pads move down under the pattern cells while a pattern plays", g6.snd);
   // シーケンサーの自動のベースへ
   var e9 = H.load(), B9 = e9.window.UGBass, U9 = e9.window.UGUkulele, rs9 = B9.patToSeq(B9.patById(B9.patterns(4), "funk"), 36), b9 = U9.seqLoad().cur.tracks.bass;
   ok(rs9.ok && b9.on && !b9.mute && b9.pattern === "funk" && b9.prog === 36, "the pattern can be set as the sequencer's auto bass (on, unmuted, same voice)", b9);
