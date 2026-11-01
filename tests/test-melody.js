@@ -171,6 +171,12 @@ module.exports = async function () {
   ok(M.hatClose() === "auto" && M.hatStyle(0.3, "auto") === "bark" && M.hatStyle(0.3, "sizzle") === "sizzle" && M.hatCloses.length === 4, "hat close styles: unknown falls back to auto");
   env.counters.targets.length = 0; M.synth(42, M.DRUM, 6, 1);
   ok(env.counters.targets.length === 0, "a closed hi-hat with nothing open chokes nothing");
+  // §246: ハーフオープン（23）・フットスプラッシュ（21）もオープンとして閉じられる。21 はペダルの音もいっしょ
+  env.counters.src.length = 0;
+  ok(hatTau(0.25) === 0.03 && (function () { env.counters.targets.length = 0; M.setHatClose("auto"); M.synth(23, M.DRUM, 7, 1); M.synth(44, M.DRUM, 7.3, 1); return env.counters.targets.some(function (x) { return x.tau === 0.03; }); })() &&
+    (function () { env.counters.src.length = 0; env.counters.targets.length = 0; M.synth(21, M.DRUM, 8, 1); M.synth(42, M.DRUM, 8.6, 1); return env.counters.src.length === 3 && env.counters.targets.some(function (x) { return x.tau === 0.07; }); })(),
+    "half-open (23) and foot splash (21) ring like an open hi-hat and are closed by the pedal / closed hi-hat; a splash also plays the pedal chick");
+  ok(M.gmDrum(23) === 46 && M.gmDrum(21) === 44 && M.gmDrum(38) === 38, "half-open / foot splash export as GM 46 / 44");
   delete M.samples.buffers[M.sampleFiles[M.DRUM]];
   await new Promise(function (res) { M.loadSamples([4, 8, 11, 24, 25, 32, 40], res); });
   ok(Object.keys(M.samples.buffers).length <= 7, "sample memory is capped (old instruments evicted)", Object.keys(M.samples.buffers).length);

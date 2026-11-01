@@ -167,8 +167,8 @@ module.exports = function () {
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
   ok(jz && jz.some(function (x) { return x[0] === 51 && x[1].length >= 4; }) && jz.some(function (x) { return x[0] === 42; }) && mt && mt[0][1].length === 16 &&
-    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 14,
-    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 14 drum-only loops added");
+    D.patternList().filter(function (pt) { return pt.group === "ドラムのリズム"; }).length === 16,
+    "groove patterns keep the ride and toms (pedal hi-hat becomes hi-hat); 16 drum-only loops added");
   // §242: オープン・クローズのパターン（開けて、すぐペダル 44 で閉じる）
   ok(["d:tsuchi", "d:bark", "d:sizzle"].every(function (id) { var st = D.patternSteps(id); return D.pattern(id).kind === "loop" && st.some(function (x) { return x[0] === 46; }) && st.some(function (x) { return x[0] === 44; }); }) &&
     D.HH_STYLES.map(function (x) { return x[0]; }).join() === "auto,tight,bark,sizzle", "open-close patterns (ツッチー・バーク・シュワッ) open the hi-hat and close it with the pedal");
@@ -366,7 +366,7 @@ module.exports = function () {
   // ピアノロール: ドラム打ち込みトラックは楽器の段
   var sq23 = U23.seqLoad().cur; sq23.tracks.mel.on = false;
   var lay = U23.rollLay(sq23);
-  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1, "the piano roll shows drum-notes tracks as drum lanes", lay.n);
+  ok(lay.drum && lay.n === 11 && lay.midi(0) === 36 && lay.row(38) === 1 && lay.label(0) === "キック" && lay.midi(11) === -1 && lay.row(23) === lay.row(46) && lay.row(21) === lay.row(42) && lay.row(44) === lay.row(42), "the piano roll shows drum-notes tracks as drum lanes", lay.n);
   // 伴奏といっしょにソング: 伴奏も頭から鳴る
   var e24 = hooked(), ok24 = null;
   e24.store[D.PREFS_KEY] = JSON.stringify({ pat: true, songOpen: true });
@@ -483,5 +483,33 @@ module.exports = function () {
     if (f === 10) { e28.ptr("up", pc[0], pc[1] * 320 / D.H, 5); }
     if (f === 15) { e28.ptr("down", hh[0], hh[1] * 320 / D.H, 6); e28.ptr("up", hh[0], hh[1] * 320 / D.H, 6); }
   });
+  // §246: ペダルをすぐはなす ＝ フットスプラッシュ（21）・½ を押して叩く ＝ ハーフオープン（23）→ はなすと閉じる
+  var e29 = hooked(), snd29 = [], hz = [kbp.x + 16 * kbp.sx, kbp.y + 77 * kbp.sy];
+  e29.store[D.PREFS_KEY] = JSON.stringify({ kit: true });
+  e29.run("drum", { config: { mode: "free" } }, 40, function (f) {
+    if (f === 1) { var U = e29.window.UGMelody, s0 = U.synth; U.synth = function (m) { snd29.push(m); return s0.apply(U, arguments); }; }
+    var hh = kc("hh");
+    if (f === 3) { e29.ptr("down", pc[0], pc[1] * 320 / D.H, 5); }
+    if (f === 6) { e29.ptr("up", pc[0], pc[1] * 320 / D.H, 5); }
+    if (f === 15) { e29.ptr("down", hz[0], hz[1] * 320 / D.H, 7); }
+    if (f === 18) { e29.ptr("down", hh[0], hh[1] * 320 / D.H, 6); e29.ptr("up", hh[0], hh[1] * 320 / D.H, 6); }
+    if (f === 25) { e29.ptr("up", hz[0], hz[1] * 320 / D.H, 7); }
+  });
+  ok(D.kitHalf(hz[0], hz[1], kbp) && !D.kitPedal(hz[0], hz[1], kbp) && !D.kitHalf(kc("snare")[0], kc("snare")[1], kbp) && snd29.join() === "21,23,44",
+    "kit: a quick tap on the pedal is a foot splash (21); holding ½ and hitting the hi-hat is half-open (23), letting go closes it", snd29);
+  // パッドの OH の音（ハーフ）・v1.50 のパターンのペダル（44）がちゃんと鳴る
+  var e30 = hooked(), snd30 = [];
+  e30.store[D.PREFS_KEY] = JSON.stringify({ ohSound: 23, hhHold: false, pat: true, bpm: 120 });
+  e30.store[D.PATPADS_KEY] = JSON.stringify(["d:tsuchi"]);
+  e30.run("drum", { config: { mode: "free" } }, 80, function (f) {
+    var h = e30.window.__drum; if (!h) { return; }
+    if (f === 1) { var U = e30.window.UGMelody, s0 = U.synth; U.synth = function (m) { snd30.push(m); return s0.apply(U, arguments); }; }
+    var c = padXY(1);
+    if (f === 3) { e30.ptr("down", c[0], c[1], 4); e30.ptr("up", c[0], c[1], 4); }
+    if (f === 5) { h().patTap(0); }
+  });
+  ok(snd30[0] === 23 && snd30.indexOf(44) > 0 && snd30.indexOf(46) > 0 && D.flashOf(23) === 46 && D.flashOf(44) === 42 && D.OH_SOUNDS.length === 3,
+    "the OH pad can play half-open; pattern pedal hi-hats (44) sound (they were skipped before)", snd30.slice(0, 12));
+  ok(D.takeClean({ notes: [[0, 23, 0.8], [1, 21, 0.8], [2, 44, 0.4]] }, 0).notes.map(function (n) { return n[1]; }).join() === "23,21,44", "takes keep half-open / foot splash / pedal notes");
   ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };

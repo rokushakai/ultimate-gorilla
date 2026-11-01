@@ -1417,8 +1417,9 @@
       if (seq.rev >= 0) { ev2.push([0, 1, [0xB0 | ch, 91, UKE_REV_CC[seq.rev]]]); }
       for (k = 0; k < notes.length; k++) {
         var on = tick(notes[k].t), off = Math.max(on + 1, tick(notes[k].t + Math.max(0.03, notes[k].d)));
-        ev2.push([on, 3, [0x90 | ch, notes[k].m, notes[k].v]]);
-        ev2.push([off, 2, [0x80 | ch, notes[k].m, 0]]);
+        var nm2 = xdrum && window.UGMelody && window.UGMelody.gmDrum ? window.UGMelody.gmDrum(notes[k].m) : notes[k].m; // §246: ハーフオープンなど → GM の番号
+        ev2.push([on, 3, [0x90 | ch, nm2, notes[k].v]]);
+        ev2.push([off, 2, [0x80 | ch, nm2, 0]]);
       }
       mtrks.push(ukeMtrk(ev2));
     }
@@ -1956,7 +1957,7 @@
       var n = UKE_ROLL_DRUMS.length;
       return { drum: true, n: n, rh: H / n, lw: 46,
         midi: function (i) { return i >= 0 && i < n ? UKE_ROLL_DRUMS[i][0] : -1; },
-        row: function (m) { for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; },
+        row: function (m) { var M = window.UGMelody; if (M && M.gmDrum) { m = M.gmDrum(m); } if (m === 44) { m = 42; } for (var i = 0; i < n; i++) { if (UKE_ROLL_DRUMS[i][0] === m) { return i; } } return -1; }, // §246: ハーフオープンはオープンの段に
         label: function (i) { return UKE_ROLL_DRUMS[i][1]; }, hi: function () { return false; } };
     }
     return { drum: false, n: UKE_ROLL_ROWS, rh: UKE_ROLL_RH, lw: 26,
@@ -2189,7 +2190,7 @@
         for (i = 0; i < gb.notes.length; i++) {
           var o = gb.orig[i];
           if (gb.len) { gb.notes[i][1] = Math.max(Math.min(g, 0.25), Math.min(32, o[1] + db)); }
-          else { gb.notes[i][0] = Math.max(0, o[0] + db); gb.notes[i][2] = L.drum ? (L.row(o[2]) >= 0 ? L.midi(Math.max(0, Math.min(L.n - 1, L.row(o[2]) + dm))) : o[2]) : Math.max(0, Math.min(127, o[2] + dm)); }
+          else { gb.notes[i][0] = Math.max(0, o[0] + db); gb.notes[i][2] = L.drum ? (dm !== 0 && L.row(o[2]) >= 0 ? L.midi(Math.max(0, Math.min(L.n - 1, L.row(o[2]) + dm))) : o[2]) : Math.max(0, Math.min(127, o[2] + dm)); }
         }
         if (!gb.len && gb.notes[0][2] !== gb.lastM) { gb.lastM = gb.notes[0][2]; sound(gb.lastM, gb.prog, 0.5); }
         if (gb.keepSel) { ukeRoll.sel = gb.notes.map(ukeNoteKey); }

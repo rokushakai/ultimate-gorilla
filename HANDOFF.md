@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.53** |
+| 現在バージョン | **v1.54** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.54] 🦶 ハーフオープン・フットスプラッシュ**（§246）: ゴリラドラムだけの番号 23（ハーフ）・21（スプラッシュ）。音は `melodyDrumSample` の中（46 のサンプルの形を変える）。`UGMelody.gmDrum` で GM へ。ドラム側は `DRUM_HH_EXTRA`・`drumPadAny`（パッドのない音も鳴らして録る）・`DRUM_KIT_HALF`・prefs `ohSound`
 - **[v1.53] 👆 タップテンポのはじめは「すぐ」**（§245）: prefs は `tapMode`（はじめ `now`）。古い `tapFollow` は読まない。プロデューサーがしばらくためして、必要ならまた直す
 - **[v1.52] 👆 追従を強める**（§244）: `DRUM_TAP_FOLLOWS` の数字だけ（ふつう 3・20）。`drumTapBpm` は最近3つ
 - **[v1.51] 👆 タップテンポの追従**（§243）: `drumTapBpm`（目標）・`drumTapGlide`（毎フレーム近づける）・`DRUM_TAP_FOLLOWS`・prefs `tapFollow`。近づいているあいだ `bpm` は小数（表示は `Math.round`）、`tapTarget` が目標。着いたら整数にして保存
@@ -202,7 +203,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（808項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（813項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

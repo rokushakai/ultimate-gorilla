@@ -704,7 +704,7 @@
     var lv = (level > 0 && level < 1) ? level : 1;
     if (melodyMidi.out) {
       var drum = prog === MELODY_DRUM;
-      var ch = drum ? 9 : v.ch, note = drum ? clamp(midi, 35, 81) : clamp(midi, 0, 127);
+      var ch = drum ? 9 : v.ch, note = drum ? clamp(melodyGmDrum(midi), 35, 81) : clamp(midi, 0, 127);
       var ts = whenPerf || perfNow();
       melodyMidiSend([0x90 | ch, note, Math.max(40, Math.round(100 * lv))], ts);
       melodyMidiSend([0x80 | ch, note, 0], ts + v.dur);
@@ -861,7 +861,7 @@
     var ev = [], i;
     for (i = 0; i < rec.notes.length; i++) {
       var nt = rec.notes[i], v = melodyVoice(nt[2]), prog = melodyProgOf(rec.prog, nt[2]);
-      var drum = prog === MELODY_DRUM, c = drum ? 9 : v.ch, m = drum ? clamp(nt[1], 35, 81) : clamp(nt[1], 0, 127);
+      var drum = prog === MELODY_DRUM, c = drum ? 9 : v.ch, m = drum ? clamp(melodyGmDrum(nt[1]), 35, 81) : clamp(nt[1], 0, 127);
       ev.push([Math.round(nt[0] / MS_PER_TICK), 1, [0x90 | c, m, Math.max(40, Math.round(96 * (nt[3] || 1)))]]);
       ev.push([Math.round((nt[0] + v.dur) / MS_PER_TICK), 0, [0x80 | c, m, 0]]);
     }
@@ -1530,13 +1530,18 @@
     60: ["skin", 420], 61: ["skin", 300], 62: ["skin", 260, 0.08], 63: ["skin", 240], 64: ["skin", 180],
     65: ["skin", 520, 0.4], 66: ["skin", 380, 0.4], 67: ["bell", 920], 68: ["bell", 680], 69: ["shaker", 0.08], 70: ["shaker", 0.05],
     71: ["whistle", 0.12], 72: ["whistle", 0.45], 73: ["guiro", 0.12], 74: ["guiro", 0.4], 75: ["wood", 2500],
-    76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2]
+    76: ["wood", 1000], 77: ["wood", 760], 78: ["cuica", 0.15], 79: ["cuica", 0.35], 80: ["tri", 0.15], 81: ["tri", 1.2],
+    21: ["hat", 0.22], 23: ["hat", 0.3] // §246: フットスプラッシュ・ハーフオープン（ゴリラドラムだけの番号）
   };
+  // §246 v1.54: ゴリラドラムだけの番号 → GM の番号（MIDI に書き出す・MIDI 機器へ送るとき）
+  var MELODY_GM_DRUM = { 21: 44, 23: 46 };
+  function melodyGmDrum(m) { return MELODY_GM_DRUM[m] || m; }
   // dest（省略可・§177 v0.96）: 出口の GainNode。指定すると level の GainNode をそこへつなぐ
   // §229 v1.37: 生ドラムのサンプル。[使う音, 再生の速さ（高さ）]。ないものは合成音
   var MELODY_DRUM_MAP = {
     35: [36, 0.94], 36: [36, 1], 37: [37, 1], 38: [38, 1], 40: [38, 1.06], 42: [42, 1], 44: [42, 0.94], 46: [46, 1],
-    41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12]
+    41: [43, 0.9], 43: [43, 1], 45: [48, 0.86], 47: [48, 0.93], 48: [48, 1], 50: [48, 1.08], 49: [49, 1], 57: [49, 1.06], 51: [51, 1], 59: [51, 1.05], 52: [49, 0.9], 55: [49, 1.12],
+    21: [46, 1], 23: [46, 1] // §246: オープンの音を形を変えて鳴らす
   };
   // §230 v1.38: ドラムセット [id, ファイル, 名前]。はじめはロック
   // §236 v1.44: ビンテージ・ブラシ・ルーム（Karoryfer・CC0）を追加
@@ -1646,10 +1651,10 @@
     sh = MELODY_HAT_SHAPES[st];
     d = sh[2];
     try {
-      var g = oh.g.gain, now = Math.max(t, ac.currentTime);
+      var g = oh.g.gain, now = Math.max(t, ac.currentTime), v0 = oh.env ? oh.env(now) : 1.4;
       g.cancelScheduledValues(now);
-      g.setValueAtTime(1.4, now);
-      if (d > 0) { g.linearRampToValueAtTime(1.4 * sh[1], now + d); }
+      g.setValueAtTime(v0, now);
+      if (d > 0) { g.linearRampToValueAtTime(v0 * sh[1], now + d); }
       g.setTargetAtTime(0.0001, now + d, sh[0]);
       if (oh.f) { oh.f.frequency.cancelScheduledValues(now); oh.f.frequency.setValueAtTime(30, now); oh.f.frequency.exponentialRampToValueAtTime(sh[3], now + d + sh[0] * 2); }
       oh.src.stop(now + d + sh[0] * 8 + 0.05);
@@ -1664,11 +1669,33 @@
     src.playbackRate.value = mp[1] * (m === 35 || m === 36 ? melodySamples.kickRate : 1); // §230: キックを太く
     g.gain.value = 1.4;
     var hf = null;
-    if (m === 46 && ac.createBiquadFilter) { hf = ac.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = 30; src.connect(hf); hf.connect(g); } // 閉じるときにしぼる
+    var open = m === 46 || m === 23 || m === 21, env = null, t0 = t;
+    if (open && ac.createBiquadFilter) { hf = ac.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = 30; src.connect(hf); hf.connect(g); } // 閉じるときにしぼる
     else { src.connect(g); }
-    g.connect(dest ? (function () { var o = ac.createGain(); o.gain.value = (level > 0 && level < 1) ? level : 1; o.connect(dest); return o; })() : melodyLevelOut(ac, level));
+    // §246: ハーフオープン（23）＝ 少し閉じたまま叩く「ジャッ」。低い音をけずって、早めに消え、こすれてふるえる
+    if (m === 23) {
+      hf.frequency.value = 900;
+      g.gain.setValueAtTime(1.3, t);
+      g.gain.setTargetAtTime(0.0001, t + 0.03, 0.13);
+      env = function (x) { return x <= t0 + 0.03 ? 1.3 : 1.3 * Math.exp(-(x - t0 - 0.03) / 0.13); };
+      try {
+        var lfo = ac.createOscillator(), dep = ac.createGain(), rat = ac.createGain();
+        lfo.type = "triangle"; lfo.frequency.value = 31; dep.gain.value = 0.35; rat.gain.value = 0.8;
+        lfo.connect(dep); dep.connect(rat.gain); g.disconnect(); g.connect(rat); g = { gain: g.gain, out: rat };
+        lfo.start(t); lfo.stop(t + 1.2);
+      } catch (e2) {}
+    }
+    // §246: フットスプラッシュ（21）＝ ペダルを踏んですぐはなす「チャッ」。ペダルの音のすぐあとに、短くひらく
+    if (m === 21) {
+      melodyDrumSample(ac, 44, t, (level > 0 && level < 1 ? level : 1) * 0.7, dest);
+      t0 = t = t + 0.012;
+      g.gain.setValueAtTime(1.0, t);
+      g.gain.setTargetAtTime(0.0001, t + 0.02, 0.11);
+      env = function (x) { return x <= t0 + 0.02 ? 1.0 : Math.exp(-(x - t0 - 0.02) / 0.11); };
+    }
+    (g.out || g).connect(dest ? (function () { var o = ac.createGain(); o.gain.value = (level > 0 && level < 1) ? level : 1; o.connect(dest); return o; })() : melodyLevelOut(ac, level));
     if ((m === 42 || m === 44) && melodyOpenHat) { g.gain.value = 1.4 * melodyHatChoke(ac, t, m); }
-    if (m === 46) { if (melodyOpenHat) { melodyHatChoke(ac, t, 42); } melodyOpenHat = { src: src, g: g, f: hf, t: t, ac: ac }; }
+    if (open) { if (melodyOpenHat) { melodyHatChoke(ac, t, 42); } melodyOpenHat = { src: src, g: g, f: hf, t: t, ac: ac, env: env }; }
     src.start(t);
     return true;
   }
@@ -2116,7 +2143,7 @@
     synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
-    hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
+    gmDrum: melodyGmDrum, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
