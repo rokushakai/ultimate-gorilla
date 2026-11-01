@@ -46,7 +46,13 @@ module.exports = function () {
     var e = H.load(), snd = [];
     e.store[B.PREFS_KEY] = JSON.stringify(prefs);
     e.run("bass", { config: {} }, frames, function (f) {
-      if (f === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, p) { if (p !== M.DRUM) { snd.push(m + "@" + p); } return s0.apply(M, arguments); }; }
+      if (f === 1) {
+        var M = e.window.UGMelody, s0 = M.synth, b0 = M.voiceBend, v0 = M.voiceStop, h0 = M.bassHit;
+        M.synth = function (m, p) { if (p !== M.DRUM) { snd.push(m + "@" + p); } return s0.apply(M, arguments); };
+        M.voiceBend = function (h, m) { snd.push("bend" + m); return b0.apply(M, arguments); };
+        M.voiceStop = function () { snd.push("stop"); return v0.apply(M, arguments); };
+        M.bassHit = function (k) { snd.push(k); return h0.apply(M, arguments); };
+      }
       fn(f, e);
     });
     return { snd: snd, e: e };
@@ -59,7 +65,7 @@ module.exports = function () {
     if (f === 7) { e.ptr("up", a3[0], a3[1], 1); }
     if (f === 9) { e.ptr("down", a0[0], a0[1], 2); e.ptr("up", a0[0], a0[1], 2); }
   });
-  ok(f1.snd.join() === "44@34,46@34,28@34", "fretboard: tap plays the cell, sliding to another fret plays that note, in the chosen voice", f1.snd);
+  ok(f1.snd.join() === "44@34,bend46,stop,28@34,stop", "fretboard: tap plays the cell in the chosen voice; sliding on the same string bends it (no new note); letting go stops it", f1.snd);
   // パッド: コード Dm にして、5 のパッド
   var cDm = at(B.chordRect(1)), p5 = at(B.padRect(2));
   var f2 = run({ view: "pad" }, 20, function (f, e) {
@@ -67,7 +73,7 @@ module.exports = function () {
     if (f === 5) { e.ptr("down", p5[0], p5[1], 1); e.ptr("up", p5[0], p5[1], 1); }
     if (f === 7) { e.key("keydown", "1"); e.key("keyup", "1"); e.key("keydown", "q"); e.key("keyup", "q"); }
   });
-  ok(f2.snd.join() === "45@33,36@33", "pads: pick Dm on the chord strip, then the 5 pad plays A; keys 1 / Q pick C and play its root", f2.snd);
+  ok(f2.snd.filter(function (x) { return x.indexOf("@") > 0; }).join() === "45@33,36@33", "pads: pick Dm on the chord strip, then the 5 pad plays A; keys 1 / Q pick C and play its root", f2.snd);
   // 録音: Z → カウント4拍（BPM 120 で 2秒）のあと1音 → Z で保存
   var f3 = run({ bpm: 120 }, 260, function (f, e) {
     if (f === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
@@ -76,8 +82,60 @@ module.exports = function () {
     if (f === 200) { e.key("keydown", "z"); e.key("keyup", "z"); }
   });
   var tk = JSON.parse(f3.e.store[B.TAKES_KEY] || "[]");
-  ok(tk.length === 1 && tk[0].notes.length === 1 && tk[0].notes[0][2] === 44 && Math.abs(tk[0].notes[0][0] - 0.93) < 0.05 && Math.abs(tk[0].notes[0][1] - 1) < 0.05 && tk[0].bpm === 120,
+  ok(tk.length === 1 && tk[0].notes.length === 1 && tk[0].notes[0].length === 3 && tk[0].notes[0][2] === 44 && Math.abs(tk[0].notes[0][0] - 0.93) < 0.05 && Math.abs(tk[0].notes[0][1] - 1) < 0.05 && tk[0].bpm === 120,
     "recording: after a 4-beat count, a held note is saved with its beat and length", tk[0] && tk[0].notes);
+
+  // --- §256: 奏法 ---
+  var e8 = H.load(), M8 = e8.window.UGMelody;
+  M8.audioInit();
+  var h8 = M8.synth(40, 33, 0, 0.8);
+  e8.counters.targets.length = 0;
+  M8.voiceBend(h8, 42, 0, 0.07);
+  M8.voiceStop(h8, 0, 0.06);
+  var tg8 = e8.counters.targets;
+  ok(h8 && h8.p.length > 0 && h8.cur === 42 && M8.synth(36, M8.DRUM, 0, 0.8) === undefined &&
+    tg8.filter(function (x) { return x.name === "frequency" && Math.abs(x.v / h8.p[0][1] - Math.pow(2, 2 / 12)) < 1e-6; }).length === h8.p.length &&
+    tg8.filter(function (x) { return x.name === "gain" && x.v < 0.001 && x.tau === 0.06; }).length === 1 && !e8.counters.errors.length,
+    "engine: synth returns a handle; voiceBend glides the pitch, voiceStop fades it out", [tg8, e8.counters.errors]);
+  // ハンマリング・プリング: G 弦 1 フレットを押さえたまま 3 フレットをタップ → 鳴らしなおさず 46 へ、はなすと 44 にもどる。両方はなすと止まる
+  var a2 = at(B.cellRect(0, 3)), b1 = at(B.cellRect(1, 3));
+  var f4 = run({ prog: 33 }, 20, function (f, e) {
+    if (f === 3) { e.ptr("down", a1[0], a1[1], 1); }
+    if (f === 5) { e.ptr("down", a2[0], a2[1], 2); }
+    if (f === 7) { e.ptr("up", a2[0], a2[1], 2); }
+    if (f === 9) { e.ptr("up", a1[0], a1[1], 1); }
+    if (f === 11) { e.ptr("down", a1[0], a1[1], 1); e.ptr("down", b1[0], b1[1], 2); e.ptr("up", b1[0], b1[1], 2); e.ptr("up", a1[0], a1[1], 1); }
+  });
+  ok(f4.snd.join() === "44@33,bend46,bend44,stop,44@33,41@33,stop,stop", "hammer-on bends up on the same string, pull-off goes back, a different string plays its own note", f4.snd);
+  // スラップ: E・A 弦は親指、D・G 弦はプル。ミュート: 「ブッ」ですぐ止まる。録音の強さ（スラップ 1・ミュート 0.35）
+  var aE = at(B.cellRect(3, 2)), aG = at(B.cellRect(0, 2));
+  var f5 = run({ tech: "slap" }, 20, function (f, e) {
+    if (f === 3) { e.ptr("down", aE[0], aE[1], 1); e.ptr("up", aE[0], aE[1], 1); e.ptr("down", aG[0], aG[1], 1); e.ptr("up", aG[0], aG[1], 1); }
+    if (f === 5) { e.key("keydown", "t"); e.key("keyup", "t"); e.ptr("down", aE[0], aE[1], 1); e.ptr("up", aE[0], aE[1], 1); }
+  });
+  ok(f5.snd.join() === "30@33,thumb,stop,45@33,pop,stop,30@33,ghost,stop,stop" && JSON.parse(f5.e.store[B.PREFS_KEY]).tech === "mute",
+    "slap: thumb on the E/A strings, pop on D/G; T switches to mute, a short ghost note", f5.snd);
+  var f6 = run({ tech: "slap", bpm: 120 }, 200, function (f, e) {
+    if (f === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (f === 150) { e.ptr("down", aE[0], aE[1], 1); }
+    if (f === 160) { e.ptr("up", aE[0], aE[1], 1); e.key("keydown", "t"); e.key("keyup", "t"); e.ptr("down", aE[0], aE[1], 1); }
+    if (f === 170) { e.ptr("up", aE[0], aE[1], 1); }
+    if (f === 180) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tk6 = JSON.parse(f6.e.store[B.TAKES_KEY] || "[]")[0];
+  ok(tk6 && tk6.notes.length === 2 && tk6.notes[0][3] === 1 && tk6.notes[1][3] === 0.35, "recording keeps the technique as the velocity (slap 1, mute 0.35)", tk6 && tk6.notes);
+  // 再生: 強さで奏法の音を選び、録った長さで止める
+  var e7 = H.load(), s7 = [];
+  e7.store[B.TAKES_KEY] = JSON.stringify([{ id: 1, name: "t", bpm: 120, prog: 33, notes: [[0, 0.5, 30, 1], [1, 0.5, 45, 1], [2, 0.5, 33, 0.35], [3, 0.5, 40]] }]);
+  e7.run("bass", { config: { take: 1 } }, 160, function (f) {
+    if (f === 1) {
+      var M = e7.window.UGMelody, h0 = M.bassHit, v0 = M.voiceStop;
+      M.bassHit = function (k) { s7.push(k); return h0.apply(M, arguments); };
+      M.voiceStop = function () { s7.push("stop"); return v0.apply(M, arguments); };
+    }
+    if (f === 2) { e7.key("keydown", "x"); e7.key("keyup", "x"); }
+  });
+  ok(s7.join() === "thumb,stop,pop,stop,ghost,stop,stop,stop", "playback picks the technique from the velocity and stops each note at its length", s7);
 
   // --- §255: シーケンサーの曲に合わせて弾く ---
   var am = B.songChord("Am", 0), g7s = B.songChord("G7", 0), ce = B.songChord("C/E", 0), bdim = B.songChord("Bdim", 0);

@@ -333,8 +333,9 @@
     if (!ac) { return; }
     var t = (when && when > ac.currentTime) ? when : ac.currentTime;
     if (prog === MELODY_DRUM) { melodyDrum(ac, midi, t, level, dest); return; } // §237: dest（シーケンサーのトラックの音量）も通す
-    if (melodySampleNote(ac, midi, prog, t, level, dest)) { return; }
-    var r = melodyRecipe(prog);
+    var sh = melodySampleNote(ac, midi, prog, t, level, dest);
+    if (sh) { return sh; }
+    var r = melodyRecipe(prog), pitches = [];
     var f = 440 * Math.pow(2, (midi - 69) / 12);
     var end = t + r.dur, i;
     // エンベロープ
@@ -406,6 +407,7 @@
       var spec = r.osc[i], o = ac.createOscillator(), g = ac.createGain();
       o.type = spec[0];
       o.frequency.setValueAtTime(f * spec[1], t);
+      pitches.push([o.frequency, f * spec[1]]);
       if (r.glide) { o.frequency.exponentialRampToValueAtTime(f * spec[1] * r.glide, end); }
       if (spec[3] && o.detune) { o.detune.value = spec[3]; }
       if (lfoGain) { lfoGain.connect(o.frequency); }
@@ -435,6 +437,66 @@
       cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.015);
       cg.connect(env);
       melodyNoise(ac, t, 0.02, 1, cg, "highpass", 2000);
+    }
+    return { ac: ac, g: env, p: pitches, midi: midi, cur: midi };
+  }
+
+  // §256: 鳴らした音（melodySynth のハンドル）を止める・高さを変える（ベースの奏法）
+  function melodyVoiceStop(h, t, tau) {
+    if (!h || !h.g || !h.ac) { return; }
+    var now = Math.max(t || 0, h.ac.currentTime), gp = h.g.gain;
+    try {
+      if (gp.cancelAndHoldAtTime) { gp.cancelAndHoldAtTime(now); } else { gp.cancelScheduledValues(now); gp.setValueAtTime(gp.value, now); }
+      gp.setTargetAtTime(0.0001, now, tau || 0.06);
+    } catch (e) {}
+  }
+  function melodyVoiceBend(h, midi, t, glide) {
+    if (!h || !h.p || !h.ac) { return; }
+    var now = Math.max(t || 0, h.ac.currentTime), k = Math.pow(2, (midi - h.midi) / 12);
+    for (var i = 0; i < h.p.length; i++) {
+      var pr = h.p[i][0];
+      try {
+        pr.cancelScheduledValues(now);
+        if (!(glide > 0.012)) { pr.setValueAtTime(h.p[i][1] * k, now); }
+        else { pr.setValueAtTime(pr.value || h.p[i][1], now); pr.setTargetAtTime(h.p[i][1] * k, now, glide / 3); }
+      } catch (e) {}
+    }
+    h.cur = midi;
+  }
+  // 奏法の音を重ねる: thumb（スラップの親指）/ pop（プル）/ ghost（ミュートの「ブッ」）
+  function melodyBassHit(kind, t, level, dest) {
+    var ac = melodyAudio.ctx;
+    if (!ac) { return; }
+    var tt = (t && t > ac.currentTime) ? t : ac.currentTime, lv = level || 0.8, out = dest || melodyLevelOut(ac, 1);
+    function burst(type, freq, q, peak, dur) {
+      if (!melodyAudio.noise) { return; }
+      var src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = melodyAudio.noise;
+      src.loop = true;
+      f.type = type;
+      f.frequency.value = freq;
+      if (q) { f.Q.value = q; }
+      g.gain.setValueAtTime(peak * lv, tt);
+      g.gain.exponentialRampToValueAtTime(0.0001, tt + dur);
+      src.connect(f); f.connect(g); g.connect(out);
+      src.start(tt);
+      src.stop(tt + dur + 0.05);
+    }
+    if (kind === "thumb") {
+      var o = ac.createOscillator(), og = ac.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(110, tt);
+      o.frequency.exponentialRampToValueAtTime(45, tt + 0.07);
+      og.gain.setValueAtTime(0.5 * lv, tt);
+      og.gain.exponentialRampToValueAtTime(0.0001, tt + 0.09);
+      o.connect(og); og.connect(out);
+      o.start(tt); o.stop(tt + 0.12);
+      burst("highpass", 1800, 0, 0.35, 0.035);
+    } else if (kind === "pop") {
+      burst("bandpass", 3200, 1.2, 0.6, 0.03);
+      burst("highpass", 5000, 0, 0.25, 0.015);
+    } else if (kind === "ghost") {
+      burst("lowpass", 700, 0, 0.5, 0.05);
     }
   }
 
@@ -640,7 +702,7 @@
     src.start(t);
     src.stop(t + hold + MELODY_SAMPLE_FADE + 0.05);
     melodySamples.used[name] = Date.now();
-    return true;
+    return { ac: ac, g: g, p: [[src.playbackRate, src.playbackRate.value]], midi: midi, cur: midi }; // §256: ハンドル
   }
 
   // Web MIDI 出力
@@ -2209,7 +2271,7 @@
   window.UGMelody = {
     buildLayout: melodyBuildLayout, scale: melodyScale, scales: MELODY_SCALES, posDegree: melodyPosDegree, degreeToMidi: melodyDegreeToMidi,
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
-    synth: melodySynth, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
+    synth: melodySynth, voiceStop: melodyVoiceStop, voiceBend: melodyVoiceBend, bassHit: melodyBassHit, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
