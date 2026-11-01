@@ -1664,17 +1664,32 @@
     } catch (e) {}
     return m === 44 ? sh[4] : 1; // スティックで叩いて閉じる（42）ときは、叩く音はそのまま
   }
+  // §248 v1.56: 37 のサンプルがリムショットの音（Snare_rim）のドラムセット。リムショットはそれを主に、クロススティックはそれを短くこもらせて作る
+  var MELODY_RIM_IS_SHOT = { drs: true };
   function melodyDrumSample(ac, m, t, level, dest) {
     var bank = melodySamples.buffers[MELODY_SAMPLE_FILES[MELODY_DRUM]], mp = bank && bank[m] ? [m, 1] : MELODY_DRUM_MAP[m];
+    var rimShot = !!MELODY_RIM_IS_SHOT[melodySamples.drumKit];
+    if (m === 24 && rimShot && bank && bank[37]) { mp = [37, 1]; }
     if (!mp || melodySamples.drumOff || !melodySamples.enabled || !bank || !bank[mp[0]]) { return false; }
     var src = ac.createBufferSource(), g = ac.createGain();
     src.buffer = bank[mp[0]];
     src.playbackRate.value = mp[1] * (m === 35 || m === 36 ? melodySamples.kickRate : 1); // §230: キックを太く
-    g.gain.value = m === 24 ? 1.6 : 1.4;
-    if (m === 24) { melodyDrumSample(ac, 37, t, (level > 0 && level < 1 ? level : 1) * 0.75, dest); } // §247: ふちの「カン」
+    g.gain.value = m === 24 ? (rimShot ? 2.1 : 1.6) : 1.4;
+    // §247: リムショット ＝ スネアとふちの音を重ねる（§248: 37 がリムショットのセットは、37 が主でスネアを小さく）
+    if (m === 24) { melodyDrumSample(ac, rimShot ? 38 : 37, t, (level > 0 && level < 1 ? level : 1) * (rimShot ? 0.45 : 0.75), dest); }
+    var pk = null;
+    if (ac.createBiquadFilter && m === 24 && !rimShot) { pk = ac.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 2000; pk.Q.value = 1.2; pk.gain.value = 7; } // §248: 「カーン」と鳴る高めの音を持ち上げる
+    if (ac.createBiquadFilter && m === 37 && rimShot) {
+      // §248: クロススティック ＝ リムの音を低めに・こもらせて・すぐ消す「コッ」
+      pk = ac.createBiquadFilter(); pk.type = "lowpass"; pk.frequency.value = 1800; pk.Q.value = 0.7;
+      src.playbackRate.value = 0.9;
+      g.gain.setValueAtTime(1.3, t);
+      g.gain.setTargetAtTime(0.0001, t + 0.008, 0.022);
+    }
     var hf = null;
     var open = m === 46 || m === 23 || m === 21, env = null, t0 = t;
     if (open && ac.createBiquadFilter) { hf = ac.createBiquadFilter(); hf.type = "highpass"; hf.frequency.value = 30; src.connect(hf); hf.connect(g); } // 閉じるときにしぼる
+    else if (pk) { src.connect(pk); pk.connect(g); }
     else { src.connect(g); }
     // §246: ハーフオープン（23）＝ 少し閉じたまま叩く「ジャッ」。低い音をけずって、早めに消え、こすれてふるえる
     if (m === 23) {

@@ -157,7 +157,7 @@ module.exports = async function () {
   ok(env.counters.src.length === 65 && env.counters.src.every(function (s) { return Math.abs(12 * Math.log(s.rate) / Math.log(2)) <= 2.0001; }), "sample notes pitch-shift at most 2 semitones in range");
   // §242: オープンハイハットを閉じる（開いていた長さで閉じ方が変わる）
   var fakeBuf = { length: 100, duration: 1 };
-  M.samples.buffers[M.sampleFiles[M.DRUM]] = { 37: fakeBuf, 38: fakeBuf, 42: fakeBuf, 44: fakeBuf, 46: fakeBuf };
+  M.samples.buffers[M.sampleFiles[M.DRUM]] = { 37: { length: 100, duration: 1, id: 37 }, 38: { length: 100, duration: 1, id: 38 }, 42: fakeBuf, 44: fakeBuf, 46: fakeBuf };
   function hatTau(hold, setting) {
     M.setHatClose(setting || "auto");
     env.counters.targets.length = 0;
@@ -178,12 +178,19 @@ module.exports = async function () {
     "half-open (23) and foot splash (21) ring like an open hi-hat and are closed by the pedal / closed hi-hat; a splash also plays the pedal chick");
   ok(M.gmDrum(23) === 46 && M.gmDrum(21) === 44 && M.gmDrum(38) === 38, "half-open / foot splash export as GM 46 / 44");
   // §247: リムショット（24）＝ スネアを少し高く＋ふちの音（37）。フラム（22）＝ 小さい装飾音のすぐあとに本当の音
+  // §248: DRSKit（はじめのセット）は 37 がリムショットの音 → リムショットは 37 が主・クロススティック（37）はこもらせて短く
+  M.setDrumKit("virtuosity"); M.samples.buffers[M.sampleFiles[M.DRUM]] = M.samples.buffers.drums_drs;
   env.counters.src.length = 0; M.synth(24, M.DRUM, 9, 1);
   var rs247 = env.counters.src.map(function (x) { return x.rate; });
+  delete M.samples.buffers.drums_virtuosity; M.setDrumKit("drs");
+  env.counters.src.length = 0; M.synth(24, M.DRUM, 9, 1);
+  var rs248 = env.counters.src.map(function (x) { return x.buf.id + "@" + x.rate; }).sort().join();
+  env.counters.src.length = 0; M.synth(37, M.DRUM, 9, 1);
+  var cs248 = env.counters.src.map(function (x) { return x.buf.id + "@" + x.rate; }).join();
   env.counters.src.length = 0; M.synth(22, M.DRUM, 10, 1);
   var fl247 = env.counters.src.map(function (x) { return x.t; });
   ok(rs247.length === 2 && rs247.indexOf(1.04) >= 0 && fl247.length === 2 && fl247[0] === 10 && Math.abs(fl247[1] - 10.03) < 1e-9 &&
-    M.gmDrum(24) === 40 && M.gmDrum(22) === 38, "rimshot layers the rim click on a brighter snare; a flam is a soft grace note then the stroke; they export as GM 40 / 38", [rs247, fl247]);
+    M.gmDrum(24) === 40 && M.gmDrum(22) === 38 && rs248 === "37@1,38@1" && cs248 === "37@0.9", "rimshot layers the rim click on a brighter snare; a flam is a soft grace note then the stroke; they export as GM 40 / 38; on DRSKit (rim sample) the rimshot leads with it and the cross-stick is a damped version", [rs247, fl247, rs248, cs248]);
   delete M.samples.buffers[M.sampleFiles[M.DRUM]];
   await new Promise(function (res) { M.loadSamples([4, 8, 11, 24, 25, 32, 40], res); });
   ok(Object.keys(M.samples.buffers).length <= 7, "sample memory is capped (old instruments evicted)", Object.keys(M.samples.buffers).length);
