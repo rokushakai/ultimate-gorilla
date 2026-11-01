@@ -162,7 +162,7 @@ module.exports = function () {
   U9.loadSamples([U9.DRUM]);
   ok(S9.state[f9] === "error", "a failed load is not retried right away (only after 10 s)");
   // --- §233: 演奏パターン ---
-  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 16 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
+  ok(D.PATPAD_DEFAULT.length === 32 && D.PATPAD_N === 32 && D.patPadsLoad().every(function (id) { return id && D.patternSteps(id); }) && D.fills.length === 24 && D.pattern("f:toms").kind === "fill" && D.pattern("g:8beat").kind === "loop",
     "32 pattern pads (2 pages): grooves loop, fills play one bar");
   // --- §236: 音色とパターンを追加 ---
   var jz = D.patternSteps("g:jazz"), mt = D.patternSteps("d:metal");
@@ -544,6 +544,14 @@ module.exports = function () {
   ok(ck1 === "49,26,49" && ck2 === "53,51" && ck3 === "53,26" && D.kitBell(rdc[0], rdc[1], kbp) && !D.kitBell(rde[0], rde[1], kbp) && D.partOf(26) === "cym" && D.flashOf(53) === 51 &&
     D.takeClean({ notes: [[0, 53, 0.6], [1, 26, 0.5]] }, 0).notes.length === 2,
     "cymbals: hold then let go chokes (26), a quick hit keeps ringing; the ride's middle is the bell (53); the CR pad can play the bell", [ck1, ck2, ck3]);
+  // §251: 新しいフィル8つ（1小節・ピンク・セットで鳴らせる音だけ）
+  var nf251 = ["unison", "flamtom", "linear", "twobass", "triplet", "floorkick", "openfill", "tombar"], bad251 = [];
+  nf251.forEach(function (id) {
+    var p = D.pattern("f:" + id), st = D.patternSteps("f:" + id);
+    if (!p || p.kind !== "fill" || D.patLen("f:" + id) !== 16 || !st || !st.length) { bad251.push(id); return; }
+    st.forEach(function (r) { if (!D.partOf(r[0])) { bad251.push(id + ":" + r[0]); } });
+  });
+  ok(bad251.length === 0, "8 new fills: one bar each, built only from kit sounds", bad251);
   ok(D.takeClean({ notes: [[0, 23, 0.8], [1, 21, 0.8], [2, 44, 0.4]] }, 0).notes.map(function (n) { return n[1]; }).join() === "23,21,44", "takes keep half-open / foot splash / pedal notes");
   ok(snd28.join() === "46,44,42", "kit pedal: hold it and the hi-hat rings open, let go and it closes (44); then it is closed (42)", snd28);
 };
