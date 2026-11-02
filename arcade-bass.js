@@ -493,6 +493,13 @@
         html += '<button class="modal-btn quiz-cat-btn" data-song="' + BASS_SONGS[i][0] + '" style="width:100%;">' + escHtml(BASS_SONGS[i][1]) + '（BPM ' + BASS_SONGS[i][6] + '）' +
           ' <span class="small" style="color:#6b4f00;">' + new Array(BASS_SONGS[i][9] + 1).join("&#x2B50;") + (bs0 ? "・ベスト " + bs0.s + "（" + bs0.r + "）" : "") + '</span></button>';
       }
+      // §281: クイズ
+      html += '<p class="small" style="margin:12px 0 2px;">&#x1F9E0; クイズ（10問）</p><div class="quiz-opts">';
+      for (i = 0; i < BASS_QUIZ_KINDS.length; i++) {
+        var bq = best["quiz@" + BASS_QUIZ_KINDS[i][0]];
+        html += '<button class="modal-btn quiz-opt" data-quiz="' + BASS_QUIZ_KINDS[i][0] + '">' + BASS_QUIZ_KINDS[i][1] + (bq ? '<br><span class="small">ベスト ' + bq.s + '（' + bq.c + '問）</span>' : "") + '</button>';
+      }
+      html += '</div>';
       html += '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + BASS_TAKES_MAX + '）</p>';
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
@@ -514,6 +521,7 @@
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-rlevel"))) { p.rlevel = v; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-rspeed"))) { p.rspeed = Number(v); bassSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-quiz"))) { ctl.done({ mode: "quiz", kind: v }); return; }
           if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed }); return; }
           if (el.getAttribute("data-backbass")) { p.backBass = !p.backBass; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) {
@@ -793,6 +801,7 @@
     create: function (api, cfg) {
       cfg = cfg || {};
       if (cfg.mode === "rhythm") { return bassRhythm(api, cfg); } // §270
+      if (cfg.mode === "quiz") { return bassQuiz(api, cfg); } // §281
       var prefs = bassPrefs(), view = prefs.view, prog = prefs.prog, names = prefs.names;
       var frame = 0, press = {}, ended = false, msg = "", flash = {}, chordD = 0;
       var panel = api.panel;
@@ -1736,8 +1745,166 @@
     }
   });
 
+  // ---------- §281: クイズ（📍 フレット当て・👂 度数当て）----------
+  var BASS_QUIZ_N = 10, BASS_QUIZ_KINDS = [["fret", "&#x1F4CD; フレット当て"], ["ear", "&#x1F442; 度数当て"]];
+  var BASS_EAR = [[7, "ルート"], [1, "3度"], [2, "5度"], [3, "7度"]]; // [コードの音の番号, 答え]
+  // 度数当ての答えのボタン（2×2）
+  function bassEarRect(i) { var w = (W - 24) / 2; return { x: 8 + (i % 2) * (w + 8), y: 150 + Math.floor(i / 2) * 70, w: w, h: 60 }; }
+  function bassEarAt(x, y) { for (var i = 0; i < 4; i++) { var r = bassEarRect(i); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } } return -1; }
+  var BASS_EAR_AGAIN = { x: 8, y: 96, w: W - 16, h: 40 };
+  // 問題を作る（rnd: 0〜1 の乱数の関数）→ フレット: { s: 弦, f: フレット, m } / 度数: { key, d, ch, a: 答えの番号, m }
+  function bassQuizMake(kind, rnd) {
+    if (kind === "ear") {
+      var key = Math.floor(rnd() * 12), d = Math.floor(rnd() * 7), ch = bassChord(key, d, "major", true), a = Math.floor(rnd() * 4);
+      return { key: key, d: d, ch: ch, a: a, m: ch.notes[BASS_EAR[a][0]] };
+    }
+    var s = Math.floor(rnd() * 4), f = Math.floor(rnd() * 8);
+    return { s: s, f: f, m: BASS_STRINGS[s][0] + f };
+  }
+  function bassQuiz(api, cfg) {
+    var prefs = bassPrefs(), prog = prefs.prog, panel = api.panel, frame = 0, ended = false, msg = "", kind = cfg.kind === "ear" ? "ear" : "fret";
+    bassSetLayout(false);
+    if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
+    if (api.setCanvasHeight) { api.setCanvasHeight(BASS_H); }
+    var qi = 0, q = null, t0 = 0, right = 0, fb = null, buses = {}, nm = prefs.names === "cde" ? BASS_CDE : BASS_DO;
+    var UG = window.UGMelody, audioOk = false;
+    function now() { return frame / 60; }
+    function audio() {
+      if (audioOk || !UG || !UG.audioInit) { return; }
+      try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([prog]); } } catch (e) {}
+    }
+    function sound(m, when, len) {
+      audio();
+      if (!audioOk) { return; }
+      var bus = bassBus(buses, "b", prefs.bvol, prefs.phone), ac = UG.audio.ctx, t = ac.currentTime + (when || 0);
+      try { var h = UG.synth(m, prog, t, 0.85, bus ? bassVoiceOut(bus, 0.85, prog) : undefined, BASS_HOLD); if (h && UG.voiceStop) { UG.voiceStop(h, t + (len || 0.6), 0.05); } } catch (e) {}
+    }
+    function ask() { if (kind === "ear") { sound(q.ch.notes[0], 0, 0.6); sound(q.m, 0.75, 0.8); } }
+    function next() {
+      fb = null;
+      if (qi >= BASS_QUIZ_N) { finish(); return; }
+      q = bassQuizMake(kind, Math.random);
+      qi++;
+      t0 = now();
+      ask();
+      render();
+    }
+    function answer(okv, m) {
+      if (ended || fb || !q) { return; }
+      if (m !== undefined) { sound(m, 0, 0.5); }
+      if (okv) { right++; api.addScore(100 + Math.max(0, Math.round(50 - (now() - t0) * 10))); }
+      fb = { ok: okv, t: now(), m: m };
+      render();
+    }
+    function finish() {
+      if (ended) { return; }
+      ended = true;
+      var best = bassBest(), key = "quiz@" + kind, sc = api.getScore();
+      if (!best[key] || !(best[key].s >= sc)) { best[key] = { s: sc, c: right }; lsSet(BASS_BEST_KEY, best); }
+      msg = BASS_QUIZ_N + "問中 <b>" + right + "問</b> 正解" + (right === BASS_QUIZ_N ? "・&#x1F389; ぜんぶ正解！" : "");
+      render();
+      api.gameOver(right + " / " + BASS_QUIZ_N);
+    }
+    function qText() {
+      if (!q) { return ""; }
+      return kind === "ear" ? "ルートのあとの音は何度？" : BASS_STRINGS[q.s][1] + "弦で「" + nm[bassPc(q.m)] + "」を押そう";
+    }
+    function render() {
+      if (!panel) { return; }
+      panel.innerHTML = '<p class="small" style="margin:4px 0 0;">' + BASS_QUIZ_KINDS[kind === "ear" ? 1 : 0][1] + '（' + Math.min(qi, BASS_QUIZ_N) + ' / ' + BASS_QUIZ_N + '問・正解 ' + right + '）</p>' +
+        '<p class="small" style="margin:4px 0 0;">' + (kind === "ear" ? "ルートの音のあとに鳴る音が、コードの何度の音かを当てよう（キー 1〜4 でも答えられます）" : "言われた弦の、その音のマスをタップ（開放弦〜7フレット）。早く答えるとボーナス") + '</p>' +
+        (msg ? '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>' : "");
+    }
+    function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+    function drawBoard(ctx) {
+      var cw = bassColW(), rh = bassRowH(), top = BASS_BOARD_Y, bot = top + rh * 4, s, c, r;
+      ctx.fillStyle = "#5b3a24";
+      ctx.fillRect(BASS_BOARD_X, top, cw * BASS_COLS, bot - top);
+      for (c = 0; c < BASS_COLS; c++) {
+        if (BASS_MARKS.indexOf(c) >= 0) { ctx.fillStyle = "#e8d8b8"; ctx.beginPath(); ctx.arc(BASS_BOARD_X + (c + 0.5) * cw, top + rh * 2, 3.5, 0, Math.PI * 2); ctx.fill(); }
+        if (c > 0) { ctx.fillStyle = c === 1 ? "#f5f0e6" : "#b8b8b8"; ctx.fillRect(BASS_BOARD_X + c * cw - (c === 1 ? 2 : 0.75), top, c === 1 ? 4 : 1.5, bot - top); }
+        text(ctx, c === 0 ? "開放" : String(c), BASS_BOARD_X + (c + 0.5) * cw, top - 7, 8, "#adb5bd");
+      }
+      for (s = 0; s < 4; s++) {
+        var sy = top + (s + 0.5) * rh;
+        ctx.fillStyle = q && kind === "fret" && q.s === s && !fb ? "#ffd166" : "#d9d9d9";
+        ctx.fillRect(BASS_BOARD_X, sy - (1 + (3 - s) * 0.45), cw * BASS_COLS, 2 + (3 - s) * 0.9);
+        hudText(ctx, BASS_STRINGS[s][1], 1, sy - rh * 0.3, "left");
+      }
+      if (fb && q) {
+        r = bassCellRect(q.s, q.f);
+        ctx.fillStyle = "#51cf66"; ctx.beginPath(); ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.36, 0, Math.PI * 2); ctx.fill();
+        text(ctx, nm[bassPc(q.m)], r.x + r.w / 2, r.y + r.h / 2, 10, "#14213d");
+        if (!fb.ok && fb.cell) {
+          r = bassCellRect(fb.cell.s, fb.cell.c);
+          ctx.strokeStyle = "#ff6b6b"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.36, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
+        }
+      }
+    }
+    function drawEar(ctx) {
+      var r = BASS_EAR_AGAIN, i;
+      ctx.fillStyle = "#2f4a6e"; ctx.fillRect(r.x, r.y, r.w, r.h);
+      text(ctx, "🔁 もう一度聞く", r.x + r.w / 2, r.y + r.h / 2, 14, "#ffffff");
+      for (i = 0; i < 4; i++) {
+        r = bassEarRect(i);
+        var col = "#3a4a7a";
+        if (fb && q && i === q.a) { col = "#2b8a3e"; } else if (fb && !fb.ok && i === fb.pick) { col = "#c92a2a"; }
+        ctx.fillStyle = col; ctx.fillRect(r.x, r.y, r.w, r.h);
+        text(ctx, BASS_EAR[i][1], r.x + r.w / 2, r.y + r.h / 2 - 6, 18, "#ffffff");
+        text(ctx, String(i + 1), r.x + r.w / 2, r.y + r.h - 10, 9, "#adb5bd");
+      }
+    }
+    var started = false;
+    function start() { if (!started) { started = true; audio(); next(); } }
+    function earPick(i) {
+      if (!q || i < 0) { return; }
+      answer(i === q.a);
+      if (fb) { fb.pick = i; }
+    }
+    return {
+      input: function (a, down) {
+        if (!down) { return; }
+        if (!started) { start(); return; }
+        if (kind === "ear" && /^c[0-3]$/.test(a)) { earPick(Number(a.charAt(1))); }
+      },
+      pointer: function (type, x, y) {
+        if (type !== "down") { return; }
+        if (!started) { start(); return; }
+        if (kind === "ear") {
+          var r = BASS_EAR_AGAIN;
+          if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { if (!fb) { ask(); } return; }
+          earPick(bassEarAt(x, y));
+          return;
+        }
+        var cell = bassCellAt(x, y, 0);
+        if (!cell || !q || fb) { return; }
+        answer(cell.s === q.s && cell.m === q.m, cell.m);
+        if (fb) { fb.cell = cell; }
+      },
+      step: function () {
+        frame++;
+        if (ended) { return; }
+        if (fb && now() - fb.t > (fb.ok ? 0.8 : 1.6)) { next(); }
+      },
+      draw: function (ctx) {
+        ctx.fillStyle = "#1b1f3b";
+        ctx.fillRect(0, 0, W, BASS_H);
+        hudText(ctx, BASS_QUIZ_KINDS[kind === "ear" ? 1 : 0][1].replace(/&#x[0-9A-F]+; /, "") + " " + Math.min(qi, BASS_QUIZ_N) + "/" + BASS_QUIZ_N, 8, 10, "left");
+        hudText(ctx, "正解 " + right, W - 8, 10, "right");
+        if (!started) { text(ctx, "タップ（どのキーでも）ではじめる", W / 2, 60, 14, "#ffffff"); }
+        else if (q && !ended) {
+          text(ctx, qText(), W / 2, kind === "ear" ? 34 : 50, kind === "ear" ? 15 : 17, "#ffd166");
+          if (kind === "ear") { text(ctx, "キー " + BASS_CDE[q.key] + "・コード " + q.ch.name, W / 2, 54, 11, "#adb5bd"); }
+        }
+        if (fb) { text(ctx, fb.ok ? "⭕ 正解！" : "❌ " + (kind === "ear" ? "答えは " + BASS_EAR[q.a][1] : "ここ（緑）"), W / 2, kind === "ear" ? 70 : 88, 16, fb.ok ? "#51cf66" : "#ff6b6b"); }
+        if (ended) { text(ctx, right + " / " + BASS_QUIZ_N + " 問正解", W / 2, 60, 22, "#ffd166"); }
+        if (kind === "ear") { drawEar(ctx); } else { drawBoard(ctx); }
+      }
+    };
+  }
+
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, tendency: bassTendency, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, tendency: bassTendency, quizMake: bassQuizMake, EAR: BASS_EAR, earRect: bassEarRect, QUIZ_N: BASS_QUIZ_N, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX

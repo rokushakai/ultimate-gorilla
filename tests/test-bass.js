@@ -363,6 +363,30 @@ module.exports = function () {
   ok(B.SONGS.length === 12 && gh.length >= 4 && gh.every(function (n) { return Math.abs(n.beat % 2 - 1.75) < 1e-6; }) && cH.notes.length > cN.notes.length &&
     hb15 !== nb15 && rr4.best && rr4.best.r === "S" && B.chart(B.SONGS.filter(function (x) { return x[0] === "beat16"; })[0], "hard").notes.length > 0,
     "rhythm game hard: fills on every 4th bar, ghost notes (✕) on the last 16th of beats 2 and 4, all hittable; 12 songs", [gh.length, cN.notes.length, cH.notes.length, hb15, nb15, rr4.best]);
+  // §281: クイズ。フレット当て: 10問ぜんぶ答えのマスをタップ → 10問正解・ベスト。度数当て: キー 1〜4 で答える
+  function qrun(kind, good) {
+    var e = H.load({ patch: function (src, file) { return file === "arcade-bass.js" ? src.split("    function qText() {\n").join("    window.__q = function () { return { q: q, fb: fb, ended: ended }; };\n    function qText() {\n") : src; } }), log = [];
+    var r = e.run("bass", { config: { mode: "quiz", kind: kind } }, 1200, function (f) {
+      if (f === 2) { e.key("keydown", "z"); e.key("keyup", "z"); return; }
+      if (f % 10 !== 5 || !e.window.__q) { return; }
+      var st = e.window.__q();
+      if (!st.q || st.fb || st.ended) { return; }
+      log.push(st.q.m);
+      if (kind === "fret") {
+        var cr = B.cellRect(st.q.s, good ? st.q.f : (st.q.f + 1) % 8), p = at(cr);
+        e.ptr("down", p[0], p[1], 1); e.ptr("up", p[0], p[1], 1);
+      } else {
+        var k = String((good ? st.q.a : (st.q.a + 1) % 4) + 1);
+        e.key("keydown", k); e.key("keyup", k);
+      }
+    });
+    return { r: r, best: JSON.parse(e.store[B.BEST_KEY] || "{}")["quiz@" + kind], n: log.length };
+  }
+  var qf = qrun("fret", true), qe = qrun("ear", true), qx = qrun("ear", false);
+  var mk = B.quizMake("ear", function () { return 0.99; }), mf = B.quizMake("fret", function () { return 0.5; });
+  ok(qf.r.ended !== null && qf.best && qf.best.c === 10 && qf.best.s >= 1000 && qf.n === 10 && qe.best && qe.best.c === 10 && qx.best && qx.best.c === 0 &&
+    mk.a === 3 && mk.m === mk.ch.notes[3] && mf.s === 2 && mf.f === 4 && mf.m === 37,
+    "quiz: fret finder (tap the asked note on the asked string) and interval ear quiz (keys 1–4), 10 questions with a best score", [qf.best, qe.best, qx.best, qf.n]);
   // --- §271: よこ向きはフレット12列（たてにもどすと8列）---
   B.setLayout(true, 130);
   var lc = B.cellRect(3, 11), lcell = B.cellAt(lc.x + lc.w / 2, lc.y + lc.h / 2, 0), lpad = B.padRect(0, 8, B.PAD_Y);
