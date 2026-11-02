@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.71** |
+| 現在バージョン | **v1.72** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.72] ⏱️ 切りかえを小節の頭に**（§264）: `pend`（{ d, key, scale }）・`pendOn()`（伴奏なしのパターン中で `prefs.quant` が "now" でない）・`pendApply()`（`patStep` の小節の頭と `patStop` で反映）。`setChord`・keyup/keydown・`scale:` は予約へ。action `quant`
 - **[v1.71] 🎼 ベースのコード進行・スケールの点**（§263）: `BASS_CPROGS`（[id, 名前, 小節ごとの度数]）・`BASS_CPROG_GROUPS`・`bassCprog(id)`・`bassCprogAt(cp, 拍, 拍子)`。`patStep` で伴奏なし＋進行ありなら小節ごとに `chordD` を進める（→ は進行の次のコードへ）。`setChord` は進行中なら `prefs.cprog` を "" に。`BASS_SCALES` の4・5番目は特徴音の度数と名前、`bassScalePcs(key, scale)` でフレットに点。`select[data-bcprog]` → `cprog:id`
 - **[v1.70] 🎼 ベースのキーとスケール**（§262）: `BASS_SCALES`（9つ）・`BASS_SCALE_GROUPS`・`bassScale(id)`（知らない id はメジャー）・`bassTriad`（3度と5度でコードの種類、度数の表記）。`bassChord(key, d, scale)` は `deg` も返す。`prefs.scale`。パネルの `select[data-bscale]` → action `scale:id`。キーの行は伴奏のないときフレットの画面にも
 - **[v1.69] 🎸 ベースのサンプル・おすすめパターン**（§261）: samples/ に electric_bass_finger・electric_bass_pick・fretless_bass・slap_bass_1・slap_bass_2・synth_bass_1・synth_bass_2 を追加、acoustic_bass を作りなおし（どれも C1〜C5 の短3度おき17音。作り方は build_samples.js の INSTR をベースにして PICK を 24〜72・3おき）。`MELODY_SAMPLE_FILES` 33〜39・`MELODY_SAMPLE_HOLD`・`MELODY_SAMPLE_TRIM`（展開時に残す秒。ベース 3）。`MELODY_SAMPLE_V` 1.69。`BASS_VOICES` 8つ。パターン14個（`BASS_PAT_GROUPS` にも）
@@ -220,7 +221,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（872項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（873項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

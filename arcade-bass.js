@@ -232,7 +232,7 @@
       prog: bassProgOk(Number(p.prog)) ? Number(p.prog) : 33,
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
-      key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "",
+      key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -629,7 +629,24 @@
         var b = pat.back ? backBeat() : (now() - pat.t0) * bpm / 60;
         return b < 0 ? -1 : Math.floor(b / pat.unit + 1e-6) % pat.d[2].length;
       }
-      function patStop() { if (!pat) { return; } hush(pat.vo); pat = null; }
+      function patStop() { if (!pat) { return; } hush(pat.vo); pat = null; pendApply(); }
+      // §264: パターン中のコード・キー・スケールの切りかえは次の小節の頭に（予約 { d, key, scale }）
+      var pend = null;
+      function pendOn() { return !!(pat && !pat.back && prefs.quant !== "now"); }
+      function pendApply() {
+        if (!pend) { return; }
+        var p0 = pend;
+        pend = null;
+        if (p0.d !== undefined) { chordD = p0.d; flash["c" + p0.d] = 10; }
+        if (p0.key !== undefined || p0.scale !== undefined) {
+          if (p0.key !== undefined) { prefs.key = p0.key; }
+          if (p0.scale !== undefined) { prefs.scale = p0.scale; }
+          bassSavePrefs(prefs);
+          render();
+        }
+      }
+      function pendKey() { return pend && pend.key !== undefined ? pend.key : prefs.key; }
+      function pendScale() { return pend && pend.scale !== undefined ? pend.scale : prefs.scale; }
       function patToggle() {
         if (pat) { patStop(); } else { if (play) { playStop(); } patStart(); }
         render();
@@ -650,6 +667,12 @@
             // コードが変わる拍が休みなら、その拍でルート
             if (c === "-" && Math.abs(sc.start - b) < 1e-6) { c = "R"; }
           } else {
+            // §264: 小節の頭で予約を反映。予約があれば → は予約のコードへ
+            if (ci === 0 && pend) { pendApply(); ch = curChord(); }
+            if (pend) {
+              next = { ch: bassChord(pendKey(), pend.d !== undefined ? pend.d : chordD, pendScale()) };
+              left = Math.floor(b / meter + 1e-6) * meter + meter - b;
+            }
             // §263: コード進行をえらんでいたら、小節ごとに次のコードへ
             var cp = bassCprog(prefs.cprog);
             if (cp) {
@@ -738,7 +761,8 @@
       // 伴奏があるときは、コードは曲に合わせて変わる（自分では選ばない）
       function setChord(d) {
         if (!(d >= 0 && d < 7 && !back)) { return; }
-        chordD = d; flash["c" + d] = 10;
+        if (pendOn()) { pend = pend || {}; pend.d = d; }
+        else { chordD = d; flash["c" + d] = 10; }
         // §263: 進行を鳴らしているときに自分でえらぶと「コード進行なし」にもどる
         if (prefs.cprog && pat) { prefs.cprog = ""; bassSavePrefs(prefs); render(); }
       }
@@ -754,18 +778,20 @@
         }
         else if (v === "keydown" || v === "keyup") {
           allOff(); padHeld = {};
-          prefs.key = (prefs.key + (v === "keyup" ? 1 : 11)) % 12;
-          bassSavePrefs(prefs);
+          var nk = (pendKey() + (v === "keyup" ? 1 : 11)) % 12;
+          if (pendOn()) { pend = pend || {}; pend.key = nk; }
+          else { prefs.key = nk; bassSavePrefs(prefs); }
           render();
         }
         else if (/^scale:/.test(v)) {
           // §262: スケールをえらぶ（知らない id は無視）
           if (bassScale(v.substring(6))[0] !== v.substring(6)) { return; }
           allOff(); padHeld = {};
-          prefs.scale = v.substring(6);
-          bassSavePrefs(prefs);
+          if (pendOn()) { pend = pend || {}; pend.scale = v.substring(6); }
+          else { prefs.scale = v.substring(6); bassSavePrefs(prefs); }
           render();
         }
+        else if (v === "quant") { prefs.quant = prefs.quant === "now" ? "bar" : "now"; bassSavePrefs(prefs); if (prefs.quant === "now") { pendApply(); } render(); }
         else if (/^cprog:/.test(v)) {
           var cid = v.substring(6);
           if (cid && !bassCprog(cid)) { return; }
@@ -854,7 +880,7 @@
         var h = "", i, j;
         for (i = 0; i < BASS_SCALE_GROUPS.length; i++) {
           h += '<optgroup label="' + BASS_SCALE_GROUPS[i][0] + '">';
-          for (j = 0; j < BASS_SCALE_GROUPS[i][1].length; j++) { var sc = bassScale(BASS_SCALE_GROUPS[i][1][j]); h += '<option value="' + sc[0] + '"' + (sc[0] === prefs.scale ? " selected" : "") + '>' + sc[1] + '</option>'; }
+          for (j = 0; j < BASS_SCALE_GROUPS[i][1].length; j++) { var sc = bassScale(BASS_SCALE_GROUPS[i][1][j]); h += '<option value="' + sc[0] + '"' + (sc[0] === pendScale() ? " selected" : "") + '>' + sc[1] + '</option>'; }
           h += '</optgroup>';
         }
         return h;
@@ -877,7 +903,7 @@
         }
         // §262: キーとスケール（フレットの画面でも）
         if (!back) {
-          html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + '</span>' +
+          html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + (pend && (pend.key !== undefined || pend.scale !== undefined) ? " → " + BASS_CDE[pendKey()] + (pend.scale !== undefined ? " " + bassScale(pend.scale)[1].replace(/（.*）/, "") : "") + "（次の小節）" : "") + '</span>' +
             '<button class="modal-btn" data-ba="keyup">&#x25B6;</button></div>' +
             '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>' +
             (view === "fret" ? '<p class="small" style="margin:4px 0 0;">マスの下の点: スケールの音（白い大きな点は主音・<span style="color:#f783ac;">●</span> 特徴音 ' + bassScale(prefs.scale)[4] + '）</p>' : "") +
@@ -892,10 +918,11 @@
           html += '<div class="piano-row"><button class="modal-btn" data-ba="patprev">&#x25C0;</button><span>&#x1F3BC; ' + patDef()[1] + '</span><button class="modal-btn" data-ba="patnext">&#x25B6;</button></div>' +
             '<div class="piano-row"><label class="piano-select">&#x1F4DA; <select data-bpat="1">' + patOptions() + '</select></label></div>' +
             '<div class="piano-row"><button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
-            '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>';
+            '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>' +
+            (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
           // §259: パターンの説明と文字の意味
           html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
-            (back ? "コードは曲に合わせて変わります。" : (prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "上の段のコードをタップすると、次の音から変わります。")) + "<br>") +
+            (back ? "コードは曲に合わせて変わります。" : (prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "上の段のコードをタップすると、" + (prefs.quant === "now" ? "次の音から" : "次の小節の頭で") + "変わります。")) + "<br>") +
             "&#x1F3BC; " + escHtml(patDef()[2]) + "（" + escHtml(bassPatLegend(patDef()[2])) + "）</p>";
           html += '<div class="piano-row">';
           for (i = 0; i < BASS_TECHS.length; i++) { html += '<button class="modal-btn' + (prefs.tech === BASS_TECHS[i][0] ? " piano-rec-on" : "") + '" data-ba="tech:' + BASS_TECHS[i][0] + '">' + BASS_TECHS[i][1] + '</button>'; }
@@ -1006,7 +1033,7 @@
       function drawChords(ctx) {
         var i, si = songIdx(), cp = pat && !pat.back ? bassCprog(prefs.cprog) : null;
         // §263: 進行の次のコード（枠が光る）
-        var nxD = cp ? bassCprogAt(cp, Math.max(0, (now() - pat.t0) * bpm / 60), meter).next : -1;
+        var nxD = pend && pend.d !== undefined ? pend.d : (cp ? bassCprogAt(cp, Math.max(0, (now() - pat.t0) * bpm / 60), meter).next : -1);
         // §255: 伴奏があるときは、上の段に「いまのコード・次のコード3つ」
         for (i = 0; si >= 0 && i < 4; i++) {
           var sr = { x: 4 + i * (W - 8) / 4 + 1, y: BASS_CHORD_Y, w: (W - 8) / 4 - 2, h: BASS_CHORD_H }, sc = back.chords[si + i];

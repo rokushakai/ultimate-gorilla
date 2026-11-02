@@ -207,7 +207,7 @@ module.exports = function () {
     return { snd: snd, e: e };
   }
   // 伴奏なし: ルート8分・BPM 120（8分 ＝ 0.25秒）。とちゅうでキー 6（Am）→ 次の音から A
-  var g1 = prun({ pat: "root8", bpm: 120, view: "fret" }, 80, function (f, e) {
+  var g1 = prun({ pat: "root8", bpm: 120, view: "fret", quant: "now" }, 80, function (f, e) {
     if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
     if (f === 40) { e.key("keydown", "6"); e.key("keyup", "6"); }
   });
@@ -237,7 +237,7 @@ module.exports = function () {
   ok(g4.snd.length >= 3 && g4.snd[0] === 36, "a pattern that starts with a rest still plays the root at the top of a new chord", g4.snd);
   // フレットの画面: パターン中は上にコードの段（タップで Am）とマスの段（v は 5↓）
   var cAm9 = at(B.chordRect(5));
-  var g5 = prun({ pat: "country", bpm: 120, view: "fret" }, 90, function (f, e) {
+  var g5 = prun({ pat: "country", bpm: 120, view: "fret", quant: "now" }, 90, function (f, e) {
     if (f === 2) { e.ptr("down", cAm9[0], cAm9[1], 1); e.ptr("up", cAm9[0], cAm9[1], 1); e.key("keydown", "b"); e.key("keyup", "b"); }
     if (f === 40) { e.ptr("down", cAm9[0], cAm9[1], 1); e.ptr("up", cAm9[0], cAm9[1], 1); }
   });
@@ -251,6 +251,13 @@ module.exports = function () {
   var g8 = prun({ pat: "root", bpm: 240, view: "pad", cprog: "epic", key: 9, scale: "minor" }, 250, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
   ok(g7.snd.slice(0, 4).join() === "29,31,28,33" && g8.snd.slice(0, 4).join() === "33,29,36,31",
     "a chord progression moves the pattern bar by bar (royal road in C: F G Em Am; epic in A minor: Am F C G)", [g7.snd, g8.snd]);
+  // --- §264: 切りかえは次の小節の頭（ルート8分・BPM 120 ＝ 1小節2秒。とちゅうで Am を予約 → 2小節目から Am）---
+  var g9 = prun({ pat: "root8", bpm: 120, view: "fret" }, 170, function (f, e) {
+    if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 40) { e.key("keydown", "6"); e.key("keyup", "6"); }
+  });
+  ok(g9.snd.length >= 9 && g9.snd.slice(0, 8).join() === "36,36,36,36,36,36,36,36" && g9.snd[8] === 33,
+    "chord changes during a pattern wait for the next bar (8 eighths of C, then Am)", g9.snd);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
