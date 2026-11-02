@@ -357,6 +357,32 @@ module.exports = function () {
   ok(lcell && lcell.f === 11 && lcell.m === 39 && lc.y + lc.h <= 130 && B.cellAt(pc.x + 3, pc.y + 3, 0).f === 7 && B.cellRect(0, 0).y === 128 &&
     B.landH(844, 300) >= 90 && B.landH(844, 300) <= 170 && B.landH(0, 0) === 130,
     "landscape layout: 12 frets fit in the short canvas; portrait goes back to 8 frets", [lcell, lpad]);
+  // §272: よこ向きは板が内側に寄って、弦の名前のところ（左はし）はマスではない
+  B.setLayout(true, 130);
+  var lo = B.cellRect(0, 0), lgut = B.cellAt(5, lo.y + lo.h / 2, 0), lopen = B.cellAt(lo.x + 2, lo.y + lo.h / 2, 0);
+  B.setLayout(false);
+  ok(lo.x === 11 && lgut === null && lopen && lopen.f === 0 && lopen.m === 43 && B.cellRect(0, 0).x === 4,
+    "landscape: the board moves in so the string names sit outside it (the open G cell starts after them)", [lo, lgut, lopen]);
+  // §272: ベース・ドラムの音量（設定は 0〜150 の 10 刻み・ベースもドラムも出口の GainNode を通る）
+  function vrun(prefs, acts) {
+    var e = H.load({ patch: function (src, file) {
+      if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+      return src;
+    } }), bd = [], dd = [], html = "";
+    e.store[B.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("bass", { config: {} }, 70, function (f) {
+      if (f === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg, w, lv, dest) { (pg === M.DRUM ? dd : bd).push(dest); return s0.apply(M, arguments); }; }
+      if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+      if (f === 3) { for (var i = 0; i < acts.length; i++) { e.window.__bassAct(acts[i]); } html = e.window.__bassPanel(); }
+    });
+    return { bd: bd, dd: dd, html: html, p: JSON.parse(e.store[B.PREFS_KEY]) };
+  }
+  var v1 = vrun({ pat: "root8", bpm: 120, drum: "g:8beat", tab: "feel", bvol: 120 }, ["bvol:+", "dvol:-", "dvol:-"]), v2 = vrun({ tab: "feel" }, []);
+  var vb = v1.bd.filter(function (d) { return d && d.gain; }), vd = v1.dd.filter(function (d) { return d && d.gain; });
+  ok(B.vol(150, 100) === 150 && B.vol(155, 100) === 100 && B.vol("x", 60) === 60 && B.vol(-10, 60) === 60 && v2.html.indexOf("100%") > 0 && v2.html.indexOf("60%") > 0 &&
+    v1.p.bvol === 130 && v1.p.dvol === 40 && v1.html.indexOf("130%") > 0 && v1.html.indexOf("40%") > 0 &&
+    vb.length >= 2 && vb.length === v1.bd.length && vd.length >= 2 && vd.length === v1.dd.length && Math.abs(vd[vd.length - 1].gain.value - 0.4) < 1e-9 && Math.abs(vb[0].gain.value - 0.85) < 0.2,
+    "volume: bass and drum levels (0–150%, saved; drums 60% by default) go through their own outputs, and each bass note keeps its own strength", [v1.p.bvol, v1.p.dvol, vb.length, vd.length, vd.length && vd[vd.length - 1].gain.value]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
