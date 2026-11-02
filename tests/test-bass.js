@@ -367,6 +367,12 @@ module.exports = function () {
   var ph275 = vrun({ tab: "feel" }, ["phone"]);
   ok(bg275 && e275on === B.ENH && e275off === 0 && Math.abs(st275.b.g.gain.value - 0.8) < 1e-9 && sd275.d.e === null && ph275.p.phone === true && ph275.html.indexOf("スマホ向けの音: ON") > 0,
     "phone speaker mode adds the bass's harmonics (low-pass → distortion → high-pass) only when on, only on the bass", [e275on, e275off]);
+  // §276: つなぎの音（王道進行 F G Em Am・ルート8分・BPM 120）→ 1小節目の最後の8分は G の半音下 F#
+  var ap1 = prun({ pat: "root8", bpm: 120, cprog: "royal", appr: true }, 290, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  var ap0 = prun({ pat: "root8", bpm: 120, cprog: "royal" }, 150, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  ok(ap1.snd.slice(0, 8).join() === "29,29,29,29,29,29,29,30" && ap1.snd[8] === 31 && ap1.snd[15] === 29 && ap1.snd[16] === 28 && ap0.snd.slice(0, 9).join() === "29,29,29,29,29,29,29,29,31" &&
+    B.approach(29, 31) === 30 && B.approach(35, 31) === 32 && B.approach(30, 28) === 29,
+    "approach notes: the last note before a chord change moves a half step next to the new root (F → F# → G from below; G → F → E from above)", [ap1.snd.slice(0, 17), ap0.snd.slice(0, 9)]);
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));
