@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.77** |
+| 現在バージョン | **v1.78** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.78] 🎮 ベースのリズムゲーム**（§270）: `cfg.mode === "rhythm"` なら `create` は `bassRhythm(api, cfg)`（別の小さなゲーム）。`BASS_SONGS`（パターン・進行・キー・スケール・BPM・小節・ドラム・★）・`bassChart(song, level)`（かんたんは拍の頭）・`bassLaneOf`（いちばん低いフレットの弦）・`BASS_RKEYS`（D F J K / Q W E R）・ベスト `ultimateGorillaBassBestV1`。はじめの画面の `data-song`・`data-rlevel`・`data-rspeed`（`prefs.rlevel`・`rspeed`）
 - **[v1.77] 🗂️ パネルのタブ**（§269）: `BASS_TABS`・`prefs.tab`・`curTab()`（伴奏のときキーのタブはなし）・action `tab:id`。`render()` は上の共通の行 → 編集中なら編集のボタン → タブの中身。**パネルに何か足すときは、どのタブに入れるか決める**
 - **[v1.76] 🎼 7th のコード名**（§268）: `bassTriad(sc, d, sev)`・`bassChord(key, d, scale, sev)`（sev で名前と度数を 7th に。鳴る音は同じ）。`prefs.sev`・action `sev`（キーの行のボタン）
 - **[v1.75] 🥁 ドラムといっしょ**（§267）: `prefs.drum`（`UGDrum.patternList` のループの id）。`drumDef()`（キャッシュ。拍子が合わなければ null）・`drumInit()`（ゴリラドラムの生ドラム・セットの設定）・`drumStep()`（`pat.dk` でパターンと同じ拍に予約。ハネも合わせる）。`select[data-bdrum]` → action `drum:id`
@@ -226,7 +227,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（881項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（883項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

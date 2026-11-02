@@ -281,7 +281,8 @@
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
-      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0], gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0],
+      rlevel: p.rlevel === "normal" ? "normal" : "easy", rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -424,6 +425,18 @@
         if (p.backing) { html += '<div class="quiz-opts"><button class="modal-btn quiz-opt' + (p.backBass ? " active" : "") + '" data-backbass="1">伴奏のベースも鳴らす ' + (p.backBass ? "ON" : "OFF") + '</button></div>'; }
       }
       html += '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F3B8; はじめる</button>';
+      // §270: リズムゲーム
+      var best = bassBest();
+      html += '<p class="small" style="margin:12px 0 2px;">&#x1F3AE; リズムゲーム（落ちてくる音符を弦のレーンでタップ）</p><div class="quiz-opts">';
+      for (i = 0; i < BASS_RLEVELS.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.rlevel === BASS_RLEVELS[i][0] ? " active" : "") + '" data-rlevel="' + BASS_RLEVELS[i][0] + '">' + BASS_RLEVELS[i][1] + '</button>'; }
+      html += '</div><div class="quiz-opts">';
+      for (i = 0; i < BASS_SPEEDS.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.rspeed === BASS_SPEEDS[i] ? " active" : "") + '" data-rspeed="' + BASS_SPEEDS[i] + '">' + BASS_SPEEDS[i] + '%</button>'; }
+      html += '</div>';
+      for (i = 0; i < BASS_SONGS.length; i++) {
+        var bs0 = best[BASS_SONGS[i][0] + "@" + p.rlevel + "@" + p.rspeed];
+        html += '<button class="modal-btn quiz-cat-btn" data-song="' + BASS_SONGS[i][0] + '" style="width:100%;">' + escHtml(BASS_SONGS[i][1]) + '（BPM ' + BASS_SONGS[i][6] + '）' +
+          ' <span class="small" style="color:#6b4f00;">' + new Array(BASS_SONGS[i][9] + 1).join("&#x2B50;") + (bs0 ? "・ベスト " + bs0.s + "（" + bs0.r + "）" : "") + '</span></button>';
+      }
       html += '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + BASS_TAKES_MAX + '）</p>';
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
@@ -443,6 +456,9 @@
           if ((v = el.getAttribute("data-prog")) !== null) { p.prog = Number(v); bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; bassSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-rlevel"))) { p.rlevel = v; bassSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-rspeed"))) { p.rspeed = Number(v); bassSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed }); return; }
           if (el.getAttribute("data-backbass")) { p.backBass = !p.backBass; bassSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) {
             var rs = bassSendToSeq(bassTakeById(bassTakesLoad(), Number(v)));
@@ -467,6 +483,188 @@
     draw();
   }
 
+  // ---------- §270: リズムゲーム ----------
+  var BASS_BEST_KEY = "ultimateGorillaBassBestV1", BASS_LOOK = 1.6, BASS_SPEEDS = [70, 85, 100];
+  var BASS_JUDGE = [[0.07, "PERFECT", 100], [0.13, "GREAT", 70], [0.2, "GOOD", 40]];
+  var BASS_RLEVELS = [["easy", "かんたん"], ["normal", "ふつう"]];
+  var BASS_LANES = [[28, "E"], [33, "A"], [38, "D"], [43, "G"]];
+  // [id, 名前, パターン, コード進行, キー, スケール, BPM, 小節, ゴリラドラムのリズム, ★]
+  var BASS_SONGS = [
+    ["royal", "王道ポップ", "pop", "royal", 0, "major", 96, 8, "g:8beat", 1], ["rock", "ロック", "rock", "pop4", 4, "major", 120, 8, "g:rock", 1],
+    ["motown", "モータウン", "motown", "fifty", 7, "major", 104, 8, "d:motown", 2], ["bossa", "ボサノバ", "bossa", "twofive", 5, "major", 100, 8, "g:bossa", 2],
+    ["reggae", "レゲエ", "reggae", "minor3", 9, "minor", 84, 8, "g:onedrop", 2], ["blues", "ブルース", "shuffle", "blues12", 9, "major", 96, 12, "g:shuffle", 2],
+    ["funk", "ファンク", "funk", "dorvamp", 2, "dorian", 96, 8, "g:funk", 3], ["jazz", "ジャズ（ウォーキング）", "walk2", "twofive", 10, "major", 112, 8, "g:jazz", 2],
+    ["waltz", "ワルツ（3拍子）", "waltz2", "canon", 0, "major", 108, 8, "g:waltz", 1], ["epic", "エピック（ギャロップ）", "gallop", "epic", 4, "minor", 104, 8, "d:metal", 3]
+  ];
+  function bassSong(id) { for (var i = 0; i < BASS_SONGS.length; i++) { if (BASS_SONGS[i][0] === id) { return BASS_SONGS[i]; } } return BASS_SONGS[0]; }
+  function bassBest() { var o = lsGet(BASS_BEST_KEY); return o && typeof o === "object" ? o : {}; }
+  // 音 → レーン（いちばん低いフレットで弾ける弦）
+  function bassLaneOf(m) { for (var i = BASS_LANES.length - 1; i > 0; i--) { if (m >= BASS_LANES[i][0]) { return i; } } return 0; }
+  function bassRJudge(dt) { dt = Math.abs(dt); for (var i = 0; i < BASS_JUDGE.length; i++) { if (dt <= BASS_JUDGE[i][0]) { return i; } } return -1; }
+  function bassRank(acc) { return acc >= 0.95 ? "S" : (acc >= 0.85 ? "A" : (acc >= 0.7 ? "B" : (acc >= 0.5 ? "C" : "D"))); }
+  // 曲の譜面 → { meter, notes: [{ beat, len, m, lane, f: フレット }] }（かんたん は拍の頭だけ）
+  function bassChart(song, level) {
+    var pd = bassPatById(bassPatterns(4), song[2]), out = [], last = "", b, ci;
+    if (pd[0] !== song[2]) { pd = bassPatById(bassPatterns(3), song[2]); }
+    var meter = pd[3], pt = pd[2], L = pt.length, unit = meter / L, cp = bassCprog(song[3]);
+    for (b = 0; b < song[7]; b++) {
+      var ca = bassCprogAt(cp, b * meter, meter), ch = bassChord(song[4], ca.d, song[5]), nx = b + 1 < song[7] ? bassChord(song[4], ca.next, song[5]) : null;
+      for (ci = 0; ci < L; ci++) {
+        var c = pt.charAt(ci), beat = b * meter + ci * unit;
+        if (c === "-" && ci === 0 && ch.name !== last) { c = "R"; }
+        if (c === "-") { continue; }
+        last = ch.name;
+        if (level === "easy" && Math.abs(beat - Math.round(beat)) > 1e-6) { continue; }
+        var m = bassTokNote(c, ch, nx, (b + 1) * meter - beat);
+        if (m < BASS_LANES[0][0]) { m += 12; }
+        var lane = bassLaneOf(m);
+        out.push({ beat: beat, len: bassTokLen(pt, ci) * unit, m: m, lane: lane, f: m - BASS_LANES[lane][0] });
+      }
+    }
+    return { meter: meter, notes: out };
+  }
+  var BASS_RKEYS = { p0: 0, p1: 1, p2: 2, p3: 3, p6: 0, p7: 1, p13: 2, p14: 3 };
+  function bassRhythm(api, cfg) {
+    var prefs = bassPrefs(), prog = prefs.prog, panel = api.panel, frame = 0, ended = false, msg = "";
+    if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
+    if (api.setCanvasHeight) { api.setCanvasHeight(BASS_H); }
+    var song = bassSong(cfg.song), level = cfg.level === "normal" ? "normal" : "easy", rate = (BASS_SPEEDS.indexOf(Number(cfg.speed)) >= 0 ? Number(cfg.speed) : 100) / 100;
+    var chart = bassChart(song, level), meter = chart.meter, spb = 60 / song[6] / rate, t0 = 0.5 + meter * spb;
+    var rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [0, 0, 0, 0], i;
+    for (i = 0; i < chart.notes.length; i++) { var cn = chart.notes[i]; rn.push({ t: t0 + cn.beat * spb, len: cn.len * spb, m: cn.m, lane: cn.lane, f: cn.f, j: -2 }); }
+    var endT = t0 + Math.ceil((chart.notes.length ? chart.notes[chart.notes.length - 1].beat + 0.01 : 0) / meter) * meter * spb;
+    function now() { return frame / 60; }
+    var UG = window.UGMelody, audioOk = false, LAT = UG && UG.latency ? UG.latency() / 1000 : 0;
+    function audio() {
+      if (audioOk || !UG || !UG.audioInit) { return; }
+      try {
+        if (UG.audioInit()) {
+          audioOk = true;
+          UG.loadSamples([prog]);
+          var D = window.UGDrum, dp = D && D.prefs ? D.prefs() : null;
+          if (dp) { if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); } if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); } if (dp.real) { UG.loadSamples([UG.DRUM]); } }
+        }
+      } catch (e) {}
+    }
+    function play(n) {
+      audio();
+      if (!audioOk) { return; }
+      try { var h = UG.synth(n.m, prog, 0, 0.85, undefined, BASS_HOLD); if (h && UG.voiceStop) { UG.voiceStop(h, h.ac.currentTime + Math.max(0.12, n.len * 0.92), 0.05); } } catch (e) {}
+    }
+    // ゴリラドラムのリズム（曲のあいだ）とカウント
+    var dsteps = null, dlen = 16, dk = 0;
+    try { var D0 = window.UGDrum; dsteps = D0 && D0.patternSteps ? D0.patternSteps(song[8]) : null; dlen = D0 && D0.patLen ? D0.patLen(song[8]) : 16; } catch (e0) {}
+    function drumStep() {
+      var ac = audioOk && UG.audio ? UG.audio.ctx : null, du = meter / dlen, D = window.UGDrum, n = 0, k;
+      if (!ac || !dsteps) { return; }
+      while (n++ < 16) {
+        var tt = t0 + dk * du * spb, dt = tt - now();
+        if (dt > 0.1 || tt >= endT - 1e-6) { break; }
+        var s = dk % dlen;
+        dk++;
+        if (dt < -0.05) { continue; }
+        for (k = 0; k < dsteps.length; k++) {
+          if (dsteps[k][1].indexOf(s) < 0) { continue; }
+          var lv = 0.8;
+          try { lv = D.patVel ? D.patVel(dsteps[k][0], s % 16, false) : 0.8; } catch (e) {}
+          try { UG.synth(dsteps[k][0], UG.DRUM, ac.currentTime + dt, lv * 0.7); } catch (e2) {}
+        }
+      }
+    }
+    function hit(lane) {
+      if (ended || !(lane >= 0 && lane < 4)) { return; }
+      laneFlash[lane] = 8;
+      var t = now() - LAT, best = null, k;
+      for (k = 0; k < rn.length; k++) {
+        var n = rn[k];
+        if (n.t - t > BASS_JUDGE[2][0]) { break; }
+        if (n.j !== -2 || n.lane !== lane || Math.abs(t - n.t) > BASS_JUDGE[2][0]) { continue; }
+        if (!best || Math.abs(t - n.t) < Math.abs(t - best.t)) { best = n; }
+      }
+      if (!best) { return; }
+      var g = bassRJudge(t - best.t);
+      best.j = g; counts[g]++; combo++; maxCombo = Math.max(maxCombo, combo);
+      play(best);
+      api.addScore(BASS_JUDGE[g][2] + Math.min(50, combo) * 2);
+      judgeText = BASS_JUDGE[g][1]; judgeFrames = 30;
+    }
+    function finish() {
+      if (ended) { return; }
+      ended = true;
+      var acc = rn.length ? (counts[0] + counts[1] * 0.7 + counts[2] * 0.4) / rn.length : 0, rk = bassRank(acc), best = bassBest();
+      if (rn.length && counts[3] === 0) { api.addScore(500); }
+      var key = song[0] + "@" + level + "@" + Math.round(rate * 100), sc = api.getScore();
+      if (!best[key] || !(best[key].s >= sc)) { best[key] = { s: sc, r: rk }; lsSet(BASS_BEST_KEY, best); }
+      msg = "ランク <b>" + rk + "</b>（正確さ " + Math.round(acc * 100) + "%）・最大コンボ " + maxCombo + (counts[3] === 0 ? "・&#x1F525; フルコンボ +500" : "") +
+        "<br>PERFECT " + counts[0] + " / GREAT " + counts[1] + " / GOOD " + counts[2] + " / MISS " + counts[3];
+      render();
+      api.gameOver("ランク " + rk);
+    }
+    function render() {
+      if (!panel) { return; }
+      panel.innerHTML = '<p class="small" style="margin:4px 0 0;">&#x1F3AE; ' + escHtml(song[1]) + '（' + BASS_RLEVELS[level === "normal" ? 1 : 0][1] + '・BPM ' + Math.round(song[6] * rate) + '・' + rn.length + '音）</p>' +
+        '<p class="small" style="margin:4px 0 0;">音符が線に来たら、その弦のレーンをタップ（キー D F J K）。音符の数字は押さえるフレット（0 は開放弦）</p>' +
+        (msg ? '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>' : "");
+    }
+    render();
+    function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+    var TOP = 26, HIT = BASS_H - 46, LW = (W - 8) / 4;
+    function laneAt(x, y) { if (y < TOP) { return -1; } var l = Math.floor((x - 4) / LW); return l >= 0 && l < 4 ? l : -1; }
+    return {
+      input: function (a, down) { if (down && BASS_RKEYS.hasOwnProperty(a)) { hit(BASS_RKEYS[a]); } },
+      pointer: function (type, x, y) { if (type === "down") { audio(); hit(laneAt(x, y)); } },
+      step: function () {
+        frame++;
+        if (judgeFrames > 0) { judgeFrames--; }
+        for (var k = 0; k < 4; k++) { if (laneFlash[k] > 0) { laneFlash[k]--; } }
+        if (ended) { return; }
+        var t = now() - LAT, left = 0;
+        for (k = 0; k < rn.length; k++) {
+          if (rn[k].j === -2 && t - rn[k].t > BASS_JUDGE[2][0]) { rn[k].j = -1; counts[3]++; combo = 0; judgeText = "MISS"; judgeFrames = 30; }
+          if (rn[k].j === -2) { left++; }
+        }
+        // 1小節のカウント
+        var sb = Math.floor((now() - t0) / spb);
+        if (sb < 0 && sb >= -meter && sb !== lastClick) {
+          lastClick = sb; audio();
+          if (audioOk) { try { UG.synth(sb === -meter ? 37 : 42, UG.DRUM, 0, sb === -meter ? 0.9 : 0.6); } catch (e) {} }
+        }
+        if (audioOk) { drumStep(); }
+        if (!left && t > Math.max(endT, rn.length ? rn[rn.length - 1].t + 1 : 0)) { finish(); }
+      },
+      draw: function (ctx) {
+        ctx.fillStyle = "#1b1f3b";
+        ctx.fillRect(0, 0, W, BASS_H);
+        hudText(ctx, "🎮 " + song[1], 8, 10, "left");
+        hudText(ctx, "コンボ " + combo, W - 8, 10, "right");
+        var t = now() - LAT, k;
+        for (k = 0; k < 4; k++) {
+          var x = 4 + k * LW;
+          ctx.fillStyle = laneFlash[k] > 0 ? "rgba(255,209,102,0.25)" : (k % 2 ? "#232a4d" : "#1f2546");
+          ctx.fillRect(x + 1, TOP, LW - 2, BASS_H - TOP);
+          ctx.fillStyle = "#d9d9d9";
+          ctx.fillRect(x + LW / 2 - (2 - k * 0.4) / 2, TOP, 2 - k * 0.4, BASS_H - TOP);
+          text(ctx, BASS_LANES[k][1], x + LW / 2, HIT + 26, 16, "#adb5bd");
+        }
+        ctx.fillStyle = "#ffd166";
+        ctx.fillRect(4, HIT - 1, W - 8, 3);
+        for (k = 0; k < rn.length; k++) {
+          var n = rn[k];
+          if (n.t - t > BASS_LOOK) { break; }
+          if (n.j !== -2 || t - n.t > 0.25) { continue; }
+          var y = HIT - (n.t - t) / BASS_LOOK * (HIT - TOP), nx = 4 + n.lane * LW;
+          ctx.fillStyle = "#74c0fc";
+          ctx.fillRect(nx + 6, y - 11, LW - 12, 22);
+          text(ctx, String(n.f), nx + LW / 2 - 12, y, 14, "#14213d");
+          text(ctx, bassName(n.m, "do"), nx + LW / 2 + 14, y, 10, "#14213d");
+        }
+        var c0 = Math.ceil((t0 - now()) / spb);
+        if (now() < t0 && c0 >= 1 && c0 <= meter) { text(ctx, String(c0), W / 2, BASS_H / 2 - 20, 40, "#ffd166"); }
+        if (judgeFrames > 0) { text(ctx, judgeText, W / 2, HIT - 40, 20, judgeText === "MISS" ? "#ff6b6b" : "#ffd166"); }
+      }
+    };
+  }
+
   // パッドの見た目でキー Q W E R / A S D F、コードは 1〜7、Z 録音・X 再生
   var BASS_KEYS = { q: "p0", w: "p1", e: "p2", r: "p3", a: "p4", s: "p5", d: "p6", f: "p7", y: "p8", u: "p9", i: "p10", o: "p11", h: "p12", j: "p13", k: "p14", l: "p15",
     "1": "c0", "2": "c1", "3": "c2", "4": "c3", "5": "c4", "6": "c5", "7": "c6", z: "rec", x: "play", t: "tech", b: "pat" };
@@ -479,7 +677,7 @@
     name: "ゴリラベース",
     icon: "&#x1F3B8;",
     desc: "4本の弦のフレットか、コードに合う音のパッドで弾いて録音。ゴリラウクレレのシーケンサーへ送れる",
-    help: "フレット・パッドをタップ（同じ弦ですべらせるとスライド・押さえたまま上をタップでハンマリング）/ パッドは Q W E R・A S D F（16個は Y U I O・H J K L も）、✏️ でパッドの音を変えられる、コードは 1〜7 / T 奏法 / B パターン / Z 録音 / X 再生 / P一時停止",
+    help: "🎮 リズムゲームは落ちてくる音符の弦のレーンをタップ（D F J K）/ フレット・パッドをタップ（同じ弦ですべらせるとスライド・押さえたまま上をタップでハンマリング）/ パッドは Q W E R・A S D F（16個は Y U I O・H J K L も）、✏️ でパッドの音を変えられる、コードは 1〜7 / T 奏法 / B パターン / Z 録音 / X 再生 / P一時停止",
     controls: [],
     keys: BASS_KEYS,
     setup: bassSetup,
@@ -487,6 +685,7 @@
     panel: true,
     create: function (api, cfg) {
       cfg = cfg || {};
+      if (cfg.mode === "rhythm") { return bassRhythm(api, cfg); } // §270
       var prefs = bassPrefs(), view = prefs.view, prog = prefs.prog, names = prefs.names;
       var frame = 0, press = {}, ended = false, msg = "", flash = {}, chordD = 0;
       var panel = api.panel;
@@ -1380,7 +1579,7 @@
   });
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX

@@ -326,6 +326,29 @@ module.exports = function () {
     h21[2].indexOf("data-bscale") > 0 && h21[2].indexOf("data-bcprog") > 0 && h21[3].indexOf('data-ba="posup"') > 0 && h21[3].indexOf('data-ba="tech:slap"') > 0 &&
     h21[4] === h21[3] && JSON.parse(e21.store[B.PREFS_KEY]).tab === "play" && h21.every(function (h) { return h.indexOf('data-ba="pat"') > 0 && h.indexOf('data-ba="rec"') > 0; }),
     "panel tabs: pattern / feel / key / playing; record and pattern buttons stay on top", h21.map(function (h) { return h.length; }));
+  // --- §270: リズムゲーム ---
+  var allOk = B.SONGS.every(function (sg) {
+    var cE = B.chart(sg, "easy"), cN = B.chart(sg, "normal");
+    return cN.notes.length > 0 && cE.notes.length > 0 && cE.notes.length <= cN.notes.length &&
+      cN.notes.every(function (n) { return n.m >= 28 && n.f >= 0 && n.lane === B.laneOf(n.m); }) && cE.notes.every(function (n) { return n.beat % 1 === 0; });
+  });
+  var ch0 = B.chart(B.SONGS[0], "normal"), chW = B.chart(B.SONGS.filter(function (x) { return x[0] === "waltz"; })[0], "normal");
+  ok(B.SONGS.length === 10 && allOk && ch0.notes[0].m === 29 && ch0.notes[0].lane === 0 && ch0.notes[0].f === 1 && chW.meter === 3 && B.laneOf(45) === 3 && B.laneOf(37) === 1,
+    "rhythm charts: 10 songs from pattern x progression, easy keeps the beat heads, each note on the lowest-fret string", [ch0.notes.slice(0, 3), chW.meter]);
+  // ちょうどで全部たたく → 全部 PERFECT・ランク S・ベスト保存。なにもしなければ全部 MISS
+  function rrun(song, level, hitAll) {
+    var e = H.load(), sg = B.SONGS.filter(function (x) { return x[0] === song; })[0], c = B.chart(sg, level), spb = 60 / sg[6], t0 = 0.5 + c.meter * spb, done = {};
+    var r = e.run("bass", { config: { mode: "rhythm", song: song, level: level, speed: 100 } }, 3000, function (f) {
+      if (!hitAll) { return; }
+      c.notes.forEach(function (n, k) {
+        if (!done[k] && f / 60 >= t0 + n.beat * spb - 0.005) { done[k] = 1; var key = "dfjk".charAt(n.lane); e.key("keydown", key); e.key("keyup", key); }
+      });
+    });
+    return { r: r, best: JSON.parse(e.store[B.BEST_KEY] || "{}")[song + "@" + level + "@100"], n: c.notes.length };
+  }
+  var rr1 = rrun("royal", "easy", true), rr2 = rrun("rock", "easy", false);
+  ok(rr1.r.ended !== null && rr1.best && rr1.best.r === "S" && rr1.best.s >= rr1.n * 100 + 500 && rr2.r.ended !== null && rr2.best && rr2.best.r === "D",
+    "rhythm game: hitting every note on time (keys D F J K) → rank S with full-combo bonus; doing nothing → rank D", [rr1.best, rr2.best]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
