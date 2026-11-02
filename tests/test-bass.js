@@ -277,6 +277,19 @@ module.exports = function () {
   ok(my16 && my16.length === 1 && my16[0][0] === "my1" && my16[0][2] === "RR-RR-5-" && pf16 === "my1" && html16.indexOf('<optgroup label="じぶんのパターン"><option value="my1" selected>') > 0 &&
     seq16.indexOf("送れません") > 0 && JSON.parse(e16.store[B.MYPATS_KEY]).length === 0 && JSON.parse(e16.store[B.PREFS_KEY]).pat === "pop",
     "make a pattern: tap a cell (－ → R), save as じぶん 1 (listed first, not sendable to the sequencer), delete it", [my16, pf16]);
+  // --- §266: ノリ（ハネ・アクセント）---
+  ok(B.swingOf(3, 2, 1) > 0.33 && B.swingOf(3, 2, 2) === 0 && B.swingOf(2, 3, 1) === 0 && B.swingOf(0, 4, 1) === 0 &&
+    B.accOf("beat", 2, 0) === 0.92 && B.accOf("beat", 2, 1) === 0.6 && B.accOf("off", 4, 2) === 0.92 && B.accOf("none", 2, 0) === 0.8,
+    "swing delays only the off cells of 2- or 4-per-beat patterns; accents on the beat or off the beat");
+  // 録音すると、ハネた位置・アクセントの強さで録れる（ルート8分・3連のハネ・拍の頭）
+  var g17 = prun({ pat: "root8", bpm: 120, swing: 3, acc: "beat" }, 330, function (f, e) {
+    if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    if (f === 10) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (f === 10 + 120 + 105) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tk17 = JSON.parse(g17.e.store[B.TAKES_KEY] || "[]")[0], n17 = tk17 ? tk17.notes.slice(0, 4) : [];
+  ok(n17.length === 4 && JSON.stringify(n17.map(function (n) { return [n[0], n[3]]; })) === "[[0,0.92],[0.667,0.6],[1,0.92],[1.667,0.6]]",
+    "a triplet swing records long-short eighths; the beat-head accent is louder", n17);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {

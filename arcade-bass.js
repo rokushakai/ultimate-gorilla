@@ -201,6 +201,19 @@
     for (i = 0; i < n; i++) { var j = i * L / n; out += j % 1 === 0 ? pt.charAt(j) : "-"; }
     return out;
   }
+  // §266: ノリ [id, 名前, 値]
+  var BASS_SWINGS = [[0, "なし", 0], [1, "軽く", 0.12], [2, "ハネ", 0.22], [3, "3連", 1 / 3]];
+  var BASS_GATES = [["norm", "ふつう", 0.92], ["stac", "短く", 0.5], ["leg", "長く", 1]];
+  var BASS_ACCS = [["none", "なし"], ["beat", "拍の頭"], ["off", "裏拍"]];
+  function bassOpt(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } } return list[0]; }
+  // マス ci のハネ（1マスの何倍おそくするか）。per: 1拍のマスの数
+  function bassSwingOf(sw, per, ci) { return (per === 2 || per === 4) && ci % 2 === 1 ? bassOpt(BASS_SWINGS, sw)[2] : 0; }
+  // マス ci の強さ
+  function bassAccOf(acc, per, ci) {
+    if (acc !== "beat" && acc !== "off") { return 0.8; }
+    var head = ci % per === 0;
+    return (acc === "beat") === head ? 0.92 : 0.6;
+  }
   function bassPatterns(meter) {
     var m3 = meter === 3, U = window.UGUkulele, st = U && U.BASS_STEPS ? U.BASS_STEPS : [], my = bassMyPats(), i;
     var out = [["root", "ルート（伸ばす）", m3 ? "R-----" : "R-------", meter], ["root8", "ルート8分", m3 ? "RRRRRR" : "RRRRRRRR", meter],
@@ -259,6 +272,7 @@
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
+      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -701,7 +715,8 @@
       function patStep() {
         var d = pat.d, pt = d[2], unit = pat.unit, ac = audioOk && UG.audio ? UG.audio.ctx : null, spb = pat.back ? back.s.spb : 60 / bpm, n = 0;
         while (pat && n++ < 16) {
-          var b = pat.k * unit, tt = patTime(b), dt = tt - now();
+          // §266: 裏のマスはハネのぶんおそく
+          var per = pt.length / d[3], b = pat.k * unit, sb = b + bassSwingOf(prefs.swing, per, pat.k % pt.length) * unit, tt = patTime(sb), dt = tt - now();
           if (dt > 0.1 || (pat.back && b >= back.s.beats - 1e-6)) { break; }
           var ci = pat.k % pt.length, c = pt.charAt(ci), ch = curChord(), next = null, left = 99;
           pat.k++;
@@ -735,11 +750,12 @@
           var m = bassTokNote(c, ch, next ? next.ch : null, left), len = bassTokLen(pt, ci) * unit, how = techOf(m, -1);
           var when = ac ? ac.currentTime + Math.max(0, dt) : 0;
           if (pat.vo && pat.vo.h && UG.voiceStop) { try { UG.voiceStop(pat.vo.h, when, 0.03); } catch (e) {} }
-          pat.vo = { h: sound(m, 0.8, how, when), cur: m };
-          if (pat.vo.h && UG.voiceStop && how !== "ghost") { try { UG.voiceStop(pat.vo.h, when + len * spb * 0.92, 0.04); } catch (e2) {} }
+          var lv = how ? velOf(how) : bassAccOf(prefs.acc, per, ci), gt = bassOpt(BASS_GATES, prefs.gate)[2];
+          pat.vo = { h: sound(m, lv, how, when), cur: m };
+          if (pat.vo.h && UG.voiceStop && how !== "ghost") { try { UG.voiceStop(pat.vo.h, when + len * spb * gt, 0.04); } catch (e2) {} }
           pat.lit = { m: m, t0: tt, t1: tt + len * spb };
           if (pat.rec && rec && b >= 0 && rec.notes.length < BASS_NOTES_MAX) {
-            var nt = [r3(b), r3(len), m], v = velOf(how);
+            var nt = [r3(sb), r3(gt < 0.9 ? len * gt : len), m], v = lv;
             if (v !== 0.8) { nt.push(v); }
             rec.notes.push(nt);
           }
@@ -835,6 +851,13 @@
           allOff(); padHeld = {};
           if (pendOn()) { pend = pend || {}; pend.scale = v.substring(6); }
           else { prefs.scale = v.substring(6); bassSavePrefs(prefs); }
+          render();
+        }
+        else if (v === "swing" || v === "gate" || v === "acc") {
+          // §266: ノリ（押すたびに次へ）
+          var gl = v === "swing" ? BASS_SWINGS : (v === "gate" ? BASS_GATES : BASS_ACCS), gi2 = gl.indexOf(bassOpt(gl, prefs[v]));
+          prefs[v] = gl[(gi2 + 1) % gl.length][0];
+          bassSavePrefs(prefs);
           render();
         }
         else if (v === "quant") { prefs.quant = prefs.quant === "now" ? "bar" : "now"; bassSavePrefs(prefs); if (prefs.quant === "now") { pendApply(); } render(); }
@@ -1014,6 +1037,9 @@
             '<div class="piano-row"><button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
             '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>' +
             '<div class="piano-row"><button class="modal-btn" data-ba="pedit">&#x270F;&#xFE0F; パターンを作る</button>' + (/^my\d$/.test(patDef()[0]) ? '<button class="modal-btn" data-ba="pdel">&#x1F5D1;&#xFE0F; 消す</button>' : "") + '</div>' +
+            '<div class="piano-row"><button class="modal-btn" data-ba="swing">ハネ: ' + bassOpt(BASS_SWINGS, prefs.swing)[1] + '</button>' +
+            '<button class="modal-btn" data-ba="gate">長さ: ' + bassOpt(BASS_GATES, prefs.gate)[1] + '</button>' +
+            '<button class="modal-btn" data-ba="acc">強弱: ' + bassOpt(BASS_ACCS, prefs.acc)[1] + '</button></div>' +
             (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
           // §259: パターンの説明と文字の意味
           html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
@@ -1268,7 +1294,7 @@
   });
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX

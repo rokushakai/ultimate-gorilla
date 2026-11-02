@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.73** |
+| 現在バージョン | **v1.74** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.74] 🎚️ パターンのノリ**（§266）: `BASS_SWINGS`・`BASS_GATES`・`BASS_ACCS`・`bassOpt`・`bassSwingOf(sw, 1拍のマス, マス)`（1拍が2か4マスのときだけ）・`bassAccOf`。`prefs.swing`/`gate`/`acc`、action swing・gate・acc。`patStep` は `sb`（ハネた拍）で鳴らして録る（録る長さは「短く」のときだけ短く）
 - **[v1.73] ✏️ じぶんのベースパターン**（§265）: localStorage `ultimateGorillaBassMyPatsV1`（[id my1〜my8, 名前, マス, 拍子]、`bassMyClean`・`bassMyPats`（キャッシュ）・`bassMySave`）。`bassPatterns` の最後に入り、`bassPatGroups` は「じぶんのパターン」を先頭に。編集 `pe`（{ pt, id }）中は `patDef()` が編集中のパターン、`stepAt`/`peTap` でマスを変える。action pedit・plen:n・pclear・psave・pcancel・pdel。`bassPatResize`
 - **[v1.72] ⏱️ 切りかえを小節の頭に**（§264）: `pend`（{ d, key, scale }）・`pendOn()`（伴奏なしのパターン中で `prefs.quant` が "now" でない）・`pendApply()`（`patStep` の小節の頭と `patStop` で反映）。`setChord`・keyup/keydown・`scale:` は予約へ。action `quant`
 - **[v1.71] 🎼 ベースのコード進行・スケールの点**（§263）: `BASS_CPROGS`（[id, 名前, 小節ごとの度数]）・`BASS_CPROG_GROUPS`・`bassCprog(id)`・`bassCprogAt(cp, 拍, 拍子)`。`patStep` で伴奏なし＋進行ありなら小節ごとに `chordD` を進める（→ は進行の次のコードへ）。`setChord` は進行中なら `prefs.cprog` を "" に。`BASS_SCALES` の4・5番目は特徴音の度数と名前、`bassScalePcs(key, scale)` でフレットに点。`select[data-bcprog]` → `cprog:id`
@@ -222,7 +223,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（875項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（877項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
