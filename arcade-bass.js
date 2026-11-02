@@ -86,11 +86,17 @@
     return { d: cp[2][((bar % L) + L) % L], next: cp[2][(((bar + 1) % L) + L) % L], left: (bar + 1) * meter - b };
   }
   // スケール sc の d 番目の3和音 → { q: コードの名前のうしろ, deg: 度数（♭III・ii° など） }
-  function bassTriad(sc, d) {
+  // sev: §268 7th のコード名
+  function bassTriad(sc, d, sev) {
     function at(k) { return sc[(d + k) % 7] + Math.floor((d + k) / 7) * 12 - sc[d]; }
     var t = at(2), f = at(4), q = t === 4 ? (f === 8 ? "aug" : (f === 6 ? "(♭5)" : "")) : (f === 6 ? "dim" : "m"), dd = sc[d] - BASS_SCALE[d];
-    var rm = t === 3 ? BASS_ROMAN[d].toLowerCase() : BASS_ROMAN[d];
-    return { q: q, deg: (dd < 0 ? "♭" : (dd > 0 ? "♯" : "")) + rm + (q === "dim" ? "°" : (q === "aug" ? "+" : "")) };
+    var rm = t === 3 ? BASS_ROMAN[d].toLowerCase() : BASS_ROMAN[d], acc = dd < 0 ? "♭" : (dd > 0 ? "♯" : "");
+    if (sev) {
+      var s7 = at(6), q7 = q === "dim" ? (s7 === 9 ? "dim7" : "m7♭5") : (q === "m" ? (s7 === 11 ? "mM7" : "m7") : (q === "aug" ? (s7 === 11 ? "augM7" : "aug7") : (s7 === 11 ? "M7" : "7")));
+      var d7 = q7 === "dim7" ? "°7" : (q7 === "m7♭5" ? "ø7" : (q7 === "mM7" ? "mM7" : (q7 === "m7" ? "m7" : (q7 === "augM7" ? "+M7" : (q7 === "aug7" ? "+7" : q7)))));
+      return { q: q === "(♭5)" ? "7♭5" : q7, deg: acc + rm + d7 };
+    }
+    return { q: q, deg: acc + rm + (q === "dim" ? "°" : (q === "aug" ? "+" : "")) };
   }
   // パッドの音 [度数 0〜6（0 ＝ ルート・1 ＝ 2度…6 ＝ 7度）, オクターブ -1〜2, 半音 -1〜1]（§258: 変えられる。8個のときは前の8個）
   var BASS_PAD_DEFS = [[0, 0, 0], [2, 0, 0], [4, 0, 0], [6, 0, 0], [4, -1, 0], [1, 0, 0], [5, 0, 0], [0, 1, 0],
@@ -102,8 +108,8 @@
   function bassPadNote(ch, pd) { return Math.max(0, (pd[0] ? ch.r + ch.iv[pd[0]] : ch.root) + pd[1] * 12 + pd[2]); }
   // キー key（0〜11）の d 番目（0〜6）のダイアトニックコード → { name, deg: 度数, root: ルートの MIDI（E1〜D#2）, r: コードの根音, iv: 度数ごとの半音, notes: はじめのパッドの MIDI 8つ }
   // scale（省略可）: §262 スケールの id（省略はメジャー）
-  function bassChord(key, d, scale) {
-    var sc = bassScale(scale)[2], rootPc = (key + sc[d]) % 12, root = 28 + ((rootPc - 4 + 12) % 12), iv = [], notes = [], i, tr = bassTriad(sc, d);
+  function bassChord(key, d, scale, sev) {
+    var sc = bassScale(scale)[2], rootPc = (key + sc[d]) % 12, root = 28 + ((rootPc - 4 + 12) % 12), iv = [], notes = [], i, tr = bassTriad(sc, d, sev);
     for (i = 0; i < 7; i++) { iv.push(sc[(d + i) % 7] + Math.floor((d + i) / 7) * 12 - sc[d]); }
     var ch = { name: BASS_CDE[rootPc] + tr.q, deg: tr.deg, root: root, r: root, iv: iv, notes: notes };
     for (i = 0; i < 8; i++) { notes.push(bassPadNote(ch, BASS_PAD_DEFS[i])); }
@@ -273,7 +279,7 @@
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
-      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -572,7 +578,7 @@
       }
       // いまのコード（伴奏があるとき）の番号
       function songIdx() { return back && back.chords.length ? bassChordIdx(back.chords, bk ? backBeat() : -1) : -1; }
-      function curChord() { var k = songIdx(); return k >= 0 ? back.chords[k].ch : bassChord(prefs.key, chordD, prefs.scale); }
+      function curChord() { var k = songIdx(); return k >= 0 ? back.chords[k].ch : bassChord(prefs.key, chordD, prefs.scale, prefs.sev); }
       function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
       function recToggle() {
@@ -904,6 +910,7 @@
           bassSavePrefs(prefs);
           render();
         }
+        else if (v === "sev") { prefs.sev = !prefs.sev; bassSavePrefs(prefs); render(); }
         else if (v === "swing" || v === "gate" || v === "acc") {
           // §266: ノリ（押すたびに次へ）
           var gl = v === "swing" ? BASS_SWINGS : (v === "gate" ? BASS_GATES : BASS_ACCS), gi2 = gl.indexOf(bassOpt(gl, prefs[v]));
@@ -1074,7 +1081,7 @@
         // §262: キーとスケール（フレットの画面でも）
         if (!back) {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + (pend && (pend.key !== undefined || pend.scale !== undefined) ? " → " + BASS_CDE[pendKey()] + (pend.scale !== undefined ? " " + bassScale(pend.scale)[1].replace(/（.*）/, "") : "") + "（次の小節）" : "") + '</span>' +
-            '<button class="modal-btn" data-ba="keyup">&#x25B6;</button></div>' +
+            '<button class="modal-btn" data-ba="keyup">&#x25B6;</button><button class="modal-btn" data-ba="sev">' + (prefs.sev ? "7th" : "3和音") + '</button></div>' +
             '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>' +
             (view === "fret" ? '<p class="small" style="margin:4px 0 0;">マスの下の点: スケールの音（白い大きな点は主音・<span style="color:#f783ac;">●</span> 特徴音 ' + bassScale(prefs.scale)[4] + '）</p>' : "") +
             '<div class="piano-row"><label class="piano-select">&#x1F501; <select data-bcprog="1">' + cprogOptions() + '</select></label></div>';
@@ -1233,9 +1240,9 @@
           ctx.fillStyle = cur ? "#ffd166" : (flash["c" + i] > 0 ? "#fff3b0" : "#2f4a6e");
           ctx.fillRect(cr.x, cr.y, cr.w, cr.h);
           if (i === nxD && i !== chordD) { ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 2; ctx.strokeRect(cr.x + 1, cr.y + 1, cr.w - 2, cr.h - 2); ctx.lineWidth = 1; }
-          var dc = bassChord(prefs.key, i, prefs.scale);
-          text(ctx, dc.deg, cr.x + cr.w / 2, cr.y + 8, 7, cur ? "#14213d" : "#adb5bd");
-          text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4, dc.name.length > 4 ? 8 : 10, cur ? "#14213d" : "#ffffff");
+          var dc = bassChord(prefs.key, i, prefs.scale, prefs.sev);
+          text(ctx, dc.deg, cr.x + cr.w / 2, cr.y + 8, dc.deg.length > 5 ? 6 : 7, cur ? "#14213d" : "#adb5bd");
+          text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4, dc.name.length > 5 ? 7 : (dc.name.length > 4 ? 8 : 10), cur ? "#14213d" : "#ffffff");
         }
       }
       function drawPads(ctx) {
@@ -1329,7 +1336,7 @@
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, BASS_H);
           var si = songIdx(), nx = si >= 0 ? back.chords[si + 1] : null;
-          hudText(ctx, view === "pad" ? (ed ? "✏️ 編集中" : si >= 0 ? "🎸 伴奏" : "🎛️ キー " + BASS_CDE[prefs.key] + " " + bassScale(prefs.scale)[1].replace(/（.*）/, "")) : (si >= 0 ? "🎸 " + back.chords[si].name + (nx ? " → " + nx.name : "") : (pat ? "🎼 " + patDef()[1] : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜"))), 8, 10, "left");
+          hudText(ctx, view === "pad" ? (ed ? "✏️ 編集中" : si >= 0 ? "🎸 伴奏" : "🎛️ キー " + BASS_CDE[prefs.key]) : (si >= 0 ? "🎸 " + back.chords[si].name + (nx ? " → " + nx.name : "") : (pat ? "🎼 " + patDef()[1] : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜"))), 8, 10, "left");
           hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
           var held = [], k;
           for (k in press) { if (press.hasOwnProperty(k)) { held.push(press[k]); } }

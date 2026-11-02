@@ -307,6 +307,11 @@ module.exports = function () {
   ok(d18.dr.filter(function (m) { return m === 36; }).length >= 2 && d18.dr.filter(function (m) { return m === 38; }).length >= 2 && d18.dr.indexOf(42) >= 0 &&
     d19.dr.length === 0 && d20.dr.length === 0 && d18.html.indexOf('<option value="g:8beat" selected>') > 0 && d18.html.indexOf('value="f:') < 0,
     "a Gorilla Drum loop plays along with the bass pattern (kick, snare, hi-hat); none or a fill id plays no drums", [d18.dr.length, d19.dr.length, d20.dr.length]);
+  // --- §268: 7th のコード名 ---
+  var c7 = [0, 1, 2, 3, 4, 5, 6].map(function (d) { var c = B.chord(0, d, "major", true); return c.name + "/" + c.deg; }).join();
+  var h7 = [B.chord(9, 6, "harm", true), B.chord(9, 0, "harm", true), B.chord(9, 2, "melo", true)].map(function (c) { return c.name + "/" + c.deg; }).join();
+  ok(c7 === "CM7/IM7,Dm7/iim7,Em7/iiim7,FM7/IVM7,G7/V7,Am7/vim7,Bm7♭5/viiø7" && h7 === "G#dim7/vii°7,AmM7/imM7,CaugM7/♭III+M7" && B.chord(0, 4, "major").name === "G",
+    "7th chord names and degrees (major scale, harmonic and melodic minor); triads stay the default", [c7, h7]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
@@ -339,6 +344,11 @@ module.exports = function () {
   ok(am9.name === "Am" && am9.deg === "i" && am9.notes[1] === 36 && B.SCALES.length === 9 &&
     sc9.map(function (c) { return c.name + "/" + c.deg; }).join() === "C/♭III,E/V,Caug/♭III+,G/IV,F/♭II,D/II,F/♭VII,Bdim/i°,C/I,Dm/ii",
     "scales: chords and degrees follow the chosen scale (minor, harmonic/melodic minor, church modes; unknown is major)", sc9.map(function (c) { return c.name + "/" + c.deg; }));
+  // §268: 7th のコード名
+  var c7 = [0, 1, 2, 3, 4, 5, 6].map(function (d) { var c = B.chord(0, d, "major", true); return c.name + "/" + c.deg; }).join();
+  var x7 = [B.chord(9, 0, "harm", true), B.chord(9, 6, "harm", true), B.chord(9, 2, "melo", true)].map(function (c) { return c.name + "/" + c.deg; }).join();
+  ok(c7 === "CM7/IM7,Dm7/iim7,Em7/iiim7,FM7/IVM7,G7/V7,Am7/vim7,Bm7♭5/viiø7" && x7 === "AmM7/imM7,G#dim7/vii°7,CaugM7/♭III+M7" && B.chord(0, 4, "major", true).notes[3] === B.chord(0, 4).notes[3],
+    "7th chord names and degrees (display only: the notes do not change)", [c7, x7]);
   // フレットの画面でもキーとスケールを変えられる（知らない id は無視）
   var e15 = H.load({ patch: function (src, file) {
     if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
