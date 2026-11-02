@@ -313,6 +313,8 @@
   }
   // §276: 次のルート nr へ半音で近づく音（m: いまの音）
   function bassApproach(m, nr) { var a = m <= nr ? nr - 1 : nr + 1; return a < 28 ? nr + 1 : a; }
+  // §278: だんだん速く（4小節ごとに上げる BPM）と上限
+  var BASS_RAMPS = [0, 2, 5, 10], BASS_RAMP_MAXES = [120, 140, 160, 180, 200, 240];
   // §277: 4小節ごとのフィル（1拍のマスの数 → フィルの文字。4小節ごとに順番に）
   var BASS_FILLS = { 1: ["8", "A", "5"], 2: ["85", "5A", "8A"], 3: ["R58", "85A", "358"], 4: ["R585", "875A", "R35A", "8R8A"] };
   // 拍 b のフィルの文字（フィルでなければ ""）
@@ -336,7 +338,7 @@
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0],
-      land: !!p.land, bvol: p.volv === 2 ? bassVol(p.bvol, 100) : 100, dvol: p.volv === 2 ? bassVol(p.dvol, 50) : 50, volv: 2, phone: !!p.phone, appr: !!p.appr, fill: !!p.fill, rlevel: p.rlevel === "normal" ? "normal" : "easy", rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      land: !!p.land, bvol: p.volv === 2 ? bassVol(p.bvol, 100) : 100, dvol: p.volv === 2 ? bassVol(p.dvol, 50) : 50, volv: 2, phone: !!p.phone, appr: !!p.appr, fill: !!p.fill, ramp: BASS_RAMPS.indexOf(Number(p.ramp)) >= 0 ? Number(p.ramp) : 0, rampMax: BASS_RAMP_MAXES.indexOf(Number(p.rampMax)) >= 0 ? Number(p.rampMax) : 160, rlevel: p.rlevel === "normal" ? "normal" : "easy", rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -978,7 +980,12 @@
         var b = pat.back ? backBeat() : (now() - pat.t0) * bpm / 60;
         return b < 0 ? -1 : Math.floor(b / pat.unit + 1e-6) % pat.d[2].length;
       }
-      function patStop() { if (!pat) { return; } hush(pat.vo); pat = null; pendApply(); }
+      function patStop() {
+        if (!pat) { return; }
+        var rmp = pat.ramped;
+        hush(pat.vo); pat = null; pendApply();
+        if (rmp) { bpm = prefs.bpm; render(); } // §278: はじめの BPM にもどす
+      }
       // §264: パターン中のコード・キー・スケールの切りかえは次の小節の頭に（予約 { d, key, scale }）
       var pend = null;
       function pendOn() { return !!(pat && !pat.back && prefs.quant !== "now"); }
@@ -1045,6 +1052,13 @@
       function patStep() {
         var d = pat.d, pt = d[2], unit = pat.unit, ac = audioOk && UG.audio ? UG.audio.ctx : null, spb = pat.back ? back.s.spb : 60 / bpm, n = 0;
         while (pat && n++ < 16) {
+          // §278: だんだん速く（5・9…小節目の頭で、その時刻のまま BPM を上げる）
+          var rb = pat.k * unit, rbar = Math.round(rb / d[3]);
+          if (prefs.ramp && !pat.back && !rec && pat.k % pt.length === 0 && rbar > 0 && rbar % 4 === 0 && pat.rampAt !== rbar) {
+            pat.rampAt = rbar;
+            var nb = Math.min(prefs.rampMax, bpm + prefs.ramp);
+            if (nb > bpm) { var tB = patTime(rb); bpm = nb; pat.t0 = tB - rb * 60 / bpm; pat.ramped = true; spb = 60 / bpm; render(); }
+          }
           // §266: 裏のマスはハネのぶんおそく
           var per = pt.length / d[3], b = pat.k * unit, sb = b + bassSwingOf(prefs.swing, per, pat.k % pt.length) * unit, tt = patTime(sb), dt = tt - now();
           if (dt > 0.1 || (pat.back && b >= back.s.beats - 1e-6)) { break; }
@@ -1199,6 +1213,10 @@
         }
         else if (v === "land") { allOff(); padHeld = {}; prefs.land = !prefs.land; bassSavePrefs(prefs); applyLand(); render(); }
         else if (/^tab:/.test(v)) { if (bassOpt(BASS_TABS, v.substring(4))[0] !== v.substring(4)) { return; } prefs.tab = v.substring(4); bassSavePrefs(prefs); render(); }
+        else if (v === "ramp" || v === "rampmax") {
+          var rl = v === "ramp" ? BASS_RAMPS : BASS_RAMP_MAXES, rk = v === "ramp" ? "ramp" : "rampMax";
+          prefs[rk] = rl[(rl.indexOf(prefs[rk]) + 1) % rl.length]; bassSavePrefs(prefs); render();
+        }
         else if (v === "fill") { prefs.fill = !prefs.fill; bassSavePrefs(prefs); render(); }
         else if (v === "appr") { prefs.appr = !prefs.appr; bassSavePrefs(prefs); render(); }
         else if (v === "phone") { prefs.phone = !prefs.phone; bassSavePrefs(prefs); bassBus(buses, "b", prefs.bvol, prefs.phone); render(); }
@@ -1409,6 +1427,8 @@
               '<div class="piano-row"><button class="modal-btn' + (prefs.phone ? " piano-rec-on" : "") + '" data-ba="phone">&#x1F4F1; スマホ向けの音: ' + (prefs.phone ? "ON" : "OFF") + '</button></div>' +
               '<div class="piano-row"><span>&#x1F50A; ベース</span><button class="modal-btn" data-ba="bvol:-">－</button><span>' + prefs.bvol + '%</span><button class="modal-btn" data-ba="bvol:+">＋</button></div>' +
               (back ? "" : '<div class="piano-row"><span>&#x1F50A; ドラム</span><button class="modal-btn" data-ba="dvol:-">－</button><span>' + prefs.dvol + '%</span><button class="modal-btn" data-ba="dvol:+">＋</button></div>') +
+              (back ? "" : '<div class="piano-row"><button class="modal-btn' + (prefs.ramp ? " piano-rec-on" : "") + '" data-ba="ramp">&#x1F4C8; だんだん速く: ' + (prefs.ramp ? "+" + prefs.ramp + "（4小節ごと）" : "なし") + '</button>' +
+                '<button class="modal-btn" data-ba="rampmax">上限 BPM ' + prefs.rampMax + '</button></div>') +
               (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
           } else if (tb === "key") {
             // §262: キーとスケール
@@ -1682,7 +1702,7 @@
   });
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX

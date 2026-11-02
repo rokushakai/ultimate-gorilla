@@ -378,6 +378,18 @@ module.exports = function () {
   ok(fi1.snd.slice(16, 30).join() === "36,36,36,36,36,36,36,36,36,36,36,36,36,36" && fi1.snd[30] === 48 && fi1.snd[31] === 43 &&
     B.fillTok(4, 15, 4) === "R" && B.fillTok(4, 15.75, 4) === "5" && B.fillTok(4, 14.75, 4) === "" && B.fillTok(4, 31.75, 4) === "A" && B.fillTok(2, 11.5, 3) === "5" && B.fillTok(1.5, 15, 4) === "",
     "fill: the last beat of every 4th bar plays a fill (8 5 for eighths), changing every 4 bars", fi1.snd.slice(14, 33));
+  // §278: だんだん速く（BPM 120・+10・上限 140）→ 5小節目の頭で 130、9小節目で 140。止めると 120
+  var rp = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } }), rph = [];
+  rp.store[B.PREFS_KEY] = JSON.stringify({ pat: "root8", bpm: 120, ramp: 10, rampMax: 140 });
+  rp.run("bass", { config: {} }, 1000, function (f) {
+    if (f === 2 || f === 990) { rp.key("keydown", "b"); rp.key("keyup", "b"); }
+    if (f === 400 || f === 520 || f === 985 || f === 995) { rph.push((rp.window.__bassPanel().match(/BPM (\d+)/) || [])[1]); }
+  });
+  ok(rph.join() === "120,130,140,120" && JSON.parse(rp.store[B.PREFS_KEY]).bpm === 120 && B.RAMPS.join() === "0,2,5,10",
+    "speed trainer: the BPM goes up every 4 bars (capped), and goes back when the pattern stops", rph);
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));
