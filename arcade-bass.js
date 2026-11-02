@@ -53,14 +53,37 @@
   var BASS_SCALE = [0, 2, 4, 5, 7, 9, 11];
   // §262: スケール [id, 名前, 主音からの半音7つ]
   var BASS_SCALES = [
-    ["major", "メジャー（イオニアン）", [0, 2, 4, 5, 7, 9, 11]], ["minor", "ナチュラルマイナー（エオリアン）", [0, 2, 3, 5, 7, 8, 10]],
-    ["harm", "ハーモニックマイナー", [0, 2, 3, 5, 7, 8, 11]], ["melo", "メロディックマイナー", [0, 2, 3, 5, 7, 9, 11]],
-    ["dorian", "ドリアン", [0, 2, 3, 5, 7, 9, 10]], ["phryg", "フリジアン", [0, 1, 3, 5, 7, 8, 10]], ["lydian", "リディアン", [0, 2, 4, 6, 7, 9, 11]],
-    ["mixo", "ミクソリディアン", [0, 2, 4, 5, 7, 9, 10]], ["locrian", "ロクリアン", [0, 1, 3, 5, 6, 8, 10]]
+    ["major", "メジャー（イオニアン）", [0, 2, 4, 5, 7, 9, 11], [3, 6], "4度・7度"], ["minor", "ナチュラルマイナー（エオリアン）", [0, 2, 3, 5, 7, 8, 10], [5], "♭6度"],
+    ["harm", "ハーモニックマイナー", [0, 2, 3, 5, 7, 8, 11], [6], "7度"], ["melo", "メロディックマイナー", [0, 2, 3, 5, 7, 9, 11], [5, 6], "6度・7度"],
+    ["dorian", "ドリアン", [0, 2, 3, 5, 7, 9, 10], [5], "6度"], ["phryg", "フリジアン", [0, 1, 3, 5, 7, 8, 10], [1], "♭2度"], ["lydian", "リディアン", [0, 2, 4, 6, 7, 9, 11], [3], "♯4度"],
+    ["mixo", "ミクソリディアン", [0, 2, 4, 5, 7, 9, 10], [6], "♭7度"], ["locrian", "ロクリアン", [0, 1, 3, 5, 6, 8, 10], [4], "♭5度"]
   ];
   var BASS_SCALE_GROUPS = [["ダイアトニック", ["major", "minor"]], ["マイナーの変化形", ["harm", "melo"]], ["教会旋法", ["dorian", "phryg", "lydian", "mixo", "locrian"]]];
   var BASS_ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
   function bassScale(id) { for (var i = 0; i < BASS_SCALES.length; i++) { if (BASS_SCALES[i][0] === id) { return BASS_SCALES[i]; } } return BASS_SCALES[0]; }
+  // §263: キーとスケールの音 → { 音の高さ（0〜11）: 1 ＝ スケールの音・2 ＝ 特徴音・3 ＝ 主音 }
+  function bassScalePcs(key, scale) {
+    var s = bassScale(scale), out = {}, i;
+    for (i = 0; i < 7; i++) { out[(key + s[2][i]) % 12] = i === 0 ? 3 : (s[3].indexOf(i) >= 0 ? 2 : 1); }
+    return out;
+  }
+  // §263: コード進行 [id, 名前, 1小節ごとのスケールの度数（0〜6）]
+  var BASS_CPROGS = [
+    ["royal", "王道進行（IV-V-iii-vi）", [3, 4, 2, 5]], ["pop4", "I-V-vi-IV", [0, 4, 5, 3]], ["canon", "カノン進行", [0, 4, 5, 2, 3, 0, 3, 4]],
+    ["komuro", "小室進行（vi-IV-V-I）", [5, 3, 4, 0]], ["fifty", "50年代（I-vi-IV-V）", [0, 5, 3, 4]], ["twofive", "ツーファイブ（ii-V-I）", [1, 4, 0, 0]],
+    ["blues12", "12小節ブルース", [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4]],
+    ["minor3", "マイナーの3コード（i-iv-v-i）", [0, 3, 4, 0]], ["andalus", "アンダルシア進行（i-♭VII-♭VI-V）", [0, 6, 5, 4]], ["epic", "エピック（i-♭VI-♭III-♭VII）", [0, 5, 2, 6]],
+    ["dorvamp", "ドリアン向け（i-IV）", [0, 3]], ["mixvamp", "ミクソリディアン向け（I-♭VII-IV-I）", [0, 6, 3, 0]], ["lydvamp", "リディアン向け（I-II）", [0, 1]],
+    ["phrvamp", "フリジアン向け（i-♭II）", [0, 1]]
+  ];
+  var BASS_CPROG_GROUPS = [["メジャー向け", ["royal", "pop4", "canon", "komuro", "fifty", "twofive", "blues12"]], ["マイナー・旋法向け", ["minor3", "andalus", "epic", "dorvamp", "mixvamp", "lydvamp", "phrvamp"]]];
+  // 知らない id・"" は null（コード進行なし）
+  function bassCprog(id) { for (var i = 0; i < BASS_CPROGS.length; i++) { if (BASS_CPROGS[i][0] === id) { return BASS_CPROGS[i]; } } return null; }
+  // 進行 cp の拍 b のときの度数・次の小節の度数・次の小節までの拍
+  function bassCprogAt(cp, b, meter) {
+    var bar = Math.floor(b / meter + 1e-6), L = cp[2].length;
+    return { d: cp[2][((bar % L) + L) % L], next: cp[2][(((bar + 1) % L) + L) % L], left: (bar + 1) * meter - b };
+  }
   // スケール sc の d 番目の3和音 → { q: コードの名前のうしろ, deg: 度数（♭III・ii° など） }
   function bassTriad(sc, d) {
     function at(k) { return sc[(d + k) % 7] + Math.floor((d + k) / 7) * 12 - sc[d]; }
@@ -209,7 +232,7 @@
       prog: bassProgOk(Number(p.prog)) ? Number(p.prog) : 33,
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
-      key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0],
+      key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -626,7 +649,18 @@
             if (next) { left = next.start - b; }
             // コードが変わる拍が休みなら、その拍でルート
             if (c === "-" && Math.abs(sc.start - b) < 1e-6) { c = "R"; }
-          } else if (c === "-" && ci === 0 && ch.name !== pat.lastCh) { c = "R"; } // §259: 伴奏なしでも、コードが変わった小節の頭が休みならルート
+          } else {
+            // §263: コード進行をえらんでいたら、小節ごとに次のコードへ
+            var cp = bassCprog(prefs.cprog);
+            if (cp) {
+              var ca = bassCprogAt(cp, b, meter);
+              if (ca.d !== chordD) { chordD = ca.d; flash["c" + ca.d] = 10; }
+              ch = curChord();
+              next = { ch: bassChord(prefs.key, ca.next, prefs.scale) };
+              left = ca.left;
+            }
+            if (c === "-" && ci === 0 && ch.name !== pat.lastCh) { c = "R"; } // §259: 伴奏なしでも、コードが変わった小節の頭が休みならルート
+          }
           if (c !== "-") { pat.lastCh = ch.name; }
           if (c === "-" || dt < -0.05) { continue; }
           var m = bassTokNote(c, ch, next ? next.ch : null, left), len = bassTokLen(pt, ci) * unit, how = techOf(m, -1);
@@ -702,7 +736,12 @@
         render();
       }
       // 伴奏があるときは、コードは曲に合わせて変わる（自分では選ばない）
-      function setChord(d) { if (d >= 0 && d < 7 && !back) { chordD = d; flash["c" + d] = 10; } }
+      function setChord(d) {
+        if (!(d >= 0 && d < 7 && !back)) { return; }
+        chordD = d; flash["c" + d] = 10;
+        // §263: 進行を鳴らしているときに自分でえらぶと「コード進行なし」にもどる
+        if (prefs.cprog && pat) { prefs.cprog = ""; bassSavePrefs(prefs); render(); }
+      }
       function setTech(t) { prefs.tech = t; bassSavePrefs(prefs); render(); }
       function action(v) {
         if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); } else if (v === "back") { backToggle(); }
@@ -724,6 +763,13 @@
           if (bassScale(v.substring(6))[0] !== v.substring(6)) { return; }
           allOff(); padHeld = {};
           prefs.scale = v.substring(6);
+          bassSavePrefs(prefs);
+          render();
+        }
+        else if (/^cprog:/.test(v)) {
+          var cid = v.substring(6);
+          if (cid && !bassCprog(cid)) { return; }
+          prefs.cprog = cid;
           bassSavePrefs(prefs);
           render();
         }
@@ -795,6 +841,15 @@
         }
         return h;
       }
+      function cprogOptions() {
+        var h = '<option value=""' + (prefs.cprog ? "" : " selected") + '>コード進行なし（上の段をタップ）</option>', i, j;
+        for (i = 0; i < BASS_CPROG_GROUPS.length; i++) {
+          h += '<optgroup label="' + BASS_CPROG_GROUPS[i][0] + '">';
+          for (j = 0; j < BASS_CPROG_GROUPS[i][1].length; j++) { var cp = bassCprog(BASS_CPROG_GROUPS[i][1][j]); h += '<option value="' + cp[0] + '"' + (cp[0] === prefs.cprog ? " selected" : "") + '>' + cp[1] + '</option>'; }
+          h += '</optgroup>';
+        }
+        return h;
+      }
       function scaleOptions() {
         var h = "", i, j;
         for (i = 0; i < BASS_SCALE_GROUPS.length; i++) {
@@ -824,7 +879,9 @@
         if (!back) {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + '</span>' +
             '<button class="modal-btn" data-ba="keyup">&#x25B6;</button></div>' +
-            '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>';
+            '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>' +
+            (view === "fret" ? '<p class="small" style="margin:4px 0 0;">マスの下の点: スケールの音（白い大きな点は主音・<span style="color:#f783ac;">●</span> 特徴音 ' + bassScale(prefs.scale)[4] + '）</p>' : "") +
+            '<div class="piano-row"><label class="piano-select">&#x1F501; <select data-bcprog="1">' + cprogOptions() + '</select></label></div>';
         }
         if (view === "pad") {
           html += '<div class="piano-row"><button class="modal-btn' + (ed ? " piano-rec-on" : "") + '" data-ba="edit">' + (ed ? "&#x2705; 編集おわり" : "&#x270F;&#xFE0F; パッドの音を変える") + '</button>' +
@@ -838,7 +895,7 @@
             '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>';
           // §259: パターンの説明と文字の意味
           html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
-            (back ? "コードは曲に合わせて変わります。" : "上の段のコードをタップすると、次の音から変わります。") + "<br>") +
+            (back ? "コードは曲に合わせて変わります。" : (prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "上の段のコードをタップすると、次の音から変わります。")) + "<br>") +
             "&#x1F3BC; " + escHtml(patDef()[2]) + "（" + escHtml(bassPatLegend(patDef()[2])) + "）</p>";
           html += '<div class="piano-row">';
           for (i = 0; i < BASS_TECHS.length; i++) { html += '<button class="modal-btn' + (prefs.tech === BASS_TECHS[i][0] ? " piano-rec-on" : "") + '" data-ba="tech:' + BASS_TECHS[i][0] + '">' + BASS_TECHS[i][1] + '</button>'; }
@@ -856,6 +913,8 @@
         if (psel) { psel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("patset:" + ev.currentTarget.value); }; }
         var ssel = panel.querySelector ? panel.querySelector("select[data-bscale]") : null;
         if (ssel) { ssel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("scale:" + ev.currentTarget.value); }; }
+        var csel = panel.querySelector ? panel.querySelector("select[data-bcprog]") : null;
+        if (csel) { csel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("cprog:" + ev.currentTarget.value); }; }
       }
       render();
 
@@ -897,7 +956,7 @@
           ctx.fillRect(BASS_BOARD_X + c * cw - (c === 1 && prefs.pos === 0 ? 2 : 0.75), top, c === 1 && prefs.pos === 0 ? 4 : 1.5, bot - top);
         }
         // §255: 伴奏があるときは、いまのコードの音（R・3・5）のマスに輪（ルートは太く）
-        var ch = (back && back.chords.length) || pat ? curChord() : null, chPcs = {};
+        var ch = (back && back.chords.length) || pat ? curChord() : null, chPcs = {}, spc = back ? null : bassScalePcs(prefs.key, prefs.scale);
         if (ch) { chPcs[bassPc(ch.notes[1])] = 1; chPcs[bassPc(ch.notes[2])] = 1; chPcs[bassPc(ch.root)] = 2; }
         // 弦と、押している・鳴っているマス
         for (s = 0; s < BASS_STRINGS.length; s++) {
@@ -905,6 +964,12 @@
           for (c = 0; c < BASS_COLS; c++) {
             var m = BASS_STRINGS[s][0] + bassFretOf(prefs.pos, c), st = lit[m];
             r = bassCellRect(s, c);
+            // §263: スケールの音の点（主音は白く大きく・特徴音はピンク）
+            if (spc && spc[bassPc(m)]) {
+              var sk = spc[bassPc(m)];
+              ctx.fillStyle = sk === 3 ? "#ffffff" : (sk === 2 ? "#f783ac" : "rgba(255,255,255,0.5)");
+              ctx.beginPath(); ctx.arc(r.x + r.w / 2, sy + rh * 0.33, sk === 1 ? 2 : 3, 0, Math.PI * 2); ctx.fill();
+            }
             if (ch && chPcs[bassPc(m)]) {
               ctx.strokeStyle = chPcs[bassPc(m)] === 2 ? "#ff922b" : "rgba(116,192,252,0.85)";
               ctx.lineWidth = chPcs[bassPc(m)] === 2 ? 3 : 1.5;
@@ -939,7 +1004,9 @@
         }
       }
       function drawChords(ctx) {
-        var i, si = songIdx();
+        var i, si = songIdx(), cp = pat && !pat.back ? bassCprog(prefs.cprog) : null;
+        // §263: 進行の次のコード（枠が光る）
+        var nxD = cp ? bassCprogAt(cp, Math.max(0, (now() - pat.t0) * bpm / 60), meter).next : -1;
         // §255: 伴奏があるときは、上の段に「いまのコード・次のコード3つ」
         for (i = 0; si >= 0 && i < 4; i++) {
           var sr = { x: 4 + i * (W - 8) / 4 + 1, y: BASS_CHORD_Y, w: (W - 8) / 4 - 2, h: BASS_CHORD_H }, sc = back.chords[si + i];
@@ -952,6 +1019,7 @@
           var cr = bassChordRect(i), cur = i === chordD;
           ctx.fillStyle = cur ? "#ffd166" : (flash["c" + i] > 0 ? "#fff3b0" : "#2f4a6e");
           ctx.fillRect(cr.x, cr.y, cr.w, cr.h);
+          if (i === nxD && i !== chordD) { ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 2; ctx.strokeRect(cr.x + 1, cr.y + 1, cr.w - 2, cr.h - 2); ctx.lineWidth = 1; }
           var dc = bassChord(prefs.key, i, prefs.scale);
           text(ctx, dc.deg, cr.x + cr.w / 2, cr.y + 8, 7, cur ? "#14213d" : "#adb5bd");
           text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4, dc.name.length > 4 ? 8 : 10, cur ? "#14213d" : "#ffffff");
@@ -1077,7 +1145,7 @@
 
   window.UGBass = {
     STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
-    cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
+    cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX
   };

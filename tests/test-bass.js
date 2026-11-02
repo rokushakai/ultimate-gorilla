@@ -243,6 +243,14 @@ module.exports = function () {
   });
   ok(g5.snd[0] === 36 && g5.snd.indexOf(33) > 0 && g5.snd.indexOf(33) > g5.snd.lastIndexOf(36) && g5.e.counters.texts.indexOf("5↓") >= 0,
     "fret view: the chord strip appears while a pattern plays (tap Am → the pattern follows) with the pattern's cells", g5.snd);
+  // --- §263: コード進行・スケールの音 ---
+  var sp9 = B.scalePcs(2, "dorian"), ca9 = B.cprogAt(B.cprog("royal"), 5, 4);
+  ok(sp9[2] === 3 && sp9[11] === 2 && sp9[4] === 1 && !sp9[1] && B.cprog("nope") === null && B.CPROGS.length === 14 && ca9.d === 4 && ca9.next === 2 && ca9.left === 3,
+    "scale notes (tonic / characteristic 6th of dorian) and chord progression lookup by bar", [sp9, ca9]);
+  var g7 = prun({ pat: "root", bpm: 240, view: "fret", cprog: "royal" }, 250, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  var g8 = prun({ pat: "root", bpm: 240, view: "pad", cprog: "epic", key: 9, scale: "minor" }, 250, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  ok(g7.snd.slice(0, 4).join() === "29,31,28,33" && g8.snd.slice(0, 4).join() === "33,29,36,31",
+    "a chord progression moves the pattern bar by bar (royal road in C: F G Em Am; epic in A minor: Am F C G)", [g7.snd, g8.snd]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
