@@ -222,17 +222,22 @@
   }
   // §269: パネルのタブ
   // §272: 音量（%）。出口の GainNode（st: ゲームごとの入れもの、k: "b" ベース / "d" ドラム）
-  var BASS_VOL_MAX = 150, BASS_VOL_STEP = 10;
+  // §273: ベースのサンプル（FluidR3）はドラム（ほぼいっぱいの大きさ）よりずっと小さいので、ベースは BOOST 倍・ドラムは TRIM 倍にしてそろえる
+  var BASS_VOL_MAX = 150, BASS_VOL_STEP = 10, BASS_BOOST = 4, BASS_DRUM_TRIM = 0.4;
   function bassVol(v, d) { v = Number(v); return v >= 0 && v <= BASS_VOL_MAX && v % BASS_VOL_STEP === 0 ? v : d; }
   function bassBus(st, k, vol) {
     var A = window.UGMelody && window.UGMelody.audio, ac = A && A.ctx, to = A ? (A.bus || A.master) : null, b = st[k];
     if (!ac || !to || !ac.createGain) { return null; }
     if (!b || b.ac !== ac || b.to !== to) { b = st[k] = { ac: ac, to: to, g: ac.createGain() }; b.g.connect(to); }
-    b.g.gain.value = vol / 100;
+    b.g.gain.value = vol / 100 * (k === "d" ? BASS_DRUM_TRIM : 1);
     return b.g;
   }
-  // 1音の強さ lv を保ったまま bus へ
-  function bassVoiceOut(bus, lv) { var g = window.UGMelody.audio.ctx.createGain(); g.gain.value = lv; g.connect(bus); return g; }
+  // 1音の強さ lv を保ったまま bus へ（サンプルで鳴るときは BOOST 倍。合成音はもとの大きさ）
+  function bassVoiceOut(bus, lv, prog) {
+    var UG = window.UGMelody, g = UG.audio.ctx.createGain(), smp = false;
+    try { smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog)); } catch (e) {}
+    g.gain.value = lv * (smp ? BASS_BOOST : 1); g.connect(bus); return g;
+  }
   var BASS_TABS = [["pat", "パターン"], ["feel", "ノリ"], ["key", "キー"], ["play", "弾き方"]];
   function bassPatterns(meter) {
     var m3 = meter === 3, U = window.UGUkulele, st = U && U.BASS_STEPS ? U.BASS_STEPS : [], my = bassMyPats(), i;
@@ -294,7 +299,7 @@
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0],
-      land: !!p.land, bvol: bassVol(p.bvol, 100), dvol: bassVol(p.dvol, 60), rlevel: p.rlevel === "normal" ? "normal" : "easy", rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      land: !!p.land, bvol: p.volv === 2 ? bassVol(p.bvol, 100) : 100, dvol: p.volv === 2 ? bassVol(p.dvol, 50) : 50, volv: 2, rlevel: p.rlevel === "normal" ? "normal" : "easy", rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -577,7 +582,7 @@
       audio();
       if (!audioOk) { return; }
       var bus = bassBus(buses, "b", prefs.bvol);
-      try { var h = UG.synth(n.m, prog, 0, 0.85, bus ? bassVoiceOut(bus, 0.85) : undefined, BASS_HOLD); if (h && UG.voiceStop) { UG.voiceStop(h, h.ac.currentTime + Math.max(0.12, n.len * 0.92), 0.05); } } catch (e) {}
+      try { var h = UG.synth(n.m, prog, 0, 0.85, bus ? bassVoiceOut(bus, 0.85, prog) : undefined, BASS_HOLD); if (h && UG.voiceStop) { UG.voiceStop(h, h.ac.currentTime + Math.max(0.12, n.len * 0.92), 0.05); } } catch (e) {}
     }
     // ゴリラドラムのリズム（曲のあいだ）とカウント
     var dsteps = null, dlen = 16, dk = 0, buses = {};
@@ -745,7 +750,7 @@
         var h = null;
         try {
           var l = how === "ghost" ? 0.45 : (lv || 0.85), bus = bassBus(buses, "b", prefs.bvol);
-          h = UG.synth(m, prog, when || 0, l, bus ? bassVoiceOut(bus, l) : undefined, how === "ghost" ? 0 : BASS_HOLD) || null;
+          h = UG.synth(m, prog, when || 0, l, bus ? bassVoiceOut(bus, l, prog) : undefined, how === "ghost" ? 0 : BASS_HOLD) || null;
           if (how && UG.bassHit) { UG.bassHit(how, when || 0, how === "ghost" ? 0.6 : 1, bus || undefined); }
           if (how === "ghost" && h && UG.voiceStop) { UG.voiceStop(h, Math.max(when || 0, h.ac.currentTime) + 0.05, 0.02); }
         } catch (e) {}

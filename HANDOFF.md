@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.80** |
+| 現在バージョン | **v1.81** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.81] 🔊 音量のつりあい**（§273）: ベースのサンプル（ピーク約 0.12）と生ドラム（約 0.95）の差を `BASS_BOOST`（4・サンプルで鳴るときだけ、`bassVoiceOut(bus, lv, prog)`）と `BASS_DRUM_TRIM`（0.4・`bassBus` の "d"）で埋める。`prefs.volv` が 2 でない古い音量はふつう（100 / 50）にもどす
 - **[v1.80] 🔊 ベースの音量**（§272）: `bassBus(st, k, vol)` がベース（"b"）・ドラム（"d"）の出口の GainNode を作って `UGMelody.audio.bus || master` へつなぐ。ベースは `bassVoiceOut(bus, lv)` で音ごとの GainNode をはさんで強弱を保つ（`synth` は dest を渡すと level を使わないため）。`prefs.bvol`（100）/ `prefs.dvol`（60）、action `bvol:+` など。よこ向きは `BASS_BOARD_X` 11
 - **[v1.79] 📱 ベースのよこ向き**（§271）: `bassSetLayout(land, h)` が `BASS_H`・`BASS_COLS`・`BASS_BOARD_Y`・コードの段・マスの段・パッドの位置を切りかえる（モジュールの変数を書きかえる。`create` の `applyLand()`、リズムゲームはいつもたて）。`BASS_LAND` のとき `text()` の文字は 0.6 倍。`prefs.land`・action `land`。**位置の定数を足すときは `bassSetLayout` の両方に入れる**
 - **[v1.78] 🎮 ベースのリズムゲーム**（§270）: `cfg.mode === "rhythm"` なら `create` は `bassRhythm(api, cfg)`（別の小さなゲーム）。`BASS_SONGS`（パターン・進行・キー・スケール・BPM・小節・ドラム・★）・`bassChart(song, level)`（かんたんは拍の頭）・`bassLaneOf`（いちばん低いフレットの弦）・`BASS_RKEYS`（D F J K / Q W E R）・ベスト `ultimateGorillaBassBestV1`。はじめの画面の `data-song`・`data-rlevel`・`data-rspeed`（`prefs.rlevel`・`rspeed`）
