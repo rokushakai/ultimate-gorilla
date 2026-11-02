@@ -349,6 +349,14 @@ module.exports = function () {
   var rr1 = rrun("royal", "easy", true), rr2 = rrun("rock", "easy", false);
   ok(rr1.r.ended !== null && rr1.best && rr1.best.r === "S" && rr1.best.s >= rr1.n * 100 + 500 && rr2.r.ended !== null && rr2.best && rr2.best.r === "D",
     "rhythm game: hitting every note on time (keys D F J K) → rank S with full-combo bonus; doing nothing → rank D", [rr1.best, rr2.best]);
+  // --- §271: よこ向きはフレット12列（たてにもどすと8列）---
+  B.setLayout(true, 130);
+  var lc = B.cellRect(3, 11), lcell = B.cellAt(lc.x + lc.w / 2, lc.y + lc.h / 2, 0), lpad = B.padRect(0, 8, B.PAD_Y);
+  B.setLayout(false);
+  var pc = B.cellRect(0, 7);
+  ok(lcell && lcell.f === 11 && lcell.m === 39 && lc.y + lc.h <= 130 && B.cellAt(pc.x + 3, pc.y + 3, 0).f === 7 && B.cellRect(0, 0).y === 128 &&
+    B.landH(844, 300) >= 90 && B.landH(844, 300) <= 170 && B.landH(0, 0) === 130,
+    "landscape layout: 12 frets fit in the short canvas; portrait goes back to 8 frets", [lcell, lpad]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
