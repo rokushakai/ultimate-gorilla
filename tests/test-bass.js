@@ -357,6 +357,9 @@ module.exports = function () {
   ok(lcell && lcell.f === 11 && lcell.m === 39 && lc.y + lc.h <= 130 && B.cellAt(pc.x + 3, pc.y + 3, 0).f === 7 && B.cellRect(0, 0).y === 128 &&
     B.landH(844, 300) >= 90 && B.landH(844, 300) <= 170 && B.landH(0, 0) === 130,
     "landscape layout: 12 frets fit in the short canvas; portrait goes back to 8 frets", [lcell, lpad]);
+  // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
+  var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
+  ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));
   // §272: よこ向きは板が内側に寄って、弦の名前のところ（左はし）はマスではない
   B.setLayout(true, 130);
   var lo = B.cellRect(0, 0), lgut = B.cellAt(5, lo.y + lo.h / 2, 0), lopen = B.cellAt(lo.x + 2, lo.y + lo.h / 2, 0);

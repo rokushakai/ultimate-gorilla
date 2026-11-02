@@ -238,6 +238,11 @@
     try { smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog)); } catch (e) {}
     g.gain.value = lv * (smp ? BASS_BOOST : 1); g.connect(bus); return g;
   }
+  // §274: 録音のメトロノームのボタンの絵（メトロノームの絵文字はないので小さな SVG）
+  var BASS_METRO_ICON = '<svg viewBox="0 0 20 20" width="1.2em" height="1.2em" style="vertical-align:-0.25em;" aria-label="メトロノーム">' +
+    '<path d="M7 1.5h6l4.5 17h-15z" fill="#8d5524" stroke="#5b3a24" stroke-width="1"/><path d="M8.2 4h3.6l2.6 10.5H5.6z" fill="#f5e6c8"/>' +
+    '<rect x="2.5" y="15.5" width="15" height="3" rx="0.8" fill="#5b3a24"/><path d="M10 14.5L14.5 3" stroke="#343a40" stroke-width="1.4" stroke-linecap="round"/>' +
+    '<rect x="11.4" y="6.6" width="3" height="2.2" rx="0.5" fill="#e03131" transform="rotate(22 12.9 7.7)"/></svg>';
   var BASS_TABS = [["pat", "パターン"], ["feel", "ノリ"], ["key", "キー"], ["play", "弾き方"]];
   function bassPatterns(meter) {
     var m3 = meter === 3, U = window.UGUkulele, st = U && U.BASS_STEPS ? U.BASS_STEPS : [], my = bassMyPats(), i;
@@ -1324,11 +1329,11 @@
           '<button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button></div>';
         if (back) {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="back"' + (rec ? " disabled" : "") + '>' + (bk && !play && !rec ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button>' +
-            '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>' +
+            '<button class="modal-btn" data-ba="metro" title="録音のメトロノーム">' + BASS_METRO_ICON + ' ' + (metro ? "ON" : "OFF") + '</button></div>' +
             '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子' + (prefs.backBass ? "" : "・曲のベースは鳴らさない") + '）</p>';
         } else {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ba="bpmup">&#xFF0B;</button>' +
-            '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
+            '<button class="modal-btn" data-ba="metro" title="録音のメトロノーム">' + BASS_METRO_ICON + ' ' + (metro ? "ON" : "OFF") + '</button></div>';
         }
         if (!pe) { html += '<div class="piano-row"><button class="modal-btn" data-ba="patprev">&#x25C0;</button><span>&#x1F3BC; ' + patDef()[1] + '</span><button class="modal-btn" data-ba="patnext">&#x25B6;</button></div>'; }
         var tb = curTab(), k;

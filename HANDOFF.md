@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.81** |
+| 現在バージョン | **v1.82** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.82] メトロノームのボタンの絵**（§274）: 録音のメトロノーム（action `metro`）のボタンは `BASS_METRO_ICON`（インライン SVG）。🥁 はパターンのドラム用
 - **[v1.81] 🔊 音量のつりあい**（§273）: ベースのサンプル（ピーク約 0.12）と生ドラム（約 0.95）の差を `BASS_BOOST`（4・サンプルで鳴るときだけ、`bassVoiceOut(bus, lv, prog)`）と `BASS_DRUM_TRIM`（0.4・`bassBus` の "d"）で埋める。`prefs.volv` が 2 でない古い音量はふつう（100 / 50）にもどす
 - **[v1.80] 🔊 ベースの音量**（§272）: `bassBus(st, k, vol)` がベース（"b"）・ドラム（"d"）の出口の GainNode を作って `UGMelody.audio.bus || master` へつなぐ。ベースは `bassVoiceOut(bus, lv)` で音ごとの GainNode をはさんで強弱を保つ（`synth` は dest を渡すと level を使わないため）。`prefs.bvol`（100）/ `prefs.dvol`（60）、action `bvol:+` など。よこ向きは `BASS_BOARD_X` 11
 - **[v1.79] 📱 ベースのよこ向き**（§271）: `bassSetLayout(land, h)` が `BASS_H`・`BASS_COLS`・`BASS_BOARD_Y`・コードの段・マスの段・パッドの位置を切りかえる（モジュールの変数を書きかえる。`create` の `applyLand()`、リズムゲームはいつもたて）。`BASS_LAND` のとき `text()` の文字は 0.6 倍。`prefs.land`・action `land`。**位置の定数を足すときは `bassSetLayout` の両方に入れる**
@@ -230,7 +231,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（886項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（887項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
