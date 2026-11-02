@@ -290,6 +290,23 @@ module.exports = function () {
   var tk17 = JSON.parse(g17.e.store[B.TAKES_KEY] || "[]")[0], n17 = tk17 ? tk17.notes.slice(0, 4) : [];
   ok(n17.length === 4 && JSON.stringify(n17.map(function (n) { return [n[0], n[3]]; })) === "[[0,0.92],[0.667,0.6],[1,0.92],[1.667,0.6]]",
     "a triplet swing records long-short eighths; the beat-head accent is louder", n17);
+  // --- §267: ゴリラドラムのリズムといっしょに（8ビート）。ドラムなしならドラムは鳴らない ---
+  function drun(prefs) {
+    var e = H.load({ patch: function (src, file) {
+      if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+      return src;
+    } }), dr = [], html = "";
+    e.store[B.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("bass", { config: {} }, 130, function (f) {
+      if (f === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === M.DRUM) { dr.push(m); } return s0.apply(M, arguments); }; }
+      if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); html = e.window.__bassPanel(); }
+    });
+    return { dr: dr, html: html };
+  }
+  var d18 = drun({ pat: "root8", bpm: 120, drum: "g:8beat" }), d19 = drun({ pat: "root8", bpm: 120 }), d20 = drun({ pat: "root8", bpm: 120, drum: "f:end3" });
+  ok(d18.dr.filter(function (m) { return m === 36; }).length >= 2 && d18.dr.filter(function (m) { return m === 38; }).length >= 2 && d18.dr.indexOf(42) >= 0 &&
+    d19.dr.length === 0 && d20.dr.length === 0 && d18.html.indexOf('<option value="g:8beat" selected>') > 0 && d18.html.indexOf('value="f:') < 0,
+    "a Gorilla Drum loop plays along with the bass pattern (kick, snare, hi-hat); none or a fill id plays no drums", [d18.dr.length, d19.dr.length, d20.dr.length]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {

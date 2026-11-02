@@ -272,6 +272,7 @@
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
+      drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
@@ -711,6 +712,47 @@
         if (pat) { patStop(); } else { if (play) { playStop(); } patStart(); }
         render();
       }
+      // §267: いっしょに鳴らすゴリラドラムのリズム → { id, len: 1小節のマス, steps: [[MIDI, [マス]]] }（なしは null）
+      var drumCache = null;
+      function drumDef() {
+        var D = window.UGDrum, id = prefs.drum;
+        if (!id || !D || !D.patternSteps) { return null; }
+        if (drumCache && drumCache.id === id) { return drumCache.steps ? drumCache : null; }
+        var st = null, len = 16;
+        try { st = D.patternSteps(id); len = D.patLen ? D.patLen(id) : 16; } catch (e) {}
+        drumCache = { id: id, len: len, steps: st && st.length && len === (meter === 3 ? 12 : 16) ? st : null };
+        return drumCache.steps ? drumCache : null;
+      }
+      function drumInit() {
+        var D = window.UGDrum, dp = null;
+        try { dp = D && D.prefs ? D.prefs() : null; } catch (e) {}
+        if (!dp || !audioOk) { return; }
+        try {
+          if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); }
+          if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); }
+          if (dp.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); }
+        } catch (e2) {}
+      }
+      // ドラムのマスを 0.1秒先まで予約して鳴らす（パターンと同じ拍）
+      function drumStep() {
+        var dd = drumDef(), D = window.UGDrum, ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0, i;
+        if (!dd || !ac) { return; }
+        var du = meter / dd.len, bper = pat.d[2].length / meter;
+        if (pat.dk === undefined) { pat.dk = Math.max(0, Math.ceil((now() - pat.t0) * bpm / 60 / du - 1e-6)); drumInit(); }
+        while (n++ < 16) {
+          var s = pat.dk % dd.len, sw = (bper === 2 && s % 4 === 2) || (bper === 4 && s % 2 === 1) ? bassOpt(BASS_SWINGS, prefs.swing)[2] * pat.unit : 0;
+          var dt = patTime(pat.dk * du + sw) - now();
+          if (dt > 0.1) { break; }
+          pat.dk++;
+          if (dt < -0.05) { continue; }
+          for (i = 0; i < dd.steps.length; i++) {
+            if (dd.steps[i][1].indexOf(s) < 0) { continue; }
+            var lv = 0.8;
+            try { lv = D.patVel ? D.patVel(dd.steps[i][0], s % 16, false) : 0.8; } catch (e) {}
+            try { UG.synth(dd.steps[i][0], UG.DRUM, ac.currentTime + Math.max(0, dt), lv * 0.75); } catch (e2) {}
+          }
+        }
+      }
       // 0.1秒先までのマスを予約して鳴らす
       function patStep() {
         var d = pat.d, pt = d[2], unit = pat.unit, ac = audioOk && UG.audio ? UG.audio.ctx : null, spb = pat.back ? back.s.spb : 60 / bpm, n = 0;
@@ -853,6 +895,15 @@
           else { prefs.scale = v.substring(6); bassSavePrefs(prefs); }
           render();
         }
+        else if (/^drum:/.test(v)) {
+          // §267: いっしょに鳴らすドラム（読めない id は無視）
+          var did = v.substring(5), od = prefs.drum;
+          prefs.drum = did;
+          if (did && !drumDef()) { prefs.drum = od; return; }
+          if (pat) { pat.dk = undefined; }
+          bassSavePrefs(prefs);
+          render();
+        }
         else if (v === "swing" || v === "gate" || v === "acc") {
           // §266: ノリ（押すたびに次へ）
           var gl = v === "swing" ? BASS_SWINGS : (v === "gate" ? BASS_GATES : BASS_ACCS), gi2 = gl.indexOf(bassOpt(gl, prefs[v]));
@@ -975,6 +1026,17 @@
         }
         return h;
       }
+      // §267: ゴリラドラムのループ（拍子が合うもの）
+      function drumOptions() {
+        var D = window.UGDrum, l = [], h = '<option value=""' + (prefs.drum ? "" : " selected") + '>ドラムなし</option>', grp = "", i;
+        try { l = D && D.patternList ? D.patternList() : []; } catch (e) {}
+        for (i = 0; i < l.length; i++) {
+          if (l[i].kind !== "loop" || l[i].len !== (meter === 3 ? 12 : 16)) { continue; }
+          if (l[i].group !== grp) { h += (grp ? '</optgroup>' : "") + '<optgroup label="' + escHtml(l[i].group) + '">'; grp = l[i].group; }
+          h += '<option value="' + escHtml(l[i].id) + '"' + (l[i].id === prefs.drum ? " selected" : "") + '>' + escHtml(l[i].name) + '</option>';
+        }
+        return h + (grp ? '</optgroup>' : "");
+      }
       function cprogOptions() {
         var h = '<option value=""' + (prefs.cprog ? "" : " selected") + '>コード進行なし（上の段をタップ）</option>', i, j;
         for (i = 0; i < BASS_CPROG_GROUPS.length; i++) {
@@ -1040,6 +1102,7 @@
             '<div class="piano-row"><button class="modal-btn" data-ba="swing">ハネ: ' + bassOpt(BASS_SWINGS, prefs.swing)[1] + '</button>' +
             '<button class="modal-btn" data-ba="gate">長さ: ' + bassOpt(BASS_GATES, prefs.gate)[1] + '</button>' +
             '<button class="modal-btn" data-ba="acc">強弱: ' + bassOpt(BASS_ACCS, prefs.acc)[1] + '</button></div>' +
+            (back ? "" : '<div class="piano-row"><label class="piano-select">&#x1F941; <select data-bdrum="1">' + drumOptions() + '</select></label></div>') +
             (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
           // §259: パターンの説明と文字の意味
           html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
@@ -1061,6 +1124,8 @@
         if (psel) { psel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("patset:" + ev.currentTarget.value); }; }
         var ssel = panel.querySelector ? panel.querySelector("select[data-bscale]") : null;
         if (ssel) { ssel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("scale:" + ev.currentTarget.value); }; }
+        var dsel = panel.querySelector ? panel.querySelector("select[data-bdrum]") : null;
+        if (dsel) { dsel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("drum:" + ev.currentTarget.value); }; }
         var csel = panel.querySelector ? panel.querySelector("select[data-bcprog]") : null;
         if (csel) { csel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("cprog:" + ev.currentTarget.value); }; }
       }
@@ -1255,6 +1320,7 @@
             rec.beat = rb;
           }
           if (pat) { patStep(); }
+          if (pat && !pat.back && prefs.drum) { drumStep(); }
           if (bk) { backStep(); }
         },
         draw: function (ctx) {
