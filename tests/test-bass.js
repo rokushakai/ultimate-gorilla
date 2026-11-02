@@ -373,6 +373,11 @@ module.exports = function () {
   ok(ap1.snd.slice(0, 8).join() === "29,29,29,29,29,29,29,30" && ap1.snd[8] === 31 && ap1.snd[15] === 29 && ap1.snd[16] === 28 && ap0.snd.slice(0, 9).join() === "29,29,29,29,29,29,29,29,31" &&
     B.approach(29, 31) === 30 && B.approach(35, 31) === 32 && B.approach(30, 28) === 29,
     "approach notes: the last note before a chord change moves a half step next to the new root (F → F# → G from below; G → F → E from above)", [ap1.snd.slice(0, 17), ap0.snd.slice(0, 9)]);
+  // §277: フィル（C・ルート8分・BPM 120）→ 4小節目の最後の1拍は 8 5（C2 G1）。3小節目はふつう
+  var fi1 = prun({ pat: "root8", bpm: 120, fill: true }, 500, function (f, e) { if (f === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  ok(fi1.snd.slice(16, 30).join() === "36,36,36,36,36,36,36,36,36,36,36,36,36,36" && fi1.snd[30] === 48 && fi1.snd[31] === 43 &&
+    B.fillTok(4, 15, 4) === "R" && B.fillTok(4, 15.75, 4) === "5" && B.fillTok(4, 14.75, 4) === "" && B.fillTok(4, 31.75, 4) === "A" && B.fillTok(2, 11.5, 3) === "5" && B.fillTok(1.5, 15, 4) === "",
+    "fill: the last beat of every 4th bar plays a fill (8 5 for eighths), changing every 4 bars", fi1.snd.slice(14, 33));
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));
