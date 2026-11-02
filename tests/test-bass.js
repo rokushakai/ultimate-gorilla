@@ -357,6 +357,16 @@ module.exports = function () {
   ok(lcell && lcell.f === 11 && lcell.m === 39 && lc.y + lc.h <= 130 && B.cellAt(pc.x + 3, pc.y + 3, 0).f === 7 && B.cellRect(0, 0).y === 128 &&
     B.landH(844, 300) >= 90 && B.landH(844, 300) <= 170 && B.landH(0, 0) === 130,
     "landscape layout: 12 frets fit in the short canvas; portrait goes back to 8 frets", [lcell, lpad]);
+  // §275: スマホ向けの音 ＝ ベースの出口に「ローパス → ゆがみ → ハイパス」をたす（OFF ならたす量 0）
+  var M275 = W.UGMelody;
+  M275.audioInit();
+  var st275 = {}, bg275 = B.bus(st275, "b", 100, true), e275on = st275.b.e && st275.b.e.gain.value;
+  B.bus(st275, "b", 80, false);
+  var e275off = st275.b.e.gain.value, sd275 = {};
+  B.bus(sd275, "d", 100, true);
+  var ph275 = vrun({ tab: "feel" }, ["phone"]);
+  ok(bg275 && e275on === B.ENH && e275off === 0 && Math.abs(st275.b.g.gain.value - 0.8) < 1e-9 && sd275.d.e === null && ph275.p.phone === true && ph275.html.indexOf("スマホ向けの音: ON") > 0,
+    "phone speaker mode adds the bass's harmonics (low-pass → distortion → high-pass) only when on, only on the bass", [e275on, e275off]);
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));
