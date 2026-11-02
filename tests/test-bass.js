@@ -333,7 +333,7 @@ module.exports = function () {
       cN.notes.every(function (n) { return n.m >= 28 && n.f >= 0 && n.lane === B.laneOf(n.m); }) && cE.notes.every(function (n) { return n.beat % 1 === 0; });
   });
   var ch0 = B.chart(B.SONGS[0], "normal"), chW = B.chart(B.SONGS.filter(function (x) { return x[0] === "waltz"; })[0], "normal");
-  ok(B.SONGS.length === 10 && allOk && ch0.notes[0].m === 29 && ch0.notes[0].lane === 0 && ch0.notes[0].f === 1 && chW.meter === 3 && B.laneOf(45) === 3 && B.laneOf(37) === 1,
+  ok(B.SONGS.length >= 10 && allOk && ch0.notes[0].m === 29 && ch0.notes[0].lane === 0 && ch0.notes[0].f === 1 && chW.meter === 3 && B.laneOf(45) === 3 && B.laneOf(37) === 1,
     "rhythm charts: 10 songs from pattern x progression, easy keeps the beat heads, each note on the lowest-fret string", [ch0.notes.slice(0, 3), chW.meter]);
   // ちょうどで全部たたく → 全部 PERFECT・ランク S・ベスト保存。なにもしなければ全部 MISS
   function rrun(song, level, hitAll, shift) {
@@ -355,6 +355,14 @@ module.exports = function () {
   ok(/平均 −\d+ms（早め）/.test(rr3.msg) && rr3.msg.indexOf("タイミング補正") > 0 && Math.abs(ms279(rr1.msg) - ms279(rr3.msg) - 60) <= 12 && t279.ms === 7 && t279.text.indexOf("ちょうどいい") > 0 && t279.sd === 12 &&
     t279b.ms === 50 && t279b.sd === 0 && t279b.text.indexOf("おそめ") > 0 && B.tendency([]) === null,
     "rhythm game result shows the timing habit (average early / late and spread)", [rr3.msg.split("<br>")[2], rr1.msg.split("<br>")[2]]);
+  // §280: むずかしい ＝ ふつう＋フィル・つなぎの音・ゴースト音。12曲
+  var sR = B.SONGS.filter(function (x) { return x[0] === "royal"; })[0], cN = B.chart(sR, "normal"), cH = B.chart(sR, "hard");
+  var gh = cH.notes.filter(function (n) { return n.ghost; }), hNon = cH.notes.filter(function (n) { return !n.ghost; });
+  var hb15 = hNon.filter(function (n) { return n.beat >= 15 - 1e-6 && n.beat < 16; }).map(function (n) { return n.beat; }).join(), nb15 = cN.notes.filter(function (n) { return n.beat >= 15 - 1e-6 && n.beat < 16; }).map(function (n) { return n.beat; }).join();
+  var rr4 = rrun("royal", "hard", true);
+  ok(B.SONGS.length === 12 && gh.length >= 4 && gh.every(function (n) { return Math.abs(n.beat % 2 - 1.75) < 1e-6; }) && cH.notes.length > cN.notes.length &&
+    hb15 !== nb15 && rr4.best && rr4.best.r === "S" && B.chart(B.SONGS.filter(function (x) { return x[0] === "beat16"; })[0], "hard").notes.length > 0,
+    "rhythm game hard: fills on every 4th bar, ghost notes (✕) on the last 16th of beats 2 and 4, all hittable; 12 songs", [gh.length, cN.notes.length, cH.notes.length, hb15, nb15, rr4.best]);
   // --- §271: よこ向きはフレット12列（たてにもどすと8列）---
   B.setLayout(true, 130);
   var lc = B.cellRect(3, 11), lcell = B.cellAt(lc.x + lc.w / 2, lc.y + lc.h / 2, 0), lpad = B.padRect(0, 8, B.PAD_Y);
