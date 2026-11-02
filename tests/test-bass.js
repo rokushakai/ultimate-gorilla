@@ -336,19 +336,25 @@ module.exports = function () {
   ok(B.SONGS.length === 10 && allOk && ch0.notes[0].m === 29 && ch0.notes[0].lane === 0 && ch0.notes[0].f === 1 && chW.meter === 3 && B.laneOf(45) === 3 && B.laneOf(37) === 1,
     "rhythm charts: 10 songs from pattern x progression, easy keeps the beat heads, each note on the lowest-fret string", [ch0.notes.slice(0, 3), chW.meter]);
   // ちょうどで全部たたく → 全部 PERFECT・ランク S・ベスト保存。なにもしなければ全部 MISS
-  function rrun(song, level, hitAll) {
-    var e = H.load(), sg = B.SONGS.filter(function (x) { return x[0] === song; })[0], c = B.chart(sg, level), spb = 60 / sg[6], t0 = 0.5 + c.meter * spb, done = {};
+  function rrun(song, level, hitAll, shift) {
+    var e = H.load({ patch: function (src, file) { return file === "arcade-bass.js" ? src.split("    function finish() {\n").join("    window.__rmsg = function () { return msg; };\n    function finish() {\n") : src; } }), sg = B.SONGS.filter(function (x) { return x[0] === song; })[0], c = B.chart(sg, level), spb = 60 / sg[6], t0 = 0.5 + c.meter * spb, done = {};
     var r = e.run("bass", { config: { mode: "rhythm", song: song, level: level, speed: 100 } }, 3000, function (f) {
       if (!hitAll) { return; }
       c.notes.forEach(function (n, k) {
-        if (!done[k] && f / 60 >= t0 + n.beat * spb - 0.005) { done[k] = 1; var key = "dfjk".charAt(n.lane); e.key("keydown", key); e.key("keyup", key); }
+        if (!done[k] && f / 60 >= t0 + n.beat * spb - 0.005 + (shift || 0)) { done[k] = 1; var key = "dfjk".charAt(n.lane); e.key("keydown", key); e.key("keyup", key); }
       });
     });
-    return { r: r, best: JSON.parse(e.store[B.BEST_KEY] || "{}")[song + "@" + level + "@100"], n: c.notes.length };
+    return { r: r, best: JSON.parse(e.store[B.BEST_KEY] || "{}")[song + "@" + level + "@100"], n: c.notes.length, msg: e.window.__rmsg ? e.window.__rmsg() : "" };
   }
   var rr1 = rrun("royal", "easy", true), rr2 = rrun("rock", "easy", false);
   ok(rr1.r.ended !== null && rr1.best && rr1.best.r === "S" && rr1.best.s >= rr1.n * 100 + 500 && rr2.r.ended !== null && rr2.best && rr2.best.r === "D",
     "rhythm game: hitting every note on time (keys D F J K) → rank S with full-combo bonus; doing nothing → rank D", [rr1.best, rr2.best]);
+  // §279: タイミングのくせ（いつも 60ms 早く叩く → 「早め」・補正のすすめ）
+  function ms279(m) { var x = m.match(/平均 ([+−]?)(\d+)ms/); return x ? (x[1] === "−" ? -1 : 1) * Number(x[2]) : NaN; }
+  var rr3 = rrun("royal", "easy", true, -0.06), t279 = B.tendency([0.01, -0.01, 0.02]), t279b = B.tendency([0.05, 0.05]);
+  ok(/平均 −\d+ms（早め）/.test(rr3.msg) && rr3.msg.indexOf("タイミング補正") > 0 && Math.abs(ms279(rr1.msg) - ms279(rr3.msg) - 60) <= 12 && t279.ms === 7 && t279.text.indexOf("ちょうどいい") > 0 && t279.sd === 12 &&
+    t279b.ms === 50 && t279b.sd === 0 && t279b.text.indexOf("おそめ") > 0 && B.tendency([]) === null,
+    "rhythm game result shows the timing habit (average early / late and spread)", [rr3.msg.split("<br>")[2], rr1.msg.split("<br>")[2]]);
   // --- §271: よこ向きはフレット12列（たてにもどすと8列）---
   B.setLayout(true, 130);
   var lc = B.cellRect(3, 11), lcell = B.cellAt(lc.x + lc.w / 2, lc.y + lc.h / 2, 0), lpad = B.padRect(0, 8, B.PAD_Y);

@@ -593,6 +593,17 @@
     }
     return { meter: meter, notes: out };
   }
+  // §279: タイミングのくせ（offs: ずれの秒。＋はおそい）→ { ms: 平均, sd: ばらつき, text }（なければ null）
+  function bassTendency(offs) {
+    if (!offs || !offs.length) { return null; }
+    var s = 0, v = 0, i;
+    for (i = 0; i < offs.length; i++) { s += offs[i]; }
+    var av = s / offs.length;
+    for (i = 0; i < offs.length; i++) { v += (offs[i] - av) * (offs[i] - av); }
+    var ms = Math.round(av * 1000), sd = Math.round(Math.sqrt(v / offs.length) * 1000);
+    return { ms: ms, sd: sd, text: "&#x1F3AF; タイミング: 平均 " + (ms > 0 ? "+" : (ms < 0 ? "−" : "")) + Math.abs(ms) + "ms（" + (Math.abs(ms) < 15 ? "ちょうどいい" : (ms < 0 ? "早め" : "おそめ")) + "）・ばらつき ±" + sd + "ms" +
+      (Math.abs(ms) >= 40 ? "。いつも同じくらいずれるなら、設定のタイミング補正で直せます" : "") };
+  }
   var BASS_RKEYS = { p0: 0, p1: 1, p2: 2, p3: 3, p6: 0, p7: 1, p13: 2, p14: 3 };
   function bassRhythm(api, cfg) {
     var prefs = bassPrefs(), prog = prefs.prog, panel = api.panel, frame = 0, ended = false, msg = "";
@@ -601,7 +612,7 @@
     if (api.setCanvasHeight) { api.setCanvasHeight(BASS_H); }
     var song = bassSong(cfg.song), level = cfg.level === "normal" ? "normal" : "easy", rate = (BASS_SPEEDS.indexOf(Number(cfg.speed)) >= 0 ? Number(cfg.speed) : 100) / 100;
     var chart = bassChart(song, level), meter = chart.meter, spb = 60 / song[6] / rate, t0 = 0.5 + meter * spb;
-    var rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [0, 0, 0, 0], i;
+    var rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [0, 0, 0, 0], offs = [], i;
     for (i = 0; i < chart.notes.length; i++) { var cn = chart.notes[i]; rn.push({ t: t0 + cn.beat * spb, len: cn.len * spb, m: cn.m, lane: cn.lane, f: cn.f, j: -2 }); }
     var endT = t0 + Math.ceil((chart.notes.length ? chart.notes[chart.notes.length - 1].beat + 0.01 : 0) / meter) * meter * spb;
     function now() { return frame / 60; }
@@ -655,7 +666,7 @@
       }
       if (!best) { return; }
       var g = bassRJudge(t - best.t);
-      best.j = g; counts[g]++; combo++; maxCombo = Math.max(maxCombo, combo);
+      best.j = g; counts[g]++; combo++; maxCombo = Math.max(maxCombo, combo); offs.push(t - best.t);
       play(best);
       api.addScore(BASS_JUDGE[g][2] + Math.min(50, combo) * 2);
       judgeText = BASS_JUDGE[g][1]; judgeFrames = 30;
@@ -669,6 +680,8 @@
       if (!best[key] || !(best[key].s >= sc)) { best[key] = { s: sc, r: rk }; lsSet(BASS_BEST_KEY, best); }
       msg = "ランク <b>" + rk + "</b>（正確さ " + Math.round(acc * 100) + "%）・最大コンボ " + maxCombo + (counts[3] === 0 ? "・&#x1F525; フルコンボ +500" : "") +
         "<br>PERFECT " + counts[0] + " / GREAT " + counts[1] + " / GOOD " + counts[2] + " / MISS " + counts[3];
+      var td = bassTendency(offs);
+      if (td) { msg += "<br>" + td.text; }
       render();
       api.gameOver("ランク " + rk);
     }
@@ -1702,7 +1715,7 @@
   });
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, tendency: bassTendency, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX
