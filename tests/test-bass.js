@@ -258,6 +258,25 @@ module.exports = function () {
   });
   ok(g9.snd.length >= 9 && g9.snd.slice(0, 8).join() === "36,36,36,36,36,36,36,36" && g9.snd[8] === 33,
     "chord changes during a pattern wait for the next bar (8 eighths of C, then Am)", g9.snd);
+  // --- §265: じぶんのパターン ---
+  var mc9 = B.myClean([["my1", "a", "R-5-R-5-", 4], ["my1", "dup", "R-------", 4], ["my2", "", "R-5", 4], ["x", "", "R-5-R-5-", 4], ["my3", "", "R-5-R-", 3], "bad"]);
+  ok(mc9.length === 2 && mc9[1][1] === "じぶん 3" && B.patResize("R-5-R-5-", 16) === "R---5---R---5---" && B.patResize("R-5-R-5-A-5-R-5-", 8) === "R5R5A5R5",
+    "my patterns are cleaned (ids my1-my8, valid cells and lengths); resizing keeps the beats", mc9);
+  var cr0 = B.chordRect(0), W9 = (cr0.w + 2) * 7 + 8, st1 = [4 + (W9 - 8) / 8 * 1.5, 74 * 320 / B.H], html16 = "", seq16 = "", my16 = null, pf16 = null;
+  var e16 = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } });
+  e16.store[B.PREFS_KEY] = JSON.stringify({ pat: "pop", view: "fret" });
+  e16.run("bass", { config: {} }, 14, function (f) {
+    var w = e16.window;
+    if (f === 3) { w.__bassAct("pedit"); e16.ptr("down", st1[0], st1[1], 1); e16.ptr("up", st1[0], st1[1], 1); w.__bassAct("psave"); html16 = w.__bassPanel(); }
+    if (f === 5) { w.__bassAct("patseq"); seq16 = w.__bassPanel(); my16 = JSON.parse(e16.store[B.MYPATS_KEY]); pf16 = JSON.parse(e16.store[B.PREFS_KEY]).pat; }
+    if (f === 7) { w.__bassAct("pdel"); }
+  });
+  ok(my16 && my16.length === 1 && my16[0][0] === "my1" && my16[0][2] === "RR-RR-5-" && pf16 === "my1" && html16.indexOf('<optgroup label="じぶんのパターン"><option value="my1" selected>') > 0 &&
+    seq16.indexOf("送れません") > 0 && JSON.parse(e16.store[B.MYPATS_KEY]).length === 0 && JSON.parse(e16.store[B.PREFS_KEY]).pat === "pop",
+    "make a pattern: tap a cell (－ → R), save as じぶん 1 (listed first, not sendable to the sequencer), delete it", [my16, pf16]);
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
