@@ -220,6 +220,8 @@
     var head = ci % per === 0;
     return (acc === "beat") === head ? 0.92 : 0.6;
   }
+  // §269: パネルのタブ
+  var BASS_TABS = [["pat", "パターン"], ["feel", "ノリ"], ["key", "キー"], ["play", "弾き方"]];
   function bassPatterns(meter) {
     var m3 = meter === 3, U = window.UGUkulele, st = U && U.BASS_STEPS ? U.BASS_STEPS : [], my = bassMyPats(), i;
     var out = [["root", "ルート（伸ばす）", m3 ? "R-----" : "R-------", meter], ["root8", "ルート8分", m3 ? "RRRRRR" : "RRRRRRRR", meter],
@@ -279,7 +281,7 @@
       pos: pos >= 0 && pos <= BASS_POS_MAX ? pos : 0,
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
-      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0], gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -910,6 +912,7 @@
           bassSavePrefs(prefs);
           render();
         }
+        else if (/^tab:/.test(v)) { if (bassOpt(BASS_TABS, v.substring(4))[0] !== v.substring(4)) { return; } prefs.tab = v.substring(4); bassSavePrefs(prefs); render(); }
         else if (v === "sev") { prefs.sev = !prefs.sev; bassSavePrefs(prefs); render(); }
         else if (v === "swing" || v === "gate" || v === "acc") {
           // §266: ノリ（押すたびに次へ）
@@ -1053,6 +1056,8 @@
         }
         return h;
       }
+      // §269: いまのタブ（伴奏のときはキーのタブはない）
+      function curTab() { return prefs.tab === "key" && back ? "pat" : prefs.tab; }
       function scaleOptions() {
         var h = "", i, j;
         for (i = 0; i < BASS_SCALE_GROUPS.length; i++) {
@@ -1064,8 +1069,10 @@
       }
       function render() {
         if (!panel) { return; }
+        // §269: 上はいつも出す（録音・再生・パターン／BPM か伴奏／パターンの名前）
         var html = '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ba="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : (back ? "&#x1F534; 合わせて録音" : "&#x1F534; 録音")) + '</button>' +
-          '<button class="modal-btn" data-ba="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button></div>';
+          '<button class="modal-btn" data-ba="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : (back ? "&#x25B6;&#xFE0F; テイク＋伴奏" : "&#x25B6;&#xFE0F; 再生")) + '</button>' +
+          '<button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button></div>';
         if (back) {
           html += '<div class="piano-row"><button class="modal-btn" data-ba="back"' + (rec ? " disabled" : "") + '>' + (bk && !play && !rec ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button>' +
             '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>' +
@@ -1074,22 +1081,8 @@
           html += '<div class="piano-row"><button class="modal-btn" data-ba="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ba="bpmup">&#xFF0B;</button>' +
             '<button class="modal-btn" data-ba="metro">&#x1F941; ' + (metro ? "ON" : "OFF") + '</button></div>';
         }
-        if (view === "fret") {
-          html += '<div class="piano-row"><button class="modal-btn" data-ba="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + BASS_COLS - 1) + " フレット" : "開放弦〜7 フレット") + '</span>' +
-            '<button class="modal-btn" data-ba="posup">&#x25B6;</button></div>';
-        }
-        // §262: キーとスケール（フレットの画面でも）
-        if (!back) {
-          html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + (pend && (pend.key !== undefined || pend.scale !== undefined) ? " → " + BASS_CDE[pendKey()] + (pend.scale !== undefined ? " " + bassScale(pend.scale)[1].replace(/（.*）/, "") : "") + "（次の小節）" : "") + '</span>' +
-            '<button class="modal-btn" data-ba="keyup">&#x25B6;</button><button class="modal-btn" data-ba="sev">' + (prefs.sev ? "7th" : "3和音") + '</button></div>' +
-            '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>' +
-            (view === "fret" ? '<p class="small" style="margin:4px 0 0;">マスの下の点: スケールの音（白い大きな点は主音・<span style="color:#f783ac;">●</span> 特徴音 ' + bassScale(prefs.scale)[4] + '）</p>' : "") +
-            '<div class="piano-row"><label class="piano-select">&#x1F501; <select data-bcprog="1">' + cprogOptions() + '</select></label></div>';
-        }
-        if (view === "pad") {
-          html += '<div class="piano-row"><button class="modal-btn' + (ed ? " piano-rec-on" : "") + '" data-ba="edit">' + (ed ? "&#x2705; 編集おわり" : "&#x270F;&#xFE0F; パッドの音を変える") + '</button>' +
-            '<button class="modal-btn" data-ba="padn">' + (prefs.padN === 16 ? "8個にする" : "16個にする") + '</button></div>';
-        }
+        if (!pe) { html += '<div class="piano-row"><button class="modal-btn" data-ba="patprev">&#x25C0;</button><span>&#x1F3BC; ' + patDef()[1] + '</span><button class="modal-btn" data-ba="patnext">&#x25B6;</button></div>'; }
+        var tb = curTab(), k;
         if (ed && view === "pad") { html += padEditor(); }
         else if (pe) {
           // §265: パターンの編集
@@ -1097,29 +1090,49 @@
             '<p class="small" style="margin:4px 0 0;">&#x1F3BC; ' + escHtml(pe.pt) + '（' + escHtml(bassPatLegend(pe.pt)) + '）</p><div class="piano-row">';
           for (i = 0; i < peLens().length; i++) { html += '<button class="modal-btn' + (pe.pt.length === peLens()[i] ? " piano-rec-on" : "") + '" data-ba="plen:' + peLens()[i] + '">' + peLens()[i] + 'マス</button>'; }
           html += '<button class="modal-btn" data-ba="pclear">ぜんぶ消す</button></div>' +
-            '<div class="piano-row"><button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; 鳴らしてみる") + '</button></div>' +
             '<div class="piano-row"><button class="modal-btn" data-ba="psave">&#x1F4BE; 保存</button><button class="modal-btn" data-ba="pcancel">やめる</button></div>';
         }
         else {
-          html += '<div class="piano-row"><button class="modal-btn" data-ba="patprev">&#x25C0;</button><span>&#x1F3BC; ' + patDef()[1] + '</span><button class="modal-btn" data-ba="patnext">&#x25B6;</button></div>' +
-            '<div class="piano-row"><label class="piano-select">&#x1F4DA; <select data-bpat="1">' + patOptions() + '</select></label></div>' +
-            '<div class="piano-row"><button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ba="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
-            '<button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button></div>' +
-            '<div class="piano-row"><button class="modal-btn" data-ba="pedit">&#x270F;&#xFE0F; パターンを作る</button>' + (/^my\d$/.test(patDef()[0]) ? '<button class="modal-btn" data-ba="pdel">&#x1F5D1;&#xFE0F; 消す</button>' : "") + '</div>' +
-            '<div class="piano-row"><button class="modal-btn" data-ba="swing">ハネ: ' + bassOpt(BASS_SWINGS, prefs.swing)[1] + '</button>' +
-            '<button class="modal-btn" data-ba="gate">長さ: ' + bassOpt(BASS_GATES, prefs.gate)[1] + '</button>' +
-            '<button class="modal-btn" data-ba="acc">強弱: ' + bassOpt(BASS_ACCS, prefs.acc)[1] + '</button></div>' +
-            (back ? "" : '<div class="piano-row"><label class="piano-select">&#x1F941; <select data-bdrum="1">' + drumOptions() + '</select></label></div>') +
-            (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
-          // §259: パターンの説明と文字の意味
-          html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
-            (back ? "コードは曲に合わせて変わります。" : (prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "上の段のコードをタップすると、" + (prefs.quant === "now" ? "次の音から" : "次の小節の頭で") + "変わります。")) + "<br>") +
-            "&#x1F3BC; " + escHtml(patDef()[2]) + "（" + escHtml(bassPatLegend(patDef()[2])) + "）</p>";
+          // §269: タブ
           html += '<div class="piano-row">';
-          for (i = 0; i < BASS_TECHS.length; i++) { html += '<button class="modal-btn' + (prefs.tech === BASS_TECHS[i][0] ? " piano-rec-on" : "") + '" data-ba="tech:' + BASS_TECHS[i][0] + '">' + BASS_TECHS[i][1] + '</button>'; }
+          for (k = 0; k < BASS_TABS.length; k++) { if (BASS_TABS[k][0] !== "key" || !back) { html += '<button class="modal-btn' + (tb === BASS_TABS[k][0] ? " piano-rec-on" : "") + '" data-ba="tab:' + BASS_TABS[k][0] + '">' + BASS_TABS[k][1] + '</button>'; } }
           html += '</div>';
+          if (tb === "pat") {
+            html += '<div class="piano-row"><label class="piano-select">&#x1F4DA; <select data-bpat="1">' + patOptions() + '</select></label></div>' +
+              '<div class="piano-row"><button class="modal-btn" data-ba="patseq">&#x1F3BC; シーケンサーのベースに</button>' +
+              '<button class="modal-btn" data-ba="pedit">&#x270F;&#xFE0F; パターンを作る</button>' + (/^my\d$/.test(patDef()[0]) ? '<button class="modal-btn" data-ba="pdel">&#x1F5D1;&#xFE0F; 消す</button>' : "") + '</div>';
+            // §259: パターンの説明と文字の意味
+            html += '<p class="small" style="margin:4px 0 0;">' + (pat ? "" : "&#x25B6;&#xFE0F; パターンを押すと、いまのコードに合わせてベースが自動で鳴ります。" +
+              (back ? "コードは曲に合わせて変わります。" : (prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "上の段のコードをタップすると、" + (prefs.quant === "now" ? "次の音から" : "次の小節の頭で") + "変わります。")) + "<br>") +
+              "&#x1F3BC; " + escHtml(patDef()[2]) + "（" + escHtml(bassPatLegend(patDef()[2])) + "）</p>";
+          } else if (tb === "feel") {
+            html += '<div class="piano-row"><button class="modal-btn" data-ba="swing">ハネ: ' + bassOpt(BASS_SWINGS, prefs.swing)[1] + '</button>' +
+              '<button class="modal-btn" data-ba="gate">長さ: ' + bassOpt(BASS_GATES, prefs.gate)[1] + '</button>' +
+              '<button class="modal-btn" data-ba="acc">強弱: ' + bassOpt(BASS_ACCS, prefs.acc)[1] + '</button></div>' +
+              (back ? "" : '<div class="piano-row"><label class="piano-select">&#x1F941; <select data-bdrum="1">' + drumOptions() + '</select></label></div>') +
+              (back ? "" : '<div class="piano-row"><button class="modal-btn" data-ba="quant">&#x23F1;&#xFE0F; 切りかえ: ' + (prefs.quant === "now" ? "すぐ" : "小節の頭") + '</button></div>');
+          } else if (tb === "key") {
+            // §262: キーとスケール
+            html += '<div class="piano-row"><button class="modal-btn" data-ba="keydown">&#x25C0;</button><span>キー ' + BASS_CDE[prefs.key] + (pend && (pend.key !== undefined || pend.scale !== undefined) ? " → " + BASS_CDE[pendKey()] + (pend.scale !== undefined ? " " + bassScale(pend.scale)[1].replace(/（.*）/, "") : "") + "（次の小節）" : "") + '</span>' +
+              '<button class="modal-btn" data-ba="keyup">&#x25B6;</button><button class="modal-btn" data-ba="sev">' + (prefs.sev ? "7th" : "3和音") + '</button></div>' +
+              '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-bscale="1">' + scaleOptions() + '</select></label></div>' +
+              (view === "fret" ? '<p class="small" style="margin:4px 0 0;">マスの下の点: スケールの音（白い大きな点は主音・<span style="color:#f783ac;">●</span> 特徴音 ' + bassScale(prefs.scale)[4] + '）</p>' : "") +
+              '<div class="piano-row"><label class="piano-select">&#x1F501; <select data-bcprog="1">' + cprogOptions() + '</select></label></div>';
+          } else {
+            html += '<div class="piano-row">';
+            for (i = 0; i < BASS_TECHS.length; i++) { html += '<button class="modal-btn' + (prefs.tech === BASS_TECHS[i][0] ? " piano-rec-on" : "") + '" data-ba="tech:' + BASS_TECHS[i][0] + '">' + BASS_TECHS[i][1] + '</button>'; }
+            html += '</div>';
+            if (view === "fret") {
+              html += '<div class="piano-row"><button class="modal-btn" data-ba="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + BASS_COLS - 1) + " フレット" : "開放弦〜7 フレット") + '</span>' +
+                '<button class="modal-btn" data-ba="posup">&#x25B6;</button></div>';
+            } else {
+              html += '<div class="piano-row"><button class="modal-btn" data-ba="edit">&#x270F;&#xFE0F; パッドの音を変える</button>' +
+                '<button class="modal-btn" data-ba="padn">' + (prefs.padN === 16 ? "8個にする" : "16個にする") + '</button></div>';
+            }
+            html += '<div class="piano-row"><button class="modal-btn" data-ba="view">' + (view === "pad" ? "&#x1F3B8; フレットにする" : "&#x1F39B;&#xFE0F; パッドにする") + '</button></div>';
+          }
         }
-        html += '<div class="piano-row"><button class="modal-btn" data-ba="view">' + (view === "pad" ? "&#x1F3B8; フレットにする" : "&#x1F39B;&#xFE0F; パッドにする") + '</button></div>';
+        if (ed && view === "pad") { html += '<div class="piano-row"><button class="modal-btn piano-rec-on" data-ba="edit">&#x2705; 編集おわり</button><button class="modal-btn" data-ba="padn">' + (prefs.padN === 16 ? "8個にする" : "16個にする") + '</button></div>'; }
         if (take && !rec) { html += '<p class="small" style="margin:4px 0 0;">いまのテイク: ' + escHtml(take.name) + '（' + take.notes.length + '音・BPM ' + take.bpm + '）</p>'; }
         if (msg) { html += '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>'; }
         panel.innerHTML = html;

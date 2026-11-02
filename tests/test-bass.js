@@ -303,7 +303,7 @@ module.exports = function () {
     });
     return { dr: dr, html: html };
   }
-  var d18 = drun({ pat: "root8", bpm: 120, drum: "g:8beat" }), d19 = drun({ pat: "root8", bpm: 120 }), d20 = drun({ pat: "root8", bpm: 120, drum: "f:end3" });
+  var d18 = drun({ pat: "root8", bpm: 120, drum: "g:8beat", tab: "feel" }), d19 = drun({ pat: "root8", bpm: 120 }), d20 = drun({ pat: "root8", bpm: 120, drum: "f:end3" });
   ok(d18.dr.filter(function (m) { return m === 36; }).length >= 2 && d18.dr.filter(function (m) { return m === 38; }).length >= 2 && d18.dr.indexOf(42) >= 0 &&
     d19.dr.length === 0 && d20.dr.length === 0 && d18.html.indexOf('<option value="g:8beat" selected>') > 0 && d18.html.indexOf('value="f:') < 0,
     "a Gorilla Drum loop plays along with the bass pattern (kick, snare, hi-hat); none or a fill id plays no drums", [d18.dr.length, d19.dr.length, d20.dr.length]);
@@ -312,6 +312,20 @@ module.exports = function () {
   var h7 = [B.chord(9, 6, "harm", true), B.chord(9, 0, "harm", true), B.chord(9, 2, "melo", true)].map(function (c) { return c.name + "/" + c.deg; }).join();
   ok(c7 === "CM7/IM7,Dm7/iim7,Em7/iiim7,FM7/IVM7,G7/V7,Am7/vim7,Bm7♭5/viiø7" && h7 === "G#dim7/vii°7,AmM7/imM7,CaugM7/♭III+M7" && B.chord(0, 4, "major").name === "G",
     "7th chord names and degrees (major scale, harmonic and melodic minor); triads stay the default", [c7, h7]);
+  // --- §269: パネルのタブ（伴奏のときはキーのタブがない・知らないタブは無視）---
+  var e21 = H.load({ patch: function (src, file) {
+    if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
+    return src;
+  } }), h21 = [];
+  e21.store[B.PREFS_KEY] = JSON.stringify({ view: "fret" });
+  e21.run("bass", { config: {} }, 8, function (f) {
+    var w = e21.window;
+    if (f === 3) { h21.push(w.__bassPanel()); ["feel", "key", "play", "nope"].forEach(function (t) { w.__bassAct("tab:" + t); h21.push(w.__bassPanel()); }); }
+  });
+  ok(h21[0].indexOf("data-bpat") > 0 && h21[0].indexOf("data-bscale") < 0 && h21[1].indexOf('data-ba="swing"') > 0 && h21[1].indexOf("data-bdrum") > 0 &&
+    h21[2].indexOf("data-bscale") > 0 && h21[2].indexOf("data-bcprog") > 0 && h21[3].indexOf('data-ba="posup"') > 0 && h21[3].indexOf('data-ba="tech:slap"') > 0 &&
+    h21[4] === h21[3] && JSON.parse(e21.store[B.PREFS_KEY]).tab === "play" && h21.every(function (h) { return h.indexOf('data-ba="pat"') > 0 && h.indexOf('data-ba="rec"') > 0; }),
+    "panel tabs: pattern / feel / key / playing; record and pattern buttons stay on top", h21.map(function (h) { return h.length; }));
   // パッドの画面: パターン中はパッドが下へずれる（ずれた位置の 5 のパッド）
   var pp5 = at(B.padRect(2, 8, B.PAD_Y_PAT));
   var g6 = prun({ pat: "root", bpm: 120, view: "pad" }, 30, function (f, e) {
@@ -354,7 +368,7 @@ module.exports = function () {
     if (file === "arcade-bass.js") { src = src.split("      function render() {\n").join("      window.__bassAct = action; window.__bassPanel = function () { return panel.innerHTML; };\n      function render() {\n"); }
     return src;
   } }), html15 = "";
-  e15.store[B.PREFS_KEY] = JSON.stringify({ pat: "pop", view: "fret" });
+  e15.store[B.PREFS_KEY] = JSON.stringify({ pat: "pop", view: "fret", tab: "key" });
   e15.run("bass", { config: {} }, 12, function (f) {
     var w = e15.window;
     if (f === 3) { w.__bassAct("pat"); w.__bassAct("scale:dorian"); w.__bassAct("scale:nope"); w.__bassAct("keyup"); w.__bassAct("keyup"); html15 = w.__bassPanel(); }
