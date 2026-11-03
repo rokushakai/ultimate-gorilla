@@ -591,7 +591,8 @@
     ["bnotes", "&#x1F3B8; ベース打ち込み", 33, "notes", "hold", 0, 80], // §254 v1.62: ゴリラベースのテイクを送るトラック
     ["gnotes", "&#x1F918; ギター打ち込み", 25, "notes", "hold", 0, 75], // §285 v1.92: ゴリラギターのテイクを送るトラック
     ["snotes", "&#x1F3BB; ストリングス打ち込み", 48, "notes", "hold", 0, 70], // §301 v2.07: ゴリラストリングスのテイクを送るトラック
-    ["hnotes", "&#x1F3BA; 管楽器打ち込み", 56, "notes", "hold", 0, 70] // §307 v2.12: ゴリラホーンのテイクを送るトラック
+    ["hnotes", "&#x1F3BA; 管楽器打ち込み", 56, "notes", "hold", 0, 70], // §307 v2.12: ゴリラホーンのテイクを送るトラック
+    ["ynotes", "&#x1F39B;&#xFE0F; シンセ打ち込み", 81, "notes", "hold", 0, 70] // §319 v2.24: ゴリラシンセのテイクを送るトラック（音色 patch つき）
   ];
   var UKE_X_PLAYS = [["hold", "伸ばす（小節ごと）"], ["half", "2拍ごと"], ["q", "4分"], ["e", "8分"], ["off", "裏打ち"], ["stab", "キメ（1拍目と2拍目の裏）"],
     ["arp8", "アルペジオ8分（上り）"], ["arp16", "アルペジオ16分（上り）"], ["arpud", "アルペジオ16分（上り下り）"]];
@@ -610,6 +611,8 @@
       oct: [-1, 0, 1].indexOf(Number(s0.oct)) >= 0 ? Number(s0.oct) : (s0.oct === undefined ? pr[5] : 0),
       notes: []
     };
+    // §319: ゴリラシンセの音色
+    if (s0.patch && typeof s0.patch === "object") { o.patch = window.UGSynth && window.UGSynth.patchClean ? window.UGSynth.patchClean(s0.patch) : s0.patch; }
     var mn = o.kind === "notes" && Array.isArray(s0.notes) ? s0.notes : [];
     for (var q = 0; q < mn.length && o.notes.length < UKE_MEL_MAX; q++) {
       var b1 = mn[q] && ukeNum(mn[q][0], 0, 4096), d1 = mn[q] && ukeNum(mn[q][1], 0.0625, 32), m1 = mn[q] && ukeNum(mn[q][2], 0, 127), v1 = mn[q] && ukeNum(mn[q][3], 0.1, 1);
@@ -1269,7 +1272,11 @@
     var tprog = tracks && tracks[ev.track || "uke"] ? tracks[ev.track || "uke"].prog : undefined;
     if (ev.kind === "note") {
       // §315: 弦・管の生の録音は、音符の長さだけのばして、強さで弱い/強いの録音をまぜる
-      var SV = window.UGStrings;
+      var SV = window.UGStrings, YS = window.UGSynth, ytr = tracks && tracks[ev.track || "uke"];
+      // §319: ゴリラシンセの音色のトラックは、その音色で音符の長さだけ
+      if (ev.sec > 0 && YS && ytr && ytr.patch) {
+        try { var yv = YS.note(ytr.patch, ev.midi, tb || ((UG.audio && UG.audio.bus) || ac.destination), when, ev.level, ev.sec); if (yv) { if (ukeSusVoices.length > 48) { ukeSusVoices = ukeSusVoices.filter(function (x) { return x.end > ac.currentTime; }); } ukeSusVoices.push(yv); return; } } catch (e8) {}
+      }
       if (ev.sec > 0 && SV && SV.sustains && tprog !== undefined && SV.sustains(tprog)) {
         try { var sv = SV.note(tprog, ev.midi, tb || ((UG.audio && UG.audio.bus) || ac.destination), when, ev.level, ev.sec); if (sv) { if (ukeSusVoices.length > 48) { ukeSusVoices = ukeSusVoices.filter(function (x) { return x.end > ac.currentTime; }); } ukeSusVoices.push(sv); return; } } catch (e7) {}
       }
@@ -1304,7 +1311,7 @@
   function ukeSusStop() {
     var SV = window.UGStrings, vs = ukeSusVoices;
     ukeSusVoices = [];
-    for (var i = 0; i < vs.length; i++) { try { if (SV && vs[i].end > vs[i].ac.currentTime) { SV.stop(vs[i], 0.08); } } catch (e) {} }
+    for (var i = 0; i < vs.length; i++) { try { if (vs[i].end > vs[i].ac.currentTime) { if (vs[i].kill) { vs[i].kill(0.08); } else if (SV) { SV.stop(vs[i], 0.08); } } } catch (e) {} }
   }
   function ukeSeqStop() {
     if (ukeSeqPlayer) { clearInterval(ukeSeqPlayer.timer); ukeSeqPlayer = null; }
