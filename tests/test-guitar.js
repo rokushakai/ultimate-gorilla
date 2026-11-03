@@ -123,6 +123,37 @@ module.exports = function () {
   ok(pp6.gvol === 90 && pp6.dvol === 60 && pp6.bvol === 110 && h6.indexOf("90%") > 0 && h6.indexOf('data-gdrum="1"') > 0 && h6.indexOf('data-gbpat="1"') > 0 && G.vol(155, 100) === 100,
     "band tab: drum and bass selects, three volume rows (saved)", [pp6.gvol, pp6.dvol, pp6.bvol]);
 
+  // --- §285: シーケンサーへ送る（🤘 ギター打ち込み・音色はシーケンサーの番号・1000 音まで）---
+  var U = W.UGUkulele, gst = U.seqLoad();
+  gst.cur.tracks.uke.on = true; gst.cur.tracks.uke.mute = false; U.seqSave(gst);
+  var gn = G.notesClean([[0, 1, 48], [0.01, 1, 52, 0.6]]), rs = G.sendToSeq({ name: "ぼくのギター", voice: "dist", notes: gn }), gst2 = U.seqLoad(), xt = gst2.cur.tracks[rs.id];
+  var many = [], q;
+  for (q = 0; q < 1200; q++) { many.push([q * 0.25, 0.25, 50]); }
+  var rs2 = G.sendToSeq({ name: "たくさん", voice: "nylon", notes: many }), xt2 = U.seqLoad().cur.tracks[rs2.id];
+  ok(rs.ok && xt && xt.preset === "gnotes" && xt.kind === "notes" && xt.prog === 30 && JSON.stringify(xt.notes) === JSON.stringify(gn) && xt.name === "ぼくのギター" && gst2.cur.tracks.uke.mute === false &&
+    rs2.ok && rs2.cut && xt2.notes.length === G.SEQ_MAX && xt2.prog === 24 && !G.sendToSeq({ name: "x", notes: [] }).ok && U.X_PRESETS.some(function (p0) { return p0[0] === "gnotes" && p0[3] === "notes"; }),
+    "send to the sequencer: a guitar-notes track with the voice's GM number (distortion 30), at most 1000 notes; the ukulele stays", [rs.msg, rs2.cut]);
+  // --- §285: 伴奏（曲のコード C → G7）。曲のウクレレは鳴らさない（ON なら鳴る）---
+  function song(e, rows) {
+    var U2 = e.window.UGUkulele, sq = U2.seqClean(null);
+    sq.rows = rows; sq.bpm = 120; sq.countIn = false; sq.loop = false;
+    e.store[U2.SEQ_KEY] = JSON.stringify({ cur: U2.seqClean(sq), songs: [] });
+  }
+  function brun(prefs, frames) {
+    var e = H.load(), mine = [], others = [];
+    song(e, [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G7", len: "w" }]);
+    e.store[G.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("guitar", { config: { backing: "cur" } }, frames, function (fr) {
+      if (fr === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === 25) { mine.push(m); } else if (pg !== M.DRUM) { others.push(pg); } return s0.apply(M, arguments); }; }
+      if (fr === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+    });
+    return { mine: mine, others: others };
+  }
+  var bb1 = brun({ view: "chord", voice: "steel", pat: "ballad" }, 260), bb2 = brun({ view: "chord", voice: "steel", pat: "ballad", backUke: true }, 100);
+  ok(bb1.mine.join() === "48,52,55,60,64,43,47,50,55,59,65" && bb1.others.indexOf(24) < 0 && bb2.others.indexOf(24) >= 0 &&
+    G.songSev("G7") && G.songSev("Am9/G") && !G.songSev("C/E") && JSON.stringify(G.shape(B.songChord("C/E", 0), false).frets) === "[null,3,2,0,1,0]",
+    "backing: the pattern follows the song's chords (C, then G7 with the 7th shape); the song's ukulele is left out unless turned on; slash chords use the chord's root", [bb1.mine, bb1.others.slice(0, 5), bb2.others.slice(0, 5)]);
+
   // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
   var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
   M5.audioInit();
