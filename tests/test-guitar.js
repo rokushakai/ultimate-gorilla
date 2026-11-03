@@ -222,6 +222,33 @@ module.exports = function () {
   ok(gs1.size === "m" && gs2.pw === 20 && gs3.lefty === false && gp.pos === "bot" && hp.indexOf("持ち方") > 0 && hp.indexOf('data-ga="grip:lefty"') > 0 && hp.indexOf('data-ga="land"') > 0,
     "grip settings cycle and are saved (shared by guitar and bass); the play tab shows them in landscape", [gs1, gs2, gs3, gp]);
 
+  // --- §291: よこ向きのストローク（左手側のコードのボタン・左利き・コードの列）---
+  var e91 = H.load(), G91 = e91.window.UGGuitar, B91 = e91.window.UGBass;
+  G91.layout({ land: true, h: 130 });
+  var sR = G91.geom(), rR = G91.chordRect(0), rR6 = G91.chordRect(6);
+  e91.store[B91.GRIP_KEY] = JSON.stringify({ lefty: true });
+  G91.layout({ land: true, h: 130 });
+  var sL = G91.geom(), rL = G91.chordRect(0);
+  G91.layout({ land: true, h: 130, cgrid: true });
+  var sG = G91.geom(), rG3 = G91.chordRect(3);
+  ok(sR.CMODE === "side" && rR.x === 4 && sR.STRUM_X0 > rR.x + rR.w && rR6.y > rR.y && rR6.y + rR6.h <= 130 && sL.CMODE === "side" && rL.x > sL.STRUM_X1 && sL.STRUM_X0 === 4 &&
+    sG.CMODE === "grid" && rG3.y < sG.STRUM_Y && G91.gridCol(rG3.x + 3) === 3 && G91.gridCol(10) === 0,
+    "landscape strum: chord buttons in a column on the left-hand side (right side when left-handed); the chord-grid mode puts 7 chord columns side by side", [sR, sL, sG]);
+  // コードの列: F の列（4つめ）を下から上へなぞる ＝ F のダウン。G の名前をタップ ＝ G のジャーン
+  var g91 = { snd: [] }, eg91 = H.load();
+  eg91.store[G.PREFS_KEY] = JSON.stringify({ view: "chord", land: true, cgrid: true, voice: "steel" });
+  eg91.run("guitar", { config: {} }, 12, function (fr) {
+    var Gw = eg91.window.UGGuitar, gm = Gw.geom(), M = eg91.window.UGMelody;
+    // テストの画面（240×320）はたて長なので、よこ向きのゲームは 90° 回した座標で渡す
+    function lp(t, x, y, id) { eg91.ptr(t, 240 - y * 240 / gm.H, x * 320 / 240, id); }
+    if (fr === 1) { var s0 = M.synth; M.synth = function (m, pg) { if (pg === 25) { g91.snd.push(m); } return s0.apply(M, arguments); }; }
+    var fx = Gw.chordRect(3).x + 5, gx = Gw.chordRect(4).x + 5;
+    if (fr === 2) { g91.mode = gm.CMODE; lp("down", fx, gm.STRUM_BOT - 1, 1); lp("move", fx, gm.STRUM_Y + 1, 1); lp("up", fx, gm.STRUM_Y + 1, 1); }
+    if (fr === 5) { lp("down", gx, Gw.chordRect(4).y + 3, 2); lp("up", gx, Gw.chordRect(4).y + 3, 2); }
+  });
+  ok(g91.mode === "grid" && g91.snd.slice(0, 6).join() === "41,48,53,57,60,65" && g91.snd.slice(6, 12).join() === "43,47,50,55,59,67",
+    "chord grid: swiping up in the F column strums F; tapping the G name strums G", g91.snd);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });

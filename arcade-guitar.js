@@ -35,18 +35,26 @@
   // §287: 右手ピッキング（左手で押さえて、板の右の「右手」の所で弾く）。そのときフレットは6列
   // §288: よこ向き（フレット 13 列）と持ち方（ゴリラベースと共通: 利き手・ネックの太さと位置・右手の所の広さ）
   var GTR_PICK = false, GTR_PICK_X = W - 4 - Math.round(W * 0.24), GTR_PICK_R = W - 4, GTR_MIRROR = false, GTR_LAND = false;
-  // o: { land, h: よこ向きの高さ, pick }
+  // o: { land, h: よこ向きの高さ, pick, cgrid: §291 コードの列（よこ向きのストローク）}
   function gtrLayout(o) {
     o = o || {};
     var land = !!o.land, pick = !!o.pick, B = BA(), g = land && B && B.grip ? B.grip() : null, zw = Math.round(W * (g ? g.pw / 100 : 0.24)), gut = land ? 11 : 4;
     GTR_LAND = land; GTR_PICK = pick; GTR_MIRROR = !!(g && g.lefty);
     if (land) {
-      GTR_H = o.h || 130; GTR_CHORD_H = 16; GTR_CHORD_Y = GTR_H - 4 - GTR_CHORD_H; GTR_STRUM_Y = 14; GTR_STRUM_BOT = GTR_CHORD_Y - 4;
+      GTR_H = o.h || 130;
+      // §291: ストロークは、コードのボタンを左手側に縦に並べる（"side"）か、コードの列（"grid"）
+      var sw = Math.round(W * 0.18);
+      if (o.cgrid) { GTR_CMODE = "grid"; GTR_CHORD_Y = 12; GTR_CHORD_H = 15; GTR_STRUM_Y = 29; GTR_STRUM_BOT = GTR_H - 4; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4; }
+      else {
+        GTR_CMODE = "side"; GTR_SIDE_W = sw; GTR_STRUM_Y = 12; GTR_STRUM_BOT = GTR_H - 4;
+        if (g && g.lefty) { GTR_SIDE_X = W - 4 - sw; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 8 - sw; } else { GTR_SIDE_X = 4; GTR_STRUM_X0 = 8 + sw; GTR_STRUM_X1 = W - 4; }
+      }
       var bx = B.gripBox(14, GTR_H - 9, g);
       GTR_BOARD_Y = bx.y0; GTR_BOARD_BOT = bx.y1;
       GTR_COLS = pick ? Math.max(7, Math.round(13 * (1 - zw / W))) : 13;
     } else {
       GTR_H = 320; GTR_CHORD_H = 42; GTR_CHORD_Y = 320 - 6 - 42; GTR_STRUM_Y = 26; GTR_STRUM_BOT = GTR_CHORD_Y - 8; GTR_BOARD_Y = 96; GTR_BOARD_BOT = 314;
+      GTR_CMODE = "strip"; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4;
       GTR_COLS = pick ? 6 : 8;
     }
     if (!GTR_MIRROR) { GTR_PICK_X = W - 4 - zw; GTR_PICK_R = W - 4; GTR_BOARD_X = gut; GTR_BOARD_R = pick ? GTR_PICK_X - 6 : W - 4; }
@@ -89,7 +97,15 @@
   // ---------- ストロークの画面（上が6弦）----------
   // §290: 弦は単音と同じく上が1弦・手前（下）が6弦。コードの段は一番手前（左手で押しやすく）。大きさは gtrLayout が決める
   var GTR_CHORD_Y = 272, GTR_CHORD_H = 42, GTR_STRUM_Y = 26, GTR_STRUM_BOT = 264;
-  function gtrChordRect(i) { var w = (W - 8) / 7; return { x: 4 + i * w + 1, y: GTR_CHORD_Y, w: w - 2, h: GTR_CHORD_H }; }
+  // §291: コードのボタンの並べ方 "strip"（下の段）/ "side"（よこ向き: 左手側の縦の列）/ "grid"（よこ向き: コードの列の上）。弦の所は GTR_STRUM_X0〜X1
+  var GTR_CMODE = "strip", GTR_STRUM_X0 = 4, GTR_STRUM_X1 = W - 4, GTR_SIDE_X = 4, GTR_SIDE_W = 58;
+  function gtrChordRect(i) {
+    if (GTR_CMODE === "side") { var h = (GTR_H - 16) / 7; return { x: GTR_SIDE_X, y: 12 + i * h + 1, w: GTR_SIDE_W, h: h - 2 }; }
+    var w = (W - 8) / 7;
+    return { x: 4 + i * w + 1, y: GTR_CHORD_Y, w: w - 2, h: GTR_CHORD_H };
+  }
+  // コードの列の番号（コードの列でなければ -1）
+  function gtrGridCol(x) { return GTR_CMODE === "grid" ? Math.max(0, Math.min(6, Math.floor((x - 4) / ((W - 8) / 7)))) : -1; }
   function gtrChordAt(x, y) { for (var i = 0; i < 7; i++) { var r = gtrChordRect(i); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } } return -1; }
   function gtrStrumRowH() { return (GTR_STRUM_BOT - GTR_STRUM_Y) / 6; }
   // 弦 sn（0 ＝ 6弦。手前 ＝ 下）の線の高さ
@@ -180,7 +196,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -557,7 +573,7 @@
       function applyLand() {
         if (api.setLandscape) { api.setLandscape(prefs.land); }
         var box = panel && panel.parentNode;
-        gtrLayout({ land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130, pick: prefs.pick && view === "fret" });
+        gtrLayout({ land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130, pick: prefs.pick && view === "fret", cgrid: prefs.cgrid && view === "chord" && !cfg.backing });
         if (api.setCanvasHeight) { api.setCanvasHeight(GTR_H); }
       }
       applyLand();
@@ -918,6 +934,7 @@
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
         else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; applyLand(); gtrSavePrefs(prefs); render(); }
+        else if (v === "cgrid") { allOff(); prefs.cgrid = !prefs.cgrid; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (v === "land") { allOff(); held = {}; picks = {}; prefs.land = !prefs.land; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (/^grip:/.test(v)) { allOff(); held = {}; picks = {}; B.gripStep(v.substring(5)); applyLand(); render(); }
         else if (v === "back") { backToggle(); }
@@ -1018,7 +1035,9 @@
           html += '<div class="piano-row">';
           for (i = 0; i < GTR_VIEWS.length; i++) { html += '<button class="modal-btn' + (view === GTR_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-ga="view:' + GTR_VIEWS[i][0] + '">' + GTR_VIEWS[i][1] + '</button>'; }
           html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-ga="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button>';
-          html += '</div>' + (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
+          html += '</div>' + (prefs.land && view === "chord" && !back ? '<div class="piano-row"><button class="modal-btn' + (prefs.cgrid ? " piano-rec-on" : "") + '" data-ga="cgrid">&#x1F39B;&#xFE0F; コードの列: ' + (prefs.cgrid ? "ON" : "OFF") + '</button></div>' +
+            '<p class="small" style="margin:4px 0 0;">' + (prefs.cgrid ? "7つのコードが列にならぶ。列の弦をなぞるとそのコードでかき鳴らす・弦をタップでその弦だけ・上のコード名でジャーン" : "左手側のボタンでコードを選んで、広い所でかき鳴らす（利き手は持ち方で）") + '</p>' : "") +
+            (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
           for (i = 0; i < GTR_VOICES.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.voice === GTR_VOICES[i][0] ? " active" : "") + '" data-ga="voice:' + GTR_VOICES[i][0] + '">' + GTR_VOICES[i][1] + '</button>'; }
           html += '</div>';
           if (view === "fret") {
@@ -1108,10 +1127,26 @@
         }
       }
       function drawSong(ctx) {
-        var k = songIdx(), r = { x: 4, y: GTR_CHORD_Y, w: W - 8, h: GTR_CHORD_H }, nx = k >= 0 ? back.chords[k + 1] : null;
+        var k = songIdx(), side = GTR_CMODE === "side", r = side ? { x: GTR_SIDE_X, y: 12, w: GTR_SIDE_W, h: GTR_H - 16 } : { x: 4, y: GTR_CHORD_Y, w: W - 8, h: GTR_CHORD_H }, nx = k >= 0 ? back.chords[k + 1] : null;
         ctx.fillStyle = "#2f4a6e"; ctx.fillRect(r.x, r.y, r.w, r.h);
-        text(ctx, k >= 0 ? back.chords[k].name : "—", W / 2 - 40, r.y + r.h / 2, 16, "#ffd166");
-        text(ctx, nx ? "→ " + nx.name : "", W / 2 + 50, r.y + r.h / 2, 11, "#adb5bd");
+        text(ctx, k >= 0 ? back.chords[k].name : "—", side ? r.x + r.w / 2 : W / 2 - 40, side ? r.y + r.h / 2 - 8 : r.y + r.h / 2, 16, "#ffd166");
+        text(ctx, nx ? "→ " + nx.name : "", side ? r.x + r.w / 2 : W / 2 + 50, side ? r.y + r.h / 2 + 10 : r.y + r.h / 2, 11, "#adb5bd");
+      }
+      // §291: コードの列（7つのコードの押さえ方をならべる）
+      function colShape(i) { return gtrShape(B.chord(prefs.key, i, prefs.scale, prefs.sev), prefs.sev); }
+      function drawGrid(ctx) {
+        var rh = gtrStrumRowH(), cw = (W - 8) / 7, i, sn;
+        for (i = 0; i < 7; i++) {
+          var x = 4 + i * cw, sh = colShape(i);
+          ctx.fillStyle = i === chordD ? "#5a3a20" : (i % 2 ? "#3b2416" : "#33200f");
+          ctx.fillRect(x, GTR_STRUM_Y, cw, rh * 6);
+          for (sn = 0; sn < 6; sn++) { var fx = sh.frets[sn]; text(ctx, fx === null ? "×" : String(fx), x + cw / 2, gtrStrumLineY(sn) - rh * 0.3, 8, fx === null ? "#ff8787" : "rgba(255,209,102,0.85)"); }
+        }
+        for (sn = 0; sn < 6; sn++) {
+          var y = gtrStrumLineY(sn), th = (1.2 + (5 - sn) * 0.5) * 0.7, a = vib[sn] / 30 * 2;
+          ctx.fillStyle = vib[sn] > 0 ? "#ffe8a3" : "#d9d9d9";
+          ctx.fillRect(4, y - th / 2 + (a > 0.2 ? Math.sin(frame * 1.7) * a : 0), W - 8, th);
+        }
       }
       function drawStrum(ctx) {
         var ch = curChord(), sh = curShape(), rh = gtrStrumRowH(), i, sn;
@@ -1124,23 +1159,25 @@
           text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + (GTR_LAND ? 0 : 4), dc.name.length > 5 ? 7 : (dc.name.length > 4 ? 8 : 10), cur ? "#14213d" : "#ffffff");
         }
         if (back) { drawSong(ctx); }
+        if (GTR_CMODE === "grid") { drawGrid(ctx); return; }
+        var X0 = GTR_STRUM_X0, X1 = GTR_STRUM_X1;
         ctx.fillStyle = "#3b2416";
-        ctx.fillRect(4, GTR_STRUM_Y, W - 8, rh * 6);
+        ctx.fillRect(X0, GTR_STRUM_Y, X1 - X0, rh * 6);
         if (!GTR_LAND) { text(ctx, "↑ 下から上 ＝ ダウン　↓ 上から下 ＝ アップ", W / 2, GTR_STRUM_BOT + 4, 8, "#adb5bd"); }
         for (sn = 0; sn < 6; sn++) {
           var y = gtrStrumLineY(sn), th = 1.2 + (5 - sn) * 0.5, a = vib[sn] / 30 * 3, fx = sh.frets[sn];
           ctx.fillStyle = vib[sn] > 0 ? "#ffe8a3" : "#d9d9d9";
           if (a > 0.2 && ctx.beginPath) {
             ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = th; ctx.beginPath();
-            for (var x = 60; x <= W - 8; x += 6) { var yy = y + Math.sin(x / 9 + frame * 1.7) * a; if (x === 60) { ctx.moveTo(x, yy); } else { ctx.lineTo(x, yy); } }
+            for (var x = X0 + 56; x <= X1 - 4; x += 6) { var yy = y + Math.sin(x / 9 + frame * 1.7) * a; if (x === X0 + 56) { ctx.moveTo(x, yy); } else { ctx.lineTo(x, yy); } }
             ctx.stroke(); ctx.lineWidth = 1;
-          } else { ctx.fillRect(60, y - th / 2, W - 68, th); }
-          var lx = GTR_LAND ? 40 : 30, ly0 = GTR_LAND ? y : y + 6, rr = GTR_LAND ? Math.min(9, rh * 0.42) : 9;
-          text(ctx, GTR_LAND ? (6 - sn) + " " + GTR_SNAME[sn] : (6 - sn) + "弦 " + GTR_SNAME[sn], GTR_LAND ? 16 : 30, GTR_LAND ? y : y - 9, 8, "#adb5bd");
+          } else { ctx.fillRect(X0 + 56, y - th / 2, X1 - X0 - 60, th); }
+          var lx = X0 + (GTR_LAND ? 36 : 26), ly0 = GTR_LAND ? y : y + 6, rr = GTR_LAND ? Math.min(9, rh * 0.42) : 9;
+          text(ctx, GTR_LAND ? (6 - sn) + " " + GTR_SNAME[sn] : (6 - sn) + "弦 " + GTR_SNAME[sn], X0 + (GTR_LAND ? 12 : 26), GTR_LAND ? y : y - 9, 8, "#adb5bd");
           ctx.fillStyle = fx === null ? "#c92a2a" : "#ffd166";
           ctx.beginPath(); ctx.arc(lx, ly0, rr, 0, Math.PI * 2); ctx.fill();
           text(ctx, fx === null ? "×" : String(fx), lx, ly0, 10, "#14213d");
-          if (fx !== null && names !== "none") { text(ctx, gtrName(sh.midis[sn], names), W - 20, y - 8, 8, "rgba(255,255,255,0.6)"); }
+          if (fx !== null && names !== "none" && !GTR_LAND) { text(ctx, gtrName(sh.midis[sn], names), X1 - 16, y - 8, 8, "rgba(255,255,255,0.6)"); }
         }
         if (!rec) { text(ctx, ch.name, W / 2, GTR_LAND ? 6 : 10, 14, "#ffd166"); }
       }
@@ -1156,8 +1193,12 @@
             audio();
             if (view === "chord") {
               var d = gtrChordAt(x, y);
-              if (d >= 0) { setChord(d); return; }
-              if (y >= GTR_STRUM_Y && y < GTR_STRUM_BOT) { press[pid] = { y: y, moved: false }; }
+              if (d >= 0) { setChord(d); if (GTR_CMODE === "grid") { strum("down", 0, 1, colShape(d)); } return; }
+              if (y >= GTR_STRUM_Y && y < GTR_STRUM_BOT && x >= GTR_STRUM_X0 && x < GTR_STRUM_X1) {
+                var gc = gtrGridCol(x);
+                press[pid] = { y: y, moved: false, col: gc };
+                if (gc >= 0 && gc !== chordD && !pat) { chordD = gc; flash["c" + gc] = 10; }
+              }
               return;
             }
             var c = gtrCellAt(x, y, prefs.pos);
@@ -1184,7 +1225,7 @@
             }
             if (!p) { return; }
             if (view === "chord") {
-              var cs = gtrStrumCross(p.y, y), sh = curShape(), k;
+              var cs = gtrStrumCross(p.y, y), sh = p.col >= 0 ? colShape(p.col) : curShape(), k;
               for (k = 0; k < cs.length; k++) { if (sh.midis[cs[k]] !== null) { playString(cs[k], sh.midis[cs[k]], y < p.y ? 0.6 : 0.5, 0); } } // 下から上 ＝ ダウン（強め）
               if (cs.length) { p.moved = true; }
               p.y = y;
@@ -1205,7 +1246,7 @@
             delete press[pid];
             if (view === "chord") {
               // またがずにはなした ＝ その弦だけ
-              if (!p.moved) { var sn0 = gtrStrumAt(p.y), sh0 = curShape(); if (sn0 >= 0 && sh0.midis[sn0] !== null) { playString(sn0, sh0.midis[sn0], 0.7, 0); } }
+              if (!p.moved) { var sn0 = gtrStrumAt(p.y), sh0 = p.col >= 0 ? colShape(p.col) : curShape(); if (sn0 >= 0 && sh0.midis[sn0] !== null) { playString(sn0, sh0.midis[sn0], 0.7, 0); } }
               return;
             }
             if (strVo[p.sn] && strVo[p.sn].cur === p.m) { stopString(p.sn, 0); }
@@ -1261,7 +1302,7 @@
     H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, MUTED: GTR_MUTED, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
     PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
     setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
-    geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y }; }, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
+    geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y, CMODE: GTR_CMODE, STRUM_X0: GTR_STRUM_X0, STRUM_X1: GTR_STRUM_X1 }; }, gridCol: gtrGridCol, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
     quality: gtrQuality, shape: gtrShape, bus: gtrBus, name: gtrName, prefs: gtrPrefs, notesClean: gtrNotesClean,
     SONGS: GTR_SONGS, chart: gtrChart, BEST_KEY: GTR_BEST_KEY, RLEVELS: GTR_RLEVELS, sendToSeq: gtrSendToSeq, SEQ_MAX: GTR_SEQ_MAX, songSev: gtrSongSev, takesLoad: gtrTakesLoad, takesSave: gtrTakesSave, takeAdd: gtrTakeAdd, takeById: gtrTakeById
   };

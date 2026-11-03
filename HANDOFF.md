@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.97** |
+| 現在バージョン | **v1.98** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.98] 🎶 ストロークのよこ向き**（§291）: `gtrLayout({ cgrid })` が `GTR_CMODE`（"strip" たて / "side" よこ / "grid" コードの列）と弦の所 `GTR_STRUM_X0〜X1` を決める。`gtrChordRect` は形ごと。コードの列は `gtrGridCol(x)`・`colShape(i)`（指 press に col を持つ）
 - **[v1.97] 🎶 ストロークの向き**（§290）: ストロークの弦は `gtrStrumLineY(sn)` で上が1弦（sn 5）・下が6弦（sn 0）。`GTR_STRUM_Y`〜`GTR_STRUM_BOT` が弦、その下 `GTR_CHORD_Y` がコードの段（`gtrLayout` が決める）。指が上へ動く ＝ ダウン
 - **[v1.96] 🎸 ギターの本物の音色**（§289）: `GTR_VOICES` は [id, 名前, GM の番号, エレキか, 大きさ]。エレキ 26・27・29・30 と、カッティング用のミュート 28（`GTR_MUTED`）を `MELODY_SAMPLE_FILES` に追加。アンプ（`GTR_AMPS`）はなくした。ギターのサンプルは `MELODY_SAMPLE_TRIM` で 3 秒残す
 - **[v1.95] 📱 ギターのよこ向き・持ち方**（§288）: 持ち方は `UGBass.grip / gripStep / gripBox / gripRows`（`ultimateGorillaGripV1`）。ギターは `gtrLayout({ land, h, pick })` が板・右手の所・列の数をまとめて決める（`create` の `applyLand`）。ベースは `bassSetPick` がよこ向きのとき持ち方を使う。列の x は `gtrColX` / `bassColX`、区切りは `gtrFretX` / `bassFretX`（`*_MIRROR` で右から）。いまの形は `geom()`
@@ -246,7 +247,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（923項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（925項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`
