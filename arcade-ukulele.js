@@ -4004,6 +4004,17 @@
         upat.k = at(upat.unit); upat.dk = at(0.25); upat.bk = bd ? at(upat.meter / bd[2].length) : 0;
         drumCache = null;
       }
+      // §326: ウクレレの種類を変える → 保存して、同じ設定でフリー演奏をはじめなおす
+      function ukeTypeChange(t) {
+        var pf = ukePrefs(), c2 = {}, k;
+        pf.type = ukeTypeOk(t);
+        ukeSavePrefs(pf);
+        ukeApplyType(pf.type);
+        upStop();
+        for (k in cfg) { if (cfg.hasOwnProperty(k)) { c2[k] = cfg[k]; } }
+        c2.lowG = pf.lowG;
+        if (api.restart) { api.restart(c2); }
+      }
       function upToggle() { if (upat) { upStop(); } else { upStart(); } padRender(); }
       // 小節の頭: 予約したパッド・コード進行の押さえ方を指板に
       function upBar(b) {
@@ -4124,11 +4135,11 @@
         var all = ukePadPlays(), groups = [["once", "ストローク"], ["pat", "ストロークパターン"], ["arp", "アルペジオのパターン"], ["my", "じぶんのパターン"]], gi, oi, opts = "", mt = upMeter(), i, j, gs;
         for (gi = 0; gi < groups.length; gi++) {
           var go = "";
-          for (oi = 0; oi < all.length; oi++) { if (all[oi][2] === groups[gi][0]) { go += '<option value="' + I.escHtml(all[oi][0]) + '"' + (padP.ppat === all[oi][0] ? " selected" : "") + '>' + I.escHtml(groups[gi][0] === "once" ? "ジャーン（1小節に1回）" : all[oi][1]) + '</option>'; } }
+          for (oi = 0; oi < all.length; oi++) { if (all[oi][2] === groups[gi][0]) { go += '<option value="' + I.escHtml(all[oi][0]) + '"' + (padP.ppat === all[oi][0] ? " selected" : "") + '>' + I.escHtml(groups[gi][0] === "once" ? "ジャーン（パターン中は1小節に1回）" : all[oi][1]) + '</option>'; } }
           if (go) { opts += '<optgroup label="' + groups[gi][1] + '">' + go + '</optgroup>'; }
         }
-        var h = '<details class="uke-mypat uke-patset"' + (patOpen ? " open" : "") + '><summary>&#x1F3BC; パターン演奏の設定</summary>' +
-          '<div class="piano-row"><label class="piano-select">&#x1F3BC; <select data-uppat="1">' + opts + '</select></label></div>' +
+        var h = '<div class="piano-row"><label class="piano-select">&#x1F3BC; パターン <select data-uppat="1">' + opts + '</select></label></div>' +
+          '<details class="uke-mypat uke-patset"' + (patOpen ? " open" : "") + '><summary>&#x1F3BC; パターン演奏の設定</summary>' +
           '<div class="piano-row"><button class="modal-btn" data-uact="uswing">ハネ: ' + ["なし", "軽く", "ハネ", "3連"][padP.swing] + '</button></div>';
         if (B && B.cprog) {
           var co = '<option value=""' + (padP.cprog ? "" : " selected") + '>コード進行なし（指板・パッドで変える）</option>';
@@ -4189,7 +4200,7 @@
         else if (v === "bpmdown" || v === "bpmup") { var ob = padP.bpm; padP.bpm = Math.max(40, Math.min(240, padP.bpm + (v === "bpmup" ? 5 : -5))); if (upat) { upRetime(ob); } }
         // §324: パターン
         else if (v === "upat") { ukePadPrefsSave(padP); upToggle(); return; }
-        else if (v.indexOf("uppat:") === 0) { padP.ppat = ukePadPlay(v.substring(6))[0]; if (upat) { upRetime(); } }
+        else if (v.indexOf("uppat:") === 0) { padP.ppat = padP.play = ukePadPlay(v.substring(6))[0]; padPlay = null; if (upat) { upRetime(); } } // §326: パッドの鳴らし方と同じ
         else if (v === "uswing") { padP.swing = (padP.swing + 1) % 4; }
         else if (v.indexOf("ucp:") === 0) { padP.cprog = B && B.cprog(v.substring(4)) ? v.substring(4) : ""; if (upat) { upat.d = -1; } }
         else if (v === "ukeyup" || v === "ukeydown") { padP.key = (padP.key + (v === "ukeyup" ? 1 : 11)) % 12; if (upat) { upat.d = -1; } }
@@ -4250,8 +4261,11 @@
         applyView();
         var pd0 = panel.querySelector ? panel.querySelector("details.uke-patset") : null;
         if (pd0) { patOpen = !!pd0.open; }
+        // §326: ウクレレの種類（変えるとフリー演奏を作りなおす）
+        var tyo = "", ti;
+        for (ti = 0; ti < UKE_TYPES.length; ti++) { tyo += '<option value="' + UKE_TYPES[ti][0] + '"' + (UKE_TYPE === UKE_TYPES[ti][0] ? " selected" : "") + '>' + UKE_TYPES[ti][1] + '</option>'; }
         // §324: ▶ パターンと BPM
-        var h = '<div class="piano-row"><button class="modal-btn' + (upat ? " piano-rec-on" : "") + '" data-uact="upat">' + (upat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
+        var h = '<div class="piano-row"><label class="piano-select">&#x1FA95; 種類 <select data-utype="1">' + tyo + '</select></label></div><div class="piano-row"><button class="modal-btn' + (upat ? " piano-rec-on" : "") + '" data-uact="upat">' + (upat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
           '<button class="modal-btn" data-uact="bpmdown">&minus;</button><span>BPM ' + padP.bpm + '</span><button class="modal-btn" data-uact="bpmup">&#xFF0B;</button></div>' + upPanel() +
           '<div class="piano-row"><button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">' + (padP.pad ? "&#x1F39B;&#xFE0F; パッドをしまう" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
           '<button class="modal-btn' + (padP.chord ? " piano-pad-on" : "") + '" data-uact="chord">&#x1F3F7;&#xFE0F; コード名 ' + (padP.chord ? "ON" : "OFF") + '</button></div>', i;
@@ -4321,7 +4335,9 @@
           })(pbs[k]);
         }
         var sel = panel.querySelector("select[data-uplay]");
-        if (sel) { sel.onchange = function (ev) { padP.play = ev.currentTarget.value; ukePadPrefsSave(padP); padPlay = null; if (ev.currentTarget.blur) { ev.currentTarget.blur(); } }; }
+        if (sel) { sel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } padAction("uppat:" + ev.currentTarget.value); }; } // §326: ▶ パターンも同じに
+        var tsel = panel.querySelector("select[data-utype]");
+        if (tsel) { tsel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } ukeTypeChange(ev.currentTarget.value); }; }
         // §324
         var usels = [["uppat", "uppat:"], ["ucp", "ucp:"], ["usc", "usc:"], ["udr", "udr:"], ["ubp", "ubp:"]];
         for (k = 0; k < usels.length; k++) {

@@ -399,4 +399,13 @@ module.exports = function () {
   var g25 = B.chord(0, cp[1], "major", false).notes[0];
   ok(drums25 >= 8 && bass25.length >= 9 && bass25[0] === B.chord(0, cp[0], "major", false).notes[0] && bass25.indexOf(g25) === 8,
     "band: the drum loop and the bass pattern (root 8ths, following the chords) play with the pattern", [drums25, bass25]);
+  // §326: パッドの鳴らし方と ▶ パターンは同じ設定
+  var e26 = patHooked(), s26 = [];
+  e26.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ pad: true });
+  e26.run("piano", { config: { mode: "free" } }, 5, function (f) {
+    var h = e26.window.__pp; if (!h || f !== 2) { return; }
+    h().act("arp:alberti"); s26.push(h().prefs.ppat);
+    h().act("ppat:bunch"); s26.push(h().prefs.padArp);
+  });
+  ok(s26.join() === "alberti,bunch", "the pads' playing style and the ▶ pattern are one setting", s26);
 };

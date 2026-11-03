@@ -1237,6 +1237,30 @@ module.exports = async function () {
   te2.run("ukulele", { config: { mode: "free" } }, 5);
   ok(te2.window.UGUkulele.type() === "baritone" && te2.window.UGMelody.sampleFiles[140] === "acoustic_guitar_nylon" && JSON.parse(te2.store.ultimateGorillaUkulelePrefsV1).type === "baritone",
     "the saved type is used when the ukulele starts (voice 140 follows it)");
+  // --- §326: フリー演奏でウクレレの種類をすぐ変える（同じゲームを作りなおす）・🏠 はじめの画面のボタン・鳴らし方と ▶ パターンを同じに ---
+  var re6 = H.load({ patch: function (src, file) {
+    src = patch(src, file);
+    if (file === "arcade-ukulele.js") { src = src.split("      padRender();\n\n      return {").join("      padRender(); window.__ukeT = { type: ukeTypeChange, act: padAction, prefs: function () { return padP; } };\n\n      return {"); }
+    return src;
+  } }), rparts = {}, rroot = H.makeEl("div");
+  rroot.querySelector = function (sel) {
+    if (!rparts[sel]) {
+      rparts[sel] = H.makeEl(sel);
+      if (sel === ".arcade-canvas") { rparts[sel].getContext = function () { return new Proxy({}, { get: function (t6, k6) { return t6[k6] !== undefined ? t6[k6] : function () {}; }, set: function (t6, k6, v6) { t6[k6] = v6; return true; } }); }; }
+    }
+    return rparts[sel];
+  };
+  re6.window.UGArcade.start("ukulele", rroot, { config: { mode: "free", sound: true }, onExit: function () {}, onEnd: function () { return 0; } });
+  var t6a = re6.window.__ukeT, sys6 = rparts[".arcade-sys"].innerHTML;
+  t6a.act("uppat:pat:DUDUDUDU:4");
+  var pl6 = t6a.prefs().play;
+  t6a.type("tenor");
+  await re6.wait(5);
+  var t6b = re6.window.__ukeT;
+  ok(sys6.indexOf('data-sys="top"') >= 0 && pl6 === "pat:DUDUDUDU:4" && t6b !== t6a && re6.window.UGUkulele.type() === "tenor" && re6.window.UGMelody.sampleFiles[140] === "fs_uke_tenor" &&
+    JSON.parse(re6.store.ultimateGorillaUkulelePrefsV1).type === "tenor" && t6b.prefs().ppat === "pat:DUDUDUDU:4",
+    "free play: 🏠 button to the first screen; choosing the ▶ pattern also sets the pads' style; changing the ukulele type saves it and restarts free play right away", [sys6.length, pl6, re6.window.UGUkulele.type()]);
+  re6.window.UGArcade.stop();
   // --- §224: 表示の設定（並び方・パッドの大きさ・下のボタン・説明） ---
   var vcls = [], vroot = H.makeEl("div"), vparts = {}, ve = ukeHooked();
   vroot.classList = { add: function (c) { vcls.push("+" + c); }, remove: function (c) { vcls.push("-" + c); }, contains: function () { return false; } };

@@ -105,6 +105,7 @@
     } else {
       sys.innerHTML =
         '<button class="modal-btn" data-sys="pause">' + (host.paused ? "&#x25B6;&#xFE0F; 再開" : "&#x23F8;&#xFE0F; 一時停止") + '</button>' +
+        (host.def.setup ? '<button class="modal-btn" data-sys="top">&#x1F3E0; はじめの画面</button>' : '') + // §326
         '<button class="modal-btn" data-sys="quit">&#x2716;&#xFE0F; やめる</button>';
     }
     var btns = sys.querySelectorAll("button");
@@ -126,7 +127,8 @@
       var g = host.gameId, root = host.root, opts = host.opts;
       if (host.score > host.hi) { opts.hiScore = host.score; }
       start(g, root, opts);
-    } else if (kind === "setup") {
+    } else if (kind === "setup" || kind === "top") {
+      if (kind === "top") { report(); } // §326: 遊んでいるあいだに、はじめの画面へ（スコアは記録する）
       var g2 = host.gameId, root2 = host.root, opts2 = host.opts;
       if (host.score > host.hi) { opts2.hiScore = host.score; }
       opts2.config = null;
@@ -401,6 +403,18 @@
       // §213 v1.21: 横向き表示（画面いっぱい。縦持ちのときは 90° 回して見せる。CSS .arcade-land）
       setLandscape: function (on) { if (rootEl.classList) { if (on) { rootEl.classList.add("arcade-land"); } else { rootEl.classList.remove("arcade-land"); } } },
       // §224 v1.32: 見た目用のクラスを画面全体につける・はずす（ゲームをやめると全部はずす）
+      // §326 v2.31: 同じゲームを新しい設定ではじめなおす（いまのフレームが終わってから）
+      restart: function (cfg) {
+        var h0 = host;
+        setTimeout(function () {
+          if (!host || host !== h0) { return; }
+          report();
+          var g3 = host.gameId, root3 = host.root, opts3 = host.opts;
+          if (host.score > host.hi) { opts3.hiScore = host.score; }
+          opts3.config = cfg;
+          start(g3, root3, opts3);
+        }, 0);
+      },
       setRootClass: function (cls, on) {
         if (!rootEl.classList || !host) { return; }
         if (on) { rootEl.classList.add(cls); if (host.rootCls.indexOf(cls) < 0) { host.rootCls.push(cls); } } else { rootEl.classList.remove(cls); }

@@ -1152,7 +1152,7 @@
         // §323: パターン・タブ・ハネ・コード進行・キー・バンド
         else if (v === "pat") { patToggle(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = PIANO_TABS.indexOf(tb0) >= 0 ? tb0 : "keys"; pianoSavePrefs(prefs); render(); }
-        else if (/^ppat:/.test(v)) { prefs.ppat = pianoPlay(v.substring(5))[0]; pianoSavePrefs(prefs); if (pat) { patRetime(); } render(); }
+        else if (/^ppat:/.test(v)) { prefs.ppat = prefs.padArp = pianoPlay(v.substring(5))[0]; arps = {}; pianoSavePrefs(prefs); if (pat) { patRetime(); } render(); } // §326: パッドの鳴らし方も同じに
         else if (v === "prate") { prefs.padRate = prefs.padRate === 16 ? 8 : 16; pianoSavePrefs(prefs); if (pat) { patRetime(); } render(); }
         else if (v === "swing") { prefs.swing = (prefs.swing + 1) % 4; pianoSavePrefs(prefs); render(); }
         else if (/^cprog:/.test(v)) { prefs.cprog = B && B.cprog(v.substring(6)) ? v.substring(6) : ""; pianoSavePrefs(prefs); render(); }
@@ -1182,6 +1182,8 @@
           else if (v.indexOf("arp:") === 0) { prefs.padArp = pianoPlay(v.substring(4))[0]; }
           else if (v === "arprate") { prefs.padRate = prefs.padRate === 16 ? 8 : 16; }
           else { prefs.padHold = prefs.padHold === "once" ? "hold" : "once"; }
+          prefs.ppat = prefs.padArp; // §326: ▶ パターンも同じ鳴らし方に
+          if (pat) { patRetime(); }
           pianoSavePrefs(prefs);
           render();
         }
