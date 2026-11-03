@@ -1180,7 +1180,8 @@
     var out = [], i, k;
     if (!x || !x.on) { return out; }
     if (x.kind === "notes") {
-      for (k = 0; k < x.notes.length; k++) { out.push({ t: tm(x.notes[k][0]), kind: "note", track: id, midi: x.notes[k][2], level: ukeNoteVel(x.notes[k]), beat: x.notes[k][0], dur: x.notes[k][1] }); }
+      // §315: sec ＝ のばす秒（生の録音でのばせる音色で使う）
+      for (k = 0; k < x.notes.length; k++) { out.push({ t: tm(x.notes[k][0]), kind: "note", track: id, midi: x.notes[k][2], level: ukeNoteVel(x.notes[k]), beat: x.notes[k][0], dur: x.notes[k][1], sec: tm(x.notes[k][0] + x.notes[k][1]) - tm(x.notes[k][0]) }); }
       return out;
     }
     var P = { hold: [meter, 0], half: [2, 0], q: [1, 0], e: [0.5, 0], off: [0.5, 0], stab: [0.5, 0], arp8: [0.5, 1], arp16: [0.25, 1], arpud: [0.25, 2] }[x.play] || [meter, 0];
@@ -1267,6 +1268,11 @@
     var lv = level || 0.8, tb = mix && mix[ev.track || "uke"] ? mix[ev.track || "uke"].g : null;
     var tprog = tracks && tracks[ev.track || "uke"] ? tracks[ev.track || "uke"].prog : undefined;
     if (ev.kind === "note") {
+      // §315: 弦・管の生の録音は、音符の長さだけのばして、強さで弱い/強いの録音をまぜる
+      var SV = window.UGStrings;
+      if (ev.sec > 0 && SV && SV.sustains && tprog !== undefined && SV.sustains(tprog)) {
+        try { var sv = SV.note(tprog, ev.midi, tb || ((UG.audio && UG.audio.bus) || ac.destination), when, ev.level, ev.sec); if (sv) { if (ukeSusVoices.length > 48) { ukeSusVoices = ukeSusVoices.filter(function (x) { return x.end > ac.currentTime; }); } ukeSusVoices.push(sv); return; } } catch (e7) {}
+      }
       try {
         var ng = ac.createGain();
         ng.gain.value = ev.level;
@@ -1293,8 +1299,16 @@
   // §178: ゲームが止まるとき（やめる）に録音を保存する
   var ukeRecFlush = null;
   I.addStopHook(function () { if (ukeRecFlush) { var f = ukeRecFlush; ukeRecFlush = null; try { f(); } catch (e) {} } });
+  // §315: のばしている弦・管の音（止めたら消す）
+  var ukeSusVoices = [];
+  function ukeSusStop() {
+    var SV = window.UGStrings, vs = ukeSusVoices;
+    ukeSusVoices = [];
+    for (var i = 0; i < vs.length; i++) { try { if (SV && vs[i].end > vs[i].ac.currentTime) { SV.stop(vs[i], 0.08); } } catch (e) {} }
+  }
   function ukeSeqStop() {
     if (ukeSeqPlayer) { clearInterval(ukeSeqPlayer.timer); ukeSeqPlayer = null; }
+    ukeSusStop();
     ukeFxPop();
   }
   I.addStopHook(ukeSeqStop);
@@ -4426,7 +4440,7 @@
     fingering: ukeFingering, velocity: ukeVelocity, stringOut: ukeStringOut, earBtn: ukeEarBtn, prefs: ukePrefs,
     tl: ukeTl, hist: ukeHist, timeToBeat: ukeTimeToBeat, rowAtBeat: ukeRowAtBeat,
     roll: ukeRoll, rollImport: ukeRollImport, rollOp: ukeRollOp, rollHit: ukeRollHit, rollBox: ukeRollBox,
-    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, seqPlayEvent: ukeSeqPlayEvent, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
+    tracksClean: ukeTracksClean, trackIds: ukeTrackIds, drumFills: ukeDrumFills, compose: ukeCompose, genreFx: ukeGenreFx, fxPush: ukeFxPush, fxPop: ukeFxPop, seqStart: ukeSeqStart, seqStop: ukeSeqStop, susStop: ukeSusStop, seqPlayEvent: ukeSeqPlayEvent, secEnergy: ukeSecEnergy, FILL_MODES: UKE_FILL_MODES, xAdd: ukeXAdd, xRemove: ukeXRemove, xMove: ukeXMove, xEvents: ukeXEvents, X_PRESETS: UKE_X_PRESETS, X_PLAYS: UKE_X_PLAYS, trackEvents: ukeTrackEvents, trackAudible: ukeTrackAudible, grooves: ukeGrooves, mixer: ukeMixer, TRACK_IDS: UKE_TRACK_IDS,
     arrangedToWritten: ukeArrangedToWritten, expand: ukeSeqExpand, sections: ukeSeqSections, lyricPlace: ukeLyricPlace, midiBytes: ukeMidiBytes, projectJson: ukeProjectJson, projectRead: ukeProjectRead, isMark: ukeIsMark,
     seqAtRate: ukeSeqAtRate, suggest: ukeSuggest, estimateKey: ukeEstimateKey, drumFrom: ukeDrumFrom, drumCustomClean: ukeDrumCustomClean, RATES: UKE_RATES,
     seqSection: ukeSeqSection, seqSemisAt: ukeSeqSemisAt, pick: ukePick, BASS_STEPS: UKE_BASS_STEPS, BASS_PATTERNS: UKE_BASS_PATTERNS,

@@ -736,6 +736,7 @@
         if (!bk) { return; }
         var U = pianoSeqApi();
         if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        if (U && U.susStop) { try { U.susStop(); } catch (e9) {} } // §315: のばしている弦・管の音を消す
         bk = null;
       }
       function backStep() {

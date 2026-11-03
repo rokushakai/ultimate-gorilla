@@ -199,6 +199,18 @@ module.exports = function () {
   ["vsco_ens", "vsco_ens_p"].forEach(function (n) { M10.samples.buffers[n] = { 60: fb }; M10.samples.keys[n] = [60]; M10.samples.state[n] = "ready"; });
   var v10s = S10.voice(49, 60, out10, 0);
   ok(v10s && v10s.src && v10s.src2 && M10.sampleReady(49) && M10.sampleReady(48), "slow strings use the ensemble recordings (both layers) with a slow attack");
+  // §315: シーケンサーの弦・管の打ち込みは、音符の長さだけのばし、強さで弱い/強いをまぜる。止めたら消す
+  var U10 = e10.window.UGUkulele, ac10 = M10.audio.ctx;
+  var xe = U10.xEvents("x1", { on: true, kind: "notes", notes: [[0, 4, 60, 0.4], [4, 1, 62]] }, [], function (b) { return b * 0.5; }, 4, false);
+  e10.counters.src.length = 0; e10.counters.targets.length = 0;
+  U10.seqPlayEvent(M10, ac10, xe[0], 2, false, 0.8, null, null, { x1: { prog: 48 } });
+  var tg10 = e10.counters.targets.filter(function (t) { return t.t === 2; }).map(function (t) { return t.v; }), stops10 = e10.counters.targets.filter(function (t) { return t.v === 0 && Math.abs(t.t - 4) < 1e-9; }).length;
+  var src10 = e10.counters.src.length;
+  e10.counters.src.length = 0;
+  U10.seqPlayEvent(M10, ac10, xe[0], 2, false, 0.8, null, null, { x1: { prog: 0 } });
+  e10.counters.targets.length = 0; U10.susStop();
+  ok(xe[0].sec === 2 && xe[1].sec === 0.5 && src10 === 2 && tg10.length === 3 && Math.abs(tg10[0] - 0.4 * 1.8) < 1e-9 && tg10[2] > tg10[1] && stops10 === 1 && e10.counters.targets.length === 1 && typeof U10.susStop === "function",
+    "sequencer strings/winds: held for the note length, a soft note leans to the soft recording, stopping the sequencer silences them", [src10, tg10, stops10]);
   ok(M10.sampleFiles[40] === "vsco_violin" && M10.sampleFiles[1040] === "vsco_violin_p" && M10.sampleFiles[48] === "vsco_ens" && M10.sampleFiles[49] === "vsco_ens" && M10.sampleFiles[1049] === "vsco_ens_p" && M10.sampleAttack[49] === 0.35 &&
     v10 && v10.src && v10.src2 && v10.best === 60 && v10.best2 === 60 && soft10.length === 3 && soft10[1] < 0.01 && soft10[2] > 0.99 && loud10[1] > 0.99 && loud10[2] < 0.01 && v10b && !v10b.src2 && !v10b.src,
     "real strings: a quiet bow plays the soft recording, a strong bow the loud one (both looped); no samples = synth", [soft10, loud10]);

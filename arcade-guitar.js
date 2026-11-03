@@ -947,6 +947,7 @@
         if (!bk) { return; }
         var U = backApi();
         if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        if (U && U.susStop) { try { U.susStop(); } catch (e9) {} } // §315: のばしている弦・管の音を消す
         bk = null;
         if (pat && pat.back) { patStop(); }
       }

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.19** |
+| 現在バージョン | **v2.20** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.20] 🎼 シーケンサーの弦・管をのばす**（§315）: `ukeSeqPlayEvent` の note は、`ev.sec` があり `UGStrings.sustains(prog)` なら `UGStrings.note`（のばせる声・強さで弱い/強い）。鳴っている声は `ukeSusVoices`、止めるのは `ukeSusStop`（`UGUkulele.susStop`。ゲームの伴奏の backStop からも）
 - **[v2.19] 🎻 ゆったり合奏も生の録音に**（§314）: 49 → vsco_ens（1049 → vsco_ens_p）。立ち上がりは `MELODY_SAMPLE_ATTACK`（`UGMelody.sampleAttack`）。`strVoice` は立ち上がりのゲイン（into）を src と g のあいだに入れる。これで弦・管はぜんぶ生の録音
 - **[v2.18] 🎷 テナー・バリトン・ブラスセクションも生の録音に**（§313）: mtg_tenorsax・mtg_barisax（MTG Solo Saxophones・CC BY 4.0。sfz の key と tune から）、vsco_brass（VSCO のトランペット・ホルン・トロンボーンを scratchpad の brassmix.js で重ねる）
 - **[v2.17] 🎷 アルト・ソプラノサックスを生の録音に**（§312）: iowa_altosax・iowa_sopsax（と _p）。アイオワ大学 MIS の AIFF（1ファイルに半音ずつ何音も）を無音で1音ずつに切って（変換スクリプト iowasplit.py は scratchpad。音の数が名前の音域と合うかを確かめる）、§310 と同じ作り方。テナー・バリトンサックス・ブラスセクションは FluidR3 のまま
