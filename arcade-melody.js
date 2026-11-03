@@ -595,7 +595,7 @@
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {}, pre: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "2.27";
+  var MELODY_SAMPLE_V = "2.30";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -1672,6 +1672,15 @@
     ["rusty", "drums_rusty", "ビンテージ（Big Rusty Drums）"], ["brush", "drums_brush", "ブラシ（Big Rusty Drums）"], ["swirly", "drums_swirly", "ルーム（Swirly Drums）"]];
   melodySamples.drumKit = "drs";
   melodySamples.kickRate = 1;
+  // §325 v2.30: ウクレレの種類（音色番号 140 の録音のファイル）
+  var MELODY_UKE_TYPES = [["soprano", "fs_ukulele", "ソプラノ"], ["concert", "fs_uke_concert", "コンサート"], ["tenor", "fs_uke_tenor", "テナー"], ["baritone", "acoustic_guitar_nylon", "バリトン"]];
+  melodySamples.ukeType = "soprano";
+  function melodySetUkeType(id) {
+    for (var i = 0; i < MELODY_UKE_TYPES.length; i++) {
+      if (MELODY_UKE_TYPES[i][0] === id) { melodySamples.ukeType = id; MELODY_SAMPLE_FILES[MELODY_UKE] = MELODY_UKE_TYPES[i][1]; return true; }
+    }
+    return false;
+  }
   function melodySetDrumKit(id) {
     for (var i = 0; i < MELODY_DRUM_KITS.length; i++) {
       if (MELODY_DRUM_KITS[i][0] === id) { melodySamples.drumKit = id; MELODY_SAMPLE_FILES[MELODY_DRUM] = MELODY_DRUM_KITS[i][1]; return true; }
@@ -2329,7 +2338,7 @@
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, sampleAttack: MELODY_SAMPLE_ATTACK, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
-    drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, prefetchSamples: melodyPrefetchSamples, sampleReady: melodySampleReady,
+    drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, ukeTypes: MELODY_UKE_TYPES, setUkeType: melodySetUkeType, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, prefetchSamples: melodyPrefetchSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,

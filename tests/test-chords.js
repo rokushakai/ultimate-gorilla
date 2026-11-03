@@ -1218,6 +1218,25 @@ module.exports = async function () {
   var B4 = pk4.e.window.UGBass;
   ok(pk4.drums >= 8 && pk4.bass.length >= 8 && pk4.bass[0] === B4.chord(0, 0, "major", false).notes[0] && pk4.e.window.__ukePad.st().prefs.ppat === "pat:D-D-D-D-:4",
     "band: the drum loop and the bass pattern play along (the bass follows the progression)", [pk4.drums, pk4.bass]);
+  // --- §325: ウクレレの種類（ソプラノ・コンサート・テナー・バリトン）---
+  var te = H.load(), tU = te.window.UGUkulele, tM = te.window.UGMelody, tfs = require("fs"), tpath = require("path");
+  var tFiles = tM.ukeTypes.map(function (t) { tM.setUkeType(t[0]); return tM.sampleFiles[140]; });
+  tM.setUkeType("soprano");
+  ok(tU.type() === "soprano" && tFiles.join() === "fs_ukulele,fs_uke_concert,fs_uke_tenor,acoustic_guitar_nylon" && tFiles.every(function (n) { return tfs.existsSync(tpath.join(H.ROOT, "samples", n + ".js")); }) && tU.TYPES.length === 4,
+    "4 ukulele types; each plays its own recording as voice 140 (soprano, a second real uke, a warmer tenor, nylon guitar for baritone)", tFiles);
+  var cSh = tU.resolve("C", 0, true).shape.join(), fSh = tU.resolve("F", 0, true).shape.join();
+  tU.applyType("baritone");
+  var bG = tU.resolve("G", 0, false), bC = tU.resolve("C", 0, false), bOpen = [0, 1, 2, 3].map(function (s9) { return tU.midi(s9, 0, false); }).join();
+  var bDet = tU.detect(bG.shape, false).name, bNames = [0, 1, 2, 3].map(tU.strName).join("");
+  var bPcs = bC.shape.map(function (f, s9) { return tU.midi(s9, f, false) % 12; }).sort(function (x, y) { return x - y; }).filter(function (x, i9, arr) { return arr.indexOf(x) === i9; }).join();
+  tU.applyType("soprano");
+  ok(bOpen === "50,55,59,64" && bNames === "DGBE" && bG.shape.join() === cSh && bC.shape.join() === fSh && bDet === "G" && bPcs === "0,4,7" && tU.midi(0, 0, false) === 67 && tU.strName(0) === "G",
+    "baritone: D G B E; the ukulele C shape is G (names a fourth lower) and C really sounds C–E–G; back to soprano afterwards", [bOpen, bNames, bG.shape, bDet, bPcs]);
+  var te2 = H.load();
+  te2.store.ultimateGorillaUkulelePrefsV1 = JSON.stringify({ type: "baritone" });
+  te2.run("ukulele", { config: { mode: "free" } }, 5);
+  ok(te2.window.UGUkulele.type() === "baritone" && te2.window.UGMelody.sampleFiles[140] === "acoustic_guitar_nylon" && JSON.parse(te2.store.ultimateGorillaUkulelePrefsV1).type === "baritone",
+    "the saved type is used when the ukulele starts (voice 140 follows it)");
   // --- §224: 表示の設定（並び方・パッドの大きさ・下のボタン・説明） ---
   var vcls = [], vroot = H.makeEl("div"), vparts = {}, ve = ukeHooked();
   vroot.classList = { add: function (c) { vcls.push("+" + c); }, remove: function (c) { vcls.push("-" + c); }, contains: function () { return false; } };

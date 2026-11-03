@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.29** |
+| 現在バージョン | **v2.30** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.30] 🪕 ウクレレの種類**（§325）: `ukePrefs().type`。`ukeApplyType` が `UGMelody.setUkeType`（140 のファイルを fs_ukulele / fs_uke_concert / fs_uke_tenor / acoustic_guitar_nylon に）と `UKE_BARI`（バリトン 5）を決める。バリトンは `ukeMidi`・`ukeVoice(Pos)`・`ukeDetect(More)` の3か所で 5 半音ずらし、辞書は `ukeDict`（バリトンでは null）。パッドはバリトン用に別キー。コンサート・テナー・バリトンの単音の自由な録音は見つかっていない（見つかったら差しかえ）。**次は §321 の 3（楽器ゲームの機能の一覧表）**
 - **[v2.29] 🎼 ゴリラウクレレのパターン演奏**（§324）: フリー演奏の `upat`（`upStart` / `upStep` / `drumStep` / `bassStep`）。鳴らすのは `current()`（指板の形）、コード進行・予約したパッド（`upend`）は小節の頭で `padShapeOn`。設定は `padP`（ppat / swing / cprog / key / scale / sev / drum / bpat / uvol / bvol / dvol）。1小節の拍はパターンの拍子。**次は §321 の 3（楽器ゲームの機能の一覧表を作って、足りないものをそろえる）**
 - **[v2.28] 🎼 ゴリラピアノのパターン演奏**（§323）: `pat`（`patStart` / `patStep` / `drumStep` / `bassStep`。ストリングスの §302 と同じ作り）。鳴らし方はパッドと同じ `PIANO_PLAYS`（`prefs.ppat`。`pianoBarSteps` で1小節）。コードは `cur`（`degChord` ＝ キーのダイアトニック・`padChordObj` ＝ パッド・伴奏は `back.chords`。伴奏は `UGBass.backing` があればそちら）、パッドは `pend` で次の小節から。パネルはタブ（`prefs.tab` keys / pat / band / key）。録音をとめたとき、先に予約したパターンの音は入れない。**次は ゴリラウクレレのパターン演奏（§321 の 2 の残り）**
 - **[v2.27] 🎹 グランドピアノ・エレピの生の録音**（§322）: 番号 0 ＝ `sal_grand`（Salamander・CC BY 3.0）、1 ＝ `vsco_piano`（アップライト。v2.26 までは 0）、2 ＝ `gs_cp80`、4 ＝ `gs_wurli`（GregSullivan E-Pianos・CC BY 3.0）。`electric_piano_1` は消した。ゴリラピアノの `PIANO_VOICES` に 1・2。ハモンド系オルガンは自由な録音がないのでパイプオルガン＋シンセ。**次は §321 の 2（ゴリラピアノ・ゴリラウクレレにパターン演奏）**
