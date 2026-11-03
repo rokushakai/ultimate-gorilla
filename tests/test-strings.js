@@ -65,6 +65,44 @@ module.exports = function () {
   var r4 = srun({ view: "solo", inst: "pizz" }, 10, function (fr, e, Sw) { if (fr === 2) { var y = Sw.rowLineY(0); e.ptr("down", 10, y, 1); e.ptr("up", 10, y, 1); } });
   ok(r4.log.on.join() === "69@45p", "plucked instruments (pizzicato) play a short note on tap", r4.log);
 
+  // --- §302: パターン・コード進行・バンド・伴奏 ---
+  function bsrun(prefs, frames, fn, cfg) {
+    var e = H.load({ patch: function (src, file) { return file === "arcade-strings.js" ? src.split("      function render() {\n").join("      window.__sAct = action; window.__sPanel = function () { return panel.innerHTML; };\n      function render() {\n") : src; } });
+    var log = { on: [], dr: 0, bs: [] };
+    if (fn && fn.pre) { fn.pre(e); }
+    e.store[S.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("strings", { config: cfg || {} }, frames, function (fr) {
+      var M = e.window.UGMelody;
+      if (fr === 1) { M.samples.enabled = false; var s0 = M.synth; M.synth = function (m, pg, w, lv, dest, hold) { if (pg === M.DRUM) { log.dr++; } else if (pg === 33) { log.bs.push(m); } else { log.on.push(m + "@" + pg + (hold === 0 ? "p" : "")); } return s0.apply(M, arguments); }; }
+      if (fr === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+      if (fn) { fn(fr, e); }
+    });
+    return { log: log, e: e };
+  }
+  var q1 = bsrun({ view: "chord", inst: "violin", pat: "hold", bpm: 120, cprog: "royal" }, 140);
+  var q2 = bsrun({ view: "chord", inst: "violin", pat: "e8", bpm: 120 }, 62);
+  var q3 = bsrun({ view: "solo", inst: "cello", pat: "pz", bpm: 120 }, 62);
+  ok(q1.log.on.slice(0, 4).join() === "65@40,72@40,77@40,81@40" && q1.log.on.slice(4, 8).join() === "55@40,62@40,67@40,71@40" &&
+    q2.log.on.length === 16 && q3.log.on.slice(0, 2).join() === "36@45p,48@45p",
+    "patterns: a held chord per bar following the progression (F, then G), eighth-note staccato chords, and pizzicato arpeggios (with the pizzicato sound)", [q1.log.on.slice(0, 8), q2.log.on.length, q3.log.on.slice(0, 4)]);
+  var q4 = bsrun({ view: "chord", inst: "violin", pat: "hold", bpm: 120 }, 140, function (fr, e) { if (fr === 40) { e.key("keydown", "6"); } if (fr === 44) { e.key("keyup", "6"); } });
+  var q5 = bsrun({ view: "solo", inst: "violin", pat: "q4", bpm: 120, drum: "g:8beat", bpat: "root8" }, 70);
+  ok(q4.log.on.join() === "60@40,67@40,72@40,76@40,57@40,64@40,69@40,72@40" && q5.log.dr > 4 && q5.log.bs.length >= 4 && q5.log.bs.every(function (m) { return m === 36; }),
+    "a chord pressed during the pattern waits for the next bar; drums and the bass pattern play along", [q4.log.on, q5.log.dr, q5.log.bs]);
+  function bfn(fr, e) { }
+  bfn.pre = function (e) {
+    var U2 = e.window.UGUkulele, sq = U2.seqClean(null);
+    sq.rows = [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G7", len: "w" }]; sq.bpm = 120; sq.countIn = false; sq.loop = false;
+    e.store[U2.SEQ_KEY] = JSON.stringify({ cur: U2.seqClean(sq), songs: [] });
+  };
+  var q6 = bsrun({ view: "chord", inst: "violin", pat: "hold" }, 260, bfn, { backing: "cur" });
+  var mine = q6.log.on.filter(function (x) { return /@40$/.test(x); });
+  ok(mine.join() === "60@40,67@40,72@40,76@40,55@40,62@40,67@40,71@40,77@40", "backing: the pattern follows the song's chords (C, then G7 with its 7th)", mine);
+  var q7 = bsrun({ tab: "band" }, 6, function (fr, e) { if (fr === 3) { e.window.__sAct("svol:-"); e.window.__sAct("dvol:+"); e.window.__sAct("tab:pat"); } });
+  var q7p = JSON.parse(q7.e.store[S.PREFS_KEY]), q7h = q7.e.window.__sPanel();
+  ok(q7p.svol === 90 && q7p.dvol === 60 && q7h.indexOf('data-spat="1"') > 0 && q7h.indexOf('data-scprog="1"') > 0 && S.PATS.length === 12 && S.vol(155, 100) === 100,
+    "pattern and band tabs: pattern / progression selects and volumes (saved)", [q7p.svol, q7p.dvol]);
+
   // --- 録音・シーケンサーへ送る ---
   var r5 = srun({ view: "chord", inst: "cello", bpm: 120 }, 260, function (fr, e) {
     if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
