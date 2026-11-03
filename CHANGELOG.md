@@ -5,6 +5,18 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [1.96] - 2026-11-03 — 🎸 ギターの音色を本物のサンプルに (§289)
+
+### Changed
+- ゴリラギターのエレキの音色を、本物の録音（FluidR3_GM）に。クリーン・クランチ（オーバードライブ）・ディストーションに加えて 🎷 ジャズも
+- エレキのカッティングはミュートのギターの録音で鳴らす
+- ギターの音がのびる長さを 1.2 秒 → 3 秒に（ストロークしたコードが早く消えないように）
+- サンプルの版（`MELODY_SAMPLE_V`）を 1.96 に
+- テストの更新（合計923項目）
+
+### Added
+- サンプル 5つ（samples/electric_guitar_jazz・electric_guitar_clean・electric_guitar_muted・overdriven_guitar・distortion_guitar。2.1MB）。CREDITS.md に追記
+
 ## [1.95] - 2026-11-03 — 📱 ギターのよこ向き・持ち方の調整 (§288)
 
 ### Added

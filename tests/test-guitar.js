@@ -76,7 +76,7 @@ module.exports = function () {
     if (fr === 4) { e.ptr("move", b3.x + 5, b3.y + 5, 1); }
     if (fr === 6) { e.ptr("up", b3.x + 5, b3.y + 5, 1); e.ptr("down", e2.x + 5, e2.y + 5, 2); e.ptr("up", e2.x + 5, e2.y + 5, 2); }
   });
-  ok(s3.snd.join() === "60@25,57@25" && s3.bends() === 1, "single notes: tap plays the fret, sliding on the same string bends it; the electric voices use the steel sample", [s3.snd, s3.bends()]);
+  ok(s3.snd.join() === "60@27,57@27" && s3.bends() === 1, "single notes: tap plays the fret, sliding on the same string bends it (clean electric = GM 27)", [s3.snd, s3.bends()]);
 
   // --- 録音: 4拍のカウントのあとのストロークをテイクに（音色も）---
   var s4 = grun({ view: "chord", voice: "dist", bpm: 120 }, 260, function (fr, e) {
@@ -221,16 +221,11 @@ module.exports = function () {
   ok(gs1.size === "m" && gs2.pw === 20 && gs3.lefty === false && gp.pos === "bot" && hp.indexOf("持ち方") > 0 && hp.indexOf('data-ga="grip:lefty"') > 0 && hp.indexOf('data-ga="land"') > 0,
     "grip settings cycle and are saved (shared by guitar and bass); the play tab shows them in landscape", [gs1, gs2, gs3, gp]);
 
-  // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
-  var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
-  M5.audioInit();
-  var ac5 = M5.audio.ctx, cw0 = ac5.createWaveShaper;
-  ac5.createWaveShaper = function () { ws++; return cw0.apply(ac5, arguments); };
-  var st = {};
-  G5.bus(st, "nylon", 100); var w0 = ws;
-  G5.bus(st, "clean", 100); var w1 = ws;
-  G5.bus(st, "dist", 80); var w2 = ws;
-  G5.bus(st, "dist", 100); var w3 = ws;
-  ok(w0 === 0 && w1 === 0 && w2 === 1 && w3 === 1 && st["g:dist"].g.gain.value === 1 && G5.AMPS.dist[1] > G5.AMPS.crunch[1],
-    "amp: distortion and crunch go through a wave shaper (built once), clean and acoustic do not", [w0, w1, w2, w3]);
+  // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
+  var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
+  var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
+  var cutA = grun({ view: "chord", voice: "steel" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
+  ok(vOk && G.VOICES.map(function (v) { return v[2]; }).join() === "24,25,26,27,29,30" && M9.sampleFiles[G.MUTED] === "electric_guitar_muted" &&
+    cutE.snd.length === 5 && cutE.snd.every(function (x) { return /@28$/.test(x); }) && cutA.snd.every(function (x) { return /@25$/.test(x); }),
+    "voices are real samples (nylon, steel, jazz, clean, overdriven, distortion); electric cutting uses the muted-guitar sample", [cutE.snd, cutA.snd]);
 };

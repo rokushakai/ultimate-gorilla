@@ -21,13 +21,12 @@
   var GTR_VIEWS = [["fret", "&#x1F3B8; 単音"], ["chord", "&#x1F3B6; ストローク"]];
   // 弦の開放の音（6弦 → 1弦。番号 sn: 0 ＝ 6弦 … 5 ＝ 1弦）
   var GTR_OPEN = [40, 45, 50, 55, 59, 64], GTR_SNAME = ["E", "A", "D", "G", "B", "E"];
-  // 音色 [id, 名前, サンプルの音色, アンプ, シーケンサーへ送るときの音色]
+  // 音色 [id, 名前, サンプルの音色（GM）, エレキか, 大きさ]（§289 v1.96: エレキも本物のサンプル。シーケンサーへも同じ番号で送る。ひずみは重ねると大きいので小さめ）
   var GTR_VOICES = [
-    ["nylon", "&#x1FA95; ナイロン", 24, "", 24], ["steel", "&#x1F3B8; スチール", 25, "", 25],
-    ["clean", "&#x26A1; クリーン", 25, "clean", 27], ["crunch", "&#x1F525; クランチ", 25, "crunch", 29], ["dist", "&#x1F918; ディストーション", 25, "dist", 30]
+    ["nylon", "&#x1FA95; ナイロン", 24, false, 1], ["steel", "&#x1F3B8; スチール", 25, false, 1], ["jazz", "&#x1F3B7; ジャズ", 26, true, 1],
+    ["clean", "&#x26A1; クリーン", 27, true, 1], ["crunch", "&#x1F525; クランチ", 29, true, 0.8], ["dist", "&#x1F918; ディストーション", 30, true, 0.7]
   ];
-  // アンプ [ハイパス, 入力の大きさ, ゆがみ, ローパス, 出力の大きさ]
-  var GTR_AMPS = { clean: [90, 1, false, 6000, 1], crunch: [90, 8, true, 4500, 0.3], dist: [90, 30, true, 3600, 0.15] };
+  var GTR_MUTED = 28; // エレキのカッティングはミュートのサンプル
   function gtrOpt(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } } return list[0]; }
 
   // ---------- 単音の画面（上が1弦）----------
@@ -164,30 +163,11 @@
   function gtrVol(v, d) { v = Number(v); return v >= 0 && v <= GTR_VOL_MAX && v % GTR_VOL_STEP === 0 ? v : d; }
 
   // ---------- 音の出口（音色ごと。エレキはアンプを通す）----------
-  function gtrCurve(drive) {
-    var n = 1024, c = typeof Float32Array !== "undefined" ? new Float32Array(n) : [], top = (Math.exp(2 * drive) - 1) / (Math.exp(2 * drive) + 1), i;
-    for (i = 0; i < n; i++) { var e = Math.exp(2 * drive * (i * 2 / (n - 1) - 1)); c[i] = (e - 1) / (e + 1) / top; }
-    return c;
-  }
-  var gtrCurveCache = null;
   // st: ゲームごとの入れもの、voice: 音色の id、vol: 0〜150（%）→ 入り口の GainNode（音が出せなければ null）
   function gtrBus(st, voice, vol) {
     var A = window.UGMelody && window.UGMelody.audio, ac = A && A.ctx, to = A ? (A.bus || A.master) : null, k = "g:" + voice, b = st[k];
     if (!ac || !to || !ac.createGain) { return null; }
-    if (!b || b.ac !== ac || b.to !== to) {
-      var amp = GTR_AMPS[gtrOpt(GTR_VOICES, voice)[3]], g = ac.createGain();
-      b = st[k] = { ac: ac, to: to, g: g };
-      if (amp && ac.createBiquadFilter) {
-        var hp = ac.createBiquadFilter(), pre = ac.createGain(), lp = ac.createBiquadFilter(), out = ac.createGain(), node = pre;
-        hp.type = "highpass"; hp.frequency.value = amp[0];
-        pre.gain.value = amp[1];
-        lp.type = "lowpass"; lp.frequency.value = amp[3];
-        out.gain.value = amp[4];
-        g.connect(hp); hp.connect(pre);
-        if (amp[2] && ac.createWaveShaper) { var ws = ac.createWaveShaper(); ws.curve = gtrCurveCache || (gtrCurveCache = gtrCurve(3)); pre.connect(ws); node = ws; }
-        node.connect(lp); lp.connect(out); out.connect(to);
-      } else { g.connect(to); }
-    }
+    if (!b || b.ac !== ac || b.to !== to) { b = st[k] = { ac: ac, to: to, g: ac.createGain() }; b.g.connect(to); }
     b.g.gain.value = vol / 100;
     return b.g;
   }
@@ -258,7 +238,7 @@
     if (!id) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
     var t = st.cur.tracks[id], n = gtrNotesClean(take.notes), cut = n.length > GTR_SEQ_MAX;
     t.name = String(take.name).slice(0, 12);
-    t.prog = gtrOpt(GTR_VOICES, take.voice)[4];
+    t.prog = gtrOpt(GTR_VOICES, take.voice)[2];
     t.notes = n.slice(0, GTR_SEQ_MAX);
     U.seqSave(st);
     return { ok: true, id: id, cut: cut, msg: "「" + take.name + "」を、ゴリラウクレレのシーケンサー（編集中の曲）に 🤘 ギター打ち込みトラックとして送りました" + (cut ? "（音が多いので、はじめの " + GTR_SEQ_MAX + " 音）" : "") };
@@ -393,7 +373,7 @@
       try {
         if (UG.audioInit()) {
           audioOk = true;
-          UG.loadSamples([24, 25, 33]);
+          UG.loadSamples([gtrOpt(GTR_VOICES, prefs.voice)[2], GTR_MUTED, 33]);
           var D = window.UGDrum, dp = D && D.prefs ? D.prefs() : null;
           if (dp) { if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); } if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); } if (dp.real) { UG.loadSamples([UG.DRUM]); } }
         }
@@ -410,8 +390,8 @@
         if (m === null) { continue; }
         try {
           var bus = gtrBus(buses, vd[0], prefs.gvol), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(vd[2])), g = null, t = ac.currentTime + k * 0.012, lv = n.cut ? 0.35 : (n.lane ? 0.5 : 0.6);
-          if (bus) { g = ac.createGain(); g.gain.value = lv * (smp ? GTR_BOOST : 1); g.connect(bus); }
-          var h = UG.synth(m, vd[2], t, lv, g || undefined, GTR_HOLD);
+          if (bus) { g = ac.createGain(); g.gain.value = lv * (smp ? GTR_BOOST : 1) * vd[4]; g.connect(bus); }
+          var h = UG.synth(m, n.cut && vd[3] ? GTR_MUTED : vd[2], t, lv, g || undefined, GTR_HOLD);
           if (h && UG.voiceStop) { UG.voiceStop(h, t + (n.cut ? 0.05 : Math.max(0.3, spb * 1.5)), n.cut ? 0.02 : 0.1); }
         } catch (e) {}
         k++;
@@ -587,16 +567,17 @@
       var UG = window.UGMelody, audioOk = false, buses = {};
       function audio() {
         if (audioOk || !UG || !UG.audioInit) { return; }
-        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([24, 25, 33]); } } catch (e) {}
+        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([voiceDef()[2], GTR_MUTED, 33]); } } catch (e) {}
       }
       // 1音（when: AudioContext の秒・省略可）→ 音のハンドル
-      function sound(m, lv, when, voice) {
+      // prog（省略可）: サンプルの音色を変える（エレキのカッティング）
+      function sound(m, lv, when, voice, prog0) {
         audio();
         if (!audioOk) { return null; }
-        var vd = gtrOpt(GTR_VOICES, voice || prefs.voice), prog = vd[2], h = null;
+        var vd = gtrOpt(GTR_VOICES, voice || prefs.voice), prog = prog0 || vd[2], h = null;
         try {
           var bus = gtrBus(buses, vd[0], prefs.gvol), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog)), d;
-          if (bus) { d = UG.audio.ctx.createGain(); d.gain.value = lv * (smp ? GTR_BOOST : 1); d.connect(bus); }
+          if (bus) { d = UG.audio.ctx.createGain(); d.gain.value = lv * (smp ? GTR_BOOST : 1) * vd[4]; d.connect(bus); }
           h = UG.synth(m, prog, when || 0, lv, d, GTR_HOLD) || null;
         } catch (e) {}
         return h;
@@ -652,7 +633,7 @@
           var sn = order[i], m = sh.midis[sn];
           if (m === null) { continue; }
           if (dir === "cut") {
-            var h = sound(m, 0.35 * lm, ac ? ac.currentTime + d0 + k * 0.004 : 0);
+            var h = sound(m, (voiceDef()[3] ? 0.6 : 0.35) * lm, ac ? ac.currentTime + d0 + k * 0.004 : 0, null, voiceDef()[3] ? GTR_MUTED : 0);
             stopString(sn, when0);
             if (h && ac) { stopVoice(h, ac.currentTime + d0 + 0.05 + k * 0.004, 0.02); }
             vib[sn] = 8;
@@ -662,7 +643,7 @@
           }
           k++;
         }
-        if (dir === "cut" && UG && UG.bassHit && audioOk) { try { UG.bassHit("ghost", when0 || 0, 0.5, gtrBus(buses, prefs.voice, prefs.gvol) || undefined); } catch (e) {} }
+        if (dir === "cut" && !voiceDef()[3] && UG && UG.bassHit && audioOk) { try { UG.bassHit("ghost", when0 || 0, 0.5, gtrBus(buses, prefs.voice, prefs.gvol) || undefined); } catch (e) {} }
       }
 
       // --- §284: パターン（ストローク・ドラム・ベース）---
@@ -927,7 +908,7 @@
           prefs.bpm = bpm; gtrSavePrefs(prefs); render();
         }
         else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "fret"; gtrSavePrefs(prefs); applyLand(); render(); }
-        else if (/^voice:/.test(v)) { allOff(); prefs.voice = gtrOpt(GTR_VOICES, v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
+        else if (/^voice:/.test(v)) { allOff(); prefs.voice = gtrOpt(GTR_VOICES, v.substring(6))[0]; gtrSavePrefs(prefs); if (audioOk) { try { UG.loadSamples([voiceDef()[2]]); } catch (e) {} } render(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = ["play", "pat", "band", "key"].indexOf(tb0) >= 0 ? tb0 : "play"; gtrSavePrefs(prefs); render(); }
         else if (v === "posdown" || v === "posup") { allOff(); prefs.pos = Math.max(0, Math.min(GTR_POS_MAX, prefs.pos + (v === "posup" ? 1 : -1))); gtrSavePrefs(prefs); render(); }
         else if (v === "keydown" || v === "keyup") { prefs.key = (prefs.key + (v === "keyup" ? 1 : 11)) % 12; gtrSavePrefs(prefs); render(); }
@@ -1275,7 +1256,7 @@
   });
 
   window.UGGuitar = {
-    H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, AMPS: GTR_AMPS, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
+    H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, MUTED: GTR_MUTED, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
     PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
     setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
     geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y }; }, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,

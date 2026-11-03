@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.95** |
+| 現在バージョン | **v1.96** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.96] 🎸 ギターの本物の音色**（§289）: `GTR_VOICES` は [id, 名前, GM の番号, エレキか, 大きさ]。エレキ 26・27・29・30 と、カッティング用のミュート 28（`GTR_MUTED`）を `MELODY_SAMPLE_FILES` に追加。アンプ（`GTR_AMPS`）はなくした。ギターのサンプルは `MELODY_SAMPLE_TRIM` で 3 秒残す
 - **[v1.95] 📱 ギターのよこ向き・持ち方**（§288）: 持ち方は `UGBass.grip / gripStep / gripBox / gripRows`（`ultimateGorillaGripV1`）。ギターは `gtrLayout({ land, h, pick })` が板・右手の所・列の数をまとめて決める（`create` の `applyLand`）。ベースは `bassSetPick` がよこ向きのとき持ち方を使う。列の x は `gtrColX` / `bassColX`、区切りは `gtrFretX` / `bassFretX`（`*_MIRROR` で右から）。いまの形は `geom()`
 - **[v1.94] ✋ 右手ピッキング**（§287）: `gtrSetPick` / `bassSetPick` が列の数と板のはば（`*_PICK_X` から右が右手の所）を変える（`bassSetLayout` は PICK をとくので、`applyLand` のあとに `bassSetPick`）。左手は `held`（指 → 弦・フレット）、右手は `picks`。ギターは `strVo`、ベースは `pv[弦]` で鳴らす（録音の id は "s弦" / "k弦"）。`heldChanged` で鳴っている弦を bend / ミュート
 - **[v1.93] 🎮 ギターのリズムゲーム**（§286）: `create` の `cfg.mode === "rhythm"` で `gtrRhythm`。譜面は `gtrChart(song, level)`（`GTR_SONGS` のストロークのパターン × コード進行。D x → レーン 0、U s → レーン 1）。判定は `UGBass.JUDGE / rjudge / rank / tendency`。曲のあいだ `band()` がゴリラドラムとゴリラベースのパターンを鳴らす。ベストは `ultimateGorillaGuitarBestV1`

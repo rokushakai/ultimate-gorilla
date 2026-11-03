@@ -13,6 +13,8 @@
 
 ベース（v1.69〜。🎸 ゴリラベース・シーケンサーのベース）: Acoustic Bass / Electric Bass (finger) / Electric Bass (pick) / Fretless Bass / Slap Bass 1 / Slap Bass 2 / Synth Bass 1 / Synth Bass 2。ベースは C1〜C5 の短3度おき17音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
+エレキギター（v1.96〜。🤘 ゴリラギター）: Electric Guitar (jazz) / Electric Guitar (clean) / Electric Guitar (muted) / Overdriven Guitar / Distortion Guitar。C2〜C7 の長3度おき16音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
+
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）
 
 ### ロック: `samples/drums_drs.js`

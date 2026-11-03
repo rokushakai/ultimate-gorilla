@@ -566,20 +566,21 @@
     24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "violin", 46: "orchestral_harp",
     48: "string_ensemble_1", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto",
     // §261 v1.69: ベース（C1〜C5 の短3度おき17音）
+    26: "electric_guitar_jazz", 27: "electric_guitar_clean", 28: "electric_guitar_muted", 29: "overdriven_guitar", 30: "distortion_guitar", // §289 v1.96: エレキギター
     33: "electric_bass_finger", 34: "electric_bass_pick", 35: "fretless_bass", 36: "slap_bass_1", 37: "slap_bass_2", 38: "synth_bass_1", 39: "synth_bass_2",
     128: "drums_drs" // §229 v1.37 / §230 v1.38: 生ドラム。いまえらんでいるドラムセット（MELODY_DRUM_KITS）のファイル
   };
   // 鳴らす長さ（秒）: 減衰する楽器は長め、持続する楽器は短く切ってフェード
   var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2,
-    33: 0.7, 34: 0.6, 35: 0.9, 36: 0.5, 37: 0.5, 38: 0.5, 39: 0.5 };
+    33: 0.7, 34: 0.6, 35: 0.9, 36: 0.5, 37: 0.5, 38: 0.5, 39: 0.5, 26: 1.2, 27: 1.2, 28: 0.3, 29: 1.2, 30: 1.2 };
   // §261: 展開するときに残す長さ（秒）。ベースはゴリラベースで押さえているあいだのばすので長め
-  var MELODY_SAMPLE_TRIM = { 32: 3, 33: 3, 34: 3, 35: 3, 36: 3, 37: 3, 38: 3, 39: 3 };
+  var MELODY_SAMPLE_TRIM = { 32: 3, 33: 3, 34: 3, 35: 3, 36: 3, 37: 3, 38: 3, 39: 3, 24: 3, 25: 3, 26: 3, 27: 3, 29: 3, 30: 3 }; // §289: ギターもゴリラギターでのばす
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 6;
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "1.69";
+  var MELODY_SAMPLE_V = "1.96";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
