@@ -36,11 +36,30 @@
   }
 
   // ---------- ソロの画面（指板・上が1弦 ＝ いちばん高い弦）----------
-  var STR_COLS = 8, STR_POS_MAX = 12, STR_BOARD_X = 4, STR_BOARD_Y = 96, STR_BOARD_BOT = 314, STR_BOW_X = W - 4 - Math.round(W * 0.26), STR_BOARD_R = W - 4;
+  var STR_COLS = 8, STR_POS_MAX = 12, STR_BOARD_X = 4, STR_BOARD_Y = 96, STR_BOARD_BOT = 314, STR_BOW_X = W - 4 - Math.round(W * 0.26), STR_BOW_R = W - 4, STR_BOARD_R = W - 4;
   var STR_MARKS = [3, 5, 7, 9, 12, 15, 17, 19];
-  // bow: 弓の所を出すか
-  function strLayout(bow) { STR_BOARD_R = bow ? STR_BOW_X - 6 : W - 4; }
+  var STR_LAND = false, STR_MIRROR = false;
+  // bow: 弓の所を出すか。o（省略可）: §303 { land: よこ向き, h: 高さ }。よこ向きは持ち方（ゴリラベースの grip）で、利き手・ネックの太さと位置・弓の所の広さ
+  function strLayout(bow, o) {
+    o = o || {};
+    var land = !!o.land, B = BA(), g = land && B && B.grip ? B.grip() : null, zw = Math.round(W * (g ? Math.max(0.2, g.pw / 100) : 0.26)), gut = land ? 11 : 4;
+    STR_LAND = land; STR_MIRROR = !!(g && g.lefty);
+    if (land) {
+      STR_H = o.h || 130;
+      var bx = B.gripBox(14, STR_H - 9, g);
+      STR_BOARD_Y = bx.y0; STR_BOARD_BOT = bx.y1;
+      STR_COLS = bow ? Math.max(7, Math.round(13 * (1 - zw / W))) : 13;
+    } else { STR_H = 320; STR_BOARD_Y = 96; STR_BOARD_BOT = 314; STR_COLS = 8; }
+    if (!bow) { STR_BOARD_X = STR_MIRROR ? 4 : gut; STR_BOARD_R = STR_MIRROR ? W - gut : W - 4; }
+    else if (!STR_MIRROR) { STR_BOW_X = W - 4 - zw; STR_BOW_R = W - 4; STR_BOARD_X = gut; STR_BOARD_R = STR_BOW_X - 6; }
+    else { STR_BOW_X = 4; STR_BOW_R = 4 + zw; STR_BOARD_X = STR_BOW_R + 6; STR_BOARD_R = W - gut; }
+  }
   function strColW() { return (STR_BOARD_R - STR_BOARD_X) / STR_COLS; }
+  // 列 c の左はし・列の区切り c の x（左利きは右から）
+  function strColX(c) { return STR_MIRROR ? STR_BOARD_R - (c + 1) * strColW() : STR_BOARD_X + c * strColW(); }
+  function strFretX(c) { return STR_MIRROR ? STR_BOARD_R - c * strColW() : STR_BOARD_X + c * strColW(); }
+  // 半音 semi（ポジション pos から）の指の x
+  function strSemiX(semi, pos) { return STR_MIRROR ? STR_BOARD_R - (semi - pos + 0.5) * strColW() : STR_BOARD_X + (semi - pos + 0.5) * strColW(); }
   function strRowH() { return (STR_BOARD_BOT - STR_BOARD_Y) / 4; }
   function strRowLineY(r) { return STR_BOARD_Y + (r + 0.5) * strRowH(); }
   // 行 r（0 ＝ 1弦）→ 弦の番号（0 ＝ いちばん低い）
@@ -49,11 +68,11 @@
   function strBoardAt(x, y, pos) {
     if (x < STR_BOARD_X || x >= STR_BOARD_R || y < STR_BOARD_Y || y >= STR_BOARD_BOT) { return null; }
     var r = Math.floor((y - STR_BOARD_Y) / strRowH());
-    return { r: r, sn: strSnOfRow(r), semi: pos + (x - STR_BOARD_X) / strColW() - 0.5 };
+    return { r: r, sn: strSnOfRow(r), semi: pos + (STR_MIRROR ? STR_BOARD_R - x : x - STR_BOARD_X) / strColW() - 0.5 };
   }
   // 弓の所の行（外は -1）
   function strBowRow(x, y) {
-    if (x < STR_BOW_X || y < STR_BOARD_Y || y >= STR_BOARD_BOT) { return -1; }
+    if (x < STR_BOW_X || x > STR_BOW_R || y < STR_BOARD_Y || y >= STR_BOARD_BOT) { return -1; }
     return Math.max(0, Math.min(3, Math.floor((y - STR_BOARD_Y) / strRowH())));
   }
   // 弓の速さ（1フレームに動いた量）→ 大きさ（0〜1.1）
@@ -62,6 +81,7 @@
   // ---------- 合奏コード ----------
   // ボタン i（0〜6）の四角（上に4つ・下に3つ）
   function strChordRect(i) {
+    if (STR_LAND) { var lw = (W - 8) / 7; return { x: 4 + i * lw + 2, y: 12, w: lw - 4, h: STR_H - 16 }; } // §303: よこ向きは1列に7つ
     var top = 40, h = (STR_H - top - 10) / 2, row = i < 4 ? 0 : 1, n = row ? 3 : 4, w = (W - 8) / n, k = row ? i - 4 : i;
     return { x: 4 + k * w + 3, y: top + row * h + 3, w: w - 6, h: h - 6 };
   }
@@ -91,7 +111,7 @@
       view: p.view === "chord" ? "chord" : "solo", inst: strOpt(STR_INSTS, p.inst)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= STR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, land: !!p.land, rlevel: strOpt(STR_RLEVELS, p.rlevel)[0], rspeed: STR_SPEEDS.indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       pat: strPat(p.pat)[0], swing: B ? strOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       bpat: typeof p.bpat === "string" && /^[a-z0-9]{1,12}$/.test(p.bpat) ? p.bpat : "",
@@ -245,6 +265,16 @@
           '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
           '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
       }
+      // §303: リズムゲーム
+      var best = strBest();
+      html += '<p class="small" style="margin:12px 0 2px;">&#x1F3AE; リズムゲーム（長い音符を押しているあいだ和音がのびる。よこ向きの設定ならよこ向きで）</p><div class="quiz-opts">' + opts(STR_RLEVELS, p.rlevel, "rlevel") + '</div><div class="quiz-opts">';
+      for (i = 0; i < STR_SPEEDS.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.rspeed === STR_SPEEDS[i] ? " active" : "") + '" data-rspeed="' + STR_SPEEDS[i] + '">' + STR_SPEEDS[i] + '%</button>'; }
+      html += '</div>';
+      for (i = 0; i < STR_SONGS.length; i++) {
+        var bs0 = best[STR_SONGS[i][0] + "@" + p.rlevel + "@" + p.rspeed];
+        html += '<button class="modal-btn quiz-cat-btn" data-song="' + STR_SONGS[i][0] + '" style="width:100%;">' + escHtml(STR_SONGS[i][1]) + '（BPM ' + STR_SONGS[i][5] + '）' +
+          ' <span class="small" style="color:#6b4f00;">' + new Array(STR_SONGS[i][10] + 1).join("&#x2B50;") + (bs0 ? "・ベスト " + bs0.s + "（" + bs0.r + "）" : "") + '</span></button>';
+      }
       html += '<button class="modal-btn" data-back="1" style="width:100%;margin-top:14px;">&#x1F579;&#xFE0F; メニューへ</button></div>';
       root.innerHTML = html;
       var btns = root.querySelectorAll("button"), j;
@@ -254,6 +284,9 @@
           if ((v = el.getAttribute("data-view"))) { p.view = v; strSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-inst"))) { p.inst = v; strSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; strSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-rlevel"))) { p.rlevel = v; strSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-rspeed"))) { p.rspeed = Number(v); strSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed, land: p.land }); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; strSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) { var rs = strSendToSeq(strTakeById(strTakesLoad(), Number(v))); note = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
@@ -273,6 +306,225 @@
     draw();
   }
 
+  // ---------- §303: リズムゲーム（長い音符を押しているあいだ和音がのびる）----------
+  var STR_BEST_KEY = "ultimateGorillaStringsBestV1", STR_SPEEDS = [70, 85, 100], STR_RLEVELS = [["easy", "かんたん"], ["normal", "ふつう"]];
+  // [id, 名前, コード進行, キー, スケール, BPM, 小節, パターン, ゴリラドラム, ゴリラベースのパターン, ★]
+  var STR_SONGS = [
+    ["canon", "カノン", "canon", 2, "major", 72, 8, "half", "g:ballad", "root", 1], ["royal", "王道バラード", "royal", 0, "major", 76, 8, "hold", "g:ballad", "root", 1],
+    ["fifty", "50年代ポップ", "fifty", 7, "major", 92, 8, "q4", "g:8beat", "r5", 2], ["minor", "マイナーの調べ", "minor3", 4, "minor", 84, 8, "half", "g:ballad", "root", 1],
+    ["epic", "エピック", "epic", 9, "minor", 100, 8, "syn", "g:rock", "root8", 2], ["andalus", "アンダルシア", "andalus", 9, "minor", 96, 8, "half", "g:latin", "r5", 2],
+    ["blues", "ブルース", "blues12", 9, "major", 88, 12, "q4", "g:shuffle", "walk2", 3], ["waltz", "ワルツ（3拍子）", "canon", 0, "major", 108, 8, "waltz", "g:waltz", "waltz2", 2]
+  ];
+  function strSong(id) { return strOpt(STR_SONGS, id); }
+  function strBest() { var o = lsGet(STR_BEST_KEY); return o && typeof o === "object" ? o : {}; }
+  // 譜面 → { meter, notes: [{ beat, len, d: 度数, name }] }。音符はパターンの文字（- 以外）ごと、次の文字まで。かんたん は1小節に1つ
+  function strChart(song, level) {
+    var pd = strPat(song[7]), meter = pd[3], pt = pd[2], L = pt.length, unit = meter / L, cp = BA().cprog(song[2]), out = [], b, ci;
+    for (b = 0; b < song[6]; b++) {
+      var d = cp ? BA().cprogAt(cp, b * meter, meter).d : 0, name = BA().chord(song[3], d, song[4]).name;
+      if (level === "easy") { out.push({ beat: b * meter, len: meter, d: d, name: name }); continue; }
+      for (ci = 0; ci < L; ci++) {
+        if (pt.charAt(ci) === "-") { continue; }
+        var n = 1;
+        while (ci + n < L && pt.charAt(ci + n) === "-") { n++; }
+        out.push({ beat: b * meter + ci * unit, len: n * unit, d: d, name: name });
+      }
+    }
+    return { meter: meter, notes: out };
+  }
+  function strRhythm(api, cfg) {
+    var B = BA(), prefs = strPrefs(), panel = api.panel, frame = 0, ended = false, msg = "", land = !!cfg.land;
+    if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
+    if (api.setLandscape) { api.setLandscape(land); }
+    var box = panel && panel.parentNode;
+    strLayout(false, land ? { land: true, h: box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130 } : {});
+    if (api.setCanvasHeight) { api.setCanvasHeight(STR_H); }
+    var song = strSong(cfg.song), level = strOpt(STR_RLEVELS, cfg.level)[0], rate = (STR_SPEEDS.indexOf(Number(cfg.speed)) >= 0 ? Number(cfg.speed) : 100) / 100;
+    var chart = strChart(song, level), meter = chart.meter, spb = 60 / song[5] / rate, t0 = 0.5 + meter * spb, JG = B.JUDGE, ins = strOpt(STR_INSTS, prefs.inst), i;
+    if (!ins[4]) { ins = strOpt(STR_INSTS, "ens"); } // はじく楽器はのばせないので合奏で
+    var cols = [], cnames = [];
+    for (i = 0; i < chart.notes.length; i++) { if (cols.indexOf(chart.notes[i].d) < 0) { cols.push(chart.notes[i].d); cnames.push(chart.notes[i].name); } }
+    var nL = cols.length, rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, keeps = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [], offs = [], holding = {};
+    for (i = 0; i < nL; i++) { laneFlash.push(0); }
+    for (i = 0; i < chart.notes.length; i++) { var cn = chart.notes[i]; rn.push({ t: t0 + cn.beat * spb, end: t0 + (cn.beat + cn.len) * spb, lane: cols.indexOf(cn.d), d: cn.d, name: cn.name, j: -2, kept: false }); }
+    var endT = t0 + song[6] * meter * spb;
+    function now() { return frame / 60; }
+    var UG = window.UGMelody, audioOk = false, LAT = UG && UG.latency ? UG.latency() / 1000 : 0, buses = {};
+    function audio() {
+      if (audioOk || !UG || !UG.audioInit) { return; }
+      try {
+        if (UG.audioInit()) {
+          audioOk = true;
+          UG.loadSamples([ins[2], 33]);
+          var D = window.UGDrum, dp = D && D.prefs ? D.prefs() : null;
+          if (dp) { if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); } if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); } if (dp.real) { UG.loadSamples([UG.DRUM]); } }
+        }
+      } catch (e) {}
+    }
+    // 押しているあいだのばす和音
+    function chordOn(n) {
+      audio();
+      if (!audioOk) { return []; }
+      var bus = B.bus(buses, "s", prefs.svol, false), ms = strVoicing(B.chord(song[3], n.d, song[4]), ins[3][0], false), vs = [], k;
+      for (k = 0; k < ms.length; k++) { var v = strVoice(ins[2], ms[k], bus, 0); strLevel(v, 0.45, 0.06); vs.push(v); }
+      return vs;
+    }
+    function chordOffAll(vs) { for (var k = 0; k < vs.length; k++) { strStop(vs[k], 0.3); } }
+    // ゴリラドラムのリズムとゴリラベースのパターン
+    var D0 = window.UGDrum, dsteps = null, dlen = 16, dk = 0, bpd = null, bk = 0, bvo = null;
+    try { dsteps = D0 && D0.patternSteps ? D0.patternSteps(song[8]) : null; dlen = D0 && D0.patLen ? D0.patLen(song[8]) : 16; if (dlen !== (meter === 3 ? 12 : 16)) { dsteps = null; } } catch (e0) {}
+    try { bpd = B.patById(B.patterns(meter), song[9]); if (!bpd || bpd[0] !== song[9] || bpd[3] !== meter) { bpd = null; } } catch (e1) {}
+    function band() {
+      var ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0, k;
+      if (!ac) { return; }
+      while (dsteps && n++ < 16) {
+        var du = meter / dlen, tt = t0 + dk * du * spb, dt = tt - now();
+        if (dt > 0.1 || tt >= endT - 1e-6) { break; }
+        var s0 = dk % dlen;
+        dk++;
+        if (dt < -0.05) { continue; }
+        for (k = 0; k < dsteps.length; k++) {
+          if (dsteps[k][1].indexOf(s0) < 0) { continue; }
+          var lv = 0.8;
+          try { lv = D0.patVel ? D0.patVel(dsteps[k][0], s0 % 16, false) : 0.8; } catch (e) {}
+          try { UG.synth(dsteps[k][0], UG.DRUM, ac.currentTime + dt, lv * 0.7, B.bus(buses, "d", prefs.dvol) || undefined); } catch (e2) {}
+        }
+      }
+      n = 0;
+      while (bpd && n++ < 16) {
+        var pt = bpd[2], u = meter / pt.length, b = bk * u, ci = bk % pt.length, tb = t0 + b * spb, db = tb - now();
+        if (db > 0.1 || tb >= endT - 1e-6) { break; }
+        bk++;
+        if (db < -0.05) { continue; }
+        var c = pt.charAt(ci);
+        if (c === "-" && ci === 0) { c = "R"; }
+        if (c === "-") { continue; }
+        var cp = B.cprog(song[2]), ca = cp ? B.cprogAt(cp, b, meter) : { d: 0, next: 0, left: 99 }, last = Math.floor(b / meter + 1e-6) + 1 >= song[6];
+        var m = B.tokNote(c, B.chord(song[3], ca.d, song[4]), last ? null : B.chord(song[3], ca.next, song[4]), ca.left), when = ac.currentTime + db;
+        if (bvo && UG.voiceStop) { try { UG.voiceStop(bvo, when, 0.03); } catch (e3) {} }
+        try {
+          var bus2 = B.bus(buses, "b", prefs.bvol, false), smp2 = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(33)), g2 = null;
+          if (bus2) { g2 = ac.createGain(); g2.gain.value = 0.85 * (smp2 ? 4 : 1); g2.connect(bus2); }
+          bvo = UG.synth(m, 33, when, 0.85, g2 || undefined, 8) || null;
+          if (bvo && UG.voiceStop) { UG.voiceStop(bvo, when + B.tokLen(pt, ci) * u * spb * 0.92, 0.04); }
+        } catch (e4) {}
+      }
+    }
+    // id（指・キー）でレーン lane を押す / はなす
+    function press(id, lane) {
+      if (ended || !(lane >= 0 && lane < nL)) { return; }
+      laneFlash[lane] = 8;
+      var t = now() - LAT, best = null, k;
+      for (k = 0; k < rn.length; k++) {
+        var n = rn[k];
+        if (n.t - t > JG[2][0]) { break; }
+        if (n.j !== -2 || n.lane !== lane || Math.abs(t - n.t) > JG[2][0]) { continue; }
+        if (!best || Math.abs(t - n.t) < Math.abs(t - best.t)) { best = n; }
+      }
+      if (!best) { return; }
+      var g = B.rjudge(t - best.t);
+      best.j = g; counts[g]++; combo++; maxCombo = Math.max(maxCombo, combo); offs.push(t - best.t);
+      api.addScore(JG[g][2] + Math.min(50, combo) * 2);
+      judgeText = JG[g][1]; judgeFrames = 30;
+      holding[id] = { n: best, vs: chordOn(best) };
+    }
+    function release(id) {
+      var h = holding[id];
+      if (!h) { return; }
+      delete holding[id];
+      chordOffAll(h.vs);
+      // おわりの手前まで（音符の長さの 75%）押していればキープ
+      if (!h.n.kept && now() - LAT >= h.n.t + (h.n.end - h.n.t) * 0.75) { h.n.kept = true; keeps++; api.addScore(50); judgeText = "キープ！"; judgeFrames = 20; }
+    }
+    function finish() {
+      if (ended) { return; }
+      ended = true;
+      var k;
+      for (k in holding) { if (holding.hasOwnProperty(k)) { release(k); } }
+      var acc = rn.length ? (counts[0] + counts[1] * 0.7 + counts[2] * 0.4) / rn.length : 0, rk = B.rank(acc), best = strBest();
+      if (rn.length && counts[3] === 0) { api.addScore(500); }
+      var key = song[0] + "@" + level + "@" + Math.round(rate * 100), sc = api.getScore();
+      if (!best[key] || !(best[key].s >= sc)) { best[key] = { s: sc, r: rk }; lsSet(STR_BEST_KEY, best); }
+      msg = "ランク <b>" + rk + "</b>（正確さ " + Math.round(acc * 100) + "%）・最大コンボ " + maxCombo + "・キープ " + keeps + " / " + rn.length + (counts[3] === 0 ? "・&#x1F525; フルコンボ +500" : "") +
+        "<br>PERFECT " + counts[0] + " / GREAT " + counts[1] + " / GOOD " + counts[2] + " / MISS " + counts[3];
+      var td = B.tendency ? B.tendency(offs) : null;
+      if (td) { msg += "<br>" + td.text; }
+      render();
+      api.gameOver("ランク " + rk);
+    }
+    function render() {
+      if (!panel) { return; }
+      panel.innerHTML = '<p class="small" style="margin:4px 0 0;">&#x1F3AE; ' + escHtml(song[1]) + '（' + strOpt(STR_RLEVELS, level)[1] + '・BPM ' + Math.round(song[5] * rate) + '・' + rn.length + '音・' + ins[1] + '）</p>' +
+        '<p class="small" style="margin:4px 0 0;">音符の頭が線に来たら、そのコードのレーンを押して、音符のおわりまで押しつづける（キープでボーナス。キー 1〜' + nL + '）</p>' +
+        (msg ? '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>' : "");
+    }
+    render();
+    function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + (land ? Math.max(4, size * 0.6) : size) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+    var TOP = land ? 12 : 26, HIT = land ? STR_H - 18 : STR_H - 50, LW = (W - 8) / nL, LOOK = land ? 1.2 : 2.0;
+    return {
+      input: function (a, down) {
+        var mk = /^c(\d)$/.exec(a);
+        if (!mk) { return; }
+        audio();
+        if (down) { press("k" + mk[1], Number(mk[1])); } else { release("k" + mk[1]); }
+      },
+      pointer: function (type, x, y, id) {
+        var pid = "p" + (id === undefined ? 0 : id);
+        if (type === "down" && y >= TOP) { audio(); press(pid, Math.floor((x - 4) / LW)); }
+        else if (type === "up") { release(pid); }
+      },
+      step: function () {
+        frame++;
+        if (judgeFrames > 0) { judgeFrames--; }
+        for (var q = 0; q < nL; q++) { if (laneFlash[q] > 0) { laneFlash[q]--; } }
+        if (ended) { return; }
+        var t = now() - LAT, left = 0, k;
+        for (k = 0; k < rn.length; k++) {
+          if (rn[k].j === -2 && t - rn[k].t > JG[2][0]) { rn[k].j = -1; counts[3]++; combo = 0; judgeText = "MISS"; judgeFrames = 30; }
+          if (rn[k].j === -2) { left++; }
+        }
+        // 音符のおわりまで押していたら自動でキープ（音も止める）
+        for (k in holding) { if (holding.hasOwnProperty(k) && t >= holding[k].n.end) { release(k); } }
+        var sb = Math.floor((now() - t0) / spb);
+        if (sb < 0 && sb >= -meter && sb !== lastClick) {
+          lastClick = sb; audio();
+          if (audioOk) { try { UG.synth(sb === -meter ? 37 : 42, UG.DRUM, 0, sb === -meter ? 0.9 : 0.6); } catch (e) {} }
+        }
+        if (audioOk) { band(); }
+        if (!left && t > Math.max(endT, rn.length ? rn[rn.length - 1].end + 0.5 : 0)) { finish(); }
+      },
+      draw: function (ctx) {
+        ctx.fillStyle = "#1b1f3b";
+        ctx.fillRect(0, 0, W, STR_H);
+        hudText(ctx, "🎮 " + song[1], 8, land ? 6 : 10, "left");
+        hudText(ctx, "コンボ " + combo, W - 8, land ? 6 : 10, "right");
+        var t = now() - LAT, k;
+        for (k = 0; k < nL; k++) {
+          var x = 4 + k * LW;
+          ctx.fillStyle = laneFlash[k] > 0 ? "rgba(255,209,102,0.25)" : (k % 2 ? "#232a4d" : "#1f2546");
+          ctx.fillRect(x + 1, TOP, LW - 2, STR_H - TOP);
+          text(ctx, cnames[k] + (land || nL >= 5 ? "" : "（" + (k + 1) + "）"), x + LW / 2, HIT + (land ? 9 : 28), 13, "#adb5bd");
+        }
+        ctx.fillStyle = "#ffd166";
+        ctx.fillRect(4, HIT - 1, W - 8, 3);
+        var px = HIT - TOP;
+        for (k = 0; k < rn.length; k++) {
+          var n = rn[k];
+          if (n.t - t > LOOK) { break; }
+          if (t > n.end + 0.1 || (n.j === -1 && t - n.t > 0.25)) { continue; }
+          var yH = HIT - (n.t - t) / LOOK * px, yT = HIT - (n.end - t) / LOOK * px, nx = 4 + n.lane * LW, held0 = false, q2;
+          for (q2 in holding) { if (holding.hasOwnProperty(q2) && holding[q2].n === n) { held0 = true; } }
+          ctx.fillStyle = held0 ? "rgba(255,209,102,0.6)" : (n.j >= 0 ? "rgba(116,192,252,0.25)" : "rgba(116,192,252,0.45)");
+          ctx.fillRect(nx + LW * 0.3, Math.max(TOP, yT), LW * 0.4, Math.min(HIT, yH) - Math.max(TOP, yT)); // のばす所
+          if (n.j === -2) { ctx.fillStyle = "#74c0fc"; ctx.fillRect(nx + 6, yH - (land ? 4 : 9), LW - 12, land ? 8 : 18); text(ctx, n.name, nx + LW / 2, yH, 12, "#14213d"); }
+        }
+        var c0 = Math.ceil((t0 - now()) / spb);
+        if (now() < t0 && c0 >= 1 && c0 <= meter) { text(ctx, String(c0), W / 2, STR_H / 2 - 20, 40, "#ffd166"); }
+        if (judgeFrames > 0) { text(ctx, judgeText, W / 2, HIT - 40, 20, judgeText === "MISS" ? "#ff6b6b" : "#ffd166"); }
+      }
+    };
+  }
+
   // コードは 1〜7（合奏コードは押しているあいだ）、Z 録音・X 再生
   var STR_KEYS = { "1": "c0", "2": "c1", "3": "c2", "4": "c3", "5": "c4", "6": "c5", "7": "c6", z: "rec", x: "play", b: "pat" };
 
@@ -284,7 +536,7 @@
     name: "ゴリラストリングス",
     icon: "&#x1F3BB;",
     desc: "バイオリン・ビオラ・チェロ・コントラバス・合奏・ハープ。弓でこすって音をのばす",
-    help: "ソロ: 左手で指板を押さえて、右の「弓」の所をこする（速いほど大きい）/ 合奏コード: ボタンを押しているあいだ和音がのびる（1〜7）/ B パターン / Z 録音 / X 再生 / P一時停止",
+    help: "🎮 リズムゲームは音符の頭で押して、おわりまで押しつづける（1〜）/ ソロ: 左手で指板を押さえて、右の「弓」の所をこする（速いほど大きい）/ 合奏コード: ボタンを押しているあいだ和音がのびる（1〜7）/ B パターン / Z 録音 / X 再生 / P一時停止",
     controls: [],
     keys: STR_KEYS,
     setup: strSetup,
@@ -292,14 +544,20 @@
     panel: true,
     create: function (api, cfg) {
       cfg = cfg || {};
+      if (cfg.mode === "rhythm") { return strRhythm(api, cfg); } // §303
       var B = BA(), prefs = strPrefs(), view = prefs.view, names = prefs.names;
       var frame = 0, msg = "", panel = api.panel, flash = {};
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
-      if (api.setLandscape) { api.setLandscape(false); }
-      if (api.setCanvasHeight) { api.setCanvasHeight(STR_H); }
       function inst() { return strOpt(STR_INSTS, prefs.inst); }
       function bowing() { return inst()[4] && prefs.bow && view === "solo"; }
-      strLayout(bowing());
+      // §303: よこ向き・持ち方
+      function applyLand() {
+        if (api.setLandscape) { api.setLandscape(prefs.land); }
+        var box = panel && panel.parentNode;
+        strLayout(bowing(), { land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130 });
+        if (api.setCanvasHeight) { api.setCanvasHeight(STR_H); }
+      }
+      applyLand();
       function now() { return frame / 60; }
 
       // --- 音 ---
@@ -643,8 +901,8 @@
           if (pat) { pat.t0 = now() - pcb * 60 / bpm; }
           prefs.bpm = bpm; strSavePrefs(prefs); render();
         }
-        else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "solo"; strSavePrefs(prefs); strLayout(bowing()); render(); }
-        else if (/^inst:/.test(v)) { allOff(); prefs.inst = strOpt(STR_INSTS, v.substring(5))[0]; strSavePrefs(prefs); strLayout(bowing()); if (audioOk) { try { UG.loadSamples([inst()[2]]); } catch (e) {} } render(); }
+        else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "solo"; strSavePrefs(prefs); applyLand(); render(); }
+        else if (/^inst:/.test(v)) { allOff(); prefs.inst = strOpt(STR_INSTS, v.substring(5))[0]; strSavePrefs(prefs); applyLand(); if (audioOk) { try { UG.loadSamples([inst()[2]]); } catch (e) {} } render(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = ["play", "pat", "band", "key"].indexOf(tb0) >= 0 ? tb0 : "play"; strSavePrefs(prefs); render(); }
         // §302
         else if (v === "pat") { patToggle(); }
@@ -661,7 +919,9 @@
           B.bus(buses, v.charAt(0), prefs[vk], false);
           render();
         }
-        else if (v === "bow" || v === "snap" || v === "vib") { allOff(); prefs[v] = !prefs[v]; strSavePrefs(prefs); strLayout(bowing()); render(); }
+        else if (v === "bow" || v === "snap" || v === "vib") { allOff(); prefs[v] = !prefs[v]; strSavePrefs(prefs); applyLand(); render(); }
+        else if (v === "land") { allOff(); prefs.land = !prefs.land; strSavePrefs(prefs); applyLand(); render(); }
+        else if (/^grip:/.test(v)) { allOff(); B.gripStep(v.substring(5)); applyLand(); render(); }
         else if (v === "posdown" || v === "posup") { allOff(); prefs.pos = Math.max(0, Math.min(STR_POS_MAX, prefs.pos + (v === "posup" ? 1 : -1))); strSavePrefs(prefs); render(); }
         else if (v === "keydown" || v === "keyup") { prefs.key = (prefs.key + (v === "keyup" ? 1 : 11)) % 12; strSavePrefs(prefs); render(); }
         else if (v === "sev") { prefs.sev = !prefs.sev; strSavePrefs(prefs); render(); }
@@ -734,7 +994,8 @@
         } else {
           html += '<div class="piano-row">';
           for (i = 0; i < STR_VIEWS.length; i++) { html += '<button class="modal-btn' + (view === STR_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-sa="view:' + STR_VIEWS[i][0] + '">' + STR_VIEWS[i][1] + '</button>'; }
-          html += '</div><div class="piano-opts">';
+          html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-sa="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button>';
+          html += '</div>' + (prefs.land && B.gripRows ? B.gripRows("sa") : "") + '<div class="piano-opts">';
           for (i = 0; i < STR_INSTS.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.inst === STR_INSTS[i][0] ? " active" : "") + '" data-sa="inst:' + STR_INSTS[i][0] + '">' + STR_INSTS[i][1] + '</button>'; }
           html += '</div>';
           if (view === "solo") {
@@ -763,29 +1024,30 @@
       render();
 
       // --- 描く ---
-      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + (STR_LAND ? Math.max(4, size * 0.6) : size) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
       function drawSolo(ctx) {
         var cw = strColW(), rh = strRowH(), top = STR_BOARD_Y, bot = STR_BOARD_BOT, ins = inst(), spc = B.scalePcs(prefs.key, prefs.scale), r, c;
+        var numY = STR_LAND ? (bot + 4 <= STR_H ? bot + 3 : top - 4) : top - 7, bw0 = STR_BOW_R - STR_BOW_X;
         ctx.fillStyle = "#2b1d14";
         ctx.fillRect(STR_BOARD_X, top, STR_BOARD_R - STR_BOARD_X, bot - top);
         if (bowing()) {
           ctx.fillStyle = "#6b3f1f";
-          ctx.fillRect(STR_BOW_X, top, W - 4 - STR_BOW_X, bot - top);
+          ctx.fillRect(STR_BOW_X, top, bw0, bot - top);
           ctx.fillStyle = "#c9a227";
-          ctx.fillRect(STR_BOW_X + 4, top + 2, 3, bot - top - 4); // 駒
-          text(ctx, "弓", STR_BOW_X + (W - 4 - STR_BOW_X) / 2, top - 7, 9, "#ffd166");
+          ctx.fillRect(STR_MIRROR ? STR_BOW_R - 7 : STR_BOW_X + 4, top + 2, 3, bot - top - 4); // 駒（指板の側）
+          text(ctx, "弓", STR_BOW_X + bw0 / 2, numY, 9, "#ffd166");
         }
         for (c = 0; c < STR_COLS; c++) {
-          var f = prefs.pos + c, cx = STR_BOARD_X + (c + 0.5) * cw;
+          var f = prefs.pos + c, cx = strColX(c) + cw / 2;
           if (STR_MARKS.indexOf(f) >= 0) { ctx.fillStyle = "rgba(232,216,184,0.5)"; ctx.beginPath(); ctx.arc(cx, top + rh * 2, 3, 0, Math.PI * 2); ctx.fill(); }
-          if (c > 0) { ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(STR_BOARD_X + c * cw - 0.5, top, 1, bot - top); }
-          text(ctx, f === 0 ? "開放" : String(f), cx, top - 7, 8, "#adb5bd");
+          if (c > 0) { ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(strFretX(c) - 0.5, top, 1, bot - top); }
+          text(ctx, f === 0 ? "開放" : String(f), cx, numY, 8, "#adb5bd");
         }
-        if (prefs.pos === 0) { ctx.fillStyle = "#f5f0e6"; ctx.fillRect(STR_BOARD_X + cw - 2, top, 3, bot - top); }
+        if (prefs.pos === 0) { ctx.fillStyle = "#f5f0e6"; ctx.fillRect(strFretX(1) - 1.5, top, 3, bot - top); }
         for (r = 0; r < 4; r++) {
           var sn = strSnOfRow(r), sy = strRowLineY(r), open = ins[3][sn];
           for (c = 0; c < STR_COLS; c++) {
-            var m = open + prefs.pos + c, sx = STR_BOARD_X + (c + 0.5) * cw;
+            var m = open + prefs.pos + c, sx = strColX(c) + cw / 2;
             if (spc && spc[strPc(m)]) { var sk = spc[strPc(m)]; ctx.fillStyle = sk === 3 ? "#ffffff" : (sk === 2 ? "#f783ac" : "rgba(255,255,255,0.45)"); ctx.beginPath(); ctx.arc(sx, sy + rh * 0.3, sk === 1 ? 2 : 3, 0, Math.PI * 2); ctx.fill(); }
             var nm = strName(m, names);
             if (nm) { text(ctx, nm, sx, sy - rh * 0.3, 7, "rgba(255,255,255,0.55)"); }
@@ -795,13 +1057,14 @@
           for (k in vo) { if (vo.hasOwnProperty(k) && k.charAt(0) === "t" && left[k.substring(1)] && left[k.substring(1)].sn === sn) { sounding = true; } }
           ctx.fillStyle = sounding ? "#ffe8a3" : "#cfcfcf";
           var th = 1 + sn * 0.5, wob = sounding ? Math.sin(frame * 2.1 + r) * 0.8 : 0;
-          ctx.fillRect(STR_BOARD_X, sy - th / 2 + wob, (bowing() ? W - 4 : STR_BOARD_R) - STR_BOARD_X, th);
-          hudText(ctx, STR_CDE[strPc(open)], 1, sy - rh * 0.3, "left");
+          var sx0 = bowing() ? Math.min(STR_BOARD_X, STR_BOW_X) : STR_BOARD_X, sx1 = bowing() ? Math.max(STR_BOARD_R, STR_BOW_R) : STR_BOARD_R;
+          ctx.fillRect(sx0, sy - th / 2 + wob, sx1 - sx0, th * (STR_LAND ? 0.7 : 1));
+          if (STR_LAND) { text(ctx, STR_CDE[strPc(open)], STR_MIRROR ? W - 5.5 : 5.5, sy, 10, "#ffd166"); } else { hudText(ctx, STR_CDE[strPc(open)], 1, sy - rh * 0.3, "left"); }
         }
         // 左手の指
         for (var k2 in left) {
           if (!left.hasOwnProperty(k2)) { continue; }
-          var L = left[k2], semi = prefs.snap ? Math.round(Math.max(0, L.semi)) : Math.max(0, L.semi), lx = STR_BOARD_X + (semi - prefs.pos + 0.5) * cw;
+          var L = left[k2], semi = prefs.snap ? Math.round(Math.max(0, L.semi)) : Math.max(0, L.semi), lx = strSemiX(semi, prefs.pos);
           ctx.fillStyle = "#ffd166"; ctx.beginPath(); ctx.arc(lx, strRowLineY(3 - L.sn), Math.min(cw, rh) * 0.3, 0, Math.PI * 2); ctx.fill();
         }
         // 弓の指
@@ -809,16 +1072,17 @@
           if (!bows.hasOwnProperty(k3)) { continue; }
           var bw = bows[k3];
           ctx.fillStyle = "rgba(255,209,102," + (0.3 + Math.min(0.7, bw.lv)) + ")";
-          ctx.fillRect(STR_BOW_X + 10, strRowLineY(bw.r) - 3, W - 18 - STR_BOW_X, 6);
+          ctx.fillRect(STR_BOW_X + 6, strRowLineY(bw.r) - 3, bw0 - 12, 6);
         }
       }
       function drawChords(ctx) {
         if (back) {
           var k0 = songIdx(), nx = k0 >= 0 ? back.chords[k0 + 1] : null, onB = !!held["pback"];
-          ctx.fillStyle = onB ? "#ffd166" : "#2f4a6e"; ctx.fillRect(8, 44, W - 16, STR_H - 54);
-          text(ctx, k0 >= 0 ? back.chords[k0].name : "—", W / 2, STR_H / 2, 40, onB ? "#14213d" : "#ffd166");
-          text(ctx, nx ? "→ " + nx.name : "", W / 2, STR_H / 2 + 46, 16, onB ? "#14213d" : "#adb5bd");
-          text(ctx, "押しているあいだ曲のコードがのびる", W / 2, 60, 11, onB ? "#14213d" : "#adb5bd");
+          var by0 = STR_LAND ? 12 : 44;
+          ctx.fillStyle = onB ? "#ffd166" : "#2f4a6e"; ctx.fillRect(8, by0, W - 16, STR_H - by0 - 6);
+          text(ctx, k0 >= 0 ? back.chords[k0].name : "—", W / 2, (by0 + STR_H) / 2, 40, onB ? "#14213d" : "#ffd166");
+          text(ctx, nx ? "→ " + nx.name : "", W / 2, (by0 + STR_H) / 2 + (STR_LAND ? 26 : 46), 16, onB ? "#14213d" : "#adb5bd");
+          if (!STR_LAND) { text(ctx, "押しているあいだ曲のコードがのびる", W / 2, 60, 11, onB ? "#14213d" : "#adb5bd"); }
           return;
         }
         for (var i = 0; i < 7; i++) {
@@ -828,8 +1092,8 @@
           ctx.fillStyle = on ? "#ffd166" : (flash["c" + i] > 0 ? "#fff3b0" : "#2f4a6e");
           ctx.fillRect(r.x, r.y, r.w, r.h);
           if (i === pend) { ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 3; ctx.strokeRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4); ctx.lineWidth = 1; }
-          text(ctx, ch.deg, r.x + r.w / 2, r.y + r.h / 2 - 18, 11, on ? "#14213d" : "#adb5bd");
-          text(ctx, ch.name, r.x + r.w / 2, r.y + r.h / 2 + 6, ch.name.length > 5 ? 15 : 20, on ? "#14213d" : "#ffffff");
+          text(ctx, ch.deg, r.x + r.w / 2, r.y + r.h * 0.3, 11, on ? "#14213d" : "#adb5bd");
+          text(ctx, ch.name, r.x + r.w / 2, r.y + r.h * 0.6, ch.name.length > 5 ? 15 : 20, on ? "#14213d" : "#ffffff");
         }
       }
       return {
@@ -846,7 +1110,7 @@
           var pid = String(id === undefined ? 0 : id);
           if (type === "down") {
             audio();
-            if (view === "chord") { if (back) { if (y > 40) { chordOn("pback", -1); } return; } var d = strChordAt(x, y); if (d >= 0) { chordOn("p" + pid, d); } return; }
+            if (view === "chord") { if (back) { if (y > (STR_LAND ? 12 : 40)) { chordOn("pback", -1); } return; } var d = strChordAt(x, y); if (d >= 0) { chordOn("p" + pid, d); } return; }
             var ins = inst(), cell = strBoardAt(x, y, prefs.pos);
             if (cell) {
               if (!ins[4]) { pluck(ins[3][cell.sn] + Math.max(0, Math.round(cell.semi)), 0.8); return; }
@@ -865,7 +1129,7 @@
             }
             var bw = bows[pid];
             if (bw) {
-              var sp = (Math.abs(x - bw.x) + Math.abs(y - bw.y)) / Math.max(1, frame - bw.f), r2 = strBowRow(Math.max(STR_BOW_X, x), y);
+              var sp = (Math.abs(x - bw.x) + Math.abs(y - bw.y)) / Math.max(1, frame - bw.f), r2 = strBowRow(Math.max(STR_BOW_X, Math.min(STR_BOW_R, x)), y);
               bw.x = x; bw.y = y; bw.f = frame;
               if (r2 >= 0 && r2 !== bw.r) { bw.r = r2; noteOff("b" + pid, 0.06); noteOn("b" + pid, stringNote(strSnOfRow(r2)), 0, 0.03); }
               var lv = strBowLevel(sp);
@@ -915,13 +1179,13 @@
           if (g) { g.addColorStop(0, "#1b1f3b"); g.addColorStop(1, "#3a2318"); }
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, STR_H);
-          hudText(ctx, inst()[1].replace(/&#x[0-9A-F]+;\s*/g, "") + (back ? " ・🎸 " + (bk ? "伴奏" : back.name) : pat ? " ・🎼 " + patDef()[1] : view === "chord" ? " ・キー " + STR_CDE[prefs.key] : ""), 8, 10, "left");
-          hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
-          if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, 28, 14, "#ff6b6b"); }
+          hudText(ctx, inst()[1].replace(/&#x[0-9A-F]+;\s*/g, "") + (back ? " ・🎸 " + (bk ? "伴奏" : back.name) : pat ? " ・🎼 " + patDef()[1] : view === "chord" ? " ・キー " + STR_CDE[prefs.key] : ""), 8, STR_LAND ? 6 : 10, "left");
+          hudText(ctx, "BPM " + bpm, W - 8, STR_LAND ? 6 : 10, "right");
+          if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, STR_LAND ? 6 : 28, 14, "#ff6b6b"); }
           if (view === "chord") { drawChords(ctx); return; }
           var line = [], k;
           for (k in vo) { if (vo.hasOwnProperty(k) && k.charAt(0) !== "k") { line.push(strName(vo[k].m, names === "none" ? "do" : names) + "（" + strName(vo[k].m, "cde") + "）"); } }
-          if (!rec) { text(ctx, line.join(" ") || (play ? "再生中…" : bowing() ? "左手で押さえて、右の「弓」をこすろう" : "指板を押して弾こう"), W / 2, line.length ? 60 : 70, line.length ? 16 : 12, line.length ? "#ffd166" : "#ffffff"); }
+          if (!rec && (!STR_LAND || line.length)) { text(ctx, line.join(" ") || (play ? "再生中…" : bowing() ? "左手で押さえて、右の「弓」をこすろう" : "指板を押して弾こう"), W / 2, STR_LAND ? 6 : (line.length ? 60 : 70), line.length ? 16 : 12, line.length ? "#ffd166" : "#ffffff"); }
           drawSolo(ctx);
         }
       };
@@ -930,7 +1194,7 @@
 
   window.UGStrings = {
     H: STR_H, INSTS: STR_INSTS, VIEWS: STR_VIEWS, COLS: STR_COLS, BOARD_Y: STR_BOARD_Y, BOW_X: STR_BOW_X, PREFS_KEY: STR_PREFS_KEY, TAKES_KEY: STR_TAKES_KEY, TAKES_MAX: STR_TAKES_MAX, SEQ_MAX: STR_SEQ_MAX,
-    layout: strLayout, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
-    voice: strVoice, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
+    layout: strLayout, colX: strColX, geom: function () { return { H: STR_H, COLS: STR_COLS, BOARD_X: STR_BOARD_X, BOARD_R: STR_BOARD_R, BOARD_Y: STR_BOARD_Y, BOARD_BOT: STR_BOARD_BOT, BOW_X: STR_BOW_X, BOW_R: STR_BOW_R, MIRROR: STR_MIRROR, LAND: STR_LAND }; }, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
+    voice: strVoice, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
   };
 })();

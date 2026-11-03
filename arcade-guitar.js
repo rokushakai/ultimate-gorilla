@@ -624,7 +624,7 @@
           var x = 4 + k * LW;
           ctx.fillStyle = laneFlash[k] > 0 ? "rgba(255,209,102,0.25)" : (k % 2 ? "#232a4d" : "#1f2546");
           ctx.fillRect(x + 1, TOP, LW - 2, GTR_H - TOP);
-          text(ctx, grid ? cnames[k] + (land ? "" : "（" + (k + 1) + "）") : (k ? "⬆ アップ" : "⬇ ダウン"), x + LW / 2, HIT + (land ? 9 : 28), grid ? 13 : 15, "#adb5bd");
+          text(ctx, grid ? cnames[k] + (land || nL >= 5 ? "" : "（" + (k + 1) + "）") : (k ? "⬆ アップ" : "⬇ ダウン"), x + LW / 2, HIT + (land ? 9 : 28), grid ? 13 : 15, "#adb5bd");
         }
         ctx.fillStyle = "#ffd166";
         ctx.fillRect(4, HIT - 1, W - 8, 3);

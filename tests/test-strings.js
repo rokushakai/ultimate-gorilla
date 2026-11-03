@@ -103,6 +103,43 @@ module.exports = function () {
   ok(q7p.svol === 90 && q7p.dvol === 60 && q7h.indexOf('data-spat="1"') > 0 && q7h.indexOf('data-scprog="1"') > 0 && S.PATS.length === 12 && S.vol(155, 100) === 100,
     "pattern and band tabs: pattern / progression selects and volumes (saved)", [q7p.svol, q7p.dvol]);
 
+  // --- §303: よこ向き・持ち方 ---
+  var el = H.load(), Sl = el.window.UGStrings, Bl = el.window.UGBass;
+  Sl.layout(true, { land: true, h: 130 });
+  var lg1 = Sl.geom(), lc1 = Sl.boardAt(lg1.BOARD_X + 2, Sl.rowLineY(0), 0);
+  el.store[Bl.GRIP_KEY] = JSON.stringify({ lefty: true, pw: 30 });
+  Sl.layout(true, { land: true, h: 130 });
+  var lg2 = Sl.geom(), lc2 = Sl.boardAt(lg2.BOARD_R - 2, Sl.rowLineY(0), 0);
+  Sl.layout(false, { land: true, h: 130 });
+  var lg3 = Sl.geom();
+  Sl.layout(true);
+  var lg4 = Sl.geom();
+  ok(lg1.LAND && lg1.H === 130 && lg1.COLS >= 7 && lg1.COLS < 13 && lg1.BOW_X > lg1.BOARD_R && lc1 && lc1.semi < 0.5 && lg2.MIRROR && lg2.BOW_X === 4 && lg2.BOARD_X > lg2.BOW_R && lc2 && lc2.semi < 0.5 &&
+    lg3.COLS === 13 && !lg4.LAND && lg4.H === 320 && lg4.COLS === 8,
+    "strings landscape: more frets, the bow area on the right (left when left-handed, nut on the right); without the bow 13 frets; portrait goes back", [lg1, lg2]);
+  // --- §303: リズムゲーム（長い音符を押しつづける）---
+  var D = W.UGDrum, songsOk = S.SONGS.every(function (sg) {
+    var cE = S.chart(sg, "easy"), cN = S.chart(sg, "normal"), bp = B.patById(B.patterns(cN.meter), sg[9]);
+    return cE.notes.length === sg[6] && cN.notes.length >= cE.notes.length && cN.notes.every(function (n) { return n.len > 0; }) && D.patternSteps(sg[8]) && D.patLen(sg[8]) === (cN.meter === 3 ? 12 : 16) && bp && bp[0] === sg[9];
+  });
+  function rrun(song, holdAll, land) {
+    var e = H.load(), sg = S.SONGS.filter(function (x) { return x[0] === song; })[0], c = S.chart(sg, "normal"), spb = 60 / sg[5], t0 = 0.5 + c.meter * spb, cols = [], dn = {}, up = {}, H0 = 0;
+    c.notes.forEach(function (n) { if (cols.indexOf(n.d) < 0) { cols.push(n.d); } });
+    var r = e.run("strings", { config: { mode: "rhythm", song: song, level: "normal", speed: 100, land: land } }, 3600, function (f) {
+      if (f === 1) { H0 = e.window.UGStrings.geom().H; }
+      c.notes.forEach(function (n, k) {
+        var key = String(cols.indexOf(n.d) + 1), endB = holdAll ? n.beat + n.len - 0.05 : n.beat + n.len * 0.3;
+        if (!dn[k] && f / 60 >= t0 + n.beat * spb - 0.005) { dn[k] = 1; e.key("keydown", key); }
+        if (dn[k] && !up[k] && f / 60 >= t0 + endB * spb) { up[k] = 1; e.key("keyup", key); }
+      });
+    });
+    var best = JSON.parse(e.store[S.BEST_KEY] || "{}")[song + "@normal@100"];
+    return { r: r, best: best, n: c.notes.length, H: H0, text: e.lastTitle ? e.lastTitle() : "" };
+  }
+  var sr1 = rrun("canon", true, false), sr2 = rrun("canon", false, false), sr3 = rrun("royal", true, true);
+  ok(songsOk && sr1.best && sr1.best.r === "S" && sr2.best && sr2.best.s < sr1.best.s && sr1.best.s - sr2.best.s >= sr1.n * 50 - 1 && sr1.H === 320 && sr3.best && sr3.best.r === "S" && sr3.H < 200,
+    "strings rhythm game: press at the head and keep holding to the end for a keep bonus (letting go early loses it); landscape works too", [sr1.best, sr2.best, sr1.n, sr3.H]);
+
   // --- 録音・シーケンサーへ送る ---
   var r5 = srun({ view: "chord", inst: "cello", bpm: 120 }, 260, function (fr, e) {
     if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
