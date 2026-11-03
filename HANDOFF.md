@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.90** |
+| 現在バージョン | **v1.91** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.91] 🤘 ギターのパターン・バンド**（§284）: `GTR_PATS` の文字（D U x s B 1〜6 -）を `patStep` が 0.1秒先まで予約して `strum(dir, dt)` / `playString`。小節の頭で `barChord`（予約 `pend` → コード進行）。ドラムは `drumStep`（ゴリラベースと同じ）、ベースは `bassStep` が `UGBass.patterns / tokNote / tokLen` で音色 33 を鳴らす。出口は `UGBass.bus(buses, "b" / "d")`。パターンやドラムを切りかえたら `patRetime`（拍はそのまま）
 - **[v1.90] 🤘 ゴリラギター**（§282・§283）: `arcade-guitar.js`（`window.UGGuitar`）。弦の番号 sn は 0 ＝ 6弦〜5 ＝ 1弦（`GTR_OPEN`）。単音の画面は上が1弦（行 r → sn = 5 − r）、ストロークの画面は上が6弦。1本の弦は1音だけ（`strVo[sn]`・`playString` / `stopString`）。押さえ方は `gtrShape(UGBass.chord(...), sev)`（開放のコード `GTR_OPEN_SHAPES` か E / A の形のバレー）。エレキは `gtrBus` がアンプ（ハイパス → 入力 → tanh → ローパス → 出力）を作る。コード・スケールはゴリラベース（`UGBass`）のものを使う（読み込みはベースのあと）
 - **[v1.89] 🧠 クイズ**（§281）: `create` の `cfg.mode === "quiz"` で `bassQuiz(api, cfg)`（kind "fret" / "ear"）。問題は `bassQuizMake(kind, rnd)`、度数の答えは `BASS_EAR`、ボタンは `bassEarRect`。ベストは `BASS_BEST_KEY` の `quiz@fret` / `quiz@ear`
 - **[v1.88] 🔥 むずかしい**（§280）: `bassChart(song, "hard")` は `bassFillTok`・`bassApproach` を使い、奇数の拍の +0.75 に `ghost: true` の音を足す（その拍の後半が空いているとき）。リズムゲームはゴースト音を短く小さく＋`bassHit("ghost")` で鳴らし、✕ で描く。`BASS_SONGS` は12曲
@@ -239,7 +240,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（908項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（914項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

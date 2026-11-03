@@ -88,6 +88,41 @@ module.exports = function () {
   ok(tk && tk.voice === "dist" && tk.notes.length === 5 && tk.notes[0][2] === 48 && tk.notes[4][2] === 64 && tk.notes[0][0] < tk.notes[4][0] && tk.notes[4][0] - tk.notes[0][0] < 0.15 && tk.name === "ギター 1",
     "recording: a strum is saved as 5 staggered notes with the voice", tk);
 
+  // --- §284: パターン ---
+  function prun(prefs, frames, fn) {
+    var e = H.load({ patch: function (src, file) { return file === "arcade-guitar.js" ? src.split("      function render() {\n").join("      window.__gAct = action; window.__gPanel = function () { return panel.innerHTML; };\n      function render() {\n") : src; } });
+    var snd = [], dr = [], bs = [];
+    e.store[G.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("guitar", { config: {} }, frames, function (fr) {
+      if (fr === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === M.DRUM) { dr.push(m); } else if (pg === 33) { bs.push(m); } else { snd.push(m); } return s0.apply(M, arguments); }; }
+      if (fr === 2) { e.key("keydown", "b"); e.key("keyup", "b"); }
+      if (fn) { fn(fr, e); }
+    });
+    return { snd: snd, dr: dr, bs: bs, e: e };
+  }
+  // 8分ダウン・BPM 120（8分 ＝ 0.25秒）→ 1秒で4回
+  var p1 = prun({ view: "chord", pat: "down8", bpm: 120 }, 62);
+  ok(p1.snd.length === 20 && p1.snd.slice(0, 5).join() === "48,52,55,60,64", "pattern: eighth-note down strums at the BPM on the current chord", p1.snd.length);
+  // コード進行（王道進行 F G Em Am）: 1小節目は F（バレー）、2小節目は G
+  var p2 = prun({ view: "chord", pat: "ballad", bpm: 120, cprog: "royal" }, 140);
+  ok(p2.snd.slice(0, 6).join() === "41,48,53,57,60,65" && p2.snd.slice(6, 12).join() === "43,47,50,55,59,67", "chord progression: F then G, one bar each", p2.snd);
+  // パターン中にコード 6（Am）をタップ → 次の小節の頭から
+  var p3 = prun({ view: "chord", pat: "down8", bpm: 120 }, 140, function (fr, e) { if (fr === 40) { e.key("keydown", "6"); e.key("keyup", "6"); } });
+  var i45 = p3.snd.indexOf(45);
+  ok(i45 === 40 && p3.snd.slice(0, 40).every(function (m) { return [48, 52, 55, 60, 64].indexOf(m) >= 0; }), "a chord tapped during the pattern waits for the next bar", [i45, p3.snd.length]);
+  // アルペジオ（B 3 2 3 1 3 2 3）: C の5弦（いちばん低い鳴る弦）・3弦・2弦・1弦
+  var p4 = prun({ view: "chord", pat: "arp", bpm: 120 }, 125);
+  ok(p4.snd.slice(0, 8).join() === "48,55,60,55,64,55,60,55" && G.arpString(G.shape(B.chord(0, 0, "major")), "6") === 1, "arpeggio pattern picks single strings (a muted string falls back to the next lower one)", p4.snd.slice(0, 8));
+  // バンド: ゴリラドラムの8ビートとベースのルート8分もいっしょに
+  var p5 = prun({ view: "fret", pat: "down8", bpm: 120, drum: "g:8beat", bpat: "root8" }, 70);
+  ok(p5.dr.indexOf(36) >= 0 && p5.dr.indexOf(38) >= 0 && p5.dr.indexOf(42) >= 0 && p5.bs.length >= 4 && p5.bs.every(function (m) { return m === 36; }) && p5.snd.length >= 15,
+    "band: the drum loop and the bass pattern play along with the strums", [p5.dr.length, p5.bs, p5.snd.length]);
+  // 音量（－ ＋ で 10%）・タブ
+  var p6 = prun({ tab: "band" }, 6, function (fr, e) { if (fr === 3) { e.window.__gAct("gvol:-"); e.window.__gAct("dvol:+"); e.window.__gAct("bvol:+"); } });
+  var pp6 = JSON.parse(p6.e.store[G.PREFS_KEY]), h6 = p6.e.window.__gPanel();
+  ok(pp6.gvol === 90 && pp6.dvol === 60 && pp6.bvol === 110 && h6.indexOf("90%") > 0 && h6.indexOf('data-gdrum="1"') > 0 && h6.indexOf('data-gbpat="1"') > 0 && G.vol(155, 100) === 100,
+    "band tab: drum and bass selects, three volume rows (saved)", [pp6.gvol, pp6.dvol, pp6.bvol]);
+
   // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
   var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
   M5.audioInit();
