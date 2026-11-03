@@ -564,9 +564,10 @@
   var MELODY_SAMPLE_FILES = {
     0: "acoustic_grand_piano", 4: "electric_piano_1", 8: "celesta", 11: "vibraphone", 12: "marimba",
     24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "vsco_violin", 46: "vsco_harp",
-    48: "vsco_ens", 52: "choir_aahs", 56: "trumpet", 65: "alto_sax", 73: "flute", 107: "koto",
+    48: "vsco_ens", 52: "choir_aahs", 56: "vsco_trumpet", 65: "alto_sax", 73: "vsco_flute", 107: "koto",
     // §261 v1.69: ベース（C1〜C5 の短3度おき17音）
-    57: "trombone", 58: "tuba", 60: "french_horn", 61: "brass_section", 64: "soprano_sax", 66: "tenor_sax", 67: "baritone_sax", 68: "oboe", 70: "bassoon", 71: "clarinet", // §307 v2.12: ゴリラホーン
+    57: "vsco_trombone", 58: "vsco_tuba", 60: "vsco_horn", 61: "brass_section", 64: "soprano_sax", 66: "tenor_sax", 67: "baritone_sax", 68: "vsco_oboe", 70: "vsco_bassoon", 71: "vsco_clarinet", // §307 v2.12: ゴリラホーン・§311 v2.16: VSCO 2 CE の録音
+    1056: "vsco_trumpet_p", 1057: "vsco_trombone_p", 1058: "vsco_tuba_p", 1060: "vsco_horn_p", 1068: "vsco_oboe_p", 1070: "vsco_bassoon_p", 1071: "vsco_clarinet_p", // §311: 弱く吹いた録音
     41: "vsco_viola", 42: "vsco_cello", 43: "vsco_contrabass", 44: "vsco_trem", 45: "vsco_pizz", 49: "string_ensemble_2", // §301 v2.07: ゴリラストリングス・§310 v2.15: VSCO 2 CE の録音
     1040: "vsco_violin_p", 1041: "vsco_viola_p", 1042: "vsco_cello_p", 1043: "vsco_contrabass_p", 1048: "vsco_ens_p", // §310: 弱く弾いた録音（音色番号 ＋1000）
     26: "electric_guitar_jazz", 27: "electric_guitar_clean", 28: "electric_guitar_muted", 29: "overdriven_guitar", 30: "distortion_guitar", // §289 v1.96: エレキギター
@@ -583,7 +584,7 @@
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "2.15";
+  var MELODY_SAMPLE_V = "2.16";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {

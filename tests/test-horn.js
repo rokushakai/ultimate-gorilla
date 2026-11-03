@@ -131,4 +131,14 @@ module.exports = function () {
   var rs = Hn.sendToSeq({ name: "ぼくのラッパ", inst: "tsax", notes: [[0, 1, 60]] }), xt = U.seqLoad().cur.tracks[rs.id];
   ok(rs.ok && xt && xt.preset === "hnotes" && xt.prog === 66 && U.X_PRESETS.some(function (p) { return p[0] === "hnotes"; }) && !Hn.sendToSeq({ name: "x", notes: [] }).ok,
     "send to the sequencer: a wind-notes track with the instrument's GM number", rs.msg);
+  // --- §311: VSCO の録音・弱い/強いの2段階（息の強さ）---
+  var e11 = H.load(), M11 = e11.window.UGMelody, S11 = e11.window.UGStrings, fb11 = { duration: 2.7, length: 59535 };
+  M11.audioInit(); M11.samples.enabled = true;
+  ["vsco_trumpet", "vsco_trumpet_p"].forEach(function (n) { M11.samples.buffers[n] = { 60: fb11, 67: fb11 }; M11.samples.keys[n] = [60, 67]; M11.samples.state[n] = "ready"; });
+  var v11 = S11.voice(56, 64, M11.audio.ctx.createGain(), 0);
+  e11.counters.targets.length = 0; S11.level(v11, 0.35, 0.05);
+  var t11 = e11.counters.targets.map(function (t) { return t.v; });
+  ok([56, 57, 58, 60, 68, 70, 71, 73].every(function (p) { return /^vsco_/.test(M11.sampleFiles[p]); }) && M11.sampleFiles[1060] === "vsco_horn_p" && !M11.sampleFiles[1073] && M11.sampleFiles[61] === "brass_section" &&
+    v11 && v11.src2 && t11[1] < 0.2 && t11[2] > 0.95,
+    "real brass and woodwinds: a soft breath plays mostly the soft recording", t11);
 };

@@ -11508,3 +11508,14 @@ var COMPANION_TECHNIQUE2_DATA = {
   - 同時に持つ音色の数 `MELODY_SAMPLE_KEEP` を 6 → 16（合奏で6パート×2段階＋ドラム・ベース）
 - 使わなくなった samples/violin・viola・cello・contrabass・tremolo_strings・pizzicato_strings・orchestral_harp・string_ensemble_1 は消す。`MELODY_SAMPLE_V` を 2.15 に
 - メロディくずし・シーケンサーのバイオリン・ハープ・ストリングスも同じ録音で鳴る（強い録音のみ）
+
+## §311 v2.16 — 🎺 金管・木管を生の録音に（弱い・強いの2段階）
+
+- §310 と同じ作りで、金管4つ・木管4つを **VSCO 2 Community Edition**（CC0）の録音に。どれも名前より1オクターブ上の高さ（FFT で確かめた）。名前と測った高さが1半音よりずれている録音は使わない（ホルンの A2 の弱い録音）
+  - トランペット（56）`vsco_trumpet`・トロンボーン（57）`vsco_trombone`（テナー）・チューバ（58）`vsco_tuba`・ホルン（60）`vsco_horn`（F ホルン）
+  - オーボエ（68）`vsco_oboe`（ビブラート）・ファゴット（70）`vsco_bassoon`・クラリネット（71）`vsco_clarinet`・フルート（73）`vsco_flute`（ビブラート。録音が1段階なので強い録音だけ）
+  - 弱く吹いた録音は ＋1000（1056・1057・1058・1060・1068・1070・1071）。息の強さで2つをまぜる（§310 の `UGStrings.voice`。ゴリラホーンもこれで鳴らしている）
+  - ブラスセクション（61）・サックス（64〜67）はそのまま（アルト・ソプラノは次に）
+- 使わなくなった samples/trumpet・trombone・tuba・french_horn・oboe・bassoon・clarinet・flute は消す。`MELODY_SAMPLE_V` を 2.16 に
+- メロディくずし・シーケンサーのトランペット・フルートなども同じ録音で鳴る（強い録音のみ）
+
