@@ -1224,6 +1224,9 @@ module.exports = async function () {
   tM.setUkeType("soprano");
   ok(tU.type() === "soprano" && tFiles.join() === "fs_ukulele,fs_uke_concert,fs_uke_tenor,acoustic_guitar_nylon" && tFiles.every(function (n) { return tfs.existsSync(tpath.join(H.ROOT, "samples", n + ".js")); }) && tU.TYPES.length === 4,
     "4 ukulele types; each plays its own recording as voice 140 (soprano, a second real uke, a warmer tenor, nylon guitar for baritone)", tFiles);
+  // §327: 大きいほど長く鳴らす
+  var tHold = tM.ukeTypes.map(function (t) { return t[3]; });
+  ok(tHold[0] < tHold[1] && tHold[1] < tHold[2] && tM.ukeTypes.every(function (t) { return t[4] >= t[3]; }), "bigger ukuleles ring longer (soprano < concert < tenor)", tHold);
   var cSh = tU.resolve("C", 0, true).shape.join(), fSh = tU.resolve("F", 0, true).shape.join();
   tU.applyType("baritone");
   var bG = tU.resolve("G", 0, false), bC = tU.resolve("C", 0, false), bOpen = [0, 1, 2, 3].map(function (s9) { return tU.midi(s9, 0, false); }).join();

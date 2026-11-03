@@ -81,7 +81,7 @@
 
 - 音源: **Ukulele**（パック）— Sadiquecat（[freesound.org/people/Sadiquecat/packs/40584](https://freesound.org/people/Sadiquecat/packs/40584/)）
 - ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
-- v2.30〜: `samples/fs_uke_concert.js`（同じパックの「Ukulele Old」の NT5 の録音。開放の C と 15 フレットは音程を直した）・`samples/fs_uke_tenor.js`（「Ukulele」の NT5 の録音を、低いほうを太く・高いほうをおだやかにした）も同じ作り方で作った
+- v2.30〜: `samples/fs_uke_concert.js`（同じパックの「Ukulele Old」の NT5 の録音。開放の C と 15 フレットは音程を直した）・`samples/fs_uke_tenor.js`（「Ukulele」の NT5 の録音）。v2.32 から、コンサート・テナーは低い響きを足し・高いほうをおだやかにし・余韻をのばす加工をしているも同じ作り方で作った
 - 変更点: ソプラノウクレレの単音（「Ukulele OS_ (弦) Fret (フレット) ZoomH5XY」）から C4〜D6 の短3度おき10音を選び、freesound の試聴用 MP3 からモノラル 22050Hz にして頭の無音を切り、2.5 秒に切ってフェードをつけ、音量をそろえて、MP3（56kbps）で JavaScript ファイルにまとめた
 
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）

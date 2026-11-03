@@ -595,7 +595,7 @@
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {}, pre: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "2.30";
+  var MELODY_SAMPLE_V = "2.32";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -1673,11 +1673,16 @@
   melodySamples.drumKit = "drs";
   melodySamples.kickRate = 1;
   // §325 v2.30: ウクレレの種類（音色番号 140 の録音のファイル）
-  var MELODY_UKE_TYPES = [["soprano", "fs_ukulele", "ソプラノ"], ["concert", "fs_uke_concert", "コンサート"], ["tenor", "fs_uke_tenor", "テナー"], ["baritone", "acoustic_guitar_nylon", "バリトン"]];
+  // [id, ファイル, 名前, 鳴らす長さ（秒・§327）, 残す長さ（秒）]
+  var MELODY_UKE_TYPES = [["soprano", "fs_ukulele", "ソプラノ", 1.2, 3], ["concert", "fs_uke_concert", "コンサート", 1.6, 3], ["tenor", "fs_uke_tenor", "テナー", 2.2, 3.6], ["baritone", "acoustic_guitar_nylon", "バリトン", 1.8, 3]];
   melodySamples.ukeType = "soprano";
   function melodySetUkeType(id) {
     for (var i = 0; i < MELODY_UKE_TYPES.length; i++) {
-      if (MELODY_UKE_TYPES[i][0] === id) { melodySamples.ukeType = id; MELODY_SAMPLE_FILES[MELODY_UKE] = MELODY_UKE_TYPES[i][1]; return true; }
+      if (MELODY_UKE_TYPES[i][0] === id) {
+        melodySamples.ukeType = id; MELODY_SAMPLE_FILES[MELODY_UKE] = MELODY_UKE_TYPES[i][1];
+        MELODY_SAMPLE_HOLD[MELODY_UKE] = MELODY_UKE_TYPES[i][3]; MELODY_SAMPLE_TRIM[MELODY_UKE] = MELODY_UKE_TYPES[i][4]; // §327: 大きいほど長く鳴らす
+        return true;
+      }
     }
     return false;
   }
