@@ -154,6 +154,30 @@ module.exports = function () {
     G.songSev("G7") && G.songSev("Am9/G") && !G.songSev("C/E") && JSON.stringify(G.shape(B.songChord("C/E", 0), false).frets) === "[null,3,2,0,1,0]",
     "backing: the pattern follows the song's chords (C, then G7 with the 7th shape); the song's ukulele is left out unless turned on; slash chords use the chord's root", [bb1.mine, bb1.others.slice(0, 5), bb2.others.slice(0, 5)]);
 
+  // --- §286: リズムゲーム ---
+  var D = W.UGDrum, songsOk = G.SONGS.every(function (sg) {
+    var cE = G.chart(sg, "easy"), cN = G.chart(sg, "normal"), cH = G.chart(sg, "hard"), bp = B.patById(B.patterns(cN.meter), sg[9]);
+    return cE.notes.length > 0 && cE.notes.length <= cN.notes.length && cN.notes.length <= cH.notes.length && cE.notes.every(function (n) { return !n.cut; }) && (cE.notes.every(function (n) { return n.beat % 1 === 0; }) || sg[0] === "ska") &&
+      cN.notes.every(function (n) { return !n.cut; }) && D.patternSteps(sg[8]) && D.patLen(sg[8]) === (cN.meter === 3 ? 12 : 16) && bp && bp[0] === sg[9] && bp[3] === cN.meter;
+  });
+  var cut = G.chart(G.SONGS.filter(function (x) { return x[0] === "cut"; })[0], "hard"), pop = G.chart(G.SONGS[0], "normal");
+  ok(songsOk && cut.notes.some(function (n) { return n.cut && n.lane === 0; }) && pop.notes[0].name === "F" && pop.notes[0].lane === 0 && pop.notes.some(function (n) { return n.lane === 1; }),
+    "rhythm charts: every song works at three levels (easy = notes on the beat, hard adds cuts ✕) with a matching drum loop and bass pattern", [pop.notes.slice(0, 4)]);
+  function rrun(song, level, hitAll) {
+    var e = H.load(), sg = G.SONGS.filter(function (x) { return x[0] === song; })[0], c = G.chart(sg, level), spb = 60 / sg[6], t0 = 0.5 + c.meter * spb, done = {}, gs = 0, bs = 0, ds = 0;
+    var r = e.run("guitar", { config: { mode: "rhythm", song: song, level: level, speed: 100 } }, 3000, function (f) {
+      if (f === 1) { var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === M.DRUM) { ds++; } else if (pg === 33) { bs++; } else { gs++; } return s0.apply(M, arguments); }; }
+      if (!hitAll) { return; }
+      c.notes.forEach(function (n, k) {
+        if (!done[k] && f / 60 >= t0 + n.beat * spb - 0.005) { done[k] = 1; var key = n.lane ? "k" : "j"; e.key("keydown", key); e.key("keyup", key); }
+      });
+    });
+    return { r: r, best: JSON.parse(e.store[G.BEST_KEY] || "{}")[song + "@" + level + "@100"], n: c.notes.length, gs: gs, bs: bs, ds: ds };
+  }
+  var gr1 = rrun("pop", "normal", true), gr2 = rrun("rock", "easy", false);
+  ok(gr1.r.ended !== null && gr1.best && gr1.best.r === "S" && gr1.best.s >= gr1.n * 100 + 500 && gr1.gs >= gr1.n * 4 && gr1.bs > 10 && gr1.ds > 20 && gr2.best && gr2.best.r === "D" && gr2.gs === 0,
+    "guitar rhythm game: hitting every strum (J down / K up) on time → rank S and each hit strums the chord; drums and bass play along; doing nothing → rank D", [gr1.best, gr2.best, gr1.gs, gr1.bs, gr1.ds]);
+
   // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
   var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
   M5.audioInit();
