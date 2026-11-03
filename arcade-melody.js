@@ -69,6 +69,7 @@
     "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot"
   ];
   var MELODY_DRUM = 128;
+  var MELODY_UKE = 140; // §321 v2.26: ウクレレ（生）。GM に番号がないので 140。MIDI では GM 25（24）
   // 鳴り所: b=ブロック / p=硬いブロック1回目 / w=壁 / s=パドル
   var MELODY_VOICES = [
     { id: "b", name: "ブロック", ch: 0, def: 12, dur: 300 },
@@ -131,6 +132,7 @@
   }
   function gmLabel(p) {
     if (p === MELODY_DRUM) { return "🥁 ドラムキット（ch10）"; }
+    if (p === MELODY_UKE) { return "🪕 ウクレレ（生） 🎙"; }
     var n = p + 1;
     return (n < 10 ? "00" : (n < 100 ? "0" : "")) + n + " " + GM_NAMES[p] + (MELODY_SAMPLE_FILES[p] ? " 🎙" : "");
   }
@@ -283,9 +285,11 @@
     ["phone"], ["heli"], ["applause"], ["gunshot"]
   ];
   var _melodyRecipeCache = {};
+  // §321: MIDI の音色番号（ウクレレ（生）は GM 25）
+  function melodyGmProg(p) { return p === MELODY_UKE ? 24 : p; }
   function melodyRecipe(prog) {
     if (_melodyRecipeCache[prog]) { return _melodyRecipeCache[prog]; }
-    var pt = MELODY_PATCHES[prog] || ["piano"], base = MELODY_RECIPES[pt[0]] || MELODY_RECIPES.piano, r = {}, k;
+    var pt = MELODY_PATCHES[prog === MELODY_UKE ? 24 : prog] || ["piano"], base = MELODY_RECIPES[pt[0]] || MELODY_RECIPES.piano, r = {}, k;
     for (k in base) { if (base.hasOwnProperty(k)) { r[k] = base[k]; } }
     if (pt[1]) { for (k in pt[1]) { if (pt[1].hasOwnProperty(k)) { r[k] = pt[1][k]; } } }
     _melodyRecipeCache[prog] = r;
@@ -562,6 +566,7 @@
 
   // §155 v0.74: 本物の楽器サンプル（FluidR3_GM, CC BY 3.0）。samples/*.js を必要なときだけ読み込む
   var MELODY_SAMPLE_FILES = {
+    140: "fs_ukulele", // §321: ウクレレ（生）
     0: "vsco_piano", 4: "electric_piano_1", 8: "celesta", 11: "vibraphone", 12: "vsco_marimba",
     9: "vsco_glock", 13: "vsco_xylo", 19: "vsco_organ", // §317 v2.22: VSCO 2 CE のアップライトピアノ・パイプオルガン・グロッケン・シロフォン・マリンバ
     24: "acoustic_guitar_nylon", 25: "acoustic_guitar_steel", 32: "acoustic_bass", 40: "vsco_violin", 46: "vsco_harp",
@@ -578,10 +583,10 @@
     128: "drums_drs" // §229 v1.37 / §230 v1.38: 生ドラム。いまえらんでいるドラムセット（MELODY_DRUM_KITS）のファイル
   };
   // 鳴らす長さ（秒）: 減衰する楽器は長め、持続する楽器は短く切ってフェード
-  var MELODY_SAMPLE_HOLD = { 128: 2.2, 0: 1.6, 9: 1.2, 13: 0.6, 19: 0.9, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2,
+  var MELODY_SAMPLE_HOLD = { 128: 2.2, 140: 1.2, 0: 1.6, 9: 1.2, 13: 0.6, 19: 0.9, 4: 1.4, 8: 1.2, 11: 1.6, 12: 0.8, 24: 1.2, 25: 1.2, 32: 0.7, 40: 0.8, 46: 1.6, 48: 0.9, 52: 0.9, 56: 0.6, 65: 0.6, 73: 0.7, 107: 1.2,
     33: 0.7, 34: 0.6, 35: 0.9, 36: 0.5, 37: 0.5, 38: 0.5, 39: 0.5, 26: 1.2, 27: 1.2, 28: 0.3, 29: 1.2, 30: 1.2, 41: 0.8, 42: 0.8, 43: 0.8, 44: 0.9, 45: 0.6, 49: 0.9, 57: 0.6, 58: 0.6, 60: 0.7, 61: 0.6, 64: 0.6, 66: 0.6, 67: 0.6, 68: 0.7, 70: 0.7, 71: 0.7 };
   // §261: 展開するときに残す長さ（秒）。ベースはゴリラベースで押さえているあいだのばすので長め
-  var MELODY_SAMPLE_TRIM = { 0: 3.5, 19: 3.2, 32: 3, 33: 3, 34: 3, 35: 3, 36: 3, 37: 3, 38: 3, 39: 3, 24: 3, 25: 3, 26: 3, 27: 3, 29: 3, 30: 3, 40: 3.2, 41: 3.2, 42: 3.2, 43: 3.2, 44: 3.2, 48: 3.2, 49: 3.2, 56: 3.2, 57: 3.2, 58: 3.2, 60: 3.2, 61: 3.2, 64: 3.2, 65: 3.2, 66: 3.2, 67: 3.2, 68: 3.2, 70: 3.2, 71: 3.2, 73: 3.2 }; // §289: ギターもゴリラギターでのばす・§301 弦はくり返すのでぜんぶ
+  var MELODY_SAMPLE_TRIM = { 140: 3, 0: 3.5, 19: 3.2, 32: 3, 33: 3, 34: 3, 35: 3, 36: 3, 37: 3, 38: 3, 39: 3, 24: 3, 25: 3, 26: 3, 27: 3, 29: 3, 30: 3, 40: 3.2, 41: 3.2, 42: 3.2, 43: 3.2, 44: 3.2, 48: 3.2, 49: 3.2, 56: 3.2, 57: 3.2, 58: 3.2, 60: 3.2, 61: 3.2, 64: 3.2, 65: 3.2, 66: 3.2, 67: 3.2, 68: 3.2, 70: 3.2, 71: 3.2, 73: 3.2 }; // §289: ギターもゴリラギターでのばす・§301 弦はくり返すのでぜんぶ
   // §314: 立ち上がり（秒）。この長さで大きくなる
   var MELODY_SAMPLE_ATTACK = { 49: 0.35 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 16; // §310: 6 → 16
@@ -589,7 +594,7 @@
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {}, pre: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "2.22";
+  var MELODY_SAMPLE_V = "2.26";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -762,7 +767,7 @@
   function melodyMidiPrograms(map) {
     if (!melodyMidi.out) { return; }
     for (var i = 0; i < MELODY_VOICES.length; i++) {
-      var p = melodyProgOf(map, MELODY_VOICES[i].id);
+      var p = melodyGmProg(melodyProgOf(map, MELODY_VOICES[i].id));
       if (p < MELODY_DRUM) { melodyMidiSend([0xC0 | MELODY_VOICES[i].ch, p]); }
       melodyMidiSend([0xB0 | MELODY_VOICES[i].ch, 91, MELODY_REV_CC[melodyAudio.fxRev || 0]]); // §154: リバーブ量
     }
@@ -991,7 +996,7 @@
     trk.push(0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20);
     var revCC = MELODY_REV_CC[(rec.fxRev >= 0 && rec.fxRev <= 3) ? rec.fxRev : 1];
     for (i = 0; i < MELODY_VOICES.length; i++) {
-      var pg = melodyProgOf(rec.prog, MELODY_VOICES[i].id);
+      var pg = melodyGmProg(melodyProgOf(rec.prog, MELODY_VOICES[i].id));
       if (pg < MELODY_DRUM) { trk.push(0x00, 0xC0 | MELODY_VOICES[i].ch, pg); }
       trk.push(0x00, 0xB0 | MELODY_VOICES[i].ch, 91, revCC);
     }
@@ -2328,6 +2333,6 @@
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
     layouts: MELODY_LAYOUTS, progressions: MELODY_PROGRESSIONS, chordTypes: MELODY_CHORD_TYPES, grooves: MELODY_GROOVES,
-    noteName: midiName, noteNames: NOTE_NAMES, gmNames: GM_NAMES, DRUM: MELODY_DRUM
+    noteName: midiName, noteNames: NOTE_NAMES, gmNames: GM_NAMES, DRUM: MELODY_DRUM, UKE: MELODY_UKE, gmProg: melodyGmProg
   };
 })();

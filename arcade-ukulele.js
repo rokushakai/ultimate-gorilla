@@ -11,7 +11,9 @@
   var W = I.W, randInt = I.randInt, hudText = I.hudText, lsGet = I.lsGet, lsSet = I.lsSet;
 
   var UKE_PREFS_KEY = "ultimateGorillaUkulelePrefsV1";
-  var UKE_PROG = 24; // GM 025 Acoustic Guitar (nylon)
+  var UKE_PROG = 140; // §321 v2.26: ウクレレ（生）（UGMelody.UKE。v2.25 までは GM 025 Acoustic Guitar (nylon) = 24）
+  // トラックの音色: 0〜127 とウクレレ（生）
+  function ukeProgVal(v) { var n = Math.round(Number(v) || 0); return n === UKE_PROG ? n : Math.max(0, Math.min(127, n)); }
   var UKE_STRINGS = ["G", "C", "E", "A"];
   var UKE_OPEN = [67, 60, 64, 69], UKE_OPEN_LOWG = 55;
   var UKE_STRX = [54, 98, 142, 186], UKE_NUT_Y = 44, UKE_FRETS = 6, UKE_FH = 28;
@@ -606,7 +608,7 @@
       on: s0.on === undefined ? true : !!s0.on, mute: !!s0.mute, solo: !!s0.solo, genre: !!s0.genre,
       vol: Math.max(0, Math.min(100, Math.round(s0.vol === undefined ? pr[6] : Number(s0.vol) || 0))),
       pan: [-0.6, 0, 0.6].indexOf(Number(s0.pan)) >= 0 ? Number(s0.pan) : 0,
-      prog: pr[2] === 128 ? 128 : Math.max(0, Math.min(127, Math.round(s0.prog === undefined ? pr[2] : Number(s0.prog) || 0))),
+      prog: pr[2] === 128 ? 128 : ukeProgVal(s0.prog === undefined ? pr[2] : s0.prog),
       play: UKE_X_PLAYS.some(function (p) { return p[0] === s0.play; }) ? s0.play : pr[4],
       oct: [-1, 0, 1].indexOf(Number(s0.oct)) >= 0 ? Number(s0.oct) : (s0.oct === undefined ? pr[5] : 0),
       notes: []
@@ -995,7 +997,9 @@
         mute: !!s0.mute, solo: !!s0.solo,
         pan: [-0.6, 0, 0.6].indexOf(Number(s0.pan)) >= 0 ? Number(s0.pan) : 0
       };
-      if (id !== "drum") { o.prog = Math.max(0, Math.min(127, Math.round(s0.prog === undefined ? d.prog : Number(s0.prog) || 0))); }
+      if (id !== "drum") { o.prog = ukeProgVal(s0.prog === undefined ? d.prog : s0.prog); }
+      // §321: 古いセーブのウクレレ・録音1・録音2（ナイロンギター 24 のまま）はウクレレ（生）に。uk ＝ 直したしるし
+      if (id === "uke" || id === "rec1" || id === "rec2") { if (!s0.uk && o.prog === 24) { o.prog = UKE_PROG; } o.uk = true; }
       if (id === "bass") { o.pattern = UKE_BASS_PATTERNS.some(function (p) { return p[0] === s0.pattern; }) ? s0.pattern : "root"; }
       if (id === "drum") {
         o.groove = typeof s0.groove === "string" && s0.groove ? s0.groove : "8beat";
@@ -1456,7 +1460,7 @@
       var xdrum = xat >= 0 && tr[tid].prog === 128; // §237: ドラム打ち込みは MIDI の 10ch
       var ch = xdrum ? 9 : (xat >= 0 ? UKE_X_CH[xat] : UKE_MIDI_CH[tid]), ev2 = [], nm = ukeUtf8(xat >= 0 ? tr[tid].name : UKE_MIDI_NAMES[tid]);
       ev2.push([0, 0, [0xFF, 0x03].concat(ukeVlq(nm.length), nm)]);
-      if (tid !== "drum" && !xdrum) { ev2.push([0, 1, [0xC0 | ch, tr[tid].prog]]); }
+      if (tid !== "drum" && !xdrum) { ev2.push([0, 1, [0xC0 | ch, tr[tid].prog === UKE_PROG ? 24 : tr[tid].prog]]); } // §321: ウクレレ（生）は GM 25
       ev2.push([0, 1, [0xB0 | ch, 7, Math.round(tr[tid].vol * 1.27)]]);
       ev2.push([0, 1, [0xB0 | ch, 10, Math.round(64 + tr[tid].pan * 63)]]);
       if (seq.rev >= 0) { ev2.push([0, 1, [0xB0 | ch, 91, UKE_REV_CC[seq.rev]]]); }
@@ -2354,6 +2358,7 @@
       // §195: 展開
       '<div class="melody-checks uke-seq-checks"><label><input type="checkbox" data-set="dyn"' + (seq.dyn ? " checked" : "") + '> &#x1F4C8; セクションで強弱をつける（イントロは静か・サビは強く）</label></div>';
     var progOpts = [];
+    progOpts.push([UKE_PROG, "&#x1FA95; ウクレレ（生）"]); // §321
     for (var pg = 0; pg < 128; pg++) { progOpts.push([pg, (pg + 1 < 10 ? "00" : (pg + 1 < 100 ? "0" : "")) + (pg + 1) + " " + (names[pg] || "")]); }
     var ids = ukeTrackIds(tr);
     for (var i = 0; i < ids.length; i++) {

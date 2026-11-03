@@ -266,7 +266,7 @@ module.exports = async function () {
   ps = C.schedule({ bpm: 60, style: "once", rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "h" }, { type: "chord", name: "Am", len: "h" }, { type: "chord", name: "F", len: "w" }] }, rsv);
   ok(ps.rows.map(function (r2) { return r2.bar; }).join() === "1,2,0,3" && ps.bars === 3, "bar numbers on rows that start a bar", ps.rows.map(function (r2) { return r2.bar; }));
   var rec = U.seqRec(U.seqClean({ bpm: 120, style: "e", countIn: true, rows: [{ type: "chord", name: "C", len: "h" }] }), false);
-  ok(rec.notes.length === 16 && rec.notes[0][0] === 0 && rec.notes[4][0] === 250 && rec.prog.b === 24, "export: every stroke becomes 4 notes, count-in is cut", rec.notes.slice(0, 6));
+  ok(rec.notes.length === 16 && rec.notes[0][0] === 0 && rec.notes[4][0] === 250 && rec.prog.b === 140, "export: every stroke becomes 4 notes, count-in is cut", rec.notes.slice(0, 6));
   var dl0 = env.counters.downloads.length;
   U.exportMidi(U.seqClean({ rows: [{ type: "chord", name: "Am", len: "w" }] }), false);
   ok(env.counters.downloads.length === dl0 + 1 && /^ukulele-\d{8}-\d{4}\.mid$/.test(env.counters.downloads[dl0]), "MIDI export saves ukulele-YYYYMMDD-HHMM.mid", env.counters.downloads.slice(dl0));
@@ -334,7 +334,7 @@ module.exports = async function () {
 
   // ===== §177 トラック・ミキサー =====
   var tc = U.tracksClean({ bass: { on: 1, vol: 300, pattern: "zz", pan: 5 }, drum: { on: true, groove: "bossa" } });
-  ok(tc.uke.on && tc.uke.prog === 24 && tc.bass.on && tc.bass.vol === 100 && tc.bass.pattern === "root" && tc.bass.pan === 0 && tc.drum.groove === "bossa" && !tc.pad.on && tc.pad.prog === 48, "tracks are cleaned (ukulele always on, defaults)", tc);
+  ok(tc.uke.on && tc.uke.prog === 140 && tc.uke.uk && tc.bass.on && tc.bass.vol === 100 && tc.bass.pattern === "root" && tc.bass.pan === 0 && tc.drum.groove === "bossa" && !tc.pad.on && tc.pad.prog === 48, "tracks are cleaned (ukulele always on, defaults)", tc);
   function tev(rows, tracks, extra) {
     var sq = U.seqClean(Object.assign({ bpm: 60, countIn: false, style: "once", rows: rows, tracks: tracks }, extra || {}));
     return U.seqSchedule(sq, false);
@@ -359,6 +359,11 @@ module.exports = async function () {
   ok(bs.length === 1 && bs[0].midi === 43, "★my chords get a bass note from the detected name", bs);
   var tsq = tev([{ type: "chord", name: "C", len: "q" }], {});
   ok(tsq.events.every(function (e) { return e.kind === "click" || e.track === "uke"; }) && tsq.tracks.uke.on, "ukulele events are tagged with their track");
+  // §321: ウクレレ（生）＝ 140。古いセーブの 24 は 140 に（1回だけ）・MIDI では 24
+  var t321 = U.tracksClean({ uke: { prog: 24 }, rec1: { prog: 24, uk: true }, pad: { prog: 140 } }), M321 = W.UGMelody;
+  ok(t321.uke.prog === 140 && t321.rec1.prog === 24 && t321.pad.prog === 140 && U.tracksClean({ pad: { prog: 141 } }).pad.prog === 127 &&
+    M321.UKE === 140 && M321.gmProg(140) === 24 && M321.gmProg(25) === 25 && M321.sampleFiles[140] === "fs_ukulele",
+    "real ukulele (140): old saves move from nylon guitar once; MIDI sends GM 25", [t321.uke.prog, t321.rec1.prog]);
   var au = U.tracksClean({ bass: { on: true, solo: true }, drum: { on: true }, pad: { on: false, solo: true } });
   ok(U.trackAudible(au, "bass") && !U.trackAudible(au, "uke") && !U.trackAudible(au, "drum") && !U.trackAudible(au, "pad"), "solo: only soloed (and switched on) tracks sound");
   au = U.tracksClean({ uke: { mute: true }, drum: { on: true } });

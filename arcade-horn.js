@@ -566,7 +566,7 @@
       function backStart(pre) {
         backStop();
         audio();
-        var U = backApi(), progs = [24], ids, i;
+        var U = backApi(), progs = [140], ids, i;
         bk = { f0: frame + Math.round((pre || 0) * 60), idx: 0, outs: [null, null, null, null], mix: null, fx: false };
         if (!audioOk || !U) { return; }
         try { ids = U.trackIds(back.s.tracks); for (i = 0; i < ids.length; i++) { if (back.s.tracks[ids[i]].on && back.s.tracks[ids[i]].prog !== undefined) { progs.push(back.s.tracks[ids[i]].prog); } } UG.loadSamples(progs); } catch (e0) {}

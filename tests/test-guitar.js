@@ -151,7 +151,7 @@ module.exports = function () {
     return { mine: mine, others: others };
   }
   var bb1 = brun({ view: "chord", voice: "steel", pat: "ballad" }, 260), bb2 = brun({ view: "chord", voice: "steel", pat: "ballad", backUke: true }, 100);
-  ok(bb1.mine.join() === "48,52,55,60,64,43,47,50,55,59,65" && bb1.others.indexOf(24) < 0 && bb2.others.indexOf(24) >= 0 &&
+  ok(bb1.mine.join() === "48,52,55,60,64,43,47,50,55,59,65" && bb1.others.indexOf(140) < 0 && bb2.others.indexOf(140) >= 0 &&
     G.songSev("G7") && G.songSev("Am9/G") && !G.songSev("C/E") && JSON.stringify(G.shape(B.songChord("C/E", 0), false).frets) === "[null,3,2,0,1,0]",
     "backing: the pattern follows the song's chords (C, then G7 with the 7th shape); the song's ukulele is left out unless turned on; slash chords use the chord's root", [bb1.mine, bb1.others.slice(0, 5), bb2.others.slice(0, 5)]);
 

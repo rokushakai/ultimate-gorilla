@@ -777,7 +777,7 @@
       function backStart(pre) {
         backStop();
         audio();
-        var U = backApi(), progs = [24], ids, i;
+        var U = backApi(), progs = [140], ids, i;
         bk = { f0: frame + Math.round((pre || 0) * 60), idx: 0, outs: [null, null, null, null], mix: null, fx: false };
         if (!audioOk || !U) { return; }
         try {
