@@ -11527,3 +11527,10 @@ var COMPANION_TECHNIQUE2_DATA = {
 - テナー・バリトンサックス（66・67）とブラスセクション（61）はこれまでの FluidR3 のまま
 - 使わなくなった samples/alto_sax・soprano_sax は消す。`MELODY_SAMPLE_V` を 2.17 に
 
+## §313 v2.18 — 🎷 テナー・バリトンサックス・ブラスセクションも生の録音に
+
+- テナーサックス（66）`mtg_tenorsax`・バリトンサックス（67）`mtg_barisax`: **MTG Solo Saxophones**（MTG・freesound.org の録音を kinwie が sfz にしたもの。sfzinstruments/MTG.SoloSax・**CC BY 4.0**）。弱い（p）・強い（f）の2段階（1066・1067）
+  - 元は FLAC で、sfz の音（key）とずれ（tune・セント）がついているので、ずれを直して（再生の速さを 2^(tune/1200) に）作る。くり返しの所は、録音の長さからエンジンのくり返しの位置を出してクロスフェード（loop "auto"）
+- ブラスセクション（61）`vsco_brass`: §311 の VSCO のトランペット2本・ホルン・トロンボーン2本の録音を、音ごとに少し高さ（±数セント）と時間（〜22ms）をずらして重ねる（その音域に入る楽器だけ）。のびている所の大きさを 0.1 秒ごとにそろえる。弱い（1061）も同じく弱い録音から
+- これで管楽器はぜんぶ生の録音。使わなくなった samples/tenor_sax・baritone_sax・brass_section は消す。`MELODY_SAMPLE_V` を 2.18 に
+
