@@ -598,7 +598,7 @@
           for (q2 in holding) { if (holding.hasOwnProperty(q2) && holding[q2].n === n) { held0 = true; } }
           ctx.fillStyle = held0 ? "rgba(255,209,102,0.6)" : (n.j >= 0 ? "rgba(116,192,252,0.25)" : "rgba(116,192,252,0.45)");
           ctx.fillRect(nx + LW * 0.3, Math.max(TOP, yT), LW * 0.4, Math.min(HIT, yH) - Math.max(TOP, yT)); // のばす所
-          if (n.j === -2) { ctx.fillStyle = "#74c0fc"; ctx.fillRect(nx + 6, yH - (land ? 4 : 9), LW - 12, land ? 8 : 18); text(ctx, n.name, nx + LW / 2, yH, 12, "#14213d"); }
+          if (n.j === -2 && yH <= HIT + 6) { ctx.fillStyle = "#74c0fc"; ctx.fillRect(nx + 6, yH - (land ? 4 : 9), LW - 12, land ? 8 : 18); text(ctx, n.name, nx + LW / 2, yH, 12, "#14213d"); }
         }
         var c0 = Math.ceil((t0 - now()) / spb);
         if (now() < t0 && c0 >= 1 && c0 <= meter) { text(ctx, String(c0), W / 2, STR_H / 2 - 20, 40, "#ffd166"); }

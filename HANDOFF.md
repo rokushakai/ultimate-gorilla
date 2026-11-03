@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.13** |
+| 現在バージョン | **v2.14** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.14] 📱 ホーンのよこ向き・リズムゲーム**（§309）: `hrnLayout(land, h)`。リズムゲームは `hrnRhythm`（`hrnChart(song)` の長い音符・レーン ＝ 度数 0〜7・`HRN_SCALE_C`）。ベースは曲の小節ごとのコードのルートを4分で
 - **[v2.13] 🎼 ホーンセクション**（§308）: `prefs.view` "section"・`prefs.sec`。和音は `hrnSectionNotes(ch, sev, parts)`、のばす音は `voiceOn / voiceOff`（`svo`）、ボタンは `hc`。パターン・ドラム・ベース・伴奏・パートごとの録音はストリングスと同じ作り（録音は id ごと・`rec.insts` で楽器）
 - **[v2.12] 🎺 ゴリラホーン**（§306・§307）: `arcade-horn.js`（`window.UGHorn`）。のばす音は `UGStrings.voice / pitch / level / stop / vibrato`。1音だけ鳴る: 指の重なり held（あとから押したものが上）を `sounding()` が見て、スラーなら `pitch` で高さだけ変える。息の強さは `hrnBreath(キーの上からの割合)`、ベンドは押した所からの横のずれ。キーは `hrnRowNotes(hrnBase(楽器, キー, オクターブ) + 段, スケール, 半音階)`
 - **[v2.11] 🎻 パートごとに録る・送る**（§305）: 録音の open に楽器（4つ目）を持ち、`recStop` で楽器ごとに分けて `take.parts`（`strPartsClean`）。再生は `strPlayList(take)`、送るはパートごとに `xAdd(tracks, "snotes")`
@@ -262,7 +263,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（970項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（972項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

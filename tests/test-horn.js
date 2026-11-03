@@ -92,6 +92,32 @@ module.exports = function () {
   ok(tk3 && tk3.parts && tk3.parts.length === 4 && sent3 === "57,66,65,56" && p4.sec.parts.length === 5 && p4.sec.parts[0].n === 2 && p4.sec.parts[4].inst === "flute" && p4.sec.preset === "" && p4.hvol === 90 && s4.e.window.__hPanel().indexOf('data-hdrum="1"') > 0,
     "section recordings keep one part per instrument and send one track each; the section editor and band tab save their settings", [tk3 && tk3.parts.map(function (p) { return p.inst; }), sent3, p4.sec]);
 
+  // --- §309: よこ向き・リズムゲーム（メロディの長い音符）---
+  var el = H.load(), Hl = el.window.UGHorn;
+  Hl.layout(true, 130);
+  var lg = Hl.geom(), lk = Hl.keyRect(2, 0, 8), lc = Hl.chordRect(6);
+  Hl.layout(false);
+  var pg = Hl.geom();
+  var chartsOk = Hn.SONGS.every(function (sg) { var c = Hn.chart(sg), tot = 0; c.notes.forEach(function (n) { tot += n.len; }); return Math.abs(tot - c.bars * 4) < 1e-6 && c.bars === sg[3].length && c.notes.every(function (n) { return n.deg >= 0 && n.deg <= 7; }); });
+  ok(lg.LAND && lg.H === 130 && lk.y + lk.h <= 130 && lc.y === 12 && lc.x + lc.w <= 240 && !pg.LAND && pg.H === 320 && chartsOk && Hn.SONGS.length === 6,
+    "horn landscape: keys and section buttons fit the short canvas; every melody fills whole bars that match its chord list", [lg, lk]);
+  function rrun(song, holdAll, land) {
+    var e = H.load(), sg = Hn.SONGS.filter(function (x) { return x[0] === song; })[0], c = Hn.chart(sg), spb = 60 / sg[2], t0 = 0.5 + 4 * spb, dn = {}, up = {}, H0 = 0;
+    var keys = "asdfghjk";
+    e.run("horn", { config: { mode: "rhythm", song: song, speed: 100, land: land } }, 3600, function (f) {
+      if (f === 1) { H0 = e.window.UGHorn.geom().H; }
+      c.notes.forEach(function (n, k) {
+        var key = keys.charAt(n.deg), endB = holdAll ? n.beat + n.len - 0.05 : n.beat + n.len * 0.3;
+        if (!dn[k] && f / 60 >= t0 + n.beat * spb - 0.005) { dn[k] = 1; e.key("keydown", key); }
+        if (dn[k] && !up[k] && f / 60 >= t0 + endB * spb) { up[k] = 1; e.key("keyup", key); }
+      });
+    });
+    return { best: JSON.parse(e.store[Hn.BEST_KEY] || "{}")[song + "@100"], n: c.notes.length, H: H0 };
+  }
+  var hr1 = rrun("ode", true, false), hr2 = rrun("ode", false, false), hr3 = rrun("kira", true, true);
+  ok(hr1.best && hr1.best.r === "S" && hr2.best && hr1.best.s - hr2.best.s >= hr1.n * 50 - 1 && hr1.H === 320 && hr3.best && hr3.best.r === "S" && hr3.H < 200,
+    "horn rhythm game: press each melody note at its head and keep blowing to the end (keep bonus); landscape works too", [hr1.best, hr2.best, hr3.H]);
+
   // --- 録音・シーケンサーへ送る ---
   var h4 = hrun({ inst: "flute", bpm: 120 }, 260, function (fr, e) {
     if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
