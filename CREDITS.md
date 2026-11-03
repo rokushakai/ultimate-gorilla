@@ -15,7 +15,7 @@
 
 エレキギター（v1.96〜。🤘 ゴリラギター）: Electric Guitar (jazz) / Electric Guitar (clean) / Electric Guitar (muted) / Overdriven Guitar / Distortion Guitar。C2〜C7 の長3度おき16音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
-ストリングス（v2.07〜。🎻 ゴリラストリングス）: String Ensemble 2。C1〜C7 の長3度おき19音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ。v2.15 でほかの弦は下の VSCO 2 CE の録音に変えた）
+ストリングス（v2.07〜v2.18。🎻 ゴリラストリングス）: v2.19 までにぜんぶ下の VSCO 2 CE の録音に変えた
 
 管楽器（v2.12〜v2.17。🎺 ゴリラホーン）: v2.18 までにぜんぶ下の生の録音（VSCO 2 CE・アイオワ大学・MTG Solo Saxophones）に変えた
 

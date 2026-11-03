@@ -11534,3 +11534,8 @@ var COMPANION_TECHNIQUE2_DATA = {
 - ブラスセクション（61）`vsco_brass`: §311 の VSCO のトランペット2本・ホルン・トロンボーン2本の録音を、音ごとに少し高さ（±数セント）と時間（〜22ms）をずらして重ねる（その音域に入る楽器だけ）。のびている所の大きさを 0.1 秒ごとにそろえる。弱い（1061）も同じく弱い録音から
 - これで管楽器はぜんぶ生の録音。使わなくなった samples/tenor_sax・baritone_sax・brass_section は消す。`MELODY_SAMPLE_V` を 2.18 に
 
+## §314 v2.19 — 🎻 ゆったり合奏も生の録音に
+
+- ゆったり合奏（49）は、合奏（48）と同じ録音 `vsco_ens`（弱い `vsco_ens_p` = 1049）を使い、立ち上がりだけゆっくりにする（`MELODY_SAMPLE_ATTACK` { 49: 0.35 } 秒で 0 から大きく。`UGMelody.sampleAttack`。`UGStrings.voice` とメロディくずしの1音の両方）
+- 同じバンクなので読み込みは1回。使わなくなった samples/string_ensemble_2 は消す。これで弦・管はぜんぶ生の録音。`MELODY_SAMPLE_V` を 2.19 に
+

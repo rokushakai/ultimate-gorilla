@@ -570,8 +570,8 @@
     1056: "vsco_trumpet_p", 1057: "vsco_trombone_p", 1058: "vsco_tuba_p", 1060: "vsco_horn_p", 1068: "vsco_oboe_p", 1070: "vsco_bassoon_p", 1071: "vsco_clarinet_p", // §311: 弱く吹いた録音
     1064: "iowa_sopsax_p", 1065: "iowa_altosax_p", // §312 v2.17: アルト・ソプラノサックス（アイオワ大学 MIS）
     1061: "vsco_brass_p", 1066: "mtg_tenorsax_p", 1067: "mtg_barisax_p", // §313 v2.18: ブラスセクション（VSCO を重ねる）・テナー・バリトン（MTG Solo Saxophones）
-    41: "vsco_viola", 42: "vsco_cello", 43: "vsco_contrabass", 44: "vsco_trem", 45: "vsco_pizz", 49: "string_ensemble_2", // §301 v2.07: ゴリラストリングス・§310 v2.15: VSCO 2 CE の録音
-    1040: "vsco_violin_p", 1041: "vsco_viola_p", 1042: "vsco_cello_p", 1043: "vsco_contrabass_p", 1048: "vsco_ens_p", // §310: 弱く弾いた録音（音色番号 ＋1000）
+    41: "vsco_viola", 42: "vsco_cello", 43: "vsco_contrabass", 44: "vsco_trem", 45: "vsco_pizz", 49: "vsco_ens", // §301 v2.07: ゴリラストリングス・§310 v2.15: VSCO 2 CE の録音
+    1040: "vsco_violin_p", 1041: "vsco_viola_p", 1042: "vsco_cello_p", 1043: "vsco_contrabass_p", 1048: "vsco_ens_p", 1049: "vsco_ens_p", // §310: 弱く弾いた録音（音色番号 ＋1000）・§314 v2.19: ゆったり合奏は合奏の録音を立ち上がりをゆっくりにして
     26: "electric_guitar_jazz", 27: "electric_guitar_clean", 28: "electric_guitar_muted", 29: "overdriven_guitar", 30: "distortion_guitar", // §289 v1.96: エレキギター
     33: "electric_bass_finger", 34: "electric_bass_pick", 35: "fretless_bass", 36: "slap_bass_1", 37: "slap_bass_2", 38: "synth_bass_1", 39: "synth_bass_2",
     128: "drums_drs" // §229 v1.37 / §230 v1.38: 生ドラム。いまえらんでいるドラムセット（MELODY_DRUM_KITS）のファイル
@@ -581,12 +581,14 @@
     33: 0.7, 34: 0.6, 35: 0.9, 36: 0.5, 37: 0.5, 38: 0.5, 39: 0.5, 26: 1.2, 27: 1.2, 28: 0.3, 29: 1.2, 30: 1.2, 41: 0.8, 42: 0.8, 43: 0.8, 44: 0.9, 45: 0.6, 49: 0.9, 57: 0.6, 58: 0.6, 60: 0.7, 61: 0.6, 64: 0.6, 66: 0.6, 67: 0.6, 68: 0.7, 70: 0.7, 71: 0.7 };
   // §261: 展開するときに残す長さ（秒）。ベースはゴリラベースで押さえているあいだのばすので長め
   var MELODY_SAMPLE_TRIM = { 32: 3, 33: 3, 34: 3, 35: 3, 36: 3, 37: 3, 38: 3, 39: 3, 24: 3, 25: 3, 26: 3, 27: 3, 29: 3, 30: 3, 40: 3.2, 41: 3.2, 42: 3.2, 43: 3.2, 44: 3.2, 48: 3.2, 49: 3.2, 56: 3.2, 57: 3.2, 58: 3.2, 60: 3.2, 61: 3.2, 64: 3.2, 65: 3.2, 66: 3.2, 67: 3.2, 68: 3.2, 70: 3.2, 71: 3.2, 73: 3.2 }; // §289: ギターもゴリラギターでのばす・§301 弦はくり返すのでぜんぶ
+  // §314: 立ち上がり（秒）。この長さで大きくなる
+  var MELODY_SAMPLE_ATTACK = { 49: 0.35 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 16; // §310: 6 → 16
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
   var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
-  var MELODY_SAMPLE_V = "2.18";
+  var MELODY_SAMPLE_V = "2.19";
 
   window.UGMelodySamples = window.UGMelodySamples || { banks: {}, onload: null };
   window.UGMelodySamples.onload = function (name) {
@@ -717,8 +719,9 @@
     var src = ac.createBufferSource(), g = ac.createGain();
     src.buffer = buf;
     src.playbackRate.value = rate;
-    g.gain.setValueAtTime(vol, t);
-    g.gain.setValueAtTime(vol, t + hold);
+    var att = MELODY_SAMPLE_ATTACK[prog] || 0;
+    if (att) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(att, hold)); } else { g.gain.setValueAtTime(vol, t); }
+    g.gain.setValueAtTime(vol, t + Math.max(hold, att));
     g.gain.exponentialRampToValueAtTime(0.0001, t + hold + MELODY_SAMPLE_FADE);
     src.connect(g);
     g.connect(dest || melodyLevelOut(ac, level));
@@ -2295,7 +2298,7 @@
     buildLayout: melodyBuildLayout, scale: melodyScale, scales: MELODY_SCALES, posDegree: melodyPosDegree, degreeToMidi: melodyDegreeToMidi,
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
     synth: melodySynth, voiceStop: melodyVoiceStop, voiceBend: melodyVoiceBend, bassHit: melodyBassHit, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
-    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
+    samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, sampleAttack: MELODY_SAMPLE_ATTACK, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,

@@ -195,7 +195,11 @@ module.exports = function () {
   e10.counters.targets.length = 0; S10.level(v10, 1.1, 0.05);
   var loud10 = e10.counters.targets.map(function (t) { return t.v; });
   var v10b = S10.voice(42, 50, out10, 0);
-  ok(M10.sampleFiles[40] === "vsco_violin" && M10.sampleFiles[1040] === "vsco_violin_p" && M10.sampleFiles[48] === "vsco_ens" && M10.sampleFiles[49] === "string_ensemble_2" &&
+  // §314: ゆったり合奏（49）は合奏の録音（48 と同じバンク）を、立ち上がりをゆっくりにして
+  ["vsco_ens", "vsco_ens_p"].forEach(function (n) { M10.samples.buffers[n] = { 60: fb }; M10.samples.keys[n] = [60]; M10.samples.state[n] = "ready"; });
+  var v10s = S10.voice(49, 60, out10, 0);
+  ok(v10s && v10s.src && v10s.src2 && M10.sampleReady(49) && M10.sampleReady(48), "slow strings use the ensemble recordings (both layers) with a slow attack");
+  ok(M10.sampleFiles[40] === "vsco_violin" && M10.sampleFiles[1040] === "vsco_violin_p" && M10.sampleFiles[48] === "vsco_ens" && M10.sampleFiles[49] === "vsco_ens" && M10.sampleFiles[1049] === "vsco_ens_p" && M10.sampleAttack[49] === 0.35 &&
     v10 && v10.src && v10.src2 && v10.best === 60 && v10.best2 === 60 && soft10.length === 3 && soft10[1] < 0.01 && soft10[2] > 0.99 && loud10[1] > 0.99 && loud10[2] < 0.01 && v10b && !v10b.src2 && !v10b.src,
     "real strings: a quiet bow plays the soft recording, a strong bow the loud one (both looped); no samples = synth", [soft10, loud10]);
 };

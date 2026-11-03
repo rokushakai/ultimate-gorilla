@@ -254,18 +254,21 @@
     var g = ac.createGain(), t = Math.max(when || 0, ac.currentTime), v = { ac: ac, g: g, m: m, src: null, h: null, best: m };
     g.gain.value = 0;
     g.connect(out);
+    // §314: 立ち上がりのゆっくりな音色（ゆったり合奏）は、サンプルをこの長さで大きくする
+    var att = UG.sampleAttack ? UG.sampleAttack[prog] || 0 : 0, into = g;
     if (S && S.enabled && UG.sampleReady && UG.sampleReady(prog) && bank && keys && keys.length) {
       var best = strNearest(keys, m), buf = bank[best];
       if (buf) {
+        if (att) { into = ac.createGain(); into.gain.setValueAtTime(0, t); into.gain.linearRampToValueAtTime(1, t + att); into.connect(g); }
         // §310: 弱く弾いた録音（＋1000）があれば、2つを混ぜる（strLevel の大きさで）
         var nameP = UG.sampleFiles[prog + 1000], bankP = nameP && UG.sampleReady(prog + 1000) ? S.buffers[nameP] : null, keysP = bankP ? S.keys[nameP] : null;
         var bestP = keysP && keysP.length ? strNearest(keysP, m) : 0, bufP = bankP ? bankP[bestP] : null;
         if (bufP) {
-          v.gL = ac.createGain(); v.gL.gain.value = 0; v.gL.connect(g);
-          v.gS = ac.createGain(); v.gS.gain.value = 1; v.gS.connect(g);
+          v.gL = ac.createGain(); v.gL.gain.value = 0; v.gL.connect(into);
+          v.gS = ac.createGain(); v.gS.gain.value = 1; v.gS.connect(into);
           v.src2 = strLoop(ac, bufP, m, bestP, v.gS, t); v.best2 = bestP;
         }
-        v.src = strLoop(ac, buf, m, best, v.gL || g, t); v.best = best;
+        v.src = strLoop(ac, buf, m, best, v.gL || into, t); v.best = best;
         return v;
       }
     }
