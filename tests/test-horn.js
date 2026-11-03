@@ -58,6 +58,40 @@ module.exports = function () {
   });
   ok(h3.log.on.join() === "64@56" && h3.log.gains.some(function (v) { return v > 1.8; }) && h3.log.bend.indexOf(64.5) >= 0, "breath from the top of the key is strong; sliding sideways bends the pitch (half a key = a quarter tone)", h3.log);
 
+  // --- §308: ホーンセクション・パターン・バンド ---
+  var jz = Hn.sectionNotes(W.UGBass.chord(0, 0, "major"), false, Hn.presetParts("jazz")), sx = Hn.sectionNotes(W.UGBass.chord(0, 4, "major", true), true, Hn.presetParts("sax"));
+  var jzOk = jz.every(function (x, k) { var ins = Hn.INSTS.filter(function (q) { return q[0] === x.inst; })[0]; return x.m >= ins[3] && x.m <= ins[4] && (k === 0 || x.m > jz[k - 1].m); });
+  ok(jz.map(function (x) { return x.inst; }).join() === "trombone,tsax,asax,trumpet" && jz.map(function (x) { return x.m % 12; }).join() === "0,7,4,0" && jzOk && sx[3].m % 12 === 5 && Hn.SECTIONS.length === 5 && Hn.PATS.length === 10,
+    "horn section: low to high root, 5th, 3rd, root inside each instrument's range (7th on top for 7th chords)", jz.map(function (x) { return x.inst + ":" + x.m; }));
+  function srun(prefs, frames, fn) {
+    var e = H.load({ patch: function (src, file) { return file === "arcade-horn.js" ? src.split("      function render() {\n").join("      window.__hAct = action; window.__hPanel = function () { return panel.innerHTML; };\n      function render() {\n") : src; } });
+    var log = { on: [], dr: 0, bs: 0, stop: 0 };
+    e.store[Hn.PREFS_KEY] = JSON.stringify(prefs);
+    e.run("horn", { config: {} }, frames, function (fr) {
+      var M = e.window.UGMelody;
+      if (fr === 1) { M.samples.enabled = false; var s0 = M.synth, v0 = M.voiceStop; M.synth = function (m, pg) { if (pg === M.DRUM) { log.dr++; } else if (pg === 33) { log.bs++; } else { log.on.push(Math.round(m) + "@" + pg); } return s0.apply(M, arguments); }; M.voiceStop = function () { log.stop++; return v0.apply(M, arguments); }; }
+      if (fn) { fn(fr, e); }
+    });
+    return { log: log, e: e };
+  }
+  var s1 = srun({ view: "section", sec: { preset: "brass", parts: Hn.presetParts("brass") } }, 14, function (fr, e) { if (fr === 2) { e.key("keydown", "1"); } if (fr === 8) { e.key("keyup", "1"); } });
+  var pg1 = s1.log.on.map(function (x) { return x.split("@")[1]; }).sort().join();
+  var s2 = srun({ view: "section", pat: "e8", bpm: 120, drum: "g:8beat", bpat: "root8" }, 62, function (fr, e) { if (fr === 2) { e.key("keydown", "b"); e.key("keyup", "b"); } });
+  ok(pg1 === "56,56,57,58,60" && s1.log.stop >= 5 && s2.log.on.length === 16 && s2.log.dr > 4 && s2.log.bs >= 4,
+    "section: a held chord plays every part with its players (brass: trumpets x2, horn, trombone, tuba); the eighth-note pattern with drums and bass", [pg1, s2.log.on.length, s2.log.dr, s2.log.bs]);
+  var s3 = srun({ view: "section", bpm: 120 }, 260, function (fr, e) {
+    if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (fr === 130) { e.key("keydown", "1"); }
+    if (fr === 190) { e.key("keyup", "1"); }
+    if (fr === 200) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tk3 = JSON.parse(s3.e.store[Hn.TAKES_KEY] || "[]")[0], Hw3 = s3.e.window.UGHorn, U3 = s3.e.window.UGUkulele, rs3 = Hw3.sendToSeq(Hw3.takeById(Hw3.takesLoad(), tk3.id));
+  var tr3 = U3.seqLoad().cur.tracks, sent3 = (rs3.ids || []).map(function (id) { return tr3[id].prog; }).join();
+  var s4 = srun({ view: "section", tab: "play" }, 6, function (fr, e) { if (fr === 3) { e.window.__hAct("parts:+"); e.window.__hAct("pn:0:+"); e.window.__hAct("pi:4:flute"); e.window.__hAct("tab:band"); e.window.__hAct("hvol:-"); } });
+  var p4 = JSON.parse(s4.e.store[Hn.PREFS_KEY]);
+  ok(tk3 && tk3.parts && tk3.parts.length === 4 && sent3 === "57,66,65,56" && p4.sec.parts.length === 5 && p4.sec.parts[0].n === 2 && p4.sec.parts[4].inst === "flute" && p4.sec.preset === "" && p4.hvol === 90 && s4.e.window.__hPanel().indexOf('data-hdrum="1"') > 0,
+    "section recordings keep one part per instrument and send one track each; the section editor and band tab save their settings", [tk3 && tk3.parts.map(function (p) { return p.inst; }), sent3, p4.sec]);
+
   // --- 録音・シーケンサーへ送る ---
   var h4 = hrun({ inst: "flute", bpm: 120 }, 260, function (fr, e) {
     if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
