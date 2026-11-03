@@ -104,6 +104,42 @@
   var STR_VOL_MAX = 150, STR_VOL_STEP = 10;
   function strVol(v, d) { v = Number(v); return v >= 0 && v <= STR_VOL_MAX && v % STR_VOL_STEP === 0 ? v : d; }
 
+  // ---------- §304: 編成（合奏の楽器の組み合わせ）----------
+  var STR_ORCH_PRESETS = [
+    ["quartet", "弦楽四重奏", [["violin", 1], ["violin", 1], ["viola", 1], ["cello", 1]]],
+    ["orch", "弦楽合奏", [["violin", 3], ["viola", 2], ["cello", 2], ["bass", 1]]],
+    ["low", "低音（チェロとコントラバス）", [["cello", 2], ["bass", 2]]],
+    ["harp", "ハープ入り", [["harp", 1], ["cello", 1], ["viola", 1], ["violin", 2]]]
+  ];
+  var STR_ORCH_MAX = 4, STR_PLAYERS_MAX = 4, STR_DETUNE = [0, 0.07, -0.07, 0.12]; // 人数ごとの音程のずれ（半音）
+  function strPresetParts(id) { return strOpt(STR_ORCH_PRESETS, id)[2].map(function (p) { return { inst: p[0], n: p[1] }; }); }
+  // 設定の編成 → { on, preset（"" ＝ じぶんで）, parts: [{ inst, n: 人数 }]（1〜4）}
+  function strOrchClean(o) {
+    o = o && typeof o === "object" ? o : {};
+    var a = o.parts && o.parts.length ? o.parts : strPresetParts("quartet"), parts = [], i;
+    for (i = 0; i < a.length && parts.length < STR_ORCH_MAX; i++) {
+      var x = a[i] || {}, n = Math.round(Number(x.n));
+      parts.push({ inst: strOpt(STR_INSTS, x.inst)[0], n: n >= 1 && n <= STR_PLAYERS_MAX ? n : 1 });
+    }
+    return { on: !!o.on, preset: typeof o.preset === "string" && strOpt(STR_ORCH_PRESETS, o.preset)[0] === o.preset ? o.preset : "", parts: parts };
+  }
+  // 編成で和音を鳴らす音 → [{ inst, m, n }]（低い楽器から）。3パート以上は ルート・5度・3度・ルート（7th は7度）を下から1つずつ、2パートまではそれぞれが和音ぜんぶ
+  function strOrchNotes(ch, sev, parts) {
+    var sorted = parts.slice().sort(function (a, b) { return strOpt(STR_INSTS, a.inst)[3][0] - strOpt(STR_INSTS, b.inst)[3][0]; }), out = [], k, j;
+    if (sorted.length < 3) {
+      for (k = 0; k < sorted.length; k++) { var vs = strVoicing(ch, strOpt(STR_INSTS, sorted[k].inst)[3][0], sev); for (j = 0; j < vs.length; j++) { out.push({ inst: sorted[k].inst, m: vs[j], n: sorted[k].n }); } }
+      return out;
+    }
+    var rootPc = strPc(ch.r !== undefined ? ch.r : ch.root), iv = ch.iv, roles = sorted.length === 3 ? [0, iv[4], iv[2]] : [0, iv[4], iv[2], sev ? iv[6] : 12], prev = -1;
+    for (k = 0; k < sorted.length; k++) {
+      var low = strOpt(STR_INSTS, sorted[k].inst)[3][0], pc = (rootPc + roles[k]) % 12, m = low + ((pc - strPc(low) + 12) % 12);
+      while (m <= prev) { m += 12; }
+      out.push({ inst: sorted[k].inst, m: m, n: sorted[k].n });
+      prev = m;
+    }
+    return out;
+  }
+
   // ---------- 設定・テイク ----------
   function strPrefs() {
     var p = lsGet(STR_PREFS_KEY) || {}, pos = Math.round(Number(p.pos)), key = Math.round(Number(p.key)), B = BA();
@@ -111,7 +147,7 @@
       view: p.view === "chord" ? "chord" : "solo", inst: strOpt(STR_INSTS, p.inst)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= STR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, land: !!p.land, rlevel: strOpt(STR_RLEVELS, p.rlevel)[0], rspeed: STR_SPEEDS.indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, land: !!p.land, orch: strOrchClean(p.orch), rlevel: strOpt(STR_RLEVELS, p.rlevel)[0], rspeed: STR_SPEEDS.indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       pat: strPat(p.pat)[0], swing: B ? strOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       bpat: typeof p.bpat === "string" && /^[a-z0-9]{1,12}$/.test(p.bpat) ? p.bpat : "",
@@ -365,8 +401,18 @@
     function chordOn(n) {
       audio();
       if (!audioOk) { return []; }
-      var bus = B.bus(buses, "s", prefs.svol, false), ms = strVoicing(B.chord(song[3], n.d, song[4]), ins[3][0], false), vs = [], k;
-      for (k = 0; k < ms.length; k++) { var v = strVoice(ins[2], ms[k], bus, 0); strLevel(v, 0.45, 0.06); vs.push(v); }
+      var bus = B.bus(buses, "s", prefs.svol, false), ch = B.chord(song[3], n.d, song[4]), vs = [], k, j;
+      // §304: 編成 ON なら編成で（はじく楽器のパートは短く）
+      var ns = prefs.orch.on ? strOrchNotes(ch, false, prefs.orch.parts) : strVoicing(ch, ins[3][0], false).map(function (m) { return { inst: ins[0], m: m, n: 1 }; });
+      for (k = 0; k < ns.length; k++) {
+        var pi = strOpt(STR_INSTS, ns[k].inst);
+        for (j = 0; j < ns[k].n; j++) {
+          var v = strVoice(pi[2], ns[k].m + STR_DETUNE[j], bus, 0);
+          strLevel(v, 0.45 / Math.sqrt(ns[k].n), 0.06);
+          if (!pi[4]) { strStop(v, 0.4, (v ? v.ac.currentTime : 0) + 0.5); }
+          vs.push(v);
+        }
+      }
       return vs;
     }
     function chordOffAll(vs) { for (var k = 0; k < vs.length; k++) { strStop(vs[k], 0.3); } }
@@ -571,15 +617,17 @@
       // id ごとに鳴っている音 { v, m（録音する半音）}
       var vo = {};
       // id の音を m（小数可）・大きさ lv で鳴らしはじめる
-      function noteOn(id, m, lv, att) {
+      // ins（省略可）: §304 編成のパートの楽器。norec: 録音しない（人数ぶん重ねる音）
+      function noteOn(id, m, lv, att, ins, norec) {
         audio();
         noteOff(id, 0.08);
-        var v = strVoice(inst()[2], m, out(), 0);
-        if (!v) { vo[id] = { v: null, m: Math.round(m) }; recOn(id, Math.round(m), lv || 0.8); return; }
+        ins = ins || inst();
+        var v = strVoice(ins[2], m, out(), 0);
+        if (!v) { vo[id] = { v: null, m: Math.round(m) }; if (!norec) { recOn(id, Math.round(m), lv || 0.8); } return; }
         strLevel(v, lv, att || 0.06);
-        if (prefs.vib && inst()[4]) { strVibrato(v, true); }
+        if (prefs.vib && ins[4]) { strVibrato(v, true); }
         vo[id] = { v: v, m: Math.round(m) };
-        recOn(id, Math.round(m), lv || 0.8); // 弓はこすりはじめ 0 なので、録音はふつうの強さ
+        if (!norec) { recOn(id, Math.round(m), lv || 0.8); } // 弓はこすりはじめ 0 なので、録音はふつうの強さ
       }
       function noteOff(id, rel) { var o = vo[id]; if (!o) { return; } strStop(o.v, rel); delete vo[id]; recOff(id); }
       // 音程を変える（録音は半音が変わったら区切る）
@@ -592,12 +640,12 @@
       }
       // はじく（ピチカート・ハープ）
       // prog（省略可）: §302 ほかの音色ではじく（弓の楽器のピチカートのパターン）
-      function pluck(m, lv, dt, prog) {
+      function pluck(m, lv, dt, prog, norec) {
         audio();
         var ac = audioOk && UG.audio ? UG.audio.ctx : null, bus = out();
         if (!ac || !bus) { return; }
         try { var g = ac.createGain(); g.gain.value = (lv || 0.8) * STR_LEVEL * 0.6; g.connect(bus); UG.synth(Math.round(m), prog || inst()[2], ac.currentTime + (dt || 0), lv || 0.8, g, 0); } catch (e) {}
-        if (rec) { var id = "k" + Math.random(); recOn(id, Math.round(m), lv || 0.8, dt || 0); recOff(id); }
+        if (rec && !norec) { var id = "k" + Math.random(); recOn(id, Math.round(m), lv || 0.8, dt || 0); recOff(id); }
       }
 
       // --- 録音・再生 ---
@@ -719,13 +767,21 @@
         if (pat && d >= 0) { pend = d; flash["c" + d] = 10; render(); return; } // §302: パターン中は次の小節の頭で
         chordOff(id);
         if (d >= 0) { chordD = d; flash["c" + d] = 10; if (prefs.cprog) { prefs.cprog = ""; strSavePrefs(prefs); } }
-        var ms = strVoicing(d >= 0 ? chordObj(d) : chordAt(), inst()[3][0], d >= 0 ? prefs.sev : sevAt()), i;
+        var ns = chordNotes(d >= 0 ? chordObj(d) : chordAt(), d >= 0 ? prefs.sev : sevAt()), i, j;
         held[id] = { d: d, ids: [] };
-        for (i = 0; i < ms.length; i++) {
-          if (inst()[4]) { var nid = id + ":" + i; noteOn(nid, ms[i], 0.55, 0.12); held[id].ids.push(nid); }
-          else { pluck(ms[i], 0.7, i * 0.035); }
+        for (i = 0; i < ns.length; i++) {
+          var ins = strOpt(STR_INSTS, ns[i].inst);
+          for (j = 0; j < ns[i].n; j++) {
+            if (ins[4]) { var nid = id + ":" + i + ":" + j; noteOn(nid, ns[i].m + STR_DETUNE[j], 0.55 / Math.sqrt(ns[i].n), 0.12 + j * 0.03, ins, j > 0); held[id].ids.push(nid); }
+            else { pluck(ns[i].m + STR_DETUNE[j], 0.7, i * 0.035 + j * 0.012, ins[2], j > 0); }
+          }
         }
         render();
+      }
+      // §304: コードを鳴らす音 [{ inst, m, n }]（編成 ON なら編成・OFF ならいまの楽器で和音）
+      function chordNotes(ch, sev) {
+        if (prefs.orch.on) { return strOrchNotes(ch, sev, prefs.orch.parts); }
+        return strVoicing(ch, inst()[3][0], sev).map(function (m) { return { inst: prefs.inst, m: m, n: 1 }; });
       }
       function chordOff(id) { var h = held[id]; if (!h) { return; } for (var i = 0; i < h.ids.length; i++) { noteOff(h.ids[i], 0.4); } delete held[id]; }
 
@@ -782,18 +838,23 @@
           if (dt < -0.05) { continue; }
           var c = pt.charAt(ci);
           if (c === "-") { continue; }
-          var dd = Math.max(0, dt), when = ac ? ac.currentTime + dd : 0, vs = strVoicing(pat.back ? chordAt(b) : chordObj(chordD), ins[3][0], pat.back ? sevAt(b) : prefs.sev);
+          // §304: 編成 ON なら編成の音（パートの楽器・人数）
+          var dd = Math.max(0, dt), when = ac ? ac.currentTime + dd : 0, ns = chordNotes(pat.back ? chordAt(b) : chordObj(chordD), pat.back ? sevAt(b) : prefs.sev), j;
+          var vs = ns.map(function (x) { return x.m; }), anyBow = prefs.orch.on || ins[4];
           patRelease(when);
-          if (c === "P" || ((c === "S" || c === "E") && !ins[4])) { for (i = 0; i < vs.length; i++) { pluck(vs[i], 0.7, dd + i * 0.02, ins[4] ? 45 : 0); } continue; }
-          if ("abcde".indexOf(c) >= 0) { pluck(vs[Math.min("abcde".indexOf(c), vs.length - 1)], 0.75, dd, ins[4] ? 45 : 0); continue; }
-          var ms = c === "S" || c === "E" ? vs : [c === "B" ? vs[0] : vs[Math.min(Number(c) - 1, vs.length - 1)]];
-          if (!ins[4]) { for (i = 0; i < ms.length; i++) { pluck(ms[i], 0.75, dd); } continue; }
-          for (i = 0; i < ms.length; i++) {
-            var v = strVoice(ins[2], ms[i], out(), when), id = "pv" + (pvn++), lv = c === "E" ? 0.6 : 0.45;
-            strLevel(v, lv, c === "E" ? 0.01 : 0.08, when);
-            if (c === "E") { strStop(v, 0.06, when + unit * spb * 0.5); }
-            pat.vo.push({ v: v, id: id });
-            recOn(id, ms[i], lv, dd);
+          if (c === "P" || ((c === "S" || c === "E") && !anyBow)) { for (i = 0; i < vs.length; i++) { pluck(vs[i], 0.7, dd + i * 0.02, anyBow ? 45 : 0); } continue; }
+          if ("abcde".indexOf(c) >= 0) { pluck(vs[Math.min("abcde".indexOf(c), vs.length - 1)], 0.75, dd, anyBow ? 45 : 0); continue; }
+          var sel = c === "S" || c === "E" ? ns : [c === "B" ? ns[0] : ns[Math.min(Number(c) - 1, ns.length - 1)]];
+          for (i = 0; i < sel.length; i++) {
+            var pi = strOpt(STR_INSTS, sel[i].inst), lv = (c === "E" ? 0.6 : 0.45) / Math.sqrt(sel[i].n);
+            for (j = 0; j < sel[i].n; j++) {
+              if (!pi[4]) { pluck(sel[i].m + STR_DETUNE[j], 0.75, dd + j * 0.012, pi[2], j > 0); continue; }
+              var v = strVoice(pi[2], sel[i].m + STR_DETUNE[j], out(), when + j * 0.012), id = "pv" + (pvn++);
+              strLevel(v, lv, c === "E" ? 0.01 : 0.08, when + j * 0.012);
+              if (c === "E") { strStop(v, 0.06, when + unit * spb * 0.5); }
+              pat.vo.push({ v: v, id: id });
+              if (j === 0) { recOn(id, sel[i].m, lv * Math.sqrt(sel[i].n), dd); }
+            }
           }
         }
       }
@@ -920,6 +981,18 @@
           render();
         }
         else if (v === "bow" || v === "snap" || v === "vib") { allOff(); prefs[v] = !prefs[v]; strSavePrefs(prefs); applyLand(); render(); }
+        // §304: 編成
+        else if (v === "orch") { allOff(); prefs.orch.on = !prefs.orch.on; strSavePrefs(prefs); render(); }
+        else if (/^orchp:/.test(v)) { allOff(); var pid0 = v.substring(6); if (pid0) { prefs.orch.preset = strOpt(STR_ORCH_PRESETS, pid0)[0]; prefs.orch.parts = strPresetParts(prefs.orch.preset); } strSavePrefs(prefs); render(); }
+        else if (v === "parts:+" || v === "parts:-") {
+          allOff();
+          var pa = prefs.orch.parts;
+          if (v === "parts:+" && pa.length < STR_ORCH_MAX) { pa.push({ inst: pa.length ? pa[pa.length - 1].inst : "violin", n: 1 }); }
+          if (v === "parts:-" && pa.length > 1) { pa.pop(); }
+          prefs.orch.preset = ""; strSavePrefs(prefs); render();
+        }
+        else if (/^pi:\d:/.test(v)) { allOff(); var pk = Number(v.charAt(3)); if (prefs.orch.parts[pk]) { prefs.orch.parts[pk].inst = strOpt(STR_INSTS, v.substring(5))[0]; prefs.orch.preset = ""; strSavePrefs(prefs); } render(); }
+        else if (/^pn:\d:[+-]$/.test(v)) { allOff(); var pk2 = Number(v.charAt(3)), pp = prefs.orch.parts[pk2]; if (pp) { pp.n = Math.max(1, Math.min(STR_PLAYERS_MAX, pp.n + (v.charAt(5) === "+" ? 1 : -1))); prefs.orch.preset = ""; strSavePrefs(prefs); } render(); }
         else if (v === "land") { allOff(); prefs.land = !prefs.land; strSavePrefs(prefs); applyLand(); render(); }
         else if (/^grip:/.test(v)) { allOff(); B.gripStep(v.substring(5)); applyLand(); render(); }
         else if (v === "posdown" || v === "posup") { allOff(); prefs.pos = Math.max(0, Math.min(STR_POS_MAX, prefs.pos + (v === "posup" ? 1 : -1))); strSavePrefs(prefs); render(); }
@@ -998,6 +1071,23 @@
           html += '</div>' + (prefs.land && B.gripRows ? B.gripRows("sa") : "") + '<div class="piano-opts">';
           for (i = 0; i < STR_INSTS.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.inst === STR_INSTS[i][0] ? " active" : "") + '" data-sa="inst:' + STR_INSTS[i][0] + '">' + STR_INSTS[i][1] + '</button>'; }
           html += '</div>';
+          if (view === "chord") {
+            // §304: 編成
+            var oc = prefs.orch, po = '<option value=""' + (oc.preset ? "" : " selected") + '>じぶんで</option>', q;
+            for (q = 0; q < STR_ORCH_PRESETS.length; q++) { po += '<option value="' + STR_ORCH_PRESETS[q][0] + '"' + (oc.preset === STR_ORCH_PRESETS[q][0] ? " selected" : "") + '>' + escHtml(STR_ORCH_PRESETS[q][1]) + '</option>'; }
+            html += '<div class="piano-row"><button class="modal-btn' + (oc.on ? " piano-rec-on" : "") + '" data-sa="orch">&#x1F3BB; 編成: ' + (oc.on ? "ON" : "OFF（いまの楽器だけ）") + '</button></div>';
+            if (oc.on) {
+              html += '<div class="piano-row"><label class="piano-select">&#x1F3BC; <select data-sorch="1">' + po + '</select></label></div>' +
+                '<div class="piano-row"><span>パートの数</span><button class="modal-btn" data-sa="parts:-">－</button><span>' + oc.parts.length + '</span><button class="modal-btn" data-sa="parts:+">＋</button></div>';
+              for (q = 0; q < oc.parts.length; q++) {
+                var io0 = "", qi;
+                for (qi = 0; qi < STR_INSTS.length; qi++) { io0 += '<option value="' + STR_INSTS[qi][0] + '"' + (STR_INSTS[qi][0] === oc.parts[q].inst ? " selected" : "") + '>' + escHtml(STR_INSTS[qi][1].replace(/&#x[0-9A-F]+;\s*/g, "")) + '</option>'; }
+                html += '<div class="piano-row"><label class="piano-select">' + (q + 1) + ' <select data-spi="' + q + '">' + io0 + '</select></label>' +
+                  '<button class="modal-btn" data-sa="pn:' + q + ':-">－</button><span>' + oc.parts[q].n + '人</span><button class="modal-btn" data-sa="pn:' + q + ':+">＋</button></div>';
+              }
+              html += '<p class="small" style="margin:4px 0 0;">3パート以上は、低い楽器から ルート・5度・3度・ルート（7th は7度）を1つずつ。2パートまではそれぞれが和音ぜんぶ。人数をふやすと少しずらして重ねて厚く</p>';
+            }
+          }
           if (view === "solo") {
             if (ins[4]) {
               html += '<div class="piano-row"><button class="modal-btn' + (prefs.bow ? " piano-rec-on" : "") + '" data-sa="bow">&#x1F3BB; 弓で弾く: ' + (prefs.bow ? "ON" : "OFF") + '</button>' +
@@ -1015,11 +1105,13 @@
         panel.innerHTML = html;
         var bs = panel.querySelectorAll ? panel.querySelectorAll("button[data-sa]") : [];
         for (i = 0; i < bs.length; i++) { bs[i].onclick = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(ev.currentTarget.getAttribute("data-sa")); }; }
-        var sels = [["sscale", "scale:"], ["spat", "spat:"], ["scprog", "cprog:"], ["sdrum", "drum:"], ["sbpat", "bpat:"]];
+        var sels = [["sscale", "scale:"], ["spat", "spat:"], ["scprog", "cprog:"], ["sdrum", "drum:"], ["sbpat", "bpat:"], ["sorch", "orchp:"]];
         for (i = 0; i < sels.length; i++) {
           var sel = panel.querySelector ? panel.querySelector("select[data-" + sels[i][0] + "]") : null;
           if (sel) { sel.onchange = (function (pre) { return function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(pre + ev.currentTarget.value); }; })(sels[i][1]); }
         }
+        var psel = panel.querySelectorAll ? panel.querySelectorAll("select[data-spi]") : [];
+        for (i = 0; i < psel.length; i++) { psel[i].onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("pi:" + ev.currentTarget.getAttribute("data-spi") + ":" + ev.currentTarget.value); }; }
       }
       render();
 
@@ -1179,7 +1271,7 @@
           if (g) { g.addColorStop(0, "#1b1f3b"); g.addColorStop(1, "#3a2318"); }
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, STR_H);
-          hudText(ctx, inst()[1].replace(/&#x[0-9A-F]+;\s*/g, "") + (back ? " ・🎸 " + (bk ? "伴奏" : back.name) : pat ? " ・🎼 " + patDef()[1] : view === "chord" ? " ・キー " + STR_CDE[prefs.key] : ""), 8, STR_LAND ? 6 : 10, "left");
+          hudText(ctx, (view === "chord" && prefs.orch.on ? "🎻 " + (prefs.orch.preset ? strOpt(STR_ORCH_PRESETS, prefs.orch.preset)[1] : "じぶんの編成") : inst()[1].replace(/&#x[0-9A-F]+;\s*/g, "")) + (back ? " ・🎸 " + (bk ? "伴奏" : back.name) : pat ? " ・🎼 " + patDef()[1] : view === "chord" ? " ・キー " + STR_CDE[prefs.key] : ""), 8, STR_LAND ? 6 : 10, "left");
           hudText(ctx, "BPM " + bpm, W - 8, STR_LAND ? 6 : 10, "right");
           if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, STR_LAND ? 6 : 28, 14, "#ff6b6b"); }
           if (view === "chord") { drawChords(ctx); return; }
@@ -1195,6 +1287,6 @@
   window.UGStrings = {
     H: STR_H, INSTS: STR_INSTS, VIEWS: STR_VIEWS, COLS: STR_COLS, BOARD_Y: STR_BOARD_Y, BOW_X: STR_BOW_X, PREFS_KEY: STR_PREFS_KEY, TAKES_KEY: STR_TAKES_KEY, TAKES_MAX: STR_TAKES_MAX, SEQ_MAX: STR_SEQ_MAX,
     layout: strLayout, colX: strColX, geom: function () { return { H: STR_H, COLS: STR_COLS, BOARD_X: STR_BOARD_X, BOARD_R: STR_BOARD_R, BOARD_Y: STR_BOARD_Y, BOARD_BOT: STR_BOARD_BOT, BOW_X: STR_BOW_X, BOW_R: STR_BOW_R, MIRROR: STR_MIRROR, LAND: STR_LAND }; }, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
-    voice: strVoice, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
+    voice: strVoice, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
   };
 })();

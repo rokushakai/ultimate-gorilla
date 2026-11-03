@@ -140,6 +140,20 @@ module.exports = function () {
   ok(songsOk && sr1.best && sr1.best.r === "S" && sr2.best && sr2.best.s < sr1.best.s && sr1.best.s - sr2.best.s >= sr1.n * 50 - 1 && sr1.H === 320 && sr3.best && sr3.best.r === "S" && sr3.H < 200,
     "strings rhythm game: press at the head and keep holding to the end for a keep bonus (letting go early loses it); landscape works too", [sr1.best, sr2.best, sr1.n, sr3.H]);
 
+  // --- §304: 編成（楽器の組み合わせ・パートの数・人数）---
+  var oq = S.orchNotes(B.chord(0, 0, "major"), false, S.presetParts("quartet")), ol = S.orchNotes(B.chord(0, 0, "major"), false, S.presetParts("low"));
+  var o7 = S.orchNotes(B.chord(0, 4, "major", true), true, S.presetParts("quartet")), oc = S.orchClean({ on: true, parts: [{ inst: "x", n: 9 }, {}, {}, {}, {}] });
+  ok(oq.map(function (x) { return x.inst + ":" + x.m; }).join() === "cello:36,viola:55,violin:64,violin:72" && ol.length === 8 && ol[0].inst === "bass" && ol[4].inst === "cello" && ol[0].n === 2 &&
+    o7[3].m % 12 === 5 && oc.parts.length === 4 && oc.parts[0].inst === "violin" && oc.parts[0].n === 1,
+    "orchestration: 3+ parts share the chord low to high (root, 5th, 3rd, root / 7th); 2 parts each play the whole chord; settings are cleaned", [oq, o7.map(function (x) { return x.m; })]);
+  var ro = srun({ view: "chord", inst: "violin", orch: { on: true, preset: "orch", parts: S.presetParts("orch") } }, 12, function (fr, e) { if (fr === 2) { e.key("keydown", "1"); } if (fr === 8) { e.key("keyup", "1"); } });
+  var progs = ro.log.on.map(function (x) { return x.split("@")[1]; }).sort().join();
+  ok(ro.log.on.length === 8 && progs === "40,40,40,41,41,42,42,43" && ro.log.stop >= 8, "a held chord with the string-orchestra preset plays every part with its players (violins x3, violas x2, cellos x2, bass)", ro.log.on);
+  var po = bsrun({ view: "chord", tab: "play", orch: { on: true, parts: S.presetParts("quartet") } }, 6, function (fr, e) { if (fr === 3) { e.window.__sAct("parts:-"); e.window.__sAct("pn:0:+"); e.window.__sAct("pi:1:cello"); } });
+  var pop = JSON.parse(po.e.store[S.PREFS_KEY]).orch, poh = po.e.window.__sPanel();
+  ok(pop.parts.length === 3 && pop.parts[0].n === 2 && pop.parts[1].inst === "cello" && pop.preset === "" && poh.indexOf('data-sorch="1"') > 0 && poh.indexOf('data-spi="2"') > 0 && poh.indexOf("パートの数") > 0,
+    "the play tab edits the orchestration (number of parts, instrument and players per part)", pop);
+
   // --- 録音・シーケンサーへ送る ---
   var r5 = srun({ view: "chord", inst: "cello", bpm: 120 }, 260, function (fr, e) {
     if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
