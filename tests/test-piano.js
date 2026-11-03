@@ -309,4 +309,20 @@ module.exports = function () {
     if (cur !== last15) { if (cur) { seq15.push(cur); } last15 = cur; }
   });
   ok(seq15.join() === "48,67,48", "a pad plays my own pattern (B-U- = bass, top note …)", seq15);
+
+  // §318: パイプオルガン（19）は押しているあいだのばし、はなすと止める
+  var e18 = H.load(), src18 = 0, stop18 = 0;
+  e18.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ prog: 19 });
+  e18.run("piano", { config: { mode: "free" } }, 40, function (f) {
+    var M = e18.window.UGMelody;
+    if (f === 1) {
+      M.audioInit(); M.samples.enabled = true;
+      M.samples.buffers.vsco_organ = { 60: { duration: 2.7, length: 59535 } }; M.samples.keys.vsco_organ = [60]; M.samples.state.vsco_organ = "ready";
+    }
+    if (f === 3) { e18.counters.src.length = 0; e18.key("keydown", "a"); }
+    if (f === 20) { src18 = e18.counters.src.length; e18.counters.targets.length = 0; e18.key("keyup", "a"); }
+    if (f === 22) { stop18 = e18.counters.targets.filter(function (t) { return t.name === "gain" && t.v === 0; }).length; }
+  });
+  ok(P.VOICES.some(function (v) { return v[0] === 19; }) && P.VOICES.some(function (v) { return v[0] === 13; }) && P.VOICES.some(function (v) { return v[0] === 9; }) && src18 === 1 && stop18 === 1,
+    "piano voices include the pipe organ, xylophone and glockenspiel; the organ sustains while held and stops on release", [src18, stop18]);
 };

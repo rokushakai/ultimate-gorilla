@@ -35,7 +35,8 @@
   var PIANO_JUDGE = [[0.07, "PERFECT", 100], [0.13, "GREAT", 70], [0.2, "GOOD", 40]];
   var PIANO_DO = ["ド", "ド#", "レ", "レ#", "ミ", "ファ", "ファ#", "ソ", "ソ#", "ラ", "ラ#", "シ"];
   var PIANO_CDE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  var PIANO_VOICES = [[0, "&#x1F3B9; ピアノ"], [4, "&#x1F3B9; エレピ"], [8, "&#x2728; チェレスタ"], [11, "&#x1F514; ビブラフォン"], [12, "&#x1FAB5; マリンバ"], [46, "&#x1F3BC; ハープ"]];
+  var PIANO_VOICES = [[0, "&#x1F3B9; ピアノ"], [4, "&#x1F3B9; エレピ"], [8, "&#x2728; チェレスタ"], [11, "&#x1F514; ビブラフォン"], [12, "&#x1FAB5; マリンバ"], [46, "&#x1F3BC; ハープ"],
+    [19, "&#x26EA; パイプオルガン"], [13, "&#x1F941; シロフォン"], [9, "&#x1F514; グロッケン"]]; // §318 v2.23
   var PIANO_NAMES = [["do", "ドレミ"], ["cde", "CDE"], ["none", "なし"]];
   // §217 v1.25: コードの別の読み方をいくつ出すか（99 ＝ すべて）
   var PIANO_ALTS_ALL = 99, PIANO_ALTS = [[0, "なし"], [1, "1つ"], [2, "2つ"], [3, "3つ"], [PIANO_ALTS_ALL, "すべて"]];
@@ -255,7 +256,9 @@
       }
     } catch (e) {}
   }
+  var pianoHoldsOff = null; // §318: ゲームをやめるとき、のばしている音を止める
   I.addStopHook(function () {
+    if (pianoHoldsOff) { try { pianoHoldsOff(); } catch (e) {} pianoHoldsOff = null; }
     pianoLock(false);
     if (pianoResize) { window.removeEventListener("resize", pianoResize); pianoResize = null; }
   });
@@ -631,6 +634,7 @@
 
       // --- 音 ---
       var UG = window.UGMelody, audioOk = false;
+      try { if (UG && UG.prefetchSamples) { UG.prefetchSamples([prog]); } } catch (e0) {} // §318: 先読み（§316）
       function audio() {
         if (audioOk || !UG || !UG.audioInit) { return; }
         try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([prog]); } } catch (e) {}
@@ -906,16 +910,23 @@
       }
 
       // --- 鍵盤 ---
+      // §318: のばせる音色（パイプオルガン）は、押しているあいだのばす
+      var holds = {};
+      pianoHoldsOff = function () { for (var k in holds) { if (holds.hasOwnProperty(k)) { try { window.UGStrings.stop(holds[k], 0.05); } catch (e) {} } } holds = {}; };
       function noteOn(id, m) {
         if (m < 0 || ended) { return; }
         if (press[id] !== undefined) { noteOff(id); }
         press[id] = m;
-        sound(m, 0.85);
+        var SV = window.UGStrings;
+        audio();
+        if (audioOk && SV && SV.sustains && SV.sustains(prog)) { try { holds[id] = SV.hold(prog, m, (UG.audio && UG.audio.bus) || UG.audio.ctx.destination, 0.85); } catch (e) {} }
+        if (!holds[id]) { sound(m, 0.85); }
         if (mode === "free") { recOn(id, m); } else if (mode === "practice") { practiceHit(m); } else { rhythmHit(m); }
       }
       function noteOff(id) {
         if (press[id] === undefined) { return; }
         delete press[id];
+        if (holds[id]) { try { window.UGStrings.stop(holds[id], 0.12); } catch (e) {} delete holds[id]; }
         if (mode === "free") { recOff(id); }
       }
       function allOff() { var ks = [], k; for (k in press) { if (press.hasOwnProperty(k)) { ks.push(k); } } for (k = 0; k < ks.length; k++) { noteOff(ks[k]); } arps = {}; padHeld = {}; }

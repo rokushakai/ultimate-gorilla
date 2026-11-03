@@ -346,6 +346,17 @@
     var UG = window.UGMelody;
     return !!(UG && UG.sampleFiles && (UG.sampleFiles[prog + 1000] || prog === 73 || prog === 19) && UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog));
   }
+  // §318: 押しているあいだのばす1音（ゴリラピアノのオルガンなど）。大きさはメロディくずしの1音（0.6 × vel）と同じ。止めるのは strStop
+  function strHold(prog, m, out, vel) {
+    var UG = window.UGMelody, ac = UG && UG.audio && UG.audio.ctx;
+    if (!ac || !out) { return null; }
+    var o = ac.createGain();
+    o.gain.value = 0.6 / STR_LEVEL;
+    o.connect(out);
+    var v = strVoice(prog, m, o, 0);
+    if (v) { strLevel(v, vel, 0.015); }
+    return v;
+  }
   // §315: シーケンサーの1音。when から sec 秒のばし、強さ vel（0.1〜1）で大きさと弱い/強いの録音をまぜる。大きさはメロディくずしの1音（0.6 × vel）と同じ
   function strNote(prog, m, out, when, vel, sec) {
     var UG = window.UGMelody, ac = UG && UG.audio && UG.audio.ctx;
@@ -1396,6 +1407,6 @@
   window.UGStrings = {
     H: STR_H, INSTS: STR_INSTS, VIEWS: STR_VIEWS, COLS: STR_COLS, BOARD_Y: STR_BOARD_Y, BOW_X: STR_BOW_X, PREFS_KEY: STR_PREFS_KEY, TAKES_KEY: STR_TAKES_KEY, TAKES_MAX: STR_TAKES_MAX, SEQ_MAX: STR_SEQ_MAX,
     layout: strLayout, colX: strColX, geom: function () { return { H: STR_H, COLS: STR_COLS, BOARD_X: STR_BOARD_X, BOARD_R: STR_BOARD_R, BOARD_Y: STR_BOARD_Y, BOARD_BOT: STR_BOARD_BOT, BOW_X: STR_BOW_X, BOW_R: STR_BOW_R, MIRROR: STR_MIRROR, LAND: STR_LAND }; }, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
-    voice: strVoice, sustains: strSustains, note: strNote, pitch: strPitch, level: strLevel, stop: strStop, vibrato: strVibrato, partsClean: strPartsClean, playList: strPlayList, ORCH_MAX: STR_ORCH_MAX, takeById: strTakeById, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
+    voice: strVoice, sustains: strSustains, note: strNote, hold: strHold, pitch: strPitch, level: strLevel, stop: strStop, vibrato: strVibrato, partsClean: strPartsClean, playList: strPlayList, ORCH_MAX: STR_ORCH_MAX, takeById: strTakeById, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
   };
 })();
