@@ -341,10 +341,10 @@
     if (v.src2) { try { v.src2.stop(t + r * 2 + 0.05); } catch (e4) {} }
     if (v.h && window.UGMelody.voiceStop) { try { window.UGMelody.voiceStop(v.h, t + r, r); } catch (e3) {} }
   }
-  // §315: 生の録音でのばせる音色（弱い録音 ＋1000 がある・フルート）。読みこみずみのときだけ
+  // §315: 生の録音でのばせる音色（弱い録音 ＋1000 がある・フルート・§317 パイプオルガン）。読みこみずみのときだけ
   function strSustains(prog) {
     var UG = window.UGMelody;
-    return !!(UG && UG.sampleFiles && (UG.sampleFiles[prog + 1000] || prog === 73) && UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog));
+    return !!(UG && UG.sampleFiles && (UG.sampleFiles[prog + 1000] || prog === 73 || prog === 19) && UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog));
   }
   // §315: シーケンサーの1音。when から sec 秒のばし、強さ vel（0.1〜1）で大きさと弱い/強いの録音をまぜる。大きさはメロディくずしの1音（0.6 × vel）と同じ
   function strNote(prog, m, out, when, vel, sec) {

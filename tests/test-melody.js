@@ -216,6 +216,9 @@ module.exports = async function () {
   await new Promise(function (res) { M316.loadSamples([42], res); });
   ok(noCtx && sc316.length === 2 && /vsco_cello\.js/.test(sc316[0]) && /vsco_cello_p\.js/.test(sc316[1]) && e316.counters.scripts.length === 2 && M316.sampleReady(42) && M316.sampleReady(1042),
     "prefetch: sample files (and soft layers) start loading before audio, and are decoded later without loading twice", [sc316, e316.counters.scripts.length]);
+  // §317: ピアノ・パイプオルガン・グロッケン・シロフォン・マリンバも生の録音（オルガンはシーケンサーでのばせる）
+  ok(M316.sampleFiles[0] === "vsco_piano" && M316.sampleFiles[19] === "vsco_organ" && M316.sampleFiles[9] === "vsco_glock" && M316.sampleFiles[13] === "vsco_xylo" && M316.sampleFiles[12] === "vsco_marimba",
+    "real piano, pipe organ and mallets");
 
   // --- WAV ---
   var wavRec = { id: 9, date: Date.UTC(2026, 9, 24, 12, 30), prog: { b: 0 }, fxRev: 1, notes: [[0, 60, "b"], [500, 64, "b", 0.5], [1000, 50, "w"]] };

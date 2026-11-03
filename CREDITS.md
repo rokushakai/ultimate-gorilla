@@ -9,7 +9,7 @@
 - ライセンス: [Creative Commons Attribution 3.0（CC BY 3.0）](https://creativecommons.org/licenses/by/3.0/)
 - 変更点: 音色を選び、各音色から C2〜C7 の長3度おき16音だけを抜き出して JavaScript ファイルにまとめた。ゲーム内では再生速度を変えて間の音程を作り、モノラル化・短く切って再生している
 
-収録音色: Acoustic Grand Piano / Electric Piano 1 / Celesta / Vibraphone / Marimba / Acoustic Guitar (nylon) / Acoustic Guitar (steel) / Acoustic Bass / Choir Aahs / Koto
+収録音色: Electric Piano 1 / Celesta / Vibraphone / Acoustic Guitar (nylon) / Acoustic Guitar (steel) / Acoustic Bass / Choir Aahs / Koto
 
 ベース（v1.69〜。🎸 ゴリラベース・シーケンサーのベース）: Acoustic Bass / Electric Bass (finger) / Electric Bass (pick) / Fretless Bass / Slap Bass 1 / Slap Bass 2 / Synth Bass 1 / Synth Bass 2。ベースは C1〜C5 の短3度おき17音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
@@ -29,6 +29,15 @@
 - 変更点: ソロバイオリン（ビブラート）・ビオラセクション・チェロセクション・ソロコントラバス・バイオリン/ビオラ/チェロのセクション（のばす・トレモロ・ピチカート）・ハープから、およそ短3度おきの音を選び、モノラル 22050Hz にして頭の無音を切り、2.7 秒（ピチカート 1.6 秒）に切ってフェードをつけ、音量をそろえ、のびている所をくり返せるようにクロスフェードして、MP3（56kbps）で JavaScript ファイルにまとめた。合奏・トレモロ・ピチカートは低い音をチェロ、まん中をビオラ、高い音をバイオリンのセクションでつないだ
 
 管楽器（v2.16〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）: `samples/vsco_trumpet`・`vsco_trombone`・`vsco_tuba`・`vsco_horn`・`vsco_oboe`・`vsco_bassoon`・`vsco_clarinet`・`vsco_flute`（と *_p）。同じ VSCO 2 Community Edition（CC0）の Trumpet / Tenor Trombone / Tuba / F Horn / Oboe / Bassoon / Clarinet / Flute ののばす録音から、上と同じように作った。ブラスセクション `samples/vsco_brass`（と _p）は、このトランペット（2本）・F ホルン・テナートロンボーン（2本）の録音を、音ごとに少し高さと時間をずらして重ね、のびている所の大きさをそろえて作った
+
+## ピアノ・パイプオルガン・鉄琴・木琴の録音（v2.22〜）
+
+`samples/vsco_piano.js`・`vsco_organ.js`・`vsco_marimba.js`・`vsco_xylo.js`・`vsco_glock.js`
+
+- 音源: **VSCO 2 Community Edition** — Versilian Studios（Upright Piano・Organ は Ivy Audio の Simon Dalzell による録音）
+- 配布元: [sgossner/VSCO-2-CE](https://github.com/sgossner/VSCO-2-CE)
+- ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す（ピアノとオルガンは元の作者と Versilian Studios の表記が勧められている）
+- 変更点: Upright Piano（まん中の強さ）・Organ（Loud の手鍵盤）・Marimba・Xylophone・Glockenspiel から音を選び、モノラル 22050Hz にして頭の無音を切り、短く切ってフェードをつけ（オルガンはのびている所をくり返せるようにクロスフェード）、音量をそろえて、MP3（56kbps）で JavaScript ファイルにまとめた
 
 ## サックスの録音（v2.17〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）
 
