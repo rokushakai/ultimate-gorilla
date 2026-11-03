@@ -13,7 +13,7 @@
   function BA() { return window.UGBass; }
   function SV() { return window.UGStrings; }
 
-  var SYN_H = 320, SYN_TOP = 36, SYN_PAD_BOT = 150, SYN_KB_Y = 158, SYN_KB_BOT = 316, SYN_WHITES = 10;
+  var SYN_H = 320, SYN_TOP = 36, SYN_PAD_BOT = 150, SYN_KB_Y = 158, SYN_KB_BOT = 316, SYN_WHITES = 10, SYN_LAND = false;
   var SYN_PREFS_KEY = "ultimateGorillaSynthPrefsV1", SYN_TAKES_KEY = "ultimateGorillaSynthTakesV1";
   var SYN_TAKES_MAX = 10, SYN_NOTES_MAX = 2000, SYN_SEQ_MAX = 1000, SYN_SEQ_PROG = 81;
   var SYN_DO = ["ド", "ド#", "レ", "レ#", "ミ", "ファ", "ファ#", "ソ", "ソ#", "ラ", "ラ#", "シ"];
@@ -175,8 +175,24 @@
     return v;
   }
 
-  // ---------- 鍵盤（白鍵 10 ＝ ド〜上のミ）----------
-  var SYN_WHITE_IV = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16], SYN_BLACK = [[0, 1], [1, 3], [3, 6], [4, 8], [5, 10], [7, 13], [8, 15]];
+  // ---------- 鍵盤（たて: 白鍵 10 ＝ ド〜上のミ / §320 よこ: 白鍵 15 ＝ 2オクターブ）----------
+  var SYN_WHITE_IV = [], SYN_BLACK = []; // SYN_BLACK: [左の白鍵の番号, 音]
+  function synKeys(n) {
+    var pcs = [0, 2, 4, 5, 7, 9, 11], i;
+    SYN_WHITES = n; SYN_WHITE_IV = []; SYN_BLACK = [];
+    for (i = 0; i < n; i++) {
+      var iv = Math.floor(i / 7) * 12 + pcs[i % 7];
+      SYN_WHITE_IV.push(iv);
+      if (i < n - 1 && [0, 1, 3, 4, 5].indexOf(i % 7) >= 0) { SYN_BLACK.push([i, iv + 1]); }
+    }
+  }
+  // §320: よこ向き（高さ h）
+  function synLayout(land, h) {
+    SYN_LAND = !!land;
+    if (land) { SYN_H = h || 130; SYN_TOP = 12; SYN_PAD_BOT = Math.round(SYN_H * 0.34); SYN_KB_Y = SYN_PAD_BOT + 3; SYN_KB_BOT = SYN_H - 2; synKeys(15); }
+    else { SYN_H = 320; SYN_TOP = 36; SYN_PAD_BOT = 150; SYN_KB_Y = 158; SYN_KB_BOT = 316; synKeys(10); }
+  }
+  synLayout(false);
   function synWhiteW() { return (W - 8) / SYN_WHITES; }
   function synKeyAt(x, y, base) {
     if (x < 4 || x >= W - 4 || y < SYN_KB_Y || y >= SYN_KB_BOT) { return -1; }
@@ -193,6 +209,42 @@
     out.push(base + 24);
     return out;
   }
+  // §320: アルペジエーター
+  var SYN_ARP_MODES = [["up", "上り"], ["down", "下り"], ["updown", "上り下り"], ["order", "押した順"], ["random", "ランダム"]];
+  var SYN_ARP_RATES = [[0.5, "8分"], [0.25, "16分"], [1 / 3, "3連"]];
+  function synArpClean(a) {
+    a = a && typeof a === "object" ? a : {};
+    var r = Number(a.rate), rate = 0.25, oct = Math.round(Number(a.oct)), gate = Number(a.gate), i;
+    for (i = 0; i < SYN_ARP_RATES.length; i++) { if (Math.abs(r - SYN_ARP_RATES[i][0]) < 1e-6) { rate = SYN_ARP_RATES[i][0]; } }
+    return { on: !!a.on, mode: synOpt(SYN_ARP_MODES, a.mode)[0], rate: rate, oct: oct >= 1 && oct <= 3 ? oct : 1, gate: isFinite(gate) && gate >= 0.2 && gate <= 1 ? Math.round(gate * 10) / 10 : 0.6 };
+  }
+  // 押さえている音（押した順）→ 1周の並び（ランダムは並びから選ぶ）
+  function synArpOrder(notes, mode, oct) {
+    var base = [], all = [], i, o;
+    for (i = 0; i < notes.length; i++) { if (base.indexOf(notes[i]) < 0) { base.push(notes[i]); } }
+    if (mode !== "order") { base.sort(function (a, b) { return a - b; }); }
+    for (o = 0; o < oct; o++) { for (i = 0; i < base.length; i++) { all.push(base[i] + 12 * o); } }
+    if (mode === "down") { all.reverse(); }
+    else if (mode === "updown" && all.length > 2) { all = all.concat(all.slice(1, -1).reverse()); }
+    return all;
+  }
+  // §320: じぶんの音色 [{ name, patch }]
+  var SYN_MY_KEY = "ultimateGorillaSynthMyV1", SYN_MY_MAX = 12;
+  function synMyLoad() {
+    var a = lsGet(SYN_MY_KEY), out = [], i;
+    if (!a || !a.length) { return out; }
+    for (i = 0; i < a.length && out.length < SYN_MY_MAX; i++) { if (a[i] && typeof a[i] === "object") { out.push({ name: String(a[i].name || "じぶんの音").slice(0, 16), patch: synPatchClean(a[i].patch) }); } }
+    return out;
+  }
+  function synMySave(list) { return lsSet(SYN_MY_KEY, list.slice(0, SYN_MY_MAX)); }
+  // 名前で入れる（同じ名前は上書き）→ 番号（いっぱいなら -1）
+  function synMyPut(list, name, patch) {
+    var nm = String(name || "").replace(/^\s+|\s+$/g, "").slice(0, 16) || "じぶんの音 " + (list.length + 1), i;
+    for (i = 0; i < list.length; i++) { if (list[i].name === nm) { list[i].patch = synPatchClean(patch); return i; } }
+    if (list.length >= SYN_MY_MAX) { return -1; }
+    list.push({ name: nm, patch: synPatchClean(patch) });
+    return list.length - 1;
+  }
   function synPc(m) { return ((m % 12) + 12) % 12; }
   function synName(m, names) {
     if (names === "none") { return ""; }
@@ -207,7 +259,9 @@
       view: p.view === "pad" ? "pad" : "keys", preset: pre, edited: !!p.edited, patch: synPatchClean(p.patch && typeof p.patch === "object" ? p.patch : synPreset(pre).patch),
       oct: oct >= -2 && oct <= 1 ? oct : 0, key: key >= 0 && key <= 11 ? key : 0, scale: B ? B.scale(p.scale)[0] : "major",
       names: p.names === "cde" || p.names === "none" ? p.names : "do", tab: p.tab === "play" ? "play" : "sound",
-      bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false
+      bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
+      land: !!p.land, arp: synArpClean(p.arp), mine: typeof p.mine === "string" ? p.mine.slice(0, 16) : "",
+      backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
   function synSavePrefs(p) { return lsSet(SYN_PREFS_KEY, p); }
@@ -263,8 +317,16 @@
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">波の形・フィルター・エンベロープ・LFO をいじって、じぶんの音を作って弾こう。XY パッドで音が変わる。</p>' +
         '<p class="small" style="margin:4px 0 2px;">弾き方</p><div class="quiz-opts">' + opts(SYN_VIEWS, p.view, "view") + '</div>' +
         '<p class="small" style="margin:4px 0 2px;">音色（プリセット）' + (p.edited ? "・いまは じぶんで変えた音色" : "") + '</p><div class="piano-opts">' + opts(SYN_PRESETS, p.edited ? "" : p.preset, "preset") + '</div>' +
-        '<p class="small" style="margin:4px 0 2px;">音名</p><div class="quiz-opts">' + opts(SYN_NAMES, p.names, "names") + '</div>' +
-        '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F39B;&#xFE0F; はじめる</button>' +
+        '<p class="small" style="margin:4px 0 2px;">音名</p><div class="quiz-opts">' + opts(SYN_NAMES, p.names, "names") + '</div>';
+      var my = synMyLoad(), bl = BA() && BA().backList ? BA().backList() : [];
+      if (my.length) {
+        html += '<p class="small" style="margin:6px 0 2px;">&#x1F4BE; じぶんの音色（' + my.length + ' / ' + SYN_MY_MAX + '）</p>';
+        for (i = 0; i < my.length; i++) {
+          html += '<div class="piano-take"><span>' + escHtml(my[i].name) + '</span><button class="modal-btn' + (p.mine === my[i].name ? " piano-rec-on" : "") + '" data-mine="' + i + '">つかう</button><button class="modal-btn" data-mydel="' + i + '">&#x1F5D1;&#xFE0F;</button></div>';
+        }
+      }
+      if (bl.length) { html += '<p class="small" style="margin:6px 0 2px;">&#x1F3B8; 伴奏（ゴリラウクレレのシーケンサーの曲）</p><div class="piano-opts">' + opts([["-", "なし"]].concat(bl), p.backing || "-", "backing") + '</div>'; }
+      html += '<button class="modal-btn" data-go="1" style="width:100%;margin-top:8px;">&#x1F39B;&#xFE0F; はじめる</button>' +
         '<p class="small" style="margin:10px 0 2px;">&#x1F399;&#xFE0F; 録音したテイク（' + takes.length + ' / ' + SYN_TAKES_MAX + '）</p>';
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
@@ -281,7 +343,18 @@
         btns[j].onclick = function (ev) {
           var el = ev.currentTarget, v;
           if ((v = el.getAttribute("data-view"))) { p.view = v; synSavePrefs(p); draw(); return; }
-          if ((v = el.getAttribute("data-preset"))) { p.preset = v; p.patch = synPreset(v).patch; p.edited = false; synSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-preset"))) { p.preset = v; p.patch = synPreset(v).patch; p.edited = false; p.mine = ""; synSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-mine"))) { var my0 = synMyLoad()[Number(v)]; if (my0) { p.patch = my0.patch; p.mine = my0.name; p.edited = false; synSavePrefs(p); } draw(); return; }
+          if ((v = el.getAttribute("data-mydel"))) {
+            var myl = synMyLoad(), mt = myl[Number(v)];
+            if (!mt || (window.confirm && !window.confirm("じぶんの音色「" + mt.name + "」を消しますか？"))) { return; }
+            myl.splice(Number(v), 1);
+            synMySave(myl);
+            if (p.mine === mt.name) { p.mine = ""; p.edited = true; synSavePrefs(p); }
+            draw();
+            return;
+          }
+          if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; synSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-names"))) { p.names = v; synSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) { var rs = synSendToSeq(synTakeById(synTakesLoad(), Number(v))); note = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
@@ -293,8 +366,8 @@
             return;
           }
           if (el.getAttribute("data-back")) { ctl.back(); return; }
-          if (el.getAttribute("data-go")) { ctl.done({}); return; }
-          if ((v = el.getAttribute("data-open"))) { ctl.done({ take: Number(v) }); }
+          if (el.getAttribute("data-go")) { ctl.done({ backing: p.backing }); return; }
+          if ((v = el.getAttribute("data-open"))) { ctl.done({ take: Number(v), backing: p.backing }); }
         };
       }
     }
@@ -311,7 +384,7 @@
     name: "ゴリラシンセ",
     icon: "&#x1F39B;&#xFE0F;",
     desc: "波の形・フィルター・LFO で音を作って弾くシンセサイザー。XY パッドで音が変わる",
-    help: "鍵盤を押しているあいだ鳴る / 上の XY パッド: 横 ＝ 明るさ・縦 ＝ うねり / XYパッド演奏: 横 ＝ 音・縦 ＝ 明るさ / キー A W S E D F T G Y H U J K / , . オクターブ / Z 録音 / X 再生 / P一時停止",
+    help: "鍵盤を押しているあいだ鳴る（アルペジエーター ON なら押さえた音を自動で1音ずつ）/ 上の XY パッド: 横 ＝ 明るさ・縦 ＝ うねり / XYパッド演奏: 横 ＝ 音・縦 ＝ 明るさ / キー A W S E D F T G Y H U J K / , . オクターブ / Z 録音 / X 再生 / P一時停止",
     controls: [],
     keys: SYN_KEYS,
     setup: synSetup,
@@ -322,8 +395,14 @@
       var B = BA(), prefs = synPrefs(), patch = prefs.patch, names = prefs.names;
       var frame = 0, msg = "", panel = api.panel;
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
-      if (api.setLandscape) { api.setLandscape(false); }
-      if (api.setCanvasHeight) { api.setCanvasHeight(SYN_H); }
+      // §320: よこ向き
+      function applyLand() {
+        if (api.setLandscape) { api.setLandscape(prefs.land); }
+        var box = panel && panel.parentNode;
+        synLayout(prefs.land, prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130);
+        if (api.setCanvasHeight) { api.setCanvasHeight(SYN_H); }
+      }
+      applyLand();
       function now() { return frame / 60; }
       function kbBase() { return 60 + prefs.oct * 12; }
       function padBase() { return 48 + prefs.key + prefs.oct * 12; }
@@ -353,6 +432,7 @@
         noteOff(id, true);
         var h = { id: id, m: m, v: null };
         held.push(h);
+        if (arpOn()) { return; } // §320: 鳴らすのはアルペジエーター
         if (patch.mono) { mono(); return; }
         h.v = synVoice(patch, m, out(), 0, 0.8);
         recOn(id, m);
@@ -363,10 +443,12 @@
           if (held[i].v) { synRelease(held[i].v); recOff(id); }
           held.splice(i, 1);
         }
-        if (patch.mono && !quiet) { mono(); }
+        if (patch.mono && !quiet && !arpOn()) { mono(); }
       }
       function allOff() {
         var i;
+        for (i = 0; i < arpVo.length; i++) { synRelease(arpVo[i], 0.05); }
+        arpVo = []; arp = null;
         for (i = 0; i < held.length; i++) { if (held[i].v) { synRelease(held[i].v); recOff(held[i].id); } }
         held = [];
         if (tone) { synRelease(tone.v); recOff("tone"); tone = null; }
@@ -405,13 +487,50 @@
       var bpm = prefs.bpm, meter = 4, metro = prefs.metro, takes = synTakesLoad();
       var take = cfg.take ? synTakeById(takes, cfg.take) : null, rec = null, play = null;
       if (take) { msg = "「" + escHtml(take.name) + "」をひらきました。▶ 再生で聴けます（録ったときの音色で鳴ります）"; }
-      function recBeat() { return rec ? (now() - rec.t0) * bpm / 60 : 0; }
+      // §320: 伴奏（シーケンサーの曲）
+      var back = cfg.backing && B.backing ? B.backing(cfg.backing) : null, bk = null;
+      if (back) { bpm = back.seq.bpm; meter = back.seq.meter; if (!take) { msg = "&#x1F3B8; 伴奏に合わせて弾こう"; } }
+      else if (cfg.backing) { msg = "伴奏の曲が見つかりませんでした（ゴリラウクレレのシーケンサーで曲を作ってね）"; }
+      function backApi() { var U = window.UGUkulele; return U && U.seqPlayEvent ? U : null; }
+      function backT() { return bk ? (frame - bk.f0) / 60 : 0; }
+      function backBeat() { var S0 = back.s, t = backT(); return t < S0.lead ? (t - S0.lead) / S0.spb : S0.beatAt(t); }
+      function backStart(pre) {
+        backStop();
+        audio();
+        var U = backApi(), progs = [24], ids, i;
+        bk = { f0: frame + Math.round((pre || 0) * 60), idx: 0, outs: [null, null, null, null], mix: null, fx: false };
+        if (!audioOk || !U) { return; }
+        try { ids = U.trackIds(back.s.tracks); for (i = 0; i < ids.length; i++) { if (back.s.tracks[ids[i]].on && back.s.tracks[ids[i]].prog !== undefined) { progs.push(back.s.tracks[ids[i]].prog); } } UG.loadSamples(progs); } catch (e0) {}
+        if (U.fxPush) { try { U.fxPush(back.seq); bk.fx = true; } catch (e) {} }
+      }
+      function backStop() {
+        if (!bk) { return; }
+        var U = backApi();
+        if (bk.fx && U && U.fxPop) { try { U.fxPop(); } catch (e) {} }
+        if (U && U.susStop) { try { U.susStop(); } catch (e9) {} }
+        bk = null;
+        arp = null;
+      }
+      function backStep() {
+        var S0 = back.s, t = backT(), U = backApi(), ac = audioOk && UG.audio ? UG.audio.ctx : null, ev;
+        while (bk.idx < S0.events.length && (ev = S0.events[bk.idx]).t <= t + 0.1) {
+          if (ac && U && B.backEventOn(ev, back.seq, S0.lead, false)) {
+            try { if (!bk.mix) { bk.mix = U.mixer(UG, ac, S0.tracks); } U.seqPlayEvent(UG, ac, ev, ac.currentTime + Math.max(0, ev.t - t), back.lowG, 0.55, bk.outs, bk.mix, S0.tracks); } catch (e) {}
+          }
+          bk.idx++;
+        }
+        if (t >= S0.time) { if (rec) { recStop(); } backStop(); if (play) { playStop(); } render(); }
+      }
+      function backToggle() { if (bk) { if (rec) { recStop(); } backStop(); playStop(); } else { backStart(0); } render(); }
+      function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
       function recToggle() {
         if (rec) { recStop(); return; }
         playStop();
         audio();
-        rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 };
+        if (back) { backStart(back.s.lead ? 0 : meter * back.s.spb); rec = { back: true, notes: [], open: {}, beat: -99 }; }
+        else { rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 }; }
+        arp = null;
         msg = "";
         render();
       }
@@ -427,13 +546,14 @@
         delete rec.open[id];
         rec.notes.push([r3(o[0]), r3(Math.max(0.0625, recBeat() - o[0])), o[1]]);
       }
-      function presetName() { return prefs.edited ? "じぶんの音色" : synOpt(SYN_PRESETS, prefs.preset)[1].replace(/&#x[0-9A-F]+;(&#x[0-9A-F]+;)?\s*/g, ""); }
+      function presetName() { return prefs.mine ? prefs.mine + (prefs.edited ? "＊" : "") : prefs.edited ? "じぶんの音色" : synOpt(SYN_PRESETS, prefs.preset)[1].replace(/&#x[0-9A-F]+;(&#x[0-9A-F]+;)?\s*/g, ""); }
       function recStop() {
         var ks = [], k;
         for (k in rec.open) { if (rec.open.hasOwnProperty(k)) { ks.push(k); } }
         for (k = 0; k < ks.length; k++) { recOff(ks[k]); }
-        var n = rec.notes.sort(function (a, b) { return a[0] - b[0]; });
+        var n = rec.notes.sort(function (a, b) { return a[0] - b[0]; }), wasBack = rec.back;
         rec = null;
+        if (wasBack) { backStop(); }
         if (n.length) {
           take = synTakeAdd(takes, { bpm: bpm, meter: meter, pname: presetName(), patch: patch, notes: n });
           synTakesSave(takes);
@@ -441,15 +561,46 @@
         } else { msg = "音がなかったので保存しませんでした"; }
         render();
       }
-      function playBeat() { return play ? (now() - play.t0) * play.bpm / 60 : 0; }
-      function playStop() { if (!play) { return; } for (var i = 0; i < play.vo.length; i++) { synRelease(play.vo[i], 0.05); } play = null; }
+      function playBeat() { return play ? (play.back ? backBeat() : (now() - play.t0) * play.bpm / 60) : 0; }
+      function playStop() { if (!play) { return; } var wb = play.back; for (var i = 0; i < play.vo.length; i++) { synRelease(play.vo[i], 0.05); } play = null; if (wb) { backStop(); } }
       function playToggle() {
         if (play) { playStop(); render(); return; }
         if (rec) { return; }
         if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音で録ってね"; render(); return; }
         audio();
-        play = { t0: now() + 0.1, bpm: take.bpm, notes: take.notes, idx: 0, vo: [], patch: synPatchClean(take.patch) };
+        if (back) { backStart(0); }
+        play = { back: !!back, t0: now() + 0.1, bpm: back ? back.seq.bpm : take.bpm, notes: take.notes, idx: 0, vo: [], patch: synPatchClean(take.patch) };
         render();
+      }
+
+      // --- §320: アルペジエーター（押さえている音を1音ずつ）---
+      var arp = null, arpVo = [], arpCur = null;
+      function arpOn() { return prefs.arp.on && prefs.view === "keys"; }
+      function arpStart() {
+        var u = prefs.arp.rate;
+        if (bk) { arp = { back: true, b0: Math.max(0, Math.ceil(backBeat() / u - 1e-6) * u), k: 0 }; }
+        else if (rec) { arp = { t0: rec.t0 + Math.max(0, Math.ceil(recBeat() / u - 1e-6)) * u * 60 / bpm, k: 0 }; }
+        else { arp = { t0: now() + 0.02, k: 0 }; }
+      }
+      function arpTime(k) { return arp.back ? now() + (back.s.tm(arp.b0 + k * prefs.arp.rate) - backT()) : arp.t0 + k * prefs.arp.rate * 60 / bpm; }
+      function arpStep() {
+        if (!arpOn() || !held.length) { arp = null; arpCur = null; return; }
+        if (!arp) { arpStart(); }
+        var ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0, i;
+        while (arp && n++ < 16) {
+          var dt = arpTime(arp.k) - now();
+          if (dt > 0.1) { break; }
+          var k = arp.k++;
+          if (dt < -0.05) { continue; }
+          var list = synArpOrder(held.map(function (h0) { return h0.m; }), prefs.arp.mode, prefs.arp.oct);
+          var m = prefs.arp.mode === "random" ? list[Math.floor(Math.random() * list.length)] : list[k % list.length];
+          var spb = arp.back ? back.s.spb : 60 / bpm, len = prefs.arp.rate * prefs.arp.gate, when = ac ? ac.currentTime + Math.max(0, dt) : 0;
+          var v = synVoice(patch, m, out(), when, 0.8);
+          if (v) { synRelease(v, undefined, when + len * spb); arpVo.push(v); }
+          arpCur = m;
+          if (rec) { var b = recBeat() + Math.max(0, dt) / spb; if (b >= -0.05 && rec.notes.length < SYN_NOTES_MAX) { rec.notes.push([r3(Math.max(0, b)), r3(len), m]); } }
+        }
+        if (arpVo.length > 32 && ac) { for (i = arpVo.length - 1; i >= 0; i--) { if (arpVo[i].end < ac.currentTime) { arpVo.splice(i, 1); } } }
       }
 
       // --- パネル ---
@@ -468,9 +619,25 @@
         if (v === "rec") { recToggle(); }
         else if (v === "play") { playToggle(); }
         else if (v === "metro") { metro = !metro; prefs.metro = metro; save(); render(); }
-        else if (v === "bpmdown" || v === "bpmup") { if (rec) { return; } bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5))); prefs.bpm = bpm; save(); render(); }
+        else if (v === "bpmdown" || v === "bpmup") { if (rec || back) { return; } bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5))); prefs.bpm = bpm; save(); render(); }
         else if (/^tab:/.test(v)) { prefs.tab = v.substring(4) === "play" ? "play" : "sound"; save(); render(); }
-        else if (/^preset:/.test(v)) { allOff(); var pr = synPreset(v.substring(7)); prefs.preset = pr.id; prefs.patch = patch = pr.patch; prefs.edited = false; save(); render(); }
+        else if (/^preset:/.test(v)) { allOff(); var pr = synPreset(v.substring(7)); prefs.preset = pr.id; prefs.patch = patch = pr.patch; prefs.edited = false; prefs.mine = ""; save(); render(); }
+        else if (v === "mysave") {
+          var my = synMyLoad(), nm = prefs.mine || ("じぶんの音 " + (my.length + 1));
+          try { if (window.prompt) { var r0 = window.prompt("音色の名前（16文字まで）", nm); if (r0 === null) { return; } nm = r0; } } catch (e) {}
+          var ix = synMyPut(my, nm, patch);
+          if (ix < 0) { msg = "じぶんの音色がいっぱいです（" + SYN_MY_MAX + "個まで）。はじめの画面で消してね"; }
+          else { synMySave(my); prefs.mine = my[ix].name; prefs.edited = false; save(); msg = "&#x1F4BE; 「" + escHtml(my[ix].name) + "」に保存しました"; }
+          render();
+        }
+        else if (/^mine:\d+$/.test(v)) { allOff(); var it = synMyLoad()[Number(v.substring(5))]; if (it) { prefs.patch = patch = it.patch; prefs.mine = it.name; prefs.edited = false; save(); } render(); }
+        else if (v === "back") { backToggle(); }
+        else if (v === "land") { allOff(); prefs.land = !prefs.land; save(); applyLand(); render(); }
+        else if (v === "arp") { allOff(); prefs.arp.on = !prefs.arp.on; save(); render(); }
+        else if (/^arpm:/.test(v)) { prefs.arp.mode = synOpt(SYN_ARP_MODES, v.substring(5))[0]; save(); render(); }
+        else if (/^arpr:/.test(v)) { prefs.arp = synArpClean({ on: prefs.arp.on, mode: prefs.arp.mode, rate: Number(v.substring(5)), oct: prefs.arp.oct, gate: prefs.arp.gate }); arp = null; save(); render(); }
+        else if (v === "arpo:-" || v === "arpo:+") { prefs.arp.oct = Math.max(1, Math.min(3, prefs.arp.oct + (v === "arpo:+" ? 1 : -1))); save(); render(); }
+        else if (v === "arpg:-" || v === "arpg:+") { prefs.arp.gate = Math.round(Math.max(0.2, Math.min(1, prefs.arp.gate + (v === "arpg:+" ? 0.1 : -0.1))) * 10) / 10; save(); render(); }
         else if (/^w1:|^w2:|^lto:/.test(v)) { allOff(); var kk = v.split(":"); patch[kk[0]] = kk[1]; prefs.patch = patch = synPatchClean(patch); edited(); render(); }
         else if (v === "mono") { allOff(); patch.mono = !patch.mono; edited(); render(); }
         else if (/^view:/.test(v)) { allOff(); prefs.view = v.substring(5) === "pad" ? "pad" : "keys"; save(); render(); }
@@ -486,21 +653,42 @@
         var html = "", i, j;
         html += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ya="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
           '<button class="modal-btn' + (play ? " piano-rec-on" : "") + '" data-ya="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button></div>' +
+          (back ? '<div class="piano-row"><button class="modal-btn" data-ya="back"' + (rec ? " disabled" : "") + '>' + (bk && !play && !rec ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button>' +
+            '<button class="modal-btn" data-ya="metro" title="録音のメトロノーム">' + METRO + ' ' + (metro ? "ON" : "OFF") + '</button></div>' +
+            '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子）</p>' :
           '<div class="piano-row"><button class="modal-btn" data-ya="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ya="bpmup">&#xFF0B;</button>' +
-          '<button class="modal-btn" data-ya="metro" title="録音のメトロノーム">' + METRO + ' ' + (metro ? "ON" : "OFF") + '</button></div>';
+          '<button class="modal-btn" data-ya="metro" title="録音のメトロノーム">' + METRO + ' ' + (metro ? "ON" : "OFF") + '</button></div>');
         html += '<div class="piano-row"><button class="modal-btn' + (prefs.tab === "sound" ? " piano-rec-on" : "") + '" data-ya="tab:sound">音色</button><button class="modal-btn' + (prefs.tab === "play" ? " piano-rec-on" : "") + '" data-ya="tab:play">弾き方</button></div>';
         if (prefs.tab === "play") {
           html += '<div class="piano-row">';
           for (i = 0; i < SYN_VIEWS.length; i++) { html += '<button class="modal-btn' + (prefs.view === SYN_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-ya="view:' + SYN_VIEWS[i][0] + '">' + SYN_VIEWS[i][1] + '</button>'; }
-          html += '</div><div class="piano-row"><button class="modal-btn" data-ya="octdown">&#x25C0;</button><span>オクターブ ' + (prefs.oct > 0 ? "+" : "") + prefs.oct + '</span><button class="modal-btn" data-ya="octup">&#x25B6;</button></div>' +
+          html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-ya="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button></div>';
+          // §320: アルペジエーター
+          var ap = prefs.arp;
+          html += '<p class="small" style="margin:8px 0 2px;color:#ffd166;">&#x1F3B6; アルペジエーター（鍵盤を押さえているあいだ、1音ずつ自動で）</p>' +
+            '<div class="piano-row"><button class="modal-btn' + (ap.on ? " piano-rec-on" : "") + '" data-ya="arp">' + (ap.on ? "ON" : "OFF") + '</button>';
+          for (i = 0; i < SYN_ARP_RATES.length; i++) { html += '<button class="modal-btn' + (Math.abs(ap.rate - SYN_ARP_RATES[i][0]) < 1e-6 ? " piano-rec-on" : "") + '" data-ya="arpr:' + SYN_ARP_RATES[i][0] + '">' + SYN_ARP_RATES[i][1] + '</button>'; }
+          html += '</div><div class="piano-row">';
+          for (i = 0; i < SYN_ARP_MODES.length; i++) { html += '<button class="modal-btn' + (ap.mode === SYN_ARP_MODES[i][0] ? " piano-rec-on" : "") + '" data-ya="arpm:' + SYN_ARP_MODES[i][0] + '">' + SYN_ARP_MODES[i][1] + '</button>'; }
+          html += '</div><div class="piano-row"><span>広げるオクターブ</span><button class="modal-btn" data-ya="arpo:-">－</button><span>' + ap.oct + '</span><button class="modal-btn" data-ya="arpo:+">＋</button></div>' +
+            '<div class="piano-row"><span>音の長さ</span><button class="modal-btn" data-ya="arpg:-">－</button><span>' + Math.round(ap.gate * 100) + '%</span><button class="modal-btn" data-ya="arpg:+">＋</button></div>';
+          html += '<div class="piano-row"><button class="modal-btn" data-ya="octdown">&#x25C0;</button><span>オクターブ ' + (prefs.oct > 0 ? "+" : "") + prefs.oct + '</span><button class="modal-btn" data-ya="octup">&#x25B6;</button></div>' +
             '<div class="piano-row"><button class="modal-btn" data-ya="keydown">&#x25C0;</button><span>キー ' + SYN_CDE[prefs.key] + '</span><button class="modal-btn" data-ya="keyup">&#x25B6;</button></div>' +
             '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-yscale="1">' + scaleOptions() + '</select></label></div><div class="piano-row">';
           for (i = 0; i < SYN_NAMES.length; i++) { html += '<button class="modal-btn' + (names === SYN_NAMES[i][0] ? " piano-rec-on" : "") + '" data-ya="names:' + SYN_NAMES[i][0] + '">' + SYN_NAMES[i][1] + '</button>'; }
           html += '</div><p class="small" style="margin:4px 0 0;">キーとスケールは XYパッド演奏の音（横に2オクターブ）。鍵盤は オクターブ だけ</p>';
         } else {
           html += '<div class="piano-opts">';
-          for (i = 0; i < SYN_PRESETS.length; i++) { html += '<button class="modal-btn quiz-opt' + (!prefs.edited && prefs.preset === SYN_PRESETS[i][0] ? " active" : "") + '" data-ya="preset:' + SYN_PRESETS[i][0] + '">' + SYN_PRESETS[i][1] + '</button>'; }
-          html += '</div><div class="piano-row"><span>波1</span>';
+          for (i = 0; i < SYN_PRESETS.length; i++) { html += '<button class="modal-btn quiz-opt' + (!prefs.edited && !prefs.mine && prefs.preset === SYN_PRESETS[i][0] ? " active" : "") + '" data-ya="preset:' + SYN_PRESETS[i][0] + '">' + SYN_PRESETS[i][1] + '</button>'; }
+          // §320: じぶんの音色
+          var my1 = synMyLoad();
+          html += '</div><div class="piano-row"><button class="modal-btn" data-ya="mysave">&#x1F4BE; いまの音色を保存</button></div>';
+          if (my1.length) {
+            html += '<div class="piano-opts">';
+            for (i = 0; i < my1.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.mine === my1[i].name && !prefs.edited ? " active" : "") + '" data-ya="mine:' + i + '">' + escHtml(my1[i].name) + '</button>'; }
+            html += '</div>';
+          }
+          html += '<div class="piano-row"><span>波1</span>';
           for (i = 0; i < SYN_WAVES.length; i++) { html += '<button class="modal-btn' + (patch.w1 === SYN_WAVES[i][0] ? " piano-rec-on" : "") + '" data-ya="w1:' + SYN_WAVES[i][0] + '">' + SYN_WAVES[i][1] + '</button>'; }
           html += '</div><div class="piano-row"><span>波2</span>';
           for (i = 0; i <= SYN_WAVES.length; i++) { var w2 = i < SYN_WAVES.length ? SYN_WAVES[i] : ["off", "なし"]; html += '<button class="modal-btn' + (patch.w2 === w2[0] ? " piano-rec-on" : "") + '" data-ya="w2:' + w2[0] + '">' + w2[1] + '</button>'; }
@@ -547,8 +735,8 @@
       render();
 
       // --- 描く ---
-      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
-      function lit(m) { var i; for (i = 0; i < held.length; i++) { if (held[i].m === m) { return true; } } return false; }
+      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + (SYN_LAND ? Math.max(4, size * 0.6) : size) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+      function lit(m) { var i; if (arpCur === m) { return true; } for (i = 0; i < held.length; i++) { if (held[i].m === m) { return true; } } return false; }
       function drawXY(ctx) {
         var x0 = 8, y0 = SYN_TOP + 4, w = W - 16, h = SYN_PAD_BOT - SYN_TOP - 8;
         var g = ctx.createLinearGradient ? ctx.createLinearGradient(x0, 0, x0 + w, 0) : null;
@@ -559,7 +747,8 @@
         ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y0 + h); ctx.moveTo(x0, py); ctx.lineTo(x0 + w, py); ctx.stroke();
         ctx.fillStyle = xyId !== null ? "#ffd166" : "#c77dff";
-        ctx.beginPath(); ctx.arc(px, py, xyId !== null ? 9 : 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, (xyId !== null ? 9 : 6) * (SYN_LAND ? 0.6 : 1), 0, Math.PI * 2); ctx.fill();
+        if (SYN_LAND) { return; } // よこ向きの帯はせまいので、文字は出さない
         text(ctx, "明るさ →", x0 + w - 30, y0 + h - 8, 9, "rgba(255,255,255,0.6)");
         text(ctx, "↑ うねり", x0 + 26, y0 + 9, 9, "rgba(255,255,255,0.6)");
       }
@@ -570,7 +759,7 @@
           ctx.fillStyle = on ? "#ffd166" : "#f8f9fa";
           ctx.fillRect(x + 1, SYN_KB_Y, ww - 2, SYN_KB_BOT - SYN_KB_Y);
           var nm = synName(m, names);
-          if (nm) { text(ctx, nm, x + ww / 2, SYN_KB_BOT - 12, nm.length > 2 ? 8 : 10, synPc(m) === 0 ? "#c2255c" : "#495057"); }
+          if (nm) { text(ctx, nm, x + ww / 2, SYN_KB_BOT - (SYN_LAND ? 6 : 12), nm.length > 2 || SYN_LAND ? 8 : 10, synPc(m) === 0 ? "#c2255c" : "#495057"); }
         }
         for (i = 0; i < SYN_BLACK.length; i++) {
           var bm = base + SYN_BLACK[i][1], bx = 4 + (SYN_BLACK[i][0] + 1) * ww;
@@ -631,19 +820,21 @@
         },
         step: function () {
           frame++;
+          if (bk) { backStep(); }
+          arpStep();
           if (play) {
             var pb = playBeat(), last = 0, i;
-            while (play.idx < play.notes.length && play.notes[play.idx][0] <= pb) {
+            while (play && play.idx < play.notes.length && play.notes[play.idx][0] <= pb) {
               var pn = play.notes[play.idx], v = synNote(play.patch, pn[2], out(), 0, pn[3] || 0.8, pn[1] * 60 / play.bpm);
               if (v) { play.vo.push(v); }
               play.idx++;
             }
             for (i = 0; i < play.notes.length; i++) { last = Math.max(last, play.notes[i][0] + play.notes[i][1]); }
-            if (play.idx >= play.notes.length && pb > last + 1) { play = null; render(); }
+            if (play.idx >= play.notes.length && pb > last + 1 && !play.back) { play = null; render(); }
           }
           if (rec) {
-            var rb = Math.floor(recBeat());
-            if (rb !== rec.beat && (metro || rb < 0)) { click(((rb % meter) + meter) % meter === 0); }
+            var rb = Math.floor(recBeat()), cnt = rec.back ? !back.s.lead : true;
+            if (rb !== rec.beat && ((metro && rb >= 0) || (rb < 0 && cnt))) { click(((rb % meter) + meter) % meter === 0); }
             rec.beat = rb;
           }
         },
@@ -652,10 +843,11 @@
           if (g) { g.addColorStop(0, "#10002b"); g.addColorStop(1, "#240046"); }
           ctx.fillStyle = g || "#10002b";
           ctx.fillRect(0, 0, W, SYN_H);
-          hudText(ctx, "🎛️ " + presetName() + (patch.mono ? "・モノ" : ""), 8, 10, "left");
-          hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
-          if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, 26, 13, "#ff6b6b"); }
-          else if (play) { text(ctx, "再生中…", W / 2, 26, 12, "#ffffff"); }
+          var hy = SYN_LAND ? 6 : 10;
+          hudText(ctx, "🎛️ " + presetName() + (arpOn() ? "・アルペジオ" : patch.mono ? "・モノ" : "") + (back ? " ・🎸 " + (bk ? "伴奏" : back.name) : ""), 8, hy, "left");
+          hudText(ctx, "BPM " + bpm, W - 8, hy, "right");
+          if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, SYN_LAND ? 6 : 26, 13, "#ff6b6b"); }
+          else if (play && !SYN_LAND) { text(ctx, "再生中…", W / 2, 26, 12, "#ffffff"); }
           if (prefs.view === "pad") { drawPad(ctx); return; }
           drawXY(ctx);
           drawKeyboard(ctx);
@@ -666,7 +858,8 @@
 
   window.UGSynth = {
     H: SYN_H, PREFS_KEY: SYN_PREFS_KEY, TAKES_KEY: SYN_TAKES_KEY, PRESETS: SYN_PRESETS, PARAMS: SYN_PARAMS, WAVES: SYN_WAVES, SEQ_PROG: SYN_SEQ_PROG,
-    TOP: SYN_TOP, PAD_BOT: SYN_PAD_BOT, KB_Y: SYN_KB_Y, KB_BOT: SYN_KB_BOT,
+    TOP: SYN_TOP, PAD_BOT: SYN_PAD_BOT, KB_Y: SYN_KB_Y, KB_BOT: SYN_KB_BOT, layout: synLayout, geom: function () { return { H: SYN_H, TOP: SYN_TOP, PAD_BOT: SYN_PAD_BOT, KB_Y: SYN_KB_Y, KB_BOT: SYN_KB_BOT, WHITES: SYN_WHITES, LAND: SYN_LAND }; },
+    arpOrder: synArpOrder, arpClean: synArpClean, ARP_MODES: SYN_ARP_MODES, MY_KEY: SYN_MY_KEY, myLoad: synMyLoad, myPut: synMyPut,
     patchClean: synPatchClean, preset: synPreset, voice: synVoice, release: synRelease, pitch: synPitch, setCut: synSetCut, setLfo: synSetLfo, note: synNote, envAt: synEnvAt,
     cutHz: synCutHz, keyAt: synKeyAt, padNotes: synPadNotes, prefs: synPrefs, takesLoad: synTakesLoad, takeById: synTakeById, sendToSeq: synSendToSeq
   };

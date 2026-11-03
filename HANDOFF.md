@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.24** |
+| 現在バージョン | **v2.25** |
 | ブランチ | main |
 
 ---
@@ -102,7 +102,8 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
-- **[v2.24] 🎛️ ゴリラシンセ**（§319）: `arcade-synth.js`（`window.UGSynth`・ホーンのあと）。音色は `synPatchClean`（`SYN_PARAMS`）、声は `synVoice / synRelease / synPitch / synSetCut / synSetLfo`、シーケンサーの1音は `synNote`（`kill`）。シーケンサーの `ynotes` トラックは `patch` を持ち、`ukeSeqPlayEvent` が `UGSynth.note` で鳴らす（`ukeXClean` で `patch` を残す・`ukeSusStop` は `kill` を呼ぶ）。次は §320（アルペジエーター・じぶんの音色・伴奏・よこ向き）
+- **[v2.25] 🎛️ シンセ: アルペジエーター・じぶんの音色・伴奏・よこ向き**（§320）: `prefs.arp`（`synArpClean`・`synArpOrder`）。`arpStep()` が step ごとに先読み（録音中は録音の拍・伴奏中は曲の拍にそろえる。弾いた音は rec.notes へ直接）。アルペジエーター ON の鍵盤は held に入れるだけ。じぶんの音色は `ultimateGorillaSynthMyV1`（`synMyPut` 同じ名前は上書き・`prefs.mine`）。伴奏はゴリラホーンと同じ作り（`backStart / backStep / backStop`）。よこ向きは `synLayout(land, h)`（白鍵 15・`synKeys(n)`）
+- **[v2.24] 🎛️ ゴリラシンセ**（§319）: `arcade-synth.js`（`window.UGSynth`・ホーンのあと）。音色は `synPatchClean`（`SYN_PARAMS`）、声は `synVoice / synRelease / synPitch / synSetCut / synSetLfo`、シーケンサーの1音は `synNote`（`kill`）。シーケンサーの `ynotes` トラックは `patch` を持ち、`ukeSeqPlayEvent` が `UGSynth.note` で鳴らす（`ukeXClean` で `patch` を残す・`ukeSusStop` は `kill` を呼ぶ）
 - **[v2.23] 🎹 ピアノの音色をふやす**（§318）: `PIANO_VOICES` に 19・13・9。のばせる音色は noteOn で `UGStrings.hold`、noteOff で `UGStrings.stop`（`holds[id]`・やめるときは `pianoHoldsOff`）。次はゴリラシンセ（§319〜・別ゲーム）
 - **[v2.22] 🎹 ピアノ・オルガン・鉄琴・木琴を生の録音に**（§317）: 0 vsco_piano・19 vsco_organ・12 vsco_marimba・13 vsco_xylo・9 vsco_glock。番号だけのファイル（ピアノ・オルガン）は変換スクリプトに一覧（list）と高さのずれ（off）を渡して作る。`UGStrings.sustains` にオルガン（19）も
 - **[v2.21] ⏩ 録音の先読み**（§316）: `UGMelody.prefetchSamples(progs)`（`melodySamples.pre`）。ストリングス・ホーンは `progsNow()` を画面を開いたときに先読み、楽器・編成の変更は `preload(progs)`

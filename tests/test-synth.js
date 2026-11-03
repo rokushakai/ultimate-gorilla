@@ -90,5 +90,34 @@ module.exports = function () {
   e5.counters.targets.length = 0; U5.susStop();
   ok(rs.ok && xt.preset === "ynotes" && xt.prog === 81 && xt.patch && xt.patch.res === 0.8 && xt.notes.length === 1 && U5.X_PRESETS.some(function (p) { return p[0] === "ynotes"; }) && played5 === 2 && e5.counters.targets.length >= 1,
     "send to the sequencer: a synth-notes track that keeps the patch and plays it for the note length; stopping silences it", [xt && xt.patch, played5]);
+
+  // --- §320: アルペジエーター ---
+  ok(Y.arpOrder([64, 60, 67], "up", 1).join() === "60,64,67" && Y.arpOrder([64, 60, 67], "down", 1).join() === "67,64,60" && Y.arpOrder([60, 64, 67], "updown", 1).join() === "60,64,67,64" &&
+    Y.arpOrder([64, 60], "order", 2).join() === "64,60,76,72" && Y.arpClean({ on: 1, rate: 0.5, oct: 9, gate: 3, mode: "zz" }).oct === 1 && Y.arpClean({ rate: 0.5 }).rate === 0.5 && Y.arpClean({}).gate === 0.6,
+    "arpeggiator orders: up, down, up-down (ends not repeated), as pressed over octaves; settings are clamped");
+  var e6 = yrun({ preset: "pluck", bpm: 120, arp: { on: true, rate: 0.25, mode: "up", gate: 0.6 } }, 300, function (fr, e) {
+    if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (fr === 125) { e.key("keydown", "a"); e.key("keydown", "d"); e.key("keydown", "g"); }
+    if (fr === 185) { e.key("keyup", "a"); e.key("keyup", "d"); e.key("keyup", "g"); }
+    if (fr === 230) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tk6 = JSON.parse(e6.store[Y.TAKES_KEY] || "[]")[0], ns6 = tk6 ? tk6.notes : [];
+  var steps6 = ns6.slice(1).every(function (n, k) { return Math.abs(n[0] - ns6[k][0] - 0.25) < 0.02; });
+  ok(ns6.length >= 6 && ns6.length <= 9 && ns6.slice(0, 4).map(function (n) { return n[2]; }).join() === "60,64,67,60" && steps6 && Math.abs(ns6[0][1] - 0.15) < 1e-6,
+    "arpeggiator: held C-E-G plays up in 16ths at the BPM (gate 60%) and is recorded as it plays", ns6);
+  // --- §320: よこ向き（2オクターブ）---
+  var e7 = H.load(), Y7 = e7.window.UGSynth;
+  Y7.layout(true, 130);
+  var gl = Y7.geom(), lw = (240 - 8) / 15;
+  var kTop = Y7.keyAt(4 + lw * 14.5, gl.KB_BOT - 3, 48);
+  Y7.layout(false);
+  ok(gl.LAND && gl.WHITES === 15 && gl.H === 130 && kTop === 72 && Y7.geom().WHITES === 10, "landscape: the keyboard spreads to two octaves (15 white keys)", gl);
+  // --- §320: じぶんの音色 ---
+  var my = [], i0 = Y.myPut(my, " わたしのベース ", Y.preset("bass").patch), i1 = Y.myPut(my, "わたしのベース", Y.preset("acid").patch), i2 = Y.myPut(my, "", Y.preset("pad").patch);
+  var full = []; for (var q = 0; q < 12; q++) { Y.myPut(full, "s" + q, {}); }
+  ok(i0 === 0 && i1 === 0 && my[0].name === "わたしのベース" && my[0].patch.res === 0.8 && i2 === 1 && my[1].name === "じぶんの音 2" && Y.myPut(full, "x", {}) === -1,
+    "my sounds: saved by name (same name overwrites, blank gets a number), up to 12", my.map(function (x) { return x.name; }));
+  var e8 = yrun({ preset: "lead" }, 10, function (fr, e) { if (fr === 1) { e.store[Y.MY_KEY] = JSON.stringify([{ name: "ぼくの音", patch: Y.preset("bell").patch }]); } });
+  ok(e8.window.UGSynth.myLoad()[0].patch.oct2 === 1 && e8.window.UGSynth.myLoad().length === 1, "my sounds load back from storage");
   void U;
 };
