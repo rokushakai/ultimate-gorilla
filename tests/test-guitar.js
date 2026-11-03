@@ -74,8 +74,8 @@ module.exports = function () {
   var b1 = G.cellRect(1, 1), b3 = G.cellRect(1, 3), e2 = G.cellRect(2, 2);
   var s3 = grun({ view: "fret", voice: "clean" }, 20, function (fr, e) {
     if (fr === 2) { e.ptr("down", b1.x + 5, b1.y + 5, 1); }
-    if (fr === 4) { e.ptr("move", b3.x + 5, b3.y + 5, 1); }
-    if (fr === 6) { e.ptr("up", b3.x + 5, b3.y + 5, 1); e.ptr("down", e2.x + 5, e2.y + 5, 2); e.ptr("up", e2.x + 5, e2.y + 5, 2); }
+    if (fr === 4) { e.ptr("move", b3.x + 5, b3.y + b3.h / 2, 1); }
+    if (fr === 6) { e.ptr("up", b3.x + 5, b3.y + b3.h / 2, 1); e.ptr("down", e2.x + 5, e2.y + 5, 2); e.ptr("up", e2.x + 5, e2.y + 5, 2); }
   });
   ok(s3.snd.join() === "60@27,57@27" && s3.bends() === 1, "single notes: tap plays the fret, sliding on the same string bends it (clean electric = GM 27)", [s3.snd, s3.bends()]);
 
@@ -193,8 +193,8 @@ module.exports = function () {
     var c1 = Gw.cellRect(1, 1), c3 = Gw.cellRect(1, 3);
     if (fr === 2) { pk.info = [Gw.cellAt(px, Gw.rowLineY(1), 0), Gw.pickRow(px, Gw.rowLineY(1)), Gw.cellRect(0, 5).x + Gw.cellRect(0, 5).w <= Gw.geom().PICK_X]; epk.ptr("down", c1.x + 5, c1.y + 5, 1); }
     if (fr === 4) { pk.n0 = pk.snd.length; epk.ptr("down", px, Gw.BOARD_Y + 2, 2); epk.ptr("move", px, 316, 2); epk.ptr("up", px, 316, 2); }
-    if (fr === 6) { pk.st0 = pk.stops; epk.ptr("move", c3.x + 5, c3.y + 5, 1); }
-    if (fr === 8) { pk.st1 = pk.stops; epk.ptr("up", c3.x + 5, c3.y + 5, 1); }
+    if (fr === 6) { pk.st0 = pk.stops; epk.ptr("move", c3.x + 5, c3.y + c3.h / 2, 1); }
+    if (fr === 8) { pk.st1 = pk.stops; epk.ptr("up", c3.x + 5, c3.y + c3.h / 2, 1); }
     if (fr === 10) { pk.st2 = pk.stops; epk.ptr("down", px, Gw.rowLineY(4), 3); epk.ptr("up", px, Gw.rowLineY(4), 3); }
   });
   ok(pk.n0 === 0 && pk.snd.slice(0, 6).join() === "64,60,55,50,45,40" && pk.bends === 1 && pk.st2 > pk.st1 && pk.snd[6] === 45 && pk.info[0] === null && pk.info[1] === 1 && pk.info[2],
@@ -284,6 +284,21 @@ module.exports = function () {
   ok(myp.myOn && myp.myEdit && myp.myc[4].r === 6 && myp.myc[4].q === "sus4" && myp.myc[4].b === 11 && myp.myc[0].r === 0 && myh.indexOf("F#sus4/B") > 0 && myh.indexOf('data-gmyq="1"') > 0 &&
     myLast.join() === JSON.stringify(G.shapeQ(6, "sus4", 11).midis.filter(function (m) { return m !== null; })).replace(/[\[\]]/g, ""),
     "the key tab edits the selected chord button (root, type, bass); strums use it", [myp.myc[4], myLast]);
+
+  // --- §295: チョーキング（押さえた指を縦に動かす ＝ 音が上がる・1行で全音まで・弦は変わらない）---
+  var bn = { b: [], snd: [] }, ebn = H.load();
+  ebn.store[G.PREFS_KEY] = JSON.stringify({ view: "fret", voice: "steel" });
+  ebn.run("guitar", { config: {} }, 14, function (fr) {
+    var Gw = ebn.window.UGGuitar, M = ebn.window.UGMelody, c = Gw.cellRect(1, 3), cy = c.y + c.h / 2;
+    if (fr === 1) { var s0 = M.synth, b0 = M.voiceBend; M.synth = function (m, pg) { if (pg === 25) { bn.snd.push(m); } return s0.apply(M, arguments); }; M.voiceBend = function (h, m) { bn.b.push(m); return b0.apply(M, arguments); }; }
+    if (fr === 2) { ebn.ptr("down", c.x + 5, cy, 1); }
+    if (fr === 4) { ebn.ptr("move", c.x + 5, cy - c.h * 0.05, 1); }
+    if (fr === 6) { ebn.ptr("move", c.x + 5, cy - c.h * 0.575, 1); }
+    if (fr === 8) { ebn.ptr("move", c.x + 5, cy - c.h * 2, 1); }
+    if (fr === 10) { ebn.ptr("move", c.x + 5, cy, 1); ebn.ptr("up", c.x + 5, cy, 1); }
+  });
+  ok(bn.snd.join() === "62" && bn.b.join() === "63,64,62" && G.bendOf(0, 40) === 0 && G.bendOf(40, 40) === 2 && G.bendOf(-100, 40) === 2,
+    "bending: moving the pressed finger across the neck raises the pitch (a small wobble is ignored), a whole step at most, back down when it returns; the string does not change", [bn.snd, bn.b]);
 
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
