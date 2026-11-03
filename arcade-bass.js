@@ -1261,11 +1261,12 @@
       function pickNote(s) { return BASS_STRINGS[s][0] + fretOf(s); }
       function pickStop(s) { if (!pv[s]) { return; } hush(pv[s]); pv[s] = null; recOff("k" + s); }
       function pickAllOff() { if (!pv) { return; } for (var s = 0; s < 4; s++) { pickStop(s); } held = {}; picks = {}; }
-      function pluck(s) {
+      // vel（省略可）: §293 なぞる速さの強さの倍率
+      function pluck(s, vel) {
         if (ended) { return; }
         var m = pickNote(s), how = techOf(m, s);
         pickStop(s);
-        pv[s] = { h: sound(m, 0.85, how), cur: m };
+        pv[s] = { h: sound(m, Math.min(1, 0.85 * (vel || 1)), how), cur: m };
         recOn("k" + s, m, velOf(how));
       }
       // 左手を変えたとき、鳴っている弦は音程を変える。指がぜんぶはなれたら止める（ミュート）
@@ -1769,17 +1770,17 @@
               // §287: 左手は押さえるだけ・右手の所で弾く
               if (c) { held[pid] = { s: c.s, f: c.f }; heldChanged(c.s, false); return; }
               var pr = bassPickRow(x, y);
-              if (pr >= 0) { picks[pid] = { y: y }; if (Math.abs(y - bassRowLineY(pr)) <= bassRowH() * 0.3) { pluck(pr); } }
+              if (pr >= 0) { picks[pid] = { y: y, f: frame }; if (Math.abs(y - bassRowLineY(pr)) <= bassRowH() * 0.3) { pluck(pr); } }
               return;
             }
             if (c) { noteOn(pid, c.m, c.s); }
           } else if (type === "move") {
             if (BASS_PICK && view === "fret") {
               if (picks[pid]) {
-                var y0 = picks[pid].y, q, ns = BASS_STRINGS.length;
-                if (y > y0) { for (q = 0; q < ns; q++) { if (bassRowLineY(q) > y0 && bassRowLineY(q) <= y) { pluck(q); } } }
-                else { for (q = ns - 1; q >= 0; q--) { if (bassRowLineY(q) < y0 && bassRowLineY(q) >= y) { pluck(q); } } }
-                picks[pid].y = y;
+                var y0 = picks[pid].y, q, ns = BASS_STRINGS.length, pvel = Math.max(0.4, Math.min(1.2, 0.4 + Math.abs(y - y0) / Math.max(1, frame - picks[pid].f) / 30));
+                if (y > y0) { for (q = 0; q < ns; q++) { if (bassRowLineY(q) > y0 && bassRowLineY(q) <= y) { pluck(q, pvel); } } }
+                else { for (q = ns - 1; q >= 0; q--) { if (bassRowLineY(q) < y0 && bassRowLineY(q) >= y) { pluck(q, pvel); } } }
+                picks[pid].y = y; picks[pid].f = frame;
                 return;
               }
               if (held[pid]) {

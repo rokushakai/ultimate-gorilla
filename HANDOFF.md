@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.99** |
+| 現在バージョン | **v2.00** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.00] 🎶 ストロークの強さ**（§293）: `gtrVelocity(速さ)`（0.4〜1.2）。指の press / picks に f（フレーム）を持ち、`swipeVel(p, y)` で倍率を出す。ベースの右手も同じ式
 - **[v1.99] 🎶 コードの位置・左利き**（§292）: `gtrLayout({ cpos })`（"near" / "far" / "side"）。よこ向きの左利きは `GTR_CREV` でコードを右から（`gtrChordRect`・`gtrGridCol`・`drawGrid`）
 - **[v1.98] 🎶 ストロークのよこ向き**（§291）: `gtrLayout({ cgrid })` が `GTR_CMODE`（"strip" たて / "side" よこ / "grid" コードの列）と弦の所 `GTR_STRUM_X0〜X1` を決める。`gtrChordRect` は形ごと。コードの列は `gtrGridCol(x)`・`colShape(i)`（指 press に col を持つ）
 - **[v1.97] 🎶 ストロークの向き**（§290）: ストロークの弦は `gtrStrumLineY(sn)` で上が1弦（sn 5）・下が6弦（sn 0）。`GTR_STRUM_Y`〜`GTR_STRUM_BOT` が弦、その下 `GTR_CHORD_Y` がコードの段（`gtrLayout` が決める）。指が上へ動く ＝ ダウン
@@ -248,7 +249,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（925項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（926項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

@@ -251,6 +251,23 @@ module.exports = function () {
   ok(g91.mode === "grid" && g91.snd.slice(0, 6).join() === "41,48,53,57,60,65" && g91.snd.slice(6, 12).join() === "43,47,50,55,59,67",
     "chord grid: swiping up in the F column strums F; tapping the G name strums G", g91.snd);
 
+  // --- §293: ストロークの強さ（ゆっくりなぞると弱く・速いと強く）---
+  function vrun(steps) {
+    var e = H.load(), lv = [];
+    e.store[G.PREFS_KEY] = JSON.stringify({ view: "chord", voice: "steel" });
+    e.run("guitar", { config: {} }, steps + 6, function (fr) {
+      var gm = e.window.UGGuitar.geom(), M = e.window.UGMelody, y0 = gm.STRUM_BOT - 2, y1 = gm.STRUM_Y + 2;
+      if (fr === 1) { var s0 = M.synth; M.synth = function (m, pg, w, l) { if (pg === 25) { lv.push(l); } return s0.apply(M, arguments); }; }
+      if (fr === 2) { e.ptr("down", 200, y0, 1); }
+      if (fr > 2 && fr <= 2 + steps) { e.ptr("move", 200, y0 + (y1 - y0) * (fr - 2) / steps, 1); }
+      if (fr === 3 + steps) { e.ptr("up", 200, y1, 1); }
+    });
+    return lv;
+  }
+  var vSlow = vrun(40), vFast = vrun(1);
+  ok(vSlow.length === 5 && vFast.length === 5 && vSlow[0] < vFast[0] * 0.6 && G.vel(0) === 0.4 && G.vel(1000) === 1.2,
+    "stroke strength: a slow swipe plays softer than a fast one", [vSlow, vFast]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
