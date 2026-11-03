@@ -327,4 +327,76 @@ module.exports = function () {
     "piano voices include the pipe organ, xylophone and glockenspiel; the organ sustains while held and stops on release", [src18, stop18]);
   // §322: グランド・アップライト・エレピ（Wurlitzer）・CP80
   ok(P.VOICES.slice(0, 4).map(function (v) { return v[0]; }).join() === "0,1,4,2", "piano voices: grand, upright, electric piano, CP80", P.VOICES.map(function (v) { return v[0]; }));
+  // --- §323: ▶ パターン（コード進行・パッドで次の小節から・ハネ・ドラム・ベース）---
+  var B = W.UGBass;
+  ok(P.voicing(B.chord(0, 0, "major", false), false).join() === "60,64,67" && P.voicing(B.chord(0, 4, "major", true), true).join() === "55,59,62,65" && P.voicing(B.chord(9, 0, "major", false), false).join() === "57,61,64" &&
+    P.barSteps([60, 64, 67], "chord", 8, 4).unit === 4 && P.barSteps([60, 64, 67], "chord", 8, 4).steps.length === 1 && P.barSteps([60, 64, 67], "bunch", 8, 4).unit === 0.5,
+    "pattern chords: root–3rd–5th from G3–F#4 (7th adds the 7th); the plain chord rings once a bar", P.voicing(B.chord(0, 4, "major", true), true));
+  function patHooked() {
+    return H.load({ patch: function (src, file) {
+      if (file === "arcade-piano.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__pp = function () { return { t: now(), pat: pat, cur: cur, pend: pend, prefs: prefs, rec: rec, act: action, text: patChordText, lit: litKeys }; };"); }
+      return src;
+    } });
+  }
+  // 録音しながらパターン（BPM 120 ＝ 1拍 30 フレーム。カウント 4拍 ＝ 120 フレーム）→ 2小節ぶん
+  function patRec(prefs, frames, extra) {
+    var e = patHooked();
+    e.store.ultimateGorillaPianoPrefsV1 = JSON.stringify(prefs);
+    e.run("piano", { config: { mode: "free" } }, frames, function (f) {
+      if (f === 2) { press(e, "r"); }
+      if (f === 4) { press(e, "b"); }
+      if (extra) { extra(f, e); }
+      if (f === frames - 2) { press(e, "r"); }
+    });
+    var tk = JSON.parse(e.store.ultimateGorillaPianoTakesV1 || "[]")[0];
+    return { e: e, notes: tk ? tk.notes : [] };
+  }
+  var cp = B.cprog("pop4")[2], v0 = P.voicing(B.chord(0, cp[0], "major", false), false), v1 = P.voicing(B.chord(0, cp[1], "major", false), false);
+  var pr1 = patRec({ bpm: 120, ppat: "bunch", cprog: "pop4" }, 122 + 240);
+  var at1 = function (b) { return pr1.notes.filter(function (n) { return Math.abs(n[0] - b) < 0.01; }).map(function (n) { return n[2]; }).sort().join(); };
+  ok(pr1.notes.length === 12 && at1(0) === String(v0[0] - 12) && at1(1) === [v0[1], v0[2]].sort().join() && at1(4) === String(v1[0] - 12) && at1(5) === [v1[1], v1[2]].sort().join() && Math.abs(pr1.notes[0][1] - 1) < 0.01,
+    "▶ pattern while recording: starts with the take, follows the chord progression bar by bar, and is recorded (ブンチャッ: bass, then right hand)", pr1.notes);
+  // パッド（キー 4 ＝ F）をパターン中に押す → 次の小節の頭から F、コード進行はとける
+  var pr2 = patRec({ bpm: 120, ppat: "chord", cprog: "royal" }, 122 + 360, function (f, e) { if (f === 122 + 40) { press(e, "4"); } });
+  ok(pr2.notes.filter(function (n) { return n[0] < 4; }).map(function (n) { return n[2]; }).sort().join() === P.voicing(B.chord(0, 3, "major", false), false).sort().join() &&
+    pr2.notes.filter(function (n) { return Math.abs(n[0] - 4) < 0.01; }).map(function (n) { return n[2]; }).join() === "65,69,72" && pr2.notes.filter(function (n) { return Math.abs(n[0] - 8) < 0.01; }).map(function (n) { return n[2]; }).join() === "65,69,72" &&
+    pr2.e.window.__pp().prefs.cprog === "",
+    "a pad pressed during the pattern takes over at the next bar (and the progression is released)", pr2.notes);
+  // パネル: タブ・コードの表示・とめる
+  var e23 = patHooked(), tabs23 = "", band23 = false, txt23 = "", lit23 = 0, stop23 = null;
+  e23.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ bpm: 120, ppat: "e8", cprog: "pop4" });
+  e23.run("piano", { config: { mode: "free" } }, 120, function (f, x) {
+    var h = e23.window.__pp; if (!h) { return; }
+    if (f === 2) { press(e23, "b"); }
+    if (f === 40) { var pn = e23.window.document; h().act("tab:band"); }
+    if (f === 60) { txt23 = h().text(); var lk = h().lit(); lit23 = Object.keys(lk).filter(function (k) { return lk[k] === "play"; }).length; }
+    if (f === 100) { press(e23, "b"); stop23 = h().pat; }
+  });
+  ok(txt23 === "C → G" && lit23 === 3 && stop23 === null && e23.window.__pp().prefs.tab === "band", "pattern shows the chord and what comes next, lights the keys it plays, and B stops it", [txt23, lit23]);
+  // ハネ（8分の裏をおそく）: 2つ目の音は 0.25 秒ではなく 0.25 ＋ 0.22×0.25 秒あと
+  var e24 = patHooked(), lit24 = [];
+  e24.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ bpm: 120, ppat: "e8", swing: 2 });
+  e24.run("piano", { config: { mode: "free" } }, 40, function (f) {
+    var h = e24.window.__pp; if (!h) { return; }
+    if (f === 2) { press(e24, "b"); }
+    if (h().pat) { h().pat.lit.forEach(function (l) { if (lit24.indexOf(l[1]) < 0) { lit24.push(l[1]); } }); }
+  });
+  var d24 = [];
+  for (var q24 = 1; q24 < lit24.length; q24++) { d24.push(Math.round((lit24[q24] - lit24[q24 - 1]) * 1000)); }
+  ok(d24.length >= 2 && Math.abs(d24[0] - 305) <= 2 && Math.abs(d24[1] - 195) <= 2, "swing delays the off-beat 8ths", [d24, lit24]);
+  // バンド: ドラムのループとベースのパターンもいっしょに鳴る
+  var e25 = patHooked(), D25 = e25.window.UGDrum, loop25 = D25.patternList().filter(function (l) { return l.kind === "loop" && l.len === 16; })[0], drums25 = 0, bass25 = [];
+  e25.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ bpm: 120, ppat: "chord", drum: loop25.id, bpat: "root8", cprog: "pop4" });
+  e25.run("piano", { config: { mode: "free" } }, 140, function (f) {
+    var M = e25.window.UGMelody;
+    if (f === 1) {
+      M.audioInit();
+      var sy = M.synth;
+      M.synth = function (m, pg) { if (pg === M.DRUM) { drums25++; } if (pg === 33) { bass25.push(m); } return sy.apply(M, arguments); };
+    }
+    if (f === 3) { press(e25, "b"); }
+  });
+  var g25 = B.chord(0, cp[1], "major", false).notes[0];
+  ok(drums25 >= 8 && bass25.length >= 9 && bass25[0] === B.chord(0, cp[0], "major", false).notes[0] && bass25.indexOf(g25) === 8,
+    "band: the drum loop and the bass pattern (root 8ths, following the chords) play with the pattern", [drums25, bass25]);
 };
