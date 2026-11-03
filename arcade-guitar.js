@@ -278,7 +278,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, power: !!p.power, fxc: p.fxc ? 1 : 0, fxd: [1, 2].indexOf(p.fxd) >= 0 ? p.fxd : 0, fxr: [1, 2].indexOf(p.fxr) >= 0 ? p.fxr : 0, capo: Math.round(Number(p.capo)) >= 0 && Math.round(Number(p.capo)) <= 7 ? Math.round(Number(p.capo)) : 0, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, rgrid: !!p.rgrid, power: !!p.power, fxc: p.fxc ? 1 : 0, fxd: [1, 2].indexOf(p.fxd) >= 0 ? p.fxd : 0, fxr: [1, 2].indexOf(p.fxr) >= 0 ? p.fxr : 0, capo: Math.round(Number(p.capo)) >= 0 && Math.round(Number(p.capo)) <= 7 ? Math.round(Number(p.capo)) : 0, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -380,11 +380,12 @@
       }
       // §286: リズムゲーム
       var best = gtrBest();
-      html += '<p class="small" style="margin:12px 0 2px;">&#x1F3AE; リズムゲーム（落ちてくるコードを ⬇ ダウン・⬆ アップでかき鳴らす）</p><div class="quiz-opts">' + opts(GTR_RLEVELS, p.rlevel, "rlevel") + '</div><div class="quiz-opts">';
+      html += '<p class="small" style="margin:12px 0 2px;">&#x1F3AE; リズムゲーム（落ちてくるコードをかき鳴らす。ギターがよこ向きの設定ならよこ向きで）</p><div class="quiz-opts">' + opts([["0", "&#x2B07;&#x2B06; ダウン・アップ"], ["1", "&#x1F39B;&#xFE0F; コードの列"]], p.rgrid ? "1" : "0", "rgrid") + '</div>' +
+        '<div class="quiz-opts">' + opts(GTR_RLEVELS, p.rlevel, "rlevel") + '</div><div class="quiz-opts">';
       for (i = 0; i < GTR_SPEEDS.length; i++) { html += '<button class="modal-btn quiz-opt' + (p.rspeed === GTR_SPEEDS[i] ? " active" : "") + '" data-rspeed="' + GTR_SPEEDS[i] + '">' + GTR_SPEEDS[i] + '%</button>'; }
       html += '</div>';
       for (i = 0; i < GTR_SONGS.length; i++) {
-        var bs0 = best[GTR_SONGS[i][0] + "@" + p.rlevel + "@" + p.rspeed];
+        var bs0 = best[GTR_SONGS[i][0] + "@" + p.rlevel + "@" + p.rspeed + (p.rgrid ? "@g" : "")];
         html += '<button class="modal-btn quiz-cat-btn" data-song="' + GTR_SONGS[i][0] + '" style="width:100%;">' + escHtml(GTR_SONGS[i][1]) + '（BPM ' + GTR_SONGS[i][6] + '）' +
           ' <span class="small" style="color:#6b4f00;">' + new Array(GTR_SONGS[i][10] + 1).join("&#x2B50;") + (bs0 ? "・ベスト " + bs0.s + "（" + bs0.r + "）" : "") + '</span></button>';
       }
@@ -399,7 +400,8 @@
           if ((v = el.getAttribute("data-names"))) { p.names = v; gtrSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-rlevel"))) { p.rlevel = v; gtrSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-rspeed"))) { p.rspeed = Number(v); gtrSavePrefs(p); draw(); return; }
-          if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed }); return; }
+          if ((v = el.getAttribute("data-rgrid"))) { p.rgrid = v === "1"; gtrSavePrefs(p); draw(); return; }
+          if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed, grid: p.rgrid, land: p.land }); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; gtrSavePrefs(p); draw(); return; }
           if (el.getAttribute("data-backuke")) { p.backUke = !p.backUke; gtrSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-send"))) {
@@ -460,13 +462,21 @@
     return { meter: meter, notes: out };
   }
   function gtrRhythm(api, cfg) {
-    var B = BA(), prefs = gtrPrefs(), panel = api.panel, frame = 0, ended = false, msg = "";
+    var B = BA(), prefs = gtrPrefs(), panel = api.panel, frame = 0, ended = false, msg = "", grid = !!cfg.grid, land = !!cfg.land;
     if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
+    // §299: よこ向き（ギターの設定がよこ向きのとき）
+    if (api.setLandscape) { api.setLandscape(land); }
+    var box = panel && panel.parentNode;
+    gtrLayout(land ? { land: true, h: box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130 } : {});
     if (api.setCanvasHeight) { api.setCanvasHeight(GTR_H); }
     var song = gtrSong(cfg.song), level = gtrOpt(GTR_RLEVELS, cfg.level)[0], rate = (GTR_SPEEDS.indexOf(Number(cfg.speed)) >= 0 ? Number(cfg.speed) : 100) / 100;
     var chart = gtrChart(song, level), meter = chart.meter, spb = 60 / song[6] / rate, t0 = 0.5 + meter * spb, JG = B.JUDGE;
-    var rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [0, 0], offs = [], i;
-    for (i = 0; i < chart.notes.length; i++) { var cn = chart.notes[i]; rn.push({ t: t0 + cn.beat * spb, beat: cn.beat, lane: cn.lane, cut: cn.cut, d: cn.d, name: cn.name, j: -2 }); }
+    // §299: コードの列 ＝ 曲に出てくるコード（出てくる順）がレーン。ふつうはダウン・アップの2本
+    var cols = [], cnames = [], i;
+    for (i = 0; i < chart.notes.length; i++) { if (cols.indexOf(chart.notes[i].d) < 0) { cols.push(chart.notes[i].d); cnames.push(chart.notes[i].name); } }
+    var nL = grid ? cols.length : 2, rn = [], counts = [0, 0, 0, 0], combo = 0, maxCombo = 0, judgeText = "", judgeFrames = 0, lastClick = -99, laneFlash = [], offs = [];
+    for (i = 0; i < nL; i++) { laneFlash.push(0); }
+    for (i = 0; i < chart.notes.length; i++) { var cn = chart.notes[i]; rn.push({ t: t0 + cn.beat * spb, beat: cn.beat, lane: grid ? cols.indexOf(cn.d) : cn.lane, dir: cn.lane, cut: cn.cut, d: cn.d, name: cn.name, j: -2 }); }
     var bars = song[7], endT = t0 + bars * meter * spb;
     function now() { return frame / 60; }
     var UG = window.UGMelody, audioOk = false, LAT = UG && UG.latency ? UG.latency() / 1000 : 0, buses = {};
@@ -486,12 +496,12 @@
       audio();
       if (!audioOk) { return; }
       var vd = gtrOpt(GTR_VOICES, prefs.voice), ac = UG.audio.ctx, sh = gtrShape(B.chord(song[4], n.d, song[5]), false);
-      var order = n.lane === 1 ? [5, 4, 3, 2] : [0, 1, 2, 3, 4, 5], k = 0, j;
+      var order = n.dir === 1 ? [5, 4, 3, 2] : [0, 1, 2, 3, 4, 5], k = 0, j;
       for (j = 0; j < order.length; j++) {
         var m = sh.midis[order[j]];
         if (m === null) { continue; }
         try {
-          var bus = gtrBus(buses, vd[0], prefs.gvol, gtrFx(prefs)), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(vd[2])), g = null, t = ac.currentTime + k * 0.012, lv = n.cut ? 0.35 : (n.lane ? 0.5 : 0.6);
+          var bus = gtrBus(buses, vd[0], prefs.gvol, gtrFx(prefs)), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(vd[2])), g = null, t = ac.currentTime + k * 0.012, lv = n.cut ? 0.35 : (n.dir ? 0.5 : 0.6);
           if (bus) { g = ac.createGain(); g.gain.value = lv * (smp ? GTR_BOOST : 1) * vd[4]; g.connect(bus); }
           var h = UG.synth(m, n.cut && vd[3] ? GTR_MUTED : vd[2], t, lv, g || undefined, GTR_HOLD);
           if (h && UG.voiceStop) { UG.voiceStop(h, t + (n.cut ? 0.05 : Math.max(0.3, spb * 1.5)), n.cut ? 0.02 : 0.1); }
@@ -540,7 +550,7 @@
       }
     }
     function hit(lane) {
-      if (ended || !(lane === 0 || lane === 1)) { return; }
+      if (ended || !(lane >= 0 && lane < nL)) { return; }
       laneFlash[lane] = 8;
       var t = now() - LAT, best = null, k;
       for (k = 0; k < rn.length; k++) {
@@ -561,7 +571,7 @@
       ended = true;
       var acc = rn.length ? (counts[0] + counts[1] * 0.7 + counts[2] * 0.4) / rn.length : 0, rk = B.rank(acc), best = gtrBest();
       if (rn.length && counts[3] === 0) { api.addScore(500); }
-      var key = song[0] + "@" + level + "@" + Math.round(rate * 100), sc = api.getScore();
+      var key = song[0] + "@" + level + "@" + Math.round(rate * 100) + (grid ? "@g" : ""), sc = api.getScore();
       if (!best[key] || !(best[key].s >= sc)) { best[key] = { s: sc, r: rk }; lsSet(GTR_BEST_KEY, best); }
       msg = "ランク <b>" + rk + "</b>（正確さ " + Math.round(acc * 100) + "%）・最大コンボ " + maxCombo + (counts[3] === 0 ? "・&#x1F525; フルコンボ +500" : "") +
         "<br>PERFECT " + counts[0] + " / GREAT " + counts[1] + " / GOOD " + counts[2] + " / MISS " + counts[3];
@@ -573,20 +583,23 @@
     function render() {
       if (!panel) { return; }
       panel.innerHTML = '<p class="small" style="margin:4px 0 0;">&#x1F3AE; ' + escHtml(song[1]) + '（' + gtrOpt(GTR_RLEVELS, level)[1] + '・BPM ' + Math.round(song[6] * rate) + '・' + rn.length + '回）</p>' +
-        '<p class="small" style="margin:4px 0 0;">⬇ の音符は左（ダウン・キー J）、⬆ は右（アップ・キー K）をタップ。音符にはそのときのコード' + (level === "hard" ? "。✕ はカッティング（左）" : "") + '</p>' +
+        '<p class="small" style="margin:4px 0 0;">' + (grid ? "音符が来たら、そのコードのレーンをタップ（キー 1〜" + nL + "）。レーンは曲に出てくるコード" : "⬇ の音符は左（ダウン・キー J）、⬆ は右（アップ・キー K）をタップ。音符にはそのときのコード" + (level === "hard" ? "。✕ はカッティング（左）" : "")) + '</p>' +
         (msg ? '<p class="small" style="margin:4px 0 0;color:#ffd166;">' + msg + '</p>' : "");
     }
     render();
-    function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
-    var TOP = 26, HIT = GTR_H - 50, LW = (W - 8) / 2;
+    function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + (land ? Math.max(4, size * 0.6) : size) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+    var TOP = land ? 12 : 26, HIT = land ? GTR_H - 18 : GTR_H - 50, LW = (W - 8) / nL, NH = land ? 8 : 22, LOOK = land ? 1.0 : GTR_LOOK; // よこ向きは落ちる距離が短いので、見える時間も短く
     return {
-      input: function (a, down) { if (down && (a === "down" || a === "up")) { audio(); hit(a === "down" ? 0 : 1); } },
-      pointer: function (type, x, y) { if (type === "down" && y >= TOP) { audio(); hit(x < W / 2 ? 0 : 1); } },
+      input: function (a, down) {
+        if (!down) { return; }
+        if (grid) { var mk = /^c(\d)$/.exec(a); if (mk) { audio(); hit(Number(mk[1])); } return; }
+        if (a === "down" || a === "up") { audio(); hit(a === "down" ? 0 : 1); }
+      },
+      pointer: function (type, x, y) { if (type === "down" && y >= TOP) { audio(); hit(Math.floor((x - 4) / LW)); } },
       step: function () {
         frame++;
         if (judgeFrames > 0) { judgeFrames--; }
-        if (laneFlash[0] > 0) { laneFlash[0]--; }
-        if (laneFlash[1] > 0) { laneFlash[1]--; }
+        for (var q = 0; q < nL; q++) { if (laneFlash[q] > 0) { laneFlash[q]--; } }
         if (ended) { return; }
         var t = now() - LAT, left = 0, k;
         for (k = 0; k < rn.length; k++) {
@@ -604,25 +617,25 @@
       draw: function (ctx) {
         ctx.fillStyle = "#1b1f3b";
         ctx.fillRect(0, 0, W, GTR_H);
-        hudText(ctx, "🎮 " + song[1], 8, 10, "left");
-        hudText(ctx, "コンボ " + combo, W - 8, 10, "right");
+        hudText(ctx, "🎮 " + song[1], 8, land ? 6 : 10, "left");
+        hudText(ctx, "コンボ " + combo, W - 8, land ? 6 : 10, "right");
         var t = now() - LAT, k;
-        for (k = 0; k < 2; k++) {
+        for (k = 0; k < nL; k++) {
           var x = 4 + k * LW;
-          ctx.fillStyle = laneFlash[k] > 0 ? "rgba(255,209,102,0.25)" : (k ? "#232a4d" : "#1f2546");
+          ctx.fillStyle = laneFlash[k] > 0 ? "rgba(255,209,102,0.25)" : (k % 2 ? "#232a4d" : "#1f2546");
           ctx.fillRect(x + 1, TOP, LW - 2, GTR_H - TOP);
-          text(ctx, k ? "⬆ アップ" : "⬇ ダウン", x + LW / 2, HIT + 28, 15, "#adb5bd");
+          text(ctx, grid ? cnames[k] + (land ? "" : "（" + (k + 1) + "）") : (k ? "⬆ アップ" : "⬇ ダウン"), x + LW / 2, HIT + (land ? 9 : 28), grid ? 13 : 15, "#adb5bd");
         }
         ctx.fillStyle = "#ffd166";
         ctx.fillRect(4, HIT - 1, W - 8, 3);
         for (k = 0; k < rn.length; k++) {
           var n = rn[k];
-          if (n.t - t > GTR_LOOK) { break; }
+          if (n.t - t > LOOK) { break; }
           if (n.j !== -2 || t - n.t > 0.25) { continue; }
-          var y = HIT - (n.t - t) / GTR_LOOK * (HIT - TOP), nx = 4 + n.lane * LW;
-          ctx.fillStyle = n.cut ? "#868e96" : (n.lane ? "#ffa8a8" : "#74c0fc");
-          ctx.fillRect(nx + 10, y - 11, LW - 20, 22);
-          text(ctx, (n.cut ? "✕ " : (n.lane ? "⬆ " : "⬇ ")) + n.name, nx + LW / 2, y, 14, "#14213d");
+          var y = HIT - (n.t - t) / LOOK * (HIT - TOP), nx = 4 + n.lane * LW, pad = Math.min(10, LW * 0.12);
+          ctx.fillStyle = n.cut ? "#868e96" : (n.dir ? "#ffa8a8" : "#74c0fc");
+          ctx.fillRect(nx + pad, y - NH / 2, LW - pad * 2, NH);
+          text(ctx, grid ? n.name : (n.cut ? "✕ " : (n.dir ? "⬆ " : "⬇ ")) + n.name, nx + LW / 2, y, grid ? 12 : 14, "#14213d");
         }
         var c0 = Math.ceil((t0 - now()) / spb);
         if (now() < t0 && c0 >= 1 && c0 <= meter) { text(ctx, String(c0), W / 2, GTR_H / 2 - 20, 40, "#ffd166"); }
@@ -642,7 +655,7 @@
     name: "ゴリラギター",
     icon: "&#x1F918;",
     desc: "6本の弦で1音ずつ弾く「単音」と、コードをかき鳴らす「ストローク」。アコギもエレキも",
-    help: "🎮 リズムゲームは ⬇ の音符で左（J）・⬆ で右（K）/ 単音: フレットをタップ（同じ弦ですべらせるとスライド）/ ストローク: 弦の上を指で下（手前の6弦）から上へ ＝ ダウン・上から下 ＝ アップ、コードは手前の段か 1〜7 / J ダウン・K アップ・L カッティング・M ブリッジミュート / B パターン / Z 録音 / X 再生 / P一時停止",
+    help: "🎮 リズムゲームは ⬇ の音符で左（J）・⬆ で右（K）、コードの列はそのコードのレーン（1〜7）/ 単音: フレットをタップ（同じ弦ですべらせるとスライド）/ ストローク: 弦の上を指で下（手前の6弦）から上へ ＝ ダウン・上から下 ＝ アップ、コードは手前の段か 1〜7 / J ダウン・K アップ・L カッティング・M ブリッジミュート / B パターン / Z 録音 / X 再生 / P一時停止",
     controls: [],
     keys: GTR_KEYS,
     setup: gtrSetup,
@@ -650,7 +663,7 @@
     panel: true,
     create: function (api, cfg) {
       cfg = cfg || {};
-      if (cfg.mode === "rhythm") { gtrLayout({}); return gtrRhythm(api, cfg); } // §286
+      if (cfg.mode === "rhythm") { return gtrRhythm(api, cfg); } // §286
       var B = BA(), prefs = gtrPrefsFull(), view = prefs.view, names = prefs.names;
       var frame = 0, msg = "", chordD = 0, panel = api.panel;
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }

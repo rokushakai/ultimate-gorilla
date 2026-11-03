@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.05** |
+| 現在バージョン | **v2.06** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.06] 🎮 コードの列のリズムゲーム**（§299）: `gtrRhythm` の cfg.grid（レーン ＝ 曲のコードの度数の出てくる順 `cols`、音符の向きは n.dir）と cfg.land（`gtrLayout({ land })`・見える時間 1.0 秒）。ベストのキーは `@g` つき
 - **[v2.05] 🎛️ エフェクト**（§298）: `gtrBus(st, voice, vol, fx)` の fx（{ ch, dl, rv }。`gtrFx(prefs)`）で、`gtrFxBuild` が作ったコーラス・ディレイ・リバーブの道の混ぜる量を変える
 - **[v2.04] ⚡ パワーコード・カポ**（§297）: `modShape(pc, q, b)` がパワーコード（q → "pow"）とカポ（c 半音下の形 ＋ c フレット。sh.capo）をかける。`shapeOf` / `shapeAt` はここを通る。右手で弾くときの `pickNote` はカポより下にならない
 - **[v2.03] 🤚 ブリッジミュート**（§296）: `prefs.pmute` のとき `playString` が `GTR_PMUTE`（0.16 秒）で止める（エレキは `GTR_MUTED` のサンプル）。録音はすぐ閉じる
@@ -254,7 +255,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（932項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（933項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

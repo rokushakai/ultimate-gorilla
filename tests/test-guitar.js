@@ -342,6 +342,22 @@ module.exports = function () {
     pfp.fxd === 2 && pfp.fxr === 1 && pfp.fxc === 1 && pfh.indexOf("ディレイ 長い") > 0 && pfh.indexOf("リバーブ 少し") > 0,
     "effects: chorus, delay (short / long) and reverb (a little / lots) are mixed in by the settings; the chain is built once", [z, pfp.fxc, pfp.fxd, pfp.fxr]);
 
+  // --- §299: リズムゲームのコードの列（レーン ＝ 曲のコード。キー 1〜）・よこ向き ---
+  function grrun(song, land) {
+    var e = H.load(), sg = G.SONGS.filter(function (x) { return x[0] === song; })[0], c = G.chart(sg, "normal"), spb = 60 / sg[6], t0 = 0.5 + c.meter * spb, done = {}, cols = [], gs = 0, H0 = 0;
+    c.notes.forEach(function (n) { if (cols.indexOf(n.d) < 0) { cols.push(n.d); } });
+    var r = e.run("guitar", { config: { mode: "rhythm", song: song, level: "normal", speed: 100, grid: true, land: land } }, 3000, function (f) {
+      if (f === 1) { H0 = e.window.UGGuitar.geom().H; var M = e.window.UGMelody, s0 = M.synth; M.synth = function (m, pg) { if (pg === 24) { gs++; } return s0.apply(M, arguments); }; }
+      c.notes.forEach(function (n, k) {
+        if (!done[k] && f / 60 >= t0 + n.beat * spb - 0.005) { done[k] = 1; var key = String(cols.indexOf(n.d) + 1); e.key("keydown", key); e.key("keyup", key); }
+      });
+    });
+    return { r: r, best: JSON.parse(e.store[G.BEST_KEY] || "{}")[song + "@normal@100@g"], n: c.notes.length, cols: cols, gs: gs, H: H0 };
+  }
+  var gq1 = grrun("pop", false), gq2 = grrun("rock", true);
+  ok(gq1.cols.length === 4 && gq1.best && gq1.best.r === "S" && gq1.gs >= gq1.n * 4 && gq1.H === 320 && gq2.best && gq2.best.r === "S" && gq2.H < 200,
+    "rhythm game chord grid: lanes are the song's chords (keys 1-n); hitting every chord on time gets rank S; landscape works too", [gq1.cols, gq1.best, gq2.best, gq2.H]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
