@@ -230,13 +230,46 @@
 
   // ---------- 音の出口（音色ごと。エレキはアンプを通す）----------
   // st: ゲームごとの入れもの、voice: 音色の id、vol: 0〜150（%）→ 入り口の GainNode（音が出せなければ null）
-  function gtrBus(st, voice, vol) {
+  // fx（省略可）: §298 エフェクト { ch: コーラス 0/1, dl: ディレイ 0/1/2, rv: リバーブ 0/1/2 }
+  function gtrBus(st, voice, vol, fx) {
     var A = window.UGMelody && window.UGMelody.audio, ac = A && A.ctx, to = A ? (A.bus || A.master) : null, k = "g:" + voice, b = st[k];
     if (!ac || !to || !ac.createGain) { return null; }
-    if (!b || b.ac !== ac || b.to !== to) { b = st[k] = { ac: ac, to: to, g: ac.createGain() }; b.g.connect(to); }
+    if (!b || b.ac !== ac || b.to !== to) { b = st[k] = { ac: ac, to: to, g: ac.createGain() }; b.g.connect(to); gtrFxBuild(b); }
     b.g.gain.value = vol / 100;
+    if (b.fx) {
+      var f = fx || {};
+      b.fx.ch.gain.value = f.ch ? 0.6 : 0;
+      b.fx.dl.gain.value = f.dl ? 0.35 : 0;
+      b.fx.dly.delayTime.value = f.dl === 2 ? 0.42 : 0.28;
+      b.fx.rv.gain.value = f.rv === 2 ? 0.55 : (f.rv ? 0.25 : 0);
+    }
     return b.g;
   }
+  // §298: エフェクトの道（入り口 b.g から、コーラス・ディレイ・リバーブをならべて出口へ。混ぜる量は gtrBus が決める）
+  var gtrIr = null;
+  function gtrFxBuild(b) {
+    var ac = b.ac;
+    if (!ac.createDelay || !ac.createOscillator || !ac.createConvolver || !ac.createBuffer) { return; }
+    try {
+      var cd = ac.createDelay(0.05), lfo = ac.createOscillator(), dep = ac.createGain(), ch = ac.createGain();
+      cd.delayTime.value = 0.018; lfo.frequency.value = 0.9; dep.gain.value = 0.004;
+      lfo.connect(dep); dep.connect(cd.delayTime); b.g.connect(cd); cd.connect(ch); ch.connect(b.to); lfo.start(0);
+      var dly = ac.createDelay(1), fb = ac.createGain(), dl = ac.createGain();
+      fb.gain.value = 0.35;
+      b.g.connect(dly); dly.connect(fb); fb.connect(dly); dly.connect(dl); dl.connect(b.to);
+      var cv = ac.createConvolver(), rv = ac.createGain();
+      if (!gtrIr || gtrIr.ac !== ac) {
+        var len = Math.round((ac.sampleRate || 44100) * 2), buf = ac.createBuffer(2, len, ac.sampleRate || 44100), c0, i;
+        for (c0 = 0; c0 < 2; c0++) { var d = buf.getChannelData(c0); for (i = 0; i < len; i++) { d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); } }
+        gtrIr = { ac: ac, buf: buf };
+      }
+      cv.buffer = gtrIr.buf;
+      b.g.connect(cv); cv.connect(rv); rv.connect(b.to);
+      b.fx = { ch: ch, dl: dl, dly: dly, rv: rv };
+    } catch (e) { b.fx = null; }
+  }
+
+  function gtrFx(p) { return { ch: p.fxc, dl: p.fxd, rv: p.fxr }; }
 
   // ---------- 設定・テイク ----------
   function gtrPrefs() {
@@ -245,7 +278,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, power: !!p.power, capo: Math.round(Number(p.capo)) >= 0 && Math.round(Number(p.capo)) <= 7 ? Math.round(Number(p.capo)) : 0, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, power: !!p.power, fxc: p.fxc ? 1 : 0, fxd: [1, 2].indexOf(p.fxd) >= 0 ? p.fxd : 0, fxr: [1, 2].indexOf(p.fxr) >= 0 ? p.fxr : 0, capo: Math.round(Number(p.capo)) >= 0 && Math.round(Number(p.capo)) <= 7 ? Math.round(Number(p.capo)) : 0, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -458,7 +491,7 @@
         var m = sh.midis[order[j]];
         if (m === null) { continue; }
         try {
-          var bus = gtrBus(buses, vd[0], prefs.gvol), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(vd[2])), g = null, t = ac.currentTime + k * 0.012, lv = n.cut ? 0.35 : (n.lane ? 0.5 : 0.6);
+          var bus = gtrBus(buses, vd[0], prefs.gvol, gtrFx(prefs)), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(vd[2])), g = null, t = ac.currentTime + k * 0.012, lv = n.cut ? 0.35 : (n.lane ? 0.5 : 0.6);
           if (bus) { g = ac.createGain(); g.gain.value = lv * (smp ? GTR_BOOST : 1) * vd[4]; g.connect(bus); }
           var h = UG.synth(m, n.cut && vd[3] ? GTR_MUTED : vd[2], t, lv, g || undefined, GTR_HOLD);
           if (h && UG.voiceStop) { UG.voiceStop(h, t + (n.cut ? 0.05 : Math.max(0.3, spb * 1.5)), n.cut ? 0.02 : 0.1); }
@@ -645,7 +678,7 @@
         if (!audioOk) { return null; }
         var vd = gtrOpt(GTR_VOICES, voice || prefs.voice), prog = prog0 || vd[2], h = null;
         try {
-          var bus = gtrBus(buses, vd[0], prefs.gvol), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog)), d;
+          var bus = gtrBus(buses, vd[0], prefs.gvol, gtrFx(prefs)), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(prog)), d;
           if (bus) { d = UG.audio.ctx.createGain(); d.gain.value = lv * (smp ? GTR_BOOST : 1) * vd[4]; d.connect(bus); }
           h = UG.synth(m, prog, when || 0, lv, d, GTR_HOLD) || null;
         } catch (e) {}
@@ -735,7 +768,7 @@
           }
           k++;
         }
-        if (dir === "cut" && !voiceDef()[3] && UG && UG.bassHit && audioOk) { try { UG.bassHit("ghost", when0 || 0, 0.5, gtrBus(buses, prefs.voice, prefs.gvol) || undefined); } catch (e) {} }
+        if (dir === "cut" && !voiceDef()[3] && UG && UG.bassHit && audioOk) { try { UG.bassHit("ghost", when0 || 0, 0.5, gtrBus(buses, prefs.voice, prefs.gvol, gtrFx(prefs)) || undefined); } catch (e) {} }
       }
 
       // --- §284: パターン（ストローク・ドラム・ベース）---
@@ -1014,6 +1047,7 @@
         else if (/^scale:/.test(v)) { prefs.scale = B.scale(v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
+        else if (v === "fxc" || v === "fxd" || v === "fxr") { prefs[v] = (prefs[v] + 1) % (v === "fxc" ? 2 : 3); gtrSavePrefs(prefs); gtrBus(buses, prefs.voice, prefs.gvol, gtrFx(prefs)); render(); } // §298
         else if (v === "power") { prefs.power = !prefs.power; gtrSavePrefs(prefs); render(); } // §297
         else if (v === "capo:-" || v === "capo:+") { prefs.capo = Math.max(0, Math.min(GTR_CAPO_MAX, prefs.capo + (v === "capo:+" ? 1 : -1))); gtrSavePrefs(prefs); render(); }
         else if (v === "pmute") { prefs.pmute = !prefs.pmute; gtrSavePrefs(prefs); render(); } // §296
@@ -1032,7 +1066,7 @@
           var vk = v.charAt(0) + "vol";
           prefs[vk] = Math.max(0, Math.min(GTR_VOL_MAX, prefs[vk] + (v.charAt(5) === "+" ? GTR_VOL_STEP : -GTR_VOL_STEP)));
           gtrSavePrefs(prefs);
-          if (vk === "gvol") { gtrBus(buses, prefs.voice, prefs.gvol); } else { B.bus(buses, v.charAt(0), prefs[vk], false); }
+          if (vk === "gvol") { gtrBus(buses, prefs.voice, prefs.gvol, gtrFx(prefs)); } else { B.bus(buses, v.charAt(0), prefs[vk], false); }
           render();
         }
       }
@@ -1137,6 +1171,10 @@
             (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
           for (i = 0; i < GTR_VOICES.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.voice === GTR_VOICES[i][0] ? " active" : "") + '" data-ga="voice:' + GTR_VOICES[i][0] + '">' + GTR_VOICES[i][1] + '</button>'; }
           html += '</div>';
+          // §298: エフェクト
+          html += '<div class="piano-row"><button class="modal-btn' + (prefs.fxc ? " piano-rec-on" : "") + '" data-ga="fxc">コーラス ' + (prefs.fxc ? "ON" : "OFF") + '</button>' +
+            '<button class="modal-btn' + (prefs.fxd ? " piano-rec-on" : "") + '" data-ga="fxd">ディレイ ' + ["OFF", "短い", "長い"][prefs.fxd] + '</button>' +
+            '<button class="modal-btn' + (prefs.fxr ? " piano-rec-on" : "") + '" data-ga="fxr">リバーブ ' + ["OFF", "少し", "たっぷり"][prefs.fxr] + '</button></div>';
           html += '<div class="piano-row">' + (view === "chord" ? '<button class="modal-btn' + (prefs.power ? " piano-rec-on" : "") + '" data-ga="power">&#x26A1; パワーコード: ' + (prefs.power ? "ON" : "OFF") + '</button>' : "") +
             '<button class="modal-btn" data-ga="capo:-">&#x25C0;</button><span>カポ ' + (prefs.capo ? prefs.capo + "フレット" : "なし") + '</span><button class="modal-btn" data-ga="capo:+">&#x25B6;</button></div>';
           if (view === "fret") {

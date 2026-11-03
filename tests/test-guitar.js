@@ -328,6 +328,20 @@ module.exports = function () {
   ok(pw.snd.join() === "48@25,55@25,60@25" && cp.snd.join() === "50@25,54@25,57@25,62@25,66@25" && cpk.snd.join() === "67",
     "power chords play root-5th-octave; capo 2 in D uses the C shape two frets up; with the capo an unpressed string sounds at the capo fret", [pw.snd, cp.snd, cpk.snd]);
 
+  // --- §298: エフェクト（コーラス・ディレイ・リバーブを混ぜる量）---
+  var ef = H.load(), Mf = ef.window.UGMelody, Gf = ef.window.UGGuitar;
+  Mf.audioInit();
+  var stf = {};
+  Gf.bus(stf, "clean", 100, {});
+  var f0 = stf["g:clean"].fx, z = [f0.ch.gain.value, f0.dl.gain.value, f0.rv.gain.value].join();
+  Gf.bus(stf, "clean", 100, { ch: 1, dl: 2, rv: 2 });
+  var f1 = stf["g:clean"].fx;
+  var pf = prun({ tab: "play" }, 6, function (fr, e) { if (fr === 3) { e.window.__gAct("fxd"); e.window.__gAct("fxd"); e.window.__gAct("fxr"); e.window.__gAct("fxc"); } });
+  var pfp = JSON.parse(pf.e.store[G.PREFS_KEY]), pfh = pf.e.window.__gPanel();
+  ok(z === "0,0,0" && f1.ch.gain.value === 0.6 && f1.dl.gain.value === 0.35 && f1.dly.delayTime.value === 0.42 && f1.rv.gain.value === 0.55 && f0 === f1 &&
+    pfp.fxd === 2 && pfp.fxr === 1 && pfp.fxc === 1 && pfh.indexOf("ディレイ 長い") > 0 && pfh.indexOf("リバーブ 少し") > 0,
+    "effects: chorus, delay (short / long) and reverb (a little / lots) are mixed in by the settings; the chain is built once", [z, pfp.fxc, pfp.fxd, pfp.fxr]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
