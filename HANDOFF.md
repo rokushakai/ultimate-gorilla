@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.98** |
+| 現在バージョン | **v1.99** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.99] 🎶 コードの位置・左利き**（§292）: `gtrLayout({ cpos })`（"near" / "far" / "side"）。よこ向きの左利きは `GTR_CREV` でコードを右から（`gtrChordRect`・`gtrGridCol`・`drawGrid`）
 - **[v1.98] 🎶 ストロークのよこ向き**（§291）: `gtrLayout({ cgrid })` が `GTR_CMODE`（"strip" たて / "side" よこ / "grid" コードの列）と弦の所 `GTR_STRUM_X0〜X1` を決める。`gtrChordRect` は形ごと。コードの列は `gtrGridCol(x)`・`colShape(i)`（指 press に col を持つ）
 - **[v1.97] 🎶 ストロークの向き**（§290）: ストロークの弦は `gtrStrumLineY(sn)` で上が1弦（sn 5）・下が6弦（sn 0）。`GTR_STRUM_Y`〜`GTR_STRUM_BOT` が弦、その下 `GTR_CHORD_Y` がコードの段（`gtrLayout` が決める）。指が上へ動く ＝ ダウン
 - **[v1.96] 🎸 ギターの本物の音色**（§289）: `GTR_VOICES` は [id, 名前, GM の番号, エレキか, 大きさ]。エレキ 26・27・29・30 と、カッティング用のミュート 28（`GTR_MUTED`）を `MELODY_SAMPLE_FILES` に追加。アンプ（`GTR_AMPS`）はなくした。ギターのサンプルは `MELODY_SAMPLE_TRIM` で 3 秒残す

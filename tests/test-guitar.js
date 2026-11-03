@@ -224,16 +224,18 @@ module.exports = function () {
 
   // --- §291: よこ向きのストローク（左手側のコードのボタン・左利き・コードの列）---
   var e91 = H.load(), G91 = e91.window.UGGuitar, B91 = e91.window.UGBass;
-  G91.layout({ land: true, h: 130 });
-  var sR = G91.geom(), rR = G91.chordRect(0), rR6 = G91.chordRect(6);
+  function lay(o) { G91.layout(o); var g = G91.geom(); g.r0 = G91.chordRect(0); g.r6 = G91.chordRect(6); return g; }
+  var sN = lay({ land: true, h: 130 }), sF = lay({ land: true, h: 130, cpos: "far" }), sS = lay({ land: true, h: 130, cpos: "side" });
+  var gN = lay({ land: true, h: 130, cgrid: true }), gF = lay({ land: true, h: 130, cgrid: true, cpos: "far" }), gS = lay({ land: true, h: 130, cgrid: true, cpos: "side" });
+  var gNcol = (lay({ land: true, h: 130, cgrid: true }), G91.gridCol(gN.r6.x + 3));
   e91.store[B91.GRIP_KEY] = JSON.stringify({ lefty: true });
-  G91.layout({ land: true, h: 130 });
-  var sL = G91.geom(), rL = G91.chordRect(0);
-  G91.layout({ land: true, h: 130, cgrid: true });
-  var sG = G91.geom(), rG3 = G91.chordRect(3);
-  ok(sR.CMODE === "side" && rR.x === 4 && sR.STRUM_X0 > rR.x + rR.w && rR6.y > rR.y && rR6.y + rR6.h <= 130 && sL.CMODE === "side" && rL.x > sL.STRUM_X1 && sL.STRUM_X0 === 4 &&
-    sG.CMODE === "grid" && rG3.y < sG.STRUM_Y && G91.gridCol(rG3.x + 3) === 3 && G91.gridCol(10) === 0,
-    "landscape strum: chord buttons in a column on the left-hand side (right side when left-handed); the chord-grid mode puts 7 chord columns side by side", [sR, sL, sG]);
+  var lN = lay({ land: true, h: 130 }), lS = lay({ land: true, h: 130, cpos: "side" }), lG = lay({ land: true, h: 130, cgrid: true });
+  var lGcol = G91.gridCol(lG.r6.x + 3);
+  ok(sN.CMODE === "strip" && sN.r0.y > sN.STRUM_BOT && sN.r0.y + sN.r0.h <= 130 && sN.r0.x < sN.r6.x && sF.r0.y < sF.STRUM_Y &&
+    sS.CMODE === "side" && sS.r0.x === 4 && sS.STRUM_X0 > sS.r0.x + sS.r0.w && sS.r6.y > sS.r0.y &&
+    gN.CMODE === "grid" && gN.r0.y > gN.STRUM_BOT && gF.r0.y < gF.STRUM_Y && gS.CMODE === "grid" && gS.r0.y === gN.r0.y && gNcol === 6 &&
+    lN.CREV && lN.r0.x > lN.r6.x && lS.r0.x > lS.STRUM_X1 && lG.r0.x > lG.r6.x && lGcol === 6,
+    "landscape strum (§292): chords near (bottom, default), far (top) or at the side; the chord grid near or far; left-handed lays the chords out from the right", [sN, sS, gN, lN]);
   // コードの列: F の列（4つめ）を下から上へなぞる ＝ F のダウン。G の名前をタップ ＝ G のジャーン
   var g91 = { snd: [] }, eg91 = H.load();
   eg91.store[G.PREFS_KEY] = JSON.stringify({ view: "chord", land: true, cgrid: true, voice: "steel" });

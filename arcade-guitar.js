@@ -43,9 +43,15 @@
     if (land) {
       GTR_H = o.h || 130;
       // §291: ストロークは、コードのボタンを左手側に縦に並べる（"side"）か、コードの列（"grid"）
-      var sw = Math.round(W * 0.18);
-      if (o.cgrid) { GTR_CMODE = "grid"; GTR_CHORD_Y = 12; GTR_CHORD_H = 15; GTR_STRUM_Y = 29; GTR_STRUM_BOT = GTR_H - 4; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4; }
-      else {
+      // §292: コードの位置 o.cpos "near" 手前（下）/ "far" 奥（上）/ "side" 横（コードの列ではなし）。左利きはコードの並びを右から
+      var sw = Math.round(W * 0.18), cpos = o.cpos === "far" || (o.cpos === "side" && !o.cgrid) ? o.cpos : "near";
+      GTR_CREV = !!(g && g.lefty);
+      GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4;
+      if (o.cgrid || cpos !== "side") {
+        GTR_CMODE = o.cgrid ? "grid" : "strip"; GTR_CHORD_H = o.cgrid ? 15 : 17;
+        if (cpos === "far") { GTR_CHORD_Y = 12; GTR_STRUM_Y = 12 + GTR_CHORD_H + 3; GTR_STRUM_BOT = GTR_H - 4; }
+        else { GTR_CHORD_Y = GTR_H - 3 - GTR_CHORD_H; GTR_STRUM_Y = 12; GTR_STRUM_BOT = GTR_CHORD_Y - 3; }
+      } else {
         GTR_CMODE = "side"; GTR_SIDE_W = sw; GTR_STRUM_Y = 12; GTR_STRUM_BOT = GTR_H - 4;
         if (g && g.lefty) { GTR_SIDE_X = W - 4 - sw; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 8 - sw; } else { GTR_SIDE_X = 4; GTR_STRUM_X0 = 8 + sw; GTR_STRUM_X1 = W - 4; }
       }
@@ -54,7 +60,7 @@
       GTR_COLS = pick ? Math.max(7, Math.round(13 * (1 - zw / W))) : 13;
     } else {
       GTR_H = 320; GTR_CHORD_H = 42; GTR_CHORD_Y = 320 - 6 - 42; GTR_STRUM_Y = 26; GTR_STRUM_BOT = GTR_CHORD_Y - 8; GTR_BOARD_Y = 96; GTR_BOARD_BOT = 314;
-      GTR_CMODE = "strip"; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4;
+      GTR_CMODE = "strip"; GTR_STRUM_X0 = 4; GTR_STRUM_X1 = W - 4; GTR_CREV = false;
       GTR_COLS = pick ? 6 : 8;
     }
     if (!GTR_MIRROR) { GTR_PICK_X = W - 4 - zw; GTR_PICK_R = W - 4; GTR_BOARD_X = gut; GTR_BOARD_R = pick ? GTR_PICK_X - 6 : W - 4; }
@@ -98,14 +104,14 @@
   // §290: 弦は単音と同じく上が1弦・手前（下）が6弦。コードの段は一番手前（左手で押しやすく）。大きさは gtrLayout が決める
   var GTR_CHORD_Y = 272, GTR_CHORD_H = 42, GTR_STRUM_Y = 26, GTR_STRUM_BOT = 264;
   // §291: コードのボタンの並べ方 "strip"（下の段）/ "side"（よこ向き: 左手側の縦の列）/ "grid"（よこ向き: コードの列の上）。弦の所は GTR_STRUM_X0〜X1
-  var GTR_CMODE = "strip", GTR_STRUM_X0 = 4, GTR_STRUM_X1 = W - 4, GTR_SIDE_X = 4, GTR_SIDE_W = 58;
+  var GTR_CMODE = "strip", GTR_STRUM_X0 = 4, GTR_STRUM_X1 = W - 4, GTR_SIDE_X = 4, GTR_SIDE_W = 58, GTR_CREV = false; // GTR_CREV: コードを右から並べる（よこ向きの左利き）
   function gtrChordRect(i) {
     if (GTR_CMODE === "side") { var h = (GTR_H - 16) / 7; return { x: GTR_SIDE_X, y: 12 + i * h + 1, w: GTR_SIDE_W, h: h - 2 }; }
-    var w = (W - 8) / 7;
-    return { x: 4 + i * w + 1, y: GTR_CHORD_Y, w: w - 2, h: GTR_CHORD_H };
+    var w = (W - 8) / 7, k = GTR_CREV ? 6 - i : i;
+    return { x: 4 + k * w + 1, y: GTR_CHORD_Y, w: w - 2, h: GTR_CHORD_H };
   }
   // コードの列の番号（コードの列でなければ -1）
-  function gtrGridCol(x) { return GTR_CMODE === "grid" ? Math.max(0, Math.min(6, Math.floor((x - 4) / ((W - 8) / 7)))) : -1; }
+  function gtrGridCol(x) { if (GTR_CMODE !== "grid") { return -1; } var k = Math.max(0, Math.min(6, Math.floor((x - 4) / ((W - 8) / 7)))); return GTR_CREV ? 6 - k : k; }
   function gtrChordAt(x, y) { for (var i = 0; i < 7; i++) { var r = gtrChordRect(i); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } } return -1; }
   function gtrStrumRowH() { return (GTR_STRUM_BOT - GTR_STRUM_Y) / 6; }
   // 弦 sn（0 ＝ 6弦。手前 ＝ 下）の線の高さ
@@ -196,7 +202,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -573,7 +579,7 @@
       function applyLand() {
         if (api.setLandscape) { api.setLandscape(prefs.land); }
         var box = panel && panel.parentNode;
-        gtrLayout({ land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130, pick: prefs.pick && view === "fret", cgrid: prefs.cgrid && view === "chord" && !cfg.backing });
+        gtrLayout({ land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130, pick: prefs.pick && view === "fret", cgrid: prefs.cgrid && view === "chord" && !cfg.backing, cpos: prefs.cpos });
         if (api.setCanvasHeight) { api.setCanvasHeight(GTR_H); }
       }
       applyLand();
@@ -934,6 +940,7 @@
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
         else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; applyLand(); gtrSavePrefs(prefs); render(); }
+        else if (v === "cpos") { var cl = prefs.cgrid ? ["near", "far"] : ["near", "far", "side"]; prefs.cpos = cl[(cl.indexOf(prefs.cpos) + 1) % cl.length]; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (v === "cgrid") { allOff(); prefs.cgrid = !prefs.cgrid; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (v === "land") { allOff(); held = {}; picks = {}; prefs.land = !prefs.land; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (/^grip:/.test(v)) { allOff(); held = {}; picks = {}; B.gripStep(v.substring(5)); applyLand(); render(); }
@@ -1035,8 +1042,9 @@
           html += '<div class="piano-row">';
           for (i = 0; i < GTR_VIEWS.length; i++) { html += '<button class="modal-btn' + (view === GTR_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-ga="view:' + GTR_VIEWS[i][0] + '">' + GTR_VIEWS[i][1] + '</button>'; }
           html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-ga="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button>';
-          html += '</div>' + (prefs.land && view === "chord" && !back ? '<div class="piano-row"><button class="modal-btn' + (prefs.cgrid ? " piano-rec-on" : "") + '" data-ga="cgrid">&#x1F39B;&#xFE0F; コードの列: ' + (prefs.cgrid ? "ON" : "OFF") + '</button></div>' +
-            '<p class="small" style="margin:4px 0 0;">' + (prefs.cgrid ? "7つのコードが列にならぶ。列の弦をなぞるとそのコードでかき鳴らす・弦をタップでその弦だけ・上のコード名でジャーン" : "左手側のボタンでコードを選んで、広い所でかき鳴らす（利き手は持ち方で）") + '</p>' : "") +
+          html += '</div>' + (prefs.land && view === "chord" && !back ? '<div class="piano-row"><button class="modal-btn' + (prefs.cgrid ? " piano-rec-on" : "") + '" data-ga="cgrid">&#x1F39B;&#xFE0F; コードの列: ' + (prefs.cgrid ? "ON" : "OFF") + '</button>' +
+            '<button class="modal-btn" data-ga="cpos">コードの位置: ' + ({ near: "手前", far: "奥", side: "横" })[prefs.cgrid && prefs.cpos === "side" ? "near" : prefs.cpos] + '</button></div>' +
+            '<p class="small" style="margin:4px 0 0;">' + (prefs.cgrid ? "7つのコードが列にならぶ。列の弦をなぞるとそのコードでかき鳴らす・弦をタップでその弦だけ・コード名でジャーン" : "コードのボタンを押して、弦の所でかき鳴らす") + '。左利き（持ち方）はコードを右から並べる（横のときは右はし）</p>' : "") +
             (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
           for (i = 0; i < GTR_VOICES.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.voice === GTR_VOICES[i][0] ? " active" : "") + '" data-ga="voice:' + GTR_VOICES[i][0] + '">' + GTR_VOICES[i][1] + '</button>'; }
           html += '</div>';
@@ -1137,7 +1145,7 @@
       function drawGrid(ctx) {
         var rh = gtrStrumRowH(), cw = (W - 8) / 7, i, sn;
         for (i = 0; i < 7; i++) {
-          var x = 4 + i * cw, sh = colShape(i);
+          var x = 4 + (GTR_CREV ? 6 - i : i) * cw, sh = colShape(i); // §292: 左利きは右から
           ctx.fillStyle = i === chordD ? "#5a3a20" : (i % 2 ? "#3b2416" : "#33200f");
           ctx.fillRect(x, GTR_STRUM_Y, cw, rh * 6);
           for (sn = 0; sn < 6; sn++) { var fx = sh.frets[sn]; text(ctx, fx === null ? "×" : String(fx), x + cw / 2, gtrStrumLineY(sn) - rh * 0.3, 8, fx === null ? "#ff8787" : "rgba(255,209,102,0.85)"); }
@@ -1302,7 +1310,7 @@
     H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, MUTED: GTR_MUTED, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
     PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
     setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
-    geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y, CMODE: GTR_CMODE, STRUM_X0: GTR_STRUM_X0, STRUM_X1: GTR_STRUM_X1 }; }, gridCol: gtrGridCol, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
+    geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y, CMODE: GTR_CMODE, CREV: GTR_CREV, STRUM_X0: GTR_STRUM_X0, STRUM_X1: GTR_STRUM_X1 }; }, gridCol: gtrGridCol, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
     quality: gtrQuality, shape: gtrShape, bus: gtrBus, name: gtrName, prefs: gtrPrefs, notesClean: gtrNotesClean,
     SONGS: GTR_SONGS, chart: gtrChart, BEST_KEY: GTR_BEST_KEY, RLEVELS: GTR_RLEVELS, sendToSeq: gtrSendToSeq, SEQ_MAX: GTR_SEQ_MAX, songSev: gtrSongSev, takesLoad: gtrTakesLoad, takesSave: gtrTakesSave, takeAdd: gtrTakeAdd, takeById: gtrTakeById
   };
