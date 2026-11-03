@@ -178,6 +178,27 @@ module.exports = function () {
   ok(gr1.r.ended !== null && gr1.best && gr1.best.r === "S" && gr1.best.s >= gr1.n * 100 + 500 && gr1.gs >= gr1.n * 4 && gr1.bs > 10 && gr1.ds > 20 && gr2.best && gr2.best.r === "D" && gr2.gs === 0,
     "guitar rhythm game: hitting every strum (J down / K up) on time → rank S and each hit strums the chord; drums and bass play along; doing nothing → rank D", [gr1.best, gr2.best, gr1.gs, gr1.bs, gr1.ds]);
 
+  // --- §287: 右手ピッキング（左手は押さえるだけ・右手の所で弾く）---
+  var pk = { snd: [], bends: 0, stops: 0, info: null }, epk = H.load();
+  epk.store[G.PREFS_KEY] = JSON.stringify({ view: "fret", pick: true, voice: "steel" });
+  epk.run("guitar", { config: {} }, 30, function (fr) {
+    var Gw = epk.window.UGGuitar, M = epk.window.UGMelody, px = Gw.PICK_X + 12;
+    if (fr === 1) {
+      var s0 = M.synth, b0 = M.voiceBend, v0 = M.voiceStop;
+      M.synth = function (m, pg) { if (pg !== M.DRUM) { pk.snd.push(m); } return s0.apply(M, arguments); };
+      M.voiceBend = function () { pk.bends++; return b0.apply(M, arguments); };
+      M.voiceStop = function () { pk.stops++; return v0.apply(M, arguments); };
+    }
+    var c1 = Gw.cellRect(1, 1), c3 = Gw.cellRect(1, 3);
+    if (fr === 2) { pk.info = [Gw.cellAt(px, Gw.rowLineY(1), 0), Gw.pickRow(px, Gw.rowLineY(1)), Gw.cellRect(0, 5).x + Gw.cellRect(0, 5).w <= Gw.PICK_X]; epk.ptr("down", c1.x + 5, c1.y + 5, 1); }
+    if (fr === 4) { pk.n0 = pk.snd.length; epk.ptr("down", px, Gw.BOARD_Y + 2, 2); epk.ptr("move", px, 316, 2); epk.ptr("up", px, 316, 2); }
+    if (fr === 6) { pk.st0 = pk.stops; epk.ptr("move", c3.x + 5, c3.y + 5, 1); }
+    if (fr === 8) { pk.st1 = pk.stops; epk.ptr("up", c3.x + 5, c3.y + 5, 1); }
+    if (fr === 10) { pk.st2 = pk.stops; epk.ptr("down", px, Gw.rowLineY(4), 3); epk.ptr("up", px, Gw.rowLineY(4), 3); }
+  });
+  ok(pk.n0 === 0 && pk.snd.slice(0, 6).join() === "64,60,55,50,45,40" && pk.bends === 1 && pk.st2 > pk.st1 && pk.snd[6] === 45 && pk.info[0] === null && pk.info[1] === 1 && pk.info[2],
+    "right-hand picking: pressing a fret is silent; swiping the right-hand area plays every string with the held frets (B string at C); moving the held finger bends the ringing string; lifting mutes it; a tap picks one string", [pk.snd, pk.bends, pk.info]);
+
   // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
   var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
   M5.audioInit();

@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v1.93** |
+| 現在バージョン | **v1.94** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v1.94] ✋ 右手ピッキング**（§287）: `gtrSetPick` / `bassSetPick` が列の数と板のはば（`*_PICK_X` から右が右手の所）を変える（`bassSetLayout` は PICK をとくので、`applyLand` のあとに `bassSetPick`）。左手は `held`（指 → 弦・フレット）、右手は `picks`。ギターは `strVo`、ベースは `pv[弦]` で鳴らす（録音の id は "s弦" / "k弦"）。`heldChanged` で鳴っている弦を bend / ミュート
 - **[v1.93] 🎮 ギターのリズムゲーム**（§286）: `create` の `cfg.mode === "rhythm"` で `gtrRhythm`。譜面は `gtrChart(song, level)`（`GTR_SONGS` のストロークのパターン × コード進行。D x → レーン 0、U s → レーン 1）。判定は `UGBass.JUDGE / rjudge / rank / tendency`。曲のあいだ `band()` がゴリラドラムとゴリラベースのパターンを鳴らす。ベストは `ultimateGorillaGuitarBestV1`
 - **[v1.92] 🤘 ギターの送る・伴奏**（§285）: `gtrSendToSeq(take)` が `UGUkulele.xAdd(tracks, "gnotes")` に音色の `GTR_VOICES[4]` で入れる（1000 音まで）。伴奏は `UGBass.backing / backEventOn / chordIdx` を使い、`backStart / backStep / backStop` はゴリラベースと同じ。曲のウクレレ（`ev.track === "uke"`）は `prefs.backUke` のときだけ。押さえ方は `shapeAt(拍)`（曲のコード・`gtrSongSev` で 7th）。分数コードは `ch.r`（/ の左）から
 - **[v1.91] 🤘 ギターのパターン・バンド**（§284）: `GTR_PATS` の文字（D U x s B 1〜6 -）を `patStep` が 0.1秒先まで予約して `strum(dir, dt)` / `playString`。小節の頭で `barChord`（予約 `pend` → コード進行）。ドラムは `drumStep`（ゴリラベースと同じ）、ベースは `bassStep` が `UGBass.patterns / tokNote / tokLen` で音色 33 を鳴らす。出口は `UGBass.bus(buses, "b" / "d")`。パターンやドラムを切りかえたら `patRetime`（拍はそのまま）
@@ -242,7 +243,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（918項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（920項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

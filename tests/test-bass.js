@@ -428,6 +428,17 @@ module.exports = function () {
   });
   ok(rph.join() === "120,130,140,120" && JSON.parse(rp.store[B.PREFS_KEY]).bpm === 120 && B.RAMPS.join() === "0,2,5,10",
     "speed trainer: the BPM goes up every 4 bars (capped), and goes back when the pattern stops", rph);
+  // §287: 右手ピッキング（A弦の2フレットを押さえて、右手の所を上から下へ）→ G D B E。押さえただけでは鳴らない
+  var bp = { snd: [] }, ebp = H.load();
+  ebp.store[B.PREFS_KEY] = JSON.stringify({ view: "fret", pick: true });
+  ebp.run("bass", { config: {} }, 20, function (fr) {
+    var Bw = ebp.window.UGBass, M = ebp.window.UGMelody, px = Bw.PICK_X + 12, sc = 320 / Bw.H;
+    if (fr === 1) { var s0 = M.synth; M.synth = function (m, pg) { if (pg === 33) { bp.snd.push(m); } return s0.apply(M, arguments); }; }
+    var a2 = Bw.cellRect(2, 2);
+    if (fr === 2) { bp.cols = Bw.cellAt(px, Bw.rowLineY(0), 0); ebp.ptr("down", a2.x + 5, (a2.y + 5) * sc, 1); }
+    if (fr === 4) { bp.n0 = bp.snd.length; ebp.ptr("down", px, (Bw.rowLineY(0) - Bw.cellRect(0, 0).h * 0.45) * sc, 2); ebp.ptr("move", px, 299 * sc, 2); ebp.ptr("up", px, 299 * sc, 2); }
+  });
+  ok(bp.n0 === 0 && bp.snd.join() === "43,38,35,28" && bp.cols === null, "bass right-hand picking: the fretted A string (B) sounds only when picked with the right hand", bp.snd);
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));

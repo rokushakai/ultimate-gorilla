@@ -31,7 +31,16 @@
   var BASS_STRINGS = [[43, "G"], [38, "D"], [33, "A"], [28, "E"]];
   var BASS_COLS = 8, BASS_POS_MAX = 12, BASS_BOARD_Y = 128, BASS_BOARD_X = 4;
   var BASS_MARKS = [3, 5, 7, 9, 12, 15, 17, 19, 21]; // フレットの印（12 は2つ）
-  function bassColW() { return (W - BASS_BOARD_X * 2) / BASS_COLS; }
+  // §287: 右手ピッキング（左手で押さえて、板の右の「右手」の所で弾く）。そのときフレットは たて 6列・よこ 9列
+  var BASS_PICK = false, BASS_PICK_X = Math.round(W * 0.76);
+  function bassSetPick(on) { BASS_PICK = !!on; BASS_COLS = BASS_LAND ? (on ? 9 : 12) : (on ? 6 : 8); }
+  function bassColW() { return ((BASS_PICK ? BASS_PICK_X - 6 : W - BASS_BOARD_X) - BASS_BOARD_X) / BASS_COLS; }
+  function bassRowLineY(s) { return BASS_BOARD_Y + (s + 0.5) * bassRowH(); }
+  // 右手の所の弦（外は -1）
+  function bassPickRow(x, y) {
+    if (!BASS_PICK || x < BASS_PICK_X || y < BASS_BOARD_Y || y >= BASS_BOARD_Y + bassRowH() * BASS_STRINGS.length) { return -1; }
+    return Math.floor((y - BASS_BOARD_Y) / bassRowH());
+  }
   function bassRowH() { return (BASS_H - BASS_BOARD_Y - 6) / BASS_STRINGS.length; }
   // マス（弦 s・列 c）の四角
   function bassCellRect(s, c) { var cw = bassColW(), rh = bassRowH(); return { x: BASS_BOARD_X + c * cw, y: BASS_BOARD_Y + s * rh, w: cw, h: rh }; }
@@ -338,7 +347,7 @@
       key: key >= 0 && key <= 11 ? key : 0, scale: bassScale(p.scale)[0], cprog: bassCprog(p.cprog) ? p.cprog : "", quant: p.quant === "now" ? "now" : "bar",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
       swing: bassOpt(BASS_SWINGS, Number(p.swing))[0], sev: !!p.sev, tab: bassOpt(BASS_TABS, p.tab)[0],
-      land: !!p.land, bvol: p.volv === 2 ? bassVol(p.bvol, 100) : 100, dvol: p.volv === 2 ? bassVol(p.dvol, 50) : 50, volv: 2, phone: !!p.phone, appr: !!p.appr, fill: !!p.fill, ramp: BASS_RAMPS.indexOf(Number(p.ramp)) >= 0 ? Number(p.ramp) : 0, rampMax: BASS_RAMP_MAXES.indexOf(Number(p.rampMax)) >= 0 ? Number(p.rampMax) : 160, rlevel: bassOpt(BASS_RLEVELS, p.rlevel)[0], rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
+      land: !!p.land, pick: !!p.pick, bvol: p.volv === 2 ? bassVol(p.bvol, 100) : 100, dvol: p.volv === 2 ? bassVol(p.dvol, 50) : 50, volv: 2, phone: !!p.phone, appr: !!p.appr, fill: !!p.fill, ramp: BASS_RAMPS.indexOf(Number(p.ramp)) >= 0 ? Number(p.ramp) : 0, rampMax: BASS_RAMP_MAXES.indexOf(Number(p.rampMax)) >= 0 ? Number(p.rampMax) : 160, rlevel: bassOpt(BASS_RLEVELS, p.rlevel)[0], rspeed: [70, 85, 100].indexOf(Number(p.rspeed)) >= 0 ? Number(p.rspeed) : 100, gate: bassOpt(BASS_GATES, p.gate)[0], acc: bassOpt(BASS_ACCS, p.acc)[0],
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))),
       metro: p.metro !== false, pat: typeof p.pat === "string" && /^[a-z0-9]{1,12}$/.test(p.pat) ? p.pat : "pop", tech: p.tech === "slap" || p.tech === "mute" ? p.tech : "normal",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : "", backBass: !!p.backBass,
@@ -551,6 +560,7 @@
   var BASS_LAND = false;
   function bassSetLayout(land, h) {
     BASS_LAND = !!land;
+    BASS_PICK = false;
     BASS_BOARD_X = land ? 11 : 4; // §272: よこ向きは弦の名前を板の外に
     if (land) { BASS_H = h; BASS_COLS = 12; BASS_BOARD_Y = 38; BASS_CHORD_Y = 12; BASS_CHORD_H = 13; BASS_STEP_Y = 27; BASS_STEP_H = 8; BASS_PAD_Y = 27; BASS_PAD_Y_PAT = 37; }
     else { BASS_H = 300; BASS_COLS = 8; BASS_BOARD_Y = 128; BASS_CHORD_Y = 26; BASS_CHORD_H = 34; BASS_STEP_Y = 64; BASS_STEP_H = 20; BASS_PAD_Y = 70; BASS_PAD_Y_PAT = 90; }
@@ -811,6 +821,7 @@
         if (api.setLandscape) { api.setLandscape(prefs.land); }
         var box = panel && panel.parentNode;
         bassSetLayout(prefs.land, prefs.land && box ? bassLandH(box.clientWidth, box.clientHeight) : 130);
+        bassSetPick(prefs.pick && view === "fret");
         prefs.pos = Math.min(prefs.pos, BASS_POS_MAX);
         if (api.setCanvasHeight) { api.setCanvasHeight(BASS_H); }
       }
@@ -1195,7 +1206,27 @@
         if (top === null) { hush(v); return; }
         if (v.cur === m) { bend(v, press[top], 0); recOn(top, press[top], 0.8); }
       }
-      function allOff() { var ks = [], k; for (k in press) { if (press.hasOwnProperty(k)) { ks.push(k); } } for (k = 0; k < ks.length; k++) { noteOff(ks[k]); } }
+      function allOff() { var ks = [], k; for (k in press) { if (press.hasOwnProperty(k)) { ks.push(k); } } for (k = 0; k < ks.length; k++) { noteOff(ks[k]); } pickAllOff(); }
+      // §287: 右手ピッキング。held: 左手の指 → { s, f }・picks: 右手の指 → { y }・pv: 弦 → 鳴っている音 { h, cur }
+      var held = {}, picks = {}, pv = [null, null, null, null];
+      function fretOf(s) { var f = 0, k; for (k in held) { if (held.hasOwnProperty(k) && held[k].s === s && held[k].f > f) { f = held[k].f; } } return f; }
+      function heldOn(s) { for (var k in held) { if (held.hasOwnProperty(k) && held[k].s === s) { return true; } } return false; }
+      function pickNote(s) { return BASS_STRINGS[s][0] + fretOf(s); }
+      function pickStop(s) { if (!pv[s]) { return; } hush(pv[s]); pv[s] = null; recOff("k" + s); }
+      function pickAllOff() { if (!pv) { return; } for (var s = 0; s < 4; s++) { pickStop(s); } held = {}; picks = {}; }
+      function pluck(s) {
+        if (ended) { return; }
+        var m = pickNote(s), how = techOf(m, s);
+        pickStop(s);
+        pv[s] = { h: sound(m, 0.85, how), cur: m };
+        recOn("k" + s, m, velOf(how));
+      }
+      // 左手を変えたとき、鳴っている弦は音程を変える。指がぜんぶはなれたら止める（ミュート）
+      function heldChanged(s, lifted) {
+        if (!pv[s]) { return; }
+        if (lifted && !heldOn(s) && pv[s].cur !== BASS_STRINGS[s][0]) { pickStop(s); return; }
+        if (pv[s].cur !== pickNote(s)) { recOff("k" + s); bend(pv[s], pickNote(s), 0.07); recOn("k" + s, pickNote(s), 0.8); }
+      }
       var padHeld = {}; // 指・キー → 押しているパッド
       var ed = null; // §258: パッドの音の編集中 { sel: えらんだパッド（-1 ＝ まだ） }
       function padPress(id, i) {
@@ -1224,7 +1255,7 @@
       function setTech(t) { prefs.tech = t; bassSavePrefs(prefs); render(); }
       function action(v) {
         if (v === "rec") { recToggle(); } else if (v === "play") { playToggle(); } else if (v === "back") { backToggle(); }
-        else if (v === "view") { allOff(); padHeld = {}; view = view === "pad" ? "fret" : "pad"; prefs.view = view; bassSavePrefs(prefs); render(); }
+        else if (v === "view") { allOff(); padHeld = {}; view = view === "pad" ? "fret" : "pad"; prefs.view = view; bassSavePrefs(prefs); bassSetPick(prefs.pick && view === "fret"); render(); }
         else if (v === "posdown" || v === "posup") {
           allOff();
           prefs.pos = Math.max(0, Math.min(BASS_POS_MAX, prefs.pos + (v === "posup" ? 1 : -1)));
@@ -1262,6 +1293,7 @@
           prefs[rk] = rl[(rl.indexOf(prefs[rk]) + 1) % rl.length]; bassSavePrefs(prefs); render();
         }
         else if (v === "fill") { prefs.fill = !prefs.fill; bassSavePrefs(prefs); render(); }
+        else if (v === "pick") { allOff(); prefs.pick = !prefs.pick; bassSavePrefs(prefs); bassSetPick(prefs.pick && view === "fret"); render(); }
         else if (v === "appr") { prefs.appr = !prefs.appr; bassSavePrefs(prefs); render(); }
         else if (v === "phone") { prefs.phone = !prefs.phone; bassSavePrefs(prefs); bassBus(buses, "b", prefs.bvol, prefs.phone); render(); }
         else if (/^[bd]vol:[+-]$/.test(v)) {
@@ -1487,7 +1519,9 @@
             html += '</div>';
             if (view === "fret") {
               html += '<div class="piano-row"><button class="modal-btn" data-ba="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + BASS_COLS - 1) + " フレット" : "開放弦〜" + (BASS_COLS - 1) + " フレット") + '</span>' +
-                '<button class="modal-btn" data-ba="posup">&#x25B6;</button></div>';
+                '<button class="modal-btn" data-ba="posup">&#x25B6;</button></div>' +
+                '<div class="piano-row"><button class="modal-btn' + (prefs.pick ? " piano-rec-on" : "") + '" data-ba="pick">&#x270B; 右手で弾く: ' + (prefs.pick ? "ON" : "OFF") + '</button></div>' +
+                '<p class="small" style="margin:4px 0 0;">' + (prefs.pick ? "左手でフレットを押さえて（押さえただけでは鳴らない）、右の「右手」の所で弦をなぞる・タップすると鳴る" : "マスをタップするとすぐ鳴る") + '</p>';
             } else {
               html += '<div class="piano-row"><button class="modal-btn" data-ba="edit">&#x270F;&#xFE0F; パッドの音を変える</button>' +
                 '<button class="modal-btn" data-ba="padn">' + (prefs.padN === 16 ? "8個にする" : "16個にする") + '</button></div>';
@@ -1524,6 +1558,7 @@
         }
         if (pat && pat.lit && now() >= pat.lit.t0 && now() < pat.lit.t1) { out[pat.lit.m] = "play"; }
         for (k in press) { if (press.hasOwnProperty(k)) { out[press[k]] = "press"; } }
+        for (i = 0; i < 4; i++) { if (pv[i]) { out[pv[i].cur] = "press"; } }
         return out;
       }
       function text(ctx, s, x, y, size, color) {
@@ -1537,6 +1572,14 @@
         var lit = litNotes(), s, c, r, cw = bassColW(), rh = bassRowH(), top = BASS_BOARD_Y, bot = BASS_BOARD_Y + rh * BASS_STRINGS.length;
         ctx.fillStyle = "#5b3a24";
         ctx.fillRect(BASS_BOARD_X, top, cw * BASS_COLS, bot - top);
+        if (BASS_PICK) {
+          // 右手の所（ボディ）
+          ctx.fillStyle = "#7a4b2a";
+          ctx.fillRect(BASS_PICK_X, top, W - 4 - BASS_PICK_X, bot - top);
+          ctx.fillStyle = "#2b2b2b";
+          ctx.fillRect(BASS_PICK_X + (W - 4 - BASS_PICK_X) * 0.3, top + 2, (W - 4 - BASS_PICK_X) * 0.4, bot - top - 4); // ピックアップ
+          text(ctx, "右手", BASS_PICK_X + (W - 4 - BASS_PICK_X) / 2, BASS_LAND ? bot + 3 : top - 7, 8, "#ffd166");
+        }
         // フレットの印
         for (c = 0; c < BASS_COLS; c++) {
           var f = bassFretOf(prefs.pos, c), cx = BASS_BOARD_X + (c + 0.5) * cw;
@@ -1578,8 +1621,13 @@
               ctx.beginPath(); ctx.arc(r.x + r.w / 2, sy, Math.min(r.w, r.h) * 0.36, 0, Math.PI * 2); ctx.fill();
             }
           }
-          ctx.fillStyle = "#d9d9d9";
-          ctx.fillRect(BASS_BOARD_X, sy - (1 + (3 - s) * 0.45), cw * BASS_COLS, 2 + (3 - s) * 0.9);
+          if (BASS_PICK && heldOn(s)) {
+            for (c = 0; c < BASS_COLS; c++) {
+              if (fretOf(s) === bassFretOf(prefs.pos, c)) { var hc = bassCellRect(s, c); ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hc.x + hc.w / 2, sy, Math.min(hc.w, hc.h) * 0.36, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
+            }
+          }
+          ctx.fillStyle = BASS_PICK && pv[s] ? "#ffe8a3" : "#d9d9d9";
+          ctx.fillRect(BASS_BOARD_X, sy - (1 + (3 - s) * 0.45), BASS_PICK ? W - 4 - BASS_BOARD_X : cw * BASS_COLS, 2 + (3 - s) * 0.9);
           for (c = 0; c < BASS_COLS; c++) {
             var nm = bassName(BASS_STRINGS[s][0] + bassFretOf(prefs.pos, c), names);
             if (nm) { r = bassCellRect(s, c); text(ctx, nm, r.x + r.w / 2, sy - rh * 0.3, 7, lit[BASS_STRINGS[s][0] + bassFretOf(prefs.pos, c)] ? "#ffffff" : "rgba(255,255,255,0.6)"); }
@@ -1666,8 +1714,33 @@
             // §259: パターン中はフレットの画面にもコードの段
             if ((pat || pe) && bassChordAt(x, y) >= 0) { setChord(bassChordAt(x, y)); return; }
             var c = bassCellAt(x, y, prefs.pos);
+            if (BASS_PICK) {
+              // §287: 左手は押さえるだけ・右手の所で弾く
+              if (c) { held[pid] = { s: c.s, f: c.f }; heldChanged(c.s, false); return; }
+              var pr = bassPickRow(x, y);
+              if (pr >= 0) { picks[pid] = { y: y }; if (Math.abs(y - bassRowLineY(pr)) <= bassRowH() * 0.3) { pluck(pr); } }
+              return;
+            }
             if (c) { noteOn(pid, c.m, c.s); }
           } else if (type === "move") {
+            if (BASS_PICK && view === "fret") {
+              if (picks[pid]) {
+                var y0 = picks[pid].y, q, ns = BASS_STRINGS.length;
+                if (y > y0) { for (q = 0; q < ns; q++) { if (bassRowLineY(q) > y0 && bassRowLineY(q) <= y) { pluck(q); } } }
+                else { for (q = ns - 1; q >= 0; q--) { if (bassRowLineY(q) < y0 && bassRowLineY(q) >= y) { pluck(q); } } }
+                picks[pid].y = y;
+                return;
+              }
+              if (held[pid]) {
+                var hy = bassRowLineY(held[pid].s), hc2 = Math.abs(y - hy) < bassRowH() * 0.85 ? bassCellAt(x, hy, prefs.pos) : bassCellAt(x, y, prefs.pos);
+                if (!hc2 || (hc2.s === held[pid].s && hc2.f === held[pid].f)) { return; }
+                var os = held[pid].s;
+                held[pid] = { s: hc2.s, f: hc2.f };
+                if (os !== hc2.s) { heldChanged(os, true); }
+                heldChanged(hc2.s, false);
+              }
+              return;
+            }
             // フレット: 同じ指をすべらせたら、となりのマスの音（スライド）
             if (view !== "fret" || press[pid] === undefined) { return; }
             // §258: 押さえた弦の高さの 0.85 ぶんまでは同じ弦のまま（となりの弦に少しはみ出してもスライドが切れない）
@@ -1682,7 +1755,11 @@
               return;
             }
             noteOn(pid, c2.m, c2.s);
-          } else { delete padHeld[pid]; noteOff(pid); }
+          } else {
+            if (picks[pid]) { delete picks[pid]; return; }
+            if (held[pid]) { var hs = held[pid].s; delete held[pid]; heldChanged(hs, true); return; }
+            delete padHeld[pid]; noteOff(pid);
+          }
         },
         step: function () {
           frame++;
@@ -1736,7 +1813,7 @@
               if (line && !rec) { text(ctx, line, W / 2, ly(106, 7), ly(15, 8), "#ffd166"); }
             } else {
               if (!rec && !line && !BASS_LAND) { emojiAt(ctx, play ? "🎶" : "🦍", W / 2, 50, 34); }
-              if (!rec || !BASS_LAND) { text(ctx, line || (play ? "再生中…" : (bk ? "伴奏中…（輪はいまのコードの音）" : "弦のマスをタップして弾こう")), W / 2, ly(rec ? 62 : (line ? 60 : 92), 30), ly(line ? 20 : 12, line ? 14 : 10), line ? "#ffd166" : "#ffffff"); }
+              if (!rec || !BASS_LAND) { text(ctx, line || (play ? "再生中…" : (bk ? "伴奏中…（輪はいまのコードの音）" : BASS_PICK ? "左手で押さえて、右手の所で弾こう" : "弦のマスをタップして弾こう")), W / 2, ly(rec ? 62 : (line ? 60 : 92), 30), ly(line ? 20 : 12, line ? 14 : 10), line ? "#ffd166" : "#ffffff"); }
             }
             drawFret(ctx);
           }
@@ -1904,7 +1981,7 @@
   }
 
   window.UGBass = {
-    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, tendency: bassTendency, rank: bassRank, rjudge: bassRJudge, quizMake: bassQuizMake, EAR: BASS_EAR, earRect: bassEarRect, QUIZ_N: BASS_QUIZ_N, METRO_ICON: BASS_METRO_ICON, SWINGS: BASS_SWINGS, CPROG_GROUPS: BASS_CPROG_GROUPS, SCALE_GROUPS: BASS_SCALE_GROUPS, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
+    STRINGS: BASS_STRINGS, COLS: BASS_COLS, POS_MAX: BASS_POS_MAX, H: BASS_H, VOICES: BASS_VOICES, VIEWS: BASS_VIEWS, PAD_DEFS: BASS_PAD_DEFS, PAD_Y: BASS_PAD_Y, PAD_Y_PAT: BASS_PAD_Y_PAT, patLegend: bassPatLegend, patGroups: bassPatGroups, myClean: bassMyClean, vol: bassVol, bus: bassBus, setPick: bassSetPick, pickRow: bassPickRow, rowLineY: bassRowLineY, PICK_X: BASS_PICK_X, approach: bassApproach, fillTok: bassFillTok, RAMPS: BASS_RAMPS, tendency: bassTendency, rank: bassRank, rjudge: bassRJudge, quizMake: bassQuizMake, EAR: BASS_EAR, earRect: bassEarRect, QUIZ_N: BASS_QUIZ_N, METRO_ICON: BASS_METRO_ICON, SWINGS: BASS_SWINGS, CPROG_GROUPS: BASS_CPROG_GROUPS, SCALE_GROUPS: BASS_SCALE_GROUPS, ENH: BASS_ENH, setLayout: bassSetLayout, landH: bassLandH, SONGS: BASS_SONGS, chart: bassChart, laneOf: bassLaneOf, BEST_KEY: BASS_BEST_KEY, JUDGE: BASS_JUDGE, swingOf: bassSwingOf, accOf: bassAccOf, patResize: bassPatResize, MYPATS_KEY: BASS_MYPATS_KEY, PAD_MAX: BASS_PAD_MAX, HOLD: BASS_HOLD, KEYS: BASS_KEYS, padLabel: bassPadLabel, padNote: bassPadNote, padsClean: bassPadsClean,
     cellAt: bassCellAt, cellRect: bassCellRect, name: bassName, chord: bassChord, SCALES: BASS_SCALES, scale: bassScale, scalePcs: bassScalePcs, CPROGS: BASS_CPROGS, cprog: bassCprog, cprogAt: bassCprogAt, padRect: bassPadRect, padAt: bassPadAt, chordRect: bassChordRect, chordAt: bassChordAt,
     prefs: bassPrefs, notesClean: bassNotesClean, takesLoad: bassTakesLoad, takesSave: bassTakesSave, takeAdd: bassTakeAdd, takeById: bassTakeById, toSeqNotes: bassToSeqNotes,
     sendToSeq: bassSendToSeq, patterns: bassPatterns, patById: bassPatById, tokNote: bassTokNote, tokLen: bassTokLen, patToSeq: bassPatToSeq, songChord: bassSongChord, songChords: bassSongChords, chordIdx: bassChordIdx, backList: bassBackList, backing: bassBacking, backEventOn: bassBackEventOn, PREFS_KEY: BASS_PREFS_KEY, TAKES_KEY: BASS_TAKES_KEY, TAKES_MAX: BASS_TAKES_MAX
