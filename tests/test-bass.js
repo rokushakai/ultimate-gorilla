@@ -432,13 +432,22 @@ module.exports = function () {
   var bp = { snd: [] }, ebp = H.load();
   ebp.store[B.PREFS_KEY] = JSON.stringify({ view: "fret", pick: true });
   ebp.run("bass", { config: {} }, 20, function (fr) {
-    var Bw = ebp.window.UGBass, M = ebp.window.UGMelody, px = Bw.PICK_X + 12, sc = 320 / Bw.H;
+    var Bw = ebp.window.UGBass, M = ebp.window.UGMelody, px = Bw.geom().PICK_X + 12, sc = 320 / Bw.H;
     if (fr === 1) { var s0 = M.synth; M.synth = function (m, pg) { if (pg === 33) { bp.snd.push(m); } return s0.apply(M, arguments); }; }
     var a2 = Bw.cellRect(2, 2);
     if (fr === 2) { bp.cols = Bw.cellAt(px, Bw.rowLineY(0), 0); ebp.ptr("down", a2.x + 5, (a2.y + 5) * sc, 1); }
     if (fr === 4) { bp.n0 = bp.snd.length; ebp.ptr("down", px, (Bw.rowLineY(0) - Bw.cellRect(0, 0).h * 0.45) * sc, 2); ebp.ptr("move", px, 299 * sc, 2); ebp.ptr("up", px, 299 * sc, 2); }
   });
   ok(bp.n0 === 0 && bp.snd.join() === "43,38,35,28" && bp.cols === null, "bass right-hand picking: the fretted A string (B) sounds only when picked with the right hand", bp.snd);
+  // §288: ベースのよこ向きも持ち方で（左利き ＝ 右手の所が左・ナットが右）
+  var eb8 = H.load(), Bb8 = eb8.window.UGBass;
+  eb8.store[Bb8.GRIP_KEY] = JSON.stringify({ lefty: true, size: "m", pos: "bot", pw: 30 });
+  Bb8.setLayout(true, 130); Bb8.setPick(true);
+  var b8 = Bb8.geom(), b8c = Bb8.cellRect(0, 0), b8h = Bb8.cellAt(b8.BOARD_R - 2, Bb8.rowLineY(1), 0);
+  Bb8.setLayout(false);
+  var b8p = Bb8.geom();
+  ok(b8.MIRROR && b8.PICK_X === 4 && b8.BOARD_X > b8.PICK_R && b8c.x + b8c.w === b8.BOARD_R && b8h && b8h.c === 0 && b8h.s === 1 && b8.BOARD_BOT === 130 - 9 && b8.BOARD_Y > 38 && !b8p.MIRROR && b8p.COLS === 8,
+    "bass landscape follows the grip settings (left-handed, neck at the bottom); portrait is unchanged", [b8, b8h]);
   // §274: 録音のメトロノームのボタンはメトロノームの絵（ドラムの絵文字ではない）
   var mh = vrun({}, []).html, mb = mh.slice(mh.indexOf('data-ba="metro"'), mh.indexOf("</button>", mh.indexOf('data-ba="metro"')));
   ok(mb.indexOf("<svg") > 0 && mb.indexOf("1F941") < 0 && mb.indexOf("ON") > 0, "the recording metronome button shows a metronome picture, not the drum emoji", mb.slice(0, 80));

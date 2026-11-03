@@ -31,16 +31,37 @@
   function gtrOpt(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } } return list[0]; }
 
   // ---------- 単音の画面（上が1弦）----------
-  var GTR_COLS = 8, GTR_POS_MAX = 12, GTR_BOARD_X = 4, GTR_BOARD_Y = 96;
+  var GTR_COLS = 8, GTR_POS_MAX = 12, GTR_BOARD_X = 4, GTR_BOARD_R = W - 4, GTR_BOARD_Y = 96, GTR_BOARD_BOT = 314;
   var GTR_MARKS = [3, 5, 7, 9, 12, 15, 17, 19, 21];
   // §287: 右手ピッキング（左手で押さえて、板の右の「右手」の所で弾く）。そのときフレットは6列
-  var GTR_PICK = false, GTR_PICK_X = Math.round(W * 0.76);
-  function gtrSetPick(on) { GTR_PICK = !!on; GTR_COLS = on ? 6 : 8; }
-  function gtrColW() { return ((GTR_PICK ? GTR_PICK_X - 6 : W - GTR_BOARD_X) - GTR_BOARD_X) / GTR_COLS; }
+  // §288: よこ向き（フレット 13 列）と持ち方（ゴリラベースと共通: 利き手・ネックの太さと位置・右手の所の広さ）
+  var GTR_PICK = false, GTR_PICK_X = W - 4 - Math.round(W * 0.24), GTR_PICK_R = W - 4, GTR_MIRROR = false, GTR_LAND = false;
+  // o: { land, h: よこ向きの高さ, pick }
+  function gtrLayout(o) {
+    o = o || {};
+    var land = !!o.land, pick = !!o.pick, B = BA(), g = land && B && B.grip ? B.grip() : null, zw = Math.round(W * (g ? g.pw / 100 : 0.24)), gut = land ? 11 : 4;
+    GTR_LAND = land; GTR_PICK = pick; GTR_MIRROR = !!(g && g.lefty);
+    if (land) {
+      GTR_H = o.h || 130; GTR_CHORD_Y = 12; GTR_CHORD_H = 14; GTR_STRUM_Y = 30;
+      var bx = B.gripBox(14, GTR_H - 9, g);
+      GTR_BOARD_Y = bx.y0; GTR_BOARD_BOT = bx.y1;
+      GTR_COLS = pick ? Math.max(7, Math.round(13 * (1 - zw / W))) : 13;
+    } else {
+      GTR_H = 320; GTR_CHORD_Y = 24; GTR_CHORD_H = 34; GTR_STRUM_Y = 72; GTR_BOARD_Y = 96; GTR_BOARD_BOT = 314;
+      GTR_COLS = pick ? 6 : 8;
+    }
+    if (!GTR_MIRROR) { GTR_PICK_X = W - 4 - zw; GTR_PICK_R = W - 4; GTR_BOARD_X = gut; GTR_BOARD_R = pick ? GTR_PICK_X - 6 : W - 4; }
+    else { GTR_PICK_X = 4; GTR_PICK_R = 4 + zw; GTR_BOARD_X = pick ? GTR_PICK_R + 6 : 4; GTR_BOARD_R = W - gut; }
+  }
+  function gtrSetPick(on) { gtrLayout({ pick: on }); }
+  function gtrColW() { return (GTR_BOARD_R - GTR_BOARD_X) / GTR_COLS; }
+  // 列 c の左はし（左利きは右から並ぶ）・列の区切り c の x
+  function gtrColX(c) { return GTR_MIRROR ? GTR_BOARD_R - (c + 1) * gtrColW() : GTR_BOARD_X + c * gtrColW(); }
+  function gtrFretX(c) { return GTR_MIRROR ? GTR_BOARD_R - c * gtrColW() : GTR_BOARD_X + c * gtrColW(); }
   function gtrRowLineY(r) { return GTR_BOARD_Y + (r + 0.5) * gtrRowH(); }
   // 右手の所の行（外は -1）
   function gtrPickRow(x, y) {
-    if (!GTR_PICK || x < GTR_PICK_X || y < GTR_BOARD_Y || y >= GTR_BOARD_Y + gtrRowH() * 6) { return -1; }
+    if (!GTR_PICK || x < GTR_PICK_X || x > GTR_PICK_R || y < GTR_BOARD_Y || y >= GTR_BOARD_Y + gtrRowH() * 6) { return -1; }
     return Math.floor((y - GTR_BOARD_Y) / gtrRowH());
   }
   // y0 → y1 で指がまたいだ行（またいだ順）。lineY(i): 行 i の弦の高さ
@@ -50,13 +71,13 @@
     else if (y1 < y0) { for (i = n - 1; i >= 0; i--) { if (lineY(i) < y0 && lineY(i) >= y1) { out.push(i); } } }
     return out;
   }
-  function gtrRowH() { return (GTR_H - GTR_BOARD_Y - 6) / 6; }
+  function gtrRowH() { return (GTR_BOARD_BOT - GTR_BOARD_Y) / 6; }
   // 行 r（0 ＝ 1弦）・列 c の四角
-  function gtrCellRect(r, c) { var cw = gtrColW(), rh = gtrRowH(); return { x: GTR_BOARD_X + c * cw, y: GTR_BOARD_Y + r * rh, w: cw, h: rh }; }
+  function gtrCellRect(r, c) { var cw = gtrColW(), rh = gtrRowH(); return { x: gtrColX(c), y: GTR_BOARD_Y + r * rh, w: cw, h: rh }; }
   // 座標 → { r: 行, sn: 弦の番号, c: 列, f: フレット, m: MIDI }（外なら null）
   function gtrCellAt(x, y, pos) {
-    var cw = gtrColW(), rh = gtrRowH(), c = Math.floor((x - GTR_BOARD_X) / cw), r = Math.floor((y - GTR_BOARD_Y) / rh);
-    if (c < 0 || c >= GTR_COLS || r < 0 || r >= 6 || y < GTR_BOARD_Y) { return null; }
+    var cw = gtrColW(), rh = gtrRowH(), c = Math.floor((GTR_MIRROR ? GTR_BOARD_R - x : x - GTR_BOARD_X) / cw), r = Math.floor((y - GTR_BOARD_Y) / rh);
+    if (x < GTR_BOARD_X || x >= GTR_BOARD_R || c < 0 || c >= GTR_COLS || r < 0 || r >= 6 || y < GTR_BOARD_Y) { return null; }
     var sn = 5 - r;
     return { r: r, sn: sn, c: c, f: pos + c, m: GTR_OPEN[sn] + pos + c };
   }
@@ -67,7 +88,7 @@
   }
 
   // ---------- ストロークの画面（上が6弦）----------
-  var GTR_CHORD_Y = 24, GTR_CHORD_H = 34, GTR_STRUM_Y = 72;
+  var GTR_CHORD_Y = 24, GTR_CHORD_H = 34, GTR_STRUM_Y = 72; // §288: よこ向きでは gtrLayout が変える
   function gtrChordRect(i) { var w = (W - 8) / 7; return { x: 4 + i * w + 1, y: GTR_CHORD_Y, w: w - 2, h: GTR_CHORD_H }; }
   function gtrChordAt(x, y) { for (var i = 0; i < 7; i++) { var r = gtrChordRect(i); if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { return i; } } return -1; }
   function gtrStrumRowH() { return (GTR_H - GTR_STRUM_Y - 8) / 6; }
@@ -178,7 +199,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -547,12 +568,18 @@
     panel: true,
     create: function (api, cfg) {
       cfg = cfg || {};
-      if (cfg.mode === "rhythm") { gtrSetPick(false); return gtrRhythm(api, cfg); } // §286
+      if (cfg.mode === "rhythm") { gtrLayout({}); return gtrRhythm(api, cfg); } // §286
       var B = BA(), prefs = gtrPrefs(), view = prefs.view, names = prefs.names;
-      gtrSetPick(prefs.pick);
       var frame = 0, msg = "", chordD = 0, panel = api.panel;
       if (panel && panel.classList) { panel.classList.add("quiz-panel"); }
-      if (api.setCanvasHeight) { api.setCanvasHeight(GTR_H); }
+      // §288: よこ向き・持ち方・右手ピッキング → 板の形
+      function applyLand() {
+        if (api.setLandscape) { api.setLandscape(prefs.land); }
+        var box = panel && panel.parentNode;
+        gtrLayout({ land: prefs.land, h: prefs.land && box && B.landH ? B.landH(box.clientWidth, box.clientHeight) : 130, pick: prefs.pick && view === "fret" });
+        if (api.setCanvasHeight) { api.setCanvasHeight(GTR_H); }
+      }
+      applyLand();
       function now() { return frame / 60; }
       function voiceDef() { return gtrOpt(GTR_VOICES, prefs.voice); }
 
@@ -899,7 +926,7 @@
           if (pat) { pat.t0 = now() - pcb * 60 / bpm; }
           prefs.bpm = bpm; gtrSavePrefs(prefs); render();
         }
-        else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "fret"; gtrSavePrefs(prefs); render(); }
+        else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "fret"; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (/^voice:/.test(v)) { allOff(); prefs.voice = gtrOpt(GTR_VOICES, v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = ["play", "pat", "band", "key"].indexOf(tb0) >= 0 ? tb0 : "play"; gtrSavePrefs(prefs); render(); }
         else if (v === "posdown" || v === "posup") { allOff(); prefs.pos = Math.max(0, Math.min(GTR_POS_MAX, prefs.pos + (v === "posup" ? 1 : -1))); gtrSavePrefs(prefs); render(); }
@@ -908,7 +935,9 @@
         else if (/^scale:/.test(v)) { prefs.scale = B.scale(v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
-        else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; gtrSetPick(prefs.pick); prefs.pos = Math.min(prefs.pos, GTR_POS_MAX); gtrSavePrefs(prefs); render(); }
+        else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; applyLand(); gtrSavePrefs(prefs); render(); }
+        else if (v === "land") { allOff(); held = {}; picks = {}; prefs.land = !prefs.land; gtrSavePrefs(prefs); applyLand(); render(); }
+        else if (/^grip:/.test(v)) { allOff(); held = {}; picks = {}; B.gripStep(v.substring(5)); applyLand(); render(); }
         else if (v === "back") { backToggle(); }
         else if (/^gpat:/.test(v)) { prefs.pat = gtrPat(v.substring(5))[0]; gtrSavePrefs(prefs); if (pat) { patRetime(); } render(); }
         else if (v === "swing") { var sl = B.SWINGS, si = 0; for (var q = 0; q < sl.length; q++) { if (sl[q][0] === prefs.swing) { si = q; } } prefs.swing = sl[(si + 1) % sl.length][0]; gtrSavePrefs(prefs); render(); }
@@ -1006,7 +1035,8 @@
         } else {
           html += '<div class="piano-row">';
           for (i = 0; i < GTR_VIEWS.length; i++) { html += '<button class="modal-btn' + (view === GTR_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-ga="view:' + GTR_VIEWS[i][0] + '">' + GTR_VIEWS[i][1] + '</button>'; }
-          html += '</div><div class="piano-opts">';
+          html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-ga="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button>';
+          html += '</div>' + (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
           for (i = 0; i < GTR_VOICES.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.voice === GTR_VOICES[i][0] ? " active" : "") + '" data-ga="voice:' + GTR_VOICES[i][0] + '">' + GTR_VOICES[i][1] + '</button>'; }
           html += '</div>';
           if (view === "fret") {
@@ -1045,28 +1075,29 @@
         if (strVo[sn].cur !== pickNote(sn)) { bendString(sn, pickNote(sn)); }
       }
       function pluck(r) { var sn = 5 - r; playString(sn, pickNote(sn), 0.75, 0); }
-      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + size + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
+      function text(ctx, s, x, y, size, color) { ctx.fillStyle = color; ctx.font = "bold " + (GTR_LAND ? Math.max(4, size * 0.6) : size) + "px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(s, x, y); }
       function drawFret(ctx) {
         var cw = gtrColW(), rh = gtrRowH(), top = GTR_BOARD_Y, bot = top + rh * 6, spc = B.scalePcs(prefs.key, prefs.scale), r, c;
+        var numY = GTR_LAND ? (bot + 4 <= GTR_H ? bot + 3 : top - 4) : top - 7, pzw = GTR_PICK_R - GTR_PICK_X;
         ctx.fillStyle = "#4a2f1d";
-        ctx.fillRect(GTR_BOARD_X, top, cw * GTR_COLS, bot - top);
+        ctx.fillRect(GTR_BOARD_X, top, GTR_BOARD_R - GTR_BOARD_X, bot - top);
         if (GTR_PICK) {
           // 右手の所（ボディ）
           ctx.fillStyle = "#7a4b2a";
-          ctx.fillRect(GTR_PICK_X, top, W - 4 - GTR_PICK_X, bot - top);
+          ctx.fillRect(GTR_PICK_X, top, pzw, bot - top);
           ctx.fillStyle = "#1a0f08";
-          ctx.beginPath(); ctx.arc(GTR_PICK_X + (W - 4 - GTR_PICK_X) / 2, (top + bot) / 2, Math.min(W - 4 - GTR_PICK_X, bot - top) * 0.36, 0, Math.PI * 2); ctx.fill();
-          text(ctx, "右手", GTR_PICK_X + (W - 4 - GTR_PICK_X) / 2, top - 7, 8, "#ffd166");
+          ctx.beginPath(); ctx.arc(GTR_PICK_X + pzw / 2, (top + bot) / 2, Math.min(pzw, bot - top) * 0.36, 0, Math.PI * 2); ctx.fill();
+          text(ctx, "右手", GTR_PICK_X + pzw / 2, numY, 8, "#ffd166");
         }
         for (c = 0; c < GTR_COLS; c++) {
-          var f = prefs.pos + c, cx = GTR_BOARD_X + (c + 0.5) * cw;
+          var f = prefs.pos + c, cx = gtrColX(c) + cw / 2;
           if (GTR_MARKS.indexOf(f) >= 0) {
             ctx.fillStyle = "#e8d8b8";
             if (f === 12) { ctx.beginPath(); ctx.arc(cx, top + rh * 2, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(cx, top + rh * 4, 3.5, 0, Math.PI * 2); ctx.fill(); }
             else { ctx.beginPath(); ctx.arc(cx, top + rh * 3, 3.5, 0, Math.PI * 2); ctx.fill(); }
           }
-          if (c > 0) { var nut = c === 1 && prefs.pos === 0; ctx.fillStyle = nut ? "#f5f0e6" : "#b8b8b8"; ctx.fillRect(GTR_BOARD_X + c * cw - (nut ? 2 : 0.75), top, nut ? 4 : 1.5, bot - top); }
-          text(ctx, f === 0 ? "開放" : String(f), cx, top - 7, 8, "#adb5bd");
+          if (c > 0) { var nut = c === 1 && prefs.pos === 0; ctx.fillStyle = nut ? "#f5f0e6" : "#b8b8b8"; ctx.fillRect(gtrFretX(c) - (nut ? 2 : 0.75), top, nut ? 4 : 1.5, bot - top); }
+          text(ctx, f === 0 ? "開放" : String(f), cx, numY, 8, "#adb5bd");
         }
         for (r = 0; r < 6; r++) {
           var sn = 5 - r, sy = top + (r + 0.5) * rh;
@@ -1085,12 +1116,13 @@
             }
           }
           ctx.fillStyle = vib[sn] > 0 ? "#ffe8a3" : "#d9d9d9";
-          ctx.fillRect(GTR_BOARD_X, sy - (0.6 + sn * 0.25) + (GTR_PICK && vib[sn] > 0 ? Math.sin(frame * 1.7) * vib[sn] / 30 * 1.5 : 0), GTR_PICK ? W - 4 - GTR_BOARD_X : cw * GTR_COLS, 1.2 + sn * 0.5);
+          var sx0 = GTR_PICK ? Math.min(GTR_BOARD_X, GTR_PICK_X) : GTR_BOARD_X, sx1 = GTR_PICK ? Math.max(GTR_BOARD_R, GTR_PICK_R) : GTR_BOARD_R;
+          ctx.fillRect(sx0, sy - (0.6 + sn * 0.25) + (GTR_PICK && vib[sn] > 0 ? Math.sin(frame * 1.7) * vib[sn] / 30 * 1.5 : 0), sx1 - sx0, (1.2 + sn * 0.5) * (GTR_LAND ? 0.7 : 1));
           for (c = 0; c < GTR_COLS; c++) {
             var nm = gtrName(GTR_OPEN[sn] + prefs.pos + c, names);
             if (nm) { var rr = gtrCellRect(r, c); text(ctx, nm, rr.x + rr.w / 2, sy - rh * 0.3, 7, "rgba(255,255,255,0.6)"); }
           }
-          hudText(ctx, String(6 - sn), 1, sy - rh * 0.3, "left");
+          if (GTR_LAND) { text(ctx, String(6 - sn), GTR_MIRROR ? W - 5.5 : 5.5, sy, 10, "#ffd166"); } else { hudText(ctx, String(6 - sn), 1, sy - rh * 0.3, "left"); }
         }
       }
       function drawSong(ctx) {
@@ -1106,8 +1138,8 @@
           ctx.fillStyle = cur ? "#ffd166" : (flash["c" + i] > 0 ? "#fff3b0" : "#2f4a6e");
           ctx.fillRect(cr.x, cr.y, cr.w, cr.h);
           if (i === pend) { ctx.strokeStyle = "#ff922b"; ctx.lineWidth = 2; ctx.strokeRect(cr.x + 1, cr.y + 1, cr.w - 2, cr.h - 2); ctx.lineWidth = 1; }
-          text(ctx, dc.deg, cr.x + cr.w / 2, cr.y + 8, dc.deg.length > 5 ? 6 : 7, cur ? "#14213d" : "#adb5bd");
-          text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4, dc.name.length > 5 ? 7 : (dc.name.length > 4 ? 8 : 10), cur ? "#14213d" : "#ffffff");
+          if (!GTR_LAND) { text(ctx, dc.deg, cr.x + cr.w / 2, cr.y + 8, dc.deg.length > 5 ? 6 : 7, cur ? "#14213d" : "#adb5bd"); }
+          text(ctx, dc.name, cr.x + cr.w / 2, cr.y + cr.h / 2 + (GTR_LAND ? 0 : 4), dc.name.length > 5 ? 7 : (dc.name.length > 4 ? 8 : 10), cur ? "#14213d" : "#ffffff");
         }
         if (back) { drawSong(ctx); }
         ctx.fillStyle = "#3b2416";
@@ -1120,13 +1152,14 @@
             for (var x = 60; x <= W - 8; x += 6) { var yy = y + Math.sin(x / 9 + frame * 1.7) * a; if (x === 60) { ctx.moveTo(x, yy); } else { ctx.lineTo(x, yy); } }
             ctx.stroke(); ctx.lineWidth = 1;
           } else { ctx.fillRect(60, y - th / 2, W - 68, th); }
-          text(ctx, (6 - sn) + "弦 " + GTR_SNAME[sn], 30, y - 9, 8, "#adb5bd");
+          var lx = GTR_LAND ? 40 : 30, ly0 = GTR_LAND ? y : y + 6, rr = GTR_LAND ? Math.min(9, rh * 0.42) : 9;
+          text(ctx, GTR_LAND ? (6 - sn) + " " + GTR_SNAME[sn] : (6 - sn) + "弦 " + GTR_SNAME[sn], GTR_LAND ? 16 : 30, GTR_LAND ? y : y - 9, 8, "#adb5bd");
           ctx.fillStyle = fx === null ? "#c92a2a" : "#ffd166";
-          ctx.beginPath(); ctx.arc(30, y + 6, 9, 0, Math.PI * 2); ctx.fill();
-          text(ctx, fx === null ? "×" : String(fx), 30, y + 6, 10, "#14213d");
+          ctx.beginPath(); ctx.arc(lx, ly0, rr, 0, Math.PI * 2); ctx.fill();
+          text(ctx, fx === null ? "×" : String(fx), lx, ly0, 10, "#14213d");
           if (fx !== null && names !== "none") { text(ctx, gtrName(sh.midis[sn], names), W - 20, y - 8, 8, "rgba(255,255,255,0.6)"); }
         }
-        text(ctx, ch.name, W / 2, GTR_STRUM_Y - 7, 11, "#ffd166");
+        if (!GTR_LAND) { text(ctx, ch.name, W / 2, GTR_STRUM_Y - 7, 11, "#ffd166"); }
       }
       return {
         input: function (a, down) {
@@ -1225,16 +1258,16 @@
           if (g) { g.addColorStop(0, "#1b1f3b"); g.addColorStop(1, "#3b1d2e"); }
           ctx.fillStyle = g || "#1b263b";
           ctx.fillRect(0, 0, W, GTR_H);
-          hudText(ctx, back ? "🎸 " + (bk ? "伴奏" : back.name) : pat ? "🎼 " + gtrPat(prefs.pat)[1] : view === "chord" ? "🎶 キー " + GTR_CDE[prefs.key] : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜"), 8, 10, "left");
-          hudText(ctx, "BPM " + bpm, W - 8, 10, "right");
+          hudText(ctx, back ? "🎸 " + (bk ? "伴奏" : back.name) : pat ? "🎼 " + gtrPat(prefs.pat)[1] : view === "chord" ? "🎶 キー " + GTR_CDE[prefs.key] : "🎸 " + (prefs.pos ? prefs.pos + "フレット〜" : "開放弦〜"), 8, GTR_LAND ? 6 : 10, "left");
+          hudText(ctx, "BPM " + bpm, W - 8, GTR_LAND ? 6 : 10, "right");
           var held = [], sn;
           for (sn = 5; sn >= 0; sn--) { if (strVo[sn] && view === "fret") { held.push(gtrName(strVo[sn].cur, names === "none" ? "do" : names) + "（" + gtrName(strVo[sn].cur, "cde") + "）"); } }
           if (rec) {
             var rb = recBeat();
-            text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, view === "chord" ? 10 : 30, view === "chord" ? 11 : 16, "#ff6b6b");
+            text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, view === "chord" || GTR_LAND ? (GTR_LAND ? 6 : 10) : 30, view === "chord" ? 11 : 16, "#ff6b6b");
           }
           if (view === "chord") { drawStrum(ctx); return; }
-          if (!rec) { text(ctx, held.join(" ") || (play ? "再生中…" : GTR_PICK ? "左手で押さえて、右手の所で弾こう" : "弦のマスをタップして弾こう"), W / 2, held.length ? 60 : 70, held.length ? 16 : 12, held.length ? "#ffd166" : "#ffffff"); }
+          if (!rec && (!GTR_LAND || held.length)) { text(ctx, held.join(" ") || (play ? "再生中…" : GTR_PICK ? "左手で押さえて、右手の所で弾こう" : "弦のマスをタップして弾こう"), W / 2, GTR_LAND ? 6 : (held.length ? 60 : 70), held.length ? 16 : 12, held.length ? "#ffd166" : "#ffffff"); }
           drawFret(ctx);
         }
       };
@@ -1244,7 +1277,8 @@
   window.UGGuitar = {
     H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, AMPS: GTR_AMPS, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
     PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
-    setPick: gtrSetPick, pickRow: gtrPickRow, rowLineY: gtrRowLineY, PICK_X: GTR_PICK_X, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
+    setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
+    geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y }; }, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
     quality: gtrQuality, shape: gtrShape, bus: gtrBus, name: gtrName, prefs: gtrPrefs, notesClean: gtrNotesClean,
     SONGS: GTR_SONGS, chart: gtrChart, BEST_KEY: GTR_BEST_KEY, RLEVELS: GTR_RLEVELS, sendToSeq: gtrSendToSeq, SEQ_MAX: GTR_SEQ_MAX, songSev: gtrSongSev, takesLoad: gtrTakesLoad, takesSave: gtrTakesSave, takeAdd: gtrTakeAdd, takeById: gtrTakeById
   };

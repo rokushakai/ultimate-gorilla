@@ -182,7 +182,7 @@ module.exports = function () {
   var pk = { snd: [], bends: 0, stops: 0, info: null }, epk = H.load();
   epk.store[G.PREFS_KEY] = JSON.stringify({ view: "fret", pick: true, voice: "steel" });
   epk.run("guitar", { config: {} }, 30, function (fr) {
-    var Gw = epk.window.UGGuitar, M = epk.window.UGMelody, px = Gw.PICK_X + 12;
+    var Gw = epk.window.UGGuitar, M = epk.window.UGMelody, px = Gw.geom().PICK_X + 12;
     if (fr === 1) {
       var s0 = M.synth, b0 = M.voiceBend, v0 = M.voiceStop;
       M.synth = function (m, pg) { if (pg !== M.DRUM) { pk.snd.push(m); } return s0.apply(M, arguments); };
@@ -190,7 +190,7 @@ module.exports = function () {
       M.voiceStop = function () { pk.stops++; return v0.apply(M, arguments); };
     }
     var c1 = Gw.cellRect(1, 1), c3 = Gw.cellRect(1, 3);
-    if (fr === 2) { pk.info = [Gw.cellAt(px, Gw.rowLineY(1), 0), Gw.pickRow(px, Gw.rowLineY(1)), Gw.cellRect(0, 5).x + Gw.cellRect(0, 5).w <= Gw.PICK_X]; epk.ptr("down", c1.x + 5, c1.y + 5, 1); }
+    if (fr === 2) { pk.info = [Gw.cellAt(px, Gw.rowLineY(1), 0), Gw.pickRow(px, Gw.rowLineY(1)), Gw.cellRect(0, 5).x + Gw.cellRect(0, 5).w <= Gw.geom().PICK_X]; epk.ptr("down", c1.x + 5, c1.y + 5, 1); }
     if (fr === 4) { pk.n0 = pk.snd.length; epk.ptr("down", px, Gw.BOARD_Y + 2, 2); epk.ptr("move", px, 316, 2); epk.ptr("up", px, 316, 2); }
     if (fr === 6) { pk.st0 = pk.stops; epk.ptr("move", c3.x + 5, c3.y + 5, 1); }
     if (fr === 8) { pk.st1 = pk.stops; epk.ptr("up", c3.x + 5, c3.y + 5, 1); }
@@ -198,6 +198,28 @@ module.exports = function () {
   });
   ok(pk.n0 === 0 && pk.snd.slice(0, 6).join() === "64,60,55,50,45,40" && pk.bends === 1 && pk.st2 > pk.st1 && pk.snd[6] === 45 && pk.info[0] === null && pk.info[1] === 1 && pk.info[2],
     "right-hand picking: pressing a fret is silent; swiping the right-hand area plays every string with the held frets (B string at C); moving the held finger bends the ringing string; lifting mutes it; a tap picks one string", [pk.snd, pk.bends, pk.info]);
+
+  // --- §288: よこ向き・持ち方（右利き / 左利き・ネックの太さと位置・右手の所の広さ）---
+  var eg = H.load(), Gg = eg.window.UGGuitar, Bg = eg.window.UGBass;
+  Gg.layout({ land: true, h: 130 });
+  var gA = Gg.geom();
+  Gg.layout({ land: true, h: 130, pick: true });
+  var gB = Gg.geom(), cB = Gg.cellRect(0, 0);
+  eg.store[Bg.GRIP_KEY] = JSON.stringify({ lefty: true, size: "s", pos: "top", pw: 35 });
+  Gg.layout({ land: true, h: 130, pick: true });
+  var gC = Gg.geom(), cC0 = Gg.cellRect(0, 0), cC1 = Gg.cellRect(0, 1), hitC = Gg.cellAt(gC.BOARD_R - 2, Gg.rowLineY(2), 0), pkC = Gg.pickRow(gC.PICK_X + 5, Gg.rowLineY(2));
+  Gg.layout({});
+  var gD = Gg.geom();
+  ok(gA.COLS === 13 && gA.H === 130 && !gA.MIRROR && gB.COLS < 13 && gB.COLS >= 7 && gB.PICK_X > gB.BOARD_R && cB.x === gB.BOARD_X &&
+    gC.MIRROR && gC.PICK_X === 4 && gC.BOARD_X > gC.PICK_R && cC0.x + cC0.w === gC.BOARD_R && cC1.x < cC0.x && hitC && hitC.c === 0 && hitC.sn === 3 && pkC === 2 &&
+    gC.BOARD_Y === 14 && gC.BOARD_BOT - gC.BOARD_Y < (gA.BOARD_BOT - gA.BOARD_Y) * 0.75 && (gC.PICK_R - gC.PICK_X) > (gB.PICK_R - gB.PICK_X) &&
+    gD.H === 320 && gD.COLS === 8 && !gD.MIRROR,
+    "landscape: 13 frets (fewer with the right-hand area); left-handed mirrors the neck (nut on the right, right-hand area on the left); a thin neck at the top; a wider right-hand area; portrait goes back", [gA, gB, gC]);
+  var gs1 = Bg.gripStep("size"), gs2 = Bg.gripStep("pw"), gs3 = Bg.gripStep("lefty");
+  var pg = prun({ land: true, view: "fret", pick: true, tab: "play" }, 6, function (fr, e) { if (fr === 3) { e.window.__gAct("grip:pos"); } });
+  var gp = JSON.parse(pg.e.store["ultimateGorillaGripV1"] || "{}"), hp = pg.e.window.__gPanel();
+  ok(gs1.size === "m" && gs2.pw === 20 && gs3.lefty === false && gp.pos === "bot" && hp.indexOf("持ち方") > 0 && hp.indexOf('data-ga="grip:lefty"') > 0 && hp.indexOf('data-ga="land"') > 0,
+    "grip settings cycle and are saved (shared by guitar and bass); the play tab shows them in landscape", [gs1, gs2, gs3, gp]);
 
   // --- アンプ: エレキはゆがみ（クランチ・ディストーション）、アコギは通さない ---
   var e5 = H.load(), M5 = e5.window.UGMelody, G5 = e5.window.UGGuitar, ws = 0;
