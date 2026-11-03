@@ -1170,6 +1170,54 @@ module.exports = async function () {
   var up15 = JSON.parse(ue.store[uU.PADS_KEY] || "[]")[15], upp = JSON.parse(ue.store[uU.PADPREFS_KEY] || "{}");
   ok(us.a === uU.padsLoad(false)[0].shape.join() && us.idx === 3 && us.b === null, "a pad puts its chord on the fretboard and strums the pattern while held (4ths at BPM 120), stopping on release", us);
   ok(up15 && up15.name === "Am" && up15.shape.join() === us.c && upp.chord === false, "registering stores the held fingering on a pad; the chord name can be turned off", [up15, upp]);
+  // --- §324: ▶ パターン（指板の形をストローク・コード進行・パッドで次の小節から・ハネ・ドラム・ベース）---
+  // 鳴らした音を時刻（秒）つきで集める（テストの AudioContext の時刻は 1 のまま → 予約の時刻はフレーム ＋ (when − 1)）
+  function ukePatRun(prefs, frames, pol) {
+    var e = ukeHooked(), out = { notes: [], drums: 0, bass: [], cur: {} }, fr = 0;
+    e.store[e.window.UGUkulele.PADPREFS_KEY] = JSON.stringify(prefs);
+    e.run("ukulele", { config: { mode: "free" } }, frames, function (f) {
+      var h = e.window.__ukePad, M = e.window.UGMelody; fr = f;
+      if (f === 1) {
+        var sy = M.synth;
+        M.synth = function (m, pg, when) {
+          if (pg === 140) { out.notes.push([Math.round((fr / 60 + (when || 1) - 1) * 1000) / 1000, m]); }
+          if (pg === M.DRUM) { out.drums++; }
+          if (pg === 33) { out.bass.push(m); }
+          return sy.apply(M, arguments);
+        };
+      }
+      if (h && pol) { pol(f, h, out); }
+    });
+    out.e = e;
+    return out;
+  }
+  function ukeStrumsOf(notes) { var o = [], i; for (i = 0; i < notes.length; i++) { if (!o.length || notes[i][0] - o[o.length - 1].t > 0.15) { o.push({ t: notes[i][0], m: [] }); } o[o.length - 1].m.push(notes[i][1]); } return o; }
+  var uPd = U.padsLoad(false), mid = function (sh) { return sh.map(function (f, s) { return U.midi(s, f, false); }).join(); };
+  var pk1 = ukePatRun({ play: "once", ppat: "pat:D-D-D-D-:4", bpm: 120, cprog: "pop4" }, 260, function (f, h, o) {
+    if (f === 2) { h.act("upat"); }
+    if (f === 60) { o.cur.a = h.st().cur.join(); }
+    if (f === 150) { o.cur.b = h.st().cur.join(); }
+  });
+  var st1 = ukeStrumsOf(pk1.notes);
+  ok(st1.length >= 8 && Math.abs(st1[1].t - st1[0].t - 0.5) < 0.03 && st1[0].m.join() === mid(uPd[0].shape) && st1[4].m.join() === mid(uPd[4].shape) && pk1.cur.a === uPd[0].shape.join() && pk1.cur.b === uPd[4].shape.join(),
+    "▶ pattern strums what the fretboard holds (4ths at BPM 120 = every 0.5 s); the chord progression puts C, then G, on the fretboard at each bar", [st1.slice(0, 5), pk1.cur]);
+  var pk2 = ukePatRun({ play: "once", ppat: "pat:D-D-D-D-:4", bpm: 120, cprog: "royal" }, 200, function (f, h, o) {
+    if (f === 2) { h.press(0); h.release(0); }
+    if (f === 4) { h.act("upat"); }
+    if (f === 40) { h.press(5); h.release(5); o.cur.cp = h.st().prefs.cprog; }
+    if (f === 100) { o.cur.a = h.st().cur.join(); }
+    if (f === 150) { o.cur.b = h.st().cur.join(); }
+  });
+  ok(pk2.cur.cp === "" && pk2.cur.a === U.padsLoad(false)[3].shape.join() && pk2.cur.b === uPd[5].shape.join(),
+    "a pad pressed during the pattern takes over at the next bar (the progression is released)", pk2.cur);
+  var pk3 = ukePatRun({ play: "once", ppat: "pat:DUDUDUDU:4", bpm: 120, swing: 2 }, 70, function (f, h) { if (f === 2) { h.act("upat"); } });
+  var st3 = ukeStrumsOf(pk3.notes);
+  ok(st3.length >= 3 && Math.abs(st3[1].t - st3[0].t - 0.305) < 0.02 && Math.abs(st3[2].t - st3[1].t - 0.195) < 0.02, "swing delays the up-strums", st3.map(function (x) { return x.t; }));
+  var lp3 = U.padPrefs && pk3.e.window.UGDrum.patternList().filter(function (l) { return l.kind === "loop" && l.len === 16; })[0];
+  var pk4 = ukePatRun({ play: "once", ppat: "pat:D-D-D-D-:4", bpm: 120, cprog: "pop4", drum: lp3.id, bpat: "root8" }, 150, function (f, h) { if (f === 2) { h.act("upat"); } if (f === 140) { h.act("upat"); } });
+  var B4 = pk4.e.window.UGBass;
+  ok(pk4.drums >= 8 && pk4.bass.length >= 8 && pk4.bass[0] === B4.chord(0, 0, "major", false).notes[0] && pk4.e.window.__ukePad.st().prefs.ppat === "pat:D-D-D-D-:4",
+    "band: the drum loop and the bass pattern play along (the bass follows the progression)", [pk4.drums, pk4.bass]);
   // --- §224: 表示の設定（並び方・パッドの大きさ・下のボタン・説明） ---
   var vcls = [], vroot = H.makeEl("div"), vparts = {}, ve = ukeHooked();
   vroot.classList = { add: function (c) { vcls.push("+" + c); }, remove: function (c) { vcls.push("-" + c); }, contains: function () { return false; } };

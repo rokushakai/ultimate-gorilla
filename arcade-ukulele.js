@@ -3364,8 +3364,20 @@
       view: UKE_VIEWS.some(function (v) { return v[0] === p.view; }) ? p.view : "below", size: p.size === "s" || p.size === "l" ? p.size : "m",
       ctrl: p.ctrl !== false, help: p.help !== false,
       // §225: 別名の数（0〜3、99 ＝ すべて）・オンコードも読む（いちばん低い音をベースに）
-      alts: [0, 1, 2, 3, 99].indexOf(Number(p.alts)) >= 0 ? Number(p.alts) : 3, onc: !!p.onc };
+      alts: [0, 1, 2, 3, 99].indexOf(Number(p.alts)) >= 0 ? Number(p.alts) : 3, onc: !!p.onc,
+      // §324: ▶ パターン（パターン・ハネ・コード進行・キー・バンド・音量）
+      ppat: typeof p.ppat === "string" && /^(once|pat:[DUxP1-4-]{1,16}:[34]|my:\d+)$/.test(p.ppat) ? p.ppat : "pat:D-DU-UDU:4",
+      swing: [0, 1, 2, 3].indexOf(Number(p.swing)) >= 0 ? Number(p.swing) : 0,
+      cprog: typeof p.cprog === "string" && /^[a-z0-9]{1,16}$/.test(p.cprog) ? p.cprog : "",
+      key: Math.round(Number(p.key)) >= 0 && Math.round(Number(p.key)) <= 11 ? Math.round(Number(p.key)) : 0,
+      scale: typeof p.scale === "string" && /^[a-z0-9]{1,16}$/.test(p.scale) ? p.scale : "major", sev: !!p.sev,
+      drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
+      bpat: typeof p.bpat === "string" && /^[a-z0-9]{1,12}$/.test(p.bpat) ? p.bpat : "",
+      uvol: ukeVol(p.uvol, 100), bvol: ukeVol(p.bvol, 100), dvol: ukeVol(p.dvol, 50) };
   }
+  // §324: 音量（%。0〜150・10 きざみ）
+  var UKE_VOL_MAX = 150, UKE_VOL_STEP = 10;
+  function ukeVol(v, d) { v = Number(v); return v >= 0 && v <= UKE_VOL_MAX && v % UKE_VOL_STEP === 0 ? v : d; }
   // §224 v1.32: 並び方 [id, 名前]
   var UKE_VIEWS = [["below", "下にパッド"], ["top", "パッドを上に"], ["side", "横ならび"], ["small", "指板を小さく"]];
   var UKE_PAD_SIZES = [["s", "小"], ["m", "中"], ["l", "大"]];
@@ -3424,7 +3436,7 @@
       { action: "posDown", label: "&#x25BC;" }
     ],
     controlsClass: "uke-ctrl", // §182: 5つ並ぶので字を小さく
-    keys: { " ": "strum", "d": "strum", "D": "strum", "u": "strumUp", "U": "strumUp", "1": "p0", "2": "p1", "3": "p2", "4": "p3", "Backspace": "clear", "ArrowUp": "posUp", "ArrowDown": "posDown" },
+    keys: { " ": "strum", "d": "strum", "D": "strum", "u": "strumUp", "U": "strumUp", "b": "upat", "B": "upat", "1": "p0", "2": "p1", "3": "p2", "4": "p3", "Backspace": "clear", "ArrowUp": "posUp", "ArrowDown": "posDown" },
     setup: ukeSetup,
     setupLabel: "モードを変える",
     panel: true, // §223: フリー演奏のパッド・パターン（ほかのモードでは空）
@@ -3891,6 +3903,13 @@
           return;
         }
         if (!pads[i]) { return; }
+        // §324: パターン中は、次の小節の頭でこのパッドの押さえ方に（コード進行はとける）
+        if (upat) {
+          upend = i;
+          msg = "次の小節で " + (pads[i].name || pads[i].shape.join("")); msgGood = true; msgT = 40;
+          if (padP.cprog) { padP.cprog = ""; ukePadPrefsSave(padP); padRender(); }
+          return;
+        }
         padShapeOn(pads[i].shape);
         padHeldI = i;
         var pl = ukePadPlay(padP.play);
@@ -3902,6 +3921,209 @@
         padHeldI = -1;
         if (padPlay && !padPlay.once) { padPlay = null; }
         padMarks();
+      }
+      // ---------- §324: ▶ パターン（指板の形をストローク・コード進行・パッドで次の小節から・ハネ・ドラム・ベース）----------
+      var B = window.UGBass, upat = null, upend = -1, ubus = {}, patOpen = false;
+      function unow() { return frames / 60; }
+      function upTime(b) { return upat.t0 + b * 60 / padP.bpm; }
+      function upBeat() { return (unow() - upat.t0) * padP.bpm / 60; }
+      function upMeter() { return upat ? upat.meter : ukePadPlay(padP.ppat)[4]; }
+      function upDefs() {
+        var pl = ukePadPlay(padP.ppat), pt = pl[2] === "once" ? "D" : pl[3];
+        return { pt: pt, meter: pl[4] === 3 ? 3 : 4, unit: (pl[4] === 3 ? 3 : 4) / pt.length };
+      }
+      function upStart() {
+        upStop();
+        if (!B || !B.cprog || !B.chord) { msg = "ゴリラベースが読みこめませんでした"; msgT = 60; return; }
+        var d = upDefs();
+        upat = { t0: unow() + 0.1, k: 0, pt: d.pt, meter: d.meter, unit: d.unit, dk: 0, bk: 0, bvo: null, lastBar: -1, d: -1 };
+        drumInit();
+        if (ac && padP.bpat) { try { UG.loadSamples([33]); } catch (e) {} }
+      }
+      function upStop() {
+        if (!upat) { return; }
+        if (upat.bvo && UG && UG.voiceStop) { try { UG.voiceStop(upat.bvo, 0, 0.06); } catch (e) {} }
+        upat = null;
+        if (upend >= 0 && pads[upend]) { padShapeOn(pads[upend].shape); }
+        upend = -1;
+      }
+      // パターン・BPM・ドラム・ベースを変えたとき: 拍の位置はそのまま、次のマスから
+      function upRetime(oldBpm) {
+        var bt = Math.max(0, (unow() - upat.t0) * (oldBpm || padP.bpm) / 60), d = upDefs(), bd;
+        function at(u) { return Math.max(0, Math.ceil(bt / u - 1e-6)); }
+        upat.t0 = unow() - bt * 60 / padP.bpm;
+        if (d.meter !== upat.meter) { upat.t0 = unow() + 0.1; bt = 0; upat.lastBar = -1; }
+        upat.pt = d.pt; upat.meter = d.meter; upat.unit = d.unit;
+        bd = bassDef();
+        upat.k = at(upat.unit); upat.dk = at(0.25); upat.bk = bd ? at(upat.meter / bd[2].length) : 0;
+        drumCache = null;
+      }
+      function upToggle() { if (upat) { upStop(); } else { upStart(); } padRender(); }
+      // 小節の頭: 予約したパッド・コード進行の押さえ方を指板に
+      function upBar(b) {
+        var bar = Math.floor(b / upat.meter + 1e-6), cp = B.cprog(padP.cprog);
+        if (bar === upat.lastBar) { return; }
+        upat.lastBar = bar;
+        if (upend >= 0) { if (pads[upend]) { padShapeOn(pads[upend].shape); } upend = -1; upat.d = -1; return; }
+        if (cp) {
+          var d = B.cprogAt(cp, b, upat.meter).d;
+          if (d !== upat.d) {
+            upat.d = d;
+            var r = ukeResolve(B.chord(padP.key, d, padP.scale, padP.sev).name, 0, lowG, "auto");
+            if (r) { padShapeOn(r.shape); }
+          }
+        }
+      }
+      // ベースのコード（コード進行・予約したパッド・指板の形から読んだコード）
+      function upChordAt(b, head) {
+        var cp = B.cprog(padP.cprog), nm;
+        if (cp) { return B.chord(padP.key, B.cprogAt(cp, b, upat.meter).d, padP.scale, padP.sev); }
+        if (head && upend >= 0 && pads[upend]) { nm = pads[upend].name; }
+        else { var dt0 = ukeDetect(current(), lowG); nm = dt0 && dt0.name; }
+        return (nm && B.songChord ? B.songChord(nm, padP.key) : null) || B.chord(padP.key, 0, padP.scale, false);
+      }
+      function upNextAt(b) {
+        var cp = B.cprog(padP.cprog);
+        if (cp) { return B.chord(padP.key, B.cprogAt(cp, b, upat.meter).next, padP.scale, padP.sev); }
+        if (upend >= 0 && pads[upend] && B.songChord) { return B.songChord(pads[upend].name, padP.key); }
+        return null;
+      }
+      function uBus() { return ac && B && B.bus ? B.bus(ubus, "u", padP.uvol, false) : null; }
+      function upSound(s, dd, vel) {
+        if (!UG || !ac) { return; }
+        ukeNote(UG, ac, outs, s, current()[s], ac.currentTime + dd, 0.9 * vel, lowG, uBus() || undefined);
+        ring[s] = 30;
+      }
+      function upStep() {
+        var n = 0, pt = upat.pt, unit = upat.unit, per = Math.round(1 / unit), c, dd, s, j;
+        while (upat && n++ < 32) {
+          var b = upat.k * unit, ci = upat.k % pt.length, dt = upTime(b + B.swingOf(padP.swing, per, ci) * unit) - unow();
+          if (dt > 0.1) { break; }
+          upat.k++;
+          if (ci === 0) { upBar(b); }
+          if (dt < -0.05) { continue; }
+          c = pt.charAt(ci); dd = Math.max(0, dt);
+          if (c === "D" || c === "U") { for (j = 0; j < 4; j++) { upSound(c === "U" ? 3 - j : j, dd + j * 0.025, c === "U" ? 0.72 : 0.85); } }
+          else if (c === "x") {
+            if (UG && ac) {
+              for (s = 0; s < 4; s++) { if (outs[s]) { ukeStringOut(UG, ac, outs, s, ac.currentTime + dd, 0.0001); } }
+              try { UG.drum(ac, 37, ac.currentTime + dd, 0.5); } catch (e) {}
+            }
+          }
+          else if (c >= "1" && c <= "4") { upSound(4 - parseInt(c, 10), dd, 0.8); }
+          else if (c === "P") { upSound(0, dd, 0.8); upSound(3, dd, 0.8); }
+        }
+      }
+      var drumCache = null;
+      function drumDef() {
+        var D = window.UGDrum, id = padP.drum, mt = upMeter();
+        if (!id || !D || !D.patternSteps) { return null; }
+        if (drumCache && drumCache.id === id && drumCache.mt === mt) { return drumCache.steps ? drumCache : null; }
+        var st = null, len = 16;
+        try { st = D.patternSteps(id); len = D.patLen ? D.patLen(id) : 16; } catch (e) {}
+        drumCache = { id: id, mt: mt, len: len, steps: st && st.length && len === (mt === 3 ? 12 : 16) ? st : null };
+        return drumCache.steps ? drumCache : null;
+      }
+      function drumInit() {
+        var D = window.UGDrum, dp = null;
+        try { dp = D && D.prefs ? D.prefs() : null; } catch (e) {}
+        if (!dp || !ac || !UG) { return; }
+        try { if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); } if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); } if (dp.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); } } catch (e2) {}
+      }
+      function drumStep() {
+        var dd = drumDef(), D = window.UGDrum, n = 0, i, q, swAmt = 0;
+        if (!dd || !ac || !UG) { return; }
+        var du = upat.meter / dd.len, bper = Math.round(1 / upat.unit) === 4 ? 4 : 2;
+        for (q = 0; q < B.SWINGS.length; q++) { if (B.SWINGS[q][0] === padP.swing) { swAmt = B.SWINGS[q][2]; } }
+        while (n++ < 16) {
+          var s0 = upat.dk % dd.len, sw = (bper === 2 && s0 % 4 === 2) ? swAmt * 0.5 : ((bper === 4 && s0 % 2 === 1) ? swAmt * 0.25 : 0);
+          var dt = upTime(upat.dk * du + sw) - unow();
+          if (dt > 0.1) { break; }
+          upat.dk++;
+          if (dt < -0.05) { continue; }
+          for (i = 0; i < dd.steps.length; i++) {
+            if (dd.steps[i][1].indexOf(s0) < 0) { continue; }
+            var lv = 0.8;
+            try { lv = D.patVel ? D.patVel(dd.steps[i][0], s0 % 16, false) : 0.8; } catch (e) {}
+            try { UG.synth(dd.steps[i][0], UG.DRUM, ac.currentTime + Math.max(0, dt), lv * 0.75, B.bus(ubus, "d", padP.dvol) || undefined); } catch (e2) {}
+          }
+        }
+      }
+      function bassDef() { var mt = upMeter(); if (!padP.bpat || !B || !B.patterns) { return null; } var d = B.patById(B.patterns(mt), padP.bpat); return d && d[0] === padP.bpat && d[3] === mt ? d : null; }
+      function bassStep() {
+        var bd = bassDef(), n = 0;
+        if (!bd || !ac || !UG) { return; }
+        var pt = bd[2], mt = upat.meter, unit = mt / pt.length, per = pt.length / mt, spb = 60 / padP.bpm;
+        while (n++ < 16) {
+          var b = upat.bk * unit, ci = upat.bk % pt.length, dt = upTime(b + B.swingOf(padP.swing, per, ci) * unit) - unow();
+          if (dt > 0.1) { break; }
+          upat.bk++;
+          if (dt < -0.05) { continue; }
+          var c = pt.charAt(ci);
+          if (c === "-" && ci === 0) { c = "R"; }
+          if (c === "-") { continue; }
+          var left0 = Math.floor(b / mt + 1e-6) * mt + mt - b;
+          var m = B.tokNote(c, upChordAt(b, ci === 0), upNextAt(b), left0), len = B.tokLen(pt, ci) * unit, when = ac.currentTime + Math.max(0, dt);
+          if (upat.bvo && UG.voiceStop) { try { UG.voiceStop(upat.bvo, when, 0.03); } catch (e0) {} }
+          try {
+            var bus = B.bus(ubus, "b", padP.bvol, false), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(33)), g = null;
+            if (bus) { g = ac.createGain(); g.gain.value = 0.85 * (smp ? 4 : 1); g.connect(bus); }
+            upat.bvo = UG.synth(m, 33, when, 0.85, g || undefined, 8) || null;
+            if (upat.bvo && UG.voiceStop) { UG.voiceStop(upat.bvo, when + len * spb * 0.92, 0.04); }
+          } catch (e) {}
+        }
+      }
+      // パネルの「🎼 パターン演奏の設定」
+      function upPanel() {
+        var all = ukePadPlays(), groups = [["once", "ストローク"], ["pat", "ストロークパターン"], ["arp", "アルペジオのパターン"], ["my", "じぶんのパターン"]], gi, oi, opts = "", mt = upMeter(), i, j, gs;
+        for (gi = 0; gi < groups.length; gi++) {
+          var go = "";
+          for (oi = 0; oi < all.length; oi++) { if (all[oi][2] === groups[gi][0]) { go += '<option value="' + I.escHtml(all[oi][0]) + '"' + (padP.ppat === all[oi][0] ? " selected" : "") + '>' + I.escHtml(groups[gi][0] === "once" ? "ジャーン（1小節に1回）" : all[oi][1]) + '</option>'; } }
+          if (go) { opts += '<optgroup label="' + groups[gi][1] + '">' + go + '</optgroup>'; }
+        }
+        var h = '<details class="uke-mypat uke-patset"' + (patOpen ? " open" : "") + '><summary>&#x1F3BC; パターン演奏の設定</summary>' +
+          '<div class="piano-row"><label class="piano-select">&#x1F3BC; <select data-uppat="1">' + opts + '</select></label></div>' +
+          '<div class="piano-row"><button class="modal-btn" data-uact="uswing">ハネ: ' + ["なし", "軽く", "ハネ", "3連"][padP.swing] + '</button></div>';
+        if (B && B.cprog) {
+          var co = '<option value=""' + (padP.cprog ? "" : " selected") + '>コード進行なし（指板・パッドで変える）</option>';
+          gs = B.CPROG_GROUPS || [];
+          for (i = 0; i < gs.length; i++) {
+            co += '<optgroup label="' + I.escHtml(gs[i][0]) + '">';
+            for (j = 0; j < gs[i][1].length; j++) { var cp = B.cprog(gs[i][1][j]); if (cp) { co += '<option value="' + cp[0] + '"' + (cp[0] === padP.cprog ? " selected" : "") + '>' + I.escHtml(cp[1]) + '</option>'; } }
+            co += '</optgroup>';
+          }
+          h += '<div class="piano-row"><label class="piano-select">&#x1F501; <select data-ucp="1">' + co + '</select></label></div>' +
+            '<div class="piano-row"><button class="modal-btn" data-uact="ukeydown">&#x25C0;</button><span>キー ' + NOTE_NAMES[padP.key] + '</span><button class="modal-btn" data-uact="ukeyup">&#x25B6;</button>' +
+            '<button class="modal-btn" data-uact="usev">' + (padP.sev ? "7th" : "3和音") + '</button></div>';
+          var so = "", sg = B.SCALE_GROUPS || [["", B.SCALES.map(function (x) { return x[0]; })]];
+          for (i = 0; i < sg.length; i++) {
+            if (sg[i][0]) { so += '<optgroup label="' + I.escHtml(sg[i][0]) + '">'; }
+            for (j = 0; j < sg[i][1].length; j++) { var sc = B.scale(sg[i][1][j]); so += '<option value="' + sc[0] + '"' + (sc[0] === B.scale(padP.scale)[0] ? " selected" : "") + '>' + I.escHtml(sc[1]) + '</option>'; }
+            if (sg[i][0]) { so += '</optgroup>'; }
+          }
+          h += '<div class="piano-row"><label class="piano-select">&#x1F3B5; <select data-usc="1">' + so + '</select></label></div>';
+        }
+        var D = window.UGDrum, l = [], dopt = '<option value=""' + (padP.drum ? "" : " selected") + '>ドラムなし</option>', grp = "", bopt = '<option value=""' + (padP.bpat ? "" : " selected") + '>ベースなし</option>';
+        try { l = D && D.patternList ? D.patternList() : []; } catch (e) {}
+        for (i = 0; i < l.length; i++) {
+          if (l[i].kind !== "loop" || l[i].len !== (mt === 3 ? 12 : 16)) { continue; }
+          if (l[i].group !== grp) { dopt += (grp ? '</optgroup>' : "") + '<optgroup label="' + I.escHtml(l[i].group) + '">'; grp = l[i].group; }
+          dopt += '<option value="' + I.escHtml(l[i].id) + '"' + (l[i].id === padP.drum ? " selected" : "") + '>' + I.escHtml(l[i].name) + '</option>';
+        }
+        dopt += grp ? '</optgroup>' : "";
+        if (B && B.patterns) {
+          gs = B.patGroups(B.patterns(mt));
+          for (i = 0; i < gs.length; i++) {
+            bopt += '<optgroup label="' + I.escHtml(gs[i][0]) + '">';
+            for (j = 0; j < gs[i][1].length; j++) { var p0 = gs[i][1][j]; if (p0[3] === mt) { bopt += '<option value="' + p0[0] + '"' + (p0[0] === padP.bpat ? " selected" : "") + '>' + I.escHtml(p0[1]) + '</option>'; } }
+            bopt += '</optgroup>';
+          }
+        }
+        h += '<div class="piano-row"><label class="piano-select">&#x1F941; <select data-udr="1">' + dopt + '</select></label></div>' +
+          '<div class="piano-row"><label class="piano-select">&#x1F3B8; <select data-ubp="1">' + bopt + '</select></label></div>';
+        var vols = [["u", "&#x1FA95; ウクレレ"], ["b", "&#x1F3B8; ベース"], ["d", "&#x1F941; ドラム"]];
+        for (i = 0; i < 3; i++) { h += '<div class="piano-row"><span>' + vols[i][1] + '</span><button class="modal-btn" data-uact="' + vols[i][0] + 'vol:-">－</button><span>' + padP[vols[i][0] + "vol"] + '%</span><button class="modal-btn" data-uact="' + vols[i][0] + 'vol:+">＋</button></div>'; }
+        return h + '<p class="small" style="margin:4px 0 0;">▶ パターンは、いま指板で押さえている形を弾きつづけます。' + (padP.cprog ? "コード進行のコードを小節の頭で指板に置きます。" : "パターン中にパッドを押すと、次の小節の頭でその押さえ方に変わります。") + '</p></details>';
       }
       function padMarks() {
         var bs = panel && panel.querySelectorAll ? panel.querySelectorAll("button[data-upad]") : [], k;
@@ -3918,7 +4140,22 @@
         else if (v === "onc") { padP.onc = !padP.onc; }
         else if (v === "edit") { padEdit = !padEdit; padPlay = null; padMsg = padEdit ? "指板を押さえて（ホールドがおすすめ）、パッドをタップすると その押さえ方を登録" : ""; }
         else if (v === "hold") { padP.hold = padP.hold === "once" ? "hold" : "once"; }
-        else if (v === "bpmdown" || v === "bpmup") { padP.bpm = Math.max(40, Math.min(240, padP.bpm + (v === "bpmup" ? 5 : -5))); }
+        else if (v === "bpmdown" || v === "bpmup") { var ob = padP.bpm; padP.bpm = Math.max(40, Math.min(240, padP.bpm + (v === "bpmup" ? 5 : -5))); if (upat) { upRetime(ob); } }
+        // §324: パターン
+        else if (v === "upat") { ukePadPrefsSave(padP); upToggle(); return; }
+        else if (v.indexOf("uppat:") === 0) { padP.ppat = ukePadPlay(v.substring(6))[0]; if (upat) { upRetime(); } }
+        else if (v === "uswing") { padP.swing = (padP.swing + 1) % 4; }
+        else if (v.indexOf("ucp:") === 0) { padP.cprog = B && B.cprog(v.substring(4)) ? v.substring(4) : ""; if (upat) { upat.d = -1; } }
+        else if (v === "ukeyup" || v === "ukeydown") { padP.key = (padP.key + (v === "ukeyup" ? 1 : 11)) % 12; if (upat) { upat.d = -1; } }
+        else if (v === "usev") { padP.sev = !padP.sev; if (upat) { upat.d = -1; } }
+        else if (v.indexOf("usc:") === 0) { padP.scale = B && B.scale ? B.scale(v.substring(4))[0] : "major"; if (upat) { upat.d = -1; } }
+        else if (v.indexOf("udr:") === 0) { padP.drum = v.substring(4); drumCache = null; if (upat) { upRetime(); drumInit(); } }
+        else if (v.indexOf("ubp:") === 0) { padP.bpat = v.substring(4); if (upat) { upRetime(); if (ac) { try { UG.loadSamples([33]); } catch (e3) {} } } }
+        else if (/^[ubd]vol:[+-]$/.test(v)) {
+          var vk = v.charAt(0) + "vol";
+          padP[vk] = Math.max(0, Math.min(UKE_VOL_MAX, padP[vk] + (v.charAt(5) === "+" ? UKE_VOL_STEP : -UKE_VOL_STEP)));
+          if (B && B.bus && ac) { B.bus(ubus, v.charAt(0), padP[vk], false); }
+        }
         else if (v === "reset") {
           if (window.confirm && !window.confirm("パッドを はじめのコードにもどしますか？")) { return; }
           try { window.localStorage.removeItem(UKE_PADS_KEY); } catch (e) {}
@@ -3965,7 +4202,12 @@
       function padRender() {
         if (!panel || !padOn) { return; }
         applyView();
-        var h = '<div class="piano-row"><button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">' + (padP.pad ? "&#x1F39B;&#xFE0F; パッドをしまう" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
+        var pd0 = panel.querySelector ? panel.querySelector("details.uke-patset") : null;
+        if (pd0) { patOpen = !!pd0.open; }
+        // §324: ▶ パターンと BPM
+        var h = '<div class="piano-row"><button class="modal-btn' + (upat ? " piano-rec-on" : "") + '" data-uact="upat">' + (upat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button>' +
+          '<button class="modal-btn" data-uact="bpmdown">&minus;</button><span>BPM ' + padP.bpm + '</span><button class="modal-btn" data-uact="bpmup">&#xFF0B;</button></div>' + upPanel() +
+          '<div class="piano-row"><button class="modal-btn' + (padP.pad ? " piano-pad-on" : "") + '" data-uact="pad">' + (padP.pad ? "&#x1F39B;&#xFE0F; パッドをしまう" : "&#x1F39B;&#xFE0F; パッド（16個）") + '</button>' +
           '<button class="modal-btn' + (padP.chord ? " piano-pad-on" : "") + '" data-uact="chord">&#x1F3F7;&#xFE0F; コード名 ' + (padP.chord ? "ON" : "OFF") + '</button></div>', i;
         var vd = panel.querySelector ? panel.querySelector("details.uke-viewset") : null;
         if (vd) { viewOpen = !!vd.open; }
@@ -3982,8 +4224,7 @@
             if (go) { opts += '<optgroup label="' + groups[gi][1] + '">' + go + '</optgroup>'; }
           }
           h += '<div class="piano-row"><label class="piano-select">&#x1F3BC; 鳴らし方 <select data-uplay="1">' + opts + '</select></label></div>' +
-            '<div class="piano-row"><button class="modal-btn" data-uact="bpmdown">&minus;</button><span>BPM ' + padP.bpm + '</span><button class="modal-btn" data-uact="bpmup">&#xFF0B;</button>' +
-            '<button class="modal-btn" data-uact="hold">' + (padP.hold === "once" ? "1回だけ" : "くりかえし") + '</button></div>' +
+            '<div class="piano-row"><button class="modal-btn" data-uact="hold">' + (padP.hold === "once" ? "1回だけ" : "くりかえし") + '</button></div>' +
             '<div class="piano-row"><button class="modal-btn' + (padEdit ? " piano-pad-on" : "") + '" data-uact="edit">&#x270F;&#xFE0F; 登録 ' + (padEdit ? "ON" : "OFF") + '</button>' +
             '<button class="modal-btn" data-uact="reset">&#x21BA; はじめのコード</button></div>';
           // じぶんのパターン
@@ -4035,6 +4276,12 @@
         }
         var sel = panel.querySelector("select[data-uplay]");
         if (sel) { sel.onchange = function (ev) { padP.play = ev.currentTarget.value; ukePadPrefsSave(padP); padPlay = null; if (ev.currentTarget.blur) { ev.currentTarget.blur(); } }; }
+        // §324
+        var usels = [["uppat", "uppat:"], ["ucp", "ucp:"], ["usc", "usc:"], ["udr", "udr:"], ["ubp", "ubp:"]];
+        for (k = 0; k < usels.length; k++) {
+          var us = panel.querySelector("select[data-" + usels[k][0] + "]");
+          if (us) { us.onchange = (function (pre) { return function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } padAction(pre + ev.currentTarget.value); }; })(usels[k][1]); }
+        }
       }
 
       // §225: 右上の「別名」。右はしにそろえ、入りきらなければ小さくして、それでも長ければ2行にする
@@ -4096,6 +4343,7 @@
             msgGood = true;
             msgT = 45;
           }
+          else if (action === "upat") { if (padOn) { padAction("upat"); } } // §324
           else if (action === "posUp") { pos = Math.max(0, pos - 1); }
           else if (action === "posDown") { pos = Math.min(UKE_TOTAL_FRETS - L.frets, pos + 1); }
           else if (action.charAt(0) === "p") {
@@ -4163,6 +4411,7 @@
           frames++;
           chordT++;
           while (padPlay && frames >= padPlay.next - 1e-6) { padTick(); } // §223
+          if (upat) { upStep(); if (upat) { drumStep(); bassStep(); } } // §324
           for (var s = 0; s < 4; s++) { if (ring[s] > 0) { ring[s]--; } }
           if (msgT > 0) { msgT--; }
           if (rhythm.t > 0) { rhythm.t--; }
