@@ -34,9 +34,10 @@ module.exports = function () {
   var r00 = G.cellRect(0, 0), r53 = G.cellRect(5, 3), c00 = G.cellAt(r00.x + 2, r00.y + 2, 0), c53 = G.cellAt(r53.x + 2, r53.y + 2, 0), c5p = G.cellAt(r53.x + 2, r53.y + 2, 5);
   ok(c00.sn === 5 && c00.m === 64 && c53.sn === 0 && c53.m === 43 && c5p.m === 48 && G.cellAt(10, 20, 0) === null,
     "fret view: 1st string on top, 6th at the bottom; frets follow the position", [c00, c53, c5p]);
-  var down = G.strumCross(G.STRUM_Y, 319), up = G.strumCross(319, G.STRUM_Y), part = G.strumCross(G.strumLineY(1) + 1, G.strumLineY(3) + 1);
-  ok(down.join() === "0,1,2,3,4,5" && up.join() === "5,4,3,2,1,0" && part.join() === "2,3" && G.strumAt(G.strumLineY(4)) === 4 && G.strumAt(10) === -1,
-    "strum view: swiping down crosses 6th → 1st, up crosses 1st → 6th", [down, up, part]);
+  var gm = G.geom(), upS = G.strumCross(gm.STRUM_BOT - 1, gm.STRUM_Y), dnS = G.strumCross(gm.STRUM_Y, gm.STRUM_BOT - 1), part = G.strumCross(G.strumLineY(1) - 1, G.strumLineY(3) - 1);
+  ok(upS.join() === "0,1,2,3,4,5" && dnS.join() === "5,4,3,2,1,0" && part.join() === "2,3" && G.strumAt(G.strumLineY(4)) === 4 && G.strumAt(10) === -1 && G.strumLineY(0) > G.strumLineY(5) &&
+    G.chordRect(0).y > gm.STRUM_BOT && G.chordRect(0).y + G.chordRect(0).h <= 320,
+    "strum view (§290): the 6th string is nearest (bottom), swiping up from it crosses 6th → 1st (a down stroke); the chord buttons are at the bottom", [upS, dnS, part]);
 
   // --- ゲーム ---
   function grun(prefs, frames, fn, cfg) {
@@ -61,14 +62,14 @@ module.exports = function () {
   ok(s1.snd.join() === "48@25,52@25,55@25,60@25,64@25,64@25,60@25,55@25,52@25,45@25,52@25,57@25,60@25,64@25",
     "strum buttons: down plays the C shape low → high, up plays the top 4 high → low, key 6 picks Am", s1.snd);
   // 指でかき鳴らす: 上から下 ＝ ダウン、下から上 ＝ アップ。弦を1本タップ ＝ その弦だけ
-  var x0 = 200, s2 = grun({ view: "chord", voice: "nylon" }, 20, function (fr, e) {
-    if (fr === 2) { e.ptr("down", x0, G.STRUM_Y + 2, 1); }
-    if (fr === 3) { e.ptr("move", x0, 200, 1); }
-    if (fr === 4) { e.ptr("move", x0, 316, 1); e.ptr("up", x0, 316, 1); }
-    if (fr === 6) { e.ptr("down", x0, 316, 1); e.ptr("move", x0, G.STRUM_Y + 2, 1); e.ptr("up", x0, G.STRUM_Y + 2, 1); }
+  var x0 = 200, yT = gm.STRUM_Y + 2, yB = gm.STRUM_BOT - 2, s2 = grun({ view: "chord", voice: "nylon" }, 20, function (fr, e) {
+    if (fr === 2) { e.ptr("down", x0, yB, 1); }
+    if (fr === 3) { e.ptr("move", x0, 150, 1); }
+    if (fr === 4) { e.ptr("move", x0, yT, 1); e.ptr("up", x0, yT, 1); }
+    if (fr === 6) { e.ptr("down", x0, yT, 1); e.ptr("move", x0, yB, 1); e.ptr("up", x0, yB, 1); }
     if (fr === 8) { e.ptr("down", x0, G.strumLineY(2) + 3, 1); e.ptr("up", x0, G.strumLineY(2) + 3, 1); }
   });
-  ok(s2.snd.join() === "48@24,52@24,55@24,60@24,64@24,64@24,60@24,55@24,52@24,48@24,52@24", "swiping over the strings strums them in order (muted 6th skipped); a tap picks one string", s2.snd);
+  ok(s2.snd.join() === "48@24,52@24,55@24,60@24,64@24,64@24,60@24,55@24,52@24,48@24,52@24", "swiping up from the near (6th) string strums 6th → 1st (muted 6th skipped), swiping down strums back; a tap picks one string", s2.snd);
   // 単音: 2弦の1フレットをタップ → 3フレットへすべらせる ＝ 鳴らしなおさずに音程だけ（スライド）。別の弦は新しい音
   var b1 = G.cellRect(1, 1), b3 = G.cellRect(1, 3), e2 = G.cellRect(2, 2);
   var s3 = grun({ view: "fret", voice: "clean" }, 20, function (fr, e) {
