@@ -17,7 +17,7 @@
 
 ストリングス（v2.07〜。🎻 ゴリラストリングス）: String Ensemble 2。C1〜C7 の長3度おき19音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ。v2.15 でほかの弦は下の VSCO 2 CE の録音に変えた）
 
-管楽器（v2.12〜。🎺 ゴリラホーン）: Brass Section / Tenor Sax / Baritone Sax（v2.16 でほかの管楽器は VSCO 2 CE、v2.17 でアルト・ソプラノサックスはアイオワ大学の録音に変えた）。C1〜C7 の長3度おき19音を抜き出した（鳴らない高い音はのぞく。同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
+管楽器（v2.12〜v2.17。🎺 ゴリラホーン）: v2.18 までにぜんぶ下の生の録音（VSCO 2 CE・アイオワ大学・MTG Solo Saxophones）に変えた
 
 ## 弦楽器の録音（v2.15〜。🎻 ゴリラストリングス・メロディくずし・シーケンサー）
 
@@ -28,7 +28,7 @@
 - ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
 - 変更点: ソロバイオリン（ビブラート）・ビオラセクション・チェロセクション・ソロコントラバス・バイオリン/ビオラ/チェロのセクション（のばす・トレモロ・ピチカート）・ハープから、およそ短3度おきの音を選び、モノラル 22050Hz にして頭の無音を切り、2.7 秒（ピチカート 1.6 秒）に切ってフェードをつけ、音量をそろえ、のびている所をくり返せるようにクロスフェードして、MP3（56kbps）で JavaScript ファイルにまとめた。合奏・トレモロ・ピチカートは低い音をチェロ、まん中をビオラ、高い音をバイオリンのセクションでつないだ
 
-管楽器（v2.16〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）: `samples/vsco_trumpet`・`vsco_trombone`・`vsco_tuba`・`vsco_horn`・`vsco_oboe`・`vsco_bassoon`・`vsco_clarinet`・`vsco_flute`（と *_p）。同じ VSCO 2 Community Edition（CC0）の Trumpet / Tenor Trombone / Tuba / F Horn / Oboe / Bassoon / Clarinet / Flute ののばす録音から、上と同じように作った
+管楽器（v2.16〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）: `samples/vsco_trumpet`・`vsco_trombone`・`vsco_tuba`・`vsco_horn`・`vsco_oboe`・`vsco_bassoon`・`vsco_clarinet`・`vsco_flute`（と *_p）。同じ VSCO 2 Community Edition（CC0）の Trumpet / Tenor Trombone / Tuba / F Horn / Oboe / Bassoon / Clarinet / Flute ののばす録音から、上と同じように作った。ブラスセクション `samples/vsco_brass`（と _p）は、このトランペット（2本）・F ホルン・テナートロンボーン（2本）の録音を、音ごとに少し高さと時間をずらして重ね、のびている所の大きさをそろえて作った
 
 ## サックスの録音（v2.17〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）
 
@@ -38,6 +38,15 @@
 - 配布元: [theremin.music.uiowa.edu/MIS.html](https://theremin.music.uiowa.edu/MIS.html)
 - 利用条件: 「may be downloaded and used for any projects, without restrictions」（どんな用途でも制限なく使ってよい）
 - 変更点: Alto Saxophone / Soprano Saxophone のビブラートありの pp と ff の録音を、無音のところで1音ずつに切り分け、およそ短3度おきの音を選び、モノラル 22050Hz・2.4 秒に切ってフェードをつけ、音量をそろえ、のびている所をくり返せるようにクロスフェードして、MP3（56kbps）で JavaScript ファイルにまとめた
+
+## テナー・バリトンサックスの録音（v2.18〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）
+
+`samples/mtg_tenorsax.js`・`samples/mtg_barisax.js`（と弱く吹いた録音の *_p）
+
+- 音源: **MTG Solo Saxophones** — 録音: MTG（Music Technology Group, Universitat Pompeu Fabra）の freesound.org のパック、SFZ 化: kinwie
+- 配布元: [sfzinstruments/MTG.SoloSax](https://github.com/sfzinstruments/MTG.SoloSax)（元の録音: [freesound.org/people/MTG](https://freesound.org/people/MTG/)）
+- ライセンス: [Creative Commons Attribution 4.0（CC BY 4.0）](https://creativecommons.org/licenses/by/4.0/)
+- 変更点: Tenor Sax・Baritone Sax の p と f の録音から、およそ短3度おきの音を選び、SFZ の音程の補正（tune）を当ててモノラル 22050Hz・2.4 秒に切ってフェードをつけ、音量をそろえ、のびている所をくり返せるようにクロスフェードして、MP3（56kbps）で JavaScript ファイルにまとめた
 
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）
 
