@@ -11519,3 +11519,11 @@ var COMPANION_TECHNIQUE2_DATA = {
 - 使わなくなった samples/trumpet・trombone・tuba・french_horn・oboe・bassoon・clarinet・flute は消す。`MELODY_SAMPLE_V` を 2.16 に
 - メロディくずし・シーケンサーのトランペット・フルートなども同じ録音で鳴る（強い録音のみ）
 
+## §312 v2.17 — 🎷 アルト・ソプラノサックスを生の録音に
+
+- VSCO 2 CE にサックスがないので、**アイオワ大学 Electronic Music Studios の Musical Instrument Samples**（「どんな用途でも制限なく使ってよい」）の録音を使う。ビブラートありの pp（弱い）と ff（強い）
+  - 元の AIFF は1ファイルに半音ずつ何音も続けて入っているので、無音のところで1音ずつに切り分け（数が名前の音域と合うことを確かめて）、名前の音（実音・C4 = 60）をつける。そのあとは §310 と同じ（2.4 秒・くり返しの所をクロスフェード）
+  - ソプラノサックス（64）`iowa_sopsax`・アルトサックス（65）`iowa_altosax`。弱い録音は 1064・1065。息の強さで2つをまぜる
+- テナー・バリトンサックス（66・67）とブラスセクション（61）はこれまでの FluidR3 のまま
+- 使わなくなった samples/alto_sax・soprano_sax は消す。`MELODY_SAMPLE_V` を 2.17 に
+

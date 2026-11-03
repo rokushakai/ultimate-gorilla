@@ -138,7 +138,7 @@ module.exports = function () {
   var v11 = S11.voice(56, 64, M11.audio.ctx.createGain(), 0);
   e11.counters.targets.length = 0; S11.level(v11, 0.35, 0.05);
   var t11 = e11.counters.targets.map(function (t) { return t.v; });
-  ok([56, 57, 58, 60, 68, 70, 71, 73].every(function (p) { return /^vsco_/.test(M11.sampleFiles[p]); }) && M11.sampleFiles[1060] === "vsco_horn_p" && !M11.sampleFiles[1073] && M11.sampleFiles[61] === "brass_section" &&
+  ok([56, 57, 58, 60, 68, 70, 71, 73].every(function (p) { return /^vsco_/.test(M11.sampleFiles[p]); }) && M11.sampleFiles[1060] === "vsco_horn_p" && !M11.sampleFiles[1073] && M11.sampleFiles[65] === "iowa_altosax" && M11.sampleFiles[1064] === "iowa_sopsax_p" && M11.sampleFiles[66] === "tenor_sax" && M11.sampleFiles[61] === "brass_section" &&
     v11 && v11.src2 && t11[1] < 0.2 && t11[2] > 0.95,
-    "real brass and woodwinds: a soft breath plays mostly the soft recording", t11);
+    "real brass, woodwinds and alto/soprano sax: a soft breath plays mostly the soft recording", t11);
 };

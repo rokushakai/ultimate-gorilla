@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.16** |
+| 現在バージョン | **v2.17** |
 | ブランチ | main |
 
 ---
@@ -102,7 +102,8 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
-- **[v2.16] 🎺 金管・木管を生の録音に**（§311）: vsco_trumpet・trombone・tuba・horn・oboe・bassoon・clarinet・flute（フルートは1段階）。弱い録音は ＋1000。作り方は §310 と同じ（変換スクリプトは名前と高さのずれる録音を落とす）。`MELODY_SAMPLE_V` "2.16"。次はアルト・ソプラノサックス（Iowa MIS・AIFF）
+- **[v2.17] 🎷 アルト・ソプラノサックスを生の録音に**（§312）: iowa_altosax・iowa_sopsax（と _p）。アイオワ大学 MIS の AIFF（1ファイルに半音ずつ何音も）を無音で1音ずつに切って（変換スクリプト iowasplit.py は scratchpad。音の数が名前の音域と合うかを確かめる）、§310 と同じ作り方。テナー・バリトンサックス・ブラスセクションは FluidR3 のまま
+- **[v2.16] 🎺 金管・木管を生の録音に**（§311）: vsco_trumpet・trombone・tuba・horn・oboe・bassoon・clarinet・flute（フルートは1段階）。弱い録音は ＋1000。作り方は §310 と同じ（変換スクリプトは名前と高さのずれる録音を落とす）。`MELODY_SAMPLE_V` "2.16"
 - **[v2.15] 🎻 ストリングスを生の録音に**（§310）: samples/vsco_*.js（VSCO 2 CE・CC0。22050Hz mono mp3 56kbps）。弱い録音は音色番号 ＋1000（`MELODY_SAMPLE_FILES[1040]` など）で、`melodyLoadSamples` が自動でいっしょに読む。`UGStrings.voice` は `src`（強い・`gL`）と `src2`（弱い・`gS`）を同時に鳴らし、`strLevel` が `STR_LAYER_LO〜HI`（0.3〜0.95）で等パワーに混ぜる。くり返しの終わりは `strLoopPoints` が波の形の合う所に。バンクは録音のくり返しの所をクロスフェード済み。`MELODY_SAMPLE_KEEP` 16・`MELODY_SAMPLE_V` "2.15"
 - **[v2.14] 📱 ホーンのよこ向き・リズムゲーム**（§309）: `hrnLayout(land, h)`。リズムゲームは `hrnRhythm`（`hrnChart(song)` の長い音符・レーン ＝ 度数 0〜7・`HRN_SCALE_C`）。ベースは曲の小節ごとのコードのルートを4分で
 - **[v2.13] 🎼 ホーンセクション**（§308）: `prefs.view` "section"・`prefs.sec`。和音は `hrnSectionNotes(ch, sev, parts)`、のばす音は `voiceOn / voiceOff`（`svo`）、ボタンは `hc`。パターン・ドラム・ベース・伴奏・パートごとの録音はストリングスと同じ作り（録音は id ごと・`rec.insts` で楽器）
