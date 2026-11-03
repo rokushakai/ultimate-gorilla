@@ -184,4 +184,18 @@ module.exports = function () {
   var rs = S.sendToSeq({ name: "ぼくの弦", inst: "cello", notes: [[0, 2, 36], [0, 2, 43]] }), xt = U.seqLoad().cur.tracks[rs.id];
   ok(rs.ok && xt && xt.preset === "snotes" && xt.prog === 42 && xt.notes.length === 2 && U.X_PRESETS.some(function (p) { return p[0] === "snotes"; }) && !S.sendToSeq({ name: "x", notes: [] }).ok,
     "send to the sequencer: a strings-notes track with the instrument's GM number", rs.msg);
+
+  // --- §310: VSCO の録音・弱い/強いの2段階 ---
+  var e10 = H.load(), M10 = e10.window.UGMelody, S10 = e10.window.UGStrings, fb = { duration: 2.6, length: 57330 };
+  M10.audioInit(); M10.samples.enabled = true;
+  ["vsco_violin", "vsco_violin_p"].forEach(function (n) { M10.samples.buffers[n] = { 60: fb, 67: fb }; M10.samples.keys[n] = [60, 67]; M10.samples.state[n] = "ready"; });
+  var out10 = M10.audio.ctx.createGain(), v10 = S10.voice(40, 62, out10, 0);
+  e10.counters.targets.length = 0; S10.level(v10, 0.3, 0.05);
+  var soft10 = e10.counters.targets.map(function (t) { return t.v; });
+  e10.counters.targets.length = 0; S10.level(v10, 1.1, 0.05);
+  var loud10 = e10.counters.targets.map(function (t) { return t.v; });
+  var v10b = S10.voice(42, 50, out10, 0);
+  ok(M10.sampleFiles[40] === "vsco_violin" && M10.sampleFiles[1040] === "vsco_violin_p" && M10.sampleFiles[48] === "vsco_ens" && M10.sampleFiles[49] === "string_ensemble_2" &&
+    v10 && v10.src && v10.src2 && v10.best === 60 && v10.best2 === 60 && soft10.length === 3 && soft10[1] < 0.01 && soft10[2] > 0.99 && loud10[1] > 0.99 && loud10[2] < 0.01 && v10b && !v10b.src2 && !v10b.src,
+    "real strings: a quiet bow plays the soft recording, a strong bow the loud one (both looped); no samples = synth", [soft10, loud10]);
 };

@@ -202,8 +202,11 @@ module.exports = async function () {
   var km252 = env.counters.targets.map(function (x) { return x.tau; });
   ok(km252.join() === "0.035" && M.gmDrum(25) === 0, "holding the kick mutes only the ringing kick, not the cymbals; not sent to MIDI", km252);
   delete M.samples.buffers[M.sampleFiles[M.DRUM]];
-  await new Promise(function (res) { M.loadSamples([4, 8, 11, 24, 25, 32, 40], res); });
-  ok(Object.keys(M.samples.buffers).length <= 7, "sample memory is capped (old instruments evicted)", Object.keys(M.samples.buffers).length);
+  // §310: 16 音色まで（弱く弾いた録音 ＋1000 もいっしょに読む）
+  await new Promise(function (res) { M.loadSamples([0, 4, 8, 11, 12, 24, 25, 26, 27, 29], res); });
+  await new Promise(function (res) { M.loadSamples([30, 32, 33, 34, 35, 36, 37, 38, 39, 41], res); });
+  var nb310 = Object.keys(M.samples.buffers);
+  ok(nb310.length <= 16 && M.sampleReady(41) && M.sampleReady(1041) && M.sampleFiles[1041] === "vsco_viola_p" && M.sampleReady(30), "sample memory is capped (old instruments evicted); soft layers load with their instrument", nb310.length);
 
   // --- WAV ---
   var wavRec = { id: 9, date: Date.UTC(2026, 9, 24, 12, 30), prog: { b: 0 }, fxRev: 1, notes: [[0, 60, "b"], [500, 64, "b", 0.5], [1000, 50, "w"]] };

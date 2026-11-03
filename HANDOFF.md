@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.14** |
+| 現在バージョン | **v2.15** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.15] 🎻 ストリングスを生の録音に**（§310）: samples/vsco_*.js（VSCO 2 CE・CC0。22050Hz mono mp3 56kbps）。弱い録音は音色番号 ＋1000（`MELODY_SAMPLE_FILES[1040]` など）で、`melodyLoadSamples` が自動でいっしょに読む。`UGStrings.voice` は `src`（強い・`gL`）と `src2`（弱い・`gS`）を同時に鳴らし、`strLevel` が `STR_LAYER_LO〜HI`（0.3〜0.95）で等パワーに混ぜる。くり返しの終わりは `strLoopPoints` が波の形の合う所に。バンクは録音のくり返しの所をクロスフェード済み。`MELODY_SAMPLE_KEEP` 16・`MELODY_SAMPLE_V` "2.15"。次は金管・木管（VSCO）→ アルト・ソプラノサックス（Iowa MIS）
 - **[v2.14] 📱 ホーンのよこ向き・リズムゲーム**（§309）: `hrnLayout(land, h)`。リズムゲームは `hrnRhythm`（`hrnChart(song)` の長い音符・レーン ＝ 度数 0〜7・`HRN_SCALE_C`）。ベースは曲の小節ごとのコードのルートを4分で
 - **[v2.13] 🎼 ホーンセクション**（§308）: `prefs.view` "section"・`prefs.sec`。和音は `hrnSectionNotes(ch, sev, parts)`、のばす音は `voiceOn / voiceOff`（`svo`）、ボタンは `hc`。パターン・ドラム・ベース・伴奏・パートごとの録音はストリングスと同じ作り（録音は id ごと・`rec.insts` で楽器）
 - **[v2.12] 🎺 ゴリラホーン**（§306・§307）: `arcade-horn.js`（`window.UGHorn`）。のばす音は `UGStrings.voice / pitch / level / stop / vibrato`。1音だけ鳴る: 指の重なり held（あとから押したものが上）を `sounding()` が見て、スラーなら `pitch` で高さだけ変える。息の強さは `hrnBreath(キーの上からの割合)`、ベンドは押した所からの横のずれ。キーは `hrnRowNotes(hrnBase(楽器, キー, オクターブ) + 段, スケール, 半音階)`

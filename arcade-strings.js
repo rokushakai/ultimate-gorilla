@@ -14,7 +14,7 @@
 
   var STR_H = 320;
   var STR_PREFS_KEY = "ultimateGorillaStringsPrefsV1", STR_TAKES_KEY = "ultimateGorillaStringsTakesV1";
-  var STR_TAKES_MAX = 10, STR_NOTES_MAX = 2000, STR_LEVEL = 1.8;
+  var STR_TAKES_MAX = 10, STR_NOTES_MAX = 2000, STR_LEVEL = 1.8, STR_LAYER_LO = 0.3, STR_LAYER_HI = 0.95;
   var STR_DO = ["ド", "ド#", "レ", "レ#", "ミ", "ファ", "ファ#", "ソ", "ソ#", "ラ", "ラ#", "シ"];
   var STR_CDE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   var STR_NAMES = [["do", "ドレミ"], ["cde", "CDE"], ["none", "なし"]];
@@ -255,24 +255,55 @@
     g.gain.value = 0;
     g.connect(out);
     if (S && S.enabled && UG.sampleReady && UG.sampleReady(prog) && bank && keys && keys.length) {
-      var best = keys[0], i;
-      for (i = 1; i < keys.length; i++) { if (Math.abs(keys[i] - m) < Math.abs(best - m)) { best = keys[i]; } }
-      var buf = bank[best];
+      var best = strNearest(keys, m), buf = bank[best];
       if (buf) {
-        var src = ac.createBufferSource(), dur = buf.duration || 3;
-        src.buffer = buf;
-        src.loop = true;
-        src.loopStart = Math.min(1, dur * 0.35);
-        src.loopEnd = Math.max(src.loopStart + 0.3, dur - 0.25);
-        src.playbackRate.value = Math.pow(2, (m - best) / 12);
-        src.connect(g);
-        src.start(t);
-        v.src = src; v.best = best;
+        // §310: 弱く弾いた録音（＋1000）があれば、2つを混ぜる（strLevel の大きさで）
+        var nameP = UG.sampleFiles[prog + 1000], bankP = nameP && UG.sampleReady(prog + 1000) ? S.buffers[nameP] : null, keysP = bankP ? S.keys[nameP] : null;
+        var bestP = keysP && keysP.length ? strNearest(keysP, m) : 0, bufP = bankP ? bankP[bestP] : null;
+        if (bufP) {
+          v.gL = ac.createGain(); v.gL.gain.value = 0; v.gL.connect(g);
+          v.gS = ac.createGain(); v.gS.gain.value = 1; v.gS.connect(g);
+          v.src2 = strLoop(ac, bufP, m, bestP, v.gS, t); v.best2 = bestP;
+        }
+        v.src = strLoop(ac, buf, m, best, v.gL || g, t); v.best = best;
         return v;
       }
     }
     try { v.h = UG.synth(m, prog, t, 0.8, g, 30) || null; } catch (e) {}
     return v;
+  }
+  function strNearest(keys, m) {
+    var best = keys[0];
+    for (var i = 1; i < keys.length; i++) { if (Math.abs(keys[i] - m) < Math.abs(best - m)) { best = keys[i]; } }
+    return best;
+  }
+  // のびている所をくり返すサンプル
+  function strLoop(ac, buf, m, best, out, t) {
+    var src = ac.createBufferSource(), lp = buf.ugLoop || strLoopPoints(buf);
+    src.buffer = buf;
+    src.loop = true;
+    src.loopStart = lp[0];
+    src.loopEnd = lp[1];
+    src.playbackRate.value = Math.pow(2, (m - best) / 12);
+    src.connect(out);
+    src.start(t);
+    return src;
+  }
+  // §310: くり返しの頭と終わり。終わりは ±10ms で、頭と波の形がいちばん合う所に（つなぎ目でプツッといわない）。バッファに覚えておく
+  function strLoopPoints(buf) {
+    var dur = buf.duration || 3, ls = Math.min(1, dur * 0.35), le = Math.max(ls + 0.3, dur - 0.25), lp = [ls, le];
+    if (typeof buf.getChannelData === "function" && buf.sampleRate) {
+      var d = buf.getChannelData(0), sr = buf.sampleRate, S = Math.round(ls * sr), E = Math.round(le * sr), R = Math.round(sr * 0.01), N = 48, bestE = E, bestErr = -1, e, j;
+      for (e = E - R; e <= E + R; e++) {
+        if (e - 4 < S || e + N >= d.length) { continue; }
+        var err = 0;
+        for (j = -4; j < N; j++) { var df = d[e + j] - d[S + j]; err += df * df; }
+        if (bestErr < 0 || err < bestErr) { bestErr = err; bestE = e; }
+      }
+      lp = [S / sr, bestE / sr];
+    }
+    try { buf.ugLoop = lp; } catch (e2) {}
+    return lp;
   }
   // 音程（なめらかに）
   function strPitch(v, m, glide) {
@@ -281,13 +312,22 @@
     var t = v.ac.currentTime;
     if (v.src) { try { v.src.playbackRate.cancelScheduledValues(t); v.src.playbackRate.setTargetAtTime(Math.pow(2, (m - v.best) / 12), t, (glide || 0.04) / 3); } catch (e) {} }
     else if (v.h && window.UGMelody.voiceBend) { try { window.UGMelody.voiceBend(v.h, m, 0, glide || 0.04); } catch (e2) {} }
+    if (v.src2) { try { v.src2.playbackRate.cancelScheduledValues(t); v.src2.playbackRate.setTargetAtTime(Math.pow(2, (m - v.best2) / 12), t, (glide || 0.04) / 3); } catch (e4) {} }
   }
   // 大きさ（tau: なめらかさ・秒。when（省略可）: §302 その時刻から）
   function strLevel(v, lv, tau, when) {
     if (!v) { return; }
     try {
-      if (when > v.ac.currentTime) { v.g.gain.setTargetAtTime(lv * STR_LEVEL, when, tau || 0.05); return; }
-      v.g.gain.cancelScheduledValues(v.ac.currentTime); v.g.gain.setTargetAtTime(lv * STR_LEVEL, v.ac.currentTime, tau || 0.05);
+      var later = when > v.ac.currentTime, t = later ? when : v.ac.currentTime;
+      if (!later) { v.g.gain.cancelScheduledValues(t); }
+      v.g.gain.setTargetAtTime(lv * STR_LEVEL, t, tau || 0.05);
+      if (v.gS) {
+        // §310: 小さいと弱い録音・大きいと強い録音（等パワー）
+        var x = Math.max(0, Math.min(1, (lv - STR_LAYER_LO) / (STR_LAYER_HI - STR_LAYER_LO)));
+        if (!later) { v.gL.gain.cancelScheduledValues(t); v.gS.gain.cancelScheduledValues(t); }
+        v.gL.gain.setTargetAtTime(Math.sin(x * Math.PI / 2), t, tau || 0.05);
+        v.gS.gain.setTargetAtTime(Math.cos(x * Math.PI / 2), t, tau || 0.05);
+      }
     } catch (e) {}
   }
   function strStop(v, rel, when) {
@@ -295,6 +335,7 @@
     var t = Math.max(v.ac.currentTime, when || 0), r = rel || 0.25;
     try { if (t <= v.ac.currentTime) { v.g.gain.cancelScheduledValues(t); } v.g.gain.setTargetAtTime(0, t, r / 3); } catch (e) {}
     if (v.src) { try { v.src.stop(t + r * 2 + 0.05); } catch (e2) {} }
+    if (v.src2) { try { v.src2.stop(t + r * 2 + 0.05); } catch (e4) {} }
     if (v.h && window.UGMelody.voiceStop) { try { window.UGMelody.voiceStop(v.h, t + r, r); } catch (e3) {} }
   }
   // ビブラート（5.5Hz で再生の速さをゆらす）
@@ -304,7 +345,7 @@
       if (on && !v.lfo) {
         var o = v.ac.createOscillator(), d = v.ac.createGain();
         o.frequency.value = 5.5; d.gain.value = 0.006 * v.src.playbackRate.value;
-        o.connect(d); d.connect(v.src.playbackRate); o.start(v.ac.currentTime + 0.25);
+        o.connect(d); d.connect(v.src.playbackRate); if (v.src2) { d.connect(v.src2.playbackRate); } o.start(v.ac.currentTime + 0.25);
         v.lfo = o;
       } else if (!on && v.lfo) { v.lfo.stop(0); v.lfo = null; }
     } catch (e) {}
