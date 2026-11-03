@@ -111,7 +111,7 @@
     ["low", "低音（チェロとコントラバス）", [["cello", 2], ["bass", 2]]],
     ["harp", "ハープ入り", [["harp", 1], ["cello", 1], ["viola", 1], ["violin", 2]]]
   ];
-  var STR_ORCH_MAX = 4, STR_PLAYERS_MAX = 4, STR_DETUNE = [0, 0.07, -0.07, 0.12]; // 人数ごとの音程のずれ（半音）
+  var STR_ORCH_MAX = 6, STR_PLAYERS_MAX = 4, STR_DETUNE = [0, 0.07, -0.07, 0.12]; // 人数ごとの音程のずれ（半音）
   function strPresetParts(id) { return strOpt(STR_ORCH_PRESETS, id)[2].map(function (p) { return { inst: p[0], n: p[1] }; }); }
   // 設定の編成 → { on, preset（"" ＝ じぶんで）, parts: [{ inst, n: 人数 }]（1〜4）}
   function strOrchClean(o) {
@@ -130,7 +130,9 @@
       for (k = 0; k < sorted.length; k++) { var vs = strVoicing(ch, strOpt(STR_INSTS, sorted[k].inst)[3][0], sev); for (j = 0; j < vs.length; j++) { out.push({ inst: sorted[k].inst, m: vs[j], n: sorted[k].n }); } }
       return out;
     }
-    var rootPc = strPc(ch.r !== undefined ? ch.r : ch.root), iv = ch.iv, roles = sorted.length === 3 ? [0, iv[4], iv[2]] : [0, iv[4], iv[2], sev ? iv[6] : 12], prev = -1;
+    // §305: 6パートまで（下から ルート・5度・3度・ルート・5度・3度。7th はいちばん上を 7度に）
+    var rootPc = strPc(ch.r !== undefined ? ch.r : ch.root), iv = ch.iv, roles = [0, iv[4], iv[2], 12, iv[4] + 12, iv[2] + 12].slice(0, sorted.length), prev = -1;
+    if (sev && roles.length >= 4) { roles[roles.length - 1] = iv[6]; }
     for (k = 0; k < sorted.length; k++) {
       var low = strOpt(STR_INSTS, sorted[k].inst)[3][0], pc = (rootPc + roles[k]) % 12, m = low + ((pc - strPc(low) + 12) % 12);
       while (m <= prev) { m += 12; }
@@ -173,8 +175,25 @@
     return {
       id: Math.max(1, Math.round(Number(t.id)) || i + 1), name: String(t.name || "テイク").slice(0, 20),
       bpm: Math.max(40, Math.min(240, Math.round(Number(t.bpm) || 100))), meter: t.meter === 3 ? 3 : 4,
-      inst: strOpt(STR_INSTS, t.inst)[0], notes: strNotesClean(t.notes)
+      inst: strOpt(STR_INSTS, t.inst)[0], notes: strNotesClean(t.notes), parts: strPartsClean(t.parts)
     };
+  }
+  // §305: 編成で録ったテイクのパート [{ inst, notes }]（2〜6。それ以外は undefined）
+  function strPartsClean(a) {
+    if (!a || !a.length || a.length < 2) { return undefined; }
+    var out = [], i;
+    for (i = 0; i < a.length && out.length < STR_ORCH_MAX; i++) {
+      var p = a[i] || {}, n = strNotesClean(p.notes);
+      if (n.length) { out.push({ inst: strOpt(STR_INSTS, p.inst)[0], notes: n }); }
+    }
+    return out.length >= 2 ? out : undefined;
+  }
+  // テイクを鳴らす音 [拍, 長さ, MIDI, 強さ, 楽器]（パートがあれば楽器ごと）
+  function strPlayList(take) {
+    var out = [], ps = take.parts || [{ inst: take.inst, notes: take.notes }], i, j;
+    for (i = 0; i < ps.length; i++) { var ins = strOpt(STR_INSTS, ps[i].inst); for (j = 0; j < ps[i].notes.length; j++) { var n = ps[i].notes[j]; out.push([n[0], n[1], n[2], n[3] || 0.8, ins]); } }
+    out.sort(function (a, b) { return a[0] - b[0]; });
+    return out;
   }
   function strTakesLoad() {
     var a = lsGet(STR_TAKES_KEY), out = [], i;
@@ -186,7 +205,7 @@
   function strTakeAdd(list, t) {
     var id = 0, i;
     for (i = 0; i < list.length; i++) { id = Math.max(id, list[i].id); }
-    var take = strTakeClean({ id: id + 1, name: t.name || "ストリングス " + (id + 1), bpm: t.bpm, meter: t.meter, inst: t.inst, notes: t.notes }, 0);
+    var take = strTakeClean({ id: id + 1, name: t.name || "ストリングス " + (id + 1), bpm: t.bpm, meter: t.meter, inst: t.inst, notes: t.notes, parts: t.parts }, 0);
     list.unshift(take);
     if (list.length > STR_TAKES_MAX) { list.length = STR_TAKES_MAX; }
     return take;
@@ -199,7 +218,24 @@
     var U = window.UGUkulele;
     if (!U || !U.seqLoad || !U.xAdd) { return { ok: false, msg: "ゴリラウクレレが読みこめませんでした" }; }
     if (!take || !take.notes || !take.notes.length) { return { ok: false, msg: "音のないテイクは送れません" }; }
-    var st = U.seqLoad(), id = U.xAdd(st.cur.tracks, "snotes");
+    var st = U.seqLoad();
+    // §305: パートのあるテイクは、パートごとに別のトラックへ
+    if (take.parts && take.parts.length >= 2) {
+      var ids = [], k;
+      for (k = 0; k < take.parts.length; k++) {
+        var pid = U.xAdd(st.cur.tracks, "snotes");
+        if (!pid) { break; }
+        var pt = st.cur.tracks[pid], pins = strOpt(STR_INSTS, take.parts[k].inst);
+        pt.name = (String(take.name).slice(0, 6) + " " + pins[1].replace(/&#x[0-9A-F]+;\s*/g, "")).slice(0, 12);
+        pt.prog = pins[2];
+        pt.notes = strNotesClean(take.parts[k].notes).slice(0, STR_SEQ_MAX);
+        ids.push(pid);
+      }
+      if (!ids.length) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
+      U.seqSave(st);
+      return { ok: true, ids: ids, id: ids[0], msg: "「" + take.name + "」を、パートごとに " + ids.length + " 本の 🎻 ストリングス打ち込みトラックとして送りました" + (ids.length < take.parts.length ? "（トラックがいっぱいで、" + (take.parts.length - ids.length) + " パートは送れませんでした）" : "") };
+    }
+    var id = U.xAdd(st.cur.tracks, "snotes");
     if (!id) { return { ok: false, msg: "追加トラックがいっぱいです（8本まで）。シーケンサーで1本消してから送ってね" }; }
     var t = st.cur.tracks[id], n = strNotesClean(take.notes), cut = n.length > STR_SEQ_MAX;
     t.name = String(take.name).slice(0, 12);
@@ -296,7 +332,7 @@
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
       for (i = 0; i < takes.length; i++) {
-        html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm + '・' + strOpt(STR_INSTS, takes[i].inst)[1] + '</span></span>' +
+        html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm + '・' + (takes[i].parts ? "編成 " + takes[i].parts.length + " パート" : strOpt(STR_INSTS, takes[i].inst)[1]) + '</span></span>' +
           '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button>' +
           '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
           '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
@@ -623,11 +659,11 @@
         noteOff(id, 0.08);
         ins = ins || inst();
         var v = strVoice(ins[2], m, out(), 0);
-        if (!v) { vo[id] = { v: null, m: Math.round(m) }; if (!norec) { recOn(id, Math.round(m), lv || 0.8); } return; }
+        if (!v) { vo[id] = { v: null, m: Math.round(m) }; if (!norec) { recOn(id, Math.round(m), lv || 0.8, 0, ins[0]); } return; }
         strLevel(v, lv, att || 0.06);
         if (prefs.vib && ins[4]) { strVibrato(v, true); }
         vo[id] = { v: v, m: Math.round(m) };
-        if (!norec) { recOn(id, Math.round(m), lv || 0.8); } // 弓はこすりはじめ 0 なので、録音はふつうの強さ
+        if (!norec) { recOn(id, Math.round(m), lv || 0.8, 0, ins[0]); } // 弓はこすりはじめ 0 なので、録音はふつうの強さ
       }
       function noteOff(id, rel) { var o = vo[id]; if (!o) { return; } strStop(o.v, rel); delete vo[id]; recOff(id); }
       // 音程を変える（録音は半音が変わったら区切る）
@@ -635,7 +671,7 @@
         var o = vo[id];
         if (!o) { return; }
         strPitch(o.v, m, 0.05);
-        if (Math.round(m) !== o.m && rec) { var lv = rec.open[id] ? rec.open[id][2] : 0.8; recOff(id); o.m = Math.round(m); recOn(id, o.m, lv); }
+        if (Math.round(m) !== o.m && rec) { var lv = rec.open[id] ? rec.open[id][2] : 0.8, oi = rec.open[id] ? rec.open[id][3] : prefs.inst; recOff(id); o.m = Math.round(m); recOn(id, o.m, lv, 0, oi); }
         else { o.m = Math.round(m); }
       }
       // はじく（ピチカート・ハープ）
@@ -645,7 +681,7 @@
         var ac = audioOk && UG.audio ? UG.audio.ctx : null, bus = out();
         if (!ac || !bus) { return; }
         try { var g = ac.createGain(); g.gain.value = (lv || 0.8) * STR_LEVEL * 0.6; g.connect(bus); UG.synth(Math.round(m), prog || inst()[2], ac.currentTime + (dt || 0), lv || 0.8, g, 0); } catch (e) {}
-        if (rec && !norec) { var id = "k" + Math.random(); recOn(id, Math.round(m), lv || 0.8, dt || 0); recOff(id); }
+        if (rec && !norec) { var id = "k" + Math.random(), pins = prefs.inst, q; for (q = 0; q < STR_INSTS.length; q++) { if (STR_INSTS[q][2] === (prog || inst()[2])) { pins = STR_INSTS[q][0]; } } recOn(id, Math.round(m), lv || 0.8, dt || 0, pins); recOff(id); }
       }
 
       // --- 録音・再生 ---
@@ -702,17 +738,18 @@
         var wasPat = !!pat;
         playStop();
         audio();
-        if (back) { backStart(back.s.lead ? 0 : meter * back.s.spb); rec = { back: true, notes: [], open: {}, beat: -99 }; }
-        else { rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 }; }
+        if (back) { backStart(back.s.lead ? 0 : meter * back.s.spb); rec = { back: true, notes: [], insts: [], open: {}, beat: -99 }; }
+        else { rec = { t0: now() + meter * 60 / bpm, notes: [], insts: [], open: {}, beat: -meter - 1 }; }
         if (wasPat) { patStart(); }
         msg = "";
         render();
       }
-      function recOn(id, m, v, dt) {
+      // ins（省略可）: §305 楽器の id（パートごとに分けて残す）
+      function recOn(id, m, v, dt, ins) {
         if (!rec) { return; }
         var b = recBeat() + (dt || 0) * bpm / 60;
         if (b < -0.25 || rec.notes.length >= STR_NOTES_MAX) { return; }
-        rec.open[id] = [Math.max(0, b), m, Math.min(1, v || 0.8)];
+        rec.open[id] = [Math.max(0, b), m, Math.min(1, v || 0.8), ins || prefs.inst];
       }
       function recOff(id) {
         if (!rec || !rec.open[id]) { return; }
@@ -721,16 +758,19 @@
         var nt = [r3(o[0]), r3(Math.max(0.0625, recBeat() - o[0])), o[1]];
         if (o[2] !== 0.8) { nt.push(r3(Math.max(0.1, o[2]))); }
         rec.notes.push(nt);
+        rec.insts.push(o[3]);
       }
       function recStop() {
         var ks = [], k;
         for (k in rec.open) { if (rec.open.hasOwnProperty(k)) { ks.push(k); } }
         for (k = 0; k < ks.length; k++) { recOff(ks[k]); }
-        var n = rec.notes, wasBack = rec.back;
+        var n = rec.notes, wasBack = rec.back, byInst = {}, order = [], q;
+        // §305: 楽器ごとに分ける（2つ以上ならパート）
+        for (q = 0; q < n.length; q++) { var ii = rec.insts[q] || prefs.inst; if (!byInst[ii]) { byInst[ii] = []; order.push(ii); } byInst[ii].push(n[q]); }
         rec = null;
         if (wasBack) { backStop(); }
         if (n.length) {
-          take = strTakeAdd(takes, { bpm: bpm, meter: meter, inst: prefs.inst, notes: n });
+          take = strTakeAdd(takes, { bpm: bpm, meter: meter, inst: order.length === 1 ? order[0] : prefs.inst, notes: n, parts: order.length >= 2 ? order.map(function (k0) { return { inst: k0, notes: byInst[k0] }; }) : undefined });
           strTakesSave(takes);
           msg = "&#x1F4BE; 「" + escHtml(take.name) + "」に保存しました（" + take.notes.length + "音）<br>はじめの画面の「🎸 送る」でシーケンサーに入れられます";
         } else { msg = "音がなかったので保存しませんでした"; }
@@ -750,7 +790,7 @@
         if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音で録ってね"; render(); return; }
         audio();
         if (back) { backStart(0); }
-        play = { back: !!back, t0: now() + 0.1, bpm: take.bpm, notes: take.notes, idx: 0, vo: [], inst: strOpt(STR_INSTS, take.inst) };
+        play = { back: !!back, t0: now() + 0.1, bpm: take.bpm, notes: strPlayList(take), idx: 0, vo: [] };
         render();
       }
 
@@ -853,7 +893,7 @@
               strLevel(v, lv, c === "E" ? 0.01 : 0.08, when + j * 0.012);
               if (c === "E") { strStop(v, 0.06, when + unit * spb * 0.5); }
               pat.vo.push({ v: v, id: id });
-              if (j === 0) { recOn(id, sel[i].m, lv * Math.sqrt(sel[i].n), dd); }
+              if (j === 0) { recOn(id, sel[i].m, lv * Math.sqrt(sel[i].n), dd, pi[0]); }
             }
           }
         }
@@ -1250,8 +1290,8 @@
             var pb = playBeat(), last = 0, i;
             while (play.idx < play.notes.length && play.notes[play.idx][0] <= pb) {
               var pn = play.notes[play.idx], v = null;
-              if (play.inst[4]) { v = strVoice(play.inst[2], pn[2], out(), 0); strLevel(v, pn[3] || 0.8, 0.06); }
-              else { pluck(pn[2], pn[3] || 0.8); }
+              if (pn[4][4]) { v = strVoice(pn[4][2], pn[2], out(), 0); strLevel(v, pn[3], 0.06); }
+              else { pluck(pn[2], pn[3], 0, pn[4][2], true); }
               play.vo.push({ v: v, end: pn[0] + pn[1] });
               play.idx++;
             }
@@ -1287,6 +1327,6 @@
   window.UGStrings = {
     H: STR_H, INSTS: STR_INSTS, VIEWS: STR_VIEWS, COLS: STR_COLS, BOARD_Y: STR_BOARD_Y, BOW_X: STR_BOW_X, PREFS_KEY: STR_PREFS_KEY, TAKES_KEY: STR_TAKES_KEY, TAKES_MAX: STR_TAKES_MAX, SEQ_MAX: STR_SEQ_MAX,
     layout: strLayout, colX: strColX, geom: function () { return { H: STR_H, COLS: STR_COLS, BOARD_X: STR_BOARD_X, BOARD_R: STR_BOARD_R, BOARD_Y: STR_BOARD_Y, BOARD_BOT: STR_BOARD_BOT, BOW_X: STR_BOW_X, BOW_R: STR_BOW_R, MIRROR: STR_MIRROR, LAND: STR_LAND }; }, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
-    voice: strVoice, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
+    voice: strVoice, partsClean: strPartsClean, playList: strPlayList, ORCH_MAX: STR_ORCH_MAX, takeById: strTakeById, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
   };
 })();

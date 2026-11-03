@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.10** |
+| 現在バージョン | **v2.11** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.11] 🎻 パートごとに録る・送る**（§305）: 録音の open に楽器（4つ目）を持ち、`recStop` で楽器ごとに分けて `take.parts`（`strPartsClean`）。再生は `strPlayList(take)`、送るはパートごとに `xAdd(tracks, "snotes")`
 - **[v2.10] 🎻 編成**（§304）: `prefs.orch`（`strOrchClean`）。和音の音は `chordNotes(ch, sev)` → 編成 ON なら `strOrchNotes(ch, sev, parts)`（[{ inst, m, n }]）。人数は `STR_DETUNE` でずらして重ねる。`noteOn(..., ins, norec)` / `pluck(..., prog, norec)` で楽器と録音を分ける
 - **[v2.09] 📱 ストリングスのよこ向き・リズムゲーム**（§303）: `strLayout(bow, { land, h })` が持ち方（`UGBass.grip`）で板・弓の所・左利きを決める（`strColX` / `strFretX` / `strSemiX`）。リズムゲームは `strRhythm`（`strChart(song, level)` の長い音符。`press` / `release` で和音をのばし、75% 押していたらキープ）
 - **[v2.08] 🎼 ストリングスのパターン・バンド・伴奏**（§302）: `STR_PATS` の文字を `patStep` が予約（のばす音は `strVoice(..., when)`・`strLevel(v, lv, tau, when)`・`strStop(v, rel, when)`、前の音は `patRelease`）。ドラム・ベース・伴奏はゴリラギターと同じ作り（`drumStep` / `bassStep` / `backStart` など）
@@ -259,7 +260,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（955項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（957項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

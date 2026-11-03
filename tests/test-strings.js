@@ -144,7 +144,7 @@ module.exports = function () {
   var oq = S.orchNotes(B.chord(0, 0, "major"), false, S.presetParts("quartet")), ol = S.orchNotes(B.chord(0, 0, "major"), false, S.presetParts("low"));
   var o7 = S.orchNotes(B.chord(0, 4, "major", true), true, S.presetParts("quartet")), oc = S.orchClean({ on: true, parts: [{ inst: "x", n: 9 }, {}, {}, {}, {}] });
   ok(oq.map(function (x) { return x.inst + ":" + x.m; }).join() === "cello:36,viola:55,violin:64,violin:72" && ol.length === 8 && ol[0].inst === "bass" && ol[4].inst === "cello" && ol[0].n === 2 &&
-    o7[3].m % 12 === 5 && oc.parts.length === 4 && oc.parts[0].inst === "violin" && oc.parts[0].n === 1,
+    o7[3].m % 12 === 5 && oc.parts.length === 5 && oc.parts[0].inst === "violin" && oc.parts[0].n === 1,
     "orchestration: 3+ parts share the chord low to high (root, 5th, 3rd, root / 7th); 2 parts each play the whole chord; settings are cleaned", [oq, o7.map(function (x) { return x.m; })]);
   var ro = srun({ view: "chord", inst: "violin", orch: { on: true, preset: "orch", parts: S.presetParts("orch") } }, 12, function (fr, e) { if (fr === 2) { e.key("keydown", "1"); } if (fr === 8) { e.key("keyup", "1"); } });
   var progs = ro.log.on.map(function (x) { return x.split("@")[1]; }).sort().join();
@@ -153,6 +153,24 @@ module.exports = function () {
   var pop = JSON.parse(po.e.store[S.PREFS_KEY]).orch, poh = po.e.window.__sPanel();
   ok(pop.parts.length === 3 && pop.parts[0].n === 2 && pop.parts[1].inst === "cello" && pop.preset === "" && poh.indexOf('data-sorch="1"') > 0 && poh.indexOf('data-spi="2"') > 0 && poh.indexOf("パートの数") > 0,
     "the play tab edits the orchestration (number of parts, instrument and players per part)", pop);
+
+  // --- §305: 6パートまで・パートごとに録って送る ---
+  var six = [{ inst: "bass", n: 1 }, { inst: "cello", n: 1 }, { inst: "viola", n: 1 }, { inst: "violin", n: 1 }, { inst: "violin", n: 1 }, { inst: "violin", n: 1 }];
+  var o6 = S.orchNotes(B.chord(0, 0, "major"), false, six), o6s = S.orchNotes(B.chord(0, 0, "major"), true, six);
+  var ok6 = o6.every(function (x, k) { return k === 0 || x.m > o6[k - 1].m; });
+  ok(o6.length === 6 && ok6 && o6.map(function (x) { return x.m % 12; }).join() === "0,7,4,0,7,4" && o6s[5].m % 12 === 11 && S.ORCH_MAX === 6,
+    "orchestration up to 6 parts: root, 5th, 3rd, root, 5th, 3rd going up (7th on top)", o6.map(function (x) { return x.m; }));
+  var rp = srun({ view: "chord", bpm: 120, orch: { on: true, parts: S.presetParts("orch") } }, 260, function (fr, e) {
+    if (fr === 2) { e.key("keydown", "z"); e.key("keyup", "z"); }
+    if (fr === 130) { e.key("keydown", "1"); }
+    if (fr === 190) { e.key("keyup", "1"); }
+    if (fr === 200) { e.key("keydown", "z"); e.key("keyup", "z"); }
+  });
+  var tp = JSON.parse(rp.e.store[S.TAKES_KEY] || "[]")[0], Up = rp.e.window.UGUkulele, Sp = rp.e.window.UGStrings;
+  var sp = Sp.sendToSeq(Sp.takeById(Sp.takesLoad(), tp.id)), trs = Up.seqLoad().cur.tracks, sent = (sp.ids || []).map(function (id) { return trs[id].prog + ":" + trs[id].notes.length; }).join();
+  var pl = Sp.playList(Sp.takeById(Sp.takesLoad(), tp.id));
+  ok(tp && tp.parts && tp.parts.length === 4 && tp.notes.length === 4 && sp.ok && sent === "43:1,42:1,41:1,40:1" && pl.length === 4 && pl.map(function (x) { return x[4][0]; }).join() === "bass,cello,viola,violin",
+    "recording with an orchestration keeps one part per instrument (the first player); sending makes one sequencer track per part", [tp && tp.parts, sent]);
 
   // --- 録音・シーケンサーへ送る ---
   var r5 = srun({ view: "chord", inst: "cello", bpm: 120 }, 260, function (fr, e) {
