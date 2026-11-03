@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.26** |
+| 現在バージョン | **v2.27** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.27] 🎹 グランドピアノ・エレピの生の録音**（§322）: 番号 0 ＝ `sal_grand`（Salamander・CC BY 3.0）、1 ＝ `vsco_piano`（アップライト。v2.26 までは 0）、2 ＝ `gs_cp80`、4 ＝ `gs_wurli`（GregSullivan E-Pianos・CC BY 3.0）。`electric_piano_1` は消した。ゴリラピアノの `PIANO_VOICES` に 1・2。ハモンド系オルガンは自由な録音がないのでパイプオルガン＋シンセ。**次は §321 の 2（ゴリラピアノ・ゴリラウクレレにパターン演奏）**
 - **[v2.26] 🪕 ウクレレを生の録音に**（§321）: 音色番号 140（`MELODY_UKE`・`UGMelody.UKE`）＝ `fs_ukulele`（freesound Sadiquecat・CC0）。MIDI は `melodyGmProg` で 24。`UKE_PROG` = 140、トラックの音色は `ukeProgVal`（0〜127 と 140）、古いセーブは `uk` のしるしで1回だけ 24 → 140。**これからの計画は GAME_DESIGN §321**（エレピ・ピアノの種類・オルガン → ピアノ・ウクレレのパターン → 機能をそろえる → DAW）
 - **[v2.25] 🎛️ シンセ: アルペジエーター・じぶんの音色・伴奏・よこ向き**（§320）: `prefs.arp`（`synArpClean`・`synArpOrder`）。`arpStep()` が step ごとに先読み（録音中は録音の拍・伴奏中は曲の拍にそろえる。弾いた音は rec.notes へ直接）。アルペジエーター ON の鍵盤は held に入れるだけ。じぶんの音色は `ultimateGorillaSynthMyV1`（`synMyPut` 同じ名前は上書き・`prefs.mine`）。伴奏はゴリラホーンと同じ作り（`backStart / backStep / backStop`）。よこ向きは `synLayout(land, h)`（白鍵 15・`synKeys(n)`）
 - **[v2.24] 🎛️ ゴリラシンセ**（§319）: `arcade-synth.js`（`window.UGSynth`・ホーンのあと）。音色は `synPatchClean`（`SYN_PARAMS`）、声は `synVoice / synRelease / synPitch / synSetCut / synSetLfo`、シーケンサーの1音は `synNote`（`kill`）。シーケンサーの `ynotes` トラックは `patch` を持ち、`ukeSeqPlayEvent` が `UGSynth.note` で鳴らす（`ukeXClean` で `patch` を残す・`ukeSusStop` は `kill` を呼ぶ）

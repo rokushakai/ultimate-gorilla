@@ -217,8 +217,12 @@ module.exports = async function () {
   ok(noCtx && sc316.length === 2 && /vsco_cello\.js/.test(sc316[0]) && /vsco_cello_p\.js/.test(sc316[1]) && e316.counters.scripts.length === 2 && M316.sampleReady(42) && M316.sampleReady(1042),
     "prefetch: sample files (and soft layers) start loading before audio, and are decoded later without loading twice", [sc316, e316.counters.scripts.length]);
   // §317: ピアノ・パイプオルガン・グロッケン・シロフォン・マリンバも生の録音（オルガンはシーケンサーでのばせる）
-  ok(M316.sampleFiles[0] === "vsco_piano" && M316.sampleFiles[19] === "vsco_organ" && M316.sampleFiles[9] === "vsco_glock" && M316.sampleFiles[13] === "vsco_xylo" && M316.sampleFiles[12] === "vsco_marimba",
+  ok(M316.sampleFiles[1] === "vsco_piano" && M316.sampleFiles[19] === "vsco_organ" && M316.sampleFiles[9] === "vsco_glock" && M316.sampleFiles[13] === "vsco_xylo" && M316.sampleFiles[12] === "vsco_marimba",
     "real piano, pipe organ and mallets");
+  // §322: グランドピアノ（Salamander）・エレピ（Wurlitzer）・CP80 も生の録音。バンクの番号と音色の番号がそろっている
+  var bk322 = ["sal_grand", "vsco_piano", "gs_cp80", "gs_wurli"].map(function (n) { var m = fs.readFileSync(path.join(sampleDir, n + ".js"), "utf8").match(/\{ prog: (\d+), notes/); return m ? Number(m[1]) : -1; });
+  ok(M316.sampleFiles[0] === "sal_grand" && M316.sampleFiles[2] === "gs_cp80" && M316.sampleFiles[4] === "gs_wurli" && bk322.join() === "0,1,2,4" && !fs.existsSync(path.join(sampleDir, "electric_piano_1.js")),
+    "real grand piano, upright, CP80 and Wurlitzer electric piano (bank prog matches)", bk322);
 
   // --- WAV ---
   var wavRec = { id: 9, date: Date.UTC(2026, 9, 24, 12, 30), prog: { b: 0 }, fxRev: 1, notes: [[0, 60, "b"], [500, 64, "b", 0.5], [1000, 50, "w"]] };

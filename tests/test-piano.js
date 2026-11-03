@@ -325,4 +325,6 @@ module.exports = function () {
   });
   ok(P.VOICES.some(function (v) { return v[0] === 19; }) && P.VOICES.some(function (v) { return v[0] === 13; }) && P.VOICES.some(function (v) { return v[0] === 9; }) && src18 === 1 && stop18 === 1,
     "piano voices include the pipe organ, xylophone and glockenspiel; the organ sustains while held and stops on release", [src18, stop18]);
+  // §322: グランド・アップライト・エレピ（Wurlitzer）・CP80
+  ok(P.VOICES.slice(0, 4).map(function (v) { return v[0]; }).join() === "0,1,4,2", "piano voices: grand, upright, electric piano, CP80", P.VOICES.map(function (v) { return v[0]; }));
 };

@@ -9,7 +9,7 @@
 - ライセンス: [Creative Commons Attribution 3.0（CC BY 3.0）](https://creativecommons.org/licenses/by/3.0/)
 - 変更点: 音色を選び、各音色から C2〜C7 の長3度おき16音だけを抜き出して JavaScript ファイルにまとめた。ゲーム内では再生速度を変えて間の音程を作り、モノラル化・短く切って再生している
 
-収録音色: Electric Piano 1 / Celesta / Vibraphone / Acoustic Guitar (nylon) / Acoustic Guitar (steel) / Acoustic Bass / Choir Aahs / Koto
+収録音色: Celesta / Vibraphone / Acoustic Guitar (nylon) / Acoustic Guitar (steel) / Acoustic Bass / Choir Aahs / Koto
 
 ベース（v1.69〜。🎸 ゴリラベース・シーケンサーのベース）: Acoustic Bass / Electric Bass (finger) / Electric Bass (pick) / Fretless Bass / Slap Bass 1 / Slap Bass 2 / Synth Bass 1 / Synth Bass 2。ベースは C1〜C5 の短3度おき17音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
@@ -30,7 +30,7 @@
 
 管楽器（v2.16〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）: `samples/vsco_trumpet`・`vsco_trombone`・`vsco_tuba`・`vsco_horn`・`vsco_oboe`・`vsco_bassoon`・`vsco_clarinet`・`vsco_flute`（と *_p）。同じ VSCO 2 Community Edition（CC0）の Trumpet / Tenor Trombone / Tuba / F Horn / Oboe / Bassoon / Clarinet / Flute ののばす録音から、上と同じように作った。ブラスセクション `samples/vsco_brass`（と _p）は、このトランペット（2本）・F ホルン・テナートロンボーン（2本）の録音を、音ごとに少し高さと時間をずらして重ね、のびている所の大きさをそろえて作った
 
-## ピアノ・パイプオルガン・鉄琴・木琴の録音（v2.22〜）
+## アップライトピアノ・パイプオルガン・鉄琴・木琴の録音（v2.22〜）
 
 `samples/vsco_piano.js`・`vsco_organ.js`・`vsco_marimba.js`・`vsco_xylo.js`・`vsco_glock.js`
 
@@ -38,6 +38,24 @@
 - 配布元: [sgossner/VSCO-2-CE](https://github.com/sgossner/VSCO-2-CE)
 - ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す（ピアノとオルガンは元の作者と Versilian Studios の表記が勧められている）
 - 変更点: Upright Piano（まん中の強さ）・Organ（Loud の手鍵盤）・Marimba・Xylophone・Glockenspiel から音を選び、モノラル 22050Hz にして頭の無音を切り、短く切ってフェードをつけ（オルガンはのびている所をくり返せるようにクロスフェード）、音量をそろえて、MP3（56kbps）で JavaScript ファイルにまとめた
+
+## グランドピアノの録音（v2.27〜。🎹 ゴリラピアノ・メロディくずし・シーケンサー）
+
+`samples/sal_grand.js`
+
+- 音源: **Salamander Grand Piano V3** — Alexander Holm（sfz 版: kinwie）
+- 配布元: [sfzinstruments/SalamanderGrandPiano](https://github.com/sfzinstruments/SalamanderGrandPiano)（元: [archive.org](https://archive.org/details/SalamanderGrandPianoV3)）
+- ライセンス: [Creative Commons Attribution 3.0（CC BY 3.0）](https://creativecommons.org/licenses/by/3.0/)
+- 変更点: 16段階の強さのうち v10 の録音を A0〜C8 の短3度おき30音選び、モノラル 22050Hz にして頭の無音を切り、3.5 秒に切ってフェードをつけ、音量をそろえて、MP3（56kbps）で JavaScript ファイルにまとめた
+
+## エレピの録音（v2.27〜。🎹 ゴリラピアノ・メロディくずし・シーケンサー）
+
+`samples/gs_wurli.js`・`gs_cp80.js`
+
+- 音源: **GregSullivan E-Pianos**（Wurlitzer EP200・Yamaha CP80）— Greg Sullivan（sfz 版: kinwie）
+- 配布元: [sfzinstruments/GregSullivan.E-Pianos](https://github.com/sfzinstruments/GregSullivan.E-Pianos)
+- ライセンス: [Creative Commons Attribution 3.0（CC BY 3.0）](https://creativecommons.org/licenses/by/3.0/)
+- 変更点: Wurlitzer EP200 は f の録音（ない音は ff・mp・pp）から16音、sfz の音程の直しをかけて、CP80 は F の録音から16音を選び、モノラル 22050Hz にして頭の無音を切り、短く切ってフェードをつけ、音量をそろえて、MP3（56kbps）で JavaScript ファイルにまとめた
 
 ## サックスの録音（v2.17〜。🎺 ゴリラホーン・メロディくずし・シーケンサー）
 
