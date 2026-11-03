@@ -207,6 +207,15 @@ module.exports = async function () {
   await new Promise(function (res) { M.loadSamples([30, 32, 33, 34, 35, 36, 37, 38, 39, 41], res); });
   var nb310 = Object.keys(M.samples.buffers);
   ok(nb310.length <= 16 && M.sampleReady(41) && M.sampleReady(1041) && M.sampleFiles[1041] === "vsco_viola_p" && M.sampleReady(30), "sample memory is capped (old instruments evicted); soft layers load with their instrument", nb310.length);
+  // §316: 音を出す前に、ファイルだけ先に読みはじめる（2度は読まない）
+  var e316 = H.load(), M316 = e316.window.UGMelody, noCtx = !M316.audio.ctx;
+  M316.prefetchSamples([42]);
+  var sc316 = e316.counters.scripts.slice();
+  await new Promise(function (res) { setTimeout(res, 5); });
+  M316.audioInit();
+  await new Promise(function (res) { M316.loadSamples([42], res); });
+  ok(noCtx && sc316.length === 2 && /vsco_cello\.js/.test(sc316[0]) && /vsco_cello_p\.js/.test(sc316[1]) && e316.counters.scripts.length === 2 && M316.sampleReady(42) && M316.sampleReady(1042),
+    "prefetch: sample files (and soft layers) start loading before audio, and are decoded later without loading twice", [sc316, e316.counters.scripts.length]);
 
   // --- WAV ---
   var wavRec = { id: 9, date: Date.UTC(2026, 9, 24, 12, 30), prog: { b: 0 }, fxRev: 1, notes: [[0, 60, "b"], [500, 64, "b", 0.5], [1000, 50, "w"]] };

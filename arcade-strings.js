@@ -485,6 +485,7 @@
     var endT = t0 + song[6] * meter * spb;
     function now() { return frame / 60; }
     var UG = window.UGMelody, audioOk = false, LAT = UG && UG.latency ? UG.latency() / 1000 : 0, buses = {};
+    try { if (UG && UG.prefetchSamples) { UG.prefetchSamples([ins[2], 33]); } } catch (e0) {} // §316
     function audio() {
       if (audioOk || !UG || !UG.audioInit) { return; }
       try {
@@ -707,10 +708,14 @@
 
       // --- 音 ---
       var UG = window.UGMelody, audioOk = false, buses = {};
+      // §316: 画面を開いたら、楽器（合奏の編成ならパートぜんぶ）の録音を先に読みはじめる
+      function progsNow() { return [inst()[2], 33].concat(prefs.orch.on ? prefs.orch.parts.map(function (p) { return strOpt(STR_INSTS, p.inst)[2]; }) : []); }
+      try { if (UG && UG.prefetchSamples) { UG.prefetchSamples(progsNow()); } } catch (e0) {}
       function audio() {
         if (audioOk || !UG || !UG.audioInit) { return; }
-        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([inst()[2], 45, 33]); } } catch (e) {}
+        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples(progsNow().concat([45])); } } catch (e) {}
       }
+      function preload(progs) { try { if (audioOk) { UG.loadSamples(progs); } else if (UG && UG.prefetchSamples) { UG.prefetchSamples(progs); } } catch (e) {} }
       function out() { return audioOk && B.bus ? B.bus(buses, "s", prefs.svol, false) : null; }
       function click(accent) { if (audioOk) { try { UG.synth(accent ? 37 : 42, UG.DRUM, 0, accent ? 0.9 : 0.6); } catch (e) {} } }
       // id ごとに鳴っている音 { v, m（録音する半音）}
@@ -1067,7 +1072,7 @@
           prefs.bpm = bpm; strSavePrefs(prefs); render();
         }
         else if (/^view:/.test(v)) { allOff(); view = prefs.view = v.substring(5) === "chord" ? "chord" : "solo"; strSavePrefs(prefs); applyLand(); render(); }
-        else if (/^inst:/.test(v)) { allOff(); prefs.inst = strOpt(STR_INSTS, v.substring(5))[0]; strSavePrefs(prefs); applyLand(); if (audioOk) { try { UG.loadSamples([inst()[2]]); } catch (e) {} } render(); }
+        else if (/^inst:/.test(v)) { allOff(); prefs.inst = strOpt(STR_INSTS, v.substring(5))[0]; strSavePrefs(prefs); applyLand(); preload([inst()[2]]); render(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = ["play", "pat", "band", "key"].indexOf(tb0) >= 0 ? tb0 : "play"; strSavePrefs(prefs); render(); }
         // §302
         else if (v === "pat") { patToggle(); }
@@ -1086,8 +1091,8 @@
         }
         else if (v === "bow" || v === "snap" || v === "vib") { allOff(); prefs[v] = !prefs[v]; strSavePrefs(prefs); applyLand(); render(); }
         // §304: 編成
-        else if (v === "orch") { allOff(); prefs.orch.on = !prefs.orch.on; strSavePrefs(prefs); render(); }
-        else if (/^orchp:/.test(v)) { allOff(); var pid0 = v.substring(6); if (pid0) { prefs.orch.preset = strOpt(STR_ORCH_PRESETS, pid0)[0]; prefs.orch.parts = strPresetParts(prefs.orch.preset); } strSavePrefs(prefs); render(); }
+        else if (v === "orch") { allOff(); prefs.orch.on = !prefs.orch.on; strSavePrefs(prefs); preload(progsNow()); render(); }
+        else if (/^orchp:/.test(v)) { allOff(); var pid0 = v.substring(6); if (pid0) { prefs.orch.preset = strOpt(STR_ORCH_PRESETS, pid0)[0]; prefs.orch.parts = strPresetParts(prefs.orch.preset); } strSavePrefs(prefs); preload(progsNow()); render(); }
         else if (v === "parts:+" || v === "parts:-") {
           allOff();
           var pa = prefs.orch.parts;

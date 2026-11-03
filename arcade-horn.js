@@ -299,6 +299,7 @@
     var endT = t0 + chart.bars * meter * spb;
     function now() { return frame / 60; }
     var UG = window.UGMelody, audioOk = false, LAT = UG && UG.latency ? UG.latency() / 1000 : 0, buses = {};
+    try { if (UG && UG.prefetchSamples) { UG.prefetchSamples([ins[2], 33]); } } catch (e0) {} // §316
     function audio() {
       if (audioOk || !UG || !UG.audioInit) { return; }
       try {
@@ -501,10 +502,14 @@
 
       // --- 音 ---
       var UG = window.UGMelody, audioOk = false, buses = {};
+      // §316: 画面を開いたら、楽器と編成の録音を先に読みはじめる
+      function progsNow() { return [inst()[2], 33].concat(prefs.sec.parts.map(function (p) { return hrnOpt(HRN_INSTS, p.inst)[2]; })); }
+      try { if (UG && UG.prefetchSamples) { UG.prefetchSamples(progsNow()); } } catch (e0) {}
       function audio() {
         if (audioOk || !UG || !UG.audioInit) { return; }
-        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples([inst()[2], 33].concat(prefs.sec.parts.map(function (p) { return hrnOpt(HRN_INSTS, p.inst)[2]; }))); } } catch (e) {}
+        try { if (UG.audioInit()) { audioOk = true; UG.loadSamples(progsNow()); } } catch (e) {}
       }
+      function preload(progs) { try { if (audioOk) { UG.loadSamples(progs); } else if (UG && UG.prefetchSamples) { UG.prefetchSamples(progs); } } catch (e) {} }
       function out() { return audioOk && B.bus ? B.bus(buses, "h", prefs.hvol, false) : null; }
       function click(accent) { if (audioOk) { try { UG.synth(accent ? 37 : 42, UG.DRUM, 0, accent ? 0.9 : 0.6); } catch (e) {} } }
 
@@ -815,13 +820,13 @@
           if (pat) { pat.t0 = now() - pcb * 60 / bpm; }
           prefs.bpm = bpm; hrnSavePrefs(prefs); render();
         }
-        else if (/^inst:/.test(v)) { allOff(); prefs.inst = hrnOpt(HRN_INSTS, v.substring(5))[0]; hrnSavePrefs(prefs); if (audioOk) { try { UG.loadSamples([inst()[2]]); } catch (e) {} } render(); }
+        else if (/^inst:/.test(v)) { allOff(); prefs.inst = hrnOpt(HRN_INSTS, v.substring(5))[0]; hrnSavePrefs(prefs); preload([inst()[2]]); render(); }
         else if (/^tab:/.test(v)) { var tb0 = v.substring(4); prefs.tab = ["play", "pat", "band", "key"].indexOf(tb0) >= 0 ? tb0 : "play"; hrnSavePrefs(prefs); render(); }
         // §308
         else if (v === "land") { allOff(); chordAllOff(); prefs.land = !prefs.land; hrnSavePrefs(prefs); applyLand(); render(); }
         else if (/^view:/.test(v)) { allOff(); chordAllOff(); view = prefs.view = v.substring(5) === "section" ? "section" : "solo"; hrnSavePrefs(prefs); render(); }
         else if (v === "sev") { prefs.sev = !prefs.sev; hrnSavePrefs(prefs); render(); }
-        else if (/^secp:/.test(v)) { chordAllOff(); var sp0 = v.substring(5); if (sp0) { prefs.sec.preset = hrnOpt(HRN_SECTIONS, sp0)[0]; prefs.sec.parts = hrnPresetParts(prefs.sec.preset); } hrnSavePrefs(prefs); if (audioOk) { try { UG.loadSamples(prefs.sec.parts.map(function (p) { return hrnOpt(HRN_INSTS, p.inst)[2]; })); } catch (e2) {} } render(); }
+        else if (/^secp:/.test(v)) { chordAllOff(); var sp0 = v.substring(5); if (sp0) { prefs.sec.preset = hrnOpt(HRN_SECTIONS, sp0)[0]; prefs.sec.parts = hrnPresetParts(prefs.sec.preset); } hrnSavePrefs(prefs); preload(prefs.sec.parts.map(function (p) { return hrnOpt(HRN_INSTS, p.inst)[2]; })); render(); }
         else if (v === "parts:+" || v === "parts:-") {
           chordAllOff();
           var pa = prefs.sec.parts;
@@ -829,7 +834,7 @@
           if (v === "parts:-" && pa.length > 1) { pa.pop(); }
           prefs.sec.preset = ""; hrnSavePrefs(prefs); render();
         }
-        else if (/^pi:\d:/.test(v)) { chordAllOff(); var pk = Number(v.charAt(3)); if (prefs.sec.parts[pk]) { prefs.sec.parts[pk].inst = hrnOpt(HRN_INSTS, v.substring(5))[0]; prefs.sec.preset = ""; hrnSavePrefs(prefs); if (audioOk) { try { UG.loadSamples([hrnOpt(HRN_INSTS, prefs.sec.parts[pk].inst)[2]]); } catch (e3) {} } } render(); }
+        else if (/^pi:\d:/.test(v)) { chordAllOff(); var pk = Number(v.charAt(3)); if (prefs.sec.parts[pk]) { prefs.sec.parts[pk].inst = hrnOpt(HRN_INSTS, v.substring(5))[0]; prefs.sec.preset = ""; hrnSavePrefs(prefs); preload([hrnOpt(HRN_INSTS, prefs.sec.parts[pk].inst)[2]]); } render(); }
         else if (/^pn:\d:[+-]$/.test(v)) { chordAllOff(); var pk2 = Number(v.charAt(3)), pp = prefs.sec.parts[pk2]; if (pp) { pp.n = Math.max(1, Math.min(HRN_PLAYERS_MAX, pp.n + (v.charAt(5) === "+" ? 1 : -1))); prefs.sec.preset = ""; hrnSavePrefs(prefs); } render(); }
         else if (v === "pat") { patToggle(); }
         else if (v === "back") { backToggle(); }

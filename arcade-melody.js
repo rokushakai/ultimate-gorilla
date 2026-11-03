@@ -585,7 +585,7 @@
   var MELODY_SAMPLE_ATTACK = { 49: 0.35 };
   var MELODY_SAMPLE_FADE = 0.25, MELODY_SAMPLE_VOL = 0.6, MELODY_SAMPLE_KEEP = 16; // §310: 6 → 16
   // state[name]: undefined | "loading" | "decoding" | "ready" | "error"
-  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {} };
+  var melodySamples = { enabled: true, state: {}, buffers: {}, keys: {}, waiting: {}, used: {}, loadAt: {}, err: {}, errMsg: {}, pre: {} };
   var MELODY_SAMPLE_RETRY_MS = 10000; // §231
   // §239 v1.47: サンプルのファイルの版（中身を作りなおしたときだけ上げる。古いファイルがキャッシュに残らないように）
   var MELODY_SAMPLE_V = "2.19";
@@ -689,6 +689,7 @@
       melodySamples.state[name] = "loading";
       melodySamples.loadAt[name] = Date.now();
       if (window.UGMelodySamples.banks[name]) { melodyDecodeBank(name); continue; }
+      if (melodySamples.pre[name] === "loading") { continue; } // §316: 先に読みはじめたファイルが届いたら展開する（onload）
       try {
         var sc = document.createElement("script");
         sc.src = "samples/" + name + ".js?v=" + MELODY_SAMPLE_V;
@@ -699,6 +700,26 @@
     melodySamples.wanted = names;
     melodyEvictSamples(names);
     if (pending === 0 && cb) { cb(); }
+  }
+  // §316: 音を出す前（画面を開いたとき）に、サンプルのファイルだけ先に読みはじめる（弱い録音 ＋1000 も）。
+  // 展開は音を出すとき（melodyLoadSamples）。音がもう出せるなら、そのまま melodyLoadSamples
+  function melodyPrefetchSamples(progs) {
+    if (!melodySamples.enabled || !progs) { return; }
+    if (melodyAudio.ctx) { melodyLoadSamples(progs); return; }
+    var all = progs.slice(), i;
+    for (i = 0; i < progs.length; i++) { if (progs[i] < 1000 && MELODY_SAMPLE_FILES[progs[i] + 1000]) { all.push(progs[i] + 1000); } }
+    for (i = 0; i < all.length; i++) {
+      var name = MELODY_SAMPLE_FILES[all[i]];
+      if (!name || melodySamples.state[name] || melodySamples.pre[name] || window.UGMelodySamples.banks[name]) { continue; }
+      melodySamples.pre[name] = "loading";
+      try {
+        var sc = document.createElement("script");
+        sc.src = "samples/" + name + ".js?v=" + MELODY_SAMPLE_V;
+        sc.onload = (function (n) { return function () { melodySamples.pre[n] = "done"; }; })(name);
+        sc.onerror = (function (n) { return function () { melodySamples.pre[n] = "error"; if (melodySamples.state[n] === "loading") { melodySampleFinish(n, false); } }; })(name);
+        (document.head || document.body).appendChild(sc);
+      } catch (e) { melodySamples.pre[name] = "error"; }
+    }
   }
   function melodyProgList(map) {
     var out = [];
@@ -2301,7 +2322,7 @@
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, sampleAttack: MELODY_SAMPLE_ATTACK, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
-    drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, sampleReady: melodySampleReady,
+    drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, prefetchSamples: melodyPrefetchSamples, sampleReady: melodySampleReady,
     midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
