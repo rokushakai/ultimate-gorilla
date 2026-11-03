@@ -17,6 +17,8 @@
 
 ストリングス（v2.07〜。🎻 ゴリラストリングス）: Viola / Cello / Contrabass / Tremolo Strings / Pizzicato Strings / String Ensemble 2。C1〜C7 の長3度おき19音を抜き出した（コントラバスは鳴らない G#3 より上をのぞく。同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
+管楽器（v2.12〜。🎺 ゴリラホーン）: Trombone / Tuba / French Horn / Brass Section / Soprano Sax / Tenor Sax / Baritone Sax / Oboe / Bassoon / Clarinet。C1〜C7 の長3度おき19音を抜き出した（鳴らない高い音はのぞく。Alto Sax も鳴らない C6 より上をのぞいた。同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
+
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）
 
 ### ロック: `samples/drums_drs.js`
