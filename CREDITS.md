@@ -15,6 +15,8 @@
 
 エレキギター（v1.96〜。🤘 ゴリラギター）: Electric Guitar (jazz) / Electric Guitar (clean) / Electric Guitar (muted) / Overdriven Guitar / Distortion Guitar。C2〜C7 の長3度おき16音を抜き出した（同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
 
+ストリングス（v2.07〜。🎻 ゴリラストリングス）: Viola / Cello / Contrabass / Tremolo Strings / Pizzicato Strings / String Ensemble 2。C1〜C7 の長3度おき19音を抜き出した（コントラバスは鳴らない G#3 より上をのぞく。同じ FluidR3_GM・CC BY 3.0。変更点も上と同じ）
+
 ## ドラムのサンプル（ゲームセンター「🥁 ゴリラドラム」・シーケンサーのドラム）
 
 ### ロック: `samples/drums_drs.js`
