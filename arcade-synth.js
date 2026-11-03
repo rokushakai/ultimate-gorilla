@@ -258,13 +258,23 @@
     return {
       view: p.view === "pad" ? "pad" : "keys", preset: pre, edited: !!p.edited, patch: synPatchClean(p.patch && typeof p.patch === "object" ? p.patch : synPreset(pre).patch),
       oct: oct >= -2 && oct <= 1 ? oct : 0, key: key >= 0 && key <= 11 ? key : 0, scale: B ? B.scale(p.scale)[0] : "major",
-      names: p.names === "cde" || p.names === "none" ? p.names : "do", tab: p.tab === "play" ? "play" : "sound",
+      names: p.names === "cde" || p.names === "none" ? p.names : "do", tab: ["play", "pat", "band"].indexOf(p.tab) >= 0 ? p.tab : "sound",
+      // §329: ▶ パターン
+      spat: typeof p.spat === "string" && /^([a-z0-9]{1,16}|my:\d+)$/.test(p.spat) ? p.spat : "up", srate: p.srate === 16 ? 16 : 8,
+      swing: [0, 1, 2, 3].indexOf(Number(p.swing)) >= 0 ? Number(p.swing) : 0, sev: !!p.sev,
+      cprog: typeof p.cprog === "string" && /^[a-z0-9]{1,16}$/.test(p.cprog) ? p.cprog : "",
+      drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
+      bpat: typeof p.bpat === "string" && /^[a-z0-9]{1,12}$/.test(p.bpat) ? p.bpat : "",
+      yvol: synVol(p.yvol, 100), bvol: synVol(p.bvol, 100), dvol: synVol(p.dvol, 50),
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       land: !!p.land, arp: synArpClean(p.arp), mine: typeof p.mine === "string" ? p.mine.slice(0, 16) : "",
       backing: typeof p.backing === "string" && /^(cur|s:\d+)$/.test(p.backing) ? p.backing : ""
     };
   }
   function synSavePrefs(p) { return lsSet(SYN_PREFS_KEY, p); }
+  // §329: 音量（%。0〜150・10 きざみ）
+  var SYN_VOL_MAX = 150, SYN_VOL_STEP = 10;
+  function synVol(v, d) { v = Number(v); return v >= 0 && v <= SYN_VOL_MAX && v % SYN_VOL_STEP === 0 ? v : d; }
   function synTakeClean(t, i) {
     return {
       id: Math.max(1, Math.round(Number(t.id)) || i + 1), name: String(t.name || "テイク").slice(0, 20),
@@ -374,7 +384,7 @@
     draw();
   }
 
-  var SYN_KEYS = { a: "n:0", w: "n:1", s: "n:2", e: "n:3", d: "n:4", f: "n:5", t: "n:6", g: "n:7", y: "n:8", h: "n:9", u: "n:10", j: "n:11", k: "n:12", z: "rec", x: "play", ",": "octdown", ".": "octup" };
+  var SYN_KEYS = { b: "pat", "1": "ch:0", "2": "ch:1", "3": "ch:2", "4": "ch:3", "5": "ch:4", "6": "ch:5", "7": "ch:6", a: "n:0", w: "n:1", s: "n:2", e: "n:3", d: "n:4", f: "n:5", t: "n:6", g: "n:7", y: "n:8", h: "n:9", u: "n:10", j: "n:11", k: "n:12", z: "rec", x: "play", ",": "octdown", ".": "octup" };
 
   I.register({
     id: "synth",
@@ -384,7 +394,7 @@
     name: "ゴリラシンセ",
     icon: "&#x1F39B;&#xFE0F;",
     desc: "波の形・フィルター・LFO で音を作って弾くシンセサイザー。XY パッドで音が変わる",
-    help: "鍵盤を押しているあいだ鳴る（アルペジエーター ON なら押さえた音を自動で1音ずつ）/ 上の XY パッド: 横 ＝ 明るさ・縦 ＝ うねり / XYパッド演奏: 横 ＝ 音・縦 ＝ 明るさ / キー A W S E D F T G Y H U J K / , . オクターブ / Z 録音 / X 再生 / P一時停止",
+    help: "鍵盤を押しているあいだ鳴る（アルペジエーター ON なら押さえた音を自動で1音ずつ）/ 上の XY パッド: 横 ＝ 明るさ・縦 ＝ うねり / XYパッド演奏: 横 ＝ 音・縦 ＝ 明るさ / キー A W S E D F T G Y H U J K / , . オクターブ / Z 録音 / X 再生 / B パターン / 1〜7 パターンのコード / P一時停止",
     controls: [],
     keys: SYN_KEYS,
     setup: synSetup,
@@ -414,7 +424,7 @@
         if (audioOk || !UG || !UG.audioInit) { return; }
         try { if (UG.audioInit()) { audioOk = true; } } catch (e) {}
       }
-      function out() { return audioOk && B.bus ? B.bus(buses, "y", 100, false) : null; }
+      function out() { return audioOk && B.bus ? B.bus(buses, "y", prefs.yvol, false) : null; }
       function click(accent) { if (audioOk) { try { UG.synth(accent ? 37 : 42, UG.DRUM, 0, accent ? 0.9 : 0.6); } catch (e) {} } }
 
       // --- 鍵盤の音。held: [{ id, m, v }]（ポリはそれぞれの声・モノは tone 1つ）---
@@ -519,9 +529,9 @@
           }
           bk.idx++;
         }
-        if (t >= S0.time) { if (rec) { recStop(); } backStop(); if (play) { playStop(); } render(); }
+        if (t >= S0.time) { if (rec) { recStop(); } backStop(); if (play) { playStop(); } if (pat && pat.back) { patStop(); } render(); }
       }
-      function backToggle() { if (bk) { if (rec) { recStop(); } backStop(); playStop(); } else { backStart(0); } render(); }
+      function backToggle() { if (bk) { if (rec) { recStop(); } backStop(); playStop(); if (pat && pat.back) { patStop(); } } else { if (pat) { patStop(); } backStart(0); } render(); }
       function recBeat() { return rec ? (rec.back ? backBeat() : (now() - rec.t0) * bpm / 60) : 0; }
       function r3(v) { return Math.round(v * 1000) / 1000; }
       function recToggle() {
@@ -531,6 +541,7 @@
         if (back) { backStart(back.s.lead ? 0 : meter * back.s.spb); rec = { back: true, notes: [], open: {}, beat: -99 }; }
         else { rec = { t0: now() + meter * 60 / bpm, notes: [], open: {}, beat: -meter - 1 }; }
         arp = null;
+        if (pat) { patStart(); } // §329: 録音の頭にそろえて鳴らしなおす
         msg = "";
         render();
       }
@@ -551,7 +562,7 @@
         var ks = [], k;
         for (k in rec.open) { if (rec.open.hasOwnProperty(k)) { ks.push(k); } }
         for (k = 0; k < ks.length; k++) { recOff(ks[k]); }
-        var n = rec.notes.sort(function (a, b) { return a[0] - b[0]; }), wasBack = rec.back;
+        var endB = recBeat(), n = rec.notes.filter(function (x) { return x[0] <= endB + 1e-6; }).sort(function (a, b) { return a[0] - b[0]; }), wasBack = rec.back; // §329: 先に予約したパターンの音は入れない
         rec = null;
         if (wasBack) { backStop(); }
         if (n.length) {
@@ -568,6 +579,7 @@
         if (rec) { return; }
         if (!take || !take.notes.length) { msg = "まだテイクがありません。🔴 録音で録ってね"; render(); return; }
         audio();
+        if (pat) { patStop(); }
         if (back) { backStart(0); }
         play = { back: !!back, t0: now() + 0.1, bpm: back ? back.seq.bpm : take.bpm, notes: take.notes, idx: 0, vo: [], patch: synPatchClean(take.patch) };
         render();
@@ -603,6 +615,213 @@
         if (arpVo.length > 32 && ac) { for (i = arpVo.length - 1; i >= 0; i--) { if (arpVo[i].end < ac.currentTime) { arpVo.splice(i, 1); } } }
       }
 
+      // ---------- §329: ▶ パターン（ゴリラピアノと同じ鳴らし方・コードのボタン・コード進行・ハネ・ドラム・ベース）----------
+      var pat = null, pend = null, cur = null, flashC = {};
+      function PI() { return window.UGPiano; }
+      function patOk() { var P = PI(); return !!(P && P.barSteps && P.voicing && B && B.chord && B.cprog); }
+      function degChord(d) { var ch = B.chord(prefs.key, d, prefs.scale, prefs.sev); return { ch: ch, ns: PI().voicing(ch, prefs.sev), name: ch.name, d: d }; }
+      function songK(b) { return back && back.chords && back.chords.length ? B.chordIdx(back.chords, b) : -1; }
+      function songChordObj(k) { var c = back.chords[k]; return { ch: c.ch, ns: PI().voicing(c.ch, /(7|9|11|13)/.test(String(c.name).split("/")[0])), name: c.name, d: -1 }; }
+      function chordFor(b) { if (pat && pat.back) { var k = songK(b); if (k >= 0) { return songChordObj(k); } } return cur || degChord(0); }
+      function nextFor(b) {
+        if (pat && pat.back) { var k = songK(b); return k >= 0 && k + 1 < back.chords.length ? back.chords[k + 1].ch : null; }
+        if (pend) { return pend.ch; }
+        var cp = B.cprog(prefs.cprog);
+        return cp ? B.chord(prefs.key, B.cprogAt(cp, b, meter).next, prefs.scale, prefs.sev) : null;
+      }
+      function patChordText() {
+        if (!pat) { return ""; }
+        var b = Math.max(0, patBeat()), co = chordFor(b), nx = "";
+        if (pat.back) { var k = songK(b); nx = k >= 0 && k + 1 < back.chords.length ? back.chords[k + 1].name : ""; }
+        else if (pend) { nx = pend.name; }
+        else { var cp = B.cprog(prefs.cprog); if (cp) { nx = B.chord(prefs.key, B.cprogAt(cp, b, meter).next, prefs.scale, prefs.sev).name; } }
+        return co.name + (nx && nx !== co.name ? " → " + nx : "");
+      }
+      function barHead(b) {
+        var bar = Math.floor(b / meter + 1e-6), cp = B.cprog(prefs.cprog);
+        if (bar === pat.lastBar) { return; }
+        pat.lastBar = bar;
+        if (pend) { cur = pend; pend = null; }
+        else if (cp) { var d = B.cprogAt(cp, b, meter).d; if (!cur || cur.d !== d) { cur = degChord(d); } }
+        if (!cur) { cur = degChord(0); }
+        if (cur.d >= 0) { flashC[cur.d] = 12; }
+      }
+      // コードのボタン（パターン中は次の小節の頭で。とまっているときは すぐ）
+      function setChord(d) {
+        if (!patOk() || (pat && pat.back)) { return; }
+        if (prefs.cprog) { prefs.cprog = ""; save(); }
+        var c = degChord(d);
+        if (pat) { pend = c; } else { cur = c; flashC[d] = 12; }
+        render();
+      }
+      function patBeat() { return pat.back ? backBeat() : (now() - pat.t0) * bpm / 60; }
+      function patTime(b) { return pat.back ? now() + (back.s.tm(b) - backT()) : pat.t0 + b * 60 / bpm; }
+      function patStart() {
+        patStop();
+        if (!patOk()) { msg = "ゴリラピアノ・ゴリラベースが読みこめませんでした"; return; }
+        audio();
+        if (back && !bk) { backStart(0); }
+        pat = { back: !!(back && bk), t0: rec && !rec.back ? rec.t0 : now() + 0.1, k: 0, unit: 1, pl: null, dk: 0, bk: 0, bvo: null, lastBar: -1, vo: [] };
+        patRetime();
+        drumInit();
+        if (audioOk && prefs.bpat) { try { UG.loadSamples([33]); } catch (e) {} }
+      }
+      function patRetime() {
+        var bt = Math.max(0, patBeat()), bd = bassDef();
+        function at(u) { return Math.max(0, Math.ceil(bt / u - 1e-6)); }
+        pat.pl = PI().play(prefs.spat);
+        pat.unit = PI().barSteps([60], prefs.spat, prefs.srate, meter, pat.pl).unit;
+        pat.k = at(pat.unit); pat.dk = at(0.25); pat.bk = bd ? at(meter / bd[2].length) : 0;
+      }
+      function patStop() {
+        if (!pat) { return; }
+        for (var i = 0; i < pat.vo.length; i++) { synRelease(pat.vo[i], 0.06); }
+        if (pat.bvo && UG.voiceStop) { try { UG.voiceStop(pat.bvo, 0, 0.06); } catch (e) {} }
+        pat = null;
+        if (pend) { cur = pend; pend = null; }
+      }
+      function patToggle() { if (pat) { patStop(); } else { if (play) { playStop(); } patStart(); } render(); }
+      function patStep() {
+        var ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0, i, j, spb = pat.back ? back.s.spb : 60 / bpm;
+        if (ac) { for (i = pat.vo.length - 1; i >= 0; i--) { if (pat.vo[i].end < ac.currentTime) { pat.vo.splice(i, 1); } } }
+        while (pat && n++ < 64) {
+          var unit = pat.unit, tpb = Math.max(1, Math.round(meter / unit)), per = Math.round(1 / unit), b = pat.k * unit, ci = pat.k % tpb;
+          var dt = patTime(b + B.swingOf(prefs.swing, per, ci) * unit) - now();
+          if (dt > 0.1 || (pat.back && b >= back.s.beats - 1e-6)) { break; }
+          pat.k++;
+          if (ci === 0 && !pat.back) { barHead(b); }
+          if (dt < -0.05) { continue; }
+          var co = chordFor(b), ps = PI().barSteps(co.ns, prefs.spat, prefs.srate, meter, pat.pl), L0 = ps.steps.length;
+          var st = ps.acc ? (ci < L0 ? ps.steps[ci] : null) : ps.steps[ci % L0];
+          if (!st) { continue; }
+          var len = 1;
+          if (ps.acc) { len = tpb - ci; } else { for (j = ci + 1; j < tpb && !ps.steps[j % L0]; j++) { len++; } }
+          var sec = len * unit * spb * (ps.acc ? 1 : 0.95), dd = Math.max(0, dt);
+          for (j = 0; j < st.length; j++) {
+            var m = st[j];
+            if (m < 0 || m > 127) { continue; }
+            if (ac) { var v = synNote(patch, m, out(), ac.currentTime + dd, 0.7, sec); if (v) { pat.vo.push(v); } }
+            if (rec && rec.notes.length < SYN_NOTES_MAX) { var rb = pat.back ? b : (rec.back ? b : b); if (rb >= 0) { rec.notes.push([r3(rb), r3(Math.max(0.0625, len * unit)), m]); } }
+          }
+        }
+        if (pat && pat.vo.length > 64) { pat.vo.splice(0, pat.vo.length - 64); }
+      }
+      var drumCache = null;
+      function drumDef() {
+        var D = window.UGDrum, id = prefs.drum;
+        if (!id || !D || !D.patternSteps) { return null; }
+        if (drumCache && drumCache.id === id) { return drumCache.steps ? drumCache : null; }
+        var st = null, len = 16;
+        try { st = D.patternSteps(id); len = D.patLen ? D.patLen(id) : 16; } catch (e) {}
+        drumCache = { id: id, len: len, steps: st && st.length && len === (meter === 3 ? 12 : 16) ? st : null };
+        return drumCache.steps ? drumCache : null;
+      }
+      function drumInit() {
+        var D = window.UGDrum, dp = null;
+        try { dp = D && D.prefs ? D.prefs() : null; } catch (e) {}
+        if (!dp || !audioOk) { return; }
+        try { if (UG.setDrumSamples) { UG.setDrumSamples(dp.real); } if (UG.setDrumKit) { UG.setDrumKit(dp.kitId); } if (dp.real && UG.loadSamples) { UG.loadSamples([UG.DRUM]); } } catch (e2) {}
+      }
+      function drumStep() {
+        var dd = drumDef(), D = window.UGDrum, ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0, i, q, swAmt = 0;
+        if (!dd || !ac) { return; }
+        var du = meter / dd.len, bper = Math.round(1 / pat.unit) === 4 ? 4 : 2;
+        for (q = 0; q < B.SWINGS.length; q++) { if (B.SWINGS[q][0] === prefs.swing) { swAmt = B.SWINGS[q][2]; } }
+        while (n++ < 16) {
+          var s0 = pat.dk % dd.len, sw = (bper === 2 && s0 % 4 === 2) ? swAmt * 0.5 : ((bper === 4 && s0 % 2 === 1) ? swAmt * 0.25 : 0);
+          var dt = patTime(pat.dk * du + sw) - now();
+          if (dt > 0.1) { break; }
+          pat.dk++;
+          if (dt < -0.05) { continue; }
+          for (i = 0; i < dd.steps.length; i++) {
+            if (dd.steps[i][1].indexOf(s0) < 0) { continue; }
+            var lv = 0.8;
+            try { lv = D.patVel ? D.patVel(dd.steps[i][0], s0 % 16, false) : 0.8; } catch (e) {}
+            try { UG.synth(dd.steps[i][0], UG.DRUM, ac.currentTime + Math.max(0, dt), lv * 0.75, B.bus(buses, "d", prefs.dvol) || undefined); } catch (e2) {}
+          }
+        }
+      }
+      function bassDef() { if (!prefs.bpat || !B.patterns) { return null; } var d = B.patById(B.patterns(meter), prefs.bpat); return d && d[0] === prefs.bpat && d[3] === meter ? d : null; }
+      function bassStep() {
+        var bd = bassDef(), ac = audioOk && UG.audio ? UG.audio.ctx : null, n = 0;
+        if (!bd || !ac) { return; }
+        var pt = bd[2], unit = meter / pt.length, per = pt.length / meter, spb = pat.back ? back.s.spb : 60 / bpm;
+        while (n++ < 16) {
+          var b = pat.bk * unit, ci = pat.bk % pt.length, dt = patTime(b + B.swingOf(prefs.swing, per, ci) * unit) - now();
+          if (dt > 0.1 || (pat.back && b >= back.s.beats - 1e-6)) { break; }
+          pat.bk++;
+          if (dt < -0.05) { continue; }
+          var c = pt.charAt(ci);
+          if (c === "-" && ci === 0) { c = "R"; }
+          if (c === "-") { continue; }
+          var left0 = Math.floor(b / meter + 1e-6) * meter + meter - b;
+          var m = B.tokNote(c, chordFor(b).ch, nextFor(b), left0), len = B.tokLen(pt, ci) * unit, when = ac.currentTime + Math.max(0, dt);
+          if (pat.bvo && UG.voiceStop) { try { UG.voiceStop(pat.bvo, when, 0.03); } catch (e0) {} }
+          try {
+            var bus = B.bus(buses, "b", prefs.bvol, false), smp = !!(UG.samples && UG.samples.enabled && UG.sampleReady && UG.sampleReady(33)), g = null;
+            if (bus) { g = ac.createGain(); g.gain.value = 0.85 * (smp ? 4 : 1); g.connect(bus); }
+            pat.bvo = UG.synth(m, 33, when, 0.85, g || undefined, 8) || null;
+            if (pat.bvo && UG.voiceStop) { UG.voiceStop(pat.bvo, when + len * spb * 0.92, 0.04); }
+          } catch (e) {}
+        }
+      }
+      function playOptions() {
+        var P = PI(), all = P ? P.PLAYS.slice() : [], mine = P ? P.myPatsLoad() : [], groups = [["chord", "和音"], ["arp", "アルペジオ"], ["pat", "演奏パターン"], ["my", "じぶんのパターン（ゴリラピアノ）"]], opts = "", gi, oi;
+        for (oi = 0; oi < mine.length; oi++) { all.push(["my:" + mine[oi].id, mine[oi].name, "my"]); }
+        for (gi = 0; gi < groups.length; gi++) {
+          var go = "";
+          for (oi = 0; oi < all.length; oi++) { if (all[oi][2] === groups[gi][0]) { go += '<option value="' + all[oi][0] + '"' + (prefs.spat === all[oi][0] ? " selected" : "") + '>' + escHtml(groups[gi][0] === "chord" ? "和音（1小節のばす）" : all[oi][1]) + '</option>'; } }
+          if (go) { opts += '<optgroup label="' + groups[gi][1] + '">' + go + '</optgroup>'; }
+        }
+        return opts;
+      }
+      function patPanel() {
+        var P = PI(), pl = P ? P.play(prefs.spat) : ["", "", "chord"], h = "", i, j;
+        if (!patOk()) { return '<p class="small">ゴリラピアノ・ゴリラベースが読みこめませんでした</p>'; }
+        h += '<div class="piano-row"><label class="piano-select">&#x1F3BC; <select data-yspat="1">' + playOptions() + '</select></label></div>' +
+          '<div class="piano-row"><button class="modal-btn" data-ya="srate"' + (pl[2] === "arp" ? "" : " disabled") + '>' + (prefs.srate === 16 ? "16分" : "8分") + '</button>' +
+          '<button class="modal-btn" data-ya="swing">ハネ: ' + ["なし", "軽く", "ハネ", "3連"][prefs.swing] + '</button>' +
+          '<button class="modal-btn" data-ya="sev">' + (prefs.sev ? "7th" : "3和音") + '</button></div>';
+        if (!back) {
+          h += '<div class="piano-opts">';
+          for (i = 0; i < 7; i++) {
+            var c = degChord(i), on = (cur && cur.d === i) || flashC[i] > 0, pn = pend && pend.d === i;
+            h += '<button class="modal-btn quiz-opt' + (on ? " active" : "") + '" data-ya="ch:' + i + '"' + (pn ? ' style="outline:2px solid #ff9f43;"' : "") + '>' + escHtml(c.name) + '<br><span class="small">' + (i + 1) + '</span></button>';
+          }
+          var co = '<option value=""' + (prefs.cprog ? "" : " selected") + '>コード進行なし（コードのボタンで）</option>', gs = B.CPROG_GROUPS || [];
+          for (i = 0; i < gs.length; i++) {
+            co += '<optgroup label="' + escHtml(gs[i][0]) + '">';
+            for (j = 0; j < gs[i][1].length; j++) { var cp = B.cprog(gs[i][1][j]); if (cp) { co += '<option value="' + cp[0] + '"' + (cp[0] === prefs.cprog ? " selected" : "") + '>' + escHtml(cp[1]) + '</option>'; } }
+            co += '</optgroup>';
+          }
+          h += '</div><div class="piano-row"><label class="piano-select">&#x1F501; <select data-ycprog="1">' + co + '</select></label></div>';
+        }
+        return h + '<p class="small" style="margin:4px 0 0;">' + (back ? "コードは曲に合わせて変わります。" : prefs.cprog ? "コードは進行どおり1小節ごとに変わります。" : "パターン中にコードのボタン（キー 1〜7）を押すと、次の小節の頭で変わります。") +
+          ' キー・スケールは「弾き方」のタブ。鍵盤はそのまま弾けます</p>';
+      }
+      function bandPanel() {
+        var D = window.UGDrum, l = [], dopt = '<option value=""' + (prefs.drum ? "" : " selected") + '>ドラムなし</option>', grp = "", bopt = '<option value=""' + (prefs.bpat ? "" : " selected") + '>ベースなし</option>', h = "", i, j;
+        try { l = D && D.patternList ? D.patternList() : []; } catch (e) {}
+        for (i = 0; i < l.length; i++) {
+          if (l[i].kind !== "loop" || l[i].len !== (meter === 3 ? 12 : 16)) { continue; }
+          if (l[i].group !== grp) { dopt += (grp ? '</optgroup>' : "") + '<optgroup label="' + escHtml(l[i].group) + '">'; grp = l[i].group; }
+          dopt += '<option value="' + escHtml(l[i].id) + '"' + (l[i].id === prefs.drum ? " selected" : "") + '>' + escHtml(l[i].name) + '</option>';
+        }
+        dopt += grp ? '</optgroup>' : "";
+        if (B.patterns) {
+          var gs = B.patGroups(B.patterns(meter));
+          for (i = 0; i < gs.length; i++) {
+            bopt += '<optgroup label="' + escHtml(gs[i][0]) + '">';
+            for (j = 0; j < gs[i][1].length; j++) { var p0 = gs[i][1][j]; if (p0[3] === meter) { bopt += '<option value="' + p0[0] + '"' + (p0[0] === prefs.bpat ? " selected" : "") + '>' + escHtml(p0[1]) + '</option>'; } }
+            bopt += '</optgroup>';
+          }
+        }
+        h += '<div class="piano-row"><label class="piano-select">&#x1F941; <select data-ydrum="1">' + dopt + '</select></label></div>' +
+          '<div class="piano-row"><label class="piano-select">&#x1F3B8; <select data-ybpat="1">' + bopt + '</select></label></div>';
+        var vols = [["y", "&#x1F39B;&#xFE0F; シンセ"], ["b", "&#x1F3B8; ベース"], ["d", "&#x1F941; ドラム"]];
+        for (i = 0; i < 3; i++) { h += '<div class="piano-row"><span>' + vols[i][1] + '</span><button class="modal-btn" data-ya="' + vols[i][0] + 'vol:-">－</button><span>' + prefs[vols[i][0] + "vol"] + '%</span><button class="modal-btn" data-ya="' + vols[i][0] + 'vol:+">＋</button></div>'; }
+        return h + '<p class="small" style="margin:4px 0 0;">▶ パターンのあいだ、ドラムとベースもいっしょに鳴ります</p>';
+      }
       // --- パネル ---
       var METRO = B.METRO_ICON || "&#x23F1;&#xFE0F;";
       function edited() { if (!prefs.edited) { prefs.edited = true; } save(); }
@@ -619,8 +838,24 @@
         if (v === "rec") { recToggle(); }
         else if (v === "play") { playToggle(); }
         else if (v === "metro") { metro = !metro; prefs.metro = metro; save(); render(); }
-        else if (v === "bpmdown" || v === "bpmup") { if (rec || back) { return; } bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5))); prefs.bpm = bpm; save(); render(); }
-        else if (/^tab:/.test(v)) { prefs.tab = v.substring(4) === "play" ? "play" : "sound"; save(); render(); }
+        else if (v === "bpmdown" || v === "bpmup") { if (rec || back) { return; } var pcb = pat ? (now() - pat.t0) * bpm / 60 : 0; bpm = Math.max(40, Math.min(240, bpm + (v === "bpmup" ? 5 : -5))); if (pat) { pat.t0 = now() - pcb * 60 / bpm; } prefs.bpm = bpm; save(); render(); }
+        else if (/^tab:/.test(v)) { var tb = v.substring(4); prefs.tab = ["play", "pat", "band"].indexOf(tb) >= 0 ? tb : "sound"; save(); render(); }
+        // §329: パターン
+        else if (v === "pat") { patToggle(); }
+        else if (/^ch:\d$/.test(v)) { setChord(Number(v.charAt(3))); }
+        else if (/^spat:/.test(v)) { prefs.spat = PI() ? PI().play(v.substring(5))[0] : "up"; save(); if (pat) { patRetime(); } render(); }
+        else if (v === "srate") { prefs.srate = prefs.srate === 16 ? 8 : 16; save(); if (pat) { patRetime(); } render(); }
+        else if (v === "swing") { prefs.swing = (prefs.swing + 1) % 4; save(); render(); }
+        else if (v === "sev") { prefs.sev = !prefs.sev; save(); if (cur && cur.d >= 0) { cur = degChord(cur.d); } render(); }
+        else if (/^cprog:/.test(v)) { prefs.cprog = B.cprog(v.substring(6)) ? v.substring(6) : ""; save(); render(); }
+        else if (/^drum:/.test(v)) { prefs.drum = v.substring(5); drumCache = null; save(); if (pat) { patRetime(); drumInit(); } render(); }
+        else if (/^bpat:/.test(v)) { prefs.bpat = v.substring(5); save(); if (pat) { patRetime(); if (audioOk) { try { UG.loadSamples([33]); } catch (e1) {} } } render(); }
+        else if (/^[ybd]vol:[+-]$/.test(v)) {
+          var vk = v.charAt(0) + "vol";
+          prefs[vk] = Math.max(0, Math.min(SYN_VOL_MAX, prefs[vk] + (v.charAt(5) === "+" ? SYN_VOL_STEP : -SYN_VOL_STEP)));
+          save(); if (B.bus && audioOk) { B.bus(buses, v.charAt(0), prefs[vk], false); }
+          render();
+        }
         else if (/^preset:/.test(v)) { allOff(); var pr = synPreset(v.substring(7)); prefs.preset = pr.id; prefs.patch = patch = pr.patch; prefs.edited = false; prefs.mine = ""; save(); render(); }
         else if (v === "mysave") {
           var my = synMyLoad(), nm = prefs.mine || ("じぶんの音 " + (my.length + 1));
@@ -642,8 +877,8 @@
         else if (v === "mono") { allOff(); patch.mono = !patch.mono; edited(); render(); }
         else if (/^view:/.test(v)) { allOff(); prefs.view = v.substring(5) === "pad" ? "pad" : "keys"; save(); render(); }
         else if (v === "octdown" || v === "octup") { allOff(); prefs.oct = Math.max(-2, Math.min(1, prefs.oct + (v === "octup" ? 1 : -1))); save(); render(); }
-        else if (v === "keydown" || v === "keyup") { allOff(); prefs.key = (prefs.key + (v === "keyup" ? 1 : 11)) % 12; save(); render(); }
-        else if (/^scale:/.test(v)) { allOff(); prefs.scale = B.scale(v.substring(6))[0]; save(); render(); }
+        else if (v === "keydown" || v === "keyup") { allOff(); prefs.key = (prefs.key + (v === "keyup" ? 1 : 11)) % 12; save(); if (cur && cur.d >= 0 && patOk()) { cur = degChord(cur.d); } render(); }
+        else if (/^scale:/.test(v)) { allOff(); prefs.scale = B.scale(v.substring(6))[0]; save(); if (cur && cur.d >= 0 && patOk()) { cur = degChord(cur.d); } render(); }
         else if (/^names:/.test(v)) { names = prefs.names = synOpt(SYN_NAMES, v.substring(6))[0]; save(); render(); }
       }
       // 秒・Hz は小数、ほかは 0〜100
@@ -652,14 +887,21 @@
         if (!panel) { return; }
         var html = "", i, j;
         html += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ya="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
-          '<button class="modal-btn' + (play ? " piano-rec-on" : "") + '" data-ya="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button></div>' +
+          '<button class="modal-btn' + (play ? " piano-rec-on" : "") + '" data-ya="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button>' +
+          '<button class="modal-btn' + (pat ? " piano-rec-on" : "") + '" data-ya="pat">' + (pat ? "&#x23F9;&#xFE0F; パターン" : "&#x25B6;&#xFE0F; パターン") + '</button></div>' +
           (back ? '<div class="piano-row"><button class="modal-btn" data-ya="back"' + (rec ? " disabled" : "") + '>' + (bk && !play && !rec ? "&#x23F9;&#xFE0F; 伴奏をとめる" : "&#x1F3B8; 伴奏だけ鳴らす") + '</button>' +
             '<button class="modal-btn" data-ya="metro" title="録音のメトロノーム">' + METRO + ' ' + (metro ? "ON" : "OFF") + '</button></div>' +
             '<p class="small" style="margin:4px 0 0;">&#x1F3B8; 伴奏: ' + escHtml(back.name) + '（BPM ' + back.seq.bpm + '・' + back.seq.meter + '拍子）</p>' :
           '<div class="piano-row"><button class="modal-btn" data-ya="bpmdown">&minus;</button><span>BPM ' + bpm + '</span><button class="modal-btn" data-ya="bpmup">&#xFF0B;</button>' +
           '<button class="modal-btn" data-ya="metro" title="録音のメトロノーム">' + METRO + ' ' + (metro ? "ON" : "OFF") + '</button></div>');
-        html += '<div class="piano-row"><button class="modal-btn' + (prefs.tab === "sound" ? " piano-rec-on" : "") + '" data-ya="tab:sound">音色</button><button class="modal-btn' + (prefs.tab === "play" ? " piano-rec-on" : "") + '" data-ya="tab:play">弾き方</button></div>';
-        if (prefs.tab === "play") {
+        // §329: タブ（音色・弾き方・パターン・バンド。伴奏の曲のときはバンドなし）
+        var tbs = back ? [["sound", "音色"], ["play", "弾き方"], ["pat", "パターン"]] : [["sound", "音色"], ["play", "弾き方"], ["pat", "パターン"], ["band", "バンド"]], tab = prefs.tab === "band" && back ? "sound" : prefs.tab;
+        html += '<div class="piano-row">';
+        for (i = 0; i < tbs.length; i++) { html += '<button class="modal-btn' + (tab === tbs[i][0] ? " piano-rec-on" : "") + '" data-ya="tab:' + tbs[i][0] + '">' + tbs[i][1] + '</button>'; }
+        html += '</div>';
+        if (tab === "pat") { html += patPanel(); }
+        else if (tab === "band") { html += bandPanel(); }
+        else if (tab === "play") {
           html += '<div class="piano-row">';
           for (i = 0; i < SYN_VIEWS.length; i++) { html += '<button class="modal-btn' + (prefs.view === SYN_VIEWS[i][0] ? " piano-rec-on" : "") + '" data-ya="view:' + SYN_VIEWS[i][0] + '">' + SYN_VIEWS[i][1] + '</button>'; }
           html += '<button class="modal-btn' + (prefs.land ? " piano-rec-on" : "") + '" data-ya="land">&#x1F4F1; ' + (prefs.land ? "たて向き" : "よこ向き") + '</button></div>';
@@ -716,6 +958,12 @@
         for (i = 0; i < bs.length; i++) { bs[i].onclick = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(ev.currentTarget.getAttribute("data-ya")); }; }
         var sel = panel.querySelector ? panel.querySelector("select[data-yscale]") : null;
         if (sel) { sel.onchange = function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action("scale:" + ev.currentTarget.value); }; }
+        // §329
+        var ysels = [["yspat", "spat:"], ["ycprog", "cprog:"], ["ydrum", "drum:"], ["ybpat", "bpat:"]];
+        for (i = 0; i < ysels.length; i++) {
+          var ys = panel.querySelector ? panel.querySelector("select[data-" + ysels[i][0] + "]") : null;
+          if (ys) { ys.onchange = (function (pre) { return function (ev) { if (ev.currentTarget.blur) { ev.currentTarget.blur(); } action(pre + ev.currentTarget.value); }; })(ysels[i][1]); }
+        }
         // つまみ: 動かしているあいだは数字だけ書きかえる（パネルを作りなおすと、つまみがはなれるので）
         var rs = panel.querySelectorAll ? panel.querySelectorAll("input[data-yk]") : [];
         for (i = 0; i < rs.length; i++) {
@@ -822,6 +1070,8 @@
           frame++;
           if (bk) { backStep(); }
           arpStep();
+          if (pat) { patStep(); if (pat) { drumStep(); bassStep(); } } // §329
+          for (var fc in flashC) { if (flashC.hasOwnProperty(fc) && flashC[fc] > 0) { flashC[fc]--; } }
           if (play) {
             var pb = playBeat(), last = 0, i;
             while (play && play.idx < play.notes.length && play.notes[play.idx][0] <= pb) {
@@ -848,6 +1098,7 @@
           hudText(ctx, "BPM " + bpm, W - 8, hy, "right");
           if (rec) { var rb = recBeat(); text(ctx, rb < 0 ? String(Math.ceil(-rb)) : "● REC " + (Math.floor(rb / meter) + 1) + "小節・" + rec.notes.length + "音", W / 2, SYN_LAND ? 6 : 26, 13, "#ff6b6b"); }
           else if (play && !SYN_LAND) { text(ctx, "再生中…", W / 2, 26, 12, "#ffffff"); }
+          else if (pat) { text(ctx, "🎼 " + patChordText(), W / 2, SYN_LAND ? 6 : 26, 13, "#ffd166"); } // §329
           if (prefs.view === "pad") { drawPad(ctx); return; }
           drawXY(ctx);
           drawKeyboard(ctx);

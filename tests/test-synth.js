@@ -119,5 +119,34 @@ module.exports = function () {
     "my sounds: saved by name (same name overwrites, blank gets a number), up to 12", my.map(function (x) { return x.name; }));
   var e8 = yrun({ preset: "lead" }, 10, function (fr, e) { if (fr === 1) { e.store[Y.MY_KEY] = JSON.stringify([{ name: "ぼくの音", patch: Y.preset("bell").patch }]); } });
   ok(e8.window.UGSynth.myLoad()[0].patch.oct2 === 1 && e8.window.UGSynth.myLoad().length === 1, "my sounds load back from storage");
+  // --- §329: ▶ パターン（ピアノと同じ鳴らし方・コード進行・コードのボタンで次の小節から・バンド）---
+  function yHooked(prefs) {
+    var e = H.load({ patch: function (src, file) {
+      if (file === "arcade-synth.js") { src = src.split("      function now() { return frame / 60; }").join("      function now() { return frame / 60; } window.__yp = function () { return { pat: pat, cur: cur, pend: pend, prefs: prefs, act: action, text: patChordText }; };"); }
+      return src;
+    } });
+    e.store[Y.PREFS_KEY] = JSON.stringify(prefs);
+    return e;
+  }
+  var e9 = yHooked({ bpm: 120, spat: "chord", cprog: "pop4", preset: "pad" }), PV = W.UGPiano, BB = W.UGBass, cp9 = BB.cprog("pop4")[2], txt9 = "";
+  e9.run("synth", { config: {} }, 4 + 122 + 240, function (f) {
+    var h = e9.window.__yp; if (!h) { return; }
+    if (f === 2) { e9.key("keydown", "z"); e9.key("keyup", "z"); }
+    if (f === 4) { e9.key("keydown", "b"); e9.key("keyup", "b"); }
+    if (f === 200) { txt9 = h().text(); }
+    if (f === 4 + 122 + 226) { e9.key("keydown", "z"); e9.key("keyup", "z"); }
+  });
+  var tk9 = JSON.parse(e9.store[Y.TAKES_KEY] || "[]")[0], n9 = tk9 ? tk9.notes : [];
+  var at9 = function (b) { return n9.filter(function (n) { return Math.abs(n[0] - b) < 0.01; }).map(function (n) { return n[2]; }).sort().join(); };
+  ok(n9.length === 6 && at9(0) === PV.voicing(BB.chord(0, cp9[0], "major", false), false).sort().join() && at9(4) === PV.voicing(BB.chord(0, cp9[1], "major", false), false).sort().join() && Math.abs(n9[0][1] - 4) < 0.01 && txt9 === "C → G",
+    "▶ pattern with the synth: a chord a bar following the progression, recorded with the take; the screen shows now → next", [n9, txt9]);
+  var e10 = yHooked({ bpm: 120, spat: "chord" }), c10 = [];
+  e10.run("synth", { config: {} }, 250, function (f) {
+    var h = e10.window.__yp; if (!h) { return; }
+    if (f === 2) { e10.key("keydown", "b"); e10.key("keyup", "b"); }
+    if (f === 40) { e10.key("keydown", "5"); e10.key("keyup", "5"); c10.push(h().cur ? h().cur.name : "-", h().pend ? h().pend.name : "-"); }
+    if (f === 160) { c10.push(h().cur.name); h().act("tab:band"); c10.push(h().prefs.tab); }
+  });
+  ok(c10.join() === "C,G,G,band", "chord buttons (keys 1–7) change the chord at the next bar; the band tab is there", c10);
   void U;
 };

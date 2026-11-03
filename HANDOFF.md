@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.32** |
+| 現在バージョン | **v2.33** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.33] 🎛️ ゴリラシンセのパターン演奏**（§329）: ゴリラピアノの §323 と同じ作り（`pat` / `patStep` / `drumStep` / `bassStep`）。鳴らし方・和音の並べ方は `UGPiano`（PLAYS・barSteps・voicing・play）。コードのボタン 7つ（キー 1〜7・`setChord` → `pend`）。タブ sound / play / pat / band。**§328 の機能の一覧表**（GAME_DESIGN）の次は 2（ギター・ストリングス・ホーンにじぶんのパターン）
 - **[v2.32] 🪕 ウクレレの種類ごとの音の太さ・余韻**（§327）: `fs_uke_concert` / `fs_uke_tenor` を EQ と余韻のばし（vscoconv の `eq` / `slow`）で作りなおし。`MELODY_UKE_TYPES` に鳴らす長さ・残す長さ（`setUkeType` が 140 の HOLD / TRIM を変える）
 - **[v2.31] 🏠 はじめの画面へ・ウクレレの種類をすぐ変える**（§326）: 遊んでいるあいだの下のボタンに `data-sys="top"`（setup のあるゲームだけ。スコアは report）。`api.restart(config)` で同じゲームを新しい設定ではじめなおす（setTimeout のあと）。ウクレレのフリー演奏のパネルに種類の選択（`ukeTypeChange`）。パッドの鳴らし方と ▶ パターンは同じ設定（ウクレレ `padP.play` = `padP.ppat`・ピアノ `padArp` = `ppat`）
 - **[v2.30] 🪕 ウクレレの種類**（§325）: `ukePrefs().type`。`ukeApplyType` が `UGMelody.setUkeType`（140 のファイルを fs_ukulele / fs_uke_concert / fs_uke_tenor / acoustic_guitar_nylon に）と `UKE_BARI`（バリトン 5）を決める。バリトンは `ukeMidi`・`ukeVoice(Pos)`・`ukeDetect(More)` の3か所で 5 半音ずらし、辞書は `ukeDict`（バリトンでは null）。パッドはバリトン用に別キー。コンサート・テナー・バリトンの単音の自由な録音は見つかっていない（見つかったら差しかえ）。**次は §321 の 3（楽器ゲームの機能の一覧表）**
