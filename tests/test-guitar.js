@@ -300,6 +300,21 @@ module.exports = function () {
   ok(bn.snd.join() === "62" && bn.b.join() === "63,64,62" && G.bendOf(0, 40) === 0 && G.bendOf(40, 40) === 2 && G.bendOf(-100, 40) === 2,
     "bending: moving the pressed finger across the neck raises the pitch (a small wobble is ignored), a whole step at most, back down when it returns; the string does not change", [bn.snd, bn.b]);
 
+  // --- §296: ブリッジミュート（短く。エレキはミュートのサンプル）---
+  function mrun(voice) {
+    var e = H.load(), r = { snd: [], stops: [] };
+    e.store[G.PREFS_KEY] = JSON.stringify({ view: "chord", voice: voice, pmute: true });
+    e.run("guitar", { config: {} }, 6, function (fr) {
+      var M = e.window.UGMelody;
+      if (fr === 1) { var s0 = M.synth, v0 = M.voiceStop; M.synth = function (m, pg) { if (pg !== M.DRUM) { r.snd.push(pg); } return s0.apply(M, arguments); }; M.voiceStop = function (h, t) { r.stops.push(t - h.ac.currentTime); return v0.apply(M, arguments); }; }
+      if (fr === 2) { e.key("keydown", "j"); e.key("keyup", "j"); }
+    });
+    return r;
+  }
+  var pmE = mrun("dist"), pmA = mrun("steel");
+  ok(pmE.snd.length === 5 && pmE.snd.every(function (p) { return p === 28; }) && pmA.snd.every(function (p) { return p === 25; }) && pmA.stops.length >= 5 && pmA.stops.slice(-5).every(function (d) { return d > 0.1 && d < 0.3; }),
+    "palm mute: notes are cut short; electric voices use the muted-guitar sample", [pmE.snd, pmA.stops]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });

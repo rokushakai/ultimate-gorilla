@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.02** |
+| 現在バージョン | **v2.03** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.03] 🤚 ブリッジミュート**（§296）: `prefs.pmute` のとき `playString` が `GTR_PMUTE`（0.16 秒）で止める（エレキは `GTR_MUTED` のサンプル）。録音はすぐ閉じる
 - **[v2.02] 🎸 チョーキング**（§295）: 指（press / held）に bd（上げている半音）を持ち、`bendTo(指, 弦, gtrBendOf(縦の量, 行の高さ))` が `voiceBend(h, cur + bd)`。`strVo[sn].cur` は押さえた音のまま（録音も）
 - **[v2.01] 🎹 じぶんのコード**（§294）: `prefs.myc`（{ r, q, b } ×7）・`prefs.myOn`。`chordObj(d)`（`UGBass.songChord(gtrSlotName(枠))`）と `shapeOf(d)`（`gtrShapeQ`）がコードと押さえ方の入り口（ベースのパターン・コード進行もこれを使う）。設定は `gtrPrefsFull()` で枠を整える
 - **[v2.00] 🎶 ストロークの強さ**（§293）: `gtrVelocity(速さ)`（0.4〜1.2）。指の press / picks に f（フレーム）を持ち、`swipeVel(p, y)` で倍率を出す。ベースの右手も同じ式
@@ -251,7 +252,7 @@
   - 保存形式 `lines: [{ t, words: [{ w, t, kind }] }]`。t はゲーム内時刻 → 将来メロディ録音と合わせる
   - 読み取り口 `window.UGLyrics`。テスト 215項目
 - **[v0.78] 品質整備: 自動テスト・ファイル分割**（§159）
-  - **作業後は必ず `node tests/run.js`**（929項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
+  - **作業後は必ず `node tests/run.js`**（930項目）。失敗したら最後の行の `UG_SEED=<種>` をつけて再実行すると同じ乱数で再現できる。内部状態は tests 側の `patch` でのぞく（本体にテスト用コードを入れない）
   - 別ファイルのゲームは `window.UGArcade.internal` のみ使う。メロディの読み取り口は `window.UGMelody`
 - **[v0.77] メロディくずし テンポ同期・伴奏ドラム・コード進行**（§158）
   - `MELODY_BPMS` / `MELODY_GROOVES`（16ステップ）/ `MELODY_PROGRESSIONS`。create 内 `quantDelay` / `scheduleAcc`（60ms先読み）/ `curChord` / `melodySnapToChord`

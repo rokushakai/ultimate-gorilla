@@ -27,6 +27,7 @@
     ["clean", "&#x26A1; クリーン", 27, true, 1], ["crunch", "&#x1F525; クランチ", 29, true, 0.8], ["dist", "&#x1F918; ディストーション", 30, true, 0.7]
   ];
   var GTR_MUTED = 28; // エレキのカッティングはミュートのサンプル
+  var GTR_PMUTE = 0.16; // §296: ブリッジミュートの音の長さ（秒）
   function gtrOpt(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } } return list[0]; }
 
   // ---------- 単音の画面（上が1弦）----------
@@ -243,7 +244,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -597,7 +598,7 @@
   }
 
   // コードは 1〜7、J ダウン・K アップ・L カッティング、Z 録音・X 再生
-  var GTR_KEYS = { "1": "c0", "2": "c1", "3": "c2", "4": "c3", "5": "c4", "6": "c5", "7": "c6", j: "down", k: "up", l: "cut", z: "rec", x: "play", b: "pat" };
+  var GTR_KEYS = { "1": "c0", "2": "c1", "3": "c2", "4": "c3", "5": "c4", "6": "c5", "7": "c6", j: "down", k: "up", l: "cut", z: "rec", x: "play", b: "pat", m: "pmute" };
 
   I.register({
     id: "guitar",
@@ -607,7 +608,7 @@
     name: "ゴリラギター",
     icon: "&#x1F918;",
     desc: "6本の弦で1音ずつ弾く「単音」と、コードをかき鳴らす「ストローク」。アコギもエレキも",
-    help: "🎮 リズムゲームは ⬇ の音符で左（J）・⬆ で右（K）/ 単音: フレットをタップ（同じ弦ですべらせるとスライド）/ ストローク: 弦の上を指で下（手前の6弦）から上へ ＝ ダウン・上から下 ＝ アップ、コードは手前の段か 1〜7 / J ダウン・K アップ・L カッティング / B パターン / Z 録音 / X 再生 / P一時停止",
+    help: "🎮 リズムゲームは ⬇ の音符で左（J）・⬆ で右（K）/ 単音: フレットをタップ（同じ弦ですべらせるとスライド）/ ストローク: 弦の上を指で下（手前の6弦）から上へ ＝ ダウン・上から下 ＝ アップ、コードは手前の段か 1〜7 / J ダウン・K アップ・L カッティング・M ブリッジミュート / B パターン / Z 録音 / X 再生 / P一時停止",
     controls: [],
     keys: GTR_KEYS,
     setup: gtrSetup,
@@ -656,11 +657,16 @@
       var strVo = [null, null, null, null, null, null], vib = [0, 0, 0, 0, 0, 0];
       // 弦 sn で音 m を鳴らす（dt: いまから何秒あと）
       function playString(sn, m, lv, dt) {
-        var ac = audioOk && UG.audio ? UG.audio.ctx : null, when = ac && dt ? ac.currentTime + dt : 0;
+        var ac = audioOk && UG.audio ? UG.audio.ctx : null, when = ac && dt ? ac.currentTime + dt : 0, pm = prefs.pmute;
         stopString(sn, when);
-        strVo[sn] = { h: sound(m, lv, when), m: m, cur: m };
-        vib[sn] = 30;
+        // §296: ブリッジミュート ＝ 短く（エレキはミュートのサンプル）
+        strVo[sn] = { h: sound(m, pm ? lv * 0.9 : lv, when, null, pm && voiceDef()[3] ? GTR_MUTED : 0), m: m, cur: m };
+        vib[sn] = pm ? 10 : 30;
         recOn("s" + sn, m, lv, dt || 0);
+        if (pm) {
+          if (strVo[sn].h && ac) { stopVoice(strVo[sn].h, (when || ac.currentTime) + GTR_PMUTE, 0.04); }
+          recOff("s" + sn);
+        }
       }
       function stopString(sn, when) {
         if (!strVo[sn]) { return; }
@@ -995,6 +1001,7 @@
         else if (/^scale:/.test(v)) { prefs.scale = B.scale(v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
+        else if (v === "pmute") { prefs.pmute = !prefs.pmute; gtrSavePrefs(prefs); render(); } // §296
         else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; applyLand(); gtrSavePrefs(prefs); render(); }
         else if (v === "cpos") { var cl = prefs.cgrid ? ["near", "far"] : ["near", "far", "side"]; prefs.cpos = cl[(cl.indexOf(prefs.cpos) + 1) % cl.length]; gtrSavePrefs(prefs); applyLand(); render(); }
         else if (v === "cgrid") { allOff(); prefs.cgrid = !prefs.cgrid; gtrSavePrefs(prefs); applyLand(); render(); }
@@ -1063,7 +1070,8 @@
         var html = "", i;
         if (view === "chord") {
           html += '<div class="piano-row"><button class="modal-btn" data-ga="down">&#x2B07;&#xFE0F; ダウン</button><button class="modal-btn" data-ga="up">&#x2B06;&#xFE0F; アップ</button>' +
-            '<button class="modal-btn" data-ga="cut">&#x270B; カッティング</button></div>';
+            '<button class="modal-btn" data-ga="cut">&#x270B; カッティング</button>' +
+            '<button class="modal-btn' + (prefs.pmute ? " piano-rec-on" : "") + '" data-ga="pmute">&#x1F91A; ミュート ' + (prefs.pmute ? "ON" : "OFF") + '</button></div>';
         }
         html += '<div class="piano-row"><button class="modal-btn' + (rec ? " piano-rec-on" : "") + '" data-ga="rec">' + (rec ? "&#x23F9;&#xFE0F; 録音をとめる" : "&#x1F534; 録音") + '</button>' +
           '<button class="modal-btn' + (play ? " piano-rec-on" : "") + '" data-ga="play"' + (rec ? " disabled" : "") + '>' + (play ? "&#x23F9;&#xFE0F; とめる" : "&#x25B6;&#xFE0F; 再生") + '</button>' +
@@ -1117,7 +1125,8 @@
           if (view === "fret") {
             html += '<div class="piano-row"><button class="modal-btn" data-ga="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + GTR_COLS - 1) + " フレット" : "開放弦〜" + (GTR_COLS - 1) + " フレット") + '</span>' +
               '<button class="modal-btn" data-ga="posup">&#x25B6;</button></div>' +
-              '<div class="piano-row"><button class="modal-btn' + (prefs.pick ? " piano-rec-on" : "") + '" data-ga="pick">&#x270B; 右手で弾く: ' + (prefs.pick ? "ON" : "OFF") + '</button></div>' +
+              '<div class="piano-row"><button class="modal-btn' + (prefs.pick ? " piano-rec-on" : "") + '" data-ga="pick">&#x270B; 右手で弾く: ' + (prefs.pick ? "ON" : "OFF") + '</button>' +
+              '<button class="modal-btn' + (prefs.pmute ? " piano-rec-on" : "") + '" data-ga="pmute">&#x1F91A; ブリッジミュート: ' + (prefs.pmute ? "ON" : "OFF") + '</button></div>' +
               '<p class="small" style="margin:4px 0 0;">' + (prefs.pick ? "左手でフレットを押さえて（押さえただけでは鳴らない）、右の「右手」の所で弦をなぞる・タップすると鳴る。鳴っている弦の押さえる所を変えると音程も変わる" : "マスをタップするとすぐ鳴る") + '</p>';
           }
         }
@@ -1382,7 +1391,7 @@
 
   window.UGGuitar = {
     H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, MUTED: GTR_MUTED, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
-    vel: gtrVelocity, bendOf: gtrBendOf, PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
+    vel: gtrVelocity, bendOf: gtrBendOf, PMUTE: GTR_PMUTE, PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
     setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
     geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y, CMODE: GTR_CMODE, CREV: GTR_CREV, STRUM_X0: GTR_STRUM_X0, STRUM_X1: GTR_STRUM_X1 }; }, gridCol: gtrGridCol, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
     quality: gtrQuality, shape: gtrShape, shapeQ: gtrShapeQ, CTYPES: GTR_CTYPES, slotName: gtrSlotName, defaultSlots: gtrDefaultSlots, slotsClean: gtrSlotsClean, bus: gtrBus, name: gtrName, prefs: gtrPrefs, notesClean: gtrNotesClean,
