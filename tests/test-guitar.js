@@ -268,6 +268,23 @@ module.exports = function () {
   ok(vSlow.length === 5 && vFast.length === 5 && vSlow[0] < vFast[0] * 0.6 && G.vel(0) === 0.4 && G.vel(1000) === 1.2,
     "stroke strength: a slow swipe plays softer than a fast one", [vSlow, vFast]);
 
+  // --- §294: 自分でコードをならべる（sus4・add9・分数コード・パワーコードなど）---
+  function fq(pc, q, b) { return JSON.stringify(G.shapeQ(pc, q, b === undefined ? -1 : b).frets); }
+  ok(fq(2, "sus4") === "[null,null,0,2,3,3]" && fq(9, "sus2") === "[null,0,2,2,0,0]" && fq(4, "sus4") === "[0,2,2,2,0,0]" && fq(0, "add9") === "[null,3,2,0,3,0]" &&
+    fq(7, "maj", 11) === "[null,2,0,0,0,3]" && fq(2, "maj", 6) === "[2,null,0,2,3,2]" && fq(0, "maj", 4) === "[0,3,2,0,1,0]" && fq(4, "9") === "[null,7,6,7,7,7]" && fq(0, "pow") === "[null,3,5,5,null,null]" &&
+    G.slotName({ r: 7, q: "maj", b: 11 }) === "G/B" && G.slotName({ r: 10, q: "sus4", b: -1 }) === "B♭sus4" && G.slotName({ r: 9, q: "m7b5", b: -1 }) === "Am7(♭5)" &&
+    G.CTYPES.every(function (ct) { var n = G.slotName({ r: 2, q: ct[0], b: -1 }); return !!B.songChord(n, 0) && G.shapeQ(2, ct[0], -1).midis.filter(function (m) { return m !== null; }).length >= 2; }),
+    "custom chords: open sus/add9 shapes, slash chords put the bass on the 6th or 5th string (G/B, D/F#, C/E), barre 9 and power chords; every type has a name and a shape", [fq(7, "maj", 11), fq(4, "9"), fq(0, "pow")]);
+  var my = prun({ view: "chord", tab: "key", voice: "steel" }, 12, function (fr, e) {
+    if (fr === 3) { e.window.__gAct("myon"); e.key("keydown", "5"); e.key("keyup", "5"); }
+    if (fr === 5) { e.window.__gAct("myq:sus4"); e.window.__gAct("myb:11"); e.window.__gAct("myr:-"); }
+    if (fr === 8) { e.key("keydown", "j"); e.key("keyup", "j"); }
+  });
+  var myp = JSON.parse(my.e.store[G.PREFS_KEY]), myh = my.e.window.__gPanel(), myLast = my.snd.slice(-5);
+  ok(myp.myOn && myp.myEdit && myp.myc[4].r === 6 && myp.myc[4].q === "sus4" && myp.myc[4].b === 11 && myp.myc[0].r === 0 && myh.indexOf("F#sus4/B") > 0 && myh.indexOf('data-gmyq="1"') > 0 &&
+    myLast.join() === JSON.stringify(G.shapeQ(6, "sus4", 11).midis.filter(function (m) { return m !== null; })).replace(/[\[\]]/g, ""),
+    "the key tab edits the selected chord button (root, type, bass); strums use it", [myp.myc[4], myLast]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });
