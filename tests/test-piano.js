@@ -327,6 +327,11 @@ module.exports = function () {
     "piano voices include the pipe organ, xylophone and glockenspiel; the organ sustains while held and stops on release", [src18, stop18]);
   // §322: グランド・アップライト・エレピ（Wurlitzer）・CP80
   ok(P.VOICES.slice(0, 4).map(function (v) { return v[0]; }).join() === "0,1,4,2", "piano voices: grand, upright, electric piano, CP80", P.VOICES.map(function (v) { return v[0]; }));
+  // §330: v2.27 のコメントで消えていたチェレスタ・ビブラフォン・マリンバ・ハープも選べる（保存した設定もそのまま）
+  var e330 = H.load();
+  e330.store.ultimateGorillaPianoPrefsV1 = JSON.stringify({ prog: 46 });
+  ok(P.VOICES.map(function (v) { return v[0]; }).join() === "0,1,4,2,8,11,12,46,19,13,9" && e330.window.UGPiano.prefs().prog === 46,
+    "all 11 piano voices are selectable again (celesta, vibraphone, marimba, harp) and a saved choice is kept", P.VOICES.map(function (v) { return v[0]; }));
   // --- §323: ▶ パターン（コード進行・パッドで次の小節から・ハネ・ドラム・ベース）---
   var B = W.UGBass;
   ok(P.voicing(B.chord(0, 0, "major", false), false).join() === "60,64,67" && P.voicing(B.chord(0, 4, "major", true), true).join() === "55,59,62,65" && P.voicing(B.chord(9, 0, "major", false), false).join() === "57,61,64" &&

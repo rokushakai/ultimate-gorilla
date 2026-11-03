@@ -11735,3 +11735,75 @@ var COMPANION_TECHNIQUE2_DATA = {
 - コード: キー・スケール（いまのシンセの設定）・3和音/7th（`prefs.sev`）のダイアトニックコード 7つのボタン（キー 1〜7）。押すと **次の小節の頭** で変わる（コード進行はとける）。コード進行（14種類）も。シーケンサーの曲を伴奏にしているときは曲のコード
 - ハネ・🥁 バンド（ドラムのループ・ベースのパターン）・音量 3つ（🎛️ シンセ 100・🎸 ベース 100・🥁 ドラム 50）
 - パネルのタブ: 音色・弾き方・パターン・バンド（伴奏の曲のときは バンドなし）
+
+## §330 v2.34 — 🎛️ シンセ高度化プロジェクト（Phase 0: 安全確保・ルール・不具合・技術の選定・検証）
+
+### 方針（ユーザーの正式な指示・2026-11-04。ChatGPT と `HANDOFF_SYNTH_DAW_REPORT.md` を分析して決めたもの）
+- 目標: RPG の中に **VPS Avenger 2 級の音作り**ができるシンセを作り、将来の DAW ゲームでもそのまま音源として使う。**シンセの高度化を一時的に最優先**にする（§328 の予定は中止せず TODO に残す）
+- 既存のゲーム・楽器・シーケンサー・セーブデータをこわさない。`window.UGSynth` の外向きの約束と、旧 patch（v1）の音を保つ（**旧 patch を v2 に直しても、音量・音程・フィルター・エンベロープがなるべく変わらないこと** が最重要の互換条件）
+- 進め方: Phase 0（このセクション）→ 1 音のエンジンの整理（UGSynth 互換アダプター・Voice Manager・共通の時計）→ 2 patch v2 と基本機能 → 3 モジュレーションマトリクス → 4 エフェクト → 5 シーケンサーとの統合（WAV で音色と長さを保つ）→ 6 高度な合成 → 7 DAW のデータの形。Phase 8（DAW 本体）は今回はやらない
+- 大型改修のあいだの commit・push・公開は、ユーザーの許可をもらってから（CLAUDE.md）
+
+### 基準（ベースライン）
+- Git: `main`・HEAD `c78c306`（v2.33。レポートの対象と同じ）。作業を始めたとき、未コミットは `HANDOFF_SYNTH_DAW_REPORT.md` だけ
+- テスト: `node tests/run.js` **1,019 項目すべて OK**（Phase 0 のあと 1,022 項目）
+
+### 技術ルールの改訂
+- CLAUDE.md の技術ルールを「A. 既存コード（ES5・ビルドなしのまま）」と「B. 新しいシンセのコード（ES2015+・TypeScript・npm・ビルド・AudioWorklet・WASM・ライブラリ可）」に分けた。どのファイルにどちらが当てはまるかを書いた
+- 出力の決まり（下の検証の結果から）: ビルドの結果は **ふつうの `<script>` で読める1ファイル（IIFE）** にして commit する。ワークレットは **data: URL**、WASM は **base64 埋めこみ**。SharedArrayBuffer は使わない
+
+### file:// ・ localhost ・ HTTPS の検証（2026-11-04・実際に動かした結果）
+試作のページ（AudioWorklet で のこぎり波・WASM の足し算・ES モジュール）を、ヘッドレスの Chrome 156 と Edge 156（Windows）で開いた。
+
+| 読みこみ方 | file:// | http://localhost |
+|---|---|---|
+| AudioWorklet（`addModule("proc.js")` ファイル） | ✖ AbortError | ○ |
+| AudioWorklet（Blob URL） | ✖ AbortError（`blob:null`） | ○ |
+| AudioWorklet（**data: URL**） | **○**（オフライン・リアルタイムとも音が出た） | ○ |
+| WASM（**base64 → `WebAssembly.instantiate`**） | **○** | ○ |
+| WASM（`fetch("add.wasm")`） | ✖ Failed to fetch | ○ |
+| `<script type="module">` | ✖ 読めない | ○ |
+| SharedArrayBuffer | ✖（`crossOriginIsolated=false`） | ✖（見出しがないため。GitHub Pages も同じ見こみ） |
+
+- **未検証**: Safari（Mac・iPhone）・Firefox・Android の Chrome。HTTPS の GitHub Pages は localhost と同じ「安全な場所」なので同じ結果になる見こみだが、公開前に確かめる
+- 結論: 「1ファイルの IIFE ＋ data: URL のワークレット ＋ base64 の WASM」なら、file:// ・ localhost ・ HTTPS のどれでも同じ作りで動く（Chromium で確認）。Safari で data: URL のワークレットが使えない場合は、いまのノードの作り（フォールバック）で鳴らす
+
+### 技術の選定（Phase 0 の決定。Claude Code の提案。変えるときはここを直す）
+| 用途 | 採用 | 理由 | 見送り |
+|---|---|---|---|
+| 言語 | **TypeScript**（新しいシンセのコードだけ） | パラメーターの表・patch v2・Mod Matrix の型を間違えにくい | — |
+| ビルド | **esbuild**（npm の開発用だけ。MIT） | 1ファイルの IIFE を作れる・速い・設定が少ない。Vite は開発サーバーが便利だが、出力が ES モジュール前提なので今回はいらない | Vite |
+| 音のエンジン | **自前**（Web Audio のノード → 必要な所だけ AudioWorklet） | `UGMelody` の AudioContext・既存の時刻の予約・OfflineAudioContext と合わせやすい | **Tone.js**（独自の時計とコンテキストの管理が既存の作りと重なる・大きい） |
+| 重い DSP（Phase 6） | **自前の AudioWorklet（TypeScript）** を先に試作。Faust（→ WASM）は高品質なフィルター（ラダー）で試作して比べる | data: URL で file:// でも動く。Faust はツールが増えるので、効果が確かめられたら使う | — |
+| 画面 | **ライブラリなし**（いまの DOM ＋ canvas・色） | いまのダークネイビーと金色の見た目・スマホの操作に合わせる | UI ライブラリ |
+| MIDI | **入れない**（Web MIDI は標準・SMF の書き出しはある） | 必要になったら選ぶ | — |
+| FFT・解析 | **入れない**（AnalyserNode と自前の小さな FFT） | 可視化・テストの数値で足りる | — |
+
+### 見つけた不具合
+- **B1（直した・v2.34）**: ゴリラピアノの音色の一覧で、チェレスタ・ビブラフォン・マリンバ・ハープが選べなかった（v2.27 から）。`arcade-piano.js:38` のコメント `// §322 v2.27` が、同じ行の後ろの4つを消していた。コメントを行の終わりに移した。保存した設定がもう ピアノ（0）に書きかわっていた人は、もとの音色に戻らない（もう一度選びなおす）
+  - ほかのファイルにも、同じ形（コメントのうしろに設定が残っている行）がないか調べた → なし
+- **B2（Phase 1 で直す）**: シンセで、のばす長さを先に決めて鳴らすとき（`UGSynth.note`: シーケンサー・▶ パターン・パターンの録音の再生）、**のばす長さが立ち上がり（a）以下だと、はなす時刻まで無音になり、はなした瞬間に音が飛びこむ**。`synRelease` の `cancelScheduledValues(t)` が、t ちょうどに終わる立ち上がりの予定まで消すため。例: 「ふわっとパッド」（a = 0.8 秒）の 0.8 秒以下の音
+- **B3（Phase 5 で直す）**: シーケンサーの WAV 書き出しで、音の長さ（`sec`）とシンセの音色（`patch`）が失われる（`ukeSeqRec`）
+- **B4（Phase 1 で直す）**: ▶ パターン・伴奏・バンドの時計がゲームのフレーム（`frame / 60`）なので、描画がとどこおるとテンポがずれる。タブが裏に回ると止まる
+
+### 旧データの見本と、旧音色の基準
+- `tests/fixtures/synth-v1-data.json`（`node tools/synth-fixtures.js` で作成）: patch v1 のパラメーターの表・12 のプリセット・じぶんの音色（範囲外や知らない値をまぜた見本）・テイク・シーケンサーのシンセのトラック（`ynotes` と patch）と、それを v2.33 のコードで読みこんだ結果。`tests/test-synth.js` が、いまのコードの読みこみ結果と同じかを確かめる（2 項目）
+- `tests/fixtures/synth-v1-golden.json`（`node tools/synth-golden.js --write` で作成）: **本物の Chrome で、12 のプリセット × 音 36・60・84 を書き出した数値**（50ms ごとの RMS 50 個・ピーク・はじめの 0.5 秒と 0.5〜0.8 秒の音の重心）。強さ 0.8・1.0 秒のばす（B2 に当たらない長さ）。`node tools/synth-golden.js` でくらべる（RMS・重心・ピークがそれぞれ 3% 以内なら同じとみなす）。同じエンジンで2回書き出して一致することを確かめた
+- 旧データを v2 に直すときは、この2つが「変わっていない」ことを確かめる（音を変えるつもりの変更は、理由を書いて基準を書きなおす）
+
+### 変更する範囲（予定）
+| Phase | 直すファイル | さわらないもの |
+|---|---|---|
+| 1 | 新: `synth/src/*.ts`（エンジン・Voice Manager・時計）・`synth/dist/ugsynth-engine.js`・`package.json`・`tools/build-synth`。直す: `arcade-synth.js`（エンジンを呼ぶ所だけ・UGSynth 互換）・`index.html`（1行足す）・`tests/harness.js`（読むファイルに足す） | RPG（`script.js`）・ほかの楽器ゲーム（時計の共通化は1ゲームずつ別の作業で） |
+| 2〜4 | `synth/src/`・`arcade-synth.js`（画面のタブ） | ほかのゲーム |
+| 5 | `arcade-ukulele.js`（`ukeSeqRec`・WAV）・`arcade-melody.js`（`renderWav`） | 曲の保存の形（足すだけ） |
+| 6〜7 | `synth/src/`（ワークレット）・データの形の文書 | 既存の保存の形 |
+
+### 回帰テストの計画
+1. 毎回: `node tests/run.js`（いまの 1,022 項目）がすべて OK
+2. シンセの音を変える作業: `node tools/synth-golden.js` が OK（旧音色が変わっていない）
+3. 新しいモジュールには、Node で動く単体テスト（パラメーターの範囲・v1 → v2 の変換・Voice Manager の割りあて・Mod Matrix の計算）と、Chrome での書き出しのテスト（音の長さ・音量・重心）を足す
+4. 画面と耳での確認: Claude Code は音を聴けないので、Phase ごとに **ユーザー向けの試聴の手順** を書く（どのプリセットで・どの鍵盤を・何を聴きくらべるか）。iPhone の実機で試していないものは「未検証」と書く
+
+### 試聴の手順（v2.34）
+- ゴリラピアノ → 音色の一覧に「✨ チェレスタ」「🔔 ビブラフォン」「🪵 マリンバ」「🎼 ハープ」が出て、選ぶとそれぞれの音で鳴ること

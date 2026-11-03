@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.33** |
+| 現在バージョン | **v2.34** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.34] 🎛️ シンセ高度化プロジェクト Phase 0**（§330）: **いちばん先にやるのはシンセの高度化**（Phase 1〜7・TODO の先頭）。CLAUDE.md の技術ルールを A（既存コード・ES5）と B（新しいシンセのコード・TS・ビルド・ワークレット・WASM 可）に分けた。file:// では ES モジュール・Blob URL のワークレット・fetch が使えず、data: URL のワークレットと base64 の WASM は使えた（Chrome・Edge 156 で確認。Safari・Firefox は未検証）。ピアノの音色の不具合（B1）を直した。旧データの見本 `tests/fixtures/synth-v1-data.json` と旧音色の基準 `tests/fixtures/synth-v1-golden.json`（`node tools/synth-golden.js` でくらべる・Chrome が要る）。不具合 B2〜B4 は Phase 1・5 で直す。**大型改修のあいだの commit・push は、ユーザーの許可をもらってから**。`HANDOFF_SYNTH_DAW_REPORT.md`（v2.33 の調査レポート）は消さない
 - **[v2.33] 🎛️ ゴリラシンセのパターン演奏**（§329）: ゴリラピアノの §323 と同じ作り（`pat` / `patStep` / `drumStep` / `bassStep`）。鳴らし方・和音の並べ方は `UGPiano`（PLAYS・barSteps・voicing・play）。コードのボタン 7つ（キー 1〜7・`setChord` → `pend`）。タブ sound / play / pat / band。**§328 の機能の一覧表**（GAME_DESIGN）の次は 2（ギター・ストリングス・ホーンにじぶんのパターン）
 - **[v2.32] 🪕 ウクレレの種類ごとの音の太さ・余韻**（§327）: `fs_uke_concert` / `fs_uke_tenor` を EQ と余韻のばし（vscoconv の `eq` / `slow`）で作りなおし。`MELODY_UKE_TYPES` に鳴らす長さ・残す長さ（`setUkeType` が 140 の HOLD / TRIM を変える）
 - **[v2.31] 🏠 はじめの画面へ・ウクレレの種類をすぐ変える**（§326）: 遊んでいるあいだの下のボタンに `data-sys="top"`（setup のあるゲームだけ。スコアは report）。`api.restart(config)` で同じゲームを新しい設定ではじめなおす（setTimeout のあと）。ウクレレのフリー演奏のパネルに種類の選択（`ukeTypeChange`）。パッドの鳴らし方と ▶ パターンは同じ設定（ウクレレ `padP.play` = `padP.ppat`・ピアノ `padArp` = `ppat`）

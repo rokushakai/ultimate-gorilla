@@ -148,5 +148,16 @@ module.exports = function () {
     if (f === 160) { c10.push(h().cur.name); h().act("tab:band"); c10.push(h().prefs.tab); }
   });
   ok(c10.join() === "C,G,G,band", "chord buttons (keys 1–7) change the chord at the next bar; the band tab is there", c10);
+  // --- §330 Phase 0: patch v1 の旧データの見本（tests/fixtures/synth-v1-data.json）が、いまと同じに読みこめる ---
+  var FX = JSON.parse(require("fs").readFileSync(require("path").join(H.ROOT, "tests", "fixtures", "synth-v1-data.json"), "utf8"));
+  var e11 = H.load(), Y11 = e11.window.UGSynth, U11 = e11.window.UGUkulele;
+  e11.store[Y11.MY_KEY] = JSON.stringify(FX.raw.my);
+  e11.store[Y11.TAKES_KEY] = JSON.stringify([FX.raw.take]);
+  var same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+  ok(same(Y11.PARAMS.map(function (d) { return d.slice(0, 5); }), FX.params) && FX.presets.every(function (p) { return same(Y11.preset(p.id).patch, p.patch); }),
+    "patch v1: the 12 presets and every parameter range are unchanged from the v2.33 snapshot");
+  ok(same(Y11.myLoad(), FX.clean.my) && same(Y11.takesLoad()[0], FX.clean.take) && same(U11.tracksClean({ xs: ["x1"], x1: FX.raw.ytrack }).x1, FX.clean.ytrack) &&
+    FX.clean.my.every(function (m) { return same(Y11.patchClean(m.patch), m.patch); }),
+    "patch v1: old my sounds, takes and the sequencer's synth track load exactly as in v2.33 (and cleaning twice changes nothing)");
   void U;
 };

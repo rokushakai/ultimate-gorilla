@@ -1,0 +1,738 @@
+{
+ "note": "§330 patch v1 の旧データの見本と、v2.33 のコードで読みこんだ結果（tools/synth-fixtures.js で作成）",
+ "params": [
+  [
+   "uni",
+   1,
+   3,
+   1,
+   1
+  ],
+  [
+   "mix",
+   0,
+   1,
+   0,
+   0.05
+  ],
+  [
+   "det",
+   0,
+   50,
+   7,
+   1
+  ],
+  [
+   "oct2",
+   -1,
+   1,
+   0,
+   1
+  ],
+  [
+   "sub",
+   0,
+   1,
+   0,
+   0.05
+  ],
+  [
+   "cut",
+   0,
+   1,
+   0.7,
+   0.01
+  ],
+  [
+   "res",
+   0,
+   1,
+   0.1,
+   0.01
+  ],
+  [
+   "env",
+   0,
+   1,
+   0.3,
+   0.01
+  ],
+  [
+   "fd",
+   0.02,
+   2,
+   0.4,
+   0.01
+  ],
+  [
+   "fs",
+   0,
+   1,
+   0.5,
+   0.01
+  ],
+  [
+   "a",
+   0.002,
+   2,
+   0.01,
+   0.002
+  ],
+  [
+   "d",
+   0.02,
+   2,
+   0.3,
+   0.01
+  ],
+  [
+   "s",
+   0,
+   1,
+   0.7,
+   0.01
+  ],
+  [
+   "r",
+   0.02,
+   3,
+   0.3,
+   0.01
+  ],
+  [
+   "lrate",
+   0.1,
+   12,
+   5,
+   0.1
+  ],
+  [
+   "ldep",
+   0,
+   1,
+   0,
+   0.01
+  ],
+  [
+   "glide",
+   0,
+   0.5,
+   0,
+   0.01
+  ],
+  [
+   "vol",
+   0,
+   1,
+   0.8,
+   0.05
+  ]
+ ],
+ "presets": [
+  {
+   "id": "lead",
+   "patch": {
+    "w1": "saw",
+    "w2": "saw",
+    "lto": "pitch",
+    "mono": true,
+    "uni": 1,
+    "mix": 0.6,
+    "det": 12,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.62,
+    "res": 0.25,
+    "env": 0.35,
+    "fd": 0.3,
+    "fs": 0.4,
+    "a": 0.005,
+    "d": 0.2,
+    "s": 0.8,
+    "r": 0.15,
+    "lrate": 5.5,
+    "ldep": 0.12,
+    "glide": 0.06,
+    "vol": 0.75
+   }
+  },
+  {
+   "id": "chip",
+   "patch": {
+    "w1": "square",
+    "w2": "off",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 1,
+    "mix": 0,
+    "det": 7,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 1,
+    "res": 0,
+    "env": 0,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.002,
+    "d": 0.1,
+    "s": 0.9,
+    "r": 0.05,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.6
+   }
+  },
+  {
+   "id": "pad",
+   "patch": {
+    "w1": "saw",
+    "w2": "saw",
+    "lto": "cut",
+    "mono": false,
+    "uni": 3,
+    "mix": 0.8,
+    "det": 18,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.45,
+    "res": 0.15,
+    "env": 0.2,
+    "fd": 1.2,
+    "fs": 0.6,
+    "a": 0.8,
+    "d": 1,
+    "s": 0.8,
+    "r": 1.5,
+    "lrate": 0.3,
+    "ldep": 0.25,
+    "glide": 0,
+    "vol": 0.7
+   }
+  },
+  {
+   "id": "spad",
+   "patch": {
+    "w1": "saw",
+    "w2": "off",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 3,
+    "mix": 0,
+    "det": 7,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.55,
+    "res": 0.05,
+    "env": 0.15,
+    "fd": 1,
+    "fs": 0.7,
+    "a": 0.35,
+    "d": 0.5,
+    "s": 0.85,
+    "r": 0.9,
+    "lrate": 5,
+    "ldep": 0.06,
+    "glide": 0,
+    "vol": 0.7
+   }
+  },
+  {
+   "id": "brass",
+   "patch": {
+    "w1": "saw",
+    "w2": "saw",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 1,
+    "mix": 0.5,
+    "det": 8,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.35,
+    "res": 0.2,
+    "env": 0.55,
+    "fd": 0.35,
+    "fs": 0.45,
+    "a": 0.06,
+    "d": 0.3,
+    "s": 0.75,
+    "r": 0.2,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.75
+   }
+  },
+  {
+   "id": "bass",
+   "patch": {
+    "w1": "square",
+    "w2": "saw",
+    "lto": "pitch",
+    "mono": true,
+    "uni": 1,
+    "mix": 0.5,
+    "det": 5,
+    "oct2": 0,
+    "sub": 0.6,
+    "cut": 0.3,
+    "res": 0.2,
+    "env": 0.35,
+    "fd": 0.2,
+    "fs": 0.2,
+    "a": 0.003,
+    "d": 0.25,
+    "s": 0.7,
+    "r": 0.08,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.85
+   }
+  },
+  {
+   "id": "acid",
+   "patch": {
+    "w1": "saw",
+    "w2": "off",
+    "lto": "pitch",
+    "mono": true,
+    "uni": 1,
+    "mix": 0,
+    "det": 7,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.22,
+    "res": 0.8,
+    "env": 0.7,
+    "fd": 0.18,
+    "fs": 0.1,
+    "a": 0.003,
+    "d": 0.2,
+    "s": 0.5,
+    "r": 0.08,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0.08,
+    "vol": 0.7
+   }
+  },
+  {
+   "id": "pluck",
+   "patch": {
+    "w1": "saw",
+    "w2": "square",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 1,
+    "mix": 0.3,
+    "det": 6,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.3,
+    "res": 0.3,
+    "env": 0.7,
+    "fd": 0.15,
+    "fs": 0,
+    "a": 0.002,
+    "d": 0.35,
+    "s": 0,
+    "r": 0.3,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.8
+   }
+  },
+  {
+   "id": "bell",
+   "patch": {
+    "w1": "sine",
+    "w2": "sine",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 1,
+    "mix": 0.5,
+    "det": 3,
+    "oct2": 1,
+    "sub": 0,
+    "cut": 1,
+    "res": 0.1,
+    "env": 0,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.002,
+    "d": 1.5,
+    "s": 0,
+    "r": 1.2,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.8
+   }
+  },
+  {
+   "id": "organ",
+   "patch": {
+    "w1": "sine",
+    "w2": "sine",
+    "lto": "amp",
+    "mono": false,
+    "uni": 1,
+    "mix": 0.7,
+    "det": 0,
+    "oct2": 1,
+    "sub": 0.5,
+    "cut": 0.9,
+    "res": 0.1,
+    "env": 0,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.01,
+    "d": 0.1,
+    "s": 1,
+    "r": 0.08,
+    "lrate": 6,
+    "ldep": 0.08,
+    "glide": 0,
+    "vol": 0.7
+   }
+  },
+  {
+   "id": "wobble",
+   "patch": {
+    "w1": "saw",
+    "w2": "square",
+    "lto": "cut",
+    "mono": true,
+    "uni": 1,
+    "mix": 0.5,
+    "det": 10,
+    "oct2": 0,
+    "sub": 0.4,
+    "cut": 0.3,
+    "res": 0.5,
+    "env": 0,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.01,
+    "d": 0.2,
+    "s": 1,
+    "r": 0.1,
+    "lrate": 3,
+    "ldep": 0.8,
+    "glide": 0,
+    "vol": 0.75
+   }
+  },
+  {
+   "id": "soft",
+   "patch": {
+    "w1": "sine",
+    "w2": "tri",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 1,
+    "mix": 0.3,
+    "det": 5,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.8,
+    "res": 0.1,
+    "env": 0,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.08,
+    "d": 0.3,
+    "s": 0.9,
+    "r": 0.4,
+    "lrate": 5,
+    "ldep": 0.1,
+    "glide": 0,
+    "vol": 0.8
+   }
+  }
+ ],
+ "raw": {
+  "my": [
+   {
+    "name": "ぼくのリード",
+    "patch": {
+     "w1": "square",
+     "w2": "saw",
+     "mix": 0.4,
+     "det": 9,
+     "cut": 0.5,
+     "res": 0.3,
+     "mono": true,
+     "glide": 0.1
+    }
+   },
+   {
+    "name": "こわれた",
+    "patch": {
+     "w1": "nope",
+     "w2": "tri",
+     "uni": 7,
+     "cut": -3,
+     "res": 2,
+     "a": 99,
+     "lto": "x",
+     "det": "12",
+     "vol": null
+    }
+   },
+   {
+    "name": "",
+    "patch": {}
+   }
+  ],
+  "take": {
+   "id": 4,
+   "name": "テイク 4",
+   "bpm": 128,
+   "meter": 4,
+   "pname": "アシッドベース",
+   "patch": {
+    "w1": "saw",
+    "cut": 0.22,
+    "res": 0.8,
+    "env": 0.7,
+    "mono": true
+   },
+   "notes": [
+    [
+     0,
+     0.25,
+     36
+    ],
+    [
+     0.5,
+     0.25,
+     48,
+     0.6
+    ],
+    [
+     1,
+     1,
+     43
+    ]
+   ]
+  },
+  "ytrack": {
+   "preset": "ynotes",
+   "kind": "notes",
+   "name": "シンセ打ち込み",
+   "vol": 70,
+   "prog": 81,
+   "patch": {
+    "w1": "saw",
+    "w2": "saw",
+    "uni": 3,
+    "det": 18,
+    "cut": 0.45,
+    "a": 0.8,
+    "r": 1.5
+   },
+   "notes": [
+    [
+     0,
+     4,
+     60
+    ],
+    [
+     4,
+     4,
+     67,
+     0.5
+    ]
+   ]
+  }
+ },
+ "clean": {
+  "my": [
+   {
+    "name": "ぼくのリード",
+    "patch": {
+     "w1": "square",
+     "w2": "saw",
+     "lto": "pitch",
+     "mono": true,
+     "uni": 1,
+     "mix": 0.4,
+     "det": 9,
+     "oct2": 0,
+     "sub": 0,
+     "cut": 0.5,
+     "res": 0.3,
+     "env": 0.3,
+     "fd": 0.4,
+     "fs": 0.5,
+     "a": 0.01,
+     "d": 0.3,
+     "s": 0.7,
+     "r": 0.3,
+     "lrate": 5,
+     "ldep": 0,
+     "glide": 0.1,
+     "vol": 0.8
+    }
+   },
+   {
+    "name": "こわれた",
+    "patch": {
+     "w1": "saw",
+     "w2": "tri",
+     "lto": "pitch",
+     "mono": false,
+     "uni": 3,
+     "mix": 0,
+     "det": 12,
+     "oct2": 0,
+     "sub": 0,
+     "cut": 0,
+     "res": 1,
+     "env": 0.3,
+     "fd": 0.4,
+     "fs": 0.5,
+     "a": 2,
+     "d": 0.3,
+     "s": 0.7,
+     "r": 0.3,
+     "lrate": 5,
+     "ldep": 0,
+     "glide": 0,
+     "vol": 0.8
+    }
+   },
+   {
+    "name": "じぶんの音",
+    "patch": {
+     "w1": "saw",
+     "w2": "off",
+     "lto": "pitch",
+     "mono": false,
+     "uni": 1,
+     "mix": 0,
+     "det": 7,
+     "oct2": 0,
+     "sub": 0,
+     "cut": 0.7,
+     "res": 0.1,
+     "env": 0.3,
+     "fd": 0.4,
+     "fs": 0.5,
+     "a": 0.01,
+     "d": 0.3,
+     "s": 0.7,
+     "r": 0.3,
+     "lrate": 5,
+     "ldep": 0,
+     "glide": 0,
+     "vol": 0.8
+    }
+   }
+  ],
+  "take": {
+   "id": 4,
+   "name": "テイク 4",
+   "bpm": 128,
+   "meter": 4,
+   "pname": "アシッドベース",
+   "patch": {
+    "w1": "saw",
+    "w2": "off",
+    "lto": "pitch",
+    "mono": true,
+    "uni": 1,
+    "mix": 0,
+    "det": 7,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.22,
+    "res": 0.8,
+    "env": 0.7,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.01,
+    "d": 0.3,
+    "s": 0.7,
+    "r": 0.3,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.8
+   },
+   "notes": [
+    [
+     0,
+     0.25,
+     36
+    ],
+    [
+     0.5,
+     0.25,
+     48,
+     0.6
+    ],
+    [
+     1,
+     1,
+     43
+    ]
+   ]
+  },
+  "ytrack": {
+   "preset": "ynotes",
+   "kind": "notes",
+   "name": "シンセ打ち込み",
+   "on": true,
+   "mute": false,
+   "solo": false,
+   "genre": false,
+   "vol": 70,
+   "pan": 0,
+   "prog": 81,
+   "play": "hold",
+   "oct": 0,
+   "notes": [
+    [
+     0,
+     4,
+     60
+    ],
+    [
+     4,
+     4,
+     67,
+     0.5
+    ]
+   ],
+   "patch": {
+    "w1": "saw",
+    "w2": "saw",
+    "lto": "pitch",
+    "mono": false,
+    "uni": 3,
+    "mix": 0,
+    "det": 18,
+    "oct2": 0,
+    "sub": 0,
+    "cut": 0.45,
+    "res": 0.1,
+    "env": 0.3,
+    "fd": 0.4,
+    "fs": 0.5,
+    "a": 0.8,
+    "d": 0.3,
+    "s": 0.7,
+    "r": 1.5,
+    "lrate": 5,
+    "ldep": 0,
+    "glide": 0,
+    "vol": 0.8
+   }
+  }
+ }
+}
