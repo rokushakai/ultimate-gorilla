@@ -315,6 +315,19 @@ module.exports = function () {
   ok(pmE.snd.length === 5 && pmE.snd.every(function (p) { return p === 28; }) && pmA.snd.every(function (p) { return p === 25; }) && pmA.stops.length >= 5 && pmA.stops.slice(-5).every(function (d) { return d > 0.1 && d < 0.3; }),
     "palm mute: notes are cut short; electric voices use the muted-guitar sample", [pmE.snd, pmA.stops]);
 
+  // --- §297: パワーコード・カポ ---
+  var pw = grun({ view: "chord", voice: "steel", power: true }, 6, function (fr, e) { if (fr === 2) { e.key("keydown", "j"); e.key("keyup", "j"); } });
+  var cp = grun({ view: "chord", voice: "steel", key: 2, capo: 2 }, 6, function (fr, e) { if (fr === 2) { e.key("keydown", "j"); e.key("keyup", "j"); } });
+  var cpk = { snd: [] }, ecp = H.load();
+  ecp.store[G.PREFS_KEY] = JSON.stringify({ view: "fret", pick: true, capo: 3, voice: "steel" });
+  ecp.run("guitar", { config: {} }, 6, function (fr) {
+    var Gw = ecp.window.UGGuitar, M = ecp.window.UGMelody, px = Gw.geom().PICK_X + 12;
+    if (fr === 1) { var s0 = M.synth; M.synth = function (m, pg) { if (pg === 25) { cpk.snd.push(m); } return s0.apply(M, arguments); }; }
+    if (fr === 2) { ecp.ptr("down", px, Gw.rowLineY(0), 1); ecp.ptr("up", px, Gw.rowLineY(0), 1); }
+  });
+  ok(pw.snd.join() === "48@25,55@25,60@25" && cp.snd.join() === "50@25,54@25,57@25,62@25,66@25" && cpk.snd.join() === "67",
+    "power chords play root-5th-octave; capo 2 in D uses the C shape two frets up; with the capo an unpressed string sounds at the capo fret", [pw.snd, cp.snd, cpk.snd]);
+
   // --- §289: 音色は本物のサンプル（エレキも）。エレキのカッティングはミュートのサンプル ---
   var M9 = W.UGMelody, files9 = require("fs"), vOk = G.VOICES.every(function (v) { var f = M9.sampleFiles[v[2]]; return f && files9.existsSync(require("path").join(__dirname, "..", "samples", f + ".js")); });
   var cutE = grun({ view: "chord", voice: "dist" }, 8, function (fr, e) { if (fr === 2) { e.key("keydown", "l"); e.key("keyup", "l"); } });

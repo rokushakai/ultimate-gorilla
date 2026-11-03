@@ -28,6 +28,7 @@
   ];
   var GTR_MUTED = 28; // エレキのカッティングはミュートのサンプル
   var GTR_PMUTE = 0.16; // §296: ブリッジミュートの音の長さ（秒）
+  var GTR_CAPO_MAX = 7; // §297
   function gtrOpt(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i]; } } return list[0]; }
 
   // ---------- 単音の画面（上が1弦）----------
@@ -244,7 +245,7 @@
       view: p.view === "chord" ? "chord" : "fret", voice: gtrOpt(GTR_VOICES, p.voice)[0],
       names: p.names === "cde" || p.names === "none" ? p.names : "do",
       pos: pos >= 0 && pos <= GTR_POS_MAX ? pos : 0, key: key >= 0 && key <= 11 ? key : 0,
-      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
+      scale: B ? B.scale(p.scale)[0] : "major", sev: !!p.sev, pick: !!p.pick, land: !!p.land, cgrid: !!p.cgrid, myOn: !!p.myOn, pmute: !!p.pmute, power: !!p.power, capo: Math.round(Number(p.capo)) >= 0 && Math.round(Number(p.capo)) <= 7 ? Math.round(Number(p.capo)) : 0, cpos: p.cpos === "far" || p.cpos === "side" ? p.cpos : "near", tab: ["play", "pat", "band", "key"].indexOf(p.tab) >= 0 ? p.tab : "play",
       bpm: Math.max(40, Math.min(240, Math.round(Number(p.bpm) || 100))), metro: p.metro !== false,
       pat: gtrPat(p.pat)[0], swing: B ? gtrOpt(B.SWINGS, Number(p.swing))[0] : 0, cprog: B && B.cprog(p.cprog) ? p.cprog : "",
       drum: typeof p.drum === "string" && /^[gdp]:[A-Za-z0-9_-]{1,32}$/.test(p.drum) ? p.drum : "",
@@ -691,9 +692,21 @@
         if (prefs.myOn) { var c = B.songChord(gtrSlotName(prefs.myc[d]), prefs.key); if (c) { c.deg = ""; return c; } }
         return B.chord(prefs.key, d, prefs.scale, prefs.sev);
       }
-      function shapeOf(d) { var sl = prefs.myc[d]; return prefs.myOn ? gtrShapeQ(sl.r, sl.q, sl.b) : gtrShape(B.chord(prefs.key, d, prefs.scale, prefs.sev), prefs.sev); }
+      // §297: パワーコード・カポ（カポ c ＝ c 半音下の形を c フレット上で）。capo には c を残す（押さえ方の数字はカポからの数）
+      function modShape(pc, q, b) {
+        var c = prefs.capo, sh = gtrShapeQ((pc - c + 12) % 12, prefs.power ? "pow" : q, b >= 0 ? (b - c + 12) % 12 : -1);
+        if (!c) { sh.capo = 0; return sh; }
+        var fr = sh.frets.map(function (f) { return f === null ? null : f + c; });
+        return { frets: fr, midis: fr.map(function (f, sn) { return f === null ? null : GTR_OPEN[sn] + f; }), q: sh.q, capo: c };
+      }
+      function shapeOf(d) {
+        var sl = prefs.myc[d], ch;
+        if (prefs.myOn) { return modShape(sl.r, sl.q, sl.b); }
+        ch = B.chord(prefs.key, d, prefs.scale, prefs.sev);
+        return modShape(gtrPc(ch.r), gtrQuality(ch, prefs.sev), -1);
+      }
       function curChord() { var k = songIdx(); return k >= 0 ? back.chords[k].ch : chordObj(chordD); }
-      function shapeAt(beat) { var k = songIdx(beat); return k >= 0 ? gtrShape(back.chords[k].ch, gtrSongSev(back.chords[k].name)) : shapeOf(chordD); }
+      function shapeAt(beat) { var k = songIdx(beat), sc; if (k < 0) { return shapeOf(chordD); } sc = back.chords[k]; return modShape(gtrPc(sc.ch.r), gtrQuality(sc.ch, gtrSongSev(sc.name)), -1); }
       function curShape() { return shapeAt(); }
       function setChord(d) {
         if (back) { return; }
@@ -1001,6 +1014,8 @@
         else if (/^scale:/.test(v)) { prefs.scale = B.scale(v.substring(6))[0]; gtrSavePrefs(prefs); render(); }
         else if (v === "down" || v === "up" || v === "cut") { strum(v); }
         else if (v === "pat") { patToggle(); }
+        else if (v === "power") { prefs.power = !prefs.power; gtrSavePrefs(prefs); render(); } // §297
+        else if (v === "capo:-" || v === "capo:+") { prefs.capo = Math.max(0, Math.min(GTR_CAPO_MAX, prefs.capo + (v === "capo:+" ? 1 : -1))); gtrSavePrefs(prefs); render(); }
         else if (v === "pmute") { prefs.pmute = !prefs.pmute; gtrSavePrefs(prefs); render(); } // §296
         else if (v === "pick") { allOff(); held = {}; picks = {}; prefs.pick = !prefs.pick; applyLand(); gtrSavePrefs(prefs); render(); }
         else if (v === "cpos") { var cl = prefs.cgrid ? ["near", "far"] : ["near", "far", "side"]; prefs.cpos = cl[(cl.indexOf(prefs.cpos) + 1) % cl.length]; gtrSavePrefs(prefs); applyLand(); render(); }
@@ -1122,6 +1137,8 @@
             (prefs.land && B.gripRows ? B.gripRows("ga") : "") + '<div class="piano-opts">';
           for (i = 0; i < GTR_VOICES.length; i++) { html += '<button class="modal-btn quiz-opt' + (prefs.voice === GTR_VOICES[i][0] ? " active" : "") + '" data-ga="voice:' + GTR_VOICES[i][0] + '">' + GTR_VOICES[i][1] + '</button>'; }
           html += '</div>';
+          html += '<div class="piano-row">' + (view === "chord" ? '<button class="modal-btn' + (prefs.power ? " piano-rec-on" : "") + '" data-ga="power">&#x26A1; パワーコード: ' + (prefs.power ? "ON" : "OFF") + '</button>' : "") +
+            '<button class="modal-btn" data-ga="capo:-">&#x25C0;</button><span>カポ ' + (prefs.capo ? prefs.capo + "フレット" : "なし") + '</span><button class="modal-btn" data-ga="capo:+">&#x25B6;</button></div>';
           if (view === "fret") {
             html += '<div class="piano-row"><button class="modal-btn" data-ga="posdown">&#x25C0;</button><span>' + (prefs.pos ? prefs.pos + "〜" + (prefs.pos + GTR_COLS - 1) + " フレット" : "開放弦〜" + (GTR_COLS - 1) + " フレット") + '</span>' +
               '<button class="modal-btn" data-ga="posup">&#x25B6;</button></div>' +
@@ -1151,7 +1168,7 @@
       var held = {}, picks = {};
       function fretOf(sn) { var f = 0, k; for (k in held) { if (held.hasOwnProperty(k) && held[k].sn === sn && held[k].f > f) { f = held[k].f; } } return f; }
       function heldOn(sn) { for (var k in held) { if (held.hasOwnProperty(k) && held[k].sn === sn) { return true; } } return false; }
-      function pickNote(sn) { return GTR_OPEN[sn] + fretOf(sn); }
+      function pickNote(sn) { return GTR_OPEN[sn] + Math.max(fretOf(sn), prefs.capo); } // §297: 押さえていない弦はカポの音
       // 左手を変えたとき、鳴っている弦は音程を変える（ハンマリング・スライド）。指がぜんぶはなれたら止める（ミュート）
       function heldChanged(sn, lifted) {
         if (!strVo[sn]) { return; }
@@ -1220,6 +1237,8 @@
           }
           if (GTR_LAND) { text(ctx, String(6 - sn), GTR_MIRROR ? W - 5.5 : 5.5, sy, 10, "#ffd166"); } else { hudText(ctx, String(6 - sn), 1, sy - rh * 0.3, "left"); }
         }
+        // §297: カポ（そのフレットの手前の区切りに黒い棒。いちばん上に描く）
+        if (prefs.capo > prefs.pos && prefs.capo - prefs.pos < GTR_COLS) { var kx = gtrFretX(prefs.capo - prefs.pos); ctx.fillStyle = "#212529"; ctx.fillRect(kx - 4, top - 2, 8, bot - top + 4); ctx.strokeStyle = "#ced4da"; ctx.lineWidth = 1; ctx.strokeRect(kx - 4, top - 2, 8, bot - top + 4); }
       }
       function drawSong(ctx) {
         var k = songIdx(), side = GTR_CMODE === "side", r = side ? { x: GTR_SIDE_X, y: 12, w: GTR_SIDE_W, h: GTR_H - 16 } : { x: 4, y: GTR_CHORD_Y, w: W - 8, h: GTR_CHORD_H }, nx = k >= 0 ? back.chords[k + 1] : null;
@@ -1235,7 +1254,7 @@
           var x = 4 + (GTR_CREV ? 6 - i : i) * cw, sh = colShape(i); // §292: 左利きは右から
           ctx.fillStyle = i === chordD ? "#5a3a20" : (i % 2 ? "#3b2416" : "#33200f");
           ctx.fillRect(x, GTR_STRUM_Y, cw, rh * 6);
-          for (sn = 0; sn < 6; sn++) { var fx = sh.frets[sn]; text(ctx, fx === null ? "×" : String(fx), x + cw / 2, gtrStrumLineY(sn) - rh * 0.3, 8, fx === null ? "#ff8787" : "rgba(255,209,102,0.85)"); }
+          for (sn = 0; sn < 6; sn++) { var fx = sh.frets[sn]; text(ctx, fx === null ? "×" : String(fx - sh.capo), x + cw / 2, gtrStrumLineY(sn) - rh * 0.3, 8, fx === null ? "#ff8787" : "rgba(255,209,102,0.85)"); }
         }
         for (sn = 0; sn < 6; sn++) {
           var y = gtrStrumLineY(sn), th = (1.2 + (5 - sn) * 0.5) * 0.7, a = vib[sn] / 30 * 2;
@@ -1271,10 +1290,10 @@
           text(ctx, GTR_LAND ? (6 - sn) + " " + GTR_SNAME[sn] : (6 - sn) + "弦 " + GTR_SNAME[sn], X0 + (GTR_LAND ? 12 : 26), GTR_LAND ? y : y - 9, 8, "#adb5bd");
           ctx.fillStyle = fx === null ? "#c92a2a" : "#ffd166";
           ctx.beginPath(); ctx.arc(lx, ly0, rr, 0, Math.PI * 2); ctx.fill();
-          text(ctx, fx === null ? "×" : String(fx), lx, ly0, 10, "#14213d");
+          text(ctx, fx === null ? "×" : String(fx - sh.capo), lx, ly0, 10, "#14213d");
           if (fx !== null && names !== "none" && !GTR_LAND) { text(ctx, gtrName(sh.midis[sn], names), X1 - 16, y - 8, 8, "rgba(255,255,255,0.6)"); }
         }
-        if (!rec) { text(ctx, ch.name, W / 2, GTR_LAND ? 6 : 10, 14, "#ffd166"); }
+        if (!rec) { text(ctx, ch.name + (prefs.power ? "5" : "") + (prefs.capo ? "（カポ" + prefs.capo + "）" : ""), W / 2, GTR_LAND ? 6 : 10, 14, "#ffd166"); }
       }
       return {
         input: function (a, down) {
@@ -1391,7 +1410,7 @@
 
   window.UGGuitar = {
     H: GTR_H, OPEN: GTR_OPEN, VOICES: GTR_VOICES, MUTED: GTR_MUTED, VIEWS: GTR_VIEWS, COLS: GTR_COLS, BOARD_Y: GTR_BOARD_Y, STRUM_Y: GTR_STRUM_Y,
-    vel: gtrVelocity, bendOf: gtrBendOf, PMUTE: GTR_PMUTE, PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
+    vel: gtrVelocity, bendOf: gtrBendOf, PMUTE: GTR_PMUTE, CAPO_MAX: GTR_CAPO_MAX, PATS: GTR_PATS, pat: gtrPat, arpString: gtrArpString, vol: gtrVol, PREFS_KEY: GTR_PREFS_KEY, TAKES_KEY: GTR_TAKES_KEY, TAKES_MAX: GTR_TAKES_MAX, BOOST: GTR_BOOST,
     setPick: gtrSetPick, layout: gtrLayout, pickRow: gtrPickRow, rowLineY: gtrRowLineY, colX: gtrColX,
     geom: function () { return { PICK_X: GTR_PICK_X, PICK_R: GTR_PICK_R, BOARD_X: GTR_BOARD_X, BOARD_R: GTR_BOARD_R, BOARD_Y: GTR_BOARD_Y, BOARD_BOT: GTR_BOARD_BOT, COLS: GTR_COLS, H: GTR_H, MIRROR: GTR_MIRROR, STRUM_Y: GTR_STRUM_Y, STRUM_BOT: GTR_STRUM_BOT, CHORD_Y: GTR_CHORD_Y, CMODE: GTR_CMODE, CREV: GTR_CREV, STRUM_X0: GTR_STRUM_X0, STRUM_X1: GTR_STRUM_X1 }; }, gridCol: gtrGridCol, cellAt: gtrCellAt, cellRect: gtrCellRect, chordRect: gtrChordRect, chordAt: gtrChordAt, strumLineY: gtrStrumLineY, strumAt: gtrStrumAt, strumCross: gtrStrumCross,
     quality: gtrQuality, shape: gtrShape, shapeQ: gtrShapeQ, CTYPES: GTR_CTYPES, slotName: gtrSlotName, defaultSlots: gtrDefaultSlots, slotsClean: gtrSlotsClean, bus: gtrBus, name: gtrName, prefs: gtrPrefs, notesClean: gtrNotesClean,
