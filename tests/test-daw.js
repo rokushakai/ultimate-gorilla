@@ -186,4 +186,85 @@ module.exports = async function () {
   A.stop();
   D.reset();
   ok(JSON.stringify(env.store) === before, "playback writes nothing to localStorage");
+
+  // ================= 9A-3: ピアノロール（§341）=================
+  // --- データモデルの編集 ---
+  var pe = M.demoProject(0), ce = pe.tracks[0].clips[0], n0 = ce.notes.length;
+  ok(M.snap(250, 240, true) === 240 && M.snap(370, 240) === 480 && M.snap(-10, 480, true) === -480, "snap: floor and round to the grid");
+  var na = M.noteAdd(ce, 961.4, 62.2, 480, 0.8);
+  ok(na && ce.notes.length === n0 + 1 && na[0] === 961 && na[1] === 480 && na[2] === 62 && na[3] === 0.8 && ce.notes.indexOf(na) >= 0, "noteAdd: integer tick, pitch, length, velocity 0.8", na);
+  ok(ce.notes.every(function (n, i) { return i === 0 || ce.notes[i - 1][0] <= n[0]; }), "notes stay sorted by tick after add");
+  var nb = M.noteAdd(ce, ce.len + 500, 200, 9999, 3);
+  ok(nb[0] === ce.len - 1 && nb[1] === 1 && nb[2] === 127 && nb[3] === 1, "noteAdd clamps into the clip (start < len, end ≤ len) and to MIDI/velocity ranges", nb);
+  M.noteDelete(ce, nb);
+  M.noteSet(ce, na, { t: ce.len - 100, m: 70 });
+  ok(na[0] === ce.len - 480 && na[1] === 480 && na[2] === 70, "noteSet move keeps the length and stays inside the clip", na);
+  M.noteSet(ce, na, { d: 99999 });
+  ok(na[0] + na[1] === ce.len, "noteSet length is cut at the clip end", na);
+  M.noteSet(ce, na, { d: 0 });
+  ok(na[1] === 1, "noteSet length is at least 1 tick when set");
+  ok(M.noteDelete(ce, na) && ce.notes.length === n0 && !M.noteDelete(ce, na), "noteDelete removes exactly that note once");
+  var cOff = { type: "midi", start: 0, len: 960, offset: 480, notes: [] }, no = M.noteAdd(cOff, 0, 60, 480);
+  ok(no[0] === 480 && no[1] === 480, "offset is respected: clip-relative tick starts at offset", no);
+  ok(JSON.stringify(M.clean(JSON.parse(JSON.stringify(pe)))) === JSON.stringify(pe), "edited project still round-trips through clean()");
+
+  // --- 画面のピアノロール（編集 → 再生への反映）---
+  D.reset();
+  var rootR = H.makeEl("div");
+  A.start("daw", rootR, {});
+  var pr = D.project(), lead = pr.tracks[0], cA = lead.clips[0], cB = lead.clips[1], nA = cA.notes.length;
+  ok(D.openRoll(cA.id) === true && D.roll().clip === cA.id && D.state().view === "roll", "tapping a clip opens its piano roll");
+  var rh = rootR.innerHTML;
+  ok(rh.indexOf("pr-wrap") >= 0 && (rh.match(/class="pr-note/g) || []).length === nA && rh.indexOf("まだ保存できません") >= 0 && rh.indexOf("もどる") >= 0, "piano roll shows the notes, the not-saved warning and the back button");
+  ok((rh.match(/class="pr-key[" ]/g) || []).length === D.ROLL.HI - D.ROLL.LO + 1 && rh.indexOf(">C4<") >= 0, "keyboard rows C1–C7 with names");
+  var E1 = D.edit;
+  var add1 = E1.add(4 * PPQ + 480, 84);
+  ok(add1 && cA.notes.length === nA + 1 && add1[0] === 4 * PPQ + 480 && add1[1] === 480 && add1[2] === 84 && D.roll().sel === add1 && D.roll().undo.length === 1, "edit.add: grid-length note, selected, one undo step");
+  ok(rootR.innerHTML.indexOf("pr-sel") >= 0 && rootR.innerHTML.indexOf("pr-handle") >= 0, "the selected note shows the length handle");
+  E1.set(add1, { t: 6 * PPQ, m: 86 });
+  ok(add1[0] === 6 * PPQ && add1[2] === 86 && D.roll().undo.length === 2, "edit.set moves pitch and start");
+  E1.set(add1, { d: 960 });
+  ok(add1[1] === 960 && D.roll().undo.length === 3, "edit.set changes the length");
+  E1.set(add1, { d: 960 });
+  ok(D.roll().undo.length === 3, "no undo step when nothing changed");
+  ok(E1.undo() && cA.notes.filter(function (n) { return n[2] === 86 && n[1] === 480; }).length === 1 && D.roll().undo.length === 2, "undo restores the previous length");
+  var added = cA.notes.filter(function (n) { return n[2] === 86; })[0];
+  ok(E1.del(added) && cA.notes.length === nA && D.roll().sel === null, "edit.del removes the note");
+  ok(E1.undo() && cA.notes.length === nA + 1, "undo brings a deleted note back");
+  ok(E1.undo() && E1.undo() && cA.notes.length === nA && !E1.undo(), "undo all the way back to the original, then nothing more");
+  ok(JSON.stringify(cA.notes) === JSON.stringify(M.demoProject(0).tracks[0].clips[0].notes), "after undoing everything the clip equals the original demo");
+
+  // 直した音符が再生に入る（クリップだけ再生・M／S は見ない）
+  var addP = E1.add(2 * PPQ + 240, 90);
+  D.clearLog();
+  lead.mute = true;
+  D.play({ clip: cA.id, a: cA.start, b: cA.start + cA.len, loop: true });
+  P = D.player(); ac = P.ac; t0 = P.segs[0].t0;
+  run(t0 + 16 * spb + 0.5);
+  var LR = D.log();
+  ok(LR.length > 0 && LR.every(function (x) { return x.track === lead.id && x.tick < cA.start + cA.len; }), "clip play: only this clip, even when the track is muted");
+  var hit = LR.filter(function (x) { return x.m === 90 && x.tick === 2 * PPQ + 240 && x.pass === 0; })[0];
+  ok(hit && eqT(hit.when, t0 + (2 * PPQ + 240) / PPQ * spb) && eqT(hit.sec, 480 / PPQ * spb) && hit.v === 0.8, "the added note plays at its tick with its length and velocity", hit);
+  ok(LR.some(function (x) { return x.pass === 1 && x.tick === 0; }), "clip play loops at the clip end");
+  lead.mute = false;
+  // 再生中に直す → 止めて同じ位置から鳴らしなおす（古い予約の音を残さない）
+  var Pold = D.player(), mOld = Pold.mix[lead.id], sOld = mOld.syn, tickNow = D.playTick();
+  E1.del(addP);
+  var Pnew = D.player();
+  ok(Pnew && Pnew !== Pold && (sOld ? sOld.disposed : mOld.voices.length === 0) && Math.abs(Pnew.segs[0].tick0 - Math.floor(tickNow)) <= 1 && Pnew.clip === cA.id, "editing while playing: old schedule disposed, restarts from the same position", [Pnew && Pnew.segs[0].tick0, tickNow]);
+  D.clearLog(); run(ac.currentTime + 16 * spb + 0.5);
+  ok(D.log().length > 0 && D.log().every(function (x) { return x.m !== 90; }), "the deleted note is not played any more");
+  D.stop();
+  // DAW の ▶（全体）にも反映される
+  var addQ = E1.add(cB.start - cB.start + 3 * PPQ, 95);
+  D.closeRoll();
+  ok(D.state().view === "arr" && rootR.innerHTML.indexOf("daw-arr") >= 0 && rootR.innerHTML.indexOf("まだ保存できません") >= 0, "back to the DAW screen (with the not-saved warning)");
+  D.setLoop(false); D.clearLog(); D.play(); P = D.player(); t0 = P.segs[0].t0; run(t0 + 6 * spb);
+  var hq = D.log().filter(function (x) { return x.m === 95; })[0];
+  ok(hq && hq.tick === 3 * PPQ && eqT(hq.when, t0 + 3 * spb), "the edited clip plays in the normal DAW playback too", hq);
+  ok(D.log().filter(function (x) { return x.track === pr.tracks[1].id; }).length > 0, "other tracks still play with the edited one");
+  D.stop();
+  A.stop();
+  ok(!D.isPlaying() && JSON.stringify(env.store) === before, "piano roll edits write nothing to localStorage (save comes in 9A-4)");
+  D.reset();
 };

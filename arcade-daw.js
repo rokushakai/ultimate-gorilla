@@ -108,7 +108,8 @@
     var M = DM(), evs = M.noteEvents(p, from, to), i, Y = window.UGSynth;
     for (i = 0; i < evs.length; i++) {
       var ev = evs[i], t = M.findTrack(p, ev.track);
-      if (!t || !M.audible(p, t)) { continue; }
+      if (pl.clip) { if (ev.clip !== pl.clip || !t) { continue; } } // 9A-3: クリップだけ鳴らす（直している音を聞けるように M／S は見ない）
+      else if (!t || !M.audible(p, t)) { continue; }
       var patch = t.instrument && t.instrument.type === "synth" && t.instrument.patch ? t.instrument.patch.patch : null;
       if (!patch) { continue; }
       var mx = mixFor(t), when = segTime(p, seg, ev.tick), end = ev.end;
@@ -131,7 +132,7 @@
       if (upto > pl.cur) { schedule(p, pl.cur, upto, seg); pl.cur = upto; }
       if (h < pl.segEnd) { break; }
       if (pl.loop) {
-        var la = DM().loopRange(p).a;
+        var la = pl.la;
         pl.segs.push({ t0: segTime(p, seg, pl.segEnd), tick0: la });
         if (pl.segs.length > 3) { pl.segs.shift(); }
         pl.cur = la; pl.pass++; pl.endAt = 0;
@@ -178,8 +179,10 @@
     if (st.root && st.ctl) { rerender(); }
   }
   // ▶: ユーザーの操作の中で AudioContext を作る／再開する（自動再生の制限）
-  function startPlay() {
+  // opts（省略可）: { from, a, b, loop, clip } … 9A-3 のクリップだけの再生・直したあとの鳴らしなおし
+  function startPlay(opts) {
     var p = project(), M = DM(), UG = window.UGMelody, ac = null, i;
+    opts = opts || {};
     stopPlay(true);
     st.msg = "";
     try { ac = UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { ac = null; }
@@ -188,9 +191,14 @@
       return false;
     }
     if (!window.UGSynth) { st.msg = "ゴリラシンセ（arcade-synth.js）を読みこめなかったため、鳴らせません。"; return false; }
-    var lr = M.loopRange(p), loop = !!(p.practice && p.practice.loopOn), from = loop ? lr.a : 0;
+    var lr = M.loopRange(p), clip = opts.clip || null, loop = opts.loop !== undefined ? !!opts.loop : !!(p.practice && p.practice.loopOn);
+    var a = opts.a !== undefined ? opts.a : lr.a, b = opts.b !== undefined ? opts.b : (loop ? lr.b : M.songEndTick(p));
+    var from = opts.from !== undefined ? opts.from : (loop || clip ? a : 0);
+    if (from >= b || from < 0) { from = loop ? a : 0; }
+    from = Math.round(from);
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
-    pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD, tick0: from }], cur: from, loop: loop, segEnd: loop ? lr.b : M.songEndTick(p), endAt: 0, pass: 0, timer: null, raf: null };
+    pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD, tick0: from }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
+      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined } };
     for (i = 0; i < p.tracks.length; i++) { mixFor(p.tracks[i]); warm(p.tracks[i]); }
     pump();
     pl.timer = setInterval(pump, PUMP_MS);
@@ -202,10 +210,12 @@
     var p = project(), M = DM();
     p.practice = p.practice || {};
     p.practice.loopOn = !!on;
-    if (pl) {
+    if (pl && !pl.clip) {
       var lr = M.loopRange(p);
       pl.loop = !!on;
+      pl.la = lr.a;
       pl.segEnd = on ? lr.b : M.songEndTick(p);
+      pl.opts.loop = !!on; pl.opts.a = lr.a; pl.opts.b = pl.segEnd;
       pl.endAt = 0;
       if (pl.cur > pl.segEnd) { pl.cur = pl.segEnd; }
     }
@@ -219,6 +229,14 @@
     if (pl && E && E.setTempo) { try { E.setTempo(b); } catch (e) {} }
     return b;
   }
+  // 9A-3: 再生中に音符を直したら、いまの位置を覚えて止め（予約した音は 50ms で消える）、同じ位置から鳴らしなおす（古い予約の音を残さない）
+  function resync() {
+    if (!pl) { return false; }
+    var o = pl.opts, t = Math.floor(playTick()), M = DM(), p = st.project;
+    if (!o.fixedB && !o.loop) { o.b = M.songEndTick(p); }
+    if (t < o.a || t >= o.b) { t = o.loop ? o.a : t; }
+    return startPlay({ from: t, a: o.a, b: o.b, loop: o.loop, clip: o.clip });
+  }
   // ---------- プレイヘッド（画面だけ。音の時計から位置を計算）----------
   function drawHead() {
     var root = st.root;
@@ -226,6 +244,12 @@
     var el = root.querySelector(".daw-playhead"), pos = root.querySelector(".daw-pos"), tick = playTick(), x = tickX(tick);
     if (el) { el.style.left = (HEAD_W + x) + "px"; }
     if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
+    var ph = st.roll ? root.querySelector(".pr-playhead") : null, rf = ph ? rollClip() : null;
+    if (ph && rf) {
+      var rel = tick - rf.clip.start;
+      ph.style.display = pl && rel >= 0 && rel <= rf.clip.len ? "block" : "none";
+      ph.style.left = Math.round(rel / DM().PPQ * RB) + "px";
+    }
     var arr = pl ? root.querySelector(".daw-arr") : null;
     if (arr && arr.clientWidth) {
       var vis = arr.clientWidth - HEAD_W;
@@ -238,7 +262,7 @@
     var raf = window.requestAnimationFrame;
     if (raf) { pl.raf = raf(function () { if (pl) { pl.raf = null; loopHead(); } }); }
   }
-  function rerender() { var arr = st.root && st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
+  function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
   I.addStopHook(function () { stopPlay(false); clearTail(); st.root = null; st.ctl = null; });
 
@@ -263,6 +287,7 @@
 
   function render(root, ctl) {
     var M = DM(), p = project();
+    if (M && p && st.view === "roll") { renderRoll(root, ctl); return; }
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -309,7 +334,8 @@
     h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;"></div></div>';
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
       '<div class="daw-info">' + infoHtml(p) + '</div>' +
-      '<p class="small daw-note">Phase 9A-2: ▶ で 2 トラックをゴリラシンセで鳴らせます。ピアノロールは 9A-3、保存は 9A-4 から。</p></div>';
+      '<div class="pr-warn">' + WARN + '</div>' +
+      '<p class="small daw-note">クリップをタップすると、ピアノロールで音符を直せます（Phase 9A-3）。</p></div>';
     root.innerHTML = h;
     var arr = root.querySelector && root.querySelector(".daw-arr");
     if (arr && st.scroll) { try { arr.scrollLeft = st.scroll; } catch (e) {} }
@@ -326,7 +352,7 @@
         for (i = 0; i < c.notes.length; i++) { lo = Math.min(lo, c.notes[i][2]); hi = Math.max(hi, c.notes[i][2]); }
         var bars = Math.round(c.len / M.ticksPerBar(M.meterAt(p, c.start)) * 100) / 100;
         return '&#x1F3B5; <b>' + escHtml((c.ext && c.ext.name) || "クリップ") + '</b>（' + escHtml(f.track.name) + '）: ' + a.bar + '小節目から ' + bars + '小節・音符 ' + c.notes.length + ' 個' +
-          (c.notes.length ? '・音域 ' + noteName(lo) + '〜' + noteName(hi) : '') + '<br><span class="small">ピアノロールで直すのは 9A-3 から</span>';
+          (c.notes.length ? '・音域 ' + noteName(lo) + '〜' + noteName(hi) : '') + '<br><span class="small">タップするとピアノロールで直せます</span>';
       }
     }
     if (s && s.kind === "track") {
@@ -334,6 +360,204 @@
       if (t) { return ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b>: ゴリラシンセ「' + instName(t) + '」・クリップ ' + t.clips.length + ' 個・音量 ' + t.vol + (t.mute ? '・ミュート' : '') + (t.solo ? '・ソロ' : ''); }
     }
     return '<span class="small">トラックやクリップをタップすると、ここに説明が出ます。全部で ' + p.tracks.length + ' トラック・' + M.viewBars(p) + ' 小節。</span>';
+  }
+
+  // ---------- §341 9A-3: ピアノロール ----------
+  // 縦 ＝ 音の高さ（C1〜C7・1 段 RH px）、横 ＝ 拍（1 拍 RB px）。音符の t・d はクリップの中の tick（offset から）
+  var RB = 56, RH = 24, LO = 24, HI = 96, KEYW = 44, UNDO_MAX = 20;
+  var SNAPS = [[960, "1/4"], [480, "1/8"], [240, "1/16"]];
+  var WARN = "&#x26A0;&#xFE0F; まだ保存できません。ページを読みなおすと、直した音符は消えます（保存は次の工程で作ります）";
+  var BLACK = [1, 3, 6, 8, 10];
+  function rollClip() { var r = st.roll, f = r ? DM().findClip(st.project, r.clip) : null; return f; }
+  function openRoll(id) {
+    var f = DM().findClip(project(), id);
+    if (!f || f.clip.type !== "midi") { return false; }
+    st.view = "roll";
+    st.sel = { kind: "clip", id: id };
+    st.roll = { clip: id, track: f.track.id, sel: null, snap: st.rollSnap || 480, undo: [], init: true, sx: 0, sy: 0 };
+    return true;
+  }
+  function closeRoll() { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.roll = null; }
+  function copyNotes(c) { return JSON.parse(JSON.stringify(c.notes)); }
+  function pushUndo(snap) { var r = st.roll; r.undo.push(snap); if (r.undo.length > UNDO_MAX) { r.undo.shift(); } }
+  // 直したあと: 再生中なら同じ位置から鳴らしなおす（古い予約の音を消す）・描きなおす
+  function afterEdit() { if (pl) { resync(); } rerender(); }
+  // 音を短く鳴らす（足した・高さを変えたとき。再生中は鳴らさない）
+  function preview(t, m) {
+    if (pl) { return; }
+    var UG = window.UGMelody, Y = window.UGSynth, patch = t && t.instrument && t.instrument.patch ? t.instrument.patch.patch : null;
+    if (!UG || !UG.audioInit || !Y || !Y.note || !patch) { return; }
+    try { var ac = UG.audioInit(); if (ac) { Y.note(patch, m, (UG.audio && UG.audio.bus) || ac.destination, ac.currentTime + 0.01, 0.8, 0.25); } } catch (e) {}
+  }
+  // 編集（画面とテストの両方から呼ぶ）。どれも直す前の状態を ↶ 用に覚える
+  var edit = {
+    add: function (t, m) {
+      var f = rollClip(); if (!f) { return null; }
+      var snap = copyNotes(f.clip), n = DM().noteAdd(f.clip, t, m, st.roll.snap, 0.8);
+      if (n) { pushUndo(snap); st.roll.sel = n; preview(f.track, n[2]); afterEdit(); }
+      return n;
+    },
+    set: function (n, o, snap) {
+      var f = rollClip(); if (!f || !n) { return null; }
+      var before = snap || copyNotes(f.clip), m0 = n[2], t0 = n[0], d0 = n[1];
+      DM().noteSet(f.clip, n, o);
+      if (n[0] === t0 && n[1] === d0 && n[2] === m0) { rerender(); return n; }
+      pushUndo(before); st.roll.sel = n;
+      if (n[2] !== m0) { preview(f.track, n[2]); }
+      afterEdit();
+      return n;
+    },
+    del: function (n) {
+      var f = rollClip(); n = n || (st.roll && st.roll.sel); if (!f || !n) { return false; }
+      var snap = copyNotes(f.clip);
+      if (!DM().noteDelete(f.clip, n)) { return false; }
+      pushUndo(snap); st.roll.sel = null; afterEdit();
+      return true;
+    },
+    undo: function () {
+      var f = rollClip(), r = st.roll; if (!f || !r.undo.length) { return false; }
+      f.clip.notes = r.undo.pop(); r.sel = null; afterEdit();
+      return true;
+    }
+  };
+  function rollHtml(p, f) {
+    var M = DM(), c = f.clip, t = f.track, r = st.roll, o = c.offset || 0, PPQ = M.PPQ, i, m;
+    var W = Math.round(c.len / PPQ * RB), H = (HI - LO + 1) * RH, m0 = M.meterAt(p, c.start), barPx = Math.round(M.ticksPerBar(m0) / PPQ * RB), snapPx = Math.max(4, Math.round(r.snap / PPQ * RB));
+    var playing = !!(pl && pl.clip === c.id), sopt = "";
+    for (i = 0; i < SNAPS.length; i++) { sopt += '<option value="' + SNAPS[i][0] + '"' + (SNAPS[i][0] === r.snap ? " selected" : "") + '>' + SNAPS[i][1] + '</option>'; }
+    var h = '<div class="daw pr">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-roll="back">&#x2190; もどる</button><b>&#x270F;&#xFE0F; ' + escHtml((c.ext && c.ext.name) || "クリップ") + '</b>' +
+      '<span class="daw-pname">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' ' + escHtml(t.name) + '・' + instName(t) + '</span></div>' +
+      '<div class="pr-warn">' + WARN + '</div>' +
+      '<div class="daw-transport">' +
+        '<button class="modal-btn daw-tbtn' + (playing ? " daw-on" : "") + '" data-roll="play" title="このクリップだけ鳴らす（くり返し）">&#x25B6;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn" data-roll="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn" data-roll="undo" title="戻す"' + (r.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (r.undo.length || '') + '</small></button>' +
+        '<button class="modal-btn daw-tbtn" data-roll="del" title="選んだ音符を消す"' + (r.sel ? '' : ' disabled') + '>&#x1F5D1;&#xFE0F;</button>' +
+        '<label class="pr-snap">グリッド <select data-roll-snap="1" aria-label="グリッド">' + sopt + '</select></label>' +
+        '<span class="pr-oct"><button class="modal-btn daw-tbtn" data-roll="up" title="1 オクターブ上へ">&#x25B2;</button><button class="modal-btn daw-tbtn" data-roll="down" title="1 オクターブ下へ">&#x25BC;</button></span>' +
+      '</div>' +
+      '<div class="pr-wrap"><div class="pr-inner" style="width:' + (KEYW + W) + 'px;height:' + H + 'px;">' +
+      '<div class="pr-keys" style="width:' + KEYW + 'px;height:' + H + 'px;">';
+    for (m = HI; m >= LO; m--) {
+      var bk = BLACK.indexOf(m % 12) >= 0;
+      h += '<div class="pr-key' + (bk ? " pr-black" : "") + (m % 12 === 0 ? " pr-c" : "") + '" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;line-height:' + RH + 'px;">' + noteName(m) + '</div>';
+    }
+    h += '</div><div class="pr-grid" style="width:' + W + 'px;height:' + H + 'px;background-size:' + barPx + 'px 100%,' + RB + 'px 100%,' + snapPx + 'px 100%,100% ' + RH + 'px;">';
+    for (m = HI; m >= LO; m--) { if (BLACK.indexOf(m % 12) >= 0) { h += '<i class="pr-rowb" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;"></i>'; } }
+    for (i = 0; i < c.notes.length; i++) {
+      var n = c.notes[i];
+      if (n[2] < LO || n[2] > HI) { continue; }
+      var x = Math.round((n[0] - o) / PPQ * RB), w = Math.max(16, Math.round((n[1] > 0 ? n[1] : 240) / PPQ * RB) - 1), sel = n === r.sel;
+      h += '<div class="pr-note' + (sel ? " pr-sel" : "") + (n[1] > 0 ? "" : " pr-zero") + '" data-n="' + i + '" style="left:' + x + 'px;top:' + ((HI - n[2]) * RH + 2) + 'px;width:' + w + 'px;height:' + (RH - 4) + 'px;">' +
+        (sel ? '<i class="pr-handle" data-h="' + i + '"></i>' : '') + '</div>';
+    }
+    h += '<div class="pr-playhead" style="display:none;"></div></div></div></div>';
+    h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') + '<div class="daw-info">' + rollInfo(p, f) + '</div>' +
+      '<p class="small pr-help">空いた所をタップ ＝ 音符を足す ／ 音符をドラッグ ＝ 高さと位置 ／ 選んだ音符の右はしをドラッグ ＝ 長さ ／ 選んで &#x1F5D1;&#xFE0F; ＝ 消す ／ &#x21B6; ＝ 戻す ／ 空いた所をスワイプ ＝ スクロール</p></div>';
+    return h;
+  }
+  function rollInfo(p, f) {
+    var M = DM(), n = st.roll.sel, c = f.clip;
+    if (n && c.notes.indexOf(n) >= 0) {
+      var b = M.tickToBar(p, c.start + n[0] - (c.offset || 0));
+      return '&#x1F3B5; <b>' + noteName(n[2]) + '</b>・' + b.bar + '小節目 ' + b.beat + '拍' + (b.sub ? '（＋' + b.sub + '）' : '') + '・長さ ' + (n[1] > 0 ? Math.round(n[1] / M.PPQ * 1000) / 1000 + '拍' : 'なし（自然に消える）') + '・強さ ' + n[3];
+    }
+    return '<span class="small">音符 ' + c.notes.length + ' 個・' + Math.round(c.len / M.ticksPerBar(M.meterAt(p, c.start)) * 100) / 100 + ' 小節。音符をタップすると選べます。</span>';
+  }
+  function renderRoll(root, ctl) {
+    var p = project(), f = rollClip();
+    if (!f) { closeRoll(); render(root, ctl); return; }
+    var r = st.roll;
+    root.innerHTML = rollHtml(p, f);
+    var wrap = root.querySelector && root.querySelector(".pr-wrap");
+    if (wrap) {
+      if (r.init) {
+        // はじめて開いた: 音符のまん中の高さが見えるように
+        var c = f.clip, lo = 127, hi = 0, i;
+        for (i = 0; i < c.notes.length; i++) { lo = Math.min(lo, c.notes[i][2]); hi = Math.max(hi, c.notes[i][2]); }
+        var mid = c.notes.length ? (lo + hi) / 2 : 60;
+        r.sy = Math.max(0, (HI - mid) * RH - (wrap.clientHeight || 300) / 2);
+        r.sx = 0; r.init = false;
+      }
+      try { wrap.scrollTop = r.sy; wrap.scrollLeft = r.sx; } catch (e) {}
+    }
+    bindRoll(root, ctl, f);
+    drawHead();
+  }
+  function bindRoll(root, ctl, f) {
+    if (!root.querySelectorAll) { return; }
+    var r = st.roll, M = DM(), c = f.clip, o = c.offset || 0, PPQ = M.PPQ;
+    var wrap = root.querySelector(".pr-wrap"), grid = root.querySelector(".pr-grid");
+    function keep() { if (wrap) { r.sx = wrap.scrollLeft; r.sy = wrap.scrollTop; } }
+    var btns = root.querySelectorAll("button"), k;
+    for (k = 0; k < btns.length; k++) {
+      btns[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-roll");
+        keep();
+        if (v === "back") { closeRoll(); render(root, ctl); return; }
+        if (v === "play") { startPlay({ clip: c.id, a: c.start, b: c.start + c.len, loop: true }); rerender(); return; }
+        if (v === "stop") { stopPlay(false); rerender(); return; }
+        if (v === "undo") { edit.undo(); return; }
+        if (v === "del") { edit.del(); return; }
+        if (v === "up" || v === "down") { if (wrap) { wrap.scrollTop += (v === "up" ? -12 : 12) * RH; keep(); } }
+      };
+    }
+    var ss = root.querySelector("select[data-roll-snap]");
+    if (ss) { ss.onchange = function () { keep(); r.snap = st.rollSnap = Number(ss.value) || 480; rerender(); }; }
+    if (wrap) { wrap.onscroll = keep; }
+    if (!grid || !grid.addEventListener) { return; }
+    var drag = null;
+    function noteOf(el) { while (el && el !== grid) { if (el.getAttribute && el.getAttribute("data-n") !== null) { return el; } el = el.parentNode; } return null; }
+    grid.addEventListener("pointerdown", function (e) {
+      if (e.button) { return; }
+      keep();
+      var hEl = e.target && e.target.getAttribute ? e.target.getAttribute("data-h") : null, nEl = noteOf(e.target);
+      if (nEl) {
+        var n = c.notes[Number(nEl.getAttribute("data-n"))];
+        if (!n) { return; }
+        if (r.sel !== n) { var prev = grid.querySelector(".pr-sel"); if (prev) { prev.className = prev.className.replace(" pr-sel", ""); } nEl.className += " pr-sel"; r.sel = n; }
+        drag = { kind: hEl !== null ? "len" : "move", n: n, el: nEl, x0: e.clientX, y0: e.clientY, t0: n[0], m0: n[2], d0: n[1] > 0 ? n[1] : 240, snap: copyNotes(c), moved: false, nt: n[0], nm: n[2], nd: n[1] };
+        try { grid.setPointerCapture(e.pointerId); } catch (e2) {}
+        if (e.preventDefault) { e.preventDefault(); }
+        return;
+      }
+      drag = { kind: "tap", x0: e.clientX, y0: e.clientY, sl: wrap ? wrap.scrollLeft : 0, st: wrap ? wrap.scrollTop : 0, moved: false };
+    });
+    grid.addEventListener("pointermove", function (e) {
+      if (!drag) { return; }
+      var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) { drag.moved = true; }
+      if (drag.kind === "move" && drag.moved) {
+        var d = drag.n[1], nt = drag.t0 + M.snap(dx / RB * PPQ, r.snap), nm = Math.max(LO, Math.min(HI, drag.m0 - Math.round(dy / RH)));
+        nt = Math.max(o, Math.min(nt, o + c.len - Math.max(1, d)));
+        drag.nt = nt; drag.nm = nm;
+        drag.el.style.left = Math.round((nt - o) / PPQ * RB) + "px";
+        drag.el.style.top = ((HI - nm) * RH + 2) + "px";
+      } else if (drag.kind === "len" && drag.moved) {
+        var end = M.snap(drag.t0 + drag.d0 + dx / RB * PPQ, r.snap), nd = Math.max(r.snap, end - drag.t0);
+        nd = Math.min(nd, o + c.len - drag.t0);
+        drag.nd = nd;
+        drag.el.style.width = Math.max(16, Math.round(nd / PPQ * RB) - 1) + "px";
+      }
+    });
+    function end(e, cancel) {
+      var d0 = drag; drag = null;
+      if (!d0) { return; }
+      keep();
+      if (cancel) { if (d0.kind !== "tap") { rerender(); } return; }
+      if (d0.kind === "tap") {
+        var scrolled = wrap && (Math.abs(wrap.scrollLeft - d0.sl) > 2 || Math.abs(wrap.scrollTop - d0.st) > 2);
+        if (d0.moved || scrolled) { return; }
+        var rc = grid.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top;
+        edit.add(o + M.snap(x / RB * PPQ, r.snap, true), HI - Math.floor(y / RH));
+        return;
+      }
+      if (d0.kind === "move") { if (d0.moved) { edit.set(d0.n, { t: d0.nt, m: d0.nm }, d0.snap); } else { rerender(); } return; }
+      if (d0.moved) { edit.set(d0.n, { d: d0.nd }, d0.snap); } else { rerender(); }
+    }
+    grid.addEventListener("pointerup", function (e) { end(e, false); });
+    grid.addEventListener("pointercancel", function (e) { end(e, true); });
   }
 
   // ---------- 操作 ----------
@@ -360,7 +584,7 @@
         }
         if ((v = el.getAttribute("data-mute"))) { var tm = M.findTrack(p, v); if (tm) { tm.mute = !tm.mute; st.sel = { kind: "track", id: v }; updateMix(); } redraw(); return; }
         if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); } redraw(); return; }
-        if ((v = el.getAttribute("data-clip"))) { st.sel = { kind: "clip", id: v }; redraw(); return; }
+        if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } if (!openRoll(v)) { st.sel = { kind: "clip", id: v }; } render(root, ctl); return; } // 9A-3: タップでピアノロール
         if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; redraw(); }
       };
     }
@@ -377,6 +601,8 @@
 
   function dawSetup(root, ctl) {
     stopPlay(false);
+    st.view = "arr";
+    st.roll = null;
     st.sel = null;
     st.scroll = 0;
     st.msg = "";
@@ -404,7 +630,11 @@
   window.UGDaw = {
     state: function () { return st; },
     project: project,
-    reset: function () { stopPlay(false); clearTail(); st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; },
+    reset: function () { stopPlay(false); clearTail(); st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; },
+    // §341 9A-3: ピアノロール（テストからも呼ぶ）
+    openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
+    closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
+    ROLL: { RB: RB, RH: RH, LO: LO, HI: HI, KEYW: KEYW },
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,
     // §341 9A-2: 再生（テストからも呼ぶ）

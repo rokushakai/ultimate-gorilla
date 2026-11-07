@@ -178,6 +178,40 @@
     return out;
   }
 
+  // ---------- §341 9A-3: ピアノロールの編集（クリップの中の音符・tick は整数・NoteEvent の形はそのまま）----------
+  function snap(t, grid, floor) { grid = Math.max(1, Math.round(grid) || 1); return (floor ? Math.floor(t / grid) : Math.round(t / grid)) * grid; }
+  function sortNotes(c) { c.notes.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; }); }
+  // 位置・長さをクリップの中におさめる（t: offset〜offset＋len−1・終わりは offset＋len まで）
+  function fitNote(c, t, d) {
+    var o = c.offset || 0, end = o + c.len;
+    t = Math.round(num(t, o, o, end - 1));
+    d = Math.round(num(d, 0, 0));
+    if (t + d > end) { d = end - t; }
+    return [t, Math.max(0, d)];
+  }
+  // 足す（足した音符を返す。いっぱいなら null）
+  function noteAdd(c, t, m, d, v) {
+    if (!c || c.type !== "midi" || c.notes.length >= MAX_NOTES) { return null; }
+    var f = fitNote(c, t, d === undefined ? PPQ : d);
+    var n = [f[0], Math.max(1, f[1]), int(m, 60, 0, 127), Math.round(num(v, 0.8, 0, 1) * 1000) / 1000];
+    c.notes.push(n);
+    sortNotes(c);
+    return n;
+  }
+  // 動かす・長さを変える（n はその音符の配列そのもの。o: { t, m, d } の変えたい所だけ）
+  function noteSet(c, n, o) {
+    if (!c || c.notes.indexOf(n) < 0) { return null; }
+    var t = o.t !== undefined ? o.t : n[0], d = o.d !== undefined ? o.d : n[1];
+    if (o.t !== undefined && o.d === undefined && d > 0) { t = Math.min(t, (c.offset || 0) + c.len - d); } // 動かすときは長さを保つ（はみ出すなら前へ）
+    var f = fitNote(c, t, d);
+    n[0] = f[0];
+    n[1] = o.d !== undefined ? Math.max(1, f[1]) : f[1];
+    if (o.m !== undefined) { n[2] = int(o.m, n[2], 0, 127); }
+    sortNotes(c);
+    return n;
+  }
+  function noteDelete(c, n) { var i = c ? c.notes.indexOf(n) : -1; if (i < 0) { return false; } c.notes.splice(i, 1); return true; }
+
   function findTrack(p, id) { var i; for (i = 0; p && i < p.tracks.length; i++) { if (p.tracks[i].id === id) { return p.tracks[i]; } } return null; }
   function findClip(p, id) {
     var i, j;
@@ -307,6 +341,7 @@
     clean: clean, cleanNotes: cleanNotes, newProject: newProject, newTrack: newTrack, newMidiClip: newMidiClip, synthInstrument: synthInstrument, demoProject: demoProject,
     nextId: nextId, hash: hash, bpmAt: bpmAt, setBpm: setBpm, meterAt: meterAt, ticksPerBar: ticksPerBar, barToTick: barToTick, tickToBar: tickToBar,
     tickToSec: tickToSec, secToTick: secToTick, endTick: endTick, viewBars: viewBars, findTrack: findTrack, findClip: findClip,
-    songEndTick: songEndTick, loopRange: loopRange, audible: audible, noteEvents: noteEvents
+    songEndTick: songEndTick, loopRange: loopRange, audible: audible, noteEvents: noteEvents,
+    snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete
   };
 })();
