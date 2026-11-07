@@ -11807,3 +11807,128 @@ var COMPANION_TECHNIQUE2_DATA = {
 
 ### 試聴の手順（v2.34）
 - ゴリラピアノ → 音色の一覧に「✨ チェレスタ」「🔔 ビブラフォン」「🪵 マリンバ」「🎼 ハープ」が出て、選ぶとそれぞれの音で鳴ること
+
+## §340 DAW の共通データモデル（設計案・**未実装**・Phase 9 の準備）
+
+Phase 8.2（2026-11-07）で書いた **設計案** で、まだプログラムは作っていない。いまのシーケンサーの保存の形（`ultimateGorillaUkuleleSeqV1`・`ukeSeqClean`・`ukeTracksClean`・`ukeXClean`）と SynthTrack（§336 5-1）を土台にして、古い曲をそのまま読めることを第一にする。
+
+### 方針
+- **いまの保存を書きかえない**: シーケンサーの曲（localStorage `ultimateGorillaUkuleleSeqV1`）・プロジェクトのファイル（`ultimate-gorilla-ukulele-project` version 1）は、いままでどおり。新しい形は「その上に足す層」で、はじめて DAW で開いたときに **写しを作る**（元は消さない・上書きしない）
+- **時刻は拍で持つ**: 保存は整数の tick（`ppq: 960`・4 分音符 ＝ 960）。いまの拍の小数（`[拍, 長さ, midi, 強さ]`）は × 960 を四捨五入（0.0625 拍 ＝ 60 tick・3 連の 1/3 拍 ＝ 320 tick で、いまの値はすべて表せる）。秒は保存しない（鳴らすときにテンポマップで計算）
+- **プレーンな JSON**: ES5 の既存コードから読み書きできる（クラスにしない）。知らない項目は `ext` に入れて残す（新しい版で足した値を古い版が消さない）
+- **音声のデータは localStorage に入れない**: IndexedDB（予定）に入れて、プロジェクトは ID で参照する
+
+### 形（案）
+```
+Project      { type:"ultimate-gorilla-project", version:1, id, name, created, saved, ppq:960,
+               tempo: TempoMap, key:[{tick, semis}], markers:[{tick, name}],
+               tracks:[Track], assets:[AudioAssetRef], master:{ vol, rev, dly, fx: FxChain },
+               practice:{ swing, swingGrid, rate, rateUp, metronome, countIn, loopOn, loopA, loopB, lyricsId, arr },
+               legacy?:{ kind:"uke-seq-v1", song:<元の曲のまるごとの写し> }, ext:{} }
+TempoMap     { points:[{tick, bpm}]（tick 0 から・段々に変わる）, meters:[{tick, num, den}] }
+               → 鳴らすときに秒の { t, bpm } にして synth の setTempoMap（§337 6-0）へ。同じ計算をリアルタイムと WAV で使う
+Track        { id, name, kind:"midi"|"audio"|"gen", instrument: InstrumentRef, vol 0〜100, pan −1〜1, mute, solo,
+               fx: FxChain, clips:[Clip], auto:[Automation], ext:{} }
+InstrumentRef{ type:"gm", prog } | { type:"uke", prog, lowG } | { type:"drum", groove, custom } |
+               { type:"synth", patch: SynthPatchRef } | { type:"sample", asset }（サンプラーは将来）
+SynthPatchRef{ mode:"inline", patch:<patch v2 を patchClean したもの>, hash } | { mode:"preset", id } | { mode:"my", name, hash }
+               → プロジェクトのファイルだけで鳴るように、保存は inline を正とする（いまの追加トラックの patch と同じ）。hash で同じ音色をまとめる
+MidiClip     { id, type:"midi", start(tick), len(tick), offset(tick), loop: LoopMeta|null, notes:[NoteEvent] }
+NoteEvent    [t, d, m, v]（t・d は clip の中の tick・m は 0〜127・v は 0〜1）。d＝0 は「長さなし（自然に消える・いまの録音1・2）」
+GenClip      { id, type:"gen", start, len, rows:[いまの行（chord・rest・sec・key・tempo）], style, pattern, bass, drum }
+               → コード譜から音を作る「生成のクリップ」。音はいまのエンジン（ukeSeqRec の考え方）で作り、保存しない（直せるまま）
+               → ユーザーが「音符にする」（フリーズ）を選んだときだけ MidiClip に変える
+AudioClip    { id, type:"audio", asset, start, len, srcOffset(秒), gain, fadeIn, fadeOut, loop: LoopMeta|null }
+AudioAssetRef{ id:"a:"+中身のハッシュ, name, sr, ch, frames, store:"idb"|"missing", src:"rec"|"import"|"render", license }
+LoopMeta     { bpm, beats, meter, root|null, start, end（サンプル）, oneShot }
+Automation   { target, points:[[tick, 値（0〜1 に正規化）, "step"|"lin"]] }
+               target: "vol" | "pan" | "fx.<番号>.<値>" | "synth.<値の ID>"（patch.ts の登録の ID を使う・Mod Matrix と同じ名前）
+FxChain      { items:[{ type:"dist"|"chorus"|"delay"|"reverb", on, ...値 }] }（patch の fx と同じ形・fxdef.ts の定義を使う）
+```
+
+### いまの曲からの写し方（`ukeSeqClean` のあとの値から）
+| いまの値 | 新しい形 |
+|---|---|
+| `bpm`・行 `tempo` | `tempo.points`（行の始まりの tick に） |
+| `meter`（3 か 4） | `tempo.meters[0]` |
+| `key`・行 `key` | `key[]` |
+| 行 `chord`・`rest`（`style`・`pattern`・`pos` をふくむ）| ウクレレのトラックの GenClip の `rows` |
+| 行 `sec`・`arr` | `markers`・`practice.arr` |
+| `tracks.uke`・`bass`（`pattern`）・`drum`（`groove`・`fill`・`custom`）・`pad` | 同じ GenClip から音を作る `gen` のトラック（`instrument` にそれぞれの設定） |
+| `rec1`・`rec2` の `[拍, midi, 強さ]` | MidiClip（`d＝0`・`quant` は `ext`） |
+| `mel` の `[拍, 長さ, midi, 強さ?]` | MidiClip（強さがないときは 0.8） |
+| 追加トラック `x1`〜`x8`（`kind` notes／chord・`prog`・`play`・`oct`・`patch`）| notes → MidiClip・chord → GenClip。`patch` があれば `{type:"synth", patch:{mode:"inline"}}`・`prog` 128 はドラム |
+| `vol`・`pan`（−0.6・0・0.6）・`mute`・`solo`・`on` | そのまま（`on:false` は `mute` とは別に `ext.on`） |
+| `rev`・`dly` | `master.rev`・`master.dly` |
+| `swing`・`style`・`pattern`・`metronome`・`countIn`・`loop*`・`rate`・`lyrics` | `practice`（音の作りに要る `swing` は GenClip にも） |
+
+### 古い曲の読みこみ（移行）
+- 写しは純粋な関数 `fromUkeSeqV1(song) → Project`（同じ入力なら同じ出力）。元の曲は `legacy.song` にまるごと残す
+- 合格の条件（実装のときのテスト）:
+  1. 戻しの確かめ: 表せる所は `toUkeSeqV1(fromUkeSeqV1(s))` が `ukeSeqClean(s)` と同じ
+  2. **音の確かめ**: 写したプロジェクトの WAV が、いまのシーケンサーの WAV とバイト単位で同じ（Golden に足す）
+  3. 古い・こわれた・空の曲でも落ちない（`ukeSeqClean` と同じ直し方）
+- 版を上げるとき: `version` ごとに純粋な移行の関数を順につなぐ（1→2→3）。**知らない新しい版は読むだけ**（上書きしない）
+- 保存の場所（案）: 曲の一覧と小さな曲は localStorage の新しいキー（`ultimateGorillaDawV1`・既存のキーは使わない）。音声と大きな曲は IndexedDB。localStorage は 5MB ほどしかなく、iPhone では使わないデータが消されることがあるので、ファイルへの書き出し（JSON・あとで zip）をいつも用意する
+- RPG のセーブ（`ultimateGorillaSaveV2`）には入れない
+
+### 実装するときの置き場所（案）
+- データの形と写しの関数は、シーケンサー（ES5）が使うので ES5 の新しいファイル（例: `arcade-daw-model.js`・画面なし・vm でテストできる）にする。シンセのエンジン（TypeScript）は `SynthPatchRef` の inline の patch を受けとるだけ
+- 既存の 7 楽器の WAV の書き出し（Phase 9 の候補 E）は、この形の NoteEvent と TempoMap を共通の入口にする
+
+### 決めていないこと（ユーザーに聞く）
+- 音声の素材（録音・読みこみ）を、どこまで、どの大きさまで持つか
+- トラックの数の上限（いまは 7 ＋ 追加 8）
+- 生成のクリップ（コード譜）を、どこまで DAW の画面で直せるようにするか
+
+## §341 Phase 9A ゴリラDAW の MVP（**実装中**・ブランチ `daw-mvp-9a`・9A-2 までを v2.35 で公開）
+
+> **公開版 v2.35 について（2026-11-07）**: §340・§341 は synth-v2 ブランチ（未公開）で書いた設計。公開版 v2.35 の main には、シンセの新しいエンジン（§331〜§339・Phase 1〜8）を入れていない。ゴリラDAW は SynthTrack が無いときの道（いままでの `UGSynth.note`・ネイティブのノード）で鳴る。そのため公開版では、モノ・レガート・音色の FX・ウェーブテーブル／FM のプリセット（音色はいままでの 12 個）は使えない。Phase 8 の未解決（WAV の不一致・音切れ）は未解決のまま
+
+2026-11-07 にユーザーが開始を決めた（PC の不安定さは承知のうえ・修理や買い替えは並行して考える）。§340 のデータの形で、**画面を操作して音を鳴らし、作曲できる小さな DAW** を作る。機能の数より、早く操作・試聴できることを優先する。
+
+### 方針
+- **新しい音のエンジンは作らない**: 音はゴリラシンセ（`UGSynth.track`＝SynthTrack・`UGSynth.note`・`UGSynth.preset`・`UGSynth.PRESETS`／`presetsX`）で鳴らす。AudioContext は `UGMelody.audio.ctx`（`UGMelody.audioInit()`）。テンポは §337 のテンポマップ（`UGSynthEngine.setTempoMap`）
+- **置き場所**（どちらも ES5・`var`・`file://` で動く）:
+  - `arcade-daw-model.js` … データの形と計算だけ（画面なし・vm でテストできる）。`window.UGDawModel`
+  - `arcade-daw.js` … 画面。ゲームセンターに「設定画面だけのゲーム」として登録（`id:"daw"`・分類「音楽・創作」・シンセのすぐ後）。`window.UGDaw`
+- **既存の保存は読まない・書かない**: RPG のセーブ・シーケンサーの曲・シンセのテイク・プリセットは変えない。DAW の保存は新しいキー `ultimateGorillaDawV1`（9A-4 から）
+- Phase 8 の未解決（WAV の不一致・音切れ）は、未解決のまま扱う（DAW で解決したことにしない）
+- やらないこと（9A では）: 新しい DSP・グラニュラー・新しいサンプラー・録音・複雑なミキサーやルーティング・全 8 楽器の統合・外部 MIDI・重い最適化・オーディオクリップ・高度なオートメーション
+
+### 工程
+| 工程 | 内容 | 合格の条件 |
+|---|---|---|
+| 9A-1 | 共通データモデル（§340 の Project・Track・MidiClip・NoteEvent・TempoMap）と DAW 画面の骨格 | ゲームセンターから開ける。トラックの一覧・小節と拍の目盛り・クリップが見える |
+| 9A-2 | 2 トラックのクリップ再生（SynthTrack・25ms ごとに先読みの予約） | 2 つのトラックが別のプリセットで別のフレーズを同時に鳴らす |
+| 9A-3 | ピアノロール（追加・削除・高さと位置の移動・長さ・グリッドに吸いつく・クリップだけ再生） | ノートを直して、すぐ聞ける |
+| 9A-4 | BPM・ループ・保存と読みこみ（`ultimateGorillaDawV1`） | 保存して、ページを読みなおしても同じ曲が戻る |
+| 9A-5 | 軽い統合の確認・ユーザーの操作手順 | 手順どおりに作曲・保存・再読みこみができる |
+
+### 9A-1 の画面（スマホ縦を優先）
+- 上: 「🎚️ ゴリラDAW」・メニューへ戻る
+- トランスポート: ▶ 再生・⏹ 停止・🔁 ループ・BPM（− ＋ と数字・40〜240）。**9A-1 では再生・ループは押せない**（9A-2・9A-4 で使えるようにする）。BPM はプロジェクトの値だけ変える
+- アレンジ画面: 左にトラックの見出し（名前・音色・M／S の表示）、右に横にスクロールする時間の目盛り（小節の番号・拍の線）とクリップ。1 拍 ＝ 28px。クリップの中に音符の小さな形を描く
+- トラックの音色は、ゴリラシンセのプリセット（いままでの 12 個 ＋ ウェーブテーブル・FM の 10 個）から選べる（9A-1 ではデータを変えるだけ・音は 9A-2）
+- クリップやトラックをタップすると選ばれて、下の欄に「何小節目から何小節・音符いくつ」を出す
+- はじめは見本のプロジェクト（8 小節・2 トラック: 🎸 リード「のこぎりリード」・🔊 ベース「モノベース」・それぞれ 4 小節のクリップを 2 つ）
+
+### §340 に足したこと・決めたこと
+- `InstrumentRef` の `{type:"synth"}` に `ext.preset`（どのプリセットから作ったか・表示の名前に使う）。音は `patch`（inline）を正とする
+- ID はプロジェクトの中で一意の短い文字（`t1`・`c1`…）。`UGDawModel.nextId(project, "t")`
+- 時刻の計算（拍 ⇄ tick ⇄ 秒）は `UGDawModel` に置き、9A-2 の再生と、あとの WAV の書き出しで同じものを使う
+- 壊れた・古い・空のデータでも落ちない `UGDawModel.clean(project)`。知らない新しい版（`version` が 1 より大きい）は `readOnly`
+
+### 9A-2 の再生（2 トラック・SynthTrack）
+- **時計**: AudioContext（`UGMelody.audioInit()` の 1 つだけ・▶ を押したときに作る／再開する）の時刻が正。25ms ごとのタイマーで、0.12 秒先までの音を AudioContext の時刻で予約する（いまのシーケンサー §336 と同じ作り）。画面のプレイヘッドは requestAnimationFrame で、音の時計から位置を計算して動かす（画面が遅れても音の予約は変わらない）
+- **時刻の計算**: 音符の tick → 秒は `UGDawModel.tickToSec`（テンポマップ）。「区間」＝{AudioContext の時刻 t0・tick0}。ループで先頭に戻るとき・BPM を変えたときに新しい区間を足す（すでに予約した音は動かさない）
+- **音符 → 音**: `UGDawModel.noteEvents(p, from, to)` でクリップの中の音符を曲の tick に（`start ＋ t − offset`・クリップの外の音符は鳴らさない・長さはクリップの終わりで切る）。トラックごとに `UGSynth.track`（SynthTrack）を 1 つ作り `note(patch, midi, 時刻, 強さ, 秒)`。音色は `instrument.patch.patch`（inline）。モノ・レガート・余韻（R）・音色の FX の意味はいまの SynthTrack のまま
+  - エンジンが無い（読みこめない）ときは、いままでの `UGSynth.note`（ネイティブのノード）で鳴らす。AudioWorklet が使えないときの切りかえはシンセのエンジンの中のまま（§338）
+  - `d＝0`（長さなし・自然に消える）: 音色の立ち上がり ＋ 減衰（a ＋ d・0.05〜4 秒）でノートオフ。サステインのない音色（プラック・ベル）は自然に消える
+  - ループが ON のときは、ループの終わりをこえる音はループの終わりで切る（次の回の頭と重ねない）
+- **ミキサー（小さい）**: トラックごとに 音量（vol）→ 左右（pan）→ 全体のバス。シンセの FX にリバーブ・ディレイがある音色は、共有の残響を通さない出口も持つ（いまのシーケンサーと同じ）
+- **ミュート・ソロの優先**: ①ミュートのトラックは鳴らない（ソロより優先）②ソロのトラックが 1 つでもあれば、ソロでミュートでないトラックだけ鳴る ③どちらもなければ全部鳴る（いまのシーケンサーの `ukeTrackAudible` と同じ）。再生中に変えると、そのトラックの音量をすぐ 0／元に戻し、これから予約する音にも反映する
+- **ループ**: 対象は `practice.loopA`〜`loopB`（見本の曲は 1〜8 小節）。ON なら終わりで頭に戻る、OFF なら曲の終わり（いちばん後ろのクリップの小節の終わり）で止まる（余韻は鳴らしきる）。再生中に切りかえられる
+- **BPM**: 再生中に変えると、まだ予約していない音から新しい速さ（シンセのテンポに合わせる LFO・ディレイも `UGSynthEngine.setTempo`）
+- **止める・片づける**: ⏹・メニューへ戻る・ゲームセンターを閉じる（`addStopHook`）で、タイマーと描画を止め、SynthTrack を `dispose()`（鳴っている音を 50ms で消す・FX を片づける）、トラックのノードを外す。終わりまで鳴って止まったときは、余韻のあと（4 秒後）に片づける。もう一度 ▶ を押すと、前の片づけをしてから新しく作る（音が重ならない）
+- **9A-2 でしないこと**: 途中のテンポの点・拍子の変更の再生（データは壊さずに残す。tick → 秒の計算は対応ずみ・シンセの LFO の BPM は最初の点だけ）、クリップのループ（LoopMeta）、全体の音量（`master.vol`）、再生位置をタップで動かす、裏に回ったとき（タブを隠す）のタイマーの遅れへの対策（いまのシーケンサーと同じ）

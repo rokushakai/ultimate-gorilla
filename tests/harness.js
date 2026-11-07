@@ -176,7 +176,7 @@ function load(opts) {
   // vm の中の Math は別物なので、読み込みごとに種から決まる乱数に差し替える
   vm.runInContext("Math", ctx).random = makeRandom(SEED + (++loadCount) * 7919);
   // opts.patch(src, file): テストだけで中身をのぞくための置換（本体のファイルは変更しない）
-  (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js", "arcade-piano.js", "arcade-drum.js", "arcade-bass.js", "arcade-guitar.js", "arcade-strings.js", "arcade-horn.js", "arcade-synth.js"]).forEach(function (f) {
+  (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js", "arcade-piano.js", "arcade-drum.js", "arcade-bass.js", "arcade-guitar.js", "arcade-strings.js", "arcade-horn.js", "arcade-synth.js", "arcade-daw-model.js", "arcade-daw.js"]).forEach(function (f) {
     var src = fs.readFileSync(path.join(ROOT, f), "utf8");
     if (opts.patch) { src = opts.patch(src, f); }
     vm.runInContext(src, ctx, { filename: f });
