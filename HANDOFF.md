@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.36** |
+| 現在バージョン | **v2.37** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.37] 💾 ゴリラDAW の曲の保存**（§341 Phase 9A-4）: `ultimateGorillaDawV1`（一覧）＋`ultimateGorillaDawV1:p:<ID>`（曲）。`arcade-daw.js` の `saveNow`（書いて読みなおして確かめる）・`markDirty`（0.5 秒でまとめる）・`proj`（一覧・開く・新しい曲・名前・JSON）。形の確認は `UGDawModel.fromRecord / parseRecordText`。公開前の版はタグ `pages-v2.36`（cb5ce5c）
 - **[v2.36] 🎹 ゴリラDAW のピアノロール**（§341 Phase 9A-3）: クリップをタップで開く。編集は `UGDawModel.noteAdd / noteSet / noteDelete`、画面の操作は `arcade-daw.js` の `edit`（↶ 20 段）。再生中に直すと `resync()` で同じ位置から鳴らしなおす。保存はまだない（9A-4）
 - **[v2.35] 🎚️ ゴリラDAW の試作**（§341 Phase 9A-1・9A-2）: `arcade-daw-model.js`（§340 のデータの形）と `arcade-daw.js`（画面・再生）。開発は `daw-mvp-9a` ブランチ（9abe9b8＝Phase 8 の WIP の上）。公開版は新しいシンセのエンジンなしで `UGSynth.note` で鳴る。公開前の版はタグ `pages-v2.33-before-daw`（c78c306）
 - **[v2.34] 🎛️ シンセ高度化プロジェクト Phase 0**（§330）: **いちばん先にやるのはシンセの高度化**（Phase 1〜7・TODO の先頭）。CLAUDE.md の技術ルールを A（既存コード・ES5）と B（新しいシンセのコード・TS・ビルド・ワークレット・WASM 可）に分けた。file:// では ES モジュール・Blob URL のワークレット・fetch が使えず、data: URL のワークレットと base64 の WASM は使えた（Chrome・Edge 156 で確認。Safari・Firefox は未検証）。ピアノの音色の不具合（B1）を直した。旧データの見本 `tests/fixtures/synth-v1-data.json` と旧音色の基準 `tests/fixtures/synth-v1-golden.json`（`node tools/synth-golden.js` でくらべる・Chrome が要る）。不具合 B2〜B4 は Phase 1・5 で直す。**大型改修のあいだの commit・push は、ユーザーの許可をもらってから**。`HANDOFF_SYNTH_DAW_REPORT.md`（v2.33 の調査レポート）は消さない

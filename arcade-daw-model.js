@@ -227,7 +227,7 @@
     if (!isArr(list)) { return out; }
     for (i = 0; i < list.length && out.length < MAX_NOTES; i++) {
       n = list[i];
-      if (!isArr(n) || !isFinite(Number(n[0])) || !isFinite(Number(n[2]))) { continue; }
+      if (!isArr(n) || typeof n[0] !== "number" || typeof n[2] !== "number" || !isFinite(n[0]) || !isFinite(n[2])) { continue; } // 時刻と高さが数でない音符は捨てる（JSON の null・文字など）
       out.push([int(Number(n[0]) * scale, 0, 0), int(Number(n[1]) * scale, 0, 0), int(n[2], 60, 0, 127), Math.round(num(n[3], 0.8, 0, 1) * 1000) / 1000]);
     }
     out.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; });
@@ -254,6 +254,17 @@
       if (!isObj(o.ext)) { o.ext = {}; }
     }
     return o;
+  }
+  // §341 9A-4: 知らない項目は消さずに残す（新しい版で足した値・いまの画面で変えられない値を守る）
+  var PROJECT_KEYS = ["type", "version", "id", "name", "created", "saved", "ppq", "tempo", "key", "markers", "tracks", "assets", "master", "practice", "legacy", "ext", "readOnly"];
+  var TRACK_KEYS = ["id", "name", "kind", "instrument", "vol", "pan", "mute", "solo", "fx", "clips", "auto", "ext"];
+  function keepUnknown(src, dst, known) {
+    var k, v;
+    for (k in src) {
+      if (!src.hasOwnProperty(k) || known.indexOf(k) >= 0 || /^__/.test(k)) { continue; }
+      v = copy(src[k]);
+      if (v !== undefined) { dst[k] = v; }
+    }
   }
   function clean(src) {
     var p = newProject({ now: 0 }), i, j;
@@ -300,8 +311,10 @@
       t.clips.sort(function (a, b) { return a.start - b.start; });
       t.id = typeof s.id === "string" && s.id && !seen[s.id] ? s.id.substring(0, 20) : "";
       if (t.id) { seen[t.id] = true; }
+      keepUnknown(s, t, TRACK_KEYS);
       p.tracks.push(t);
     }
+    keepUnknown(src, p, PROJECT_KEYS);
     // 無い・重なる ID を付ける（トラックとクリップで一意）
     for (i = 0; i < p.tracks.length; i++) {
       if (!p.tracks[i].id) { p.tracks[i].id = nextId(p, "t"); }
@@ -336,12 +349,65 @@
     return p;
   }
 
+  // ---------- §341 9A-4: 保存の形（localStorage の曲 1 つ ＝ JSON の書き出し）----------
+  var FORMAT = "ultimate-gorilla-daw", SCHEMA = 1, MAX_JSON = 2 * 1024 * 1024;
+  // 新しい曲の ID（時刻 ＋ 乱数・ほかの曲と重ならない）
+  function newProjectId(now) { return "p" + (typeof now === "number" ? now : Date.now()).toString(36) + Math.floor(Math.random() * 1679616).toString(36); }
+  // からっぽの曲（リードとベース・空のクリップ 4 小節 × 2・8 小節ループ）
+  function emptyProject(now) {
+    var p = newProject({ name: "あたらしい曲", bpm: 120, now: typeof now === "number" ? now : Date.now() }), BAR4 = PPQ * 4 * 4;
+    var a = newTrack(p, "リード", synthInstrument("lead")), b = newTrack(p, "ベース", synthInstrument("bass"));
+    a.ext.icon = "&#x1F3B8;"; b.ext.icon = "&#x1F50A;";
+    newMidiClip(p, a, 0, BAR4, [], "メロディ A"); newMidiClip(p, a, BAR4, BAR4, [], "メロディ B");
+    newMidiClip(p, b, 0, BAR4, [], "ベース A"); newMidiClip(p, b, BAR4, BAR4, [], "ベース B");
+    p.practice.loopA = 0; p.practice.loopB = BAR4 * 2;
+    return p;
+  }
+  function noteCount(p) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { n += (p.tracks[i].clips[j].notes || []).length; } } return n; }
+  // 保存する形（schemaVersion つき）。readOnly（画面だけの印）は入れない
+  function toRecord(p, now) {
+    var q = copy(p);
+    delete q.readOnly;
+    if (typeof now === "number") { q.saved = now; }
+    return { format: FORMAT, schemaVersion: SCHEMA, saved: q.saved || 0, project: q };
+  }
+  // 読む: 形を確かめて clean する → { ok, project } / { ok:false, error, why }。元のデータは変えない
+  function fromRecord(obj) {
+    var src;
+    if (!isObj(obj)) { return { ok: false, error: "notDaw", why: "ゴリラDAW の曲のデータではありません" }; }
+    if (obj.format === FORMAT) {
+      var sv = Number(obj.schemaVersion);
+      if (!isFinite(sv) || sv < 1) { return { ok: false, error: "schema", why: "保存の形の版（schemaVersion）がおかしいです" }; }
+      if (sv > SCHEMA) { return { ok: false, error: "newer", why: "新しい版のゴリラDAW で作られたデータなので、この版では開けません" }; }
+      src = obj.project;
+    } else if (obj.type === TYPE) {
+      src = obj; // schemaVersion の無い Project そのもの
+    } else {
+      return { ok: false, error: "notDaw", why: "ゴリラDAW の曲のデータではありません" };
+    }
+    if (!isObj(src) || src.type !== TYPE || !isArr(src.tracks)) { return { ok: false, error: "broken", why: "曲のデータが欠けています（トラックがありません）" }; }
+    var p;
+    try { p = clean(src); } catch (e) { return { ok: false, error: "broken", why: "曲のデータを読めませんでした" }; }
+    if (p.readOnly) { return { ok: false, error: "newer", why: "新しい版のゴリラDAW で作られた曲なので、この版では開けません" }; }
+    return { ok: true, project: p };
+  }
+  // JSON の文字 → fromRecord（大きすぎ・JSON でない は読まない）
+  function parseRecordText(text) {
+    if (typeof text !== "string" || !text.length) { return { ok: false, error: "empty", why: "ファイルが空です" }; }
+    if (text.length > MAX_JSON) { return { ok: false, error: "big", why: "ファイルが大きすぎます（2MB まで）" }; }
+    var obj;
+    try { obj = JSON.parse(text.charCodeAt(0) === 0xFEFF ? text.substring(1) : text); } catch (e) { return { ok: false, error: "json", why: "JSON として読めませんでした（ファイルがこわれているか、ちがうファイルです）" }; }
+    return fromRecord(obj);
+  }
+
   window.UGDawModel = {
     PPQ: PPQ, VERSION: VERSION, TYPE: TYPE, STORE_KEY: STORE_KEY, BPM_MIN: BPM_MIN, BPM_MAX: BPM_MAX,
     clean: clean, cleanNotes: cleanNotes, newProject: newProject, newTrack: newTrack, newMidiClip: newMidiClip, synthInstrument: synthInstrument, demoProject: demoProject,
     nextId: nextId, hash: hash, bpmAt: bpmAt, setBpm: setBpm, meterAt: meterAt, ticksPerBar: ticksPerBar, barToTick: barToTick, tickToBar: tickToBar,
     tickToSec: tickToSec, secToTick: secToTick, endTick: endTick, viewBars: viewBars, findTrack: findTrack, findClip: findClip,
     songEndTick: songEndTick, loopRange: loopRange, audible: audible, noteEvents: noteEvents,
-    snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete
+    snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete,
+    FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
+    toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText
   };
 })();

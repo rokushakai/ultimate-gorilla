@@ -12,8 +12,18 @@
   // セッションのあいだのプロジェクト（9A-4 で ultimateGorillaDawV1 に保存する）
   var st = { project: null, sel: null, scroll: 0 };
 
+  // はじめて開いたとき: 最後に開いた曲を読む。保存が無ければ見本（まだ保存しない）。読めなければ見本を開いて理由を出す（壊れたデータは消さない）
   function project() {
-    if (!st.project && DM()) { st.project = DM().demoProject(); }
+    if (!st.project && DM()) {
+      var r = loadLast();
+      if (r && r.ok) { st.project = r.project; sv.status = "saved"; sv.at = r.project.saved || 0; }
+      else {
+        st.project = DM().demoProject();
+        st.project.id = DM().newProjectId();
+        sv.status = r && r.error === "storage" ? "error" : "demo";
+        sv.msg = r && r.why ? r.why : "";
+      }
+    }
     return st.project;
   }
 
@@ -264,7 +274,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { stopPlay(false); clearTail(); st.root = null; st.ctl = null; });
+  I.addStopHook(function () { flushSave(); stopPlay(false); clearTail(); st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -288,6 +298,7 @@
   function render(root, ctl) {
     var M = DM(), p = project();
     if (M && p && st.view === "roll") { renderRoll(root, ctl); return; }
+    if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -297,8 +308,9 @@
     var grid = 'background-size:' + barPx + 'px 100%,' + beatPx + 'px 100%;width:' + W + 'px;';
     var plist = presetList(), i, j, b, loopOn = !!(p.practice && p.practice.loopOn), lr = M.loopRange(p);
     var h = '<div class="daw">' +
-      '<div class="daw-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW</b><span class="daw-pname">' + escHtml(p.name) + '</span>' +
+      '<div class="daw-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW</b><span class="daw-pname"></span>' +
       '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
+      projBarHtml(p) +
       '<div class="daw-transport">' +
         '<button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-act="play" title="再生">&#x25B6;&#xFE0F;</button>' +
         '<button class="modal-btn daw-tbtn" data-act="stop" title="停止（頭へ）">&#x23F9;&#xFE0F;</button>' +
@@ -334,8 +346,8 @@
     h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;"></div></div>';
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
       '<div class="daw-info">' + infoHtml(p) + '</div>' +
-      '<div class="pr-warn">' + WARN + '</div>' +
-      '<p class="small daw-note">クリップをタップすると、ピアノロールで音符を直せます（Phase 9A-3）。</p></div>';
+      saveNoteHtml() +
+      '<p class="small daw-note">クリップをタップすると、ピアノロールで音符を直せます。</p></div>';
     root.innerHTML = h;
     var arr = root.querySelector && root.querySelector(".daw-arr");
     if (arr && st.scroll) { try { arr.scrollLeft = st.scroll; } catch (e) {} }
@@ -366,7 +378,259 @@
   // 縦 ＝ 音の高さ（C1〜C7・1 段 RH px）、横 ＝ 拍（1 拍 RB px）。音符の t・d はクリップの中の tick（offset から）
   var RB = 56, RH = 24, LO = 24, HI = 96, KEYW = 44, UNDO_MAX = 20;
   var SNAPS = [[960, "1/4"], [480, "1/8"], [240, "1/16"]];
-  var WARN = "&#x26A0;&#xFE0F; まだ保存できません。ページを読みなおすと、直した音符は消えます（保存は次の工程で作ります）";
+  // ---------- §341 9A-4: 保存・読みこみ・JSON ----------
+  // localStorage: KEY ＝ 曲の一覧、KEY:p:<ID> ＝ 曲 1 つ（JSON の書き出しと同じ形）、KEY:broken:<時刻> ＝ 読めなかった一覧の写し
+  var SAVE_DELAY = 500, STORE_FORMAT = "ultimate-gorilla-daw-store";
+  var sv = { status: "demo", at: 0, msg: "", timer: null, note: "" }; // status: demo / dirty / saved / error / readonly
+  function skey() { return DM().STORE_KEY; }
+  function pkey(id) { return skey() + ":p:" + id; }
+  // 読む: 文字（無ければ null）。localStorage が使えないときは undefined
+  function lsRaw(k) { try { return window.localStorage ? window.localStorage.getItem(k) : undefined; } catch (e) { return undefined; } }
+  // 書く: 書いたあと読みなおして同じなら true（容量いっぱい・プライベートブラウズ・禁止はどれも false）
+  function lsPut(k, v) { try { window.localStorage.setItem(k, v); return window.localStorage.getItem(k) === v; } catch (e) { return false; } }
+  function emptyIndex() { return { format: STORE_FORMAT, schemaVersion: 1, last: "", list: [] }; }
+  // 一覧を読む → { ok, idx } / { ok:false, error:"storage" | "broken", raw }
+  function readIndex() {
+    var raw = lsRaw(skey()), o;
+    if (raw === undefined) { return { ok: false, error: "storage", why: "このブラウザでは保存が使えません（プライベートブラウズ・保存の禁止など）" }; }
+    if (raw === null) { return { ok: true, idx: emptyIndex() }; }
+    try { o = JSON.parse(raw); } catch (e) { o = null; }
+    if (!o || o.format !== STORE_FORMAT || Object.prototype.toString.call(o.list) !== "[object Array]") { return { ok: false, error: "broken", raw: raw, why: "保存した曲の一覧が読めませんでした（データは消さずに残しています）" }; }
+    if (Number(o.schemaVersion) > 1) { return { ok: false, error: "newer", raw: raw, why: "新しい版のゴリラDAW の保存なので、この版では書きかえません" }; }
+    return { ok: true, idx: o };
+  }
+  // 一覧がこわれたとき: 保存してある曲のキーを探して一覧を作りなおす（キーの一覧が取れないブラウザでは空）
+  function scanProjects() {
+    var out = [], pre = skey() + ":p:", i, k, n;
+    try {
+      var ls = window.localStorage;
+      n = ls.length;
+      for (i = 0; i < n; i++) {
+        k = ls.key(i);
+        if (!k || k.indexOf(pre) !== 0) { continue; }
+        var r = DM().parseRecordText(ls.getItem(k));
+        if (r.ok) { out.push({ id: k.substring(pre.length), name: r.project.name, saved: r.project.saved || 0, created: r.project.created || 0, notes: DM().noteCount(r.project), tracks: r.project.tracks.length }); }
+      }
+    } catch (e) { return out; }
+    return out;
+  }
+  function findEntry(idx, id) { var i; for (i = 0; i < idx.list.length; i++) { if (idx.list[i] && idx.list[i].id === id) { return i; } } return -1; }
+  // 曲 1 つを読む → fromRecord の結果
+  function loadProject(id) {
+    var raw = lsRaw(pkey(id));
+    if (raw === undefined) { return { ok: false, error: "storage", why: "このブラウザでは保存が使えません" }; }
+    if (raw === null) { return { ok: false, error: "missing", why: "保存した曲が見つかりません" }; }
+    return DM().parseRecordText(raw);
+  }
+  function loadLast() {
+    var r = readIndex();
+    if (!r.ok) { return r; }
+    if (!r.idx.last) { return { ok: false, error: "none" }; }
+    var q = loadProject(r.idx.last);
+    if (!q.ok) { q.why = "最後に開いていた曲を読めませんでした（" + q.why + "）。見本の曲を開きました。保存したデータは消していません"; }
+    return q;
+  }
+  function setStatus(s, msg) { sv.status = s; sv.msg = msg || ""; drawStatus(); }
+  // いま保存する（成功したときだけ「保存ずみ」）
+  function saveNow() {
+    if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; }
+    var p = st.project, M = DM();
+    if (!p || !M) { return false; }
+    if (p.readOnly) { setStatus("readonly", "新しい版のデータなので保存しません"); return false; }
+    var r = readIndex(), now = Date.now();
+    if (!r.ok && r.error === "broken") {
+      // 一覧がこわれている: 元の文字を別のキーに写して守ってから、新しい一覧を作る
+      if (!lsPut(skey() + ":broken:" + now, r.raw)) { setStatus("error", "保存した曲の一覧が読めず、控えも作れなかったので、保存をやめました。JSON に書き出して控えを作ってください"); return false; }
+      r = { ok: true, idx: emptyIndex() };
+      r.idx.list = scanProjects();
+      sv.note = "読めなかった一覧は「" + skey() + ":broken:" + now + "」に残しました";
+    }
+    if (!r.ok) { setStatus("error", r.why); return false; }
+    var rec = M.toRecord(p, now), text = JSON.stringify(rec);
+    if (!lsPut(pkey(p.id), text)) { setStatus("error", "保存できませんでした（容量がいっぱい・プライベートブラウズなど）。JSON に書き出して控えを作ってください"); return false; }
+    var idx = r.idx, at = findEntry(idx, p.id), ent = { id: p.id, name: p.name, saved: now, created: p.created || now, notes: M.noteCount(p), tracks: p.tracks.length };
+    if (at >= 0) { idx.list[at] = ent; } else { idx.list.push(ent); }
+    idx.list.sort(function (a, b) { return (b.saved || 0) - (a.saved || 0); });
+    idx.last = p.id;
+    if (!lsPut(skey(), JSON.stringify(idx))) { setStatus("error", "曲は書けましたが、一覧を書けませんでした。JSON に書き出して控えを作ってください"); return false; }
+    p.saved = now;
+    sv.at = now;
+    setStatus("saved", "");
+    return true;
+  }
+  // 直した: 0.5 秒後にまとめて保存（ドラッグ中は呼ばない・確定したときだけ）
+  function markDirty() {
+    if (!st.project || st.project.readOnly) { return; }
+    if (sv.timer) { clearTimeout(sv.timer); }
+    sv.status = "dirty";
+    sv.timer = setTimeout(function () { sv.timer = null; saveNow(); }, SAVE_DELAY);
+    drawStatus();
+  }
+  // 待っている保存を今すぐ（曲を切りかえる・画面を隠す・メニューへ戻る）
+  function flushSave() { if (sv.timer) { saveNow(); } }
+  if (window.addEventListener) { window.addEventListener("pagehide", flushSave); }
+  if (window.document && document.addEventListener) { document.addEventListener("visibilitychange", function () { if (document.hidden) { flushSave(); } }); }
+  function fmtTime(ms) { if (!ms) { return ""; } var d = new Date(ms), z = function (n) { return (n < 10 ? "0" : "") + n; }; return (d.getMonth() + 1) + "/" + d.getDate() + " " + z(d.getHours()) + ":" + z(d.getMinutes()); }
+  function statusHtml() {
+    var s = sv.status;
+    if (s === "saved") { return '<span class="dsv dsv-ok">&#x2705; 保存ずみ ' + fmtTime(sv.at) + '</span>'; }
+    if (s === "dirty") { return '<span class="dsv dsv-wait">&#x270F;&#xFE0F; 保存待ち…</span>'; }
+    if (s === "error") { return '<span class="dsv dsv-err">&#x26A0;&#xFE0F; 保存できません</span>'; }
+    if (s === "readonly") { return '<span class="dsv dsv-err">&#x1F512; 読むだけ</span>'; }
+    return '<span class="dsv dsv-demo">&#x1F4C4; 見本（まだ保存していない）</span>';
+  }
+  // 画面の下の説明（保存の状態に合わせる。成功のふりをしない）
+  function saveNoteHtml() {
+    if (sv.status === "error" || sv.status === "readonly") { return '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(sv.msg || "保存できません") + '</div>'; }
+    var h = sv.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(sv.msg) + '</div>' : '';
+    if (sv.status === "demo") { return h + '<p class="small dsv-note">見本の曲です。直すと、自動で「じぶんの曲」として保存します。</p>'; }
+    return h + '<p class="small dsv-note">直すと自動で保存します（この端末のこのブラウザの中だけ）。</p>';
+  }
+  function drawStatus() {
+    var root = st.root;
+    if (!root || !root.querySelectorAll) { return; }
+    var els = root.querySelectorAll(".dsv-slot"), i;
+    for (i = 0; i < els.length; i++) { els[i].innerHTML = statusHtml(); }
+  }
+  // 曲を切りかえる（いまの曲の待っている保存を先に書く・再生を止める）
+  function switchTo(p, status) {
+    flushSave();
+    stopPlay(false);
+    st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0;
+    sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
+  }
+  var proj = {
+    // 保存した曲の一覧（読めない曲も「読めない」として出す）
+    list: function () {
+      var r = readIndex(), out = [], i;
+      if (!r.ok) { return { ok: false, why: r.why, list: [] }; }
+      for (i = 0; i < r.idx.list.length; i++) { var e = r.idx.list[i]; if (e && e.id) { out.push({ id: e.id, name: String(e.name || "（名前なし）"), saved: e.saved || 0, notes: e.notes || 0, ok: lsRaw(pkey(e.id)) !== null }); } }
+      return { ok: true, list: out, last: r.idx.last };
+    },
+    open: function (id) {
+      if (st.project && st.project.id === id) { return { ok: true }; }
+      var r = loadProject(id);
+      if (!r.ok) { sv.note = "開けませんでした: " + r.why + "（データは消していません）"; return r; }
+      switchTo(r.project, "saved");
+      var ix = readIndex(); if (ix.ok) { ix.idx.last = id; lsPut(skey(), JSON.stringify(ix.idx)); }
+      return r;
+    },
+    // 新しい曲（kind: "empty" ＝ からっぽ / "demo" ＝ 見本から）。すぐ保存して一覧に出す
+    create: function (kind) {
+      var M = DM(), p = kind === "demo" ? M.demoProject() : M.emptyProject();
+      p.id = M.newProjectId();
+      if (kind === "demo") { p.name = "見本からの曲"; }
+      switchTo(p, "dirty");
+      saveNow();
+      return p;
+    },
+    rename: function (name) {
+      var p = project(); name = String(name || "").replace(/[\u0000-\u001f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40);
+      if (!name) { return false; }
+      p.name = name;
+      return saveNow() || true;
+    },
+    // JSON に書き出す（DAW の曲だけ・UTF-8）
+    exportJson: function () {
+      var p = project(), M = DM(), text = JSON.stringify(M.toRecord(p, p.saved || Date.now()), null, 1);
+      var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
+      var base = String(p.name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw";
+      var name = base + "_" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()) + ".json";
+      var how = "fail";
+      try { how = I.saveBlob(new Blob([text], { type: "application/json" }), name); } catch (e) { how = "fail"; }
+      sv.note = how === "fail" ? "書き出せませんでした" : "「" + name + "」を書き出しました" + (how === "share" ? "（共有シートから「ファイルに保存」を選んでください）" : "");
+      return { ok: how !== "fail", name: name, text: text, how: how };
+    },
+    // JSON を読みこむ（検証してから・新しい曲として保存・ほかの曲を上書きしない）
+    importText: function (text) {
+      var M = DM(), r = M.parseRecordText(text);
+      if (!r.ok) { sv.note = "読みこめませんでした: " + r.why + "（いまの曲と保存した曲はそのままです）"; return r; }
+      var p = r.project, ix = readIndex(), i;
+      if (ix.ok) {
+        if (findEntry(ix.idx, p.id) >= 0 || (st.project && st.project.id === p.id)) { p.id = M.newProjectId(); }
+        for (i = 0; i < ix.idx.list.length; i++) { if (ix.idx.list[i] && ix.idx.list[i].name === p.name) { p.name = (p.name + "（読みこみ）").substring(0, 40); break; } }
+      } else if (st.project && st.project.id === p.id) { p.id = M.newProjectId(); }
+      switchTo(p, "dirty");
+      var ok = saveNow();
+      sv.note = "「" + p.name + "」を読みこみました" + (ok ? "" : "（ただし保存できませんでした）");
+      return { ok: true, project: p, saved: ok };
+    }
+  };
+  function projHtml() {
+    var p = project(), L = proj.list(), i, h;
+    h = '<div class="daw dp">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-pj="back">&#x2190; もどる</button><b>&#x1F4C1; 曲の保存と読みこみ</b></div>' +
+      '<div class="dp-cur"><div class="dp-name">' + escHtml(p.name) + '</div><span class="dsv-slot">' + statusHtml() + '</span></div>' +
+      '<div class="dp-btns">' +
+        '<button class="modal-btn" data-pj="save">&#x1F4BE; いま保存</button>' +
+        '<button class="modal-btn" data-pj="rename">&#x270F;&#xFE0F; 曲名を変える</button>' +
+        '<button class="modal-btn" data-pj="new">&#x1F195; 新しい曲（からっぽ）</button>' +
+        '<button class="modal-btn" data-pj="demo">&#x1F3BC; 見本の曲から作る</button>' +
+        '<button class="modal-btn" data-pj="export">&#x2B07;&#xFE0F; JSON に書き出す</button>' +
+        '<button class="modal-btn" data-pj="import">&#x2B06;&#xFE0F; JSON を読みこむ</button>' +
+        '<input type="file" class="dp-file" accept=".json,application/json,text/plain" style="display:none;">' +
+      '</div>' +
+      (sv.note ? '<div class="daw-info">' + escHtml(sv.note) + '</div>' : '') +
+      saveNoteHtml() +
+      '<p class="small dsv-note">保存は<b>この端末・このブラウザの中だけ</b>です。ほかの端末やブラウザとは同期しません。機種を変える・PC に移す・念のための控えには「JSON に書き出す」を使ってください。</p>' +
+      '<p class="small dp-h">保存した曲' + (L.ok ? '（' + L.list.length + '）' : '') + '</p>';
+    if (!L.ok) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(L.why) + '</div>'; }
+    else if (!L.list.length) { h += '<p class="small dsv-note">まだありません。</p>'; }
+    for (i = 0; i < L.list.length; i++) {
+      var e = L.list[i], cur = e.id === p.id;
+      h += '<div class="dp-row' + (cur ? " dp-curr" : "") + '"><span class="dp-rn">' + escHtml(e.name) + '<br><span class="small">' + fmtTime(e.saved) + '・音符 ' + e.notes + ' 個' + (e.ok ? '' : '・<b>読めません（データはそのまま）</b>') + '</span></span>' +
+        (cur ? '<span class="small dp-now">いま開いている</span>' : (e.ok ? '<button class="modal-btn" data-pj-open="' + escHtml(e.id) + '">開く</button>' : '')) + '</div>';
+    }
+    return h + '</div>';
+  }
+  function renderProj(root, ctl) {
+    root.innerHTML = projHtml();
+    if (!root.querySelectorAll) { return; }
+    var btns = root.querySelectorAll("button"), k, file = root.querySelector(".dp-file");
+    function back() { st.view = "arr"; sv.note = ""; render(root, ctl); }
+    for (k = 0; k < btns.length; k++) {
+      btns[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-pj"), id = el.getAttribute("data-pj-open");
+        if (id) { var r = proj.open(id); if (r.ok) { sv.note = ""; render(root, ctl); } else { renderProj(root, ctl); } return; }
+        if (v === "back") { back(); return; }
+        if (v === "save") { sv.note = saveNow() ? "保存しました" : ""; renderProj(root, ctl); return; }
+        if (v === "rename") {
+          var a = window.prompt ? window.prompt("曲名（40 文字まで）", project().name) : null;
+          if (a !== null && a !== undefined) { proj.rename(a); }
+          renderProj(root, ctl); return;
+        }
+        if (v === "new" || v === "demo") { proj.create(v === "demo" ? "demo" : "empty"); sv.note = ""; render(root, ctl); return; }
+        if (v === "export") { proj.exportJson(); renderProj(root, ctl); return; }
+        if (v === "import" && file) { file.value = ""; file.click(); }
+      };
+    }
+    if (file) {
+      file.onchange = function () {
+        var f = file.files && file.files[0];
+        if (!f) { return; }
+        if (f.size > DM().MAX_JSON) { sv.note = "読みこめませんでした: ファイルが大きすぎます（2MB まで）"; renderProj(root, ctl); return; }
+        var rd = new FileReader();
+        rd.onload = function () { var r = proj.importText(String(rd.result || "")); if (r.ok) { render(root, ctl); } else { renderProj(root, ctl); } };
+        rd.onerror = function () { sv.note = "ファイルを読めませんでした"; renderProj(root, ctl); };
+        rd.readAsText(f, "UTF-8");
+      };
+    }
+  }
+  // DAW とピアノロールの上の段: 📁 曲・曲名・保存の状態・💾
+  function projBarHtml(p) {
+    return '<div class="dp-bar"><button class="modal-btn daw-small" data-go-proj="1">&#x1F4C1; 曲</button>' +
+      '<button class="dp-title" data-rename="1" title="曲名を変える">' + escHtml(p.name) + ' &#x270F;&#xFE0F;</button>' +
+      '<span class="dsv-slot">' + statusHtml() + '</span>' +
+      '<button class="modal-btn daw-small" data-save-now="1" title="いま保存">&#x1F4BE;</button></div>';
+  }
+  // 上の段のボタン（DAW とピアノロールで同じ）
+  function bindProjBar(root, ctl) {
+    var a = root.querySelector("[data-go-proj]"), b = root.querySelector("[data-rename]"), c = root.querySelector("[data-save-now]");
+    if (a) { a.onclick = function () { keepScroll(root); if (pl) { stopPlay(false); } st.view = "proj"; sv.note = ""; renderProj(root, ctl); }; }
+    if (b) { b.onclick = function () { var v = window.prompt ? window.prompt("曲名（40 文字まで）", project().name) : null; if (v !== null && v !== undefined) { proj.rename(v); keepScroll(root); render(root, ctl); } }; }
+    if (c) { c.onclick = function () { saveNow(); drawStatus(); }; }
+  }
+  function keepScroll(root) { var arr = root.querySelector && root.querySelector(".daw-arr"); if (arr) { st.scroll = arr.scrollLeft || 0; } var w = root.querySelector && root.querySelector(".pr-wrap"); if (w && st.roll) { st.roll.sx = w.scrollLeft; st.roll.sy = w.scrollTop; } }
   var BLACK = [1, 3, 6, 8, 10];
   function rollClip() { var r = st.roll, f = r ? DM().findClip(st.project, r.clip) : null; return f; }
   function openRoll(id) {
@@ -394,7 +658,7 @@
     add: function (t, m) {
       var f = rollClip(); if (!f) { return null; }
       var snap = copyNotes(f.clip), n = DM().noteAdd(f.clip, t, m, st.roll.snap, 0.8);
-      if (n) { pushUndo(snap); st.roll.sel = n; preview(f.track, n[2]); afterEdit(); }
+      if (n) { pushUndo(snap); st.roll.sel = n; preview(f.track, n[2]); markDirty(); afterEdit(); }
       return n;
     },
     set: function (n, o, snap) {
@@ -402,7 +666,7 @@
       var before = snap || copyNotes(f.clip), m0 = n[2], t0 = n[0], d0 = n[1];
       DM().noteSet(f.clip, n, o);
       if (n[0] === t0 && n[1] === d0 && n[2] === m0) { rerender(); return n; }
-      pushUndo(before); st.roll.sel = n;
+      pushUndo(before); st.roll.sel = n; markDirty();
       if (n[2] !== m0) { preview(f.track, n[2]); }
       afterEdit();
       return n;
@@ -411,12 +675,12 @@
       var f = rollClip(); n = n || (st.roll && st.roll.sel); if (!f || !n) { return false; }
       var snap = copyNotes(f.clip);
       if (!DM().noteDelete(f.clip, n)) { return false; }
-      pushUndo(snap); st.roll.sel = null; afterEdit();
+      pushUndo(snap); st.roll.sel = null; markDirty(); afterEdit();
       return true;
     },
     undo: function () {
       var f = rollClip(), r = st.roll; if (!f || !r.undo.length) { return false; }
-      f.clip.notes = r.undo.pop(); r.sel = null; afterEdit();
+      f.clip.notes = r.undo.pop(); r.sel = null; markDirty(); afterEdit(); // 戻したあとの状態を保存
       return true;
     }
   };
@@ -428,7 +692,7 @@
     var h = '<div class="daw pr">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-roll="back">&#x2190; もどる</button><b>&#x270F;&#xFE0F; ' + escHtml((c.ext && c.ext.name) || "クリップ") + '</b>' +
       '<span class="daw-pname">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' ' + escHtml(t.name) + '・' + instName(t) + '</span></div>' +
-      '<div class="pr-warn">' + WARN + '</div>' +
+      projBarHtml(p) +
       '<div class="daw-transport">' +
         '<button class="modal-btn daw-tbtn' + (playing ? " daw-on" : "") + '" data-roll="play" title="このクリップだけ鳴らす（くり返し）">&#x25B6;&#xFE0F;</button>' +
         '<button class="modal-btn daw-tbtn" data-roll="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
@@ -503,6 +767,7 @@
         if (v === "up" || v === "down") { if (wrap) { wrap.scrollTop += (v === "up" ? -12 : 12) * RH; keep(); } }
       };
     }
+    bindProjBar(root, ctl);
     var ss = root.querySelector("select[data-roll-snap]");
     if (ss) { ss.onchange = function () { keep(); r.snap = st.rollSnap = Number(ss.value) || 480; rerender(); }; }
     if (wrap) { wrap.onscroll = keep; }
@@ -574,26 +839,27 @@
         if ((v = el.getAttribute("data-act"))) {
           if (v === "play") { startPlay(); redraw(); return; }
           if (v === "stop") { stopPlay(false); redraw(); return; }
-          if (v === "loop") { setLoop(!(p.practice && p.practice.loopOn)); redraw(); return; }
-          if (v === "bpm-" || v === "bpm+") { changeBpm(M.bpmAt(p, 0) + (v === "bpm+" ? 1 : -1)); redraw(); return; }
+          if (v === "loop") { setLoop(!(p.practice && p.practice.loopOn)); markDirty(); redraw(); return; }
+          if (v === "bpm-" || v === "bpm+") { changeBpm(M.bpmAt(p, 0) + (v === "bpm+" ? 1 : -1)); markDirty(); redraw(); return; }
           if (v === "bpm" && window.prompt) {
             var a = window.prompt("BPM（" + M.BPM_MIN + "〜" + M.BPM_MAX + "）", String(M.bpmAt(p, 0)));
-            if (a !== null && isFinite(Number(a)) && String(a).replace(/\s/g, "") !== "") { changeBpm(Number(a)); redraw(); }
+            if (a !== null && isFinite(Number(a)) && String(a).replace(/\s/g, "") !== "") { changeBpm(Number(a)); markDirty(); redraw(); }
           }
           return;
         }
-        if ((v = el.getAttribute("data-mute"))) { var tm = M.findTrack(p, v); if (tm) { tm.mute = !tm.mute; st.sel = { kind: "track", id: v }; updateMix(); } redraw(); return; }
-        if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); } redraw(); return; }
+        if ((v = el.getAttribute("data-mute"))) { var tm = M.findTrack(p, v); if (tm) { tm.mute = !tm.mute; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
+        if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } if (!openRoll(v)) { st.sel = { kind: "clip", id: v }; } render(root, ctl); return; } // 9A-3: タップでピアノロール
         if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; redraw(); }
       };
     }
+    bindProjBar(root, ctl);
     var sels = root.querySelectorAll("select[data-inst]");
     for (k = 0; k < sels.length; k++) {
       sels[k].onclick = function (ev) { if (ev.stopPropagation) { ev.stopPropagation(); } };
       sels[k].onchange = function (ev) {
         var el = ev.currentTarget, t = M.findTrack(p, el.getAttribute("data-inst"));
-        if (t && el.value) { t.instrument = M.synthInstrument(el.value); st.sel = { kind: "track", id: t.id }; if (pl) { warm(t); } } // 再生中なら、これから予約する音から新しい音色
+        if (t && el.value) { t.instrument = M.synthInstrument(el.value); st.sel = { kind: "track", id: t.id }; if (pl) { warm(t); } markDirty(); } // 再生中なら、これから予約する音から新しい音色
         redraw();
       };
     }
@@ -630,10 +896,14 @@
   window.UGDaw = {
     state: function () { return st; },
     project: project,
-    reset: function () { stopPlay(false); clearTail(); st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; },
+    reset: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
+    // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
+    proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
+    showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
+    reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
     ROLL: { RB: RB, RH: RH, LO: LO, HI: HI, KEYW: KEYW },
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,

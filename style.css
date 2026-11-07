@@ -1414,3 +1414,23 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .pr-handle::after { content: ""; position: absolute; left: 4px; top: 7px; bottom: 7px; width: 5px; border-radius: 2px; background: #10202e; box-shadow: 0 0 0 1px #fff3c4; }
 .pr-playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ef476f; z-index: 4; pointer-events: none; }
 .pr-help { color: #adb5bd; margin: 6px 0 0; line-height: 1.5; }
+/* §341 9A-4: 曲の保存・読みこみ */
+.dp-bar { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; min-width: 0; }
+.dp-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; background: #0f1a2b; color: #fff; border: 1px solid #3a4a63; border-radius: 6px; min-height: 30px; padding: 0 6px; font-size: 13px; font-weight: bold; }
+.dsv-slot { flex: 0 0 auto; }
+.dsv { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
+.dsv-ok { background: #0b3b2e; color: #06d6a0; }
+.dsv-wait { background: #3d2f00; color: #ffd166; }
+.dsv-err { background: #4a1d2a; color: #ff8fab; }
+.dsv-demo { background: #24364d; color: #c9d6e3; }
+.dsv-note { color: #adb5bd; margin: 6px 0 0; line-height: 1.5; }
+.dp-cur { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.dp-name { flex: 1; min-width: 0; font-size: 16px; font-weight: bold; color: #ffd166; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.dp-btns .modal-btn { margin: 0; min-height: 40px; font-size: 13px; padding: 4px 6px; }
+.dp-h { margin: 10px 0 4px; color: #ffd166; }
+.dp-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 6px; background: #1a2a3a; border-radius: 8px; }
+.dp-row.dp-curr { box-shadow: inset 3px 0 0 #ffd166; }
+.dp-rn { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.dp-row .modal-btn { margin: 0; flex: 0 0 auto; min-height: 34px; padding: 2px 12px; }
+.dp-now { color: #ffd166; flex: 0 0 auto; }
