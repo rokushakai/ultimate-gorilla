@@ -1063,4 +1063,143 @@ module.exports = async function () {
   ok(Object.keys(DA.audio.state().buf).length === 0 && Object.keys(DA.audio.state().st).length === 0 && !DA.isPlaying(), "14. leaving the DAW frees the decoded audio (the WAV stays in IndexedDB)");
   ok(SA.ultimateGorillaSaveV2 === rpgA, "RPG save untouched");
   DA.reset();
+  // ================= 9A-11: プロジェクトパック（ZIP）（§341）=================
+  var NC = require("crypto"), NZ = require("zlib");
+  function fakeDecode(W) {
+    W.OfflineAudioContext.prototype.decodeAudioData = function (ab, okCb, ngCb) {
+      var info = W.UGDawModel.parseWav(ab);
+      setTimeout(function () {
+        if (!info.ok || info.bits !== 16) { if (ngCb) { ngCb({ name: "EncodingError" }); } return; }
+        var v = new DataView(ab), chs = [], c, i;
+        for (c = 0; c < info.ch; c++) { chs.push(new Float32Array(info.frames)); }
+        for (i = 0; i < info.frames; i++) { for (c = 0; c < info.ch; c++) { chs[c][i] = v.getInt16(info.dataOffset + (i * info.ch + c) * 2, true) / 32768; } }
+        okCb({ numberOfChannels: info.ch, length: info.frames, sampleRate: info.sr, duration: info.frames / info.sr, getChannelData: function (k) { return chs[k]; } });
+      }, 1);
+      return { catch: function () {} };
+    };
+  }
+  function blobAB(b) { var n = 0, i, o; for (i = 0; i < b.parts.length; i++) { n += b.parts[i].length; } var u = new Uint8Array(n); o = 0; for (i = 0; i < b.parts.length; i++) { u.set(b.parts[i], o); o += b.parts[i].length; } return u.buffer; }
+  function eq(a, b) { a = new Uint8Array(a); b = new Uint8Array(b); if (a.length !== b.length) { return false; } for (var i = 0; i < a.length; i++) { if (a[i] !== b[i]) { return false; } } return true; }
+  function lsDaw(S) { return JSON.stringify(Object.keys(S).filter(function (k) { return k.indexOf("ultimateGorillaDawV1") === 0; }).sort().map(function (k) { return [k, S[k]]; })); }
+  // --- 道具（CRC32・SHA-256・deflate・ZIP）---
+  var eZ = H.load(), Z = eZ.window.UGDawZip;
+  ok(!!Z && Z.crc32(Z.utf8("123456789")) === 0xCBF43926 && Z.sha256(Z.utf8("abc")) === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" && Z.sha256(new Uint8Array(0)) === "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "UGDawZip: CRC32 and SHA-256 test vectors");
+  var shaOk = [55, 56, 64, 1000, 70001].every(function (n) { var b = NC.randomBytes(n); return Z.sha256(new Uint8Array(b)) === NC.createHash("sha256").update(b).digest("hex"); });
+  ok(shaOk, "SHA-256 (ES5) = Node crypto for block-edge lengths");
+  var infOk = [0, 1, 300, 70000].every(function (n) { return [0, 1, 9].every(function (lv) { var b = Buffer.alloc(n), i; for (i = 0; i < n; i++) { b[i] = (i % 17) * 3 + (i >> 9); } var d = NZ.deflateRawSync(b, { level: lv }), o = Z.inflateRaw(new Uint8Array(d), n); return Buffer.compare(Buffer.from(o), b) === 0; }); });
+  var infStop = false; try { Z.inflateRaw(new Uint8Array(NZ.deflateRawSync(Buffer.alloc(5000))), 4999); } catch (e) { infStop = true; }
+  ok(infOk && infStop, "inflate (stored / fixed / dynamic blocks) = zlib, and it stops past the declared size");
+  ok(Z.safeName("audio/a-1.wav") && !Z.safeName("../x") && !Z.safeName("audio/../../x") && !Z.safeName("/etc/x") && !Z.safeName("a\\b") && !Z.safeName("c:x") && !Z.safeName("a//b"), "unsafe names (../, absolute, \\, :, empty parts) are rejected");
+  var zb = Z.zipBuild([{ name: "a.txt", data: Z.utf8("ゴリラ") }, { name: "audio/b.wav", data: new Uint8Array([1, 2, 3]) }]), zab = blobAB({ parts: zb.parts }), zr = Z.zipRead(zab);
+  ok(zr.ok && zr.list.join() === "a.txt,audio/b.wav" && Z.fromUtf8(Z.zipData(zab, zr.files["a.txt"]).data) === "ゴリラ" && zb.size === zab.byteLength, "zipBuild → zipRead round trip (stored, UTF-8 names)");
+
+  // --- 曲を作る（リード・ベース・音声 2 素材・同じ素材を 2 つのクリップ）---
+  var eP = H.load(), WP = eP.window, MP = WP.UGDawModel, DP = WP.UGDaw, AP = WP.UGArcade, SP = eP.store;
+  SP.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); SP.ultimateGorillaUkuleleSeqV1 = JSON.stringify({ bpm: 90 });
+  var rpgP = SP.ultimateGorillaSaveV2, ukeP = SP.ultimateGorillaUkuleleSeqV1;
+  var IDBP = fakeIDB(); WP.indexedDB = IDBP; fakeDecode(WP);
+  var RP = H.makeEl("div"); DP.reset(); AP.start("daw", RP, {});
+  DP.proj.create("empty");
+  var pP = DP.project(); pP.tracks[0].clips[0].notes = [[0, 480, 72, 0.8], [960, 480, 74, 0.7]]; pP.ext.future = { keep: 1 }; pP.tracks[0].myKey = "x";
+  var tP = await new Promise(function (r) { DP.audio.add(r); });
+  var wv1 = makeWav({ sr: 44100, ch: 2, sec: 2.5, fn: tone(330) }), wv2 = makeWav({ sr: 48000, ch: 1, sec: 1.2, fn: tone(550) });
+  function impP(ab, name, o) { return new Promise(function (r) { DP.audio.importWav(ab, name, o, r); }); }
+  var q1 = await impP(wv1, "uke.wav", { track: tP.id }), q2 = await impP(wv1.slice(0), "uke.wav", { track: tP.id }), q3 = await impP(wv2, "voice.wav", { track: tP.id });
+  DP.flushSave(); DP.saveNow();
+  var id1 = MP.hashBytes(new Uint8Array(wv1)), id2 = MP.hashBytes(new Uint8Array(wv2));
+  ok(q1.ok && q2.ok && q2.reused && q3.ok && DP.project().assets.length === 2 && MP.assetUse(DP.project(), id1) === 2, "song: 3 audio clips, 2 assets (one used twice)");
+  var pjBefore = JSON.stringify(DP.project()), lsBefore = lsDaw(SP);
+  // --- 書き出し ---
+  var exP = await new Promise(function (r) { DP.pack.exportZip(r); });
+  var zipAB = blobAB(exP.blob), zrP = Z.zipRead(zipAB);
+  ok(exP.ok && zrP.ok && zrP.list.join() === ["manifest.json", "project.json", DP.pack.file(id1), DP.pack.file(id2)].join() && exP.assets === 2 && /\.zip$/.test(exP.name), "1–4. ZIP = manifest.json + project.json + one WAV per asset (the shared one only once)", zrP.list);
+  var manP = JSON.parse(Z.fromUtf8(Z.zipData(zipAB, zrP.files["manifest.json"]).data));
+  ok(manP.format === "ultimate-gorilla-daw-pack" && manP.packVersion === 1 && manP.name === DP.project().name && manP.projectId === DP.project().id && manP.assets.length === 2 && manP.assets[0].sha256 === NC.createHash("sha256").update(Buffer.from(wv1)).digest("hex") && manP.assets[0].bytes === wv1.byteLength && manP.assets[0].used, "manifest: version, name, assets with id / file / bytes / SHA-256 (= Node crypto)");
+  ok(eq(Z.zipData(zipAB, zrP.files[DP.pack.file(id1)]).data, wv1) && eq(Z.zipData(zipAB, zrP.files[DP.pack.file(id2)]).data, wv2), "5. the WAVs in the ZIP are byte-identical to the original files");
+  var recP = JSON.parse(Z.fromUtf8(Z.zipData(zipAB, zrP.files["project.json"]).data));
+  ok(recP.format === "ultimate-gorilla-daw" && recP.schemaVersion === 1 && JSON.stringify(recP.project) === JSON.stringify(MP.toRecord(DP.project(), DP.project().saved).project) && recP.project.ext.future.keep === 1 && recP.project.tracks[0].myKey === "x", "8. project.json = the usual JSON export (schemaVersion 1, unknown keys kept)");
+  ok(JSON.stringify(DP.project()) === pjBefore && lsDaw(SP) === lsBefore, "exporting the ZIP changes neither the song nor the saved data");
+  DP.showProj();
+  ok(RP.innerHTML.indexOf("プロジェクトをまとめて保存（ZIP）") >= 0 && RP.innerHTML.indexOf("プロジェクトZIPを読みこむ") >= 0 && RP.innerHTML.indexOf("<b>JSON</b> ＝ 曲の編集データだけ") >= 0 && RP.innerHTML.indexOf("音声の素材 2 個") >= 0, "the song screen has ZIP save / load and explains JSON / ZIP / WAV");
+  // --- 新しい保存領域（別の端末のつもり）に ZIP だけから復元 ---
+  var eQ = H.load(), WQ = eQ.window, MQ = WQ.UGDawModel, DQ = WQ.UGDaw, AQ = WQ.UGArcade, SQ = eQ.store, IDBQ = fakeIDB();
+  WQ.indexedDB = IDBQ; fakeDecode(WQ);
+  var RQ = H.makeEl("div"); DQ.reset(); AQ.start("daw", RQ, {});
+  DQ.proj.create("empty"); DQ.project().name = "uke 以外の曲"; DQ.saveNow();
+  var curQ = DQ.project().id, curQjson = JSON.stringify(DQ.project());
+  function impZ(D, ab) { return new Promise(function (r) { D.pack.importZip(ab, r); }); }
+  var rq1 = await impZ(DQ, zipAB.slice(0));
+  ok(rq1.ok && rq1.assets === 2 && rq1.reused === 0 && rq1.id !== manP.projectId && DQ.project().id === curQ && JSON.stringify(DQ.project()) === curQjson, "2–3, 9. restored into an empty storage under a NEW id; the open song is not switched or changed", rq1.why);
+  var dbQ = IDBQ.data[DQ.audio.IDB_NAME];
+  ok(eq(dbQ.stores.blobs.rows[id1].data, wv1) && eq(dbQ.stores.blobs.rows[id2].data, wv2) && dbQ.stores.meta.rows[id1].peaks.length === 250, "the WAVs are stored in the new IndexedDB, byte-identical");
+  var lpQ = DQ.loadProject(rq1.id);
+  var strip = function (p) { var o = JSON.parse(JSON.stringify(p)); delete o.id; delete o.saved; delete o.name; return JSON.stringify(o); };
+  ok(lpQ.ok && strip(lpQ.project) === strip(JSON.parse(pjBefore)) && lpQ.project.ext.future.keep === 1, "8. the restored song equals the original (except id / name / saved), unknown keys kept");
+  ok(DQ.proj.list().list.some(function (e) { return e.id === rq1.id; }) && DQ.proj.list().list.some(function (e) { return e.id === curQ; }), "it is in the song list next to the existing song");
+  // 開いて鳴らす・WAV に書き出す
+  ok(DQ.proj.open(rq1.id).ok && DQ.project().id === rq1.id, "open the restored song");
+  await new Promise(function (r) { DQ.audio.ensure(DQ.project(), r); });
+  DQ.clearLog(); DQ.play(); var PQ = DQ.player(), gQ = 0; while (PQ.ac.currentTime < PQ.segs[0].t0 + 9 && gQ++ < 5000) { PQ.ac.currentTime += 0.025; DQ.pump(); }
+  var laQ = DQ.log().filter(function (x) { return x.audio; });
+  ok(laQ.length === 3 && laQ.every(function (x) { return x.ok; }) && DQ.log().some(function (x) { return !x.audio && x.ok; }), "6. the restored song plays its 3 audio clips and the notes", laQ.map(function (x) { return x.why; }));
+  DQ.stop();
+  DQ.wav.start(); for (var gq = 0; gq < 300 && DQ.wav.state().busy; gq++) { await eQ.wait(10); }
+  ok(DQ.wav.state().state === "done" && DQ.wav.state().log.filter(function (x) { return x.audio && x.ok; }).length === 3, "7. the restored song can be exported to WAV (with audio)", DQ.wav.state().msg);
+  // 同じ ZIP をもう一度: 上書きしない・素材は使いまわす
+  var lsQ1 = SQ["ultimateGorillaDawV1:p:" + rq1.id], w0 = IDBQ.writes, rq2 = await impZ(DQ, zipAB.slice(0));
+  ok(rq2.ok && rq2.id !== rq1.id && rq2.reused === 2 && IDBQ.writes === w0 && SQ["ultimateGorillaDawV1:p:" + rq1.id] === lsQ1 && /（復元）/.test(rq2.name), "10. the same ZIP again: another new song (name +（復元）), assets reused, the first one untouched", [rq2.name, rq2.reused]);
+  // --- 失敗のとき: なにも変えない ---
+  function zipOf(list) { return blobAB({ parts: Z.zipBuild(list).parts }); }
+  var fM = Z.utf8(JSON.stringify(manP)), fP = Z.zipData(zipAB, zrP.files["project.json"]).data, fA1 = new Uint8Array(wv1), fA2 = new Uint8Array(wv2);
+  function withMan(f) { var m = JSON.parse(JSON.stringify(manP)); f(m); return Z.utf8(JSON.stringify(m)); }
+  var badA1 = new Uint8Array(wv1.slice(0)); badA1[5000] ^= 1;
+  var crcBad = zipAB.slice(0); new Uint8Array(crcBad)[zrP.files[DP.pack.file(id2)].start + 100] ^= 1;
+  var cases = [
+    ["truncated ZIP", zipAB.slice(0, zipAB.byteLength - 30), /終わりの印|こわれ/],
+    ["not a ZIP", new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]).buffer, /ZIP ではありません/],
+    ["no manifest", zipOf([{ name: "project.json", data: fP }]), /manifest\.json がありません/],
+    ["newer pack", zipOf([{ name: "manifest.json", data: withMan(function (m) { m.packVersion = 2; }) }, { name: "project.json", data: fP }]), /新しい版/],
+    ["missing WAV", zipOf([{ name: "manifest.json", data: fM }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: fA1 }]), /素材が足りません/],
+    ["SHA-256 mismatch", zipOf([{ name: "manifest.json", data: withMan(function (m) { m.assets[1].sha256 = new Array(65).join("0"); }) }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: fA1 }, { name: DP.pack.file(id2), data: fA2 }]), /SHA-256 が一致しません/],
+    ["changed WAV", zipOf([{ name: "manifest.json", data: fM }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: badA1 }, { name: DP.pack.file(id2), data: fA2 }]), /一致しません/],
+    ["CRC broken", crcBad, /CRC/],
+    ["../ name", zipOf([{ name: "manifest.json", data: fM }, { name: "../evil.js", data: Z.utf8("alert(1)") }]), /危ない名前/],
+    ["broken project.json", zipOf([{ name: "manifest.json", data: fM }, { name: "project.json", data: Z.utf8("{\"format\":\"ultimate-gorilla-daw\", broken") }]), /project\.json/]
+  ];
+  var lsQ = lsDaw(SQ), rowsQ = JSON.stringify(Object.keys(IDBQ.data[DQ.audio.IDB_NAME].stores.blobs.rows).sort()), wQ = IDBQ.writes, results = [];
+  for (var ci = 0; ci < cases.length; ci++) { var rc = await impZ(DQ, cases[ci][1]); results.push([cases[ci][0], rc.ok, rc.why]); }
+  ok(results.every(function (r, i) { return !r[1] && cases[i][2].test(r[2]); }), "11. broken / truncated / not-ZIP / no manifest / newer / missing WAV / SHA-256 / changed WAV / CRC / ../ / broken project are refused with reasons", results.filter(function (r, i) { return r[1] || !cases[i][2].test(r[2]); }));
+  ok(lsDaw(SQ) === lsQ && IDBQ.writes === wQ && JSON.stringify(Object.keys(IDBQ.data[DQ.audio.IDB_NAME].stores.blobs.rows).sort()) === rowsQ, "11. after all those failures nothing is written (songs and IndexedDB unchanged)");
+  // 圧縮率の高いファイル（ZIP 爆弾のまね）
+  var zeros = Buffer.alloc(1024 * 1024), dz = new Uint8Array(NZ.deflateRawSync(zeros, { level: 9 })), bomb = blobAB({ parts: Z.zipBuild([{ name: "project.json", data: dz }]).parts }), bv = new DataView(bomb), bz = Z.zipRead(bomb);
+  var eo = bomb.byteLength - 22, co = bv.getUint32(eo + 16, true);
+  bv.setUint16(8, 8, true); bv.setUint32(22, zeros.length, true); bv.setUint16(co + 10, 8, true); bv.setUint32(co + 24, zeros.length, true); bv.setUint32(co + 16, Z.crc32(new Uint8Array(zeros)), true); bv.setUint32(14, Z.crc32(new Uint8Array(zeros)), true);
+  var rb = Z.zipRead(bomb);
+  ok(!rb.ok && /圧縮率/.test(rb.why), "a highly compressed entry (1 MB from ~1 KB) is refused before it is expanded", rb.why);
+  ok(!Z.zipRead(bomb, { maxRatio: 100000, maxTotal: 1000 }).ok, "expanded total over the limit is refused");
+  // 容量不足: 曲は登録しない
+  var lsQq = lsDaw(SQ), eR = H.load(), WR = eR.window, DR = WR.UGDaw, IDBR = fakeIDB(); WR.indexedDB = IDBR; fakeDecode(WR);
+  var RR = H.makeEl("div"); DR.reset(); WR.UGArcade.start("daw", RR, {}); DR.proj.create("empty"); var lsR = lsDaw(eR.store);
+  IDBR.failNext = "QuotaExceededError";
+  var rqq = await impZ(DR, zipAB.slice(0));
+  ok(!rqq.ok && /容量/.test(rqq.why) && /曲は登録していません/.test(rqq.why) && lsDaw(eR.store) === lsR, "12. quota error while storing: stops, no song is registered, existing songs unchanged", rqq.why);
+  // MIDI だけの曲（IndexedDB が無いブラウザでも）
+  var eM = H.load(), WM = eM.window, DM2 = WM.UGDaw, RM = H.makeEl("div"); DM2.reset(); WM.UGArcade.start("daw", RM, {}); DM2.proj.create("demo");
+  var exM = await new Promise(function (r) { DM2.pack.exportZip(r); }), abM = blobAB(exM.blob), rM = await impZ(DM2, abM.slice(0));
+  ok(exM.ok && exM.assets === 0 && Z.zipRead(abM).list.join() === "manifest.json,project.json" && rM.ok && rM.assets === 0 && DM2.loadProject(rM.id).ok && MP.noteCount(DM2.loadProject(rM.id).project) === 69, "1. a MIDI-only song: ZIP save → restore (no IndexedDB needed)", rM.why);
+  // 画面の操作（書き出し・読みこみ・開く）
+  DQ.showProj(); DQ.pack.start(function () {}); for (var gp = 0; gp < 300 && DQ.pack.state().busy; gp++) { await eQ.wait(10); }
+  DQ.showProj();
+  ok(DQ.pack.state().state === "done" && RQ.innerHTML.indexOf('data-pj="packSave"') >= 0 && RQ.innerHTML.indexOf("download=") >= 0, "UI: after ZIP save → save (share) and download buttons");
+  await new Promise(function (r) { DQ.pack.load(zipAB.slice(0), r); }); DQ.showProj();
+  ok(DQ.pack.state().istate === "done" && RQ.innerHTML.indexOf("を復元しました") >= 0 && RQ.innerHTML.indexOf('data-pj-open="' + DQ.pack.state().restored.id + '"') >= 0, "UI: after ZIP load → result and ▶ 復元した曲を開く");
+  await new Promise(function (r) { DQ.pack.load(cases[0][1], r); }); DQ.showProj();
+  ok(RQ.innerHTML.indexOf("読みこめませんでした") >= 0 && RQ.innerHTML.indexOf("いまの曲と保存した曲はそのままです") >= 0, "UI: a failed load says that nothing changed");
+  // JSON の書き出し・読みこみはそのまま
+  var jx = DQ.proj.exportJson();
+  ok(jx.ok && DQ.proj.importText(jx.text).ok, "13. JSON export / import still work");
+  ok(SP.ultimateGorillaSaveV2 === rpgP && SP.ultimateGorillaUkuleleSeqV1 === ukeP && !SQ.ultimateGorillaSaveV2, "RPG / ukulele saves untouched");
+  AP.stop(); AQ.stop();
+  ok(!DQ.pack.state().blob && DQ.pack.state().state === "idle", "leaving the DAW frees the ZIP");
+  DP.reset(); DQ.reset();
 };

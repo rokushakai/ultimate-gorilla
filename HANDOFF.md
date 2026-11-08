@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.43** |
+| 現在バージョン | **v2.44** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.44] 📦 ゴリラDAW のプロジェクトパック ZIP**（§341 Phase 9A-11）: 新しい `arcade-daw-zip.js`（`UGDawZip`: crc32・sha256・inflateRaw・zipBuild・zipRead・zipData）。`arcade-daw.js` の `packExport`（IndexedDB の元の WAV・SHA-256・manifest）・`packImport`（全部確かめてから保存・新しい曲 ID で登録・いまの曲は変えない）。公開前の版はタグ `pages-v2.43`（f423742）
 - **[v2.43] 🎵 ゴリラDAW のオーディオトラック**（§341 Phase 9A-10）: `arcade-daw-model.js` に `parseWav`・`hashBytes`・`addAudioTrack`・`addAudioClip`・`audioEvents`・`computePeaks`。`arcade-daw.js` に IndexedDB（`ultimateGorillaDawAudioV1`・`blobs` と `meta`）・`importWav`（保存を確かめてから曲を変える）・`playAudio`・`waveSvg`・素材がないときの表示と選びなおし。WAV の書き出しにもふくめる。公開前の版はタグ `pages-v2.42`（b1a68bd）
 - **[v2.42] 🎵 ゴリラDAW の WAV の書き出し**（§341 Phase 9A-9）: `arcade-daw.js` の `renderSong`（`UGMelody.audio` を差しかえ・`pl` をオフライン用にして `schedule()`）・`wavExport`・`bufStats`。`UGMelody.buildFx` を公開。上の段のボタンが 16 ステップ・ミキサーで効かなかった不具合を直した。公開前の版はタグ `pages-v2.41`（22dd9c6）
 - **[v2.41] 💪 ゴリラDAW のドラムの表現**（§341 Phase 9A-8）: モデル `setStepVel / swingOf / swingDelay / PATTERNS / applyPattern`（`noteEvents` に `rel`）。画面は `steps.pick / setVel / setSwing / pattern / mode`。ハイハットの開閉は `schedule()` の `mxd.openHat`（1 打ごとのゲイン）。公開前の版はタグ `pages-v2.40`（dda90c2）

@@ -344,7 +344,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
+  I.addStopHook(function () { flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -633,6 +633,7 @@
     stopPlay(false);
     wavCancel(); wavFree(); wav.state = "idle"; wav.msg = ""; wav.note = "";
     audFree(p); // 9A-10: 新しい曲で使わない音声を捨てる
+    if (!pk.busy) { packFree(); pk.state = "idle"; pk.msg = ""; } pk.istate = "idle"; pk.imsg = ""; // 9A-11
     st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
@@ -1122,6 +1123,201 @@
     return true;
   }
   function wavCancel() { if (wav.job) { wav.job.canceled = true; } }
+
+  // ---------- §341 9A-11: プロジェクトパック（ZIP: manifest.json・project.json・audio/ の WAV）----------
+  var PACK_FORMAT = "ultimate-gorilla-daw-pack", PACK_VERSION = 1, PACK_MAX_ZIP = 100 * 1024 * 1024, PACK_MAX_JSON = 2 * 1024 * 1024;
+  var pk = { busy: false, state: "idle", msg: "", blob: null, url: "", name: "", size: 0, assets: 0, restored: null, istate: "idle", imsg: "" };
+  function ZP() { return window.UGDawZip || null; }
+  function packFile(id) { return "audio/" + String(id).replace(":", "-") + ".wav"; }
+  function packFree() { if (pk.url) { try { URL.revokeObjectURL(pk.url); } catch (e) {} } pk.url = ""; pk.blob = null; }
+  // まとめる素材（クリップが使う素材は必須・曲の一覧にある素材は端末にあれば）と大きさの見こみ
+  function packPlan(p) {
+    var M = DM(), used = usedAssets(p), l = p.assets || [], i, bytes = 0, list = [], seen = {};
+    for (i = 0; i < used.length; i++) { var a = M.findAsset(p, used[i]); list.push({ id: used[i], ref: a, used: true }); seen[used[i]] = true; if (a) { bytes += a.bytes; } }
+    for (i = 0; i < l.length; i++) { if (!seen[l[i].id]) { list.push({ id: l[i].id, ref: l[i], used: false }); bytes += l[i].bytes; } }
+    return { list: list, used: used.length, bytes: bytes + 8000 };
+  }
+  // 書き出す → cb({ ok, why, blob, name, size, assets })。曲も保存も変えない
+  function packExport(cb) {
+    var Z = ZP(), M = DM(), p = project();
+    function fail(why) { pk.busy = false; cb({ ok: false, why: why }); }
+    if (pk.busy) { cb({ ok: false, why: "いま ZIP を作っています" }); return; }
+    if (!Z) { cb({ ok: false, why: "ZIP の道具（arcade-daw-zip.js）を読みこめませんでした" }); return; }
+    pk.busy = true;
+    var plan = packPlan(p), out = [], i = -1, d = new Date();
+    function next() {
+      i++;
+      if (i >= plan.list.length) { build(); return; }
+      var it = plan.list[i];
+      if (!it.ref) { if (it.used) { fail("クリップが使う素材の情報が曲にありません（" + it.id + "）"); return; } next(); return; }
+      idbGet("blobs", it.id, function (b, why) {
+        var data = b && b.data ? new Uint8Array(b.data) : null;
+        if (!data || data.length !== it.ref.bytes || M.hashBytes(data) !== it.id) {
+          if (it.used) { fail("音声の素材「" + it.ref.name + "」が" + (b === undefined ? "読めません（" + (why || "") + "）" : (data ? "こわれています" : "この端末にありません")) + "。まとめられません（「🔗 素材を選びなおす」でつなぎなおしてください）"); return; }
+          next(); return; // 使っていない素材が端末に無いときは入れない
+        }
+        Z.sha256Async(data, function (sha) {
+          if (!/^[0-9a-f]{64}$/.test(sha)) { fail("SHA-256 を計算できませんでした"); return; }
+          var r = it.ref;
+          out.push({ data: data, m: { id: it.id, file: packFile(it.id), name: r.name, bytes: data.length, sha256: sha, sr: r.sr, ch: r.ch, bits: r.bits, frames: r.frames, sec: r.sec, used: it.used } });
+          next();
+        });
+      });
+    }
+    function build() {
+      var rec = M.toRecord(p, p.saved || Date.now()), files = [], k, man;
+      man = { format: PACK_FORMAT, packVersion: PACK_VERSION, app: "究極ゴリラ ゴリラDAW", created: d.toISOString(), name: p.name, projectId: p.id, project: "project.json", assets: [] };
+      for (k = 0; k < out.length; k++) { man.assets.push(out[k].m); }
+      files.push({ name: "manifest.json", data: Z.utf8(JSON.stringify(man, null, 1)) });
+      files.push({ name: "project.json", data: Z.utf8(JSON.stringify(rec, null, 1)) });
+      for (k = 0; k < out.length; k++) { files.push({ name: out[k].m.file, data: out[k].data }); }
+      var z, blob;
+      try { z = Z.zipBuild(files, d); blob = new Blob(z.parts, { type: "application/zip" }); } catch (e) { fail("ZIP を作れませんでした（" + errName(e) + "・メモリが足りないかもしれません）"); return; }
+      pk.busy = false;
+      cb({ ok: true, blob: blob, name: fileBase(p.name) + "_" + stamp() + ".zip", size: z.size, assets: out.length, manifest: man });
+    }
+    if (!plan.list.length) { build(); return; }
+    next();
+  }
+  // 読みこむ（全部確かめてから IndexedDB へ・新しい曲 ID で一覧に足す。いまの曲は切りかえない）→ cb({ ok, why, id, name, assets, reused })
+  function packImport(ab, cb) {
+    var Z = ZP(), M = DM();
+    function fail(why) { pk.busy = false; cb({ ok: false, why: why }); }
+    if (pk.busy) { cb({ ok: false, why: "いま別の ZIP を処理しています" }); return; }
+    if (!Z) { cb({ ok: false, why: "ZIP の道具（arcade-daw-zip.js）を読みこめませんでした" }); return; }
+    if (!ab || typeof ab.byteLength !== "number") { cb({ ok: false, why: "ファイルを読めませんでした" }); return; }
+    if (ab.byteLength > PACK_MAX_ZIP) { cb({ ok: false, why: "ZIP が大きすぎます（" + mb(ab.byteLength) + "・" + (PACK_MAX_ZIP / 1048576) + "MB まで）" }); return; }
+    var zr = Z.zipRead(ab, { maxEntries: 64, maxTotal: PACK_MAX_ZIP, maxRatio: 200 });
+    if (!zr.ok) { cb({ ok: false, why: zr.why }); return; }
+    function json(name) {
+      var f = zr.files[name];
+      if (!f) { return { ok: false, why: "ZIP に " + name + " がありません（ゴリラDAW のプロジェクトの ZIP ではないようです）" }; }
+      if (f.usize > PACK_MAX_JSON) { return { ok: false, why: name + " が大きすぎます" }; }
+      var d = Z.zipData(ab, f);
+      if (!d.ok) { return d; }
+      var o; try { o = JSON.parse(Z.fromUtf8(d.data).replace(/^﻿/, "")); } catch (e) { return { ok: false, why: name + " を読めませんでした（こわれています）" }; }
+      return { ok: true, obj: o, text: Z.fromUtf8(d.data) };
+    }
+    var mj = json("manifest.json");
+    if (!mj.ok) { cb({ ok: false, why: mj.why }); return; }
+    var man = mj.obj;
+    if (!man || typeof man !== "object" || man.format !== PACK_FORMAT) { cb({ ok: false, why: "ゴリラDAW のプロジェクトの ZIP ではありません（manifest の形がちがいます）" }); return; }
+    var pv = Number(man.packVersion);
+    if (!(pv >= 1)) { cb({ ok: false, why: "manifest の版がおかしいです" }); return; }
+    if (pv > PACK_VERSION) { cb({ ok: false, why: "新しい版のゴリラDAW で作られた ZIP なので、この版では読めません（ページを最新にしてください）" }); return; }
+    if (man.project !== "project.json") { cb({ ok: false, why: "manifest の曲のファイル名がおかしいです" }); return; }
+    var pj = json("project.json");
+    if (!pj.ok) { cb({ ok: false, why: pj.why }); return; }
+    var pr = M.parseRecordText(pj.text);
+    if (!pr.ok) { cb({ ok: false, why: "曲のデータ（project.json）を読めませんでした: " + pr.why }); return; }
+    var p = pr.project, need = usedAssets(p), mas = Object.prototype.toString.call(man.assets) === "[object Array]" ? man.assets : null, byId = {}, i;
+    if (!mas) { cb({ ok: false, why: "manifest の素材の一覧がありません" }); return; }
+    if (mas.length > M.MAX_ASSETS) { cb({ ok: false, why: "素材が多すぎます（" + mas.length + " 個・" + M.MAX_ASSETS + " 個まで）" }); return; }
+    for (i = 0; i < mas.length; i++) {
+      var a = mas[i];
+      if (!a || typeof a.id !== "string" || !/^a:[0-9a-f]{16}$/.test(a.id) || a.file !== packFile(a.id) || !/^[0-9a-f]{64}$/.test(String(a.sha256))) { cb({ ok: false, why: "manifest の素材の情報がおかしいです（" + (i + 1) + " 個目）" }); return; }
+      if (byId[a.id]) { cb({ ok: false, why: "manifest に同じ素材が 2 回あります" }); return; }
+      if (!zr.files[a.file]) { if (need.indexOf(a.id) >= 0) { cb({ ok: false, why: "素材が足りません（「" + String(a.name || a.id) + "」が ZIP に入っていません）。読みこみをやめました" }); return; } continue; }
+      if (!(a.bytes > 0) || a.bytes > M.WAV_MAX_BYTES || zr.files[a.file].usize !== a.bytes) { cb({ ok: false, why: "素材「" + String(a.name || a.id) + "」の大きさがおかしいです" }); return; }
+      if (M.findAsset(p, a.id)) { byId[a.id] = a; } // 曲の一覧にある素材だけ使う（ほかは読まない）
+    }
+    for (i = 0; i < need.length; i++) { if (!byId[need[i]]) { var nr = M.findAsset(p, need[i]); cb({ ok: false, why: "素材が足りません（「" + (nr ? nr.name : need[i]) + "」が ZIP にありません）。読みこみをやめました" }); return; } }
+    pk.busy = true;
+    var ids = Object.keys(byId), ok = [], k = -1;
+    // 1 つずつ: 取り出す → 大きさ・SHA-256・中身の ID・WAV のヘッダー・曲の参照と同じか → デコードできるか
+    function check() {
+      k++;
+      if (k >= ids.length) { store(); return; }
+      var a = byId[ids[k]], d = Z.zipData(ab, zr.files[a.file]);
+      if (!d.ok) { fail(d.why + "。読みこみをやめました"); return; }
+      var u = d.data;
+      if (u.length !== a.bytes || M.hashBytes(u) !== a.id) { fail("素材「" + a.name + "」の中身が一致しません（こわれているか、書きかえられています）。読みこみをやめました"); return; }
+      Z.sha256Async(u, function (sha) {
+        if (sha !== a.sha256) { fail("素材「" + a.name + "」の SHA-256 が一致しません。読みこみをやめました"); return; }
+        var buf = u.buffer.byteLength === u.length ? u.buffer : u.slice(0).buffer, info = M.parseWav(buf);
+        if (!info.ok) { fail("素材「" + a.name + "」: " + info.why); return; }
+        var ref = M.findAsset(p, a.id);
+        if (!M.sameAsset(ref, M.assetRef(info, ref.name, a.id))) { fail("素材「" + a.name + "」が曲の記録（長さ・レート・ch）と合いません。読みこみをやめました"); return; }
+        decodeWav(buf, info, function (b, why) {
+          if (!b) { fail("素材「" + a.name + "」: " + why); return; }
+          var peaks = []; try { peaks = peaksOf(b); } catch (e) { peaks = []; }
+          ok.push({ id: a.id, data: buf, meta: { id: a.id, name: ref.name, bytes: ref.bytes, sr: ref.sr, ch: ref.ch, bits: ref.bits, frames: ref.frames, sec: ref.sec, hash: a.id, peaks: peaks, added: Date.now() } });
+          check();
+        }, true);
+      });
+    }
+    // IndexedDB へ（同じ中身があれば使う）→ 読みなおして照合
+    var reused = 0, j = -1;
+    function store() {
+      j++;
+      if (j >= ok.length) { register(); return; }
+      var it = ok[j];
+      idbGet("meta", it.id, function (old, w0) {
+        if (old === undefined) { fail((w0 || "音声の保存場所を使えませんでした") + "（曲は登録していません）"); return; }
+        function after() { verifyAsset(it.id, it.meta.bytes, function (vw) { if (vw) { fail(vw + "（曲は登録していません）"); return; } store(); }); }
+        if (old && old.hash === it.id && old.bytes === it.meta.bytes) { reused++; after(); return; }
+        idbPutAsset(it.meta, it.data, function (pw) { if (pw) { fail(pw + "（曲は登録していません・ほかの曲は変えていません）"); return; } after(); });
+      });
+    }
+    // 新しい曲 ID で一覧に足す（いまの曲・ほかの曲は上書きしない）
+    function register() {
+      var r = readIndex();
+      if (!r.ok) { fail((r.why || "保存した曲の一覧が読めません") + "（曲は登録していません）"); return; }
+      var names = {}, q;
+      for (q = 0; q < r.idx.list.length; q++) { if (r.idx.list[q]) { names[r.idx.list[q].name] = true; } }
+      p.id = M.newProjectId();
+      while (findEntry(r.idx, p.id) >= 0 || lsRaw(pkey(p.id)) !== null) { p.id = M.newProjectId(); }
+      var base = String(p.name || "曲").substring(0, 34), nm = p.name, n2 = 2;
+      if (names[nm]) { nm = (base + "（復元）").substring(0, 40); }
+      while (names[nm]) { nm = (base + "（復元 " + n2++ + "）").substring(0, 40); }
+      p.name = nm;
+      var now = Date.now(), text = JSON.stringify(M.toRecord(p, now)), key = pkey(p.id);
+      if (!lsPut(key, text)) { try { window.localStorage.removeItem(key); } catch (e) {} fail("曲を保存できませんでした（容量がいっぱいかもしれません）。曲は登録していません"); return; }
+      r.idx.list.push({ id: p.id, name: p.name, saved: now, created: p.created || now, notes: M.noteCount(p), tracks: p.tracks.length });
+      r.idx.list.sort(function (x, y) { return (y.saved || 0) - (x.saved || 0); });
+      if (!lsPut(skey(), JSON.stringify(r.idx))) { try { window.localStorage.removeItem(key); } catch (e2) {} fail("曲の一覧を書けませんでした。曲は登録していません"); return; }
+      pk.busy = false;
+      cb({ ok: true, id: p.id, name: p.name, assets: ok.length, reused: reused });
+    }
+    check();
+  }
+  // 画面から: 書き出す（前の ZIP は捨てる）・読みこむ
+  function packStart(onDone) {
+    if (pk.busy) { return false; }
+    stopPlay(false); packFree();
+    pk.state = "busy"; pk.msg = "";
+    packExport(function (r) {
+      if (r.ok) { pk.state = "done"; pk.blob = r.blob; pk.name = r.name; pk.size = r.size; pk.assets = r.assets; try { pk.url = URL.createObjectURL(r.blob); } catch (e) { pk.url = ""; } }
+      else { pk.state = "fail"; pk.msg = r.why; }
+      if (onDone) { onDone(r); }
+    });
+    return true;
+  }
+  function packLoad(ab, onDone) {
+    pk.istate = "busy"; pk.restored = null; pk.imsg = "";
+    packImport(ab, function (r) {
+      if (r.ok) { pk.istate = "done"; pk.restored = { id: r.id, name: r.name, assets: r.assets, reused: r.reused }; }
+      else { pk.istate = "fail"; pk.imsg = r.why; }
+      if (onDone) { onDone(r); }
+    });
+  }
+  function packHtml(p) {
+    var pl0 = packPlan(p), h = '<div class="dp-wav dp-pack"><div class="dp-h">&#x1F4E6; まとめて保存（ZIP）・復元</div>' +
+      '<div class="small dp-kinds"><b>JSON</b> ＝ 曲の編集データだけ（音声は入らない）<br><b>ZIP</b> ＝ 曲と、使っている音声の素材のまるごとの控え（ほかの端末へ移すとき）<br><b>WAV</b> ＝ できあがった音（聞く・送る）</div>' +
+      '<div class="small">「' + escHtml(p.name) + '」・音声の素材 ' + pl0.list.length + ' 個・約 ' + mb(pl0.bytes) + '</div>';
+    if (pk.state === "busy") { h += '<div class="daw-info">&#x23F3; ZIP を作っています…</div>'; }
+    else if (pk.state === "done" && pk.blob) {
+      h += '<div class="daw-info">&#x2705; できました: ' + escHtml(pk.name) + '<br><span class="small">' + mb(pk.size) + '・音声 ' + pk.assets + ' 個</span></div>' +
+        '<div class="dp-btns"><button class="modal-btn" data-pj="packSave">&#x1F4BE; ファイルに保存（共有）</button>' + (pk.url ? '<a class="modal-btn dp-dl" href="' + pk.url + '" download="' + escHtml(pk.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+    } else if (pk.state === "fail") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pk.msg) + '</div>'; }
+    h += '<button class="modal-btn dp-wavgo" data-pj="pack"' + (pk.busy ? ' disabled' : '') + '>&#x1F4E6; プロジェクトをまとめて保存（ZIP）</button>' +
+      '<button class="modal-btn dp-wavgo" data-pj="unpack"' + (pk.busy ? ' disabled' : '') + '>&#x1F4C2; プロジェクトZIPを読みこむ</button>' +
+      '<input type="file" class="dp-zipfile" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;">';
+    if (pk.istate === "busy") { h += '<div class="daw-info">&#x23F3; ZIP を確かめて読みこんでいます…</div>'; }
+    else if (pk.istate === "done" && pk.restored) { h += '<div class="daw-info">&#x2705; 「' + escHtml(pk.restored.name) + '」を復元しました（音声の素材 ' + pk.restored.assets + ' 個' + (pk.restored.reused ? '・うち ' + pk.restored.reused + ' 個は端末にあった同じ素材' : '') + '）。いまの曲はそのままです。</div>' + (st.project && st.project.id === pk.restored.id ? '' : '<button class="modal-btn dp-wavgo" data-pj-open="' + escHtml(pk.restored.id) + '">&#x25B6;&#xFE0F; 復元した曲を開く</button>'); }
+    else if (pk.istate === "fail") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; 読みこめませんでした: ' + escHtml(pk.imsg) + '（いまの曲と保存した曲はそのままです）</div>'; }
+    return h + '<p class="small dsv-note">ZIP は数秒かかることがあります。iPhone では「ファイルに保存（共有）」で共有シートが開き、「"ファイル"に保存」を選べる見こみです（実機では未確認）。開かないときは「ダウンロード」を使ってください。</p></div>';
+  }
   function mb(n) { return (Math.round(n / 104857.6) / 10) + " MB"; }
   function wavHtml(p) {
     var pln = wavPlan(p), h = '<div class="dp-wav"><div class="dp-h">&#x1F3B5; WAV を書き出す</div>';
@@ -1155,8 +1351,9 @@
       (sv.note ? '<div class="daw-info">' + escHtml(sv.note) + '</div>' : '') +
       saveNoteHtml() +
       wavHtml(p) +
+      packHtml(p) +
       assetsHtml(p) +
-      '<p class="small dsv-note">保存は<b>この端末・このブラウザの中だけ</b>です。ほかの端末やブラウザとは同期しません。機種を変える・PC に移す・念のための控えには「JSON に書き出す」を使ってください。</p>' +
+      '<p class="small dsv-note">保存は<b>この端末・このブラウザの中だけ</b>です。ほかの端末やブラウザとは同期しません。機種を変える・PC に移す・念のための控えには「&#x1F4E6; プロジェクトをまとめて保存（ZIP）」を使ってください（音声の素材も入ります。JSON には音声が入りません）。</p>' +
       '<p class="small dp-h">保存した曲' + (L.ok ? '（' + L.list.length + '）' : '') + '</p>';
     if (!L.ok) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(L.why) + '</div>'; }
     else if (!L.list.length) { h += '<p class="small dsv-note">まだありません。</p>'; }
@@ -1207,7 +1404,24 @@
         if (v === "import" && file) { file.value = ""; file.click(); return; }
         if (v === "wav") { wavExport(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
         if (v === "wavCancel") { wavCancel(); renderProj(root, ctl); return; }
+        // §341 9A-11: ZIP
+        if (v === "pack") { packStart(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
+        if (v === "packSave" && pk.blob) { var hz = "fail"; try { hz = I.saveBlob(pk.blob, pk.name); } catch (ez) { hz = "fail"; } if (hz === "fail") { pk.state = "fail"; pk.msg = "保存できませんでした。「ダウンロード」を使ってください"; } renderProj(root, ctl); return; }
+        if (v === "unpack") { var zf = root.querySelector(".dp-zipfile"); if (zf && !pk.busy) { zf.value = ""; zf.click(); } return; }
         if (v === "wavSave" && wav.blob) { var how = "fail"; try { how = I.saveBlob(wav.blob, wav.name); } catch (e) { how = "fail"; } if (how === "fail") { wav.note = "保存できませんでした。「ダウンロード」を使ってください。"; } renderProj(root, ctl); }
+      };
+    }
+    var zfile = root.querySelector(".dp-zipfile"); // §341 9A-11
+    if (zfile) {
+      zfile.onchange = function () {
+        var f = zfile.files && zfile.files[0];
+        if (!f) { return; }
+        if (f.size > PACK_MAX_ZIP) { pk.istate = "fail"; pk.imsg = "ZIP が大きすぎます（" + mb(f.size) + "・" + (PACK_MAX_ZIP / 1048576) + "MB まで）"; renderProj(root, ctl); return; }
+        pk.istate = "busy"; pk.restored = null; renderProj(root, ctl);
+        var rz = new FileReader();
+        rz.onload = function () { packLoad(rz.result, function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); };
+        rz.onerror = function () { pk.istate = "fail"; pk.imsg = "ファイルを読めませんでした"; renderProj(root, ctl); };
+        rz.readAsArrayBuffer(f);
       };
     }
     if (file) {
@@ -1832,6 +2046,8 @@
     hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
+    // §341 9A-11: プロジェクトパック（ZIP）
+    pack: { exportZip: packExport, importZip: packImport, start: packStart, load: packLoad, state: function () { return pk; }, plan: function () { return packPlan(project()); }, file: packFile, FORMAT: PACK_FORMAT, VERSION: PACK_VERSION, MAX_ZIP: PACK_MAX_ZIP },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
     audio: { importWav: importWav, ensure: ensureAssets, state: function () { return aud; }, add: addAudio, pick: pickWav, waveSvg: waveSvg, used: usedAssets, missing: audMissing, assetState: assetState, IDB_NAME: IDB_NAME, forget: audForget },
     reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
