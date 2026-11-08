@@ -1484,4 +1484,124 @@ module.exports = async function () {
   ok(DE.rec.state().result.kind === "discard" && /捨てました/.test(DE.rec.state().result.text) && DE.rec.state().clicks.length === 0 && micE.stops === 3, "cancel: discarded is shown; count-in clicks are stopped");
   ok(SE.ultimateGorillaSaveV2 === rpgE && eE.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eE.counters.errors.slice(0, 3));
   AE.stop(); DE.reset();
+
+  // ================= 9A-14: テイク管理 Lite（§341）=================
+  // --- データ ---
+  var pk0 = ME.emptyProject(0), tk0 = ME.addAudioTrack(pk0).track;
+  var rA = { id: "a:000000000000a001", name: "A.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:000000000000a001", store: "idb", added: 1000 };
+  var rB = { id: "a:000000000000b002", name: "B.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 48000, sec: 1, hash: "a:000000000000b002", store: "idb", added: 2000 };
+  var rC = { id: "a:000000000000c003", name: "C.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 240000, sec: 5, hash: "a:000000000000c003", store: "idb", added: 3000 };
+  pk0.assets.push(rA, rB, rC);
+  var ck = ME.addAudioClip(pk0, tk0, 3840, rA, "vocal");
+  var vt = ME.takesOf(pk0, ck);
+  ok(vt.length === 1 && vt[0].id === "A" && vt[0].virtual && !ck.hasOwnProperty("takes") && ME.activeTakeId(ck) === "A", "a clip without takes: one virtual take A; no field added");
+  ME.setAudioEdit(pk0, ck.id, { trimIn: 1.5, trimOut: 1.9, nudge: 20, fadeIn: 0.05 });
+  var at1 = ME.addTake(pk0, ck.id, rB.id, "B.wav", 2000);
+  ok(at1.ok && at1.take === "B" && ck.take === "B" && ck.asset === rB.id && ck.takes.length === 2 && ck.takes[0].asset === rA.id && ck.takes[0].edit.trimIn === 1.5 && ck.takes[0].edit.nudge === 20 && ck.takes[0].edit.fadeIn === 0.05, "addTake: the current sound becomes take A (its edits kept), new take B is used", ck.takes);
+  ok(!ck.hasOwnProperty("trimIn") && !ck.hasOwnProperty("nudge") && ck.fadeIn === 0 && ck.len === 3840 && ck.start === 3840 && !ck.takes[1].hasOwnProperty("edit"), "take B starts with no edit; same position; box fits B (1 s → 1 bar)");
+  ME.setAudioEdit(pk0, ck.id, { trimOut: 0.8, fadeOut: 0.1 });
+  var sw = ME.selectTake(pk0, ck.id, "A");
+  ok(sw.ok && ck.asset === rA.id && ck.trimIn === 1.5 && ck.trimOut === 1.9 && ck.nudge === 20 && ck.fadeIn === 0.05 && ck.takes[1].edit.trimOut === 0.8 && ck.takes[1].edit.fadeOut === 0.1 && !ck.takes[0].hasOwnProperty("edit"), "switch to A: A's edits come back; B's edits are kept in takes[].edit", ck);
+  ck.takes[1].edit.trimIn = 4.5; ck.takes[1].edit.trimOut = 9; // B は 1 秒しかない（範囲外の値）
+  ME.selectTake(pk0, ck.id, "B");
+  var spB = ME.audioSpan(pk0, ck);
+  ok(ck.asset === rB.id && spB.tin < spB.tout && spB.tout <= 1 && !ck.hasOwnProperty("trimOut") && ck.trimIn === 0.99, "out-of-range values are clamped to the take's length on switch", [ck.trimIn, ck.trimOut]);
+  ok(ME.addTake(pk0, ck.id, rC.id, "C.wav", 3000).ok && ck.take === "C" && ck.len === 3 * 3840 && !ME.addTake(pk0, ck.id, rA.id, "D", 4000).ok && /3 個/.test(ME.takeRoomWhy(ck)), "take C (5 s → box 3 bars); a 4th take is refused (3 per clip)");
+  ok(!ME.removeTake(pk0, ck.id, "C").ok && ME.removeTake(pk0, ck.id, "B").ok && ck.takes.length === 2 && ME.takeRoomWhy(ck) === "", "the take in use can't be removed; another one can (list only)");
+  ME.addTake(pk0, ck.id, rB.id, "B again", 5000);
+  ok(JSON.stringify(ME.clipAssets(ck).sort()) === JSON.stringify([rA.id, rB.id, rC.id].sort()) && ME.assetUse(pk0, rA.id) === 1 && ME.assetUse(pk0, rB.id) === 1, "clipAssets / assetUse count every take (not only the one in use)");
+  var rtk = ME.parseRecordText(JSON.stringify(ME.toRecord(pk0, 1))), ck2 = rtk.project.tracks[2].clips[0];
+  ok(rtk.ok && ck2.takes.length === 3 && ck2.take === ck.take && ck2.asset === ck.asset && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(rtk.project)))) === JSON.stringify(rtk.project), "JSON round trip keeps takes / take; clean() is stable");
+  var badT = ME.clean({ assets: [rA, rB], tracks: [{ kind: "audio", instrument: { type: "audio" }, clips: [{ type: "audio", asset: rB.id, take: "Z", takes: [{ id: "A", asset: rA.id, edit: { nudge: 99999 } }, { id: "A", asset: rB.id }, { id: "x", asset: rB.id }, 5] }] }] }).tracks[0].clips[0];
+  ok(badT.takes.length === 2 && badT.take === "B" && badT.takes[1].asset === rB.id && badT.takes[0].edit.nudge === 1000, "broken takes are repaired (bad / duplicate ids dropped; the playing asset gets a take, never lost)", badT);
+  var noT = ME.clean({ tracks: [{ kind: "audio", instrument: { type: "audio" }, clips: [{ type: "audio", asset: rA.id, take: "B" }] }] }).tracks[0].clips[0];
+  ok(!noT.hasOwnProperty("take") && !noT.hasOwnProperty("takes"), "a stray take id without takes is dropped");
+  // --- 録音 → 別テイク（まねのマイク・IndexedDB）---
+  var eT = H.load(), WT = eT.window, MT = WT.UGDawModel, DT = WT.UGDaw, AT = WT.UGArcade, ST = eT.store, IDBT = fakeIDB();
+  ST.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 14 }); var rpgT = ST.ultimateGorillaSaveV2;
+  WT.indexedDB = IDBT; fakeDecode(WT);
+  var RT = H.makeEl("div"); DT.reset(); AT.start("daw", RT, {}); DT.proj.create("empty");
+  var trT = await new Promise(function (r) { DT.audio.add(r); }), micT = fakeMic(WT), acT = WT.UGMelody.audioInit(); acT.currentTime = 1;
+  async function waitT(st0) { for (var g = 0; g < 400 && DT.rec.state().state === st0; g++) { await eT.wait(5); } return DT.rec.state().state; }
+  function fill(v, n) { var d = new Float32Array(n), i; for (i = 0; i < n; i++) { d[i] = v * Math.sin(i / 7); } return d; }
+  async function recTake(v, sec) { DT.rec.start(); await waitT("ask"); var R0 = DT.rec.state(); R0.next = -1; DT.rec.chunk(R0.f0, fill(v, Math.round(sec * R0.sr))); DT.rec.stop("btn"); await waitT("saving"); return DT.rec.state().result; }
+  DT.rec.open(trT.id); DT.rec.state().withPlay = false; DT.rec.state().countIn = false; DT.rec.state().bar = 1;
+  var resA = await recTake(0.5, 1.5);
+  var PT = DT.project(), clT = PT.tracks[2].clips[0], assetA = clT.asset;
+  ok(resA.kind === "ok" && clT.start === 3840 && !clT.takes, "take A: a normal recording on bar 2");
+  DT.select("clip", clT.id);
+  ok(RT.innerHTML.indexOf('data-cl="take"') >= 0 && RT.innerHTML.indexOf("別テイクを録音") >= 0, "audio clip panel: 🎙️ 別テイクを録音");
+  ok(DT.takes.openRec(clT.id) && DT.rec.state().takeClip === clT.id && RT.innerHTML.indexOf("別テイクを録音</b>") >= 0 && RT.innerHTML.indexOf("クリップと同じ位置") >= 0 && RT.innerHTML.indexOf('data-rc="bar+"') < 0, "record panel in take mode: same position (bar fixed)");
+  DT.rec.state().withPlay = true; DT.rec.state().countIn = false;
+  DT.rec.start(); await waitT("ask");
+  var RB0 = DT.rec.state(), plT = DT.player();
+  ok(RB0.state === "rec" && plT && plT.muteClip === clT.id && RB0.start === clT.start && plT.segs[0].tick0 === clT.start, "recording a take: accompaniment from the clip's bar, the clip's current take is not played", [plT && plT.muteClip, RB0.start]);
+  ok(DT.takes.select(clT.id, "A").ok === false && /録音中/.test(DT.state().anote + (DT.state().aedit ? DT.state().aedit.msg : "")), "switching takes is refused while recording");
+  RB0.next = -1; DT.rec.chunk(RB0.f0, fill(0.25, Math.round(1.2 * RB0.sr))); DT.rec.stop("btn"); await waitT("saving");
+  clT = DT.project().tracks[2].clips[0];
+  var assetB = clT.asset, dbT = IDBT.data[DT.audio.IDB_NAME].stores.blobs.rows;
+  ok(/テイク B/.test(DT.rec.state().result.text) && clT.take === "B" && clT.takes.length === 2 && assetB !== assetA && clT.takes[0].asset === assetA && !!dbT[assetA] && !!dbT[assetB] && !!MT.findAsset(DT.project(), assetA), "take B saved (IndexedDB verified first) and used; take A's WAV and ref are still there", DT.rec.state().result);
+  var svT = JSON.parse(ST["ultimateGorillaDawV1:p:" + DT.project().id]).project.tracks[2].clips[0];
+  ok(svT.take === "B" && svT.takes.length === 2, "saved right away (takes in localStorage)");
+  // ↶ で前の選択へ
+  ok(DT.ops.undo() && DT.project().tracks[2].clips[0].asset === assetA && !DT.project().tracks[2].clips[0].takes && !!dbT[assetB], "undo: back to take A (B's WAV stays in IndexedDB)");
+  DT.project().tracks[2].clips[0] = JSON.parse(JSON.stringify(svT)); clT = DT.project().tracks[2].clips[0]; DT.markDirty(); // B を使う状態に戻す（保存した形から）
+  // 再生: 使っているテイクだけ
+  function runT(sec) { var P = DT.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DT.pump(); } }
+  DT.setLoop(false); DT.clearLog(); DT.play(); runT(4);
+  var lgT = DT.log().filter(function (x) { return x.audio; });
+  ok(lgT.length === 1 && lgT[0].asset === assetB && lgT[0].ok, "playback uses only the selected take (B)");
+  // 再生中に切りかえ: 古いノードを止めて、A で鳴らしなおす
+  DT.stop(); DT.clearLog(); DT.play(); runT(2.3); var srcBefore = DT.player().mix[trT.id].srcs.length;
+  var swT = DT.takes.select(clT.id, "A"); runT(1);
+  var lgS = DT.log().filter(function (x) { return x.audio; });
+  ok(swT.ok && lgS.length === 2 && lgS[0].asset === assetB && lgS[1].asset === assetA && DT.player().mix[trT.id].srcs.length === 1 && srcBefore === 1, "switching while playing: restarts from the same spot with take A (old source stopped)", lgS.map(function (x) { return x.asset; }));
+  DT.stop();
+  // 書き出し: 選んだテイクだけ
+  DT.takes.select(clT.id, "B");
+  await new Promise(function (r) { DT.wav.start(r); }); for (var gT = 0; gT < 300 && DT.wav.state().busy; gT++) { await eT.wait(10); }
+  var wlT = DT.wav.state().log.filter(function (x) { return x.audio; });
+  ok(wlT.length === 1 && wlT[0].asset === assetB, "WAV export uses only the selected take");
+  // 試聴
+  var src0 = eT.counters.src.length; DT.takes.hear(clT.id, "A");
+  var hs = eT.counters.src.slice(src0);
+  ok(hs.length === 1 && hs[0].buf === DT.audio.state().buf[assetA] && DT.takes.info().id === "A" && DT.project().tracks[2].clips[0].take === "B", "▶ preview plays take A's own audio without changing the selection");
+  DT.takes.stop();
+  ok(!DT.takes.info(), "⏹ stops the preview");
+  // 編集の画面のテイクの欄
+  DT.aedit.open(clT.id);
+  ok(RT.innerHTML.indexOf('data-tku="A"') >= 0 && RT.innerHTML.indexOf("このテイクを使用中") >= 0 && RT.innerHTML.indexOf('data-tkp="B"') >= 0 && RT.innerHTML.indexOf('data-tk="rec"') >= 0 && RT.innerHTML.indexOf("この曲の素材 2／8 個") >= 0, "✂️ 編集 screen: take list (A / B, in use, preview, use), record another take, asset count");
+  // 「曲から外す」は使っていないテイクの素材にも出さない
+  DT.showProj();
+  ok(RT.innerHTML.indexOf('data-pj-unasset="' + assetA + '"') < 0 && !DT.proj.unasset(assetA) && !!MT.findAsset(DT.project(), assetA), "the unused take's asset can't be removed from the song");
+  DT.state().view = "arr";
+  // 容量不足: テイクを足さない・いまのテイクと選択はそのまま
+  var beforeQ = JSON.stringify(DT.project().tracks[2].clips[0]);
+  DT.takes.openRec(clT.id); DT.rec.state().withPlay = false; DT.rec.state().countIn = false;
+  DT.rec.start(); await waitT("ask"); var RQ0 = DT.rec.state(); RQ0.next = -1; DT.rec.chunk(RQ0.f0, fill(0.3, RQ0.sr)); IDBT.failNext = "QuotaExceededError"; DT.rec.stop("btn"); await waitT("saving");
+  ok(DT.rec.state().result.kind === "fail" && /容量/.test(DT.rec.state().result.text) && JSON.stringify(DT.project().tracks[2].clips[0]) === beforeQ && !!DT.rec.state().fail, "quota error: no take added, the takes and the selection stay; the take can be downloaded", DT.rec.state().result);
+  // 3 個目・4 個目
+  DT.rec.ui("close"); DT.takes.openRec(clT.id); DT.rec.state().withPlay = false; DT.rec.state().countIn = false;
+  var resC = await recTake(0.4, 1);
+  ok(/テイク C/.test(resC.text) && DT.project().tracks[2].clips[0].takes.length === 3, "take C");
+  DT.takes.openRec(clT.id);
+  ok(/3 個/.test(DT.rec.why()) && !DT.rec.start(), "a 4th take is refused before recording (nothing would be lost)");
+  // ZIP: 全部のテイクの素材が入る（B を使っていても A も）
+  DT.takes.select(clT.id, "B"); DT.flushSave();
+  var exT = await new Promise(function (r) { DT.pack.exportZip(r); }), zT = eZ.window.UGDawZip.zipRead(blobAB(exT.blob)), assetC = DT.project().tracks[2].clips[0].takes[2].asset;
+  ok(exT.ok && exT.assets === 3 && zT.list.indexOf(DT.pack.file(assetA)) >= 0 && zT.list.indexOf(DT.pack.file(assetB)) >= 0 && zT.list.indexOf(DT.pack.file(assetC)) >= 0, "ZIP (take B in use) contains the WAVs of A, B and C", zT.list);
+  // 空の保存領域へ復元 → A に切りかえて鳴らす
+  var eU = H.load(), WU = eU.window, DU = WU.UGDaw, IDBU = fakeIDB(); WU.indexedDB = IDBU; fakeDecode(WU);
+  var RU = H.makeEl("div"); DU.reset(); WU.UGArcade.start("daw", RU, {});
+  var rU = await impZ(DU, blobAB(exT.blob));
+  ok(rU.ok && rU.assets === 3 && Object.keys(IDBU.data[DU.audio.IDB_NAME].stores.blobs.rows).length === 3, "restore into empty storage: all 3 take WAVs stored", rU.why);
+  DU.proj.open(rU.id); await new Promise(function (r) { DU.audio.ensure(DU.project(), r); });
+  var cU = DU.project().tracks[2].clips[0];
+  ok(cU.take === "B" && cU.takes.length === 3 && DU.takes.select(cU.id, "A").ok && DU.project().tracks[2].clips[0].asset === assetA, "after restore: takes kept (B in use) and A can be selected");
+  DU.setLoop(false); DU.clearLog(); DU.play(); var PU = DU.player(), gU = 0; while (PU.ac.currentTime < 4 && gU++ < 1000) { PU.ac.currentTime += 0.025; DU.pump(); }
+  var lgU = DU.log().filter(function (x) { return x.audio; });
+  ok(lgU.length === 1 && lgU[0].asset === assetA && lgU[0].ok, "the restored take A plays");
+  DU.stop(); WU.UGArcade.stop(); DU.reset();
+  ok(ST.ultimateGorillaSaveV2 === rpgT && eT.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eT.counters.errors.slice(0, 3));
+  AT.stop(); DT.reset();
 };

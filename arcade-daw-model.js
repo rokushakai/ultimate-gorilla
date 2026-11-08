@@ -249,6 +249,7 @@
       if (c.hasOwnProperty("trimIn")) { var ti0 = Number(c.trimIn); if (isFinite(ti0) && ti0 > 0) { o.trimIn = r4(ti0); } else { delete o.trimIn; } }
       if (c.hasOwnProperty("trimOut")) { var to0 = Number(c.trimOut); if (c.trimOut !== null && isFinite(to0) && to0 > 0) { o.trimOut = r4(to0); } else { delete o.trimOut; } }
       if (c.hasOwnProperty("nudge")) { var nu0 = Number(c.nudge); if (isFinite(nu0) && nu0 !== 0) { o.nudge = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Math.round(nu0 * 10) / 10)); } else { delete o.nudge; } }
+      cleanTakes(c, o); // §341 9A-14
       delete o.notes;
     }
     o.ext = isObj(c.ext) ? copy(c.ext) : {};
@@ -604,7 +605,7 @@
   function sameAsset(a, b) { return !!(a && b && a.hash === b.hash && a.bytes === b.bytes && a.frames === b.frames && a.sr === b.sr && a.ch === b.ch); }
   function findAsset(p, id) { var i, l = p && isArr(p.assets) ? p.assets : []; for (i = 0; i < l.length; i++) { if (l[i] && l[i].id === id) { return l[i]; } } return null; }
   // その素材を使っているクリップの数
-  function assetUse(p, id) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (p.tracks[i].clips[j].type === "audio" && p.tracks[i].clips[j].asset === id) { n++; } } } return n; }
+  function assetUse(p, id) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (clipAssets(p.tracks[i].clips[j]).indexOf(id) >= 0) { n++; } } } return n; } // 9A-14: 使っていないテイクの素材もふくむ
   function audioClipCount(p) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (p.tracks[i].clips[j].type === "audio") { n++; } } } return n; }
   // 曲に素材を足せるか（新しい素材のとき）→ "" / 理由
   function assetRoomWhy(p, info) {
@@ -692,6 +693,105 @@
       }
     }
     return { ok: true, clip: c, span: audioSpan(p, c) };
+  }
+  // ---------- §341 9A-14: テイク（AudioClip の takes・take。GAME_DESIGN §341「9A-14 のテイク管理 Lite」）----------
+  // asset と trimIn〜fadeOut ＝ いま使っているテイク。takes[].edit ＝ 使っていないテイクの編集値
+  var MAX_TAKES = 3, TAKE_IDS = "ABCDEFGH", EDIT_KEYS = ["trimIn", "trimOut", "nudge", "fadeIn", "fadeOut"];
+  function cleanEdit(e) {
+    var o = {}, v;
+    if (!isObj(e)) { return o; }
+    v = Number(e.trimIn); if (isFinite(v) && v > 0) { o.trimIn = r4(v); }
+    v = Number(e.trimOut); if (e.trimOut !== null && isFinite(v) && v > 0) { o.trimOut = r4(v); }
+    v = Number(e.nudge); if (isFinite(v) && v !== 0) { o.nudge = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Math.round(v * 10) / 10)); }
+    v = num(e.fadeIn, 0, 0, FADE_MAX); if (v > 0) { o.fadeIn = v; }
+    v = num(e.fadeOut, 0, 0, FADE_MAX); if (v > 0) { o.fadeOut = v; }
+    return o;
+  }
+  function editOf(c) { return cleanEdit(c); }
+  function cleanTakes(c, o) {
+    if (!c.hasOwnProperty("takes")) { delete o.take; return; }
+    var src = isArr(c.takes) ? c.takes : [], out = [], seen = {}, i;
+    for (i = 0; i < src.length && out.length < TAKE_IDS.length; i++) {
+      var t = src[i];
+      if (!isObj(t) || typeof t.id !== "string" || !/^[A-H]$/.test(t.id) || seen[t.id] || typeof t.asset !== "string" || !t.asset) { continue; }
+      var x = copy(t) || {};
+      x.asset = t.asset.substring(0, 40); x.name = str(t.name, "テイク", 80); x.at = int(t.at, 0, 0);
+      if (t.hasOwnProperty("edit")) { x.edit = cleanEdit(t.edit); }
+      seen[t.id] = true; out.push(x);
+    }
+    if (!out.length) { delete o.takes; delete o.take; return; }
+    var act = null;
+    for (i = 0; i < out.length; i++) { if (out[i].id === c.take && out[i].asset === o.asset) { act = out[i]; } }
+    if (!act) { for (i = 0; i < out.length; i++) { if (out[i].asset === o.asset) { act = out[i]; break; } } }
+    if (!act && o.asset) { // 使っている素材のテイクが一覧に無い（こわれた）: 消さずに足す
+      for (i = 0; i < TAKE_IDS.length && seen[TAKE_IDS.charAt(i)]; i++) {}
+      if (i < TAKE_IDS.length) { act = { id: TAKE_IDS.charAt(i), asset: o.asset, name: "テイク", at: 0 }; out.push(act); }
+    }
+    o.takes = out; o.take = act ? act.id : out[0].id;
+    if (act) { delete act.edit; } // 使っているテイクの値はクリップの項目に
+  }
+  // クリップが使う素材（全部のテイク）
+  function clipAssets(c) {
+    var out = [], i;
+    if (!c || c.type !== "audio") { return out; }
+    if (c.asset) { out.push(c.asset); }
+    if (isArr(c.takes)) { for (i = 0; i < c.takes.length; i++) { var a = c.takes[i] && c.takes[i].asset; if (a && out.indexOf(a) < 0) { out.push(a); } } }
+    return out;
+  }
+  // テイクの一覧（テイクが無いクリップは、いまの素材を「A」として返す・データは変えない）
+  function takesOf(p, c) {
+    if (c && isArr(c.takes) && c.takes.length) { return c.takes; }
+    var a = c ? findAsset(p, c.asset) : null;
+    return c && c.asset ? [{ id: "A", asset: c.asset, name: (a && a.name) || "テイク", at: (a && a.added) || 0, virtual: true }] : [];
+  }
+  function activeTakeId(c) { return c && isArr(c.takes) && c.takes.length ? c.take : "A"; }
+  function takeRoomWhy(c) { return takesOfCount(c) >= MAX_TAKES ? "1 つのクリップのテイクは " + MAX_TAKES + " 個までです（使っていないテイクを外すと録れます）" : ""; }
+  function takesOfCount(c) { return c && isArr(c.takes) && c.takes.length ? c.takes.length : (c && c.asset ? 1 : 0); }
+  // テイクを足して、それを使う（素材の参照は呼ぶ側が先に足す）
+  function addTake(p, clipId, assetId, name, at) {
+    var f = findClip(p, clipId), i;
+    if (!f || f.clip.type !== "audio") { return { ok: false, why: "オーディオのクリップが見つかりません" }; }
+    var c = f.clip, why = takeRoomWhy(c);
+    if (why) { return { ok: false, why: why }; }
+    if (!isArr(c.takes) || !c.takes.length) { var a0 = findAsset(p, c.asset); c.takes = [{ id: "A", asset: c.asset, name: str(String((a0 && a0.name) || (c.ext && c.ext.name) || "テイク").replace(/\.wav$/i, ""), "テイク", 80), at: int(a0 && a0.added, 0, 0) }]; c.take = "A"; }
+    var used = {}; for (i = 0; i < c.takes.length; i++) { used[c.takes[i].id] = true; }
+    for (i = 0; i < TAKE_IDS.length && used[TAKE_IDS.charAt(i)]; i++) {}
+    var id = TAKE_IDS.charAt(i);
+    c.takes.push({ id: id, asset: assetId, name: str(name, "テイク", 80), at: int(at, 0, 0), edit: {} });
+    var r = selectTake(p, clipId, id);
+    if (!r.ok) { c.takes.pop(); return r; }
+    return { ok: true, take: id, clip: c };
+  }
+  // テイクを切りかえる（いまの編集値は takes[].edit へ・選んだテイクの値をクリップへ・長さに合わせて範囲に入れる）
+  function selectTake(p, clipId, id) {
+    var f = findClip(p, clipId), i, k;
+    if (!f || f.clip.type !== "audio") { return { ok: false, why: "オーディオのクリップが見つかりません" }; }
+    var c = f.clip, cur = null, tgt = null;
+    if (!isArr(c.takes)) { return { ok: false, why: "テイクがありません" }; }
+    for (i = 0; i < c.takes.length; i++) { if (c.takes[i].id === c.take) { cur = c.takes[i]; } if (c.takes[i].id === id) { tgt = c.takes[i]; } }
+    if (!tgt) { return { ok: false, why: "テイクが見つかりません" }; }
+    if (tgt === cur) { return { ok: true, same: true, clip: c }; }
+    var ta = findAsset(p, tgt.asset);
+    if (!ta || !(Number(ta.sec) > 0)) { return { ok: false, why: "テイク " + id + " の素材がありません" }; }
+    var keep = editOf(c), e = cleanEdit(tgt.edit);
+    if (cur) { cur.edit = keep; cur.asset = c.asset; }
+    for (k = 0; k < EDIT_KEYS.length; k++) { delete c[EDIT_KEYS[k]]; }
+    c.fadeIn = 0; c.fadeOut = 0;
+    c.asset = tgt.asset; c.take = id; delete tgt.edit;
+    var o = { trimOut: e.hasOwnProperty("trimOut") ? e.trimOut : ta.sec };
+    if (e.hasOwnProperty("trimIn")) { o.trimIn = e.trimIn; }
+    if (e.hasOwnProperty("nudge")) { o.nudge = e.nudge; }
+    if (e.fadeIn) { o.fadeIn = e.fadeIn; } if (e.fadeOut) { o.fadeOut = e.fadeOut; }
+    var r = setAudioEdit(p, clipId, o); // 素材の長さで範囲に入れ、箱の長さを合わせる
+    return { ok: r.ok, why: r.why, clip: c, from: cur ? cur.id : "", to: id };
+  }
+  // 使っていないテイクを一覧から外す（素材の参照と WAV は残る）
+  function removeTake(p, clipId, id) {
+    var f = findClip(p, clipId), i;
+    if (!f || !isArr(f.clip.takes)) { return { ok: false, why: "テイクがありません" }; }
+    if (f.clip.take === id) { return { ok: false, why: "使っているテイクは外せません（ほかのテイクを使ってから）" }; }
+    for (i = 0; i < f.clip.takes.length; i++) { if (f.clip.takes[i].id === id) { f.clip.takes.splice(i, 1); return { ok: true }; } }
+    return { ok: false, why: "テイクが見つかりません" };
   }
   // 波形のピーク（1 秒 rate 点・0〜255。チャンネルの大きいほう）。chans: Float32Array の列
   function computePeaks(chans, sr, rate) {
@@ -782,6 +882,6 @@
     WAV_MAX_BYTES: WAV_MAX_BYTES, WAV_MAX_SEC: WAV_MAX_SEC, MAX_AUDIO_TRACKS: MAX_AUDIO_TRACKS, MAX_ASSETS: MAX_ASSETS, MAX_ASSET_SEC: MAX_ASSET_SEC, PEAK_RATE: PEAK_RATE,
     audioInstrument: audioInstrument, isAudio: isAudio, audioTrackCount: audioTrackCount, addAudioTrack: addAudioTrack, parseWav: parseWav, wavLimitWhy: wavLimitWhy, hashBytes: hashBytes,
     assetRef: assetRef, sameAsset: sameAsset, findAsset: findAsset, assetUse: assetUse, audioClipCount: audioClipCount, assetRoomWhy: assetRoomWhy, audioClipLen: audioClipLen,
-    addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
+    addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, clipAssets: clipAssets, takesOf: takesOf, activeTakeId: activeTakeId, addTake: addTake, selectTake: selectTake, removeTake: removeTake, takeRoomWhy: takeRoomWhy, MAX_TAKES: MAX_TAKES, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
 })();

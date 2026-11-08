@@ -1562,3 +1562,16 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .ae-btns .ae-b { flex: 1; min-width: 0; padding: 8px 2px; font-size: 13px; }
 .daw .ae-all { padding: 6px 8px; }
 .ae > .da-btns { margin-top: 10px; }
+/* §341 9A-14 テイク管理 Lite */
+.tk { margin: 8px 0 4px; padding: 6px; background: #0e1d2c; border: 1px solid #335; border-radius: 8px; }
+.tk-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+.tk-row { display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-top: 1px solid #22344a; }
+.tk-row.tk-on { background: rgba(6, 214, 160, 0.10); border-radius: 6px; }
+.tk-id { flex: 0 0 26px; height: 26px; line-height: 26px; text-align: center; border-radius: 13px; background: #1d3a52; color: #ffd166; }
+.tk-on .tk-id { background: #06d6a0; color: #10202e; }
+.tk-meta { flex: 1; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.tk-use { color: #06d6a0; font-size: 12px; }
+.tk-btns { display: flex; gap: 4px; flex: 0 0 auto; }
+.tk-btns .tk-b { min-width: 44px; padding: 8px 6px; font-size: 13px; }
+.tk-rec { margin-top: 4px; }
+.daw-clip .tk-tag { display: inline-block; padding: 0 4px; border-radius: 4px; background: #ffd166; color: #10202e; font-size: 10px; }
