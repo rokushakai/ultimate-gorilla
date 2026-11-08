@@ -1202,4 +1202,144 @@ module.exports = async function () {
   AP.stop(); AQ.stop();
   ok(!DQ.pack.state().blob && DQ.pack.state().state === "idle", "leaving the DAW frees the ZIP");
   DP.reset(); DQ.reset();
+
+  // ================= 9A-12: マイク録音（§341）=================
+  // まねのマイク（getUserMedia・トラックの stop を数える）と ScriptProcessor（AudioWorklet の無いブラウザの道）
+  function fakeMic(W) {
+    var api = { calls: [], deny: null, stops: 0, streams: [], nodes: [], latency: 0.01 };
+    W.navigator.mediaDevices = { getUserMedia: function (c) {
+      api.calls.push(c);
+      if (api.deny) { var e = api.deny; return Promise.reject({ name: e }); }
+      var tr = { kind: "audio", label: "fake mic", stopped: false, stop: function () { if (!tr.stopped) { tr.stopped = true; api.stops++; } }, getSettings: function () { return { channelCount: 1, sampleRate: 44100, latency: api.latency, echoCancellation: false }; } };
+      var s = { tracks: [tr], getTracks: function () { return s.tracks; }, getAudioTracks: function () { return s.tracks; } };
+      api.streams.push(s);
+      return Promise.resolve(s);
+    } };
+    function node(kind) { var n = { kind: kind, conns: [], disc: 0, gain: { value: 1 }, connect: function (x) { n.conns.push(x); }, disconnect: function () { n.disc++; } }; api.nodes.push(n); return n; }
+    W.AudioContext.prototype.createMediaStreamSource = function (s) { var n = node("mic"); n.stream = s; return n; };
+    W.AudioContext.prototype.createScriptProcessor = function (sz) { var n = node("sp"); n.size = sz; api.sp = n; return n; };
+    return api;
+  }
+  var eC = H.load(), WC = eC.window, MC = WC.UGDawModel, DC = WC.UGDaw, AC2 = WC.UGArcade, SC = eC.store, IDBC = fakeIDB();
+  SC.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 12 }); var rpgC = SC.ultimateGorillaSaveV2;
+  WC.indexedDB = IDBC; fakeDecode(WC);
+  var RC = H.makeEl("div"); DC.reset(); AC2.start("daw", RC, {}); DC.proj.create("demo");
+  async function waitRec(st0, ms) { for (var g = 0; g < (ms || 400) && DC.rec.state().state === st0; g++) { await eC.wait(5); } return DC.rec.state().state; }
+  // --- WAV（PCM 16bit モノラル）---
+  var rw = DC.rec.wav([new Float32Array([0, 0.5, -0.5, 1.5]), new Float32Array([-1, 0.25, 9])], 6, 48000), ri = MC.parseWav(rw), rv = new DataView(rw);
+  ok(ri.ok && ri.fmt === 1 && ri.bits === 16 && ri.ch === 1 && ri.sr === 48000 && ri.frames === 6 && rw.byteLength === 44 + 12, "recorded WAV: real PCM (fmt 1, 16 bit, mono, rate of the AudioContext), not just a .wav name", ri);
+  ok(rv.getInt16(46, true) === 16384 && rv.getInt16(48, true) === -16384 && rv.getInt16(50, true) === 32767 && rv.getInt16(52, true) === -32768 && rv.getInt16(54, true) === 8192 && rw.byteLength === 56, "samples: ±0.5 → ±16384, over 1 is clipped, −1 → −32768, only n frames are written");
+  // --- AudioWorklet の中のコード（まねの AudioWorkletProcessor で動かす）---
+  var wlPosted = [], wlReg = {}, wlCtx = { currentFrame: 1000, registerProcessor: function (n, c) { wlReg[n] = c; } };
+  wlCtx.AudioWorkletProcessor = function () { this.port = { postMessage: function (m) { wlPosted.push({ f: m.f, d: Array.prototype.slice.call(m.d, 0, 3), n: m.d.length }); } }; };
+  require("vm").runInNewContext(DC.rec.WORKLET, wlCtx);
+  var WLP = wlReg["ug-daw-rec"], wl = WLP ? new WLP() : null, blk, bi;
+  for (bi = 0; wl && bi < 20; bi++) { blk = new Float32Array(128); blk[0] = bi + 1; wlCtx.currentFrame = 1000 + bi * 128; wl.process([[blk]]); }
+  wl.process([[]]); // 入力が無い回（数えない）
+  ok(!!WLP && wlPosted.length === 1 && wlPosted[0].f === 1000 && wlPosted[0].n === 2048 && wlPosted[0].d[0] === 1 && wl.process([[new Float32Array(128)]]) === true, "AudioWorklet processor: posts 2048-frame chunks tagged with the AudioContext frame of their first sample", wlPosted);
+  wl.port.onmessage({ data: "stop" });
+  ok(wl.process([[new Float32Array(128)]]) === false && DC.rec.WORKLET.indexOf("=>") < 0, "the processor ends after 'stop'");
+  // --- マイクが無い・https でない ---
+  var tC = await new Promise(function (r) { DC.audio.add(r); }), beforeC = JSON.stringify(DC.project());
+  DC.select("track", tC.id);
+  ok(RC.innerHTML.indexOf('data-tr="rec"') >= 0 && RC.innerHTML.indexOf("録音") >= 0, "audio track panel: 🎙️ 録音 button");
+  DC.rec.open(tC.id); DC.select("track", tC.id);
+  ok(/getUserMedia/.test(DC.rec.why()) && RC.innerHTML.indexOf('data-rc="go"') >= 0 && / disabled>&#x25CF;/.test(RC.innerHTML) && !DC.rec.start() && JSON.stringify(DC.project()) === beforeC, "no getUserMedia: ● is disabled with the reason, nothing changes", DC.rec.why());
+  WC.isSecureContext = false;
+  ok(/https/.test(DC.rec.why()), "not a secure page (http://LAN-IP): says mic needs https / localhost", DC.rec.why());
+  WC.isSecureContext = true;
+  // --- 権限の拒否 ---
+  var mic = fakeMic(WC), acC = WC.UGMelody.audioInit(); acC.outputLatency = 0.02;
+  DC.select("track", tC.id);
+  ok(RC.innerHTML.indexOf("モニター（マイクの音を聞く）: OFF") >= 0 && RC.innerHTML.indexOf("伴奏を鳴らしながら録る") >= 0 && DC.rec.state().monitor === false && DC.rec.state().withPlay === true, "panel: monitoring OFF by default, accompaniment ON by default");
+  mic.deny = "NotAllowedError";
+  DC.rec.start(); var sDeny = await waitRec("ask");
+  ok(sDeny === "idle" && /許可/.test(DC.rec.state().msg) && /曲は変えていません/.test(DC.rec.state().msg) && JSON.stringify(DC.project()) === beforeC && IDBC.writes === 0 && mic.calls.length === 1, "permission denied: reason shown, song unchanged, nothing stored", DC.rec.state().msg);
+  var cst = mic.calls[0].audio;
+  ok(cst.echoCancellation === false && cst.noiseSuppression === false && cst.autoGainControl === false && cst.channelCount === 1 && !mic.calls[0].video, "mic constraints: no echo cancel / noise suppression / auto gain, mono, no video");
+  mic.deny = "NotFoundError"; DC.rec.start(); await waitRec("ask");
+  ok(/見つかりません/.test(DC.rec.state().msg) && DC.rec.state().state === "idle", "no microphone: reason shown");
+  mic.deny = null;
+  // --- 伴奏ありで録る（同期）---
+  DC.rec.setManual(0);
+  DC.state().sel = null; DC.rec.open(tC.id); DC.rec.state().bar = 1; // 2 小節目から
+  DC.select("track", tC.id);
+  DC.rec.start(); var sRec = await waitRec("ask");
+  var R = DC.rec.state(), plC = DC.player(), barT = MC.barToTick(DC.project(), 1);
+  ok(sRec === "rec" && R.mode === "script" && mic.sp && mic.sp.size === 4096 && !!plC && plC.segs[0].tick0 === barT && plC.loop === false && R.start === barT, "start with accompaniment: playback starts at the chosen bar (no loop), ScriptProcessor fallback (no AudioWorklet)", [sRec, R.mode, R.msg]);
+  ok(nearA(R.comp, 0.03) && R.f0 === Math.round((plC.segs[0].t0 + 0.03) * R.sr) && R.auto.out === 0.02 && R.auto.inp === 0.01, "sync: frame f0 = (playback start t0 + output 20 ms + input 10 ms) × rate", [R.comp, R.f0, plC.segs[0].t0]);
+  var micNode = mic.nodes.filter(function (n) { return n.kind === "mic"; })[0], monG = R.mon;
+  ok(monG && monG.gain.value === 0 && micNode.conns.indexOf(monG) >= 0 && micNode.conns.indexOf(mic.sp) >= 0, "monitoring is OFF (gain 0) while recording; the mic feeds the capture node");
+  DC.rec.ui("mon"); var monOn = monG.gain.value; DC.rec.ui("mon");
+  ok(monOn === 1 && monG.gain.value === 0 && DC.rec.state().monitor === false, "monitor can be switched on and off (not saved)");
+  var f0 = R.f0, c1 = new Float32Array(4096); c1[1000 + 100] = 0.75; c1[999] = 0.5; // f0 の 1 フレーム前は捨てる
+  DC.rec.chunk(f0 - 1000, c1);
+  ok(R.kept === 3096 && R.chunks[0][100] === c1[1100] && R.chunks[0][0] === 0, "frames before f0 are dropped: sample 100 of the take = frame f0 + 100", R.kept);
+  var c2 = new Float32Array(4096); c2[0] = 0.25;
+  DC.rec.chunk(R.next + 500, c2); // 500 フレームの抜け
+  var gapOk = R.kept === 3096 + 500 + 4096 && R.chunks[1].length === 500 && R.chunks[2][0] === 0.25;
+  var c3 = new Float32Array(1000); c3[100] = 0.5; DC.rec.chunk(R.next - 100, c3); // 100 フレームの重なり
+  ok(gapOk && R.kept === 3096 + 500 + 4096 + 900 && R.chunks[3][0] === 0.5, "a gap is filled with silence, an overlap is trimmed (the take stays on the clock)", R.kept);
+  mic.sp.onaudioprocess({ inputBuffer: { getChannelData: function () { var d = new Float32Array(4096); d[5] = NaN; return d; } } });
+  ok(R.kept === 3096 + 500 + 4096 + 900 + 4096 && R.chunks[4][5] === 0, "ScriptProcessor callback continues at the next frame; NaN becomes 0");
+  while (R.kept < 44100) { DC.rec.chunk(R.next, new Float32Array(4096)); }
+  var keptC = R.kept;
+  // 録音中は ▶ を使えない
+  ok(DC.play() === false && /録音中/.test(DC.state().msg) && DC.player() === plC, "while recording, ▶ (and resync) cannot restart playback (the clock would move)");
+  DC.rec.stop("btn");
+  ok(mic.stops === 1 && mic.streams[0].tracks[0].stopped && !R.stream && !R.node && micNode.disc > 0 && mic.sp.disc > 0 && !R.mon && !R.sink && !DC.player(), "■ stop: the mic track is stopped and all nodes are disconnected, accompaniment stops", [mic.stops, !R.stream, !R.node, micNode.disc, mic.sp.disc, monG.disc, !DC.player()]);
+  var sSave = await waitRec("saving");
+  var PC = DC.project(), clC = PC.tracks[PC.tracks.length - 1].clips[0], aC = clC ? MC.findAsset(PC, clC.asset) : null;
+  ok(sSave === "idle" && clC && clC.type === "audio" && clC.start === barT && aC && aC.src === "rec" && aC.ch === 1 && aC.sr === 44100 && aC.frames === keptC && !R.open, "the take is placed at bar 2 on the track; asset ref src \"rec\", mono, all frames", [sSave, DC.rec.state().msg, aC]);
+  var blobC = IDBC.data[DC.audio.IDB_NAME].stores.blobs.rows[aC.id], biC = MC.parseWav(blobC.data), dvC = new DataView(blobC.data);
+  ok(biC.ok && biC.frames === keptC && dvC.getInt16(44 + 100 * 2, true) === Math.round(0.75 * 32767) && dvC.getInt16(44 + 99 * 2, true) === 0 && MC.hashBytes(new Uint8Array(blobC.data)) === aC.id, "IndexedDB holds the PCM WAV: sample 100 is the 0.75 click (frame-exact), id = content hash");
+  var svC = JSON.parse(SC["ultimateGorillaDawV1:p:" + PC.id]);
+  ok(svC.project.assets.some(function (a) { return a.id === aC.id && a.src === "rec"; }) && JSON.stringify(svC).indexOf('"data"') < 0 && DC.saveState().status === "saved" && /録音（1 秒）/.test(DC.state().anote), "the song is saved (asset ref only) and the message says where the take went", DC.state().anote);
+  // 再生: 録った素材も 2 小節目の頭で鳴る
+  DC.clearLog(); DC.play(); var pC2 = DC.player(), lgC = DC.log().filter(function (x) { return x.audio && x.asset === aC.id; });
+  function runC(sec) { var ac = pC2.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DC.pump(); } }
+  runC(3); lgC = DC.log().filter(function (x) { return x.audio && x.asset === aC.id; });
+  ok(lgC.length === 1 && lgC[0].ok && nearA(lgC[0].when - pC2.segs[0].t0, MC.tickToSec(PC, barT)), "playback: the recorded clip starts exactly at bar 2 on the same clock", lgC);
+  DC.stop(); acC.currentTime = 1;
+  // --- 上限（1 曲の素材の合計 120 秒の残り）・自動で止める ---
+  PC.assets.push({ id: "a:00000000000000aa", name: "x", bytes: 1, sr: 44100, ch: 1, bits: 16, frames: 1, sec: 117.5 - aC.sec, hash: "a:00000000000000aa", store: "idb" });
+  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.state().bar = 6; DC.rec.start(); await waitRec("ask");
+  R = DC.rec.state();
+  ok(R.state === "rec" && R.max === Math.floor(2.5 * 44100) && !DC.player() && R.f0 === Math.round(acC.currentTime * R.sr) && R.comp === 0, "without accompaniment: no playback, no latency shift; the limit is what is left of 120 s (2.5 s)", [R.state, R.max]);
+  while (R.state === "rec") { DC.rec.chunk(R.next >= 0 ? R.next : R.f0, new Float32Array(4096)); await eC.wait(1); }
+  await waitRec("saving");
+  var clMax = PC.tracks[PC.tracks.length - 1].clips.filter(function (c) { return c.start === MC.barToTick(PC, 6); })[0], aMax = clMax && MC.findAsset(PC, clMax.asset);
+  ok(clMax && aMax && aMax.frames === Math.floor(2.5 * 44100) && mic.stops === 2 && /上限/.test(DC.state().anote), "at the limit it stops by itself and places exactly the allowed length", [DC.state().anote, aMax && aMax.frames]);
+  ok(/120 秒/.test(DC.rec.why()) && !DC.rec.start(), "no room left (< 1 s): recording does not start");
+  PC.assets = PC.assets.filter(function (a) { return a.id !== "a:00000000000000aa"; });
+  // --- 短すぎる・やめる ---
+  var n0 = IDBC.writes, bS = JSON.stringify(DC.project());
+  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.start(); await waitRec("ask");
+  DC.rec.chunk(DC.rec.state().f0, new Float32Array(4096)); DC.rec.stop("btn");
+  ok(DC.rec.state().state === "idle" && /短すぎ/.test(DC.rec.state().msg) && IDBC.writes === n0 && JSON.stringify(DC.project()) === bS && mic.stops === 3, "a take under 0.5 s is thrown away (nothing stored, song unchanged, mic released)");
+  DC.rec.start(); await waitRec("ask"); DC.rec.chunk(DC.rec.state().f0, new Float32Array(44100)); DC.rec.cancel("x");
+  ok(DC.rec.state().state === "idle" && DC.rec.state().chunks.length === 0 && IDBC.writes === n0 && JSON.stringify(DC.project()) === bS && mic.stops === 4, "✕ cancel: the take is discarded, mic released, nothing stored");
+  // --- 容量不足: 曲は変えない・録った音は WAV でとっておける ---
+  var saveQ = SC["ultimateGorillaDawV1:p:" + PC.id];
+  DC.rec.start(); await waitRec("ask"); DC.rec.chunk(DC.rec.state().f0, new Float32Array(44100)); IDBC.failNext = "QuotaExceededError"; DC.rec.stop("btn"); await waitRec("saving");
+  DC.select("track", tC.id);
+  ok(DC.rec.state().state === "idle" && /容量/.test(DC.rec.state().msg) && /曲は変えていません/.test(DC.rec.state().msg) && JSON.stringify(DC.project()) === bS && SC["ultimateGorillaDawV1:p:" + PC.id] === saveQ && mic.stops === 5, "quota error: the song (memory and saved) is unchanged, mic released", DC.rec.state().msg);
+  ok(!!DC.rec.state().fail && RC.innerHTML.indexOf("置けなかった録音を WAV で保存") >= 0 && RC.innerHTML.indexOf('download="') >= 0, "…and the take can still be downloaded as a WAV");
+  DC.rec.ui("close");
+  // --- 中断: DAW を閉じる ＝ そこまでを置く／曲を切りかえる ＝ 捨てる ---
+  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.state().bar = 10; DC.rec.start(); await waitRec("ask"); DC.rec.chunk(DC.rec.state().f0, new Float32Array(44100));
+  AC2.stop(); var htmlBefore = RC.innerHTML;
+  await waitRec("saving");
+  var clX = DC.project().tracks[DC.project().tracks.length - 1].clips.filter(function (c) { return c.start === MC.barToTick(DC.project(), 10); })[0];
+  ok(mic.stops === 6 && !DC.rec.state().stream && clX && DC.rec.state().state === "idle" && SC["ultimateGorillaDawV1:p:" + PC.id].indexOf(clX.asset) >= 0 && RC.innerHTML === htmlBefore, "closing the DAW while recording: mic released, the take so far is saved (screen not redrawn)", [mic.stops, !DC.rec.state().stream, !!clX, DC.rec.state().state, RC.innerHTML === htmlBefore, DC.rec.state().msg, DC.state().anote]);
+  AC2.start("daw", RC, {});
+  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.start(); await waitRec("ask"); DC.rec.chunk(DC.rec.state().f0, new Float32Array(44100));
+  var nSw = IDBC.writes; DC.proj.create("empty");
+  ok(mic.stops === 7 && DC.rec.state().state === "idle" && !DC.rec.state().open && IDBC.writes === nSw, "switching songs while recording: mic released, the take is discarded");
+  // --- 遅れの補正（この端末だけ・ほかのキーは変えない）---
+  var keysB = Object.keys(SC).filter(function (k) { return k !== "ultimateGorillaDawRecV1"; }).sort().join();
+  ok(DC.rec.setManual(30) === 30 && DC.rec.manual() === 30 && DC.rec.setManual(9999) === 500 && JSON.parse(SC.ultimateGorillaDawRecV1).offsetMs === 500 && Object.keys(SC).filter(function (k) { return k !== "ultimateGorillaDawRecV1"; }).sort().join() === keysB, "manual offset: own key ultimateGorillaDawRecV1, clamped ±500 ms");
+  DC.rec.setManual(0);
+  ok(SC.ultimateGorillaSaveV2 === rpgC && mic.calls.length === 9 && eC.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eC.counters.errors.slice(0, 3));
+  AC2.stop(); DC.reset();
 };

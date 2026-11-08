@@ -242,6 +242,7 @@
   function startPlay(opts) {
     var p = project(), M = DM(), UG = window.UGMelody, ac = null, i;
     opts = opts || {};
+    if (rec.state === "rec" && !opts.rec) { st.msg = "録音中は ▶ を使えません（録音の「■ 停止して置く」で止めてから）"; return false; } // 9A-12: 伴奏の時計を変えない
     stopPlay(true);
     st.msg = "";
     try { ac = UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { ac = null; }
@@ -344,7 +345,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
+  I.addStopHook(function () { if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -451,6 +452,7 @@
   // §341 9A-5: 選んだクリップ・トラックの操作の欄（小さい画面でも押しやすいボタン）
   function panelHtml(p) {
     var M = DM(), s = st.sel, h = st.anote ? '<div class="da-note">' + st.anote + '</div>' : '';
+    if (rec.open) { var rh = recHtml(p); if (rh) { return h + rh; } } // 9A-12: 録音の欄
     if (st.chooseAdd) {
       return h + '<div class="daw-info da-panel"><div>&#xFF0B; どのトラックを足しますか？</div><div class="da-btns da-btns3">' +
         '<button class="modal-btn" data-ar="addSynth">&#x1F3B9; シンセ</button><button class="modal-btn" data-ar="addDrum">&#x1F941; ドラム</button><button class="modal-btn" data-ar="addAudio">&#x1F3B5; オーディオ</button>' +
@@ -485,7 +487,7 @@
           return h + '<div class="daw-info da-panel da-confirm"><div>&#x26A0;&#xFE0F; 「<b>' + escHtml(t.name) + '</b>」を削除します。中のクリップ ' + nc + ' 個（音符 ' + nn + ' 個）も消えます。' + (pl ? '再生は止まります。' : '') + '消したあとも &#x21B6; で戻せます。</div>' +
             '<div class="da-btns">' + b("tr", "delYes", "&#x1F5D1;&#xFE0F; 削除する", "da-half da-danger") + b("tr", "delNo", "やめる", "da-half") + '</div></div>';
         }
-        return h + '<div class="daw-info da-panel"><div>' + infoHtml(p) + '</div><div class="da-btns">' + (M.isAudio(t) ? b("tr", "wav", "&#x1F3B5; WAV を読みこむ", "da-wide") : b("tr", "clip", "&#xFF0B; クリップ", "da-wide")) + b("tr", "name", "&#x270F;&#xFE0F; 名前") + b("tr", "up", "&#x25B2; 上へ") + b("tr", "down", "&#x25BC; 下へ") + b("tr", "del", "&#x1F5D1;&#xFE0F; トラックを削除", "da-wide da-danger-o") + '</div></div>';
+        return h + '<div class="daw-info da-panel"><div>' + infoHtml(p) + '</div><div class="da-btns">' + (M.isAudio(t) ? b("tr", "rec", "&#x1F399;&#xFE0F; 録音", "da-wide dr-open") + b("tr", "wav", "&#x1F3B5; WAV を読みこむ", "da-wide") : b("tr", "clip", "&#xFF0B; クリップ", "da-wide")) + b("tr", "name", "&#x270F;&#xFE0F; 名前") + b("tr", "up", "&#x25B2; 上へ") + b("tr", "down", "&#x25BC; 下へ") + b("tr", "del", "&#x1F5D1;&#xFE0F; トラックを削除", "da-wide da-danger-o") + '</div></div>';
       }
     }
     return h + '<div class="daw-info">' + infoHtml(p) + '</div>';
@@ -629,6 +631,7 @@
   }
   // 曲を切りかえる（いまの曲の待っている保存を先に書く・再生を止める）
   function switchTo(p, status) {
+    if (rec.state === "rec" || rec.state === "ask") { recCancel("曲を切りかえたので、録音をやめました（録った音は捨てました）"); } rec.open = false; // 9A-12
     flushSave();
     stopPlay(false);
     wavCancel(); wavFree(); wav.state = "idle"; wav.msg = ""; wav.note = "";
@@ -872,6 +875,7 @@
     if (lim) { cb({ ok: false, why: lim }); return; }
     aud.busy = true;
     var hash = M.hashBytes(new Uint8Array(ab)), ref = M.assetRef(info, fileName, hash), have = M.findAsset(p, hash);
+    if (opts.src === "rec") { ref.src = "rec"; } // 9A-12: マイクで録った素材
     if (opts.relink) {
       var want = M.findAsset(p, opts.relink);
       if (!want) { fail("つなぎなおす素材が曲の中に見つかりません"); return; }
@@ -1003,6 +1007,308 @@
     if (r.ok && pl) { resync(); }
     rerender();
   }
+
+  // ---------- §341 9A-12: マイク録音 ----------
+  // getUserMedia → MediaStreamAudioSourceNode（UGMelody.audio.ctx）→ AudioWorklet（だめなら ScriptProcessor）で PCM をそのまま受けとる → モノラル 16bit の WAV → importWav（9A-10 と同じ保存）
+  // MediaRecorder は使わない（形式がブラウザでちがう・圧縮される・録りはじめを AudioContext の時計と合わせられない）
+  var REC_MAX_SEC = 60, REC_MIN_SEC = 0.5, REC_KEY = "ultimateGorillaDawRecV1", REC_CHUNK = 2048, REC_SP = 4096, REC_TICK_MS = 100, REC_STALL_MS = 3000, REC_NAME = "ug-daw-rec", REC_BARS = 256;
+  var rec = { state: "idle", open: false, track: "", bar: 0, withPlay: true, monitor: false, msg: "", tok: null, ac: null, stream: null, src: null, node: null, sink: null, mon: null, mode: "",
+    sr: 0, f0: 0, next: -1, kept: 0, max: 0, chunks: [], peak: 0, clipN: 0, comp: 0, auto: null, manual: 0, start: 0, timer: null, last: 0, fail: null, failUrl: "", wl: null, info: null };
+  // AudioWorklet の中のコード（文字列のまま data: URL・だめなら Blob URL で読む）。REC_CHUNK フレームごとに { f: 1 フレーム目の番号, d: Float32Array } を送る
+  var REC_WORKLET = [
+    "class P extends AudioWorkletProcessor {",
+    "  constructor() { super(); this.b = new Float32Array(" + REC_CHUNK + "); this.n = 0; this.f = 0; this.on = true; var s = this; this.port.onmessage = function (e) { if (e.data === 'stop') { s.on = false; } }; }",
+    "  process(inp) {",
+    "    if (!this.on) { return false; }",
+    "    var c = inp[0] && inp[0][0], i;",
+    "    if (!c) { return true; }",
+    "    for (i = 0; i < c.length; i++) {",
+    "      if (this.n === 0) { this.f = currentFrame + i; }",
+    "      this.b[this.n++] = c[i];",
+    "      if (this.n === this.b.length) { this.port.postMessage({ f: this.f, d: this.b }, [this.b.buffer]); this.b = new Float32Array(" + REC_CHUNK + "); this.n = 0; }",
+    "    }",
+    "    return true;",
+    "  }",
+    "}",
+    "registerProcessor('" + REC_NAME + "', P);"
+  ].join("\n");
+  // 手で足す遅れの補正（ms・この端末だけ）
+  function recManual() { var r = lsRaw(REC_KEY), o = null; if (r) { try { o = JSON.parse(r); } catch (e) { o = null; } } var v = o && isFinite(Number(o.offsetMs)) ? Number(o.offsetMs) : 0; return Math.max(-500, Math.min(500, Math.round(v))); }
+  function recSetManual(ms) { var v = Math.max(-500, Math.min(500, Math.round(Number(ms) || 0))); lsPut(REC_KEY, JSON.stringify({ format: "ultimate-gorilla-daw-rec", offsetMs: v })); return v; }
+  // 自動の補正（ブラウザが報告する 出力の遅れ ＋ マイクの入力の遅れ・秒）
+  function recAuto(ac, stream) {
+    var o = 0, i = 0;
+    try { o = Number(ac.outputLatency); if (!(o > 0 && o < 1)) { o = Number(ac.baseLatency); } if (!(o > 0 && o < 1)) { o = 0; } } catch (e) { o = 0; }
+    try { var tr = stream && stream.getAudioTracks ? stream.getAudioTracks()[0] : null, s = tr && tr.getSettings ? tr.getSettings() : null; i = s && Number(s.latency) > 0 && Number(s.latency) < 1 ? Number(s.latency) : 0; } catch (e2) { i = 0; }
+    return { out: o, inp: i, sec: o + i };
+  }
+  // 録れる長さ（秒）: 60 秒・WAV の上限・1 曲の素材の合計の残り
+  function recRoom(p, sr) {
+    var M = DM(), l = p && p.assets ? p.assets : [], sec = 0, i;
+    for (i = 0; i < l.length; i++) { sec += Number(l[i] && l[i].sec) || 0; }
+    return Math.max(0, Math.min(REC_MAX_SEC, M.WAV_MAX_SEC, (M.WAV_MAX_BYTES - 44) / (2 * (sr || 48000)), M.MAX_ASSET_SEC - sec));
+  }
+  function recMedia() { try { var n = window.navigator, md = n && n.mediaDevices; return md && md.getUserMedia ? md : null; } catch (e) { return null; } }
+  // 録音を始められない理由（"" ＝ 始められる）
+  function recWhy(p, t) {
+    var M = DM();
+    if (!p || p.readOnly) { return "この曲は読むだけなので、録音を置けません"; }
+    if (!t || !M.isAudio(t)) { return "オーディオトラックを選んでください"; }
+    if (aud.busy) { return "いま別の音声を読みこんでいます"; }
+    if (wav.busy) { return "WAV を書き出しています。終わってから録音してください"; }
+    if (pk.busy) { return "ZIP を作っています。終わってから録音してください"; }
+    if (window.isSecureContext === false) { return "マイクは https のページ（GitHub Pages）か localhost でだけ使えます"; }
+    if (!recMedia()) { return "このブラウザではマイクを使えません（getUserMedia がありません）"; }
+    if ((p.assets || []).length >= M.MAX_ASSETS) { return M.assetRoomWhy(p, { sec: 0 }); }
+    if (recRoom(p, 0) < 1) { return "1 曲の音声の素材は合計 " + M.MAX_ASSET_SEC + " 秒までなので、もう録れません（「📁 曲」の画面で、使っていない素材を外せます）"; }
+    return "";
+  }
+  function micErr(e) {
+    var n = String((e && e.name) || "");
+    if (n === "NotAllowedError" || n === "SecurityError" || n === "PermissionDeniedError") { return "マイクの使用が許可されませんでした。ブラウザの設定（iPhone は「設定 → アプリ → Safari → マイク」、PC はアドレスバーの鍵のマーク）で許可してから、もう一度 ● を押してください"; }
+    if (n === "NotFoundError" || n === "OverconstrainedError" || n === "DevicesNotFoundError") { return "マイクが見つかりませんでした"; }
+    if (n === "NotReadableError" || n === "AbortError" || n === "TrackStartError") { return "マイクを使えませんでした（ほかのアプリが使っている・マイクの不具合など）"; }
+    if (n === "ended") { return "マイクが切れました"; }
+    return "録音を始められませんでした（" + errName(e) + "）";
+  }
+  function stopStream(s) { var l = [], i; try { l = s && s.getTracks ? s.getTracks() : []; } catch (e) { l = []; } for (i = 0; i < l.length; i++) { try { l[i].onended = null; l[i].stop(); } catch (e2) {} } }
+  // マイクとノードを全部はなす（どの終わり方でも必ず通る）
+  function recRelease() {
+    var l = [rec.src, rec.mon, rec.sink], i;
+    rec.tok = null;
+    if (rec.timer) { clearInterval(rec.timer); rec.timer = null; }
+    if (rec.node) {
+      try { if (rec.node.port) { rec.node.port.onmessage = null; rec.node.port.postMessage("stop"); } } catch (e) {}
+      try { rec.node.onaudioprocess = null; } catch (e1) {}
+      try { rec.node.disconnect(); } catch (e2) {}
+    }
+    for (i = 0; i < l.length; i++) { if (l[i]) { try { l[i].disconnect(); } catch (e3) {} } }
+    stopStream(rec.stream);
+    rec.stream = null; rec.src = null; rec.node = null; rec.mon = null; rec.sink = null;
+  }
+  function recFreeFail() { if (rec.failUrl) { try { URL.revokeObjectURL(rec.failUrl); } catch (e) {} } rec.failUrl = ""; rec.fail = null; }
+  function recOpen(tid) { if (rec.state !== "idle") { return false; } var p = project(), M = DM(), lr = M.loopRange(p); rec.open = true; rec.track = tid; rec.msg = ""; recFreeFail(); rec.bar = p.practice && p.practice.loopOn ? M.tickToBar(p, lr.a).bar - 1 : 0; rec.manual = recManual(); st.chooseAdd = false; st.confirmDel = null; st.anote = ""; return true; }
+  // ● 録音開始（ボタンの中から: AudioContext を作る・再開する → マイクの許可）
+  function recStart() {
+    var p = project(), M = DM(), t = M.findTrack(p, rec.track), UG = window.UGMelody, ac = null, why;
+    if (rec.state !== "idle") { return false; }
+    rec.msg = ""; recFreeFail();
+    why = recWhy(p, t);
+    if (why) { rec.msg = why; return false; }
+    try { ac = UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { ac = null; }
+    if (!ac || !ac.createMediaStreamSource) { rec.msg = "このブラウザでは録音できません（Web Audio のマイク入力が使えません）"; return false; }
+    stopPlay(false);
+    var tok = rec.tok = {}, pr;
+    rec.state = "ask"; rec.ac = ac; rec.mode = ""; rec.info = null;
+    try { pr = recMedia().getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }, video: false }); } catch (e1) { recFail(tok, e1); return true; }
+    if (!pr || !pr.then) { recFail(tok, { message: "getUserMedia" }); return true; }
+    pr.then(function (stream) { if (rec.tok !== tok) { stopStream(stream); return; } recWire(tok, stream); }, function (e2) { recFail(tok, e2); });
+    return true;
+  }
+  function recFail(tok, e) {
+    if (rec.tok !== tok) { return; }
+    var withPl = rec.state === "rec" && rec.withPlay;
+    recRelease();
+    if (withPl) { stopPlay(false); }
+    rec.chunks = []; rec.state = "idle";
+    rec.msg = (e && e.ugText ? e.ugText : micErr(e)) + "（曲は変えていません）";
+    rerender();
+  }
+  function recWire(tok, stream) {
+    var ac = rec.ac, UG = window.UGMelody, trs = [], i;
+    rec.stream = stream;
+    try { rec.src = ac.createMediaStreamSource(stream); } catch (e) { recFail(tok, { ugText: "このブラウザでは、マイクの音を Web Audio に入れられませんでした（" + errName(e) + "）" }); return; }
+    try {
+      rec.sink = ac.createGain(); rec.sink.gain.value = 0; rec.sink.connect(ac.destination); // 処理を動かすための出口（音は出さない）
+      rec.mon = ac.createGain(); rec.mon.gain.value = rec.monitor ? 1 : 0; rec.src.connect(rec.mon); // モニター（はじめは OFF ＝ 0）
+      rec.mon.connect(UG && UG.audio && UG.audio.ctx === ac && UG.audio.master ? UG.audio.master : ac.destination);
+    } catch (e1) { recFail(tok, { ugText: "録音の準備ができませんでした（" + errName(e1) + "）" }); return; }
+    try { trs = stream.getAudioTracks ? stream.getAudioTracks() : []; } catch (e2) { trs = []; }
+    for (i = 0; i < trs.length; i++) { trs[i].onended = function () { if (rec.tok !== tok) { return; } if (rec.state === "rec") { recStop("ended"); } else { recFail(tok, { name: "ended" }); } }; }
+    try { var s0 = trs[0] && trs[0].getSettings ? trs[0].getSettings() : {}; rec.info = { label: String((trs[0] && trs[0].label) || "").substring(0, 60), ch: s0.channelCount || 0, sr: s0.sampleRate || 0, ec: s0.echoCancellation, ns: s0.noiseSuppression, agc: s0.autoGainControl }; } catch (e3) { rec.info = null; }
+    recNode(ac, tok, function (ok) { if (rec.tok !== tok) { return; } if (!ok) { recFail(tok, { ugText: "このブラウザでは録音の処理を作れませんでした" }); return; } recBegin(tok); });
+  }
+  // PCM を受けとるノード（AudioWorklet → だめなら ScriptProcessor）
+  function recNode(ac, tok, cb) {
+    function sp() {
+      if (rec.tok !== tok) { return; }
+      var n = null;
+      try { n = ac.createScriptProcessor(REC_SP, 1, 1); } catch (e) { n = null; }
+      if (!n) { cb(false); return; }
+      n.onaudioprocess = function (ev) { if (rec.node !== n) { return; } var d = ev.inputBuffer.getChannelData(0); recChunk(rec.next >= 0 ? rec.next : Math.round(ac.currentTime * ac.sampleRate) - d.length, new Float32Array(d)); };
+      try { rec.src.connect(n); n.connect(rec.sink); } catch (e1) { cb(false); return; }
+      rec.node = n; rec.mode = "script"; cb(true);
+    }
+    function make() {
+      if (rec.tok !== tok) { return; }
+      var n = null;
+      try { n = new window.AudioWorkletNode(ac, REC_NAME, { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: "explicit", channelInterpretation: "speakers" }); } catch (e) { n = null; }
+      if (!n) { sp(); return; }
+      n.port.onmessage = function (e) { var m = e.data; if (rec.node === n && m && m.d) { recChunk(m.f, m.d); } };
+      try { rec.src.connect(n); n.connect(rec.sink); } catch (e1) { sp(); return; }
+      rec.node = n; rec.mode = "worklet"; cb(true);
+    }
+    if (!ac.audioWorklet || !window.AudioWorkletNode) { sp(); return; }
+    if (rec.wl === ac) { make(); return; }
+    function load(u, next) {
+      var pr;
+      try { pr = ac.audioWorklet.addModule(u); } catch (e) { next(); return; }
+      if (!pr || !pr.then) { next(); return; }
+      pr.then(function () { rec.wl = ac; make(); }, function () { next(); });
+    }
+    load("data:application/javascript;charset=utf-8," + encodeURIComponent(REC_WORKLET), function () {
+      var bu = "";
+      try { bu = URL.createObjectURL(new Blob([REC_WORKLET], { type: "application/javascript" })); } catch (e) { bu = ""; }
+      if (!bu) { sp(); return; }
+      load(bu, sp);
+    });
+  }
+  // 録りはじめる（伴奏ありなら、ループなしの再生を録りはじめの小節から）
+  function recBegin(tok) {
+    var p = project(), M = DM(), ac = rec.ac;
+    if (rec.withPlay && audNeedLoad(p)) { ensureAssets(p, function () { if (rec.tok === tok) { recBegin(tok); } }); return; } // 伴奏の音声の素材を読みこんでから
+    rec.sr = ac.sampleRate; rec.max = Math.floor(recRoom(p, rec.sr) * rec.sr); rec.kept = 0; rec.chunks = []; rec.peak = 0; rec.clipN = 0; rec.next = -1;
+    rec.auto = recAuto(ac, rec.stream); rec.manual = recManual();
+    rec.start = M.barToTick(p, rec.bar);
+    rec.state = "rec"; rec.last = Date.now();
+    if (rec.withPlay) {
+      rec.comp = Math.max(0, rec.auto.sec + rec.manual / 1000);
+      var end = M.songEndTick(p);
+      if (!startPlay({ from: rec.start, a: rec.start, b: Math.max(end, rec.start + M.barTicks(p)), loop: false, noWait: true, rec: true }) || !pl) { recFail(tok, { ugText: st.msg || "伴奏を鳴らせませんでした" }); return; }
+      rec.f0 = Math.round((pl.segs[0].t0 + rec.comp) * rec.sr); // この番号のフレーム ＝ 録りはじめの小節の頭（伴奏の予約と同じ時計）
+    } else {
+      rec.comp = 0;
+      rec.f0 = Math.round(ac.currentTime * rec.sr);
+    }
+    rec.timer = setInterval(recTick, REC_TICK_MS);
+    rerender();
+  }
+  // 受けとった PCM（f ＝ 1 フレーム目の AudioContext のフレーム番号）。抜けは無音で埋め、重なりは捨てる
+  function recChunk(f, d) {
+    if (rec.state !== "rec") { return; }
+    rec.last = Date.now();
+    if (rec.next >= 0 && f > rec.next) { var gap = Math.min(f - rec.next, rec.max + 1); recPush(rec.next, new Float32Array(gap)); if (rec.state !== "rec") { return; } }
+    else if (rec.next >= 0 && f < rec.next) { var cut = rec.next - f; if (cut >= d.length) { return; } d = d.subarray(cut); f = rec.next; }
+    recPush(f, d);
+  }
+  function recPush(f, d) {
+    rec.next = f + d.length;
+    var a = Math.max(0, rec.f0 - f);
+    if (a >= d.length) { return; }
+    var take = Math.min(d.length - a, rec.max - rec.kept), i, x, pk = rec.peak;
+    if (take <= 0) { return; }
+    var seg = new Float32Array(take);
+    for (i = 0; i < take; i++) { x = d[a + i]; if (x !== x) { x = 0; } seg[i] = x; if (x < 0) { x = -x; } if (x > pk) { pk = x; } if (x >= 0.999) { rec.clipN++; } }
+    rec.peak = pk;
+    rec.chunks.push(seg); rec.kept += take;
+    if (rec.kept >= rec.max) { setTimeout(function () { recStop("max"); }, 0); }
+  }
+  function recClock(sec) { var s = Math.max(0, sec), m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + (Math.floor(r * 10) / 10).toFixed(1); }
+  // 100ms ごと: 経過時間・入力レベル（描きなおさずに文字と幅だけ）。データが 3 秒来なければ止める（電話・別のアプリなどで止まった）
+  function recTick() {
+    if (rec.state !== "rec") { return; }
+    if (Date.now() - rec.last > REC_STALL_MS) { recStop("stall"); return; }
+    var root = st.root, el = root && root.querySelector ? root.querySelector(".dr-time") : null, lv = root && root.querySelector ? root.querySelector(".dr-lv") : null;
+    if (el) { el.textContent = recClock(rec.kept / rec.sr) + " / " + recClock(rec.max / rec.sr); }
+    if (lv) { lv.style.width = Math.round(Math.min(1, rec.peak) * 100) + "%"; lv.className = "dr-lv" + (rec.peak >= 0.999 ? " dr-hot" : ""); }
+    rec.peak = 0;
+  }
+  // PCM（Float32 の列）→ モノラル 16bit の WAV（RIFF・fmt の PCM 1・data）
+  function recWav(chunks, n, sr) {
+    var ab = new ArrayBuffer(44 + n * 2), v = new DataView(ab), o = 44, w = 0, i, j, x;
+    function tag(off, s) { var k; for (k = 0; k < 4; k++) { v.setUint8(off + k, s.charCodeAt(k)); } }
+    tag(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); tag(8, "WAVE"); tag(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); tag(36, "data"); v.setUint32(40, n * 2, true);
+    for (i = 0; i < chunks.length && w < n; i++) {
+      var d = chunks[i];
+      for (j = 0; j < d.length && w < n; j++) { x = d[j]; x = x > 1 ? 1 : (x < -1 ? -1 : x); v.setInt16(o, x < 0 ? Math.round(x * 32768) : Math.round(x * 32767), true); o += 2; w++; }
+    }
+    return ab;
+  }
+  var REC_WHY = { max: "上限の長さになったので止めました。", ended: "マイクが切れたので、そこまでを置きます。", stall: "マイクの音が来なくなったので（電話・ほかのアプリなど）、そこまでを置きます。", hidden: "画面を離れたので、そこまでを置きます。", exit: "DAW を閉じたので、そこまでを置きます。", btn: "" };
+  // ■ 停止して置く（ボタン・⏹・上限・中断）。マイクを先にはなしてから WAV にして importWav へ
+  function recStop(reason) {
+    if (rec.state === "ask") { recCancel("録音をやめました（曲は変えていません）"); return true; }
+    if (rec.state !== "rec") { return false; }
+    var p = project(), M = DM(), n = rec.kept, sr = rec.sr, chunks = rec.chunks, start = rec.start, tid = rec.track, why0 = REC_WHY[reason] || "", clipN = rec.clipN;
+    var withPl = rec.withPlay;
+    recRelease();
+    if (withPl) { stopPlay(false); }
+    rec.chunks = [];
+    if (n < REC_MIN_SEC * sr) { rec.state = "idle"; rec.msg = why0 + "録音が短すぎる（" + (Math.round(n / sr * 10) / 10) + " 秒）ので捨てました（曲は変えていません）"; rerender(); return true; }
+    var ab = recWav(chunks, n, sr), info = M.parseWav(ab), name = "録音 " + fmtTime(Date.now()) + ".wav", sec = Math.round(n / sr * 10) / 10;
+    if (!info.ok || info.fmt !== 1 || info.bits !== 16 || info.ch !== 1 || info.frames !== n) { rec.state = "idle"; rec.msg = "録音を WAV にできませんでした（曲は変えていません）"; rerender(); return true; }
+    rec.state = "saving"; rec.msg = why0; rerender();
+    importWav(ab, name, { track: tid, start: start, src: "rec" }, function (r) {
+      rec.state = "idle";
+      if (!r.ok) {
+        rec.fail = { ab: ab, name: name.replace(/[\/:]/g, "-") };
+        rec.msg = why0 + "録音を置けませんでした: " + r.why + (/曲は変えていません|保存しました/.test(r.why) ? "" : "（曲は変えていません）") + "。下のボタンで、録った音を WAV のファイルにとっておけます";
+        rerender(); return;
+      }
+      var t = M.findTrack(project(), tid), moved = r.clip && r.clip.start !== start;
+      rec.open = false; rec.msg = "";
+      audNote(why0 + "🎙️ 録音（" + sec + " 秒）を「" + (t ? t.name : "") + "」の " + (r.clip ? M.tickToBar(project(), r.clip.start).bar : "?") + " 小節目に置きました" + (moved ? "（録りはじめの小節にほかのクリップが重なったので、後ろへずらしました。伴奏とはずれています）" : "") + (clipN ? "。音が大きすぎて割れたところがあります（マイクから少し離れてください）" : "") + (r.saved ? "" : "。ただし曲を保存できませんでした"));
+      rerender();
+    });
+    return true;
+  }
+  // ✕ やめる（捨てる）・曲を切りかえる
+  function recCancel(msg) {
+    if (rec.state !== "rec" && rec.state !== "ask") { return false; }
+    var withPl = rec.state === "rec" && rec.withPlay;
+    recRelease();
+    if (withPl) { stopPlay(false); }
+    rec.chunks = []; rec.kept = 0; rec.state = "idle"; rec.msg = msg || "";
+    return true;
+  }
+  // 画面のボタン（data-rc）
+  function recUi(v) {
+    if (v === "go") { recStart(); return; }
+    if (v === "stop") { recStop("btn"); return; }
+    if (v === "cancel") { recCancel("録音をやめました（捨てました・曲は変えていません）"); return; }
+    if (v === "mon") { rec.monitor = !rec.monitor; if (rec.mon) { try { rec.mon.gain.value = rec.monitor ? 1 : 0; } catch (e) {} } return; }
+    if (rec.state !== "idle") { return; }
+    if (v === "close") { rec.open = false; rec.msg = ""; recFreeFail(); return; }
+    if (v === "bar-" || v === "bar+") { rec.bar = Math.max(0, Math.min(REC_BARS - 1, rec.bar + (v === "bar+" ? 1 : -1))); return; }
+    if (v === "play") { rec.withPlay = !rec.withPlay; return; }
+    if (v === "off-" || v === "off+") { rec.manual = recSetManual(recManual() + (v === "off+" ? 10 : -10)); }
+  }
+  function recHtml(p) {
+    var M = DM(), t = M.findTrack(p, rec.track), i;
+    if (!t || !M.isAudio(t)) { if (rec.state === "idle") { rec.open = false; return ""; } }
+    function b(act, label, cls, dis) { return '<button class="modal-btn' + (cls ? " " + cls : "") + '" data-rc="' + act + '"' + (dis ? " disabled" : "") + '>' + label + '</button>'; }
+    var h = '<div class="daw-info da-panel dr"><div>&#x1F399;&#xFE0F; <b>録音</b> &#x2192; 「' + escHtml(t ? t.name : "?") + '」</div>';
+    var monB = b("mon", "&#x1F3A7; モニター（マイクの音を聞く）: " + (rec.monitor ? "ON" : "OFF"), "da-wide dr-tg" + (rec.monitor ? " on" : ""));
+    if (rec.state === "rec") {
+      h += '<div class="dr-live"><span class="dr-dot">&#x25CF;</span> 録音中 <b class="dr-time">' + recClock(rec.kept / rec.sr) + ' / ' + recClock(rec.max / rec.sr) + '</b><span class="dr-meter" aria-hidden="true"><i class="dr-lv" style="width:0%;"></i></span></div>' +
+        '<div class="small">' + (rec.withPlay ? '伴奏といっしょに ' + (rec.bar + 1) + ' 小節目から（補正 ' + Math.round(rec.comp * 1000) + 'ms）' : 'マイクだけ（伴奏なし）・' + (rec.bar + 1) + ' 小節目に置きます') + '・' + rec.sr + 'Hz・' + (rec.mode === "worklet" ? "AudioWorklet" : "ScriptProcessor") + '</div>' +
+        '<div class="da-btns">' + b("stop", "&#x25A0; 停止して置く", "da-half dr-stop") + b("cancel", "&#x2715; やめる（捨てる）", "da-half") + monB + '</div>';
+    } else if (rec.state === "ask") {
+      h += '<div>&#x23F3; マイクの準備をしています…（ブラウザがマイクを使ってよいか聞いてきたら「許可」を押してください）</div><div class="da-btns">' + b("cancel", "&#x2715; やめる", "da-wide") + '</div>';
+    } else if (rec.state === "saving") {
+      h += '<div>&#x23F3; 録音を保存しています…（この端末の中に保存して、確かめてから置きます）</div>';
+    } else {
+      var why = recWhy(p, t), room = recRoom(p, rec.ac ? rec.ac.sampleRate : 0), st0 = M.barToTick(p, rec.bar), over = false, mn = rec.manual;
+      for (i = 0; t && i < t.clips.length; i++) { if (t.clips[i].start + t.clips[i].len > st0) { over = true; } }
+      var au = rec.auto ? Math.round(rec.auto.sec * 1000) : null;
+      h += '<div class="dr-row">録りはじめ: ' + b("bar-", "&#x2212;", "dr-sm", rec.bar <= 0) + ' <b>' + (rec.bar + 1) + ' 小節目</b> ' + b("bar+", "&#xFF0B;", "dr-sm") + '</div>' +
+        '<div class="da-btns">' + b("play", (rec.withPlay ? "&#x2611;" : "&#x2610;") + " &#x1F3B6; 伴奏を鳴らしながら録る", "da-wide dr-tg" + (rec.withPlay ? " on" : "")) + monB + '</div>' +
+        (rec.withPlay ? '<div class="dr-row small">ずれの補正: 自動 ' + (au === null ? '（録りはじめに測る）' : au + 'ms') + ' ＋ 手で ' + b("off-", "&#x2212;10", "dr-sm") + ' <b>' + (mn > 0 ? "+" : "") + mn + 'ms</b> ' + b("off+", "&#xFF0B;10", "dr-sm") + '<br>録った音が伴奏より遅れて聞こえるときは ＋、早いときは − にします。</div>' : '') +
+        (over ? '<div class="small">&#x26A0;&#xFE0F; このトラックの ' + (rec.bar + 1) + ' 小節目より後ろにクリップがあります。重なると後ろへずらして置くので、伴奏とずれます（空いたオーディオトラックで録るのがおすすめ）。</div>' : '') +
+        '<div class="da-btns">' + b("go", "&#x25CF; 録音開始（" + Math.floor(room) + " 秒まで）", "da-wide dr-go", !!why) + b("close", "閉じる", "da-wide") + '</div>' +
+        (why ? '<div class="small">' + escHtml(why) + '</div>' : '') +
+        '<div class="small">イヤホンをつけると、伴奏がマイクに入りません。モニターはイヤホンのときだけ ON にしてください（ハウリングします）。録った音は外へ送らず、この端末の中だけに保存します。</div>';
+    }
+    if (rec.msg) { h += '<div class="da-note">' + escHtml(rec.msg) + '</div>'; }
+    if (rec.fail && rec.state === "idle") {
+      if (!rec.failUrl) { try { rec.failUrl = URL.createObjectURL(new Blob([rec.fail.ab], { type: "audio/wav" })); } catch (e) { rec.failUrl = ""; } }
+      if (rec.failUrl) { h += '<a class="modal-btn da-wide dr-dl" href="' + rec.failUrl + '" download="' + escHtml(rec.fail.name) + '">&#x2B07;&#xFE0F; 置けなかった録音を WAV で保存</a>'; }
+    }
+    return h + '</div>';
+  }
+  // ページを隠した（iPhone でホームへ・アプリの切りかえ・電話）: そこまでを置く
+  if (window.document && document.addEventListener) { document.addEventListener("visibilitychange", function () { if (document.hidden && rec.state !== "idle") { if (rec.state === "rec") { recStop("hidden"); } else if (rec.state === "ask") { recCancel("画面を離れたので、録音をやめました"); } } }); }
 
   // ---------- §341 9A-9: WAV の書き出し（OfflineAudioContext・再生と同じ schedule()・44.1kHz・16bit・ステレオ）----------
   var WAV_RATE = 44100, WAV_MAX_MUSIC = 60, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000;
@@ -1942,7 +2248,12 @@
         var el = ev.currentTarget, v;
         if (ev.stopPropagation) { ev.stopPropagation(); }
         if (el.getAttribute("data-back")) { ctl.back(); return; }
+        if ((v = el.getAttribute("data-rc"))) { keepScroll(root); recUi(v); redraw(); return; } // 9A-12
         if ((v = el.getAttribute("data-act"))) {
+          if (rec.state === "rec" || rec.state === "ask") { // 9A-12: 録音中は ⏹ ＝ 録音の停止。▶・ループ・BPM は変えない（伴奏の時計がずれる）
+            if (v === "stop") { recStop("btn"); } else { st.msg = "録音中は ▶・ループ・BPM を変えられません（⏹ か「■ 停止して置く」で止めてから）"; }
+            redraw(); return;
+          }
           if (v === "play") { startPlay(); redraw(); return; }
           if (v === "stop") { stopPlay(false); redraw(); return; }
           if (v === "loop") { setLoop(!(p.practice && p.practice.loopOn)); markDirty(); redraw(); return; }
@@ -1979,6 +2290,7 @@
           if (!ft) { return; }
           if (v === "clip") { ops.addClip(tid); return; }
           if (v === "wav") { st.anote = ""; pickWav(root, { track: tid }); return; } // 9A-10
+          if (v === "rec") { recOpen(tid); rerender(); return; } // 9A-12
           if (v === "up" || v === "down") { ops.moveTrack(tid, v === "up" ? -1 : 1); return; }
           if (v === "del") { st.confirmDel = tid; st.anote = ""; rerender(); return; }
           if (v === "delNo") { st.confirmDel = null; rerender(); return; }
@@ -2037,7 +2349,7 @@
   window.UGDaw = {
     state: function () { return st; },
     project: project,
-    reset: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
+    reset: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
@@ -2048,9 +2360,11 @@
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）
     pack: { exportZip: packExport, importZip: packImport, start: packStart, load: packLoad, state: function () { return pk; }, plan: function () { return packPlan(project()); }, file: packFile, FORMAT: PACK_FORMAT, VERSION: PACK_VERSION, MAX_ZIP: PACK_MAX_ZIP },
+    // §341 9A-12: マイク録音（テストからも呼ぶ）
+    rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
     audio: { importWav: importWav, ensure: ensureAssets, state: function () { return aud; }, add: addAudio, pick: pickWav, waveSvg: waveSvg, used: usedAssets, missing: audMissing, assetState: assetState, IDB_NAME: IDB_NAME, forget: audForget },
-    reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
+    reload: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
     ROLL: { RB: RB, RH: RH, LO: LO, HI: HI, KEYW: KEYW },
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,
