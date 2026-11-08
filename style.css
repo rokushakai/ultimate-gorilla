@@ -1449,3 +1449,25 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .daw, .daw button, .daw-clip, .daw-head { touch-action: manipulation; }
 /* 選ぶと出る操作の欄の高さをあらかじめ取っておく（箱がまん中ぞろえなので、高さが変わると上の部分がずれて 2 回目のタップが別のクリップに当たる） */
 .da-area { min-height: 252px; }
+/* §341 9A-6: ミキサー Lite・トラックの削除 */
+.dm-row { background: #1a2a3a; border-radius: 8px; padding: 6px 8px; margin-top: 6px; }
+.dm-master { box-shadow: inset 3px 0 0 #ffd166; }
+.dm-name { display: flex; align-items: center; gap: 6px; font-size: 13px; min-width: 0; }
+.dm-name .small { color: #adb5bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.dm-ms { flex: 0 0 96px; }
+.dm-ms button { min-height: 30px; font-size: 12px; }
+.dm-ctl { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.dm-lab { flex: 0 0 auto; font-size: 11px; color: #adb5bd; width: 28px; }
+.dm-val { flex: 0 0 auto; width: 38px; text-align: right; font-size: 13px; color: #ffd166; font-variant-numeric: tabular-nums; }
+.dm-sp { flex: 0 0 auto; width: 44px; }
+.dm .dm-reset { margin: 0; flex: 0 0 auto; min-width: 44px; min-height: 34px; padding: 0; font-size: 16px; }
+.dm-fader { flex: 1 1 auto; min-width: 0; height: 34px; margin: 0; background: transparent; touch-action: pan-y; -webkit-appearance: none; appearance: none; }
+.dm-fader::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, #4cc9f0, #3a4a63); }
+.dm-fader.dm-pan::-webkit-slider-runnable-track { background: linear-gradient(to right, #3a4a63 0%, #4cc9f0 49%, #ffd166 50%, #4cc9f0 51%, #3a4a63 100%); }
+.dm-fader::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -11px; border-radius: 50%; background: #ffd166; border: 2px solid #10202e; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.dm-fader::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: #ffd166; border: 2px solid #10202e; }
+.dm-fader:disabled { opacity: 0.4; }
+.da-btns .da-half { grid-column: span 2; font-size: 14px; }
+.da-btns .da-danger { background: #ef476f; color: #fff; }
+.da-btns .da-danger-o { background: transparent; color: #ff8fab; border: 2px solid #ef476f; }
+.da-confirm { box-shadow: inset 0 0 0 2px #ef476f; }

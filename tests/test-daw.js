@@ -470,4 +470,78 @@ module.exports = async function () {
   ok(D5.project().tracks.length === M5.MAX_TRACKS && D5.state().anote.indexOf("16 本まで") >= 0, "tracks are limited to 16", [cnt, added]);
   A5.stop();
   D5.reset();
+
+  // ================= 9A-6: ミキサー Lite・トラックの削除（§341）=================
+  var e6 = H.load(), W6 = e6.window, M6 = W6.UGDawModel, D6 = W6.UGDaw, A6 = W6.UGArcade, S6 = e6.store, K6 = M6.STORE_KEY, C6 = e6.counters;
+  S6.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 });
+  var rpg6 = S6.ultimateGorillaSaveV2;
+  // 開いただけでは保存を書きかえない（v2.37 の曲）
+  S6[K6] = JSON.stringify(fx.index);
+  S6[K6 + ":p:" + fx.record.project.id] = JSON.stringify(fx.record);
+  var keys0 = JSON.stringify(Object.keys(S6).sort().map(function (k) { return [k, S6[k]]; }));
+  var R6 = H.makeEl("div");
+  D6.reset(); A6.start("daw", R6, {});
+  ok(D6.project().id === fx.record.project.id && D6.project().master.vol === 80, "v2.37 song opens (master.vol 80)");
+  D6.showMixer(); A6.stop(); D6.reset(); A6.start("daw", R6, {});
+  ok(JSON.stringify(Object.keys(S6).sort().map(function (k) { return [k, S6[k]]; })) === keys0, "opening a saved song (and the mixer) writes nothing");
+  // 左右（StereoPanner）は仮の Web Audio に無いので、ここで用意して値を確かめる
+  var ac6 = W6.UGMelody.audioInit(), pans = [];
+  ac6.createStereoPanner = function () { var n = { connect: function () {}, disconnect: function () {}, pan: { value: 0, setTargetAtTime: function (v, t, tau) { n.pan.value = v; pans.push({ v: v, tau: tau }); } } }; return n; };
+  var rpgMaster0 = W6.UGMelody.audio.master.gain.value;
+  var p6 = D6.proj.create("demo"), L6 = p6.tracks[0], B6 = p6.tracks[1];
+  D6.play();
+  var P6 = D6.player(), mst = P6.mix.__master, mxL = P6.mix[L6.id], mxB = P6.mix[B6.id];
+  ok(mst && mst.bus.gain.value === 0.8 && mst.dry && mst.dry.gain.value === 0.8, "DAW master gain = master.vol / 100 (80 → 0.8)", mst && mst.bus.gain.value);
+  ok(mxL.main.g.gain.value === 0.8 && mxL.main.pn && mxL.main.pn.pan.value === 0, "track gain = vol / 100, pan = 0 at start");
+  function lastTarget(name) { var a = C6.targets.filter(function (x) { return x.name === name; }); return a[a.length - 1]; }
+  ok(D6.mixer.setVol(L6.id, 0) && L6.vol === 0 && lastTarget("gain").v === 0 && lastTarget("gain").tau === 0.01, "volume 0 while playing: smooth ramp (10 ms) to 0");
+  ok(D6.mixer.resetTrack(L6.id) && L6.vol === 80 && L6.pan === 0 && lastTarget("gain").v === 0.8, "↺ resets volume to 80 and pan to C");
+  D6.mixer.setPan(L6.id, -1);
+  ok(L6.pan === -1 && pans.length && pans[pans.length - 1].v === -1 && pans[pans.length - 1].tau === 0.01 && D6.panText(-1) === "L100", "pan left: StereoPanner pan → −1 (smooth), shown as L100");
+  D6.mixer.setPan(B6.id, 0.37);
+  ok(B6.pan === 0.37 && pans[pans.length - 1].v === 0.37 && D6.panText(0.37) === "R37" && D6.panText(0) === "C", "pan right 37: R37");
+  D6.mixer.setPan(L6.id, 5); ok(L6.pan === 1, "pan is clamped to −1…1");
+  var lg = [], st0 = mxL.main.g.gain.setTargetAtTime; mxL.main.g.gain.setTargetAtTime = function (v, t, tau) { lg.push(v); return st0.call(this, v, t, tau); };
+  D6.mixer.setVol(L6.id, 50); L6.mute = true; D6.updateMix();
+  ok(lg.join() === "0.5,0", "mute wins over volume (lead gain 0.5 → 0)", lg);
+  L6.mute = false; D6.updateMix();
+  ok(lg[lg.length - 1] === 0.5, "unmute: back to volume 50 (0.5)", lg);
+  D6.mixer.setMaster(0);
+  ok(p6.master.vol === 0 && lastTarget("gain").v === 0, "master 0: DAW master gain → 0 (silent)");
+  D6.mixer.setMaster(100);
+  ok(p6.master.vol === 100 && lastTarget("gain").v === 1, "master 100: gain 1");
+  ok(W6.UGMelody.audio.master.gain.value === rpgMaster0, "the shared (RPG / other games) master volume is not changed");
+  D6.mixer.commit(); D6.stop();
+  ok(!D6.isPlaying() && !D6.player(), "stop clears the player");
+  // ミキサーの画面
+  D6.showMixer();
+  var mh = R6.innerHTML;
+  ok(mh.indexOf("DAW のマスター") >= 0 && (mh.match(/data-mxv="/g) || []).length === 3 && (mh.match(/data-mxp="/g) || []).length === 2 && mh.indexOf('value="50"') >= 0 && mh.indexOf(">R100<") >= 0 && mh.indexOf("data-mxm=") >= 0 && mh.indexOf("アレンジ") >= 0, "mixer screen: master + a volume and pan fader per track with values, M/S, back");
+  // 保存 → 読みなおし・JSON
+  D6.flushSave();
+  var q6 = D6.reload();
+  ok(q6.tracks[0].vol === 50 && q6.tracks[0].pan === 1 && q6.tracks[1].pan === 0.37 && q6.master.vol === 100, "volume, pan and master are saved and come back after reload");
+  var ex6 = D6.proj.exportJson(), im6 = D6.proj.importText(ex6.text);
+  ok(im6.ok && D6.project().tracks[0].vol === 50 && D6.project().tracks[1].pan === 0.37 && D6.project().master.vol === 100, "JSON keeps volume, pan and master");
+  // トラックの削除
+  var p7 = D6.proj.create("demo"), T7 = p7.tracks[1], before7 = JSON.stringify(p7.tracks), u0 = D6.undoDepth();
+  p7.tracks[1].vol = 33; p7.tracks[1].pan = -0.5; p7.tracks[1].instrument = M6.synthInstrument("bell"); before7 = JSON.stringify(p7.tracks);
+  D6.select("track", T7.id);
+  ok(R6.innerHTML.indexOf("トラックを削除") >= 0, "selected track shows a delete button");
+  D6.askDelete(T7.id);
+  ok(R6.innerHTML.indexOf("「<b>ベース</b>」を削除します。中のクリップ 2 個（音符 36 個）も消えます") >= 0 && R6.innerHTML.indexOf('data-tr="delYes"') >= 0 && R6.innerHTML.indexOf('data-tr="delNo"') >= 0, "the confirmation names the track and says its clips and notes go too");
+  D6.play();
+  ok(D6.ops.deleteTrack(T7.id) && p7.tracks.length === 1 && !M6.findTrack(p7, T7.id) && !D6.isPlaying() && D6.undoDepth() === u0 + 1 && D6.state().anote.indexOf("戻せます") >= 0, "delete while playing: playback stops, the track is gone, undo is possible");
+  ok(D6.ops.deleteTrack(p7.tracks[0].id) === false && p7.tracks.length === 1 && D6.state().anote.indexOf("最後の 1 本") >= 0, "the last track cannot be deleted (said why)");
+  ok(D6.ops.undo() && JSON.stringify(D6.project().tracks) === before7, "undo restores the track with clips, notes, instrument, volume and pan");
+  var rt = M6.findTrack(D6.project(), T7.id); rt.clips[0].notes[0][2] = 1;
+  ok(D6.undoDepth() === u0 && JSON.parse(before7)[1].clips[0].notes[0][2] !== 1, "the restored data is not shared with anything kept for undo");
+  rt.clips[0].notes[0][2] = JSON.parse(before7)[1].clips[0].notes[0][2];
+  D6.ops.deleteTrack(T7.id); D6.flushSave();
+  ok(D6.reload().tracks.length === 1, "a deleted track stays deleted after reload");
+  D6.ops.undo();
+  ok(D6.project().tracks.length === 1, "reload empties the undo list (nothing to undo)");
+  ok(S6.ultimateGorillaSaveV2 === rpg6 && Object.keys(S6).every(function (k) { return k === "ultimateGorillaSaveV2" || k.indexOf(K6) === 0; }) && S6[K6 + ":p:" + fx.record.project.id] === JSON.stringify(fx.record), "RPG save and the old v2.37 song are untouched");
+  A6.stop();
+  D6.reset();
 };

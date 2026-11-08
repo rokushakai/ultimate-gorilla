@@ -434,6 +434,13 @@
     return { ok: true, hidden: hid };
   }
   function hiddenNotes(c) { var i, n = 0; for (i = 0; c.notes && i < c.notes.length; i++) { if (c.notes[i][0] - (c.offset || 0) >= c.len) { n++; } } return n; }
+  // §341 9A-6: トラックを消す（最後の 1 本は消さない）
+  function deleteTrack(p, id) {
+    var i;
+    if (!p || p.tracks.length <= 1) { return { ok: false, why: "曲には 1 本以上のトラックが要ります（最後の 1 本は消せません）" }; }
+    for (i = 0; i < p.tracks.length; i++) { if (p.tracks[i].id === id) { p.tracks.splice(i, 1); return { ok: true }; } }
+    return { ok: false, why: "トラックが見つかりません" };
+  }
   function deleteClip(p, id) {
     var f = findClip(p, id);
     if (!f) { return false; }
@@ -502,6 +509,6 @@
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
-    addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes
+    addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack
   };
 })();

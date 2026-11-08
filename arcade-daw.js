@@ -80,18 +80,35 @@
       if (!pn) { g.connect(dest); }
       return { g: g, pn: pn };
     }
-    mx = { main: chain(bus), dry: master ? chain(master) : null, syn: null, voices: [] };
+    var mm = masterOf(); // §341 9A-6: トラック → DAW のマスター → 共有のバス・マスター（RPG やほかのゲームの音量は変えない）
+    mx = { main: chain(mm.bus), dry: mm.dry ? chain(mm.dry) : null, syn: null, voices: [] };
     mx.syn = Y && Y.track ? Y.track(ac, { bus: mx.main.g, dry: mx.dry ? mx.dry.g : null }) : null; // エンジンが無ければ null（UGSynth.note で鳴らす）
     pl.mix[t.id] = mx;
     setGain(t, mx, true);
     return mx;
   }
+  // §341 9A-6: DAW のマスター（ゲイン 2 つ: 共有のバスへ・共有の残響を通さない出口へ）。ゲイン ＝ master.vol ÷ 100
+  function masterVol() { var p = st.project, v = p && p.master ? Number(p.master.vol) : 80; return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
+  function masterOf() {
+    var m = pl.mix.__master;
+    if (m) { return m; }
+    var ac = pl.ac, UG = window.UGMelody;
+    var bus = UG && UG.audio && UG.audio.ctx === ac && UG.audio.bus ? UG.audio.bus : ac.destination;
+    var master = UG && UG.audio && UG.audio.ctx === ac && UG.audio.master ? UG.audio.master : null;
+    m = { bus: ac.createGain(), dry: master ? ac.createGain() : null };
+    m.bus.gain.value = masterVol(); m.bus.connect(bus);
+    if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(master); }
+    pl.mix.__master = m;
+    return m;
+  }
+  function rampTo(param, v, now) { try { if (now) { param.value = v; } else { param.setTargetAtTime(v, pl.ac.currentTime, 0.01); } } catch (e) { param.value = v; } }
+  function setMasterGain() { if (!pl || !pl.mix.__master) { return; } var m = pl.mix.__master, v = masterVol(); rampTo(m.bus.gain, v, false); if (m.dry) { rampTo(m.dry.gain, v, false); } }
   function setGain(t, mx, now) {
     var on = DM().audible(st.project, t), v = on ? t.vol / 100 : 0, ac = pl.ac, list = [mx.main, mx.dry], i;
     for (i = 0; i < list.length; i++) {
       if (!list[i]) { continue; }
-      try { if (now) { list[i].g.gain.value = v; } else { list[i].g.gain.setTargetAtTime(v, ac.currentTime, 0.01); } } catch (e) { list[i].g.gain.value = v; }
-      if (list[i].pn) { try { list[i].pn.pan.value = t.pan; } catch (e2) {} }
+      rampTo(list[i].g.gain, v, now);
+      if (list[i].pn) { rampTo(list[i].pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9A-6: パンもなめらかに
     }
   }
   // ミュート・ソロ・音量を、鳴っているトラックにすぐ反映
@@ -157,13 +174,15 @@
   function disposeMix(mix) {
     var id, i;
     for (id in mix) {
-      if (!mix.hasOwnProperty(id)) { continue; }
+      if (!mix.hasOwnProperty(id) || id === "__master") { continue; }
       var mx = mix[id];
       if (mx.syn) { try { mx.syn.dispose(); } catch (e) {} mx.syn = null; }
       for (i = 0; i < mx.voices.length; i++) { try { if (mx.voices[i].kill) { mx.voices[i].kill(0.05); } } catch (e2) {} }
       mx.voices = [];
       (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} } } }, 150); })(mx);
     }
+    var ms = mix.__master;
+    if (ms) { setTimeout(function () { try { ms.bus.disconnect(); if (ms.dry) { ms.dry.disconnect(); } } catch (e4) {} }, 150); } // 9A-6: DAW のマスターも外す
   }
   var tailTimer = null, tailMix = null;
   function clearTail() { if (tailTimer) { clearTimeout(tailTimer); tailTimer = null; } if (tailMix) { var m = tailMix; tailMix = null; disposeMix(m); } }
@@ -299,6 +318,7 @@
     var M = DM(), p = project();
     if (M && p && st.view === "roll") { renderRoll(root, ctl); return; }
     if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
+    if (M && p && st.view === "mix") { renderMix(root, ctl); return; }
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -323,6 +343,7 @@
       '</div>' +
       '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
         '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
+        '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
@@ -382,7 +403,12 @@
     if (s && s.kind === "track") {
       var t = M.findTrack(p, s.id);
       if (t) {
-        return h + '<div class="daw-info da-panel"><div>' + infoHtml(p) + '</div><div class="da-btns">' + b("tr", "clip", "&#xFF0B; クリップ", "da-wide") + b("tr", "name", "&#x270F;&#xFE0F; 名前") + b("tr", "up", "&#x25B2; 上へ") + b("tr", "down", "&#x25BC; 下へ") + '</div></div>';
+        if (st.confirmDel === t.id) {
+          var nc = 0, nn = 0, q; for (q = 0; q < t.clips.length; q++) { nc++; nn += (t.clips[q].notes || []).length; }
+          return h + '<div class="daw-info da-panel da-confirm"><div>&#x26A0;&#xFE0F; 「<b>' + escHtml(t.name) + '</b>」を削除します。中のクリップ ' + nc + ' 個（音符 ' + nn + ' 個）も消えます。' + (pl ? '再生は止まります。' : '') + '消したあとも &#x21B6; で戻せます。</div>' +
+            '<div class="da-btns">' + b("tr", "delYes", "&#x1F5D1;&#xFE0F; 削除する", "da-half da-danger") + b("tr", "delNo", "やめる", "da-half") + '</div></div>';
+        }
+        return h + '<div class="daw-info da-panel"><div>' + infoHtml(p) + '</div><div class="da-btns">' + b("tr", "clip", "&#xFF0B; クリップ", "da-wide") + b("tr", "name", "&#x270F;&#xFE0F; 名前") + b("tr", "up", "&#x25B2; 上へ") + b("tr", "down", "&#x25BC; 下へ") + b("tr", "del", "&#x1F5D1;&#xFE0F; トラックを削除", "da-wide da-danger-o") + '</div></div>';
       }
     }
     return h + '<div class="daw-info">' + infoHtml(p) + '</div>';
@@ -737,7 +763,19 @@
       st.sel = null;
       return done(s, "「" + escHtml(clipLabel(f.clip)) + "」を消しました（&#x21B6; で戻せます）");
     },
-    undo: function () { var ok = edit.undo(); if (ok) { st.anote = "1 つ戻しました"; if (st.sel && st.sel.kind === "clip" && !DM().findClip(project(), st.sel.id)) { st.sel = null; } rerender(); } return ok; }
+    undo: function () { var ok = edit.undo(); if (ok) { st.anote = "1 つ戻しました"; if (st.sel && st.sel.kind === "clip" && !DM().findClip(project(), st.sel.id)) { st.sel = null; } rerender(); } return ok; },
+    // §341 9A-6: トラックを消す（確かめの欄のあと。再生中なら止めてから。↶ で戻せる・最後の 1 本は消さない）
+    deleteTrack: function (id) {
+      var p = project(), t = DM().findTrack(p, id);
+      st.confirmDel = null;
+      if (!t) { return false; }
+      if (p.tracks.length <= 1) { return nope("曲には 1 本以上のトラックが要ります（最後の 1 本は消せません）"); }
+      if (pl) { stopPlay(false); }
+      var s = snapTracks(), r = DM().deleteTrack(p, id);
+      if (!r.ok) { return nope(r.why); }
+      st.sel = null;
+      return done(s, "「" + escHtml(t.name) + "」を消しました（&#x21B6; で戻せます）");
+    },
   };
   // 音を短く鳴らす（足した・高さを変えたとき。再生中は鳴らさない）
   function preview(t, m) {
@@ -918,6 +956,72 @@
     grid.addEventListener("pointercancel", function (e) { end(e, true); });
   }
 
+  // ---------- §341 9A-6: ミキサー Lite ----------
+  // 音量 vol 0〜100（ゲイン ＝ ÷100）・パン pan −1〜1（表示は ×100 で L〜C〜R）・DAW のマスター master.vol 0〜100（ゲイン ＝ ÷100）
+  var VOL0 = 80;
+  function clampNum(v, lo, hi, d) { v = Number(v); if (!isFinite(v)) { v = d; } return Math.max(lo, Math.min(hi, v)); }
+  function panText(pan) { var n = Math.round(pan * 100); return n === 0 ? "C" : (n < 0 ? "L" + (-n) : "R" + n); }
+  var mixer = {
+    // 動かしているあいだ（保存はしない・音だけ変える）
+    setVol: function (id, v) { var t = DM().findTrack(project(), id); if (!t) { return false; } t.vol = Math.round(clampNum(v, 0, 100, VOL0)); if (pl && pl.mix[id]) { setGain(t, pl.mix[id], false); } return true; },
+    setPan: function (id, v) { var t = DM().findTrack(project(), id); if (!t) { return false; } t.pan = Math.round(clampNum(v, -1, 1, 0) * 100) / 100; if (pl && pl.mix[id]) { setGain(t, pl.mix[id], false); } return true; },
+    setMaster: function (v) { var p = project(); p.master = p.master || { vol: VOL0, rev: 0, dly: 0, fx: { items: [] } }; p.master.vol = Math.round(clampNum(v, 0, 100, VOL0)); setMasterGain(); return true; },
+    resetTrack: function (id) { if (!mixer.setVol(id, VOL0) || !mixer.setPan(id, 0)) { return false; } markDirty(); return true; },
+    resetMaster: function () { mixer.setMaster(VOL0); markDirty(); return true; },
+    commit: function () { markDirty(); } // 指をはなしたとき 1 回だけ保存
+  };
+  function panSupported() { var UG = window.UGMelody, ac = UG && UG.audio && UG.audio.ctx; if (ac) { return !!ac.createStereoPanner; } var AC = window.AudioContext || window.webkitAudioContext; return !!(AC && AC.prototype && AC.prototype.createStereoPanner); }
+  function mixHtml(p) {
+    var i, h, mv = p.master ? Math.round(clampNum(p.master.vol, 0, 100, VOL0)) : VOL0, ps = panSupported();
+    h = '<div class="daw dm">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-mx="back">&#x2190; アレンジ</button><b>&#x1F39A;&#xFE0F; ミキサー</b></div>' +
+      projBarHtml(p) +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-mx="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-mx="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span></div>' +
+      '<div class="dm-row dm-master"><div class="dm-name"><b>DAW のマスター</b></div>' +
+        '<div class="dm-ctl"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + mv + '" data-mxv="master" aria-label="マスター音量"><b class="dm-val" data-mxval="master">' + mv + '</b>' +
+        '<button class="modal-btn dm-reset" data-mx="resetMaster" title="80 に戻す">&#x21BA;</button></div></div>';
+    if (!ps) { h += '<p class="small dsv-note">このブラウザでは左右（パン）を変えられません（音量・M／S は使えます）。</p>'; }
+    for (i = 0; i < p.tracks.length; i++) {
+      var t = p.tracks[i], pv = Math.round(clampNum(t.pan, -1, 1, 0) * 100), tv = Math.round(clampNum(t.vol, 0, 100, VOL0));
+      h += '<div class="dm-row"><div class="dm-name">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b> <span class="small">' + instName(t) + '</span>' +
+          '<span class="daw-ms dm-ms"><button class="daw-m' + (t.mute ? " on" : "") + '" data-mxm="' + t.id + '">M</button><button class="daw-s' + (t.solo ? " on" : "") + '" data-mxs="' + t.id + '">S</button></span></div>' +
+        '<div class="dm-ctl"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + tv + '" data-mxv="' + t.id + '" aria-label="' + escHtml(t.name) + ' の音量"><b class="dm-val" data-mxval="' + t.id + '">' + tv + '</b>' +
+          '<button class="modal-btn dm-reset" data-mxr="' + t.id + '" title="音量 80・パン C に戻す">&#x21BA;</button></div>' +
+        '<div class="dm-ctl"><span class="dm-lab">パン</span><input type="range" class="dm-fader dm-pan" min="-100" max="100" step="1" value="' + pv + '" data-mxp="' + t.id + '" aria-label="' + escHtml(t.name) + ' の左右"' + (ps ? '' : ' disabled') + '><b class="dm-val" data-mxpval="' + t.id + '">' + panText(pv / 100) + '</b><span class="dm-sp"></span></div></div>';
+    }
+    return h + saveNoteHtml() + '<p class="small dsv-note">フェーダーは指で左右に動かします。↺ で初期値（音量 80・パン C・マスター 80）に戻ります。音量・パン・マスターは ↶ の対象外です。</p></div>';
+  }
+  function renderMix(root, ctl) {
+    var p = project();
+    root.innerHTML = mixHtml(p);
+    if (!root.querySelectorAll) { return; }
+    bindProjBar(root, ctl);
+    var M = DM(), els = root.querySelectorAll("button"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-mx"), id;
+        if (v === "back") { st.view = "arr"; render(root, ctl); return; }
+        if (v === "play") { startPlay(); renderMix(root, ctl); return; }
+        if (v === "stop") { stopPlay(false); renderMix(root, ctl); return; }
+        if (v === "resetMaster") { mixer.resetMaster(); renderMix(root, ctl); return; }
+        if ((id = el.getAttribute("data-mxr"))) { mixer.resetTrack(id); renderMix(root, ctl); return; }
+        if ((id = el.getAttribute("data-mxm"))) { var tm = M.findTrack(p, id); if (tm) { tm.mute = !tm.mute; updateMix(); markDirty(); } renderMix(root, ctl); return; }
+        if ((id = el.getAttribute("data-mxs"))) { var ts = M.findTrack(p, id); if (ts) { ts.solo = !ts.solo; updateMix(); markDirty(); } renderMix(root, ctl); }
+      };
+    }
+    var rs = root.querySelectorAll("input[type=range]");
+    for (k = 0; k < rs.length; k++) {
+      rs[k].oninput = function (ev) {
+        var el = ev.currentTarget, id = el.getAttribute("data-mxv"), pid = el.getAttribute("data-mxp"), lab;
+        if (id === "master") { mixer.setMaster(el.value); lab = root.querySelector('[data-mxval="master"]'); if (lab) { lab.textContent = String(Math.round(el.value)); } return; }
+        if (id) { mixer.setVol(id, el.value); lab = root.querySelector('[data-mxval="' + id + '"]'); if (lab) { lab.textContent = String(Math.round(el.value)); } return; }
+        if (pid) { mixer.setPan(pid, Number(el.value) / 100); lab = root.querySelector('[data-mxpval="' + pid + '"]'); if (lab) { lab.textContent = panText(Number(el.value) / 100); } }
+      };
+      rs[k].onchange = function () { mixer.commit(); };
+    }
+    drawHead();
+  }
+
   // ---------- 操作 ----------
   function bind(root, ctl) {
     if (!root.querySelectorAll) { return; }
@@ -943,7 +1047,7 @@
         if ((v = el.getAttribute("data-mute"))) { var tm = M.findTrack(p, v); if (tm) { tm.mute = !tm.mute; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } st.anote = ""; if (st.sel && st.sel.kind === "clip" && st.sel.id === v && openRoll(v)) { render(root, ctl); return; } st.sel = { kind: "clip", id: v }; render(root, ctl); return; } // 9A-5: タップで選ぶ・もう一度でピアノロール
-        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { ops.addTrack(); } else if (v === "undo") { ops.undo(); } return; }
+        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { ops.addTrack(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } return; }
         if ((v = el.getAttribute("data-addclip"))) { keepScroll(root); ops.addClip(v); return; }
         if ((v = el.getAttribute("data-cl")) && st.sel && st.sel.kind === "clip") {
           var cid = st.sel.id, fc = M.findClip(p, cid);
@@ -963,10 +1067,13 @@
           if (!ft) { return; }
           if (v === "clip") { ops.addClip(tid); return; }
           if (v === "up" || v === "down") { ops.moveTrack(tid, v === "up" ? -1 : 1); return; }
+          if (v === "del") { st.confirmDel = tid; st.anote = ""; rerender(); return; }
+          if (v === "delNo") { st.confirmDel = null; rerender(); return; }
+          if (v === "delYes") { ops.deleteTrack(tid); return; }
           if (v === "name") { var tn = window.prompt ? window.prompt("トラックの名前（40 文字まで）", ft.name) : null; if (tn !== null && tn !== undefined) { ops.renameTrack(tid, tn); } }
           return;
         }
-        if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; st.anote = ""; redraw(); }
+        if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; st.anote = ""; st.confirmDel = null; redraw(); }
       };
     }
     bindProjBar(root, ctl);
@@ -1018,7 +1125,7 @@
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
-    ops: ops, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.undo.length = 0; st.anote = ""; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
