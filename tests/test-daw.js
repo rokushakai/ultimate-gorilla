@@ -1294,7 +1294,7 @@ module.exports = async function () {
   var blobC = IDBC.data[DC.audio.IDB_NAME].stores.blobs.rows[aC.id], biC = MC.parseWav(blobC.data), dvC = new DataView(blobC.data);
   ok(biC.ok && biC.frames === keptC && dvC.getInt16(44 + 100 * 2, true) === Math.round(0.75 * 32767) && dvC.getInt16(44 + 99 * 2, true) === 0 && MC.hashBytes(new Uint8Array(blobC.data)) === aC.id, "IndexedDB holds the PCM WAV: sample 100 is the 0.75 click (frame-exact), id = content hash");
   var svC = JSON.parse(SC["ultimateGorillaDawV1:p:" + PC.id]);
-  ok(svC.project.assets.some(function (a) { return a.id === aC.id && a.src === "rec"; }) && JSON.stringify(svC).indexOf('"data"') < 0 && DC.saveState().status === "saved" && /録音（1 秒）/.test(DC.state().anote), "the song is saved (asset ref only) and the message says where the take went", DC.state().anote);
+  ok(svC.project.assets.some(function (a) { return a.id === aC.id && a.src === "rec"; }) && JSON.stringify(svC).indexOf('"data"') < 0 && DC.saveState().status === "saved" && /録音（1 秒）/.test(DC.rec.state().result.text) && DC.rec.state().result.kind === "ok", "the song is saved (asset ref only) and the result banner says where the take went", DC.rec.state().result);
   // 再生: 録った素材も 2 小節目の頭で鳴る
   DC.clearLog(); DC.play(); var pC2 = DC.player(), lgC = DC.log().filter(function (x) { return x.audio && x.asset === aC.id; });
   function runC(sec) { var ac = pC2.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DC.pump(); } }
@@ -1303,13 +1303,13 @@ module.exports = async function () {
   DC.stop(); acC.currentTime = 1;
   // --- 上限（1 曲の素材の合計 120 秒の残り）・自動で止める ---
   PC.assets.push({ id: "a:00000000000000aa", name: "x", bytes: 1, sr: 44100, ch: 1, bits: 16, frames: 1, sec: 117.5 - aC.sec, hash: "a:00000000000000aa", store: "idb" });
-  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.state().bar = 6; DC.rec.start(); await waitRec("ask");
+  DC.rec.open(tC.id); DC.rec.state().withPlay = false; DC.rec.state().countIn = false; DC.rec.state().bar = 6; DC.rec.start(); await waitRec("ask");
   R = DC.rec.state();
   ok(R.state === "rec" && R.max === Math.floor(2.5 * 44100) && !DC.player() && R.f0 === Math.round(acC.currentTime * R.sr) && R.comp === 0, "without accompaniment: no playback, no latency shift; the limit is what is left of 120 s (2.5 s)", [R.state, R.max]);
   while (R.state === "rec") { DC.rec.chunk(R.next >= 0 ? R.next : R.f0, new Float32Array(4096)); await eC.wait(1); }
   await waitRec("saving");
   var clMax = PC.tracks[PC.tracks.length - 1].clips.filter(function (c) { return c.start === MC.barToTick(PC, 6); })[0], aMax = clMax && MC.findAsset(PC, clMax.asset);
-  ok(clMax && aMax && aMax.frames === Math.floor(2.5 * 44100) && mic.stops === 2 && /上限/.test(DC.state().anote), "at the limit it stops by itself and places exactly the allowed length", [DC.state().anote, aMax && aMax.frames]);
+  ok(clMax && aMax && aMax.frames === Math.floor(2.5 * 44100) && mic.stops === 2 && /上限/.test(DC.rec.state().result.text), "at the limit it stops by itself and places exactly the allowed length", [DC.rec.state().result, aMax && aMax.frames]);
   ok(/120 秒/.test(DC.rec.why()) && !DC.rec.start(), "no room left (< 1 s): recording does not start");
   PC.assets = PC.assets.filter(function (a) { return a.id !== "a:00000000000000aa"; });
   // --- 短すぎる・やめる ---
@@ -1342,4 +1342,146 @@ module.exports = async function () {
   DC.rec.setManual(0);
   ok(SC.ultimateGorillaSaveV2 === rpgC && mic.calls.length === 9 && eC.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eC.counters.errors.slice(0, 3));
   AC2.stop(); DC.reset();
+
+  // ================= 9A-13: オーディオ編集 Lite・カウントイン（§341）=================
+  var eE = H.load(), WE = eE.window, ME = WE.UGDawModel, DE = WE.UGDaw, AE = WE.UGArcade, SE = eE.store, IDBE = fakeIDB();
+  SE.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 13 }); var rpgE = SE.ultimateGorillaSaveV2;
+  WE.indexedDB = IDBE; fakeDecode(WE);
+  // --- データ（§340 の項目の意味）---
+  var pe = ME.emptyProject(0), te = ME.addAudioTrack(pe).track, refE = { id: "a:00000000000000e1", name: "x.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000000e1", store: "idb" };
+  pe.assets.push(refE);
+  var ce = ME.addAudioClip(pe, te, 4 * PPQ * 2, refE, "take"), BS = ME.tickToSec(pe, ce.start); // 3 小節目（4 秒）
+  var sp0 = ME.audioSpan(pe, ce);
+  ok(nearA(sp0.p0, BS) && nearA(sp0.p1, BS + 2) && sp0.tin === 0 && sp0.tout === 2 && sp0.nudge === 0 && !sp0.edited && !ce.hasOwnProperty("trimIn"), "unedited clip: plays the whole asset from the bar (same as before)", sp0);
+  var rE1 = ME.setAudioEdit(pe, ce.id, { trimIn: 0.5 }), sp1 = ME.audioSpan(pe, ce);
+  ok(rE1.ok && ce.trimIn === 0.5 && nearA(sp1.A, BS) && nearA(sp1.p0, BS + 0.5) && nearA(sp1.p1, BS + 2), "trimIn 0.5 s: silence before it, the audio does not move (non-destructive)");
+  ME.setAudioEdit(pe, ce.id, { trimOut: 1.5 }); var sp2 = ME.audioSpan(pe, ce);
+  ok(ce.trimOut === 1.5 && nearA(sp2.p1, BS + 1.5) && ce.len === 4 * PPQ, "trimOut 1.5 s: ends there; the box shrinks to the bars needed (1 bar)", ce.len);
+  ME.setAudioEdit(pe, ce.id, { trimIn: 9 }); ME.setAudioEdit(pe, ce.id, { trimOut: 0.1 });
+  ok(nearA(ce.trimIn, 1.49) && nearA(ce.trimOut, 1.5), "trimIn can't pass trimOut (and vice versa): keeps at least 10 ms", [ce.trimIn, ce.trimOut]);
+  ME.setAudioEdit(pe, ce.id, { trimIn: 0.5 }); ME.setAudioEdit(pe, ce.id, { trimOut: 1.5 });
+  ME.setAudioEdit(pe, ce.id, { nudge: 12.34 }); var sp3 = ME.audioSpan(pe, ce);
+  ok(ce.nudge === 12.3 && nearA(sp3.A, BS + 0.0123) && nearA(sp3.p0, BS + 0.5123) && ce.start === 4 * PPQ * 2, "nudge 12.3 ms (0.1 ms steps) shifts the sound, the bar position (start) stays", sp3.A);
+  ME.setAudioEdit(pe, ce.id, { nudge: 5000 }); var nMax = ce.nudge; ME.setAudioEdit(pe, ce.id, { nudge: -5000 });
+  ok(nMax === 1000 && ce.nudge === -1000, "nudge is limited to ±1000 ms");
+  ME.setAudioEdit(pe, ce.id, { nudge: 0 });
+  ok(!ce.hasOwnProperty("nudge"), "nudge back to 0 removes the field (no edit)");
+  var evE = ME.audioEvents(pe, 0, 99999, false);
+  ok(evE.length === 1 && nearA(evE[0].sec, BS + 0.5) && nearA(evE[0].src, 0.5) && nearA(evE[0].endSec, BS + 1.5), "audioEvents: starts at the trimmed start with the source offset (src)", evE[0]);
+  // 区間を細かく分けても、同じ 1 つ（重ならない・欠けない）
+  var nWin = 0, kW; for (kW = 0; kW < 64; kW++) { nWin += ME.audioEvents(pe, kW * 300, (kW + 1) * 300, false).length; }
+  ok(nWin === 1, "split into 64 windows: the clip starts exactly once", nWin);
+  var fr = ME.audioEvents(pe, 4 * PPQ * 2 + 1920, 99999, true);
+  ok(fr.length === 1 && nearA(fr[0].sec, BS + 1) && nearA(fr[0].src, 1) && fr[0].skip > 0, "a fresh segment inside the clip starts it in the middle (loop / play from here)", fr[0]);
+  // 曲の頭より前
+  var c0 = ME.addAudioClip(pe, te, 0, refE, "head"); ME.setAudioEdit(pe, c0.id, { nudge: -250 });
+  var sp4 = ME.audioSpan(pe, c0), ev4 = ME.audioEvents(pe, 0, 960, false).filter(function (x) { return x.clip === c0.id; })[0];
+  ok(nearA(sp4.pre, 0.25) && ev4 && ev4.sec === 0 && nearA(ev4.src, 0.25), "nudge −250 ms at bar 1: the part before the song start is skipped (source from 0.25 s)", ev4);
+  // 保存の形
+  var oldClip = { id: "c9", type: "audio", asset: refE.id, start: 0, len: 3840, offset: 0, srcOffset: 0, gain: 1, fadeIn: 0, fadeOut: 0, loop: null, ext: { name: "old" } };
+  var pOld = ME.emptyProject(0), tOld = ME.addAudioTrack(pOld).track; tOld.clips.push(JSON.parse(JSON.stringify(oldClip))); pOld.assets.push(refE);
+  var pc1 = ME.clean(JSON.parse(JSON.stringify(pOld))), oc = pc1.tracks[2].clips[0];
+  ok(!oc.hasOwnProperty("trimIn") && !oc.hasOwnProperty("trimOut") && !oc.hasOwnProperty("nudge") && JSON.stringify(Object.keys(oc).sort()) === JSON.stringify(Object.keys(oldClip).sort()), "a v2.43–v2.45 clip (no edit fields) is not changed by clean() — no fields are added");
+  ME.setAudioEdit(pe, ce.id, { fadeIn: 0.1, fadeOut: 0.25, nudge: 7.5 });
+  var recE = ME.toRecord(pe, 1), backE = ME.parseRecordText(JSON.stringify(recE)), bc = backE.project.tracks[2].clips.filter(function (c) { return c.id === ce.id; })[0];
+  ok(backE.ok && bc.trimIn === 0.5 && bc.trimOut === 1.5 && bc.nudge === 7.5 && bc.fadeIn === 0.1 && bc.fadeOut === 0.25 && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(backE.project)))) === JSON.stringify(backE.project), "JSON round trip keeps trim / nudge / fades; clean() is stable", bc);
+  var badC = ME.clean({ tracks: [{ kind: "audio", instrument: { type: "audio" }, clips: [{ type: "audio", asset: refE.id, trimIn: -1, trimOut: null, nudge: 99999, fadeIn: 99 }] }] }).tracks[0].clips[0];
+  ok(!badC.hasOwnProperty("trimIn") && !badC.hasOwnProperty("trimOut") && badC.nudge === 1000 && badC.fadeIn === 10, "bad values are fixed (negative trim / null dropped, nudge ±1000, fade ≤ 10 s)", badC);
+  var dupE = ME.duplicateClip(pe, ce.id);
+  ok(dupE && dupE.trimIn === 0.5 && dupE.trimOut === 1.5 && dupE.nudge === 7.5 && dupE.fadeOut === 0.25 && dupE.asset === ce.asset, "duplicate keeps every edit value and the same asset");
+  ME.setAudioEdit(pe, ce.id, { reset: true });
+  ok(!ce.hasOwnProperty("trimIn") && !ce.hasOwnProperty("trimOut") && !ce.hasOwnProperty("nudge") && ce.fadeIn === 0 && ce.fadeOut === 0 && ce.len === 4 * PPQ, "reset: back to the original sound (no edit fields, box fits the whole asset)");
+  // --- 画面と再生（まねの IndexedDB）---
+  var RE = H.makeEl("div"); DE.reset(); AE.start("daw", RE, {}); DE.proj.create("empty");
+  var tE = await new Promise(function (r) { DE.audio.add(r); });
+  var wE = makeWav({ sr: 44100, ch: 1, sec: 2, fn: tone(440, 0.5) }), wE0 = new Uint8Array(wE.slice(0));
+  var rI = await new Promise(function (r) { DE.audio.importWav(wE, "take.wav", { track: tE.id, start: 0 }, r); });
+  var cE = rI.clip, hE = cE.asset;
+  ok(rI.ok && DE.audio.assetState(hE) === "ready", "a 2 s take on bar 1");
+  DE.select("clip", cE.id);
+  ok(RE.innerHTML.indexOf('data-cl="edit"') >= 0 && RE.innerHTML.indexOf("編集") >= 0, "audio clip panel: ✂️ 編集");
+  ok(DE.aedit.open(cE.id) && DE.state().view === "aedit" && RE.innerHTML.indexOf('data-aeb="trimIn|0.01"') >= 0 && RE.innerHTML.indexOf('data-aeb="nudge|-1"') >= 0 && RE.innerHTML.indexOf('data-aev="fadeOut"') >= 0 && RE.innerHTML.indexOf("ae-svg") >= 0 && RE.innerHTML.indexOf('data-ae="playAll"') >= 0, "✂️ 編集 screen: waveform, head / tail / nudge / fade rows with buttons and number input, preview with accompaniment");
+  var u0 = DE.undoDepth();
+  DE.aedit.step("trimIn", 0.1); DE.aedit.step("trimIn", 0.1); DE.aedit.step("trimIn", 0.01); DE.aedit.step("trimIn", 0.01); DE.aedit.step("trimIn", 0.01);
+  ok(nearA(DE.project().tracks[2].clips[0].trimIn, 0.23) && DE.undoDepth() === u0 + 5 && RE.innerHTML.indexOf("0.230 秒") >= 0, "head: +0.1 s ×2, +10 ms ×3 = 0.23 s (one undo step each)", DE.project().tracks[2].clips[0].trimIn);
+  DE.aedit.step("trimOut", -0.1); DE.aedit.step("trimOut", -0.1); DE.aedit.step("trimOut", -0.1); DE.aedit.step("trimOut", -0.01);
+  DE.aedit.step("nudge", 10); DE.aedit.step("nudge", 1); DE.aedit.step("nudge", 1);
+  DE.aedit.step("fadeIn", 1); DE.aedit.step("fadeIn", 1); DE.aedit.step("fadeIn", 1); DE.aedit.step("fadeIn", 1); DE.aedit.step("fadeIn", 1); // 0 → 5 → 10 → 20 → 50 → 100ms
+  DE.aedit.step("fadeOut", 1); DE.aedit.step("fadeOut", 1); DE.aedit.step("fadeOut", 1); DE.aedit.step("fadeOut", 1); DE.aedit.step("fadeOut", 1); DE.aedit.step("fadeOut", 1); // 200ms
+  var cE2 = DE.project().tracks[2].clips[0];
+  ok(nearA(cE2.trimOut, 1.69) && cE2.nudge === 12 && cE2.fadeIn === 0.1 && cE2.fadeOut === 0.2, "tail −0.31 s, nudge +12 ms, fade in 100 ms (preset steps), fade out 200 ms", cE2);
+  var blobE = IDBE.data[DE.audio.IDB_NAME].stores.blobs.rows[hE].data;
+  ok(eq(blobE, wE0.buffer) && MA.hashBytes(new Uint8Array(blobE)) === hE, "the stored WAV in IndexedDB is byte-for-byte unchanged (non-destructive)");
+  ok(SE["ultimateGorillaDawV1:p:" + DE.project().id] === undefined || true, "(saved later)");
+  await eE.wait(700);
+  var svE = JSON.parse(SE["ultimateGorillaDawV1:p:" + DE.project().id]).project.tracks[2].clips[0];
+  ok(svE.trimIn === 0.23 && svE.trimOut === 1.69 && svE.nudge === 12 && svE.fadeIn === 0.1 && svE.fadeOut === 0.2, "auto-save keeps the edit values", svE);
+  // 再生（まねの時計）: 開始・素材の位置・長さ・フェードの折れ目
+  function runE(sec) { var P = DE.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DE.pump(); } }
+  DE.setLoop(false); DE.state().view = "arr"; DE.clearLog(); DE.play(); var PE = DE.player(), tE0 = PE.segs[0].t0; runE(3);
+  var LE = DE.log().filter(function (x) { return x.audio; });
+  ok(LE.length === 1 && nearA(LE[0].when, tE0 + 0.012 + 0.23) && nearA(LE[0].offset, 0.23) && nearA(LE[0].dur, 1.46), "playback: starts at bar + 12 ms + 0.23 s, source offset 0.23 s, plays 1.46 s (trimmed part only)", LE[0]);
+  var envE = LE[0].env, okEnv = envE.length === 6 && envE[0][1] === 0 && nearA(envE[1][0], 0.003) && nearA(envE[2][0], 0.1) && envE[2][1] === 1 && nearA(envE[3][0], 1.26) && envE[3][1] === 1 && nearA(envE[4][0], 1.455) && nearA(envE[4][1], 0.025) && envE[5][1] === 0 && nearA(envE[5][0], 1.46);
+  ok(okEnv, "gain: 0 → fade in to 1 at 100 ms → hold → fade out from 200 ms before the end → 0 (3 ms / 5 ms de-click at the cut source)", envE);
+  DE.stop();
+  // WAV の書き出し（同じ schedule）: 同じ時刻・位置・フェード
+  var wpE = await new Promise(function (r) { DE.wav.start(r); }); for (var gE = 0; gE < 300 && DE.wav.state().busy; gE++) { await eE.wait(10); }
+  var WL = DE.wav.state().log.filter(function (x) { return x.audio; });
+  ok(WL.length === 1 && nearA(WL[0].when, 0.012 + 0.23) && nearA(WL[0].offset, 0.23) && nearA(WL[0].dur, 1.46) && JSON.stringify(WL[0].env) === JSON.stringify(envE), "WAV export uses the same edit: same start (from 0), offset, length and fade points", WL[0]);
+  // ループの境目（1 小節 ＝ 2 秒）
+  var pE = DE.project(); pE.practice = pE.practice || {}; DE.setLoop(true); pE.practice.loopA = 0; pE.practice.loopB = 4 * PPQ;
+  DE.clearLog(); DE.play(); PE = DE.player(); tE0 = PE.segs[0].t0; runE(4.2);
+  var LL = DE.log().filter(function (x) { return x.audio; });
+  ok(LL.length === 2 && nearA(LL[1].when - LL[0].when, ME.tickToSec(pE, PE.opts.b) - ME.tickToSec(pE, PE.opts.a)) && nearA(LL[0].offset, LL[1].offset) && LL.every(function (x) { return nearA(x.dur, Math.min(1.46, ME.tickToSec(pE, PE.opts.b) - 0.242)); }), "loop: one start per pass at the same spot, cut at the loop end (no doubles, no gaps)", LL.map(function (x) { return [x.when - tE0, x.offset, x.dur]; }));
+  DE.stop(); DE.setLoop(false);
+  // ↶・複製・移動
+  var uB = DE.undoDepth(); DE.aedit.open(cE.id); DE.aedit.step("nudge", -100);
+  ok(DE.project().tracks[2].clips[0].nudge === -88 && DE.ops.undo() && DE.project().tracks[2].clips[0].nudge === 12, "undo restores the previous nudge", [uB, DE.undoDepth(), DE.project().tracks[2].clips[0].nudge]);
+  var dE = DE.ops.duplicate(DE.project().tracks[2].clips[0].id);
+  ok(dE && dE.trimIn === 0.23 && dE.nudge === 12 && dE.fadeOut === 0.2 && DE.ops.move(dE.id, 1) && ME.findClip(DE.project(), dE.id).clip.nudge === 12, "duplicate keeps the edit; moving by a bar keeps the nudge");
+  DE.ops.remove(dE.id);
+  DE.aedit.open(cE.id); DE.aedit.reset();
+  var cR = DE.project().tracks[2].clips[0];
+  ok(!cR.hasOwnProperty("trimIn") && !cR.hasOwnProperty("nudge") && cR.fadeIn === 0 && RE.innerHTML.indexOf('data-ae="reset" disabled') >= 0, "↺ reset: the original sound again");
+  DE.ops.undo();
+  // --- カウントイン（伴奏あり）---
+  var micE = fakeMic(WE), acE = WE.UGMelody.audioInit(); acE.outputLatency = 0.02; acE.currentTime = 1;
+  DE.state().view = "arr"; DE.rec.open(tE.id); DE.rec.state().bar = 2; DE.select("track", tE.id);
+  ok(RE.innerHTML.indexOf('data-rc="cnt"') >= 0 && RE.innerHTML.indexOf("カウントイン 1 小節") >= 0 && DE.rec.state().countIn === true, "record panel: 🥁 count-in (ON by default)");
+  var osc0 = eE.counters.osc;
+  DE.rec.start(); await (async function () { for (var g = 0; g < 400 && DE.rec.state().state === "ask"; g++) { await eE.wait(5); } })();
+  var RS = DE.rec.state(), PC0 = DE.player();
+  ok(RS.state === "rec" && RS.beats === 4 && nearA(RS.beat, 0.5) && nearA(PC0.segs[0].t0, 1 + 0.08 + 2) && PC0.segs[0].tick0 === ME.barToTick(DE.project(), 2) && RS.t0 === PC0.segs[0].t0, "count-in: accompaniment starts after one bar (4 beats × 0.5 s at 120 BPM, 4/4)", [RS.beats, PC0.segs[0].t0]);
+  ok(RS.clicks.length === 4 && RS.clicks[0].accent && !RS.clicks[1].accent && nearA(RS.clicks[0].t, 1.08) && nearA(RS.clicks[3].t, 2.58) && eE.counters.osc - osc0 === 4, "4 clicks (first accented) on the beats before the recording bar");
+  ok(RS.f0 === Math.round((RS.t0 + RS.comp) * RS.sr) && nearA(RS.comp, 0.03), "the take starts at the bar after the count-in (+ output / input latency)");
+  ok(/カウント 1／4/.test(RE.innerHTML) && /録音中 — /.test(RE.innerHTML), "the panel shows 'カウント 1／4' during the count-in; the top banner says recording");
+  var cin = new Float32Array(Math.round(2.1 * RS.sr)); for (var ci = 0; ci < cin.length; ci++) { cin[ci] = 0.5; }
+  DE.rec.chunk(Math.round(1.0 * RS.sr), cin); // カウントインの音（f0 より前）
+  ok(RS.kept === 0, "frames during the count-in are not in the take");
+  acE.currentTime = 3.2;
+  ok(DE.rec.html().indexOf("録音中") >= 0, "after the count-in: 録音中");
+  DE.rec.chunk(RS.next, new Float32Array(RS.sr));
+  // ミキサーの ⏹ ＝ 録音の停止（伴奏だけ止まらない）
+  DE.showMixer();
+  ok(RE.innerHTML.indexOf("dr-banner dr-now") >= 0, "mixer screen also shows that recording is running");
+  DE.transportStop();
+  ok(DE.rec.state().state !== "rec" && !DE.player() && micE.stops === 1, "⏹ on any screen stops the recording (not just the accompaniment) and releases the mic");
+  for (var gS = 0; gS < 400 && DE.rec.state().state !== "idle"; gS++) { await eE.wait(5); }
+  DE.showMixer();
+  ok(DE.rec.state().result && DE.rec.state().result.kind === "ok" && RE.innerHTML.indexOf("dr-banner dr-ok") >= 0 && RE.innerHTML.indexOf('data-rc-x="1"') >= 0, "result banner: placed (saved), dismissable", DE.rec.state().result);
+  // 伴奏なし ＋ カウントイン: 補正を使う
+  DE.state().view = "arr"; DE.rec.open(tE.id); DE.rec.state().withPlay = false; DE.rec.state().bar = 8; acE.currentTime = 5;
+  DE.rec.start(); for (var gA = 0; gA < 400 && DE.rec.state().state === "ask"; gA++) { await eE.wait(5); }
+  RS = DE.rec.state();
+  ok(RS.state === "rec" && !DE.player() && nearA(RS.t0, 5 + 0.08 + 2) && nearA(RS.comp, 0.03) && RS.clicks.length === 4, "mic only + count-in: clicks, then the take starts at the bar (latency compensated)");
+  DE.rec.chunk(RS.f0, new Float32Array(RS.sr));
+  // 中断: ページを隠す ＝ そこまでを置く／やめる ＝ 捨てる（結果を出す）
+  var hidden = WE.document; DE.rec.stop("hidden");
+  for (gS = 0; gS < 400 && DE.rec.state().state !== "idle"; gS++) { await eE.wait(5); }
+  ok(/画面を離れた/.test(DE.rec.state().result.text) && DE.rec.state().result.kind === "ok" && micE.stops === 2, "hidden page: the take so far is placed and the banner says so", DE.rec.state().result);
+  DE.rec.open(tE.id); DE.rec.start(); for (gA = 0; gA < 400 && DE.rec.state().state === "ask"; gA++) { await eE.wait(5); }
+  DE.rec.cancel("録音をやめました（捨てました）");
+  ok(DE.rec.state().result.kind === "discard" && /捨てました/.test(DE.rec.state().result.text) && DE.rec.state().clicks.length === 0 && micE.stops === 3, "cancel: discarded is shown; count-in clicks are stopped");
+  ok(SE.ultimateGorillaSaveV2 === rpgE && eE.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eE.counters.errors.slice(0, 3));
+  AE.stop(); DE.reset();
 };

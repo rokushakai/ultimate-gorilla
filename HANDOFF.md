@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.45** |
+| 現在バージョン | **v2.46** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.46] ✂️ ゴリラDAW のオーディオ編集 Lite・カウントイン**（§341 Phase 9A-13）: `arcade-daw-model.js` の `audioSpan`（鳴る範囲）・`audioEvents`（秒で計算）・`setAudioEdit`。`arcade-daw.js` の `audEnv`（ゲインの折れ目）・`playAudio`・「オーディオ編集 Lite」の節（`openAedit`・`aedit`・`aeditSvg`・`renderAedit`）・録音の `recClicks`（カウントイン）・`transportStop`・`recBannerHtml`。公開前の版はタグ `pages-v2.45`（0a2b029）
 - **[v2.45] 🎙️ ゴリラDAW のマイク録音**（§341 Phase 9A-12）: `arcade-daw.js` の「マイク録音」の節（`recStart`・`recWire`・`recNode`（AudioWorklet の文字列 `REC_WORKLET`／ScriptProcessor）・`recBegin`（伴奏の時計で f0）・`recChunk`・`recWav`（16bit モノラル）・`recStop`（`importWav` へ・`src:"rec"`）・`recRelease`（マイクを必ず止める））。手の補正は `ultimateGorillaDawRecV1`。公開前の版はタグ `pages-v2.44`（dda8b8f）
 - **[v2.44] 📦 ゴリラDAW のプロジェクトパック ZIP**（§341 Phase 9A-11）: 新しい `arcade-daw-zip.js`（`UGDawZip`: crc32・sha256・inflateRaw・zipBuild・zipRead・zipData）。`arcade-daw.js` の `packExport`（IndexedDB の元の WAV・SHA-256・manifest）・`packImport`（全部確かめてから保存・新しい曲 ID で登録・いまの曲は変えない）。公開前の版はタグ `pages-v2.43`（f423742）
 - **[v2.43] 🎵 ゴリラDAW のオーディオトラック**（§341 Phase 9A-10）: `arcade-daw-model.js` に `parseWav`・`hashBytes`・`addAudioTrack`・`addAudioClip`・`audioEvents`・`computePeaks`。`arcade-daw.js` に IndexedDB（`ultimateGorillaDawAudioV1`・`blobs` と `meta`）・`importWav`（保存を確かめてから曲を変える）・`playAudio`・`waveSvg`・素材がないときの表示と選びなおし。WAV の書き出しにもふくめる。公開前の版はタグ `pages-v2.42`（b1a68bd）

@@ -266,7 +266,7 @@
       return true;
     }
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
-    pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD, tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
+    pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD + Math.max(0, Number(opts.delay) || 0), tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
       opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined } };
     for (i = 0; i < p.tracks.length; i++) { mixFor(p.tracks[i]); warm(p.tracks[i]); }
     // §341 9A-7: ドラムのトラックがあれば生ドラムのサンプルを読みはじめる（終わるまでは作る音）
@@ -331,6 +331,8 @@
       ph.style.display = pl && rel >= 0 && rel <= rf.clip.len ? "block" : "none";
       ph.style.left = Math.round(rel / DM().PPQ * RB) + "px";
     }
+    var aph = st.view === "aedit" && st.aedit ? root.querySelector(".ae-ph") : null, af = aph ? aedit.clip() : null; // 9A-13: 編集の波形のプレイヘッド（素材の時刻）
+    if (aph && af) { var asp = DM().audioSpan(st.project, af.clip), au = DM().tickToSec(st.project, tick) - asp.A + asp.so; aph.style.display = pl && isFinite(asp.dur) && au >= 0 && au <= asp.dur ? "block" : "none"; if (isFinite(asp.dur)) { aph.style.left = (au / asp.dur * 100) + "%"; } }
     var arr = pl ? root.querySelector(".daw-arr") : null;
     if (arr && arr.clientWidth) {
       var vis = arr.clientWidth - HEAD_W;
@@ -378,6 +380,7 @@
     if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
     if (M && p && st.view === "mix") { renderMix(root, ctl); return; }
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
+    if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -466,9 +469,10 @@
         var ac0 = f.clip, aa0 = M.findAsset(p, ac0.asset), ab0 = M.tickToBar(p, ac0.start), abars = Math.round(ac0.len / M.barTicks(p) * 100) / 100, astate = assetState(ac0.asset);
         var csec = M.tickToSec(p, ac0.start + ac0.len) - M.tickToSec(p, ac0.start), asec = aa0 ? aa0.sec - (ac0.srcOffset || 0) : 0;
         return h + '<div class="daw-info da-panel"><div>&#x1F3B5; <b>' + escHtml(clipLabel(ac0)) + '</b>（' + escHtml(f.track.name) + '）: ' + ab0.bar + '小節目から ' + abars + '小節（' + (Math.round(csec * 10) / 10) + ' 秒）・音声 ' + (aa0 ? (Math.round(aa0.sec * 10) / 10) + ' 秒' : '？') +
-          (aa0 && asec > csec + 0.01 ? '<br><span class="small">&#x2702;&#xFE0F; クリップが短いので、後ろの ' + (Math.round((asec - csec) * 10) / 10) + ' 秒は鳴りません</span>' : '') +
+          (aa0 && asec > csec + 0.01 && !M.audioSpan(p, ac0).edited ? '<br><span class="small">&#x2702;&#xFE0F; クリップが短いので、後ろの ' + (Math.round((asec - csec) * 10) / 10) + ' 秒は鳴りません</span>' : '') +
+          aeditSummary(p, ac0) +
           '<br><span class="small">' + assetStateText(ac0.asset) + '</span></div>' +
-          '<div class="da-btns">' + (astate === "ready" || astate === "loading" || !astate ? '' : b("cl", "relink", "&#x1F517; 素材を選びなおす（同じ WAV）", "da-wide")) +
+          '<div class="da-btns">' + (astate === "ready" || astate === "loading" || !astate ? b("cl", "edit", "&#x2702;&#xFE0F; 編集（前後・位置・フェード）", "da-wide da-aedit") : b("cl", "relink", "&#x1F517; 素材を選びなおす（同じ WAV）", "da-wide")) +
           b("cl", "dup", "&#x29C9; 複製") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") + b("cl", "shorter", "&#x2212; 短く") +
           b("cl", "longer", "&#xFF0B; 長く") + b("cl", "name", "&#x270F;&#xFE0F; 名前") + b("cl", "del", "&#x1F5D1;&#xFE0F; 削除", "da-half") + '</div></div>';
       }
@@ -919,48 +923,69 @@
       });
     }, true);
   }
-  // 音声のクリップ 1 つを予約する（ev ＝ UGDawModel.audioEvents の 1 つ）
+  // §341 9A-13: クリップのゲインの折れ目（曲の秒 → 値）。フェードイン・フェードアウトは鳴る範囲（p0〜endSec）に合わせた直線。
+  // microIn ＝ 素材の途中から鳴らしはじめる（3ms で 0 から）・microOut ＝ 素材の途中で切る（5ms で 0 へ）。編集していなければ [s0, gv]〜[s1, gv]（いままでと同じ）
+  function audEnv(ev, s0, s1, microIn, microOut) {
+    var gv = ev.gain, fi = ev.fadeIn || 0, fo = ev.fadeOut || 0, p0 = ev.p0, p1 = ev.endSec, len = s1 - s0, mi = microIn ? Math.min(FADE_IN, len / 2) : 0, mo = microOut ? Math.min(FADE_OUT, len / 2) : 0;
+    function g(x) {
+      var v = gv;
+      if (fi > 0) { v *= Math.max(0, Math.min(1, (x - p0) / fi)); }
+      if (fo > 0) { v *= Math.max(0, Math.min(1, (p1 - x) / fo)); }
+      if (mi && x < s0 + mi) { v *= Math.max(0, (x - s0) / mi); }
+      if (mo && x > s1 - mo) { v *= Math.max(0, (s1 - x) / mo); }
+      return v;
+    }
+    var pts = [s0, s1], out = [], i;
+    if (fi > 0) { pts.push(p0 + fi); } if (fo > 0) { pts.push(p1 - fo); } if (mi) { pts.push(s0 + mi); } if (mo) { pts.push(s1 - mo); }
+    pts.sort(function (a, b) { return a - b; });
+    for (i = 0; i < pts.length; i++) { var x = pts[i]; if (x < s0 || x > s1 || (out.length && x - out[out.length - 1][0] < 1e-6)) { continue; } out.push([x, g(x)]); }
+    return out;
+  }
+  // 音声のクリップ 1 つを予約する（ev ＝ UGDawModel.audioEvents の 1 つ）。start(when, offset ＝ 素材の時刻, duration ＝ 鳴る長さ)
   function playAudio(p, ev, seg) {
     var M = DM(), t = M.findTrack(p, ev.track);
     if (pl.clip) { if (ev.clip !== pl.clip || !t) { return; } } else if (!t || !M.audible(p, t)) { return; }
-    var buf = aud.buf[ev.asset], endT = Math.min(ev.end, pl.segEnd), when = segTime(p, seg, ev.tick), stop = segTime(p, seg, endT);
-    var off = ev.srcOffset + (ev.skip ? M.tickToSec(p, ev.tick) - M.tickToSec(p, ev.start) : 0);
-    var rec = { track: t.id, tick: ev.tick, audio: true, asset: ev.asset, clip: ev.clip, when: when, offset: off, dur: 0, pass: pl.pass, ok: false, why: "" };
+    var buf = aud.buf[ev.asset], base = M.tickToSec(p, seg.tick0);
+    function at(x) { return seg.t0 + (x - base); }
+    var endS = Math.min(ev.endSec, M.tickToSec(p, pl.segEnd)), when = at(ev.sec), off = ev.src;
+    var rec = { track: t.id, tick: ev.tick, sec: ev.sec, audio: true, asset: ev.asset, clip: ev.clip, when: when, offset: off, dur: 0, pass: pl.pass, ok: false, why: "", env: null };
     if (!buf) { rec.why = assetState(ev.asset) || "notLoaded"; }
     else {
-      var dur = Math.min(buf.duration - off, stop - when);
+      var dur = Math.min(buf.duration - off, endS - ev.sec);
       rec.dur = dur;
       if (!(dur > 0.001)) { rec.why = "end"; }
       else {
         try {
-          var mx = mixFor(t), ac = pl.ac, dest = mx.dry ? mx.dry.g : mx.main.g, src = ac.createBufferSource(), g = ac.createGain(), gv = ev.gain, cut = dur < buf.duration - off - 0.0005;
+          var mx = mixFor(t), ac = pl.ac, dest = mx.dry ? mx.dry.g : mx.main.g, src = ac.createBufferSource(), g = ac.createGain(), cut = off + dur < buf.duration - 0.0005;
+          var env = audEnv(ev, ev.sec, ev.sec + dur, off > 0.0005, cut), k;
           src.buffer = buf; src.connect(g); g.connect(dest);
-          g.gain.value = off > 0.0005 ? 0 : gv;
-          if (off > 0.0005) { g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(gv, when + FADE_IN); } // 途中から: 3ms でフェードイン
-          else { g.gain.setValueAtTime(gv, when); }
-          if (cut) { g.gain.setValueAtTime(gv, Math.max(when + FADE_IN, when + dur - FADE_OUT)); g.gain.linearRampToValueAtTime(0, when + dur); } // クリップ・ループの終わり: 5ms で消す
+          g.gain.value = env[0][1];
+          g.gain.setValueAtTime(env[0][1], when);
+          for (k = 1; k < env.length; k++) { g.gain.linearRampToValueAtTime(env[k][1], at(env[k][0])); }
           src.start(when, off, dur);
           mx.srcs.push({ src: src, g: g, end: when + dur });
-          if (mx.srcs.length > 16) { mx.srcs = mx.srcs.filter(function (x) { return !(x.end < ac.currentTime - 1); }); }
+          if (mx.srcs.length > 16) { mx.srcs = mx.srcs.filter(function (x) { if (x.end < ac.currentTime - 1) { try { x.g.disconnect(); } catch (e0) {} return false; } return true; }); } // 鳴り終わったノードを外す
           rec.ok = true; rec.cut = cut;
+          rec.env = env.map(function (x) { return [Math.round((x[0] - ev.sec) * 1e6) / 1e6, Math.round(x[1] * 1e6) / 1e6]; });
         } catch (e) { rec.why = errName(e); }
       }
     }
     plLog.push(rec);
     if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
-  }
-  // 波形（2px に 1 本の線の SVG・クリップの位置・長さ・テンポごとにとっておく）
+  }  // 波形（2px に 1 本の線の SVG・クリップの位置・長さ・テンポごとにとっておく）
   function waveSvg(p, c, w) {
     var M = DM(), pk = aud.peaks[c.asset], a = M.findAsset(p, c.asset);
     if (!pk || !pk.length || !a) { return ""; }
-    var key = c.asset + "|" + c.start + "|" + c.len + "|" + (c.srcOffset || 0) + "|" + w + "|" + JSON.stringify(p.tempo.points);
+    var key = c.asset + "|" + c.start + "|" + c.len + "|" + (c.srcOffset || 0) + "|" + (c.trimIn || 0) + "|" + (c.trimOut || 0) + "|" + (c.nudge || 0) + "|" + w + "|" + JSON.stringify(p.tempo.points);
     if (aud.wave[key]) { return aud.wave[key]; }
     var out = "";
     try {
-      var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, s0 = M.tickToSec(p, c.start), PR = M.PEAK_RATE, off = c.srcOffset || 0, d = "", x, i;
+      var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, sp = M.audioSpan(p, c), PR = M.PEAK_RATE, lo = Math.max(0, sp.p0), d = "", x, i; // 9A-13: トリム・微調整を反映（鳴る所だけ描く）
       for (x = 0; x < w; x += 2) {
-        var t0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ) - s0 + off, t1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ) - s0 + off;
-        if (t0 >= a.sec) { break; }
+        var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ);
+        if (x0 >= sp.p1) { break; }
+        if (x1 <= lo) { continue; }
+        var t0 = Math.max(x0, lo) - sp.A + sp.so, t1 = Math.min(x1, sp.p1) - sp.A + sp.so;
         var i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
         for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
         var hh = Math.max(0.5, m / 255 * H / 2);
@@ -1012,7 +1037,7 @@
   // getUserMedia → MediaStreamAudioSourceNode（UGMelody.audio.ctx）→ AudioWorklet（だめなら ScriptProcessor）で PCM をそのまま受けとる → モノラル 16bit の WAV → importWav（9A-10 と同じ保存）
   // MediaRecorder は使わない（形式がブラウザでちがう・圧縮される・録りはじめを AudioContext の時計と合わせられない）
   var REC_MAX_SEC = 60, REC_MIN_SEC = 0.5, REC_KEY = "ultimateGorillaDawRecV1", REC_CHUNK = 2048, REC_SP = 4096, REC_TICK_MS = 100, REC_STALL_MS = 3000, REC_NAME = "ug-daw-rec", REC_BARS = 256;
-  var rec = { state: "idle", open: false, track: "", bar: 0, withPlay: true, monitor: false, msg: "", tok: null, ac: null, stream: null, src: null, node: null, sink: null, mon: null, mode: "",
+  var rec = { state: "idle", open: false, track: "", bar: 0, withPlay: true, countIn: true, beats: 0, beat: 0.5, t0: 0, clicks: [], result: null, monitor: false, msg: "", tok: null, ac: null, stream: null, src: null, node: null, sink: null, mon: null, mode: "",
     sr: 0, f0: 0, next: -1, kept: 0, max: 0, chunks: [], peak: 0, clipN: 0, comp: 0, auto: null, manual: 0, start: 0, timer: null, last: 0, fail: null, failUrl: "", wl: null, info: null };
   // AudioWorklet の中のコード（文字列のまま data: URL・だめなら Blob URL で読む）。REC_CHUNK フレームごとに { f: 1 フレーム目の番号, d: Float32Array } を送る
   var REC_WORKLET = [
@@ -1077,6 +1102,8 @@
     var l = [rec.src, rec.mon, rec.sink], i;
     rec.tok = null;
     if (rec.timer) { clearInterval(rec.timer); rec.timer = null; }
+    for (i = 0; i < rec.clicks.length; i++) { try { rec.clicks[i].o.stop(0); } catch (e4) {} try { rec.clicks[i].g.disconnect(); } catch (e5) {} } // 9A-13: カウントインのクリック
+    rec.clicks = [];
     if (rec.node) {
       try { if (rec.node.port) { rec.node.port.onmessage = null; rec.node.port.postMessage("stop"); } } catch (e) {}
       try { rec.node.onaudioprocess = null; } catch (e1) {}
@@ -1112,6 +1139,7 @@
     if (withPl) { stopPlay(false); }
     rec.chunks = []; rec.state = "idle";
     rec.msg = (e && e.ugText ? e.ugText : micErr(e)) + "（曲は変えていません）";
+    rec.result = { kind: "fail", text: rec.msg };
     rerender();
   }
   function recWire(tok, stream) {
@@ -1170,16 +1198,22 @@
     rec.sr = ac.sampleRate; rec.max = Math.floor(recRoom(p, rec.sr) * rec.sr); rec.kept = 0; rec.chunks = []; rec.peak = 0; rec.clipN = 0; rec.next = -1;
     rec.auto = recAuto(ac, rec.stream); rec.manual = recManual();
     rec.start = M.barToTick(p, rec.bar);
+    // 9A-13: カウントイン 1 小節（録りはじめの小節の拍子・BPM）。録るのはそのあとの小節の頭から
+    var m0 = M.meterAt(p, rec.start), beat = 60 / M.bpmAt(p, rec.start) * 4 / m0.den;
+    rec.beats = rec.countIn ? m0.num : 0; rec.beat = beat;
+    var lead = rec.beats * beat;
     rec.state = "rec"; rec.last = Date.now();
     if (rec.withPlay) {
       rec.comp = Math.max(0, rec.auto.sec + rec.manual / 1000);
       var end = M.songEndTick(p);
-      if (!startPlay({ from: rec.start, a: rec.start, b: Math.max(end, rec.start + M.barTicks(p)), loop: false, noWait: true, rec: true }) || !pl) { recFail(tok, { ugText: st.msg || "伴奏を鳴らせませんでした" }); return; }
-      rec.f0 = Math.round((pl.segs[0].t0 + rec.comp) * rec.sr); // この番号のフレーム ＝ 録りはじめの小節の頭（伴奏の予約と同じ時計）
+      if (!startPlay({ from: rec.start, a: rec.start, b: Math.max(end, rec.start + M.barTicks(p)), loop: false, noWait: true, rec: true, delay: lead }) || !pl) { recFail(tok, { ugText: st.msg || "伴奏を鳴らせませんでした" }); return; }
+      rec.t0 = pl.segs[0].t0;
     } else {
-      rec.comp = 0;
-      rec.f0 = Math.round(ac.currentTime * rec.sr);
+      rec.comp = rec.beats ? Math.max(0, rec.auto.sec + rec.manual / 1000) : 0; // カウントインに合わせて弾くので、伴奏なしでも補正する
+      rec.t0 = rec.beats ? ac.currentTime + START_LEAD + lead : ac.currentTime;
     }
+    rec.f0 = Math.round((rec.t0 + rec.comp) * rec.sr); // この番号のフレーム ＝ 録りはじめの小節の頭（伴奏・クリックの予約と同じ時計）。それより前（カウントイン）は捨てる
+    if (rec.beats) { recClicks(ac, rec.t0 - lead, beat, rec.beats); }
     rec.timer = setInterval(recTick, REC_TICK_MS);
     rerender();
   }
@@ -1203,6 +1237,27 @@
     rec.chunks.push(seg); rec.kept += take;
     if (rec.kept >= rec.max) { setTimeout(function () { recStop("max"); }, 0); }
   }
+  // 9A-13: カウントインのクリック（1 拍目は高い音）。伴奏ありなら DAW のマスターへ
+  function recClicks(ac, t0, beat, n) {
+    var UG = window.UGMelody, dest = pl && pl.ac === ac ? masterOf().bus : (UG && UG.audio && UG.audio.ctx === ac && UG.audio.bus ? UG.audio.bus : ac.destination), k;
+    rec.clicks = [];
+    for (k = 0; k < n; k++) {
+      try {
+        var o = ac.createOscillator(), g = ac.createGain(), t = t0 + k * beat;
+        o.frequency.value = k === 0 ? 1760 : 1320; g.gain.value = 0;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(k === 0 ? 0.5 : 0.35, t + 0.002); g.gain.setTargetAtTime(0, t + 0.012, 0.012);
+        o.connect(g); g.connect(dest); o.start(t); o.stop(t + 0.1);
+        rec.clicks.push({ o: o, g: g, t: t, accent: k === 0 });
+      } catch (e) {}
+    }
+  }
+  // いまの段階（カウント n／拍・録音中）
+  function recPhase() {
+    var now = rec.ac ? rec.ac.currentTime : 0;
+    if (rec.state !== "rec") { return ""; }
+    if (now < rec.t0) { return rec.beats ? "カウント " + Math.min(rec.beats, Math.max(1, Math.floor((now - (rec.t0 - rec.beats * rec.beat)) / rec.beat) + 1)) + "／" + rec.beats : "準備中…"; }
+    return "録音中";
+  }
   function recClock(sec) { var s = Math.max(0, sec), m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + (Math.floor(r * 10) / 10).toFixed(1); }
   // 100ms ごと: 経過時間・入力レベル（描きなおさずに文字と幅だけ）。データが 3 秒来なければ止める（電話・別のアプリなどで止まった）
   function recTick() {
@@ -1210,6 +1265,7 @@
     if (Date.now() - rec.last > REC_STALL_MS) { recStop("stall"); return; }
     var root = st.root, el = root && root.querySelector ? root.querySelector(".dr-time") : null, lv = root && root.querySelector ? root.querySelector(".dr-lv") : null;
     if (el) { el.textContent = recClock(rec.kept / rec.sr) + " / " + recClock(rec.max / rec.sr); }
+    var lb = root && root.querySelector ? root.querySelector(".dr-lab") : null; if (lb) { lb.textContent = recPhase(); }
     if (lv) { lv.style.width = Math.round(Math.min(1, rec.peak) * 100) + "%"; lv.className = "dr-lv" + (rec.peak >= 0.999 ? " dr-hot" : ""); }
     rec.peak = 0;
   }
@@ -1235,24 +1291,27 @@
     recRelease();
     if (withPl) { stopPlay(false); }
     rec.chunks = [];
-    if (n < REC_MIN_SEC * sr) { rec.state = "idle"; rec.msg = why0 + "録音が短すぎる（" + (Math.round(n / sr * 10) / 10) + " 秒）ので捨てました（曲は変えていません）"; rerender(); return true; }
+    if (n < REC_MIN_SEC * sr) { rec.state = "idle"; rec.msg = why0 + "録音が短すぎる（" + (Math.round(n / sr * 10) / 10) + " 秒）ので捨てました（曲は変えていません）"; rec.result = { kind: "discard", text: rec.msg }; rerender(); return true; }
     var ab = recWav(chunks, n, sr), info = M.parseWav(ab), name = "録音 " + fmtTime(Date.now()) + ".wav", sec = Math.round(n / sr * 10) / 10;
-    if (!info.ok || info.fmt !== 1 || info.bits !== 16 || info.ch !== 1 || info.frames !== n) { rec.state = "idle"; rec.msg = "録音を WAV にできませんでした（曲は変えていません）"; rerender(); return true; }
+    if (!info.ok || info.fmt !== 1 || info.bits !== 16 || info.ch !== 1 || info.frames !== n) { rec.state = "idle"; rec.msg = "録音を WAV にできませんでした（曲は変えていません）"; rec.result = { kind: "fail", text: rec.msg }; rerender(); return true; }
     rec.state = "saving"; rec.msg = why0; rerender();
     importWav(ab, name, { track: tid, start: start, src: "rec" }, function (r) {
       rec.state = "idle";
       if (!r.ok) {
         rec.fail = { ab: ab, name: name.replace(/[\/:]/g, "-") };
         rec.msg = why0 + "録音を置けませんでした: " + r.why + (/曲は変えていません|保存しました/.test(r.why) ? "" : "（曲は変えていません）") + "。下のボタンで、録った音を WAV のファイルにとっておけます";
+        rec.result = { kind: "fail", text: why0 + "録音を置けませんでした: " + r.why + "。録音の欄で WAV のファイルにとっておけます" }; rec.open = true; rec.track = tid;
         rerender(); return;
       }
       var t = M.findTrack(project(), tid), moved = r.clip && r.clip.start !== start;
       rec.open = false; rec.msg = "";
-      audNote(why0 + "🎙️ 録音（" + sec + " 秒）を「" + (t ? t.name : "") + "」の " + (r.clip ? M.tickToBar(project(), r.clip.start).bar : "?") + " 小節目に置きました" + (moved ? "（録りはじめの小節にほかのクリップが重なったので、後ろへずらしました。伴奏とはずれています）" : "") + (clipN ? "。音が大きすぎて割れたところがあります（マイクから少し離れてください）" : "") + (r.saved ? "" : "。ただし曲を保存できませんでした"));
+      rec.result = { kind: r.saved ? "ok" : "fail", text: why0 + "🎙️ 録音（" + sec + " 秒）を「" + (t ? t.name : "") + "」の " + (r.clip ? M.tickToBar(project(), r.clip.start).bar : "?") + " 小節目に置きました" + (moved ? "（録りはじめの小節にほかのクリップが重なったので、後ろへずらしました。伴奏とはずれています）" : "") + (clipN ? "。音が大きすぎて割れたところがあります（マイクから少し離れてください）" : "") + (r.saved ? "（保存しました）" : "。ただし曲を保存できませんでした") }; // 9A-13: 置いた・捨てたを上の欄に
       rerender();
     });
     return true;
   }
+  // 9A-13: どの画面の ⏹ も同じ: 録音中なら「録音の停止（置く）」、でなければ再生を止める
+  function transportStop() { if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); return true; } stopPlay(false); return false; }
   // ✕ やめる（捨てる）・曲を切りかえる
   function recCancel(msg) {
     if (rec.state !== "rec" && rec.state !== "ask") { return false; }
@@ -1260,6 +1319,7 @@
     recRelease();
     if (withPl) { stopPlay(false); }
     rec.chunks = []; rec.kept = 0; rec.state = "idle"; rec.msg = msg || "";
+    if (msg) { rec.result = { kind: "discard", text: "🗑️ " + msg }; }
     return true;
   }
   // 画面のボタン（data-rc）
@@ -1272,6 +1332,7 @@
     if (v === "close") { rec.open = false; rec.msg = ""; recFreeFail(); return; }
     if (v === "bar-" || v === "bar+") { rec.bar = Math.max(0, Math.min(REC_BARS - 1, rec.bar + (v === "bar+" ? 1 : -1))); return; }
     if (v === "play") { rec.withPlay = !rec.withPlay; return; }
+    if (v === "cnt") { rec.countIn = !rec.countIn; return; }
     if (v === "off-" || v === "off+") { rec.manual = recSetManual(recManual() + (v === "off+" ? 10 : -10)); }
   }
   function recHtml(p) {
@@ -1281,8 +1342,8 @@
     var h = '<div class="daw-info da-panel dr"><div>&#x1F399;&#xFE0F; <b>録音</b> &#x2192; 「' + escHtml(t ? t.name : "?") + '」</div>';
     var monB = b("mon", "&#x1F3A7; モニター（マイクの音を聞く）: " + (rec.monitor ? "ON" : "OFF"), "da-wide dr-tg" + (rec.monitor ? " on" : ""));
     if (rec.state === "rec") {
-      h += '<div class="dr-live"><span class="dr-dot">&#x25CF;</span> 録音中 <b class="dr-time">' + recClock(rec.kept / rec.sr) + ' / ' + recClock(rec.max / rec.sr) + '</b><span class="dr-meter" aria-hidden="true"><i class="dr-lv" style="width:0%;"></i></span></div>' +
-        '<div class="small">' + (rec.withPlay ? '伴奏といっしょに ' + (rec.bar + 1) + ' 小節目から（補正 ' + Math.round(rec.comp * 1000) + 'ms）' : 'マイクだけ（伴奏なし）・' + (rec.bar + 1) + ' 小節目に置きます') + '・' + rec.sr + 'Hz・' + (rec.mode === "worklet" ? "AudioWorklet" : "ScriptProcessor") + '</div>' +
+      h += '<div class="dr-live"><span class="dr-dot">&#x25CF;</span> <span class="dr-lab">' + recPhase() + '</span> <b class="dr-time">' + recClock(rec.kept / rec.sr) + ' / ' + recClock(rec.max / rec.sr) + '</b><span class="dr-meter" aria-hidden="true"><i class="dr-lv" style="width:0%;"></i></span></div>' +
+        '<div class="small">' + (rec.beats ? 'カウントイン 1 小節（' + rec.beats + ' 拍）のあと、' : '') + (rec.withPlay ? '伴奏といっしょに ' + (rec.bar + 1) + ' 小節目の頭から録ります' : 'マイクだけ（伴奏なし）・' + (rec.bar + 1) + ' 小節目に置きます') + (rec.comp ? '（ずれの補正 ' + Math.round(rec.comp * 1000) + 'ms）' : '') + '・' + rec.sr + 'Hz・' + (rec.mode === "worklet" ? "AudioWorklet" : "ScriptProcessor") + '</div>' +
         '<div class="da-btns">' + b("stop", "&#x25A0; 停止して置く", "da-half dr-stop") + b("cancel", "&#x2715; やめる（捨てる）", "da-half") + monB + '</div>';
     } else if (rec.state === "ask") {
       h += '<div>&#x23F3; マイクの準備をしています…（ブラウザがマイクを使ってよいか聞いてきたら「許可」を押してください）</div><div class="da-btns">' + b("cancel", "&#x2715; やめる", "da-wide") + '</div>';
@@ -1293,8 +1354,8 @@
       for (i = 0; t && i < t.clips.length; i++) { if (t.clips[i].start + t.clips[i].len > st0) { over = true; } }
       var au = rec.auto ? Math.round(rec.auto.sec * 1000) : null;
       h += '<div class="dr-row">録りはじめ: ' + b("bar-", "&#x2212;", "dr-sm", rec.bar <= 0) + ' <b>' + (rec.bar + 1) + ' 小節目</b> ' + b("bar+", "&#xFF0B;", "dr-sm") + '</div>' +
-        '<div class="da-btns">' + b("play", (rec.withPlay ? "&#x2611;" : "&#x2610;") + " &#x1F3B6; 伴奏を鳴らしながら録る", "da-wide dr-tg" + (rec.withPlay ? " on" : "")) + monB + '</div>' +
-        (rec.withPlay ? '<div class="dr-row small">ずれの補正: 自動 ' + (au === null ? '（録りはじめに測る）' : au + 'ms') + ' ＋ 手で ' + b("off-", "&#x2212;10", "dr-sm") + ' <b>' + (mn > 0 ? "+" : "") + mn + 'ms</b> ' + b("off+", "&#xFF0B;10", "dr-sm") + '<br>録った音が伴奏より遅れて聞こえるときは ＋、早いときは − にします。</div>' : '') +
+        '<div class="da-btns">' + b("cnt", (rec.countIn ? "&#x2611;" : "&#x2610;") + " &#x1F941; カウントイン 1 小節", "da-wide dr-tg" + (rec.countIn ? " on" : "")) + b("play", (rec.withPlay ? "&#x2611;" : "&#x2610;") + " &#x1F3B6; 伴奏を鳴らしながら録る", "da-wide dr-tg" + (rec.withPlay ? " on" : "")) + monB + '</div>' +
+        (rec.withPlay || rec.countIn ? '<div class="dr-row small">ずれの補正: 自動 ' + (au === null ? '（録りはじめに測る）' : au + 'ms') + ' ＋ 手で ' + b("off-", "&#x2212;10", "dr-sm") + ' <b>' + (mn > 0 ? "+" : "") + mn + 'ms</b> ' + b("off+", "&#xFF0B;10", "dr-sm") + '<br>録った音が伴奏より遅れて聞こえるときは ＋、早いときは − にします。</div>' : '') +
         (over ? '<div class="small">&#x26A0;&#xFE0F; このトラックの ' + (rec.bar + 1) + ' 小節目より後ろにクリップがあります。重なると後ろへずらして置くので、伴奏とずれます（空いたオーディオトラックで録るのがおすすめ）。</div>' : '') +
         '<div class="da-btns">' + b("go", "&#x25CF; 録音開始（" + Math.floor(room) + " 秒まで）", "da-wide dr-go", !!why) + b("close", "閉じる", "da-wide") + '</div>' +
         (why ? '<div class="small">' + escHtml(why) + '</div>' : '') +
@@ -1747,14 +1808,23 @@
     return '<div class="dp-bar"><button class="modal-btn daw-small" data-go-proj="1">&#x1F4C1; 曲</button>' +
       '<button class="dp-title" data-rename="1" title="曲名を変える">' + escHtml(p.name) + ' &#x270F;&#xFE0F;</button>' +
       '<span class="dsv-slot">' + statusHtml() + '</span>' +
-      '<button class="modal-btn daw-small" data-save-now="1" title="いま保存">&#x1F4BE;</button></div>';
+      '<button class="modal-btn daw-small" data-save-now="1" title="いま保存">&#x1F4BE;</button></div>' + recBannerHtml();
+  }
+  // 9A-13: 録音の状態・結果（どの画面でも上に出す）
+  function recBannerHtml() {
+    if (rec.state === "rec" || rec.state === "ask") { return '<div class="dr-banner dr-now">&#x25CF; ' + (rec.state === "ask" ? "マイクの準備中…" : "録音中") + ' — &#x23F9;&#xFE0F; で止めて置きます（▶ は使えません）</div>'; }
+    if (rec.state === "saving") { return '<div class="dr-banner dr-now">&#x23F3; 録音を保存しています…</div>'; }
+    if (!rec.result) { return ''; }
+    return '<div class="dr-banner dr-' + rec.result.kind + '">' + (rec.result.kind === "ok" ? "&#x2705; " : (rec.result.kind === "fail" ? "&#x26A0;&#xFE0F; " : "")) + escHtml(rec.result.text) + '<button class="dr-x" data-rc-x="1" aria-label="消す">&#x2715;</button></div>';
   }
   // 上の段のボタン（DAW とピアノロールで同じ）
   function bindProjBar(root, ctl) {
     var a = root.querySelector("[data-go-proj]"), b = root.querySelector("[data-rename]"), c = root.querySelector("[data-save-now]");
-    if (a) { a.onclick = function () { keepScroll(root); if (pl) { stopPlay(false); } st.view = "proj"; sv.note = ""; renderProj(root, ctl); }; }
+    if (a) { a.onclick = function () { keepScroll(root); if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else if (pl) { stopPlay(false); } st.view = "proj"; sv.note = ""; renderProj(root, ctl); }; }
     if (b) { b.onclick = function () { var v = window.prompt ? window.prompt("曲名（40 文字まで）", project().name) : null; if (v !== null && v !== undefined) { proj.rename(v); keepScroll(root); render(root, ctl); } }; }
     if (c) { c.onclick = function () { saveNow(); drawStatus(); }; }
+    var x = root.querySelector("[data-rc-x]"); // 9A-13: 録音の結果の欄を消す
+    if (x) { x.onclick = function () { rec.result = null; keepScroll(root); render(root, ctl); }; }
   }
   function keepScroll(root) { var arr = root.querySelector && root.querySelector(".daw-arr"); if (arr) { st.scroll = arr.scrollLeft || 0; } var w = root.querySelector && root.querySelector(".pr-wrap"); if (w && st.roll) { st.roll.sx = w.scrollLeft; st.roll.sy = w.scrollTop; } }
   var BLACK = [1, 3, 6, 8, 10];
@@ -1976,7 +2046,7 @@
         keep();
         if (v === "back") { closeRoll(); render(root, ctl); return; }
         if (v === "play") { startPlay({ clip: c.id, a: c.start, b: c.start + c.len, loop: true }); rerender(); return; }
-        if (v === "stop") { stopPlay(false); rerender(); return; }
+        if (v === "stop") { transportStop(); rerender(); return; }
         if (v === "undo") { edit.undo(); return; }
         if (v === "del") { edit.del(); return; }
         if (v === "up" || v === "down") { if (wrap) { wrap.scrollTop += (v === "up" ? -12 : 12) * RH; keep(); } }
@@ -2045,6 +2115,7 @@
   function openEditor(id) {
     var f = DM().findClip(project(), id);
     if (!f) { return false; }
+    if (f.clip.type === "audio") { return openAedit(id); } // 9A-13: オーディオ ＝ ✂️ 編集
     if (DM().isDrum(f.track)) { st.view = "steps"; st.sel = { kind: "clip", id: id }; st.steps = { clip: id, track: f.track.id, sx: 0, mode: "tap", pick: null }; return true; }
     return openRoll(id);
   }
@@ -2158,7 +2229,7 @@
         if (v === "modeTap" || v === "modeVel") { steps.mode(v === "modeVel" ? "vel" : "tap"); renderSteps(root, ctl); return; }
         if (v === "back") { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.steps = null; render(root, ctl); return; }
         if (v === "play") { startPlay({ clip: c.id, a: c.start, b: c.start + c.len, loop: true }); renderSteps(root, ctl); return; }
-        if (v === "stop") { stopPlay(false); renderSteps(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderSteps(root, ctl); return; }
         if (v === "undo") { edit.undo(); return; }
       };
     }
@@ -2171,6 +2242,146 @@
     drawHead();
   }
 
+  // ---------- §341 9A-13: オーディオ編集 Lite（非破壊: クリップの値だけを変える・元の WAV はそのまま）----------
+  var FADES = [0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2], AE_W = 340, AE_H = 96;
+  function openAedit(id) {
+    var f = DM().findClip(project(), id);
+    if (!f || f.clip.type !== "audio") { return false; }
+    st.view = "aedit"; st.sel = { kind: "clip", id: id }; st.aedit = { clip: id, msg: "" };
+    return true;
+  }
+  function fsec(x) { return (Math.round(x * 1000) / 1000).toFixed(3); }
+  function fms(x) { var v = Math.round(x * 10) / 10; return (v > 0 ? "+" : (v < 0 ? "&#x2212;" : "")) + Math.abs(v) + "ms"; }
+  function fadeText(x) { return x >= 1 ? (Math.round(x * 100) / 100) + " 秒" : (x > 0 ? Math.round(x * 1000) + "ms" : "なし"); }
+  // アレンジのクリップの欄に出す、編集の要約（編集していなければ出さない）
+  function aeditSummary(p, c) {
+    var sp = DM().audioSpan(p, c), out = [];
+    if (!sp.edited) { return ""; }
+    if (c.hasOwnProperty("trimIn") || c.hasOwnProperty("trimOut")) { out.push("鳴る所 素材の " + fsec(sp.tin) + "〜" + (isFinite(sp.tout) ? fsec(sp.tout) : "?") + " 秒"); }
+    if (sp.nudge) { out.push("位置 " + fms(sp.nudge)); }
+    if (sp.fadeIn || sp.fadeOut) { out.push("フェード " + fadeText(sp.fadeIn) + "／" + fadeText(sp.fadeOut)); }
+    return '<br><span class="small">&#x2702;&#xFE0F; ' + out.join("・") + (sp.pre > 0.0005 ? "（曲の頭より前の " + Math.round(sp.pre * 1000) + "ms は鳴りません）" : "") + '</span>';
+  }
+  var aedit = {
+    clip: function () { return st.aedit ? DM().findClip(project(), st.aedit.clip) : null; },
+    // 値を変える（↶ に積む・自動保存・試聴中なら鳴らしなおす）
+    set: function (o) {
+      var f = aedit.clip();
+      if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+      var snap = snapTracks(), before = JSON.stringify(f.clip), r = DM().setAudioEdit(project(), f.clip.id, o);
+      st.aedit.msg = r.ok ? "" : r.why;
+      if (r.ok && JSON.stringify(f.clip) !== before) {
+        pushUndo(snap); markDirty();
+        if (pl && pl.clip) { aeditPlay(false); } else if (pl) { resync(); }
+      }
+      if (st.root) { rerender(); }
+      return r;
+    },
+    // ボタン（d: 秒・ms・フェードは ±1 ＝ となりの値）
+    step: function (field, d) {
+      var f = aedit.clip(), o = {}, i;
+      if (!f) { return { ok: false }; }
+      var sp = DM().audioSpan(project(), f.clip);
+      if (field === "trimIn") { o.trimIn = sp.tin + d; }
+      else if (field === "trimOut") { o.trimOut = sp.tout + d; }
+      else if (field === "nudge") { o.nudge = sp.nudge + d; }
+      else if (field === "fadeIn" || field === "fadeOut") {
+        var cur = sp[field], nv = cur;
+        if (d > 0) { for (i = 0; i < FADES.length; i++) { if (FADES[i] > cur + 1e-9) { nv = FADES[i]; break; } } }
+        else { for (i = FADES.length - 1; i >= 0; i--) { if (FADES[i] < cur - 1e-9) { nv = FADES[i]; break; } } }
+        o[field] = nv;
+      } else { return { ok: false }; }
+      return aedit.set(o);
+    },
+    reset: function () { return aedit.set({ reset: true }); }
+  };
+  // 試聴: solo ＝ このクリップだけくり返し／でなければ 伴奏と（クリップの 1 小節前から・くり返さない）
+  function aeditPlay(withAll) {
+    var f = aedit.clip(), M = DM(), p = project();
+    if (!f) { return false; }
+    var sp = M.audioSpan(p, f.clip);
+    if (withAll) { return startPlay({ from: Math.max(0, f.clip.start - M.barTicks(p)), loop: false }); }
+    var a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, sp.p0)))), b = Math.max(a + 1, Math.ceil(M.secToTick(p, sp.p1)) + 1);
+    return startPlay({ clip: f.clip.id, a: a, b: b, from: a, loop: true });
+  }
+  // 素材の全体の波形（画面の幅）: 鳴る所・鳴らない所（暗い）・フェードの線
+  function aeditSvg(p, c, sp) {
+    var pk = aud.peaks[c.asset], dur = sp.dur, mid = AE_H / 2, on = "", off = "", x;
+    if (!pk || !pk.length || !isFinite(dur) || !(dur > 0)) { return '<div class="ae-nowave small">&#x23F3; 波形を読みこんでいます…</div>'; }
+    var u0 = sp.tin + sp.pre, u1 = sp.tin + (sp.p1 - sp.p0), PR = DM().PEAK_RATE;
+    for (x = 0; x < AE_W; x += 2) {
+      var a = x / AE_W * dur, b = (x + 2) / AE_W * dur, i0 = Math.floor(a * PR), i1 = Math.max(i0 + 1, Math.ceil(b * PR)), m = 0, i;
+      for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
+      var hh = Math.max(0.5, m / 255 * (AE_H / 2 - 4)), seg = "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
+      if (b > u0 && a < u1) { on += seg; } else { off += seg; }
+    }
+    function X(u) { return Math.round(Math.max(0, Math.min(1, u / dur)) * AE_W * 10) / 10; }
+    function Y(v) { return Math.round((4 + (1 - v) * (AE_H - 8)) * 10) / 10; }
+    var ev = { gain: 1, fadeIn: sp.fadeIn, fadeOut: sp.fadeOut, p0: sp.p0, endSec: sp.p1 }, s0 = Math.max(0, sp.p0), env = audEnv(ev, s0, sp.p1, false, false), pts = [], k;
+    for (k = 0; k < env.length; k++) { pts.push(X(env[k][0] - sp.A + sp.so) + "," + Y(env[k][1])); }
+    return '<svg class="ae-svg" viewBox="0 0 ' + AE_W + ' ' + AE_H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<rect class="ae-dim" x="0" y="0" width="' + X(u0) + '" height="' + AE_H + '"/><rect class="ae-dim" x="' + X(u1) + '" y="0" width="' + Math.max(0, AE_W - X(u1)) + '" height="' + AE_H + '"/>' +
+      '<path class="ae-off" d="' + off + '"/><path class="ae-on" d="' + on + '"/>' +
+      (sp.fadeIn || sp.fadeOut ? '<polyline class="ae-env" points="' + pts.join(" ") + '"/>' : '') +
+      '<line class="ae-cut" x1="' + X(u0) + '" y1="0" x2="' + X(u0) + '" y2="' + AE_H + '"/><line class="ae-cut" x1="' + X(u1) + '" y1="0" x2="' + X(u1) + '" y2="' + AE_H + '"/></svg>';
+  }
+  function aeditHtml(p, f) {
+    var M = DM(), c = f.clip, sp = M.audioSpan(p, c), a = sp.asset, bar = M.tickToBar(p, c.start).bar, playing = !!(pl && pl.clip === c.id), i;
+    function bb(field, list) { var h = '', k; for (k = 0; k < list.length; k++) { h += '<button class="modal-btn ae-b" data-aeb="' + field + '|' + list[k][0] + '">' + list[k][1] + '</button>'; } return h; }
+    function row(field, label, val, btns) { return '<div class="ae-row"><span class="ae-lab">' + label + '</span><button class="ae-val" data-aev="' + field + '" title="数字で入れる">' + val + '</button></div><div class="ae-btns">' + btns + '</div>'; }
+    var T = [["-0.1", "&#x2212;0.1s"], ["-0.01", "&#x2212;10ms"], ["0.01", "＋10ms"], ["0.1", "＋0.1s"]];
+    var h = '<div class="daw ae">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-ae="back">&#x2190; アレンジ</button><b>&#x2702;&#xFE0F; ' + escHtml(clipLabel(c)) + '</b><span class="daw-pname">' + escHtml(f.track.name) + '</span></div>' +
+      projBarHtml(p) +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (playing ? " daw-on" : "") + '" data-ae="play" title="この音だけ（くり返し）">&#x25B6;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-small ae-all' + (pl && !pl.clip ? " daw-on" : "") + '" data-ae="playAll" title="伴奏といっしょに（1 小節前から）">&#x25B6;&#xFE0F; 伴奏と</button>' +
+        '<button class="modal-btn daw-tbtn" data-ae="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn" data-ae="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (st.undo.length || '') + '</small></button><span class="daw-pos">1.1</span></div>' +
+      '<div class="ae-wave">' + aeditSvg(p, c, sp) + '<i class="ae-ph" style="display:none;"></i></div>' +
+      '<div class="small ae-info">素材 ' + escHtml(a ? a.name : "?") + '（' + (isFinite(sp.dur) ? fsec(sp.dur) + ' 秒' : '?') + '）・鳴る所 ' + fsec(sp.tin) + '〜' + (isFinite(sp.tout) ? fsec(Math.min(sp.tout, sp.tin + sp.p1 - sp.p0)) : '?') + ' 秒（' + fsec(Math.max(0, sp.p1 - sp.p0)) + ' 秒）・' + bar + ' 小節目の頭 ' + (sp.nudge ? fms(sp.nudge) : '') +
+        (sp.pre > 0.0005 ? '<br>&#x26A0;&#xFE0F; 曲の頭より前の ' + Math.round(sp.pre * 1000) + 'ms は鳴りません（位置を ＋ にするか、クリップを後ろの小節へ）' : '') +
+        (sp.boxCut ? '<br>&#x2702;&#xFE0F; クリップの箱（' + Math.round(c.len / M.barTicks(p)) + ' 小節）で切れています' : '') + '</div>' +
+      row("trimIn", "先頭", fsec(sp.tin) + " 秒", bb("trimIn", T)) +
+      row("trimOut", "末尾", (isFinite(sp.tout) ? fsec(sp.tout) : "?") + " 秒", bb("trimOut", T)) +
+      row("nudge", "位置の微調整", fms(sp.nudge), bb("nudge", [["-100", "&#x2212;100"], ["-10", "&#x2212;10"], ["-1", "&#x2212;1"], ["1", "＋1"], ["10", "＋10"], ["100", "＋100"]])) +
+      row("fadeIn", "フェードイン", fadeText(sp.fadeIn), bb("fadeIn", [["-1", "&#x2212;"], ["1", "＋"]])) +
+      row("fadeOut", "フェードアウト", fadeText(sp.fadeOut), bb("fadeOut", [["-1", "&#x2212;"], ["1", "＋"]])) +
+      '<div class="da-btns"><button class="modal-btn da-wide" data-ae="reset"' + (sp.edited ? '' : ' disabled') + '>&#x21BA; 編集をもとに戻す（元の音）</button></div>' +
+      (st.aedit.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.aedit.msg) + '</div>' : '') +
+      (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
+      saveNoteHtml() +
+      '<p class="small dsv-note">元の WAV は変えません（クリップの値だけ）。先頭・末尾は素材の秒、位置の微調整は ms（&#x2212;1000〜＋1000・小節の位置とは別）。数字をタップすると入力できます。&#x21B6; で戻せます。</p></div>';
+    return h;
+  }
+  function renderAedit(root, ctl) {
+    var p = project(), f = aedit.clip();
+    if (!f) { st.view = "arr"; st.aedit = null; render(root, ctl); return; }
+    audKick(p);
+    root.innerHTML = aeditHtml(p, f);
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-ae"), b = el.getAttribute("data-aeb"), fv = el.getAttribute("data-aev");
+        if (b) { var bp = b.split("|"), fd = bp[0], dv = Number(bp[1]); aedit.step(fd, fd === "fadeIn" || fd === "fadeOut" ? dv : dv); return; }
+        if (fv) {
+          var sp = DM().audioSpan(project(), f.clip), ms = fv === "nudge" || fv === "fadeIn" || fv === "fadeOut", cur = fv === "trimIn" ? sp.tin : (fv === "trimOut" ? sp.tout : (fv === "nudge" ? sp.nudge : sp[fv] * 1000));
+          var lab = { trimIn: "先頭（素材の秒）", trimOut: "末尾（素材の秒）", nudge: "位置の微調整（ms・−1000〜1000）", fadeIn: "フェードイン（ms・0〜10000）", fadeOut: "フェードアウト（ms・0〜10000）" }[fv];
+          var a = window.prompt ? window.prompt(lab, String(ms ? Math.round(cur * 10) / 10 : fsec(cur))) : null;
+          if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { var o = {}; o[fv] = fv === "fadeIn" || fv === "fadeOut" ? Number(a) / 1000 : Number(a); aedit.set(o); }
+          return;
+        }
+        if (v === "back") { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.aedit = null; render(root, ctl); return; }
+        if (v === "play") { aeditPlay(false); renderAedit(root, ctl); return; }
+        if (v === "playAll") { aeditPlay(true); renderAedit(root, ctl); return; }
+        if (v === "stop") { transportStop(); rerender(); return; }
+        if (v === "undo") { edit.undo(); return; }
+        if (v === "reset") { aedit.reset(); }
+      };
+    }
+    bindProjBar(root, ctl);
+    drawHead();
+  }
   // ---------- §341 9A-6: ミキサー Lite ----------
   // 音量 vol 0〜100（ゲイン ＝ ÷100）・パン pan −1〜1（表示は ×100 で L〜C〜R）・DAW のマスター master.vol 0〜100（ゲイン ＝ ÷100）
   var VOL0 = 80;
@@ -2216,7 +2427,7 @@
         var el = ev.currentTarget, v = el.getAttribute("data-mx"), id;
         if (v === "back") { st.view = "arr"; render(root, ctl); return; }
         if (v === "play") { startPlay(); renderMix(root, ctl); return; }
-        if (v === "stop") { stopPlay(false); renderMix(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderMix(root, ctl); return; }
         if (v === "resetMaster") { mixer.resetMaster(); renderMix(root, ctl); return; }
         if ((id = el.getAttribute("data-mxr"))) { mixer.resetTrack(id); renderMix(root, ctl); return; }
         if ((id = el.getAttribute("data-mxm"))) { var tm = M.findTrack(p, id); if (tm) { tm.mute = !tm.mute; updateMix(); markDirty(); } renderMix(root, ctl); return; }
@@ -2277,6 +2488,7 @@
           if (!fc) { return; }
           if (v === "roll") { st.anote = ""; if (openEditor(cid)) { render(root, ctl); } return; }
           if (v === "relink") { st.anote = ""; pickWav(root, { relink: fc.clip.asset }); return; } // 9A-10
+          if (v === "edit") { st.anote = ""; if (openAedit(cid)) { render(root, ctl); } return; } // 9A-13
           if (v === "dup") { ops.duplicate(cid); return; }
           if (v === "left" || v === "right") { ops.move(cid, v === "left" ? -1 : 1); return; }
           if (v === "shorter" || v === "longer") { ops.resize(cid, v === "shorter" ? -1 : 1); return; }
@@ -2349,7 +2561,7 @@
   window.UGDaw = {
     state: function () { return st; },
     project: project,
-    reset: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
+    reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
@@ -2361,6 +2573,8 @@
     // §341 9A-11: プロジェクトパック（ZIP）
     pack: { exportZip: packExport, importZip: packImport, start: packStart, load: packLoad, state: function () { return pk; }, plan: function () { return packPlan(project()); }, file: packFile, FORMAT: PACK_FORMAT, VERSION: PACK_VERSION, MAX_ZIP: PACK_MAX_ZIP },
     // §341 9A-12: マイク録音（テストからも呼ぶ）
+    aedit: { open: function (id) { var ok = openAedit(id); if (ok && st.root) { rerender(); } return ok; }, set: aedit.set, step: aedit.step, reset: aedit.reset, play: aeditPlay, svg: aeditSvg, env: audEnv }, // 9A-13
+    transportStop: transportStop,
     rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
     audio: { importWav: importWav, ensure: ensureAssets, state: function () { return aud; }, add: addAudio, pick: pickWav, waveSvg: waveSvg, used: usedAssets, missing: audMissing, assetState: assetState, IDB_NAME: IDB_NAME, forget: audForget },

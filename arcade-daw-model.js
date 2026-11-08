@@ -244,7 +244,11 @@
     if (o.type === "midi") { o.notes = cleanNotes(c.notes, scale); }
     if (o.type === "audio") { // §341 9A-10
       o.asset = typeof c.asset === "string" ? c.asset.substring(0, 40) : "";
-      o.srcOffset = num(c.srcOffset, 0, 0); o.gain = num(c.gain, 1, 0, 4); o.fadeIn = num(c.fadeIn, 0, 0); o.fadeOut = num(c.fadeOut, 0, 0);
+      o.srcOffset = num(c.srcOffset, 0, 0); o.gain = num(c.gain, 1, 0, 4); o.fadeIn = num(c.fadeIn, 0, 0, FADE_MAX); o.fadeOut = num(c.fadeOut, 0, 0, FADE_MAX);
+      // §341 9A-13: 非破壊の編集（あるときだけ整える。無いクリップには足さない ＝ 古い曲の保存の中身を変えない）
+      if (c.hasOwnProperty("trimIn")) { var ti0 = Number(c.trimIn); if (isFinite(ti0) && ti0 > 0) { o.trimIn = r4(ti0); } else { delete o.trimIn; } }
+      if (c.hasOwnProperty("trimOut")) { var to0 = Number(c.trimOut); if (c.trimOut !== null && isFinite(to0) && to0 > 0) { o.trimOut = r4(to0); } else { delete o.trimOut; } }
+      if (c.hasOwnProperty("nudge")) { var nu0 = Number(c.nudge); if (isFinite(nu0) && nu0 !== 0) { o.nudge = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Math.round(nu0 * 10) / 10)); } else { delete o.nudge; } }
       delete o.notes;
     }
     o.ext = isObj(c.ext) ? copy(c.ext) : {};
@@ -629,22 +633,65 @@
     sortClips(t);
     return c;
   }
-  // 曲の tick の [from, to) で鳴りはじめる音声（クリップの頭。fresh ＝ 区間の頭（再生の開始・ループで戻った）なら、from にかかっているクリップを途中から）
-  // → { tick（鳴りはじめ）, skip（クリップの頭から何 tick 後ろか）, start, end（クリップの終わりの tick）, asset, srcOffset, gain, track, clip, ti }
+  // §341 9A-13: オーディオのクリップの鳴る範囲（曲の秒）。GAME_DESIGN §341「§340 の AudioClip の項目の意味」
+  // A ＝ 秒(start) ＋ nudge。素材の時刻 s は A ＋ (s − srcOffset) に鳴る。鳴りはじめ p0 ＝ A ＋ (trimIn − srcOffset)、鳴り終わり p1 ＝ min(A ＋ (trimOut − srcOffset), 秒(start＋len) ＋ nudge)
+  var NUDGE_MAX = 1000, FADE_MAX = 10, TRIM_MIN = 0.01;
+  function r4(x) { return Math.round(x * 10000) / 10000; }
+  function audioSpan(p, c) {
+    var a = findAsset(p, c.asset), dur = a && Number(a.sec) > 0 ? Number(a.sec) : Infinity, so = Math.max(0, Number(c.srcOffset) || 0);
+    var tin = Math.max(so, Number(c.trimIn) || 0), tout = c.trimOut !== null && c.trimOut !== undefined && Number(c.trimOut) > 0 ? Number(c.trimOut) : dur;
+    tin = Math.min(tin, dur); tout = Math.max(tin, Math.min(dur, tout));
+    var nu = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Number(c.nudge) || 0)), A = tickToSec(p, c.start) + nu / 1000, box = tickToSec(p, c.start + c.len) + nu / 1000;
+    var p0 = A + (tin - so), full = A + (tout - so), p1 = Math.min(full, box);
+    return { asset: a, dur: dur, so: so, tin: tin, tout: tout, nudge: nu, A: A, p0: p0, p1: p1, full: full, box: box, boxCut: box < full - 1e-6, pre: p0 < 0 ? -p0 : 0,
+      fadeIn: num(c.fadeIn, 0, 0, FADE_MAX), fadeOut: num(c.fadeOut, 0, 0, FADE_MAX), gain: num(c.gain, 1, 0, 4), ok: p1 > Math.max(0, p0) + 1e-4,
+      edited: c.hasOwnProperty("trimIn") || c.hasOwnProperty("trimOut") || c.hasOwnProperty("nudge") || num(c.fadeIn, 0, 0) > 0 || num(c.fadeOut, 0, 0) > 0 };
+  }
+  // 曲の tick の [from, to) で鳴りはじめる音声（区間の境目は同じ秒の計算なので、重ならない・欠けない）。fresh ＝ 区間の頭（再生の開始・ループで戻った）なら、from にかかっているクリップを途中から
+  // → { tick, sec（鳴りはじめの曲の秒）, src（そこで鳴る素材の時刻）, p0（鳴りはじめ・頭より前もふくむ）, endSec（鳴り終わり）, fadeIn, fadeOut, gain, skip（tick・途中から）, start, end, asset, track, clip, ti }
   function audioEvents(p, from, to, fresh) {
-    var out = [], i, j;
+    var out = [], i, j, fs = tickToSec(p, from), ts = tickToSec(p, to);
     for (i = 0; p && i < p.tracks.length; i++) {
       var t = p.tracks[i];
       if (!isAudio(t)) { continue; }
       for (j = 0; j < t.clips.length; j++) {
-        var c = t.clips[j], cs = c.start, ce = c.start + c.len;
+        var c = t.clips[j];
         if (c.type !== "audio" || !c.asset) { continue; }
-        if (cs >= from && cs < to) { out.push({ tick: cs, skip: 0, start: cs, end: ce, asset: c.asset, srcOffset: Math.max(0, Number(c.srcOffset) || 0), gain: num(c.gain, 1, 0, 4), track: t.id, clip: c.id, ti: i }); }
-        else if (fresh && cs < from && ce > from) { out.push({ tick: from, skip: from - cs, start: cs, end: ce, asset: c.asset, srcOffset: Math.max(0, Number(c.srcOffset) || 0), gain: num(c.gain, 1, 0, 4), track: t.id, clip: c.id, ti: i }); }
+        var s = audioSpan(p, c), b = Math.max(0, s.p0), at = null;
+        if (!s.ok) { continue; }
+        if (b >= fs && b < ts) { at = b; } else if (fresh && b < fs && s.p1 > fs) { at = fs; }
+        if (at === null) { continue; }
+        var tk = Math.round(secToTick(p, at) * 1000) / 1000;
+        out.push({ tick: tk, sec: at, src: s.tin + (at - s.p0), p0: s.p0, endSec: s.p1, fadeIn: s.fadeIn, fadeOut: s.fadeOut, gain: s.gain, skip: at > b ? Math.round((tk - secToTick(p, b)) * 1000) / 1000 : 0,
+          start: c.start, end: c.start + c.len, asset: c.asset, srcOffset: s.so, track: t.id, clip: c.id, ti: i });
       }
     }
-    out.sort(function (a, b) { return a.tick - b.tick || a.ti - b.ti; });
+    out.sort(function (a, b) { return a.sec - b.sec || a.ti - b.ti; });
     return out;
+  }
+  // §341 9A-13: 編集の値を変える（o: { trimIn, trimOut, nudge, fadeIn, fadeOut, reset }・秒／ms）。範囲に入れ、既定の値は消す（無い ＝ 編集なし）。trimOut を変えたら箱の長さを鳴る範囲に合わせる（次のクリップとは重ねない）
+  function setAudioEdit(p, id, o) {
+    var f = findClip(p, id);
+    if (!f || f.clip.type !== "audio") { return { ok: false, why: "オーディオのクリップが見つかりません" }; }
+    var c = f.clip, s = audioSpan(p, c), k;
+    o = o || {};
+    if (o.reset) { delete c.trimIn; delete c.trimOut; delete c.nudge; c.fadeIn = 0; c.fadeOut = 0; }
+    if (!isFinite(s.dur) && (o.trimIn !== undefined || o.trimOut !== undefined)) { return { ok: false, why: "素材の長さが分からないので、切れません" }; }
+    if (o.trimIn !== undefined) { var ti = r4(Math.max(s.so, Math.min(s.tout - TRIM_MIN, Number(o.trimIn) || 0))); if (ti > s.so) { c.trimIn = ti; } else { delete c.trimIn; } s = audioSpan(p, c); }
+    if (o.trimOut !== undefined) { var to = r4(Math.max(s.tin + TRIM_MIN, Math.min(s.dur, Number(o.trimOut) || 0))); if (to < s.dur - 0.00005) { c.trimOut = to; } else { delete c.trimOut; } }
+    if (o.nudge !== undefined) { var nu = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Math.round((Number(o.nudge) || 0) * 10) / 10)); if (nu) { c.nudge = nu; } else { delete c.nudge; } }
+    var fl = ["fadeIn", "fadeOut"];
+    for (k = 0; k < fl.length; k++) { if (o[fl[k]] !== undefined) { c[fl[k]] = r4(Math.max(0, Math.min(FADE_MAX, Number(o[fl[k]]) || 0))); } }
+    if (o.trimOut !== undefined || o.reset) {
+      s = audioSpan(p, c);
+      if (isFinite(s.dur)) {
+        var len = audioClipLen(p, c.start, s.tout - s.so), t = f.track, nx = Infinity, j;
+        for (j = 0; j < t.clips.length; j++) { if (t.clips[j] !== c && t.clips[j].start >= c.start + 1 && t.clips[j].start < nx) { nx = t.clips[j].start; } }
+        if (c.start + len > nx) { len = Math.max(barTicks(p), Math.floor((nx - c.start) / barTicks(p)) * barTicks(p)); }
+        c.len = len;
+      }
+    }
+    return { ok: true, clip: c, span: audioSpan(p, c) };
   }
   // 波形のピーク（1 秒 rate 点・0〜255。チャンネルの大きいほう）。chans: Float32Array の列
   function computePeaks(chans, sr, rate) {
@@ -735,6 +782,6 @@
     WAV_MAX_BYTES: WAV_MAX_BYTES, WAV_MAX_SEC: WAV_MAX_SEC, MAX_AUDIO_TRACKS: MAX_AUDIO_TRACKS, MAX_ASSETS: MAX_ASSETS, MAX_ASSET_SEC: MAX_ASSET_SEC, PEAK_RATE: PEAK_RATE,
     audioInstrument: audioInstrument, isAudio: isAudio, audioTrackCount: audioTrackCount, addAudioTrack: addAudioTrack, parseWav: parseWav, wavLimitWhy: wavLimitWhy, hashBytes: hashBytes,
     assetRef: assetRef, sameAsset: sameAsset, findAsset: findAsset, assetUse: assetUse, audioClipCount: audioClipCount, assetRoomWhy: assetRoomWhy, audioClipLen: audioClipLen,
-    addAudioClip: addAudioClip, audioEvents: audioEvents, computePeaks: computePeaks, cleanAsset: cleanAsset
+    addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
 })();
