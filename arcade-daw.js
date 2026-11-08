@@ -154,7 +154,7 @@
         }
         try { if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, dest); okd = true; } } catch (ed) { okd = false; }
         plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whd, sec: 0, hash: "drum", pass: pl.pass, ok: okd, drum: true, swing: dly, choked: choked });
-        if (plLog.length > 400) { plLog.shift(); }
+        if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
         continue;
       }
       var patch = t.instrument && t.instrument.type === "synth" && t.instrument.patch ? t.instrument.patch.patch : null;
@@ -167,7 +167,7 @@
         else if (Y && Y.note) { v = Y.note(patch, ev.m, mx.main.g, when, ev.v, sec); if (v) { mx.voices.push(v); if (mx.voices.length > 64) { mx.voices = mx.voices.filter(function (x) { return !(x.end < pl.ac.currentTime); }); } } }
       } catch (e) { v = null; }
       plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: when, sec: sec, hash: t.instrument.patch.hash, pass: pl.pass, ok: !!v });
-      if (plLog.length > 400) { plLog.shift(); }
+      if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
     }
   }
   // タイマーから: いまから LOOK 秒先まで予約。区間の終わりに来たら、ループなら頭へ・でなければ終わりの時刻を決める
@@ -322,7 +322,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { flushSave(); stopPlay(false); clearTail(); st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く
+  I.addStopHook(function () { flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -589,6 +589,7 @@
   function switchTo(p, status) {
     flushSave();
     stopPlay(false);
+    wavCancel(); wavFree(); wav.state = "idle"; wav.msg = ""; wav.note = "";
     st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
@@ -649,6 +650,129 @@
       return { ok: true, project: p, saved: ok };
     }
   };
+  // ---------- §341 9A-9: WAV の書き出し（OfflineAudioContext・再生と同じ schedule()・44.1kHz・16bit・ステレオ）----------
+  var WAV_RATE = 44100, WAV_MAX_MUSIC = 60, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000;
+  var wav = { busy: false, job: null, blob: null, url: "", name: "", stats: null, plan: null, msg: "", note: "", state: "idle", log: [], ms: 0 };
+  function fileBase(name) { return String(name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw"; }
+  function stamp() { var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()); }
+  // 書き出す範囲と大きさの見こみ（曲の頭から曲の終わり ＋ 余韻。ループは使わない）
+  function wavPlan(p) {
+    var M = DM(), end = M.songEndTick(p), music = M.tickToSec(p, end), sec = music + WAV_TAIL, frames = Math.ceil(sec * WAV_RATE);
+    var r = { endTick: end, bars: M.tickToBar(p, Math.max(0, end - 1)).bar, music: music, sec: sec, frames: frames, bytes: 44 + frames * 4, ok: true, why: "" };
+    if (!(M.noteCount(p) > 0)) { r.ok = false; r.why = "音符がありません"; }
+    else if (music > WAV_MAX_MUSIC) { r.ok = false; r.why = "曲が " + Math.round(music) + " 秒あります。いまは " + WAV_MAX_MUSIC + " 秒までです（途中で切らないので、書き出しません）"; }
+    return r;
+  }
+  function wavFree() { if (wav.url) { try { URL.revokeObjectURL(wav.url); } catch (e) {} } wav.url = ""; wav.blob = null; }
+  // 描いた音の検査（左右のピーク・RMS・NaN・0dBFS に届いたサンプル）
+  function bufStats(buf) {
+    var out = { ch: buf.numberOfChannels, rate: buf.sampleRate, frames: buf.length, sec: buf.length / buf.sampleRate, peak: 0, nan: 0, clip: 0, L: null, R: null }, c, i;
+    for (c = 0; c < Math.min(2, buf.numberOfChannels); c++) {
+      var d = buf.getChannelData(c), pk = 0, sq = 0, nan = 0, cl = 0, x;
+      for (i = 0; i < d.length; i++) { x = d[i]; if (x !== x) { nan++; continue; } if (x < 0) { x = -x; } if (x > pk) { pk = x; } if (x >= 0.9999) { cl++; } sq += x * x; }
+      var o = { peak: Math.round(pk * 10000) / 10000, rms: Math.round(Math.sqrt(sq / Math.max(1, d.length)) * 100000) / 100000, nan: nan, clip: cl };
+      if (c === 0) { out.L = o; } else { out.R = o; }
+      out.peak = Math.max(out.peak, o.peak); out.nan += nan; out.clip += cl;
+    }
+    return out;
+  }
+  // 曲全体を描く → cb(blob, why, stats, plan)
+  function renderSong(cb) {
+    var p = project(), M = DM(), UG = window.UGMelody, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, plan = wavPlan(p), id;
+    if (!plan.ok) { cb(null, plan.why); return; }
+    if (!OAC || !UG || !UG.audioInit || !UG.encodeWav) { cb(null, "このブラウザでは書き出せません（OfflineAudioContext がありません）"); return; }
+    if (!UG.audioInit()) { cb(null, "音の準備ができませんでした"); return; }
+    var off;
+    try { off = new OAC(2, plan.frames, WAV_RATE); } catch (e) { cb(null, "書き出しの準備ができませんでした（メモリが足りないかもしれません）"); return; }
+    var A = UG.audio, saved = { ctx: A.ctx, master: A.master, bus: A.bus, revSend: A.revSend, dlySend: A.dlySend }, savedPl = pl, savedLog = plLog, ok = true, err = "";
+    plLog = [];
+    try {
+      // オフライン側にも、いまと同じ「全体の音量 → 共有の残響（リバーブ・ディレイ）」を作る（送りの量はいまの値を写す）
+      var mst = off.createGain(); mst.gain.value = A.master ? A.master.gain.value : 0.25; mst.connect(off.destination);
+      var fx = UG.buildFx ? UG.buildFx(off, mst) : { bus: mst, revSend: null, dlySend: null };
+      if (fx.revSend && A.revSend) { fx.revSend.gain.value = A.revSend.gain.value; }
+      if (fx.dlySend && A.dlySend) { fx.dlySend.gain.value = A.dlySend.gain.value; }
+      A.ctx = off; A.master = mst; A.bus = fx.bus; A.revSend = fx.revSend || null; A.dlySend = fx.dlySend || null;
+      pl = { ac: off, mix: {}, segs: [{ t0: 0, tick0: 0 }], cur: 0, loop: false, la: 0, segEnd: plan.endTick, endAt: 0, pass: 0, timer: null, raf: null, clip: null, wav: true, opts: { a: 0, b: plan.endTick, loop: false, clip: null } };
+      var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, 0)); } catch (e1) {} }
+      for (var ti = 0; ti < p.tracks.length; ti++) { mixFor(p.tracks[ti]); }
+      schedule(p, 0, plan.endTick, pl.segs[0]);
+      for (id in pl.mix) { if (pl.mix.hasOwnProperty(id) && pl.mix[id] && pl.mix[id].syn && pl.mix[id].syn.finish) { try { pl.mix[id].syn.finish(); } catch (e3) {} } }
+    } catch (e2) { ok = false; err = String(e2 && e2.message ? e2.message : e2); }
+    wav.log = plLog;
+    pl = savedPl; plLog = savedLog;
+    A.ctx = saved.ctx; A.master = saved.master; A.bus = saved.bus; A.revSend = saved.revSend; A.dlySend = saved.dlySend;
+    if (!ok) { cb(null, "書き出しに失敗しました（" + err + "）"); return; }
+    var done = false;
+    function fin(buf) {
+      if (done) { return; }
+      done = true;
+      var stt = null;
+      try { stt = bufStats(buf); } catch (e5) { cb(null, "描いた音を調べられませんでした"); return; }
+      if (stt.rate !== WAV_RATE || stt.ch < 2) { cb(null, "描いた音の形がちがいます（" + stt.rate + "Hz・" + stt.ch + "ch）", stt, plan); return; }
+      if (stt.nan > 0) { cb(null, "描いた音がこわれていました（NaN " + stt.nan + " 個）", stt, plan); return; }
+      if (stt.peak < 0.0001) { cb(null, "音がありません（全部ミュート・マスター 0 などではありませんか）", stt, plan); return; }
+      var blob = null;
+      try { blob = UG.encodeWav(buf); } catch (e6) { blob = null; }
+      if (!blob) { cb(null, "WAV にできませんでした", stt, plan); return; }
+      cb(blob, "", stt, plan);
+    }
+    off.oncomplete = function (ev) { fin(ev.renderedBuffer); };
+    try {
+      var pr = off.startRendering();
+      if (pr && pr.then) { pr.then(fin, function () { if (!done) { done = true; cb(null, "描けませんでした"); } }); }
+    } catch (e4) { if (!done) { done = true; cb(null, "描けませんでした"); } }
+  }
+  // 書き出す（再生を止めてから・一度に 1 つ・データは変えない）
+  function wavExport(onDone) {
+    if (wav.busy) { return false; }
+    stopPlay(false);
+    wavFree();
+    var p = project(), plan = wavPlan(p), UG = window.UGMelody, i, hasDrum = false;
+    wav.plan = plan; wav.stats = null; wav.note = ""; wav.msg = "";
+    if (!plan.ok) { wav.state = "fail"; wav.msg = plan.why; if (onDone) { onDone(); } return false; }
+    for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { hasDrum = true; } }
+    wav.busy = true; wav.state = "busy";
+    var job = wav.job = { canceled: false, t0: Date.now() }, started = false, tm = null;
+    function go() {
+      if (started) { return; }
+      started = true;
+      if (tm) { clearTimeout(tm); }
+      var samplesOk = !hasDrum || !UG.sampleReady || !!UG.sampleReady(UG.DRUM);
+      renderSong(function (blob, why, stt, pln) {
+        wav.busy = false; wav.job = null; wav.stats = stt || null; wav.ms = Date.now() - job.t0;
+        if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
+        else if (!blob) { wav.state = "fail"; wav.msg = why || "書き出せませんでした"; }
+        else {
+          wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav";
+          try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
+          wav.state = "done";
+          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" : "");
+        }
+        if (onDone) { onDone(); }
+      });
+    }
+    if (hasDrum && UG.loadSamples && UG.DRUM !== undefined) { tm = setTimeout(go, WAV_SAMPLE_WAIT); try { UG.loadSamples([UG.DRUM], go); } catch (e) { go(); } }
+    else { go(); }
+    return true;
+  }
+  function wavCancel() { if (wav.job) { wav.job.canceled = true; } }
+  function mb(n) { return (Math.round(n / 104857.6) / 10) + " MB"; }
+  function wavHtml(p) {
+    var pln = wavPlan(p), h = '<div class="dp-wav"><div class="dp-h">&#x1F3B5; WAV を書き出す</div>';
+    h += '<div class="small">「' + escHtml(p.name) + '」・1〜' + pln.bars + ' 小節（曲の全体・ループは使わない）＋ 余韻 ' + WAV_TAIL + ' 秒<br>長さ 約 ' + (Math.round(pln.sec * 10) / 10) + ' 秒・大きさ 約 ' + mb(pln.bytes) + '（44.1kHz・16bit・ステレオ）</div>';
+    if (wav.state === "busy") { h += '<div class="daw-info">&#x23F3; 書き出し中…</div><button class="modal-btn" data-pj="wavCancel">やめる</button>'; }
+    else {
+      if (wav.state === "done" && wav.blob) {
+        var w = wav.stats;
+        h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
+          '<div class="dp-btns"><button class="modal-btn" data-pj="wavSave">&#x1F4BE; ファイルに保存（共有）</button>' + (wav.url ? '<a class="modal-btn dp-dl" href="' + wav.url + '" download="' + escHtml(wav.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+      } else if (wav.state === "fail" || wav.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(wav.msg) + '</div>'; }
+      h += pln.ok ? '<button class="modal-btn dp-wavgo" data-pj="wav">&#x1F3B5; WAV を書き出す</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div>';
+    }
+    return h + '<p class="small dsv-note">書き出しは数秒かかります（曲の長さを待ちません）。iPhone では「ファイルに保存（共有）」で共有シートが開きます（実機では未確認）。開かないときは「ダウンロード」を使ってください。</p></div>';
+  }
+
   function projHtml() {
     var p = project(), L = proj.list(), i, h;
     h = '<div class="daw dp">' +
@@ -665,6 +789,7 @@
       '</div>' +
       (sv.note ? '<div class="daw-info">' + escHtml(sv.note) + '</div>' : '') +
       saveNoteHtml() +
+      wavHtml(p) +
       '<p class="small dsv-note">保存は<b>この端末・このブラウザの中だけ</b>です。ほかの端末やブラウザとは同期しません。機種を変える・PC に移す・念のための控えには「JSON に書き出す」を使ってください。</p>' +
       '<p class="small dp-h">保存した曲' + (L.ok ? '（' + L.list.length + '）' : '') + '</p>';
     if (!L.ok) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(L.why) + '</div>'; }
@@ -694,7 +819,10 @@
         }
         if (v === "new" || v === "demo") { proj.create(v === "demo" ? "demo" : "empty"); sv.note = ""; render(root, ctl); return; }
         if (v === "export") { proj.exportJson(); renderProj(root, ctl); return; }
-        if (v === "import" && file) { file.value = ""; file.click(); }
+        if (v === "import" && file) { file.value = ""; file.click(); return; }
+        if (v === "wav") { wavExport(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
+        if (v === "wavCancel") { wavCancel(); renderProj(root, ctl); return; }
+        if (v === "wavSave" && wav.blob) { var how = "fail"; try { how = I.saveBlob(wav.blob, wav.name); } catch (e) { how = "fail"; } if (how === "fail") { wav.note = "保存できませんでした。「ダウンロード」を使ってください。"; } renderProj(root, ctl); }
       };
     }
     if (file) {
@@ -1092,7 +1220,6 @@
     var wrap = root.querySelector(".ds-wrap");
     if (wrap && st.steps.sx) { try { wrap.scrollLeft = st.steps.sx; } catch (e) {} }
     if (wrap) { wrap.onscroll = function () { if (st.steps) { st.steps.sx = wrap.scrollLeft; } }; }
-    bindProjBar(root, ctl);
     var els = root.querySelectorAll("button"), k;
     for (k = 0; k < els.length; k++) {
       els[k].onclick = function (ev) {
@@ -1115,6 +1242,7 @@
         if (v === "undo") { edit.undo(); return; }
       };
     }
+    bindProjBar(root, ctl); // 9A-9: ほかのボタンのあとに付ける（前は上書きされて 📁 曲・曲名・💾 が効かなかった）
     var sw = root.querySelector(".ds-swing"), swv = root.querySelector(".ds-swv"), swSnap = null;
     if (sw) {
       sw.oninput = function () { if (!swSnap) { swSnap = snapTracks(); } steps.setSwing(sw.value, false); if (swv) { swv.textContent = Math.round(sw.value) + "%"; } };
@@ -1162,7 +1290,6 @@
     var p = project();
     root.innerHTML = mixHtml(p);
     if (!root.querySelectorAll) { return; }
-    bindProjBar(root, ctl);
     var M = DM(), els = root.querySelectorAll("button"), k;
     for (k = 0; k < els.length; k++) {
       els[k].onclick = function (ev) {
@@ -1176,6 +1303,7 @@
         if ((id = el.getAttribute("data-mxs"))) { var ts = M.findTrack(p, id); if (ts) { ts.solo = !ts.solo; updateMix(); markDirty(); } renderMix(root, ctl); }
       };
     }
+    bindProjBar(root, ctl); // 9A-9: ほかのボタンのあとに付ける（前は上書きされて 📁 曲・曲名・💾 が効かなかった）
     var rs = root.querySelectorAll("input[type=range]");
     for (k = 0; k < rs.length; k++) {
       rs[k].oninput = function (ev) {
@@ -1295,6 +1423,7 @@
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
+    wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
     hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },

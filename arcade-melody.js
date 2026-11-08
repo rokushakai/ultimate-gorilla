@@ -2344,7 +2344,7 @@
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, ukeTypes: MELODY_UKE_TYPES, setUkeType: melodySetUkeType, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, prefetchSamples: melodyPrefetchSamples, sampleReady: melodySampleReady,
-    midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav,
+    midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav, buildFx: melodyBuildFx, // §341 9A-9: DAW の WAV（オフラインにも同じ共有の残響を作る）
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
     layouts: MELODY_LAYOUTS, progressions: MELODY_PROGRESSIONS, chordTypes: MELODY_CHORD_TYPES, grooves: MELODY_GROOVES,
