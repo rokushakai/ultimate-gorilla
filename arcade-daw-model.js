@@ -610,9 +610,10 @@
   // 曲に素材を足せるか（新しい素材のとき）→ "" / 理由
   function assetRoomWhy(p, info) {
     var l = p && isArr(p.assets) ? p.assets : [], sec = 0, i;
-    if (l.length >= MAX_ASSETS) { return "1 曲の音声の素材は " + MAX_ASSETS + " 個までです（「📁 曲」の画面で、使っていない素材を外せます）"; }
     for (i = 0; i < l.length; i++) { sec += Number(l[i] && l[i].sec) || 0; }
-    if (sec + info.sec > MAX_ASSET_SEC + 0.001) { return "1 曲の音声の素材は合計 " + MAX_ASSET_SEC + " 秒までです（いま " + Math.round(sec) + " 秒）"; }
+    var tail = "。テイクを外しても端末の素材は消えません（「📁 曲」の「曲から外す」で、この曲の一覧から外せます）。端末の素材は「🎵 素材ライブラリ」で確かめられますが、端末の素材を削除しても、1 曲の上限は増えません"; // §341 9A-15
+    if (l.length >= MAX_ASSETS) { return "1 曲の音声の素材は " + MAX_ASSETS + " 個までです（いま " + l.length + " 個・合計 " + Math.round(sec * 10) / 10 + " 秒）" + tail; }
+    if (sec + info.sec > MAX_ASSET_SEC + 0.001) { return "1 曲の音声の素材は合計 " + MAX_ASSET_SEC + " 秒までです（いま " + l.length + " 個・" + Math.round(sec * 10) / 10 + " 秒）" + tail; }
     return "";
   }
   // 音声の秒 → クリップの長さ（start から、いまのテンポで小節に切り上げ・1〜64 小節）

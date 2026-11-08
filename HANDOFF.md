@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.47** |
+| 現在バージョン | **v2.48** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.48] 🎵 ゴリラDAW の素材ライブラリ**（§341 Phase 9A-15）: `arcade-daw.js` の「素材ライブラリ」の節（`libScan`（全部の保存曲）・`libRefs`（文字・メモリ・↶）・`libBusyWhy`・`otherTabs`（BroadcastChannel）・`libDelete`（直前に調べなおし・消えたことを確かめる）・`idbAll`・`idbDelete`・`libHtml`）。公開前の版はタグ `pages-v2.47`（9695432）
 - **[v2.47] 🎙️ ゴリラDAW のテイク管理 Lite**（§341 Phase 9A-14）: `arcade-daw-model.js` の `cleanTakes`・`clipAssets`・`takesOf`・`addTake`・`selectTake`・`removeTake`。`arcade-daw.js` の `usedAssets`（全部のテイク）・`importWav` の `take`・`recOpenTake`・`takes`・`takeHear`・`takesHtml`・再生の `muteClip`。公開前の版はタグ `pages-v2.46`（a093792）
 - **[v2.46] ✂️ ゴリラDAW のオーディオ編集 Lite・カウントイン**（§341 Phase 9A-13）: `arcade-daw-model.js` の `audioSpan`（鳴る範囲）・`audioEvents`（秒で計算）・`setAudioEdit`。`arcade-daw.js` の `audEnv`（ゲインの折れ目）・`playAudio`・「オーディオ編集 Lite」の節（`openAedit`・`aedit`・`aeditSvg`・`renderAedit`）・録音の `recClicks`（カウントイン）・`transportStop`・`recBannerHtml`。公開前の版はタグ `pages-v2.45`（0a2b029）
 - **[v2.45] 🎙️ ゴリラDAW のマイク録音**（§341 Phase 9A-12）: `arcade-daw.js` の「マイク録音」の節（`recStart`・`recWire`・`recNode`（AudioWorklet の文字列 `REC_WORKLET`／ScriptProcessor）・`recBegin`（伴奏の時計で f0）・`recChunk`・`recWav`（16bit モノラル）・`recStop`（`importWav` へ・`src:"rec"`）・`recRelease`（マイクを必ず止める））。手の補正は `ultimateGorillaDawRecV1`。公開前の版はタグ `pages-v2.44`（dda8b8f）

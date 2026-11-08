@@ -808,13 +808,16 @@ module.exports = async function () {
         var S = D.stores[n];
         return {
           get: function (k) { var r = {}; setTimeout(function () { r.result = S.rows[k] ? clone(S.rows[k]) : undefined; if (r.onsuccess) { r.onsuccess(); } }, 0); return r; },
+          getAll: function () { var r = {}; setTimeout(function () { r.result = Object.keys(S.rows).map(function (k) { return clone(S.rows[k]); }); if (r.onsuccess) { r.onsuccess(); } }, 0); return r; }, // 9A-15
+          getAllKeys: function () { var r = {}; setTimeout(function () { r.result = Object.keys(S.rows); if (r.onsuccess) { r.onsuccess(); } }, 0); return r; },
+          "delete": function (k) { if (mode !== "readwrite") { throw new Error("ReadOnlyError"); } tx.pending.push([S, k, undefined, true]); },
           put: function (val) { if (mode !== "readwrite") { throw new Error("ReadOnlyError"); } tx.pending.push([S, val[S.key], clone(val)]); }
         };
       };
       tx.abort = function () { tx.aborted = true; };
       setTimeout(function () {
         if (fail || tx.aborted) { tx.error = { name: fail || "AbortError" }; if (tx.onerror) { tx.onerror(); } if (tx.onabort) { tx.onabort(); } return; }
-        tx.pending.forEach(function (x) { x[0].rows[x[1]] = x[2]; api.writes++; });
+        tx.pending.forEach(function (x) { if (x[3]) { delete x[0].rows[x[1]]; api.deletes = (api.deletes || 0) + 1; } else { x[0].rows[x[1]] = x[2]; api.writes++; } });
         if (tx.oncomplete) { tx.oncomplete(); }
       }, 2);
       return tx;
@@ -1604,4 +1607,101 @@ module.exports = async function () {
   DU.stop(); WU.UGArcade.stop(); DU.reset();
   ok(ST.ultimateGorillaSaveV2 === rpgT && eT.counters.errors.length === 0, "RPG save untouched; no Web Audio errors", eT.counters.errors.slice(0, 3));
   AT.stop(); DT.reset();
+
+  // ================= 9A-15: 素材ライブラリ・安全な削除（§341）=================
+  // localStorage（key・length あり）と BroadcastChannel（同じバスのほかのタブ）のまね
+  function richLS(store, ctl) {
+    return { getItem: function (k) { return store[k] === undefined ? null : store[k]; }, setItem: function (k, v) { if (ctl && ctl.fail) { throw new Error("QuotaExceededError"); } store[k] = String(v); }, removeItem: function (k) { delete store[k]; },
+      key: function (i) { var ks = Object.keys(store); return i < ks.length ? ks[i] : null; }, get length() { return Object.keys(store).length; } };
+  }
+  function fakeBus() {
+    var bus = { list: [] };
+    bus.BC = function (name) { this.name = name; this.onmessage = null; this.closed = false; bus.list.push(this); };
+    bus.BC.prototype.postMessage = function (d) { var self = this; bus.list.forEach(function (o) { if (o !== self && o.name === self.name && !o.closed) { setTimeout(function () { if (!o.closed && o.onmessage) { o.onmessage({ data: JSON.parse(JSON.stringify(d)) }); } }, 1); } }); };
+    bus.BC.prototype.close = function () { this.closed = true; };
+    return bus;
+  }
+  function sha(ab) { return NC.createHash("sha256").update(Buffer.from(new Uint8Array(ab))).digest("hex"); }
+  var eL = H.load(), WL = eL.window, ML = WL.UGDawModel, DL = WL.UGDaw, AL = WL.UGArcade, SL = eL.store, IDBL = fakeIDB(), lsCtl = { fail: false }, bus = fakeBus();
+  SL.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 15 }); SL.ultimateGorillaUkuleleSeqV1 = JSON.stringify({ bpm: 77 }); var rpgL = SL.ultimateGorillaSaveV2, ukeL = SL.ultimateGorillaUkuleleSeqV1;
+  WL.indexedDB = IDBL; fakeDecode(WL); WL.localStorage = richLS(SL, lsCtl); WL.BroadcastChannel = bus.BC; DL.lib.chanInit();
+  var RL = H.makeEl("div"); DL.reset(); AL.start("daw", RL, {}); DL.proj.create("empty");
+  function impL(ab, name, o) { return new Promise(function (r) { DL.audio.importWav(ab, name, o, r); }); }
+  function loadL() { return new Promise(function (r) { DL.lib.load(r); }); }
+  function delL(id) { return new Promise(function (r) { DL.lib.del(id, r); }); }
+  function rows() { return IDBL.data[DL.audio.IDB_NAME].stores; }
+  // 曲 1: 同じ素材のクリップ 2 つ（X1）・テイク A／B／C（X1・X2・X3）・あとで外す素材（X4）
+  var x1 = makeWav({ sr: 44100, ch: 1, sec: 1, fn: tone(330) }), x2 = makeWav({ sr: 44100, ch: 1, sec: 1.1, fn: tone(440) }), x3 = makeWav({ sr: 48000, ch: 2, sec: 0.9, fn: tone(550) }), x4 = makeWav({ sr: 44100, ch: 1, sec: 0.7, fn: tone(660) }), x5 = makeWav({ sr: 44100, ch: 1, sec: 0.6, fn: tone(770) }), x6 = makeWav({ sr: 44100, ch: 1, sec: 0.5, fn: tone(880) });
+  var H1 = ML.hashBytes(new Uint8Array(x1)), H2 = ML.hashBytes(new Uint8Array(x2)), H3 = ML.hashBytes(new Uint8Array(x3)), H4 = ML.hashBytes(new Uint8Array(x4)), H5 = ML.hashBytes(new Uint8Array(x5)), H6 = ML.hashBytes(new Uint8Array(x6));
+  var tL = await new Promise(function (r) { DL.audio.add(r); });
+  var q1 = await impL(x1.slice(0), "one.wav", { track: tL.id }), q1b = await impL(x1.slice(0), "one.wav", { track: tL.id });
+  var qB = await impL(x2.slice(0), "takeB.wav", { track: tL.id, take: q1.clip.id }), qC = await impL(x3.slice(0), "takeC.wav", { track: tL.id, take: q1.clip.id });
+  DL.takes.select(q1.clip.id, "A");
+  var q4 = await impL(x4.slice(0), "gone.wav", { track: tL.id });
+  ok(q1.ok && q1b.ok && q1b.reused && qB.ok && qC.ok && q4.ok && DL.project().tracks[2].clips[0].take === "A", "song 1: one asset on 2 clips, takes A/B/C (A in use), plus X4");
+  DL.ops.remove(q4.clip.id); ok(DL.proj.unasset(H4), "X4: clip removed and taken off the song list");
+  DL.flushSave(); var song1 = DL.project().id;
+  // 曲 2（いまの曲）: X5 を使う。曲を切りかえたので ↶ の履歴は空
+  DL.proj.create("empty"); var tL2 = await new Promise(function (r) { DL.audio.add(r); }); var q5 = await impL(x5.slice(0), "five.wav", { track: tL2.id }); DL.flushSave();
+  var sha0 = {}; [H1, H2, H3, H5].forEach(function (h) { sha0[h] = sha(rows().blobs.rows[h].data); });
+  await loadL();
+  var LS = DL.lib.state(), sc = LS.scan, byId = {}; LS.list.forEach(function (a) { byId[a.id] = a; });
+  ok(LS.list.length === 5 && sc.ok && sc.nSongs === 2, "library: 5 assets on the device, 2 saved songs read", [LS.list.length, sc.ok, sc.why]);
+  var r1 = DL.lib.refs(H1, sc), r2 = DL.lib.refs(H2, sc), r3 = DL.lib.refs(H3, sc), r4 = DL.lib.refs(H4, sc), r5 = DL.lib.refs(H5, sc);
+  ok(r1.raw && r1.songs.length === 1 && !r1.mem && r2.raw && r3.raw && r2.songs.length === 1, "X1 (2 clips) and the unused takes X2 / X3 of song 1 are referenced (from the other saved song)");
+  ok(r5.cur === "clip" && r5.mem && r5.raw, "X5: used by the current song");
+  ok(!r4.raw && !r4.mem && !r4.undo && r4.songs.length === 0, "X4: referenced by nothing (song list, clips, takes, undo)");
+  var html = DL.lib.html();
+  ok(html.indexOf('data-lbd="' + H4 + '"') >= 0 && html.indexOf('data-lbd="' + H1 + '"') < 0 && html.indexOf('data-lbd="' + H2 + '"') < 0 && html.indexOf('data-lbd="' + H5 + '"') < 0 && html.indexOf("どの曲からも参照されていない 1 個") >= 0 && html.indexOf("削除すると元に戻せません") >= 0 && html.indexOf("v2.48 以降") >= 0, "only X4 gets a delete button; summary and warnings shown");
+  ok(/モノラル/.test(html) && /ステレオ/.test(html) && /48000Hz/.test(html) && /使っている曲 1/.test(html), "rows: mono / stereo, rate, number of songs");
+  // ↶ の履歴だけにある素材（X6）は消さない
+  var q6 = await impL(x6.slice(0), "undo.wav", { track: tL2.id }); DL.ops.remove(q6.clip.id); DL.proj.unasset(H6); DL.flushSave();
+  await loadL(); var r6 = DL.lib.refs(H6, DL.lib.state().scan);
+  var d6 = await delL(H6);
+  ok(r6.undo && !r6.raw && !d6.ok && /↶/.test(d6.why) && !!rows().blobs.rows[H6], "an asset only in the undo history is protected (not deleted)", d6.why);
+  // 処理中は消さない
+  DL.audio.state().busy = true; var dB = await delL(H4); DL.audio.state().busy = false;
+  ok(!dB.ok && /読みこんで/.test(dB.why) && !!rows().blobs.rows[H4], "while importing a WAV: refused");
+  DL.rec.state().state = "rec"; var dR = await delL(H4); DL.rec.state().state = "idle";
+  DL.pack.state().istate = "busy"; var dZ = await delL(H4); DL.pack.state().istate = "idle";
+  ok(!dR.ok && /録音中/.test(dR.why) && !dZ.ok && /ZIP/.test(dZ.why) && !!rows().blobs.rows[H4], "while recording / restoring a ZIP: refused");
+  // ほかのタブ
+  var eL2 = H.load(); eL2.window.BroadcastChannel = bus.BC; eL2.window.UGDaw.lib.chanInit();
+  var dT = await delL(H4);
+  ok(!dT.ok && /ほかのタブ/.test(dT.why) && !!rows().blobs.rows[H4], "another tab of the game answers: refused (it may hold unsaved changes)", dT.why);
+  bus.list.forEach(function (o) { if (o !== bus.list[0]) { o.close(); } });
+  // BroadcastChannel が無いブラウザ
+  WL.BroadcastChannel = undefined; DL.lib.chanInit(); var dN = await delL(H4); WL.BroadcastChannel = bus.BC; DL.lib.chanInit();
+  ok(!dN.ok && /確かめられない/.test(dN.why) && !!rows().blobs.rows[H4], "no BroadcastChannel (can't check other tabs): refused");
+  // こわれた保存曲・一覧にあるのに無い曲
+  SL["ultimateGorillaDawV1:p:broken1"] = "{oops"; var dK = await delL(H4); delete SL["ultimateGorillaDawV1:p:broken1"];
+  ok(!dK.ok && /読めない保存曲/.test(dK.why) && !!rows().blobs.rows[H4], "a broken saved song: refused", dK.why);
+  var idxS = SL.ultimateGorillaDawV1, idxO = JSON.parse(idxS); idxO.list.push({ id: "ghost", name: "ghost" }); SL.ultimateGorillaDawV1 = JSON.stringify(idxO);
+  var dG = await delL(H4); SL.ultimateGorillaDawV1 = idxS;
+  ok(!dG.ok && /見つからない曲/.test(dG.why), "a song in the list but missing: refused");
+  // 保存待ちの変更を保存できない
+  DL.markDirty(); lsCtl.fail = true; var dS = await delL(H4); lsCtl.fail = false; DL.flushSave(); DL.saveNow();
+  ok(!dS.ok && /保存/.test(dS.why) && !!rows().blobs.rows[H4], "pending changes that can't be saved: refused");
+  // 問いあわせのあいだに参照が増えた（直前の調べなおし）
+  var pD = delL(H4); DL.project().assets.push({ id: H4, name: "late", bytes: 1, sr: 44100, ch: 1, bits: 16, frames: 1, sec: 0.7, hash: H4, store: "idb" }); var dL2 = await pD;
+  DL.project().assets.pop();
+  ok(!dL2.ok && /いまの曲/.test(dL2.why) && !!rows().blobs.rows[H4], "a reference appearing during the check is caught just before deleting", dL2.why);
+  // ほんとうに参照されていない X4 を消す
+  var nBefore = Object.keys(rows().blobs.rows).length, dOk = await delL(H4);
+  ok(dOk.ok && !rows().blobs.rows[H4] && !rows().meta.rows[H4] && Object.keys(rows().blobs.rows).length === nBefore - 1, "X4 is deleted (WAV and meta), verified gone", dOk.why);
+  ok([H1, H2, H3, H5].every(function (h) { return rows().blobs.rows[h] && sha(rows().blobs.rows[h].data) === sha0[h]; }) && !!rows().blobs.rows[H6], "every protected asset is byte-identical after the deletion (SHA-256)");
+  await loadL();
+  ok(DL.lib.state().list.length === 5 && DL.lib.state().list.every(function (a) { return a.id !== H4; }), "the list updates after deleting");
+  // やめる（確かめの欄）＝ 何も変えない
+  DL.lib.state().confirm = H6; var hc = DL.lib.html();
+  ok(hc.indexOf('data-lby="' + H6 + '"') < 0 && hc.indexOf("やめる") < 0, "no confirm for a protected asset (X6 is in undo)");
+  // テイクを外しても、ほかの曲・↶ にあれば候補にしない（曲 1 を開いて C を外す）
+  DL.proj.open(song1); DL.takes.remove(DL.project().tracks[2].clips[0].id, "C"); DL.flushSave();
+  await loadL(); var r3b = DL.lib.refs(H3, DL.lib.state().scan);
+  ok(r3b.undo && DL.lib.html().indexOf('data-lbd="' + H3 + '"') < 0, "removing take C: its asset stays protected (undo history) — nothing is deleted");
+  // ZIP は、テイクの素材がそろっていて書き出せる
+  var exL = await new Promise(function (r) { DL.pack.exportZip(r); });
+  ok(exL.ok && exL.assets >= 2, "ZIP export still works after the deletion", exL.why);
+  ok(SL.ultimateGorillaSaveV2 === rpgL && SL.ultimateGorillaUkuleleSeqV1 === ukeL && Object.keys(SL).every(function (k) { return k.indexOf("ultimateGorilla") === 0; }) && eL.counters.errors.length === 0, "RPG / ukulele saves untouched; no new storage keys; no errors");
+  AL.stop(); DL.reset();
 };

@@ -1575,3 +1575,14 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .tk-btns .tk-b { min-width: 44px; padding: 8px 6px; font-size: 13px; }
 .tk-rec { margin-top: 4px; }
 .daw-clip .tk-tag { display: inline-block; padding: 0 4px; border-radius: 4px; background: #ffd166; color: #10202e; font-size: 10px; }
+/* §341 9A-15 素材ライブラリ */
+.dl-sum { line-height: 1.6; }
+.dl-warn { font-size: 12px; }
+.dl-row { display: flex; align-items: center; gap: 6px; padding: 8px 4px; border-top: 1px solid #22344a; }
+.dl-row.dl-free { background: rgba(255, 209, 102, 0.06); }
+.dl-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.dl-btns { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+.dl-btns .dl-b { min-width: 52px; padding: 8px 6px; font-size: 13px; }
+.dl-btns .dl-del { background: #ef476f; color: #fff; }
+.dl-confirm { margin: 2px 0 8px; }
+.dp-lib { margin-top: 8px; }
