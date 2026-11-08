@@ -170,7 +170,7 @@
         for (k = 0; k < c.notes.length; k++) {
           var n = c.notes[k], rel = n[0] - (c.offset || 0), at = cs + rel;
           if (rel < 0 || rel >= c.len || at < from || at >= to) { continue; }
-          out.push({ tick: at, end: n[1] > 0 ? Math.min(at + n[1], ce) : at, d: n[1], m: n[2], v: n[3], track: t.id, clip: c.id, ti: i });
+          out.push({ tick: at, end: n[1] > 0 ? Math.min(at + n[1], ce) : at, d: n[1], m: n[2], v: n[3], track: t.id, clip: c.id, ti: i, rel: rel });
         }
       }
     }
@@ -466,6 +466,47 @@
     return true;
   }
 
+  // ---------- §341 9A-8: 強さ・スイング・パターン ----------
+  var SWING_MAX_TICKS = STEP / 2; // 100% ＝ 120 tick（16 分の半分）
+  function setStepVel(c, m, step, v) {
+    var n = c ? findStep(c, m, step) : null;
+    if (!n) { return null; }
+    n[3] = Math.round(num(v, DRUM_V, 0.05, 1) * 1000) / 1000;
+    return n;
+  }
+  function swingOf(t) { var v = t && t.ext ? Number(t.ext.swing) : 0; return isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 0; }
+  // クリップの中の位置 rel（t − offset）の音符を何 tick 遅らせるか（8 分の裏の 16 分だけ）
+  function swingDelay(rel, swing) {
+    if (!(swing > 0)) { return 0; }
+    var r = ((Math.round(rel) % (2 * STEP)) + 2 * STEP) % (2 * STEP);
+    return r === STEP ? Math.round(SWING_MAX_TICKS * Math.min(100, swing) / 100) : 0;
+  }
+  // パターン（1 小節 16 ステップ。[GM, [ステップ…], 強さ（省くと 0.85）, 裏の強さ]）
+  var PATTERNS = {
+    four: [[36, [0, 4, 8, 12]], [39, [4, 12]], [46, [2, 6, 10, 14]]],
+    eight: [[36, [0, 8, 10]], [38, [4, 12]], [42, [0, 2, 4, 6, 8, 10, 12, 14], DRUM_V, 0.6]],
+    sixteen: [[36, [0, 6, 8]], [38, [4, 12]], [42, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], DRUM_V, 0.55]],
+    clear: []
+  };
+  // いまのクリップの 5 つの音のグリッドの上の音符を置きかえる（ほかの番号・ステップの間の音符は残す）
+  function applyPattern(c, id) {
+    var pat = PATTERNS[id], kit = {}, i, j, b, o = c ? (c.offset || 0) : 0;
+    if (!c || !pat) { return false; }
+    for (i = 0; i < DRUM_KIT.length; i++) { kit[DRUM_KIT[i][0]] = true; }
+    c.notes = c.notes.filter(function (n) { var rel = n[0] - o; return !(kit[n[2]] && rel >= 0 && rel < c.len && rel % STEP === 0); });
+    var bars = Math.max(1, Math.floor(stepCount(c) / 16));
+    for (b = 0; b < bars; b++) {
+      for (i = 0; i < pat.length; i++) {
+        for (j = 0; j < pat[i][1].length; j++) {
+          var st = pat[i][1][j], v = pat[i][3] !== undefined && st % 4 !== 0 ? pat[i][3] : (pat[i][2] || DRUM_V); // 拍の頭でないステップは「裏の強さ」
+          if (c.notes.length < MAX_NOTES) { c.notes.push([o + (b * 16 + st) * STEP, 0, pat[i][0], v]); }
+        }
+      }
+    }
+    sortNotes(c);
+    return true;
+  }
+
   // §341 9A-6: トラックを消す（最後の 1 本は消さない）
   function deleteTrack(p, id) {
     var i;
@@ -542,6 +583,7 @@
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
     addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack,
-    STEP: STEP, DRUM_KIT: DRUM_KIT, drumInstrument: drumInstrument, isDrum: isDrum, addDrumTrack: addDrumTrack, stepCount: stepCount, findStep: findStep, toggleStep: toggleStep
+    STEP: STEP, DRUM_KIT: DRUM_KIT, drumInstrument: drumInstrument, isDrum: isDrum, addDrumTrack: addDrumTrack, stepCount: stepCount, findStep: findStep, toggleStep: toggleStep,
+    DRUM_V: DRUM_V, SWING_MAX_TICKS: SWING_MAX_TICKS, setStepVel: setStepVel, swingOf: swingOf, swingDelay: swingDelay, PATTERNS: PATTERNS, applyPattern: applyPattern
   };
 })();

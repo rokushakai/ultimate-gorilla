@@ -140,9 +140,20 @@
       else if (!t || !M.audible(p, t)) { continue; }
       if (t.instrument && t.instrument.type === "drum") {
         // §341 9A-7: ドラム ＝ いまある UGMelody.drum（GM の番号）を、トラックの出口（音量 → 左右）→ DAW のマスターへ
-        var mxd = mixFor(t), whd = segTime(p, seg, ev.tick), UGd = window.UGMelody, okd = false;
-        try { if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, mxd.main.g); okd = true; } } catch (ed) { okd = false; }
-        plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whd, sec: 0, hash: "drum", pass: pl.pass, ok: okd, drum: true });
+        // 9A-8: スイング（8 分の裏の 16 分だけ・tick で遅らせる・ループの終わりはこえない）
+        var dly = M.swingDelay(ev.rel, M.swingOf(t));
+        if (ev.tick + dly >= pl.segEnd) { dly = 0; }
+        var mxd = mixFor(t), whd = segTime(p, seg, ev.tick + dly), UGd = window.UGMelody, okd = false, dest = mxd.main.g, choked = null;
+        // 9A-8: ハイハットの開閉（同じトラックの中だけ）: 開いたハイハットは 1 打ごとのゲインを通す → 閉じたハイハット・次の開いたハイハットでそのゲインを 0 へ
+        if ((ev.m === 42 || ev.m === 44 || ev.m === 46) && mxd.openHat && mxd.openHat.t < whd) {
+          try { var og = mxd.openHat.g.gain; og.setValueAtTime(1, whd); og.setTargetAtTime(0, whd, 0.015); choked = mxd.openHat.tick; } catch (eo) {}
+          mxd.openHat = null;
+        }
+        if (ev.m === 46) {
+          try { var cg = pl.ac.createGain(); cg.gain.value = 1; cg.connect(mxd.main.g); dest = cg; mxd.openHat = { g: cg, t: whd, tick: ev.tick }; } catch (ec) { dest = mxd.main.g; }
+        }
+        try { if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, dest); okd = true; } } catch (ed) { okd = false; }
+        plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whd, sec: 0, hash: "drum", pass: pl.pass, ok: okd, drum: true, swing: dly, choked: choked });
         if (plLog.length > 400) { plLog.shift(); }
         continue;
       }
@@ -986,7 +997,7 @@
   function openEditor(id) {
     var f = DM().findClip(project(), id);
     if (!f) { return false; }
-    if (DM().isDrum(f.track)) { st.view = "steps"; st.sel = { kind: "clip", id: id }; st.steps = { clip: id, track: f.track.id, sx: 0 }; return true; }
+    if (DM().isDrum(f.track)) { st.view = "steps"; st.sel = { kind: "clip", id: id }; st.steps = { clip: id, track: f.track.id, sx: 0, mode: "tap", pick: null }; return true; }
     return openRoll(id);
   }
   var steps = {
@@ -997,10 +1008,41 @@
       var snap = snapTracks(), on = DM().toggleStep(f.clip, m, step);
       if (on === null) { return null; }
       pushUndo(snap); markDirty();
-      if (on && !pl) { var UG = window.UGMelody; try { var ac = UG.audioInit(); if (ac && UG.drum) { UG.drum(ac, m, ac.currentTime + 0.01, 0.85, (UG.audio && UG.audio.bus) || ac.destination); } } catch (e) {} }
+      if (on && !pl) { hear(m, DM().DRUM_V); }
       return on;
-    }
+    },
+    // 9A-8: 強さ（ON のマスだけ。↶ に積む・自動保存）
+    pick: function (m, step) { var f = st.steps ? DM().findClip(project(), st.steps.clip) : null; if (!f || !DM().findStep(f.clip, m, step)) { st.steps.pick = null; return false; } st.steps.pick = { m: m, step: step }; return true; },
+    setVel: function (v) {
+      var sp = st.steps && st.steps.pick, f = sp ? DM().findClip(project(), st.steps.clip) : null, n = f ? DM().findStep(f.clip, sp.m, sp.step) : null;
+      if (!n) { return null; }
+      var nv = Math.round(Math.max(0.05, Math.min(1, Number(v) || DM().DRUM_V)) * 1000) / 1000;
+      if (nv === n[3]) { return n[3]; }
+      var snap = snapTracks(); DM().setStepVel(f.clip, sp.m, sp.step, nv); pushUndo(snap); markDirty();
+      if (!pl) { hear(sp.m, nv); }
+      return nv;
+    },
+    // 9A-8: スイング（トラックの ext.swing・0〜100）。snap ＝ 動かしはじめる前の写し（指をはなしたとき 1 回だけ ↶ に積む）
+    setSwing: function (v, snap) {
+      var t = st.steps ? DM().findTrack(project(), st.steps.track) : null;
+      if (!t) { return null; }
+      var nv = Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+      if ((t.ext && t.ext.swing || 0) === nv) { return nv; }
+      if (snap !== false) { pushUndo(snap || snapTracks()); }
+      t.ext = t.ext || {}; t.ext.swing = nv;
+      if (snap !== false) { markDirty(); }
+      return nv;
+    },
+    pattern: function (id) {
+      var f = st.steps ? DM().findClip(project(), st.steps.clip) : null;
+      if (!f || !DM().PATTERNS[id]) { return false; }
+      var snap = snapTracks();
+      DM().applyPattern(f.clip, id); pushUndo(snap); markDirty(); st.steps.pick = null;
+      return true;
+    },
+    mode: function (m) { if (st.steps) { st.steps.mode = m === "vel" ? "vel" : "tap"; st.steps.pick = null; } }
   };
+  function hear(m, v) { var UG = window.UGMelody; try { var ac = UG.audioInit(); if (ac && UG.drum) { UG.drum(ac, m, ac.currentTime + 0.01, v, (UG.audio && UG.audio.bus) || ac.destination); } } catch (e) {} }
   function stepsHtml(p, f) {
     var M = DM(), c = f.clip, t = f.track, n = M.stepCount(c), kit = M.DRUM_KIT, i, j, h;
     var playing = !!(pl && pl.clip === c.id);
@@ -1011,6 +1053,8 @@
         '<button class="modal-btn daw-tbtn" data-sq="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
         '<button class="modal-btn daw-tbtn" data-sq="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (st.undo.length || '') + '</small></button>' +
         '<span class="daw-pos">1.1</span><span class="small ds-bpm">BPM ' + M.bpmAt(p, 0) + '</span></div>' +
+      '<div class="ds-tools"><span class="ds-seg"><button class="' + (st.steps.mode === "vel" ? "" : "on") + '" data-sq="modeTap">&#x270B; 打つ</button><button class="' + (st.steps.mode === "vel" ? "on" : "") + '" data-sq="modeVel">&#x1F4AA; 強さ</button></span>' +
+        '<label class="ds-sw">スイング <input type="range" class="dm-fader ds-swing" min="0" max="100" step="1" value="' + M.swingOf(t) + '" aria-label="スイング"><b class="ds-swv">' + M.swingOf(t) + '%</b></label></div>' +
       '<div class="ds-wrap"><div class="ds-grid" style="width:' + (DS_LW + n * DS_CW) + 'px;">' +
       '<div class="ds-row ds-head"><div class="ds-lab"></div>';
     for (j = 0; j < n; j++) { h += '<div class="ds-num' + (j % 4 === 0 ? " ds-beat" : "") + (j % 16 === 0 && j ? " ds-bar" : "") + '">' + (j % 4 === 0 ? (j / 4 + 1) : '') + '</div>'; }
@@ -1018,14 +1062,26 @@
     for (i = 0; i < kit.length; i++) {
       h += '<div class="ds-row"><div class="ds-lab">' + kit[i][1] + '</div>';
       for (j = 0; j < n; j++) {
-        var on = !!M.findStep(c, kit[i][0], j);
-        h += '<button class="ds-cell' + (on ? " ds-on" : "") + (Math.floor(j / 4) % 2 ? " ds-alt" : "") + (j % 16 === 0 && j ? " ds-bar" : "") + '" data-st="' + j + '" data-m="' + kit[i][0] + '" aria-pressed="' + on + '" aria-label="' + kit[i][1] + ' ' + (j + 1) + '"></button>';
+        var nn = M.findStep(c, kit[i][0], j), on = !!nn, pk = st.steps.pick && st.steps.pick.m === kit[i][0] && st.steps.pick.step === j;
+        h += '<button class="ds-cell' + (on ? " ds-on" : "") + (pk ? " ds-pick" : "") + (Math.floor(j / 4) % 2 ? " ds-alt" : "") + (j % 16 === 0 && j ? " ds-bar" : "") + '" data-st="' + j + '" data-m="' + kit[i][0] + '" aria-pressed="' + on + '" aria-label="' + kit[i][1] + ' ' + (j + 1) + (on ? ' 強さ ' + nn[3] : '') + '"' +
+          (on ? ' style="--v:' + nn[3] + ';"><i class="ds-vel">' + Math.round(nn[3] * 100) + '</i></button>' : '></button>');
       }
       h += '</div>';
     }
-    h += '<div class="ds-ph" style="display:none;left:' + DS_LW + 'px;width:' + DS_CW + 'px;"></div></div></div>' +
+    h += '<div class="ds-ph" style="display:none;left:' + DS_LW + 'px;width:' + DS_CW + 'px;"></div></div></div>';
+    // 9A-8: 強さの欄は「打つ」のときも同じ高さで出す（モードを変えても箱の高さが変わらず、上のマスがずれない）
+    if (st.steps.mode !== "vel") {
+      h += '<div class="daw-info ds-velp"><div class="small">&#x1F4AA; 強さを変えるときは、上の「強さ」に切りかえて、ON のマスをタップして選びます。</div></div>';
+    } else {
+      var sp = st.steps.pick, pn = sp ? M.findStep(c, sp.m, sp.step) : null, kn = "";
+      for (i = 0; sp && i < kit.length; i++) { if (kit[i][0] === sp.m) { kn = kit[i][1]; } }
+      h += '<div class="daw-info ds-velp"><div>' + (pn ? '&#x1F4AA; <b>' + kn + '</b>・' + (Math.floor(sp.step / 4) + 1) + '拍目の ' + (sp.step % 4 + 1) + ' つ目：強さ <b class="ds-vnow">' + pn[3] + '</b>' : '<span class="small">ON のマス（色のついたマス）をタップして選ぶと、強さを変えられます。</span>') + '</div>' +
+        '<div class="da-btns">' + [["0.3", "弱 0.3"], ["0.6", "中 0.6"], ["0.85", "標準 0.85"], ["1", "強 1.0"]].map(function (x) { return '<button class="modal-btn" data-vel="' + x[0] + '"' + (pn ? '' : ' disabled') + '>' + x[1] + '</button>'; }).join('') +
+        '<button class="modal-btn da-half" data-vel="-"' + (pn ? '' : ' disabled') + '>&#x2212; 0.05</button><button class="modal-btn da-half" data-vel="+"' + (pn ? '' : ' disabled') + '>&#xFF0B; 0.05</button></div></div>';
+    }
+    h += '<div class="ds-pats"><span class="small">パターン:</span><button class="modal-btn" data-pat="four">4 つ打ち</button><button class="modal-btn" data-pat="eight">8 ビート</button><button class="modal-btn" data-pat="sixteen">16 ビート</button><button class="modal-btn" data-pat="clear">消す</button></div>' +
       saveNoteHtml() +
-      '<p class="small dsv-note">マスをタップ ＝ ON（色がつく）／ もう一度 ＝ OFF。横にスワイプでスクロール。&#x25B6; でこのパターンをくり返し鳴らす（再生しながら打ちこめます）。1 マス ＝ 16 分音符。</p></div>';
+      '<p class="small dsv-note">「打つ」: マスをタップ ＝ ON／OFF。「強さ」: ON のマスをタップして選び、下のボタンで強さ（色の高さと数字）。スイングは裏の 16 分を遅らせます（0% ＝ まっすぐ）。&#x25B6; でくり返し鳴らしながら直せます。1 マス ＝ 16 分音符。</p></div>';
     return h;
   }
   function renderSteps(root, ctl) {
@@ -1041,12 +1097,28 @@
     for (k = 0; k < els.length; k++) {
       els[k].onclick = function (ev) {
         var el = ev.currentTarget, v = el.getAttribute("data-sq"), stp = el.getAttribute("data-st"), c = f.clip;
-        if (stp !== null && stp !== undefined && el.getAttribute("data-m")) { steps.toggle(Number(el.getAttribute("data-m")), Number(stp)); renderSteps(root, ctl); return; }
+        if (stp !== null && stp !== undefined && el.getAttribute("data-m")) {
+          if (st.steps.mode === "vel") { steps.pick(Number(el.getAttribute("data-m")), Number(stp)); } else { steps.toggle(Number(el.getAttribute("data-m")), Number(stp)); }
+          renderSteps(root, ctl); return;
+        }
+        var vv = el.getAttribute("data-vel"), pt = el.getAttribute("data-pat");
+        if (vv) {
+          var sp0 = st.steps.pick, cn = sp0 ? DM().findStep(DM().findClip(project(), st.steps.clip).clip, sp0.m, sp0.step) : null;
+          if (cn) { steps.setVel(vv === "+" ? cn[3] + 0.05 : (vv === "-" ? cn[3] - 0.05 : Number(vv))); }
+          renderSteps(root, ctl); return;
+        }
+        if (pt) { steps.pattern(pt); renderSteps(root, ctl); return; }
+        if (v === "modeTap" || v === "modeVel") { steps.mode(v === "modeVel" ? "vel" : "tap"); renderSteps(root, ctl); return; }
         if (v === "back") { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.steps = null; render(root, ctl); return; }
         if (v === "play") { startPlay({ clip: c.id, a: c.start, b: c.start + c.len, loop: true }); renderSteps(root, ctl); return; }
         if (v === "stop") { stopPlay(false); renderSteps(root, ctl); return; }
         if (v === "undo") { edit.undo(); return; }
       };
+    }
+    var sw = root.querySelector(".ds-swing"), swv = root.querySelector(".ds-swv"), swSnap = null;
+    if (sw) {
+      sw.oninput = function () { if (!swSnap) { swSnap = snapTracks(); } steps.setSwing(sw.value, false); if (swv) { swv.textContent = Math.round(sw.value) + "%"; } };
+      sw.onchange = function () { var before = swSnap; swSnap = null; if (before) { pushUndo(before); markDirty(); } renderSteps(root, ctl); };
     }
     drawHead();
   }
@@ -1223,7 +1295,7 @@
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
-    steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },

@@ -1486,3 +1486,20 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .ds-cell.ds-bar, .ds-num.ds-bar { border-left: 2px solid #ffd166; }
 .ds-cell.ds-on { background: #ef476f; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.35); }
 .ds-ph { position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none; background: rgba(6, 214, 160, 0.22); box-shadow: inset 0 0 0 2px #06d6a0; }
+/* §341 9A-8: ドラムの強さ・スイング・パターン */
+.ds-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; }
+.ds-seg { display: inline-flex; border: 1px solid #3a4a63; border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.ds-seg button { min-height: 36px; padding: 0 10px; font-size: 13px; background: #0f1a2b; color: #c9d6e3; border: 0; touch-action: manipulation; }
+.ds-seg button.on { background: #ffd166; color: #10202e; font-weight: bold; }
+.ds-sw { display: flex; align-items: center; gap: 6px; flex: 1 1 170px; min-width: 0; font-size: 12px; color: #adb5bd; }
+.ds-sw .ds-swing { flex: 1 1 auto; }
+.ds-swv { width: 40px; text-align: right; color: #ffd166; font-variant-numeric: tabular-nums; }
+.ds-cell { position: relative; }
+.ds-cell.ds-on { background: linear-gradient(to top, #ef476f calc(var(--v, 0.85) * 100%), #4a2232 calc(var(--v, 0.85) * 100%)); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3); }
+.ds-cell.ds-pick { box-shadow: inset 0 0 0 3px #ffd166; }
+.ds-vel { position: absolute; left: 0; right: 0; bottom: 1px; font-size: 9px; font-style: normal; color: #fff; text-align: center; pointer-events: none; text-shadow: 0 0 2px #000; }
+.ds-velp { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.ds-vnow { color: #ffd166; }
+.ds-pats { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.ds-pats .modal-btn { margin: 0; min-height: 34px; padding: 2px 10px; font-size: 12px; }
+.ds-velp { min-height: 150px; box-sizing: border-box; }
