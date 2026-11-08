@@ -755,22 +755,312 @@ module.exports = async function () {
   // ドラムのサンプルを待つあいだは 2 つ目を受けつけない
   var busy1 = DW.wav.start();
   ok(busy1 === true && DW.wav.state().busy && DW.wav.start() === false, "only one export at a time (the second is refused while busy)");
-  await eW.wait(60);
+  for (var gw = 0; gw < 300 && DW.wav.state().busy; gw++) { await eW.wait(10); } await eW.wait(5); // 重いとき（全部のテスト）でも終わるまで待つ
   var LD = DW.wav.state().log.filter(function (x) { return x.drum; });
   ok(!DW.wav.state().busy && DW.wav.state().state === "done" && LD.length === 21 && LD.filter(function (x) { return x.swing === 120; }).length === 8, "drums are rendered with swing (8 off 16ths × 120 ticks)", [LD.length, LD.filter(function (x) { return x.swing; }).length]);
   // やめる: 描いた結果を捨てる
   var sr0 = WW.OfflineAudioContext.prototype.startRendering;
   WW.OfflineAudioContext.prototype.startRendering = function () { var self = this; return { then: function (ok) { setTimeout(function () { sr0.call(self).then(ok); }, 20); } }; }; // 本物のように後で終わる
-  DW.wav.start(); DW.wav.cancel(); await eW.wait(80);
+  DW.wav.start(); DW.wav.cancel(); for (var gw = 0; gw < 300 && DW.wav.state().busy; gw++) { await eW.wait(10); } await eW.wait(5);
   WW.OfflineAudioContext.prototype.startRendering = sr0;
   ok(DW.wav.state().state === "canceled" && !DW.wav.state().blob, "cancel discards the result");
   // 画面
   DW.showProj();
   ok(RW.innerHTML.indexOf("WAV を書き出す") >= 0 && RW.innerHTML.indexOf("1〜8 小節") >= 0 && RW.innerHTML.indexOf("44.1kHz・16bit・ステレオ") >= 0 && RW.innerHTML.indexOf("やめました") >= 0, "the song screen shows the WAV section (range, size, state)");
-  DW.wav.start(); await eW.wait(60); DW.showProj();
+  DW.wav.start(); for (var gw = 0; gw < 300 && DW.wav.state().busy; gw++) { await eW.wait(10); } await eW.wait(5); DW.showProj();
   ok(RW.innerHTML.indexOf('data-pj="wavSave"') >= 0 && RW.innerHTML.indexOf("download=") >= 0 && RW.innerHTML.indexOf("44100Hz") >= 0, "after the export: save (share) and download buttons");
   ok(SW.ultimateGorillaSaveV2 === rpgW, "RPG save untouched");
   AW.stop();
   ok(DW.wav.state().state === "idle" && !DW.wav.state().blob, "leaving the screen frees the WAV");
   DW.reset();
+  // ================= 9A-10: オーディオトラック（§341）=================
+  // テスト用の WAV（16bit などの PCM・自作の波形）
+  function makeWav(o) {
+    var sr = o.sr || 44100, ch = o.ch || 1, bits = o.bits || 16, n = Math.round((o.sec || 1) * sr), bps = bits / 8, data = n * ch * bps, list = o.list ? 18 : 0, code = o.code || 1;
+    var ab = new ArrayBuffer(44 + list + data), v = new DataView(ab), i, c;
+    function w4(off, s) { for (var k = 0; k < 4; k++) { v.setUint8(off + k, s.charCodeAt(k)); } }
+    w4(0, "RIFF"); v.setUint32(4, ab.byteLength - 8, true); w4(8, "WAVE"); w4(12, "fmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, code, true); v.setUint16(22, ch, true); v.setUint32(24, sr, true); v.setUint32(28, sr * ch * bps, true); v.setUint16(32, ch * bps, true); v.setUint16(34, bits, true);
+    var o2 = 36;
+    if (list) { w4(o2, "LIST"); v.setUint32(o2 + 4, 9, true); o2 += 18; } // 奇数の長さのチャンク（1 バイトの詰め物つき）
+    w4(o2, o.noData ? "junk" : "data"); v.setUint32(o2 + 4, data, true);
+    var fn = o.fn || function () { return 0; }, base = o2 + 8;
+    for (i = 0; i < n; i++) {
+      for (c = 0; c < ch; c++) {
+        var x = Math.max(-1, Math.min(1, fn(i / sr, c))), at = base + (i * ch + c) * bps;
+        if (bits === 16) { v.setInt16(at, Math.round(x * 32767), true); }
+        else if (bits === 24) { var q = Math.round(x * 8388607); v.setUint8(at, q & 255); v.setUint8(at + 1, (q >> 8) & 255); v.setUint8(at + 2, (q >> 16) & 255); }
+      }
+    }
+    return ab;
+  }
+  function tone(f, amp) { return function (t) { return (amp || 0.5) * Math.sin(2 * Math.PI * f * t); }; }
+  function nearA(a, b, e) { return Math.abs(a - b) < (e || 1e-6); }
+  // まねの IndexedDB（書いたものを写して持つ・非同期・容量不足のまね）
+  function fakeIDB() {
+    var dbs = {}, api = { writes: 0, failNext: null, data: dbs, opens: 0 };
+    function isAB(v) { return Object.prototype.toString.call(v) === "[object ArrayBuffer]"; }
+    function clone(v) { if (isAB(v)) { return v.slice(0); } if (v && typeof v === "object") { var o = Array.isArray(v) ? [] : {}, k; for (k in v) { o[k] = clone(v[k]); } return o; } return v; }
+    function makeTx(D, mode) {
+      var tx = { pending: [], aborted: false }, fail = mode === "readwrite" && api.failNext;
+      if (fail) { api.failNext = null; }
+      tx.objectStore = function (n) {
+        var S = D.stores[n];
+        return {
+          get: function (k) { var r = {}; setTimeout(function () { r.result = S.rows[k] ? clone(S.rows[k]) : undefined; if (r.onsuccess) { r.onsuccess(); } }, 0); return r; },
+          put: function (val) { if (mode !== "readwrite") { throw new Error("ReadOnlyError"); } tx.pending.push([S, val[S.key], clone(val)]); }
+        };
+      };
+      tx.abort = function () { tx.aborted = true; };
+      setTimeout(function () {
+        if (fail || tx.aborted) { tx.error = { name: fail || "AbortError" }; if (tx.onerror) { tx.onerror(); } if (tx.onabort) { tx.onabort(); } return; }
+        tx.pending.forEach(function (x) { x[0].rows[x[1]] = x[2]; api.writes++; });
+        if (tx.oncomplete) { tx.oncomplete(); }
+      }, 2);
+      return tx;
+    }
+    api.open = function (name) {
+      var rq = {};
+      api.opens++;
+      setTimeout(function () {
+        var fresh = !dbs[name];
+        if (fresh) { dbs[name] = { stores: {} }; }
+        var D = dbs[name];
+        rq.result = { objectStoreNames: { contains: function (n) { return !!D.stores[n]; } }, createObjectStore: function (n, o) { D.stores[n] = { key: o.keyPath, rows: {} }; }, close: function () {}, transaction: function (names, mode) { return makeTx(D, mode); } };
+        if (fresh && rq.onupgradeneeded) { rq.onupgradeneeded(); }
+        if (rq.onsuccess) { rq.onsuccess(); }
+      }, 0);
+      return rq;
+    };
+    return api;
+  }
+  var eA = H.load(), WA = eA.window, MA = WA.UGDawModel, DA = WA.UGDaw, AA = WA.UGArcade, SA = eA.store, CA = eA.counters;
+  SA.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 7 }); var rpgA = SA.ultimateGorillaSaveV2;
+  // --- WAV のヘッダー ---
+  var w1 = makeWav({ sr: 44100, ch: 2, sec: 2.5, fn: function (t, c) { return t < 0.01 ? 0.9 : (c ? 0.2 : 0.4) * Math.sin(2 * Math.PI * 330 * t); } });
+  var i1 = MA.parseWav(w1);
+  ok(i1.ok && i1.fmt === 1 && i1.bits === 16 && i1.ch === 2 && i1.sr === 44100 && i1.frames === 110250 && nearA(i1.sec, 2.5) && i1.dataOffset === 44 && i1.bytes === w1.byteLength, "parseWav: 16 bit stereo 44.1 kHz (frames, seconds, data offset)", i1);
+  var w2 = makeWav({ sr: 48000, ch: 1, sec: 1, list: true, fn: tone(220) }), i2 = MA.parseWav(w2);
+  ok(i2.ok && i2.ch === 1 && i2.sr === 48000 && i2.frames === 48000 && i2.dataOffset === 44 + 18, "parseWav: mono 48 kHz, walks past an odd-sized LIST chunk", i2);
+  var i24 = MA.parseWav(makeWav({ sr: 44100, ch: 1, sec: 0.2, bits: 24 }));
+  ok(i24.ok && i24.bits === 24 && i24.frames === 8820, "parseWav: 24 bit PCM is accepted (decoding is up to the browser)");
+  function bytes(arr) { var u = new Uint8Array(64), i; for (i = 0; i < arr.length; i++) { u[i] = typeof arr[i] === "string" ? arr[i].charCodeAt(0) : arr[i]; } return u.buffer; }
+  var rej = [
+    [bytes(["I", "D", "3", 3, 0]), /MP3/], [bytes([0, 0, 0, 0x20, "f", "t", "y", "p", "M", "4", "A"]), /m4a/], [new ArrayBuffer(5), /短すぎ/],
+    [makeWav({ code: 2, sec: 0.1 }), /圧縮/], [makeWav({ ch: 3, sec: 0.1 }), /3ch/], [makeWav({ sec: 0.1, noData: true }), /data/]
+  ];
+  ok(rej.every(function (r) { var x = MA.parseWav(r[0]); return !x.ok && r[1].test(x.why); }), "parseWav refuses MP3 / m4a / short / compressed / 3 ch / no data, with reasons", rej.map(function (r) { return MA.parseWav(r[0]).why; }));
+  ok(/大きすぎ/.test(MA.wavLimitWhy(null, 10 * 1024 * 1024 + 1)) && /長すぎ/.test(MA.wavLimitWhy({ sec: 60.5 }, 1000)) && MA.wavLimitWhy({ sec: 60 }, 10 * 1024 * 1024) === "", "limits: 10 MB and 60 s");
+  var hA = MA.hashBytes(new Uint8Array(w1)), w1b = w1.slice(0); new Uint8Array(w1b)[5000] ^= 1;
+  ok(/^a:[0-9a-f]{16}$/.test(hA) && hA === MA.hashBytes(new Uint8Array(w1.slice(0))) && hA !== MA.hashBytes(new Uint8Array(w1b)), "content hash: 16 hex digits, same bytes → same id, one changed byte → different id", hA);
+  var pkc = new Float32Array(1000); pkc[50] = 0.25; pkc[930] = -1;
+  var pks = MA.computePeaks([pkc], 10000, 100);
+  ok(pks.length === 10 && pks[0] === 128 && pks[9] === 255 && pks[3] === 0, "peaks: 100 per second, square-root scale 0–255", pks);
+  // --- トラック・クリップ（データ）---
+  var pa = MA.emptyProject(0), ra = MA.addAudioTrack(pa);
+  ok(ra.ok && ra.track.kind === "audio" && MA.isAudio(ra.track) && ra.track.instrument.type === "audio" && pa.tracks.length === 3, "addAudioTrack: kind audio, instrument audio");
+  MA.addAudioTrack(pa); MA.addAudioTrack(pa); MA.addAudioTrack(pa);
+  var ra5 = MA.addAudioTrack(pa);
+  ok(!ra5.ok && /4 本/.test(ra5.why) && MA.audioTrackCount(pa) === 4, "at most 4 audio tracks (few simultaneous audio sources)", ra5.why);
+  pa.tracks.splice(3, 3);
+  var refA = MA.assetRef(i1, "ukulele.wav", hA), ca = MA.addAudioClip(pa, ra.track, null, refA, "ukulele");
+  ok(ca && ca.type === "audio" && ca.start === 0 && ca.len === 2 * 4 * PPQ && ca.asset === hA && ca.srcOffset === 0 && ca.gain === 1, "audio clip: 2.5 s at 120 BPM → 2 bars (rounded up), starts at bar 1", ca);
+  var cb2 = MA.addAudioClip(pa, ra.track, null, refA, "ukulele");
+  ok(cb2.start === 2 * 4 * PPQ && cb2.asset === ca.asset, "a second clip of the same asset goes after the first (shares the asset)");
+  var aev = MA.audioEvents(pa, 0, 16 * PPQ, false);
+  ok(aev.length === 2 && aev[0].tick === 0 && aev[0].skip === 0 && aev[1].tick === 8 * PPQ && aev[1].end === 16 * PPQ, "audioEvents: clip starts inside the window");
+  var aevF = MA.audioEvents(pa, 960, 2000, true), aevN = MA.audioEvents(pa, 960, 2000, false);
+  ok(aevF.length === 1 && aevF[0].tick === 960 && aevF[0].skip === 960 && aevN.length === 0, "audioEvents: a fresh segment starts the clip it is inside (skip), otherwise nothing");
+  ok(MA.noteEvents(pa, 0, 99999).length === 0, "noteEvents ignores audio tracks");
+  ok(/8 個/.test(MA.assetRoomWhy({ assets: [1, 2, 3, 4, 5, 6, 7, 8].map(function () { return { sec: 1 }; }) }, { sec: 1 })) && /120 秒/.test(MA.assetRoomWhy({ assets: [{ sec: 119 }] }, { sec: 2 })) && MA.assetRoomWhy(pa, { sec: 2 }) === "", "per song: 8 assets, 120 s in total");
+  pa.assets = [refA, { id: "bad" }, JSON.parse(JSON.stringify(refA)), 5];
+  var pc = MA.clean(JSON.parse(JSON.stringify(pa)));
+  var pcc = pc.tracks[2].clips[0];
+  ok(pc.assets.length === 1 && pc.assets[0].id === hA && pc.tracks[2].kind === "audio" && pcc.type === "audio" && pcc.asset === hA && pcc.len === 8 * PPQ && pcc.notes === undefined, "clean(): bad / duplicated asset refs are dropped; audio track and clip kept", pc.assets.length);
+  ok(JSON.stringify(MA.clean(JSON.parse(JSON.stringify(pc)))) === JSON.stringify(pc), "clean() is stable for a project with audio");
+  var recA = MA.toRecord(pc, 5), backA = MA.parseRecordText(JSON.stringify(recA));
+  ok(backA.ok && JSON.stringify(backA.project.assets) === JSON.stringify(pc.assets) && backA.project.tracks[2].clips.length === 2 && JSON.stringify(recA).indexOf('"data"') < 0 && JSON.stringify(recA).length < 6000, "the saved form keeps placement + asset refs, but no audio data", JSON.stringify(recA).length);
+
+  // --- 画面: IndexedDB が無いとき ---
+  var RA = H.makeEl("div"); DA.reset(); AA.start("daw", RA, {});
+  DA.proj.create("empty");
+  var nTA = DA.project().tracks.length, rNo = "x";
+  DA.audio.add(function (r) { rNo = r; });
+  ok(rNo === false && DA.project().tracks.length === nTA && /IndexedDB/.test(DA.state().anote), "no IndexedDB: 🎵 オーディオ is refused with the reason, nothing is added", DA.state().anote);
+  // --- まねの IndexedDB とデコード ---
+  var IDB = fakeIDB(), decodes = 0;
+  WA.indexedDB = IDB; DA.audio.forget();
+  WA.OfflineAudioContext.prototype.decodeAudioData = function (ab, okCb, ngCb) {
+    var info = MA.parseWav(ab), self = this; decodes++;
+    setTimeout(function () {
+      if (!info.ok || info.bits !== 16) { if (ngCb) { ngCb({ name: "EncodingError" }); } return; } // このまねは 16bit だけ読める
+      var v = new DataView(ab), chs = [], c, i;
+      for (c = 0; c < info.ch; c++) { chs.push(new Float32Array(info.frames)); }
+      for (i = 0; i < info.frames; i++) { for (c = 0; c < info.ch; c++) { chs[c][i] = info.bits === 16 ? v.getInt16(info.dataOffset + (i * info.ch + c) * 2, true) / 32768 : 0; } }
+      okCb({ numberOfChannels: info.ch, length: info.frames, sampleRate: info.sr, duration: info.frames / info.sr, getChannelData: function (k) { return chs[k]; }, ctxRate: self.sampleRate });
+    }, 1);
+    return { catch: function () {} };
+  };
+  function imp(ab, name, o) { return new Promise(function (r) { DA.audio.importWav(ab, name, o, r); }); }
+  function addA() { return new Promise(function (r) { DA.audio.add(r); }); }
+  var tA = await addA();
+  ok(tA && tA.kind === "audio" && DA.project().tracks.length === nTA + 1 && RA.innerHTML.indexOf("da-audlab") >= 0 && RA.innerHTML.indexOf("WAV を読みこむ") >= 0 && RA.innerHTML.indexOf('data-addwav="' + tA.id + '"') >= 0, "with IndexedDB: ＋ トラック → 🎵 オーディオ adds an audio track (label, WAV button, lane ＋)");
+  DA.state().chooseAdd = true; DA.select(null);
+  ok(RA.innerHTML.indexOf('data-ar="addSynth"') >= 0 && RA.innerHTML.indexOf('data-ar="addDrum"') >= 0 && RA.innerHTML.indexOf('data-ar="addAudio"') >= 0 && RA.innerHTML.indexOf("オーディオ") >= 0, "＋ トラック offers 🎹 シンセ / 🥁 ドラム / 🎵 オーディオ");
+  DA.state().chooseAdd = false; DA.select(null);
+  // 読みこむ
+  var undo0 = DA.undoDepth(), r1 = await imp(w1, "ukulele.wav", { track: tA.id });
+  var P1 = DA.project(), dbr = IDB.data[DA.audio.IDB_NAME];
+  ok(r1.ok && r1.clip.start === 0 && r1.clip.len === 2 * 4 * PPQ && r1.clip.asset === hA && P1.assets.length === 1 && P1.assets[0].name === "ukulele.wav" && !r1.reused, "import: a clip at bar 1 (2 bars) and one asset ref", r1.why);
+  ok(IDB.writes === 2 && dbr.stores.blobs.rows[hA].data.byteLength === w1.byteLength && dbr.stores.meta.rows[hA].peaks.length === 250 && dbr.stores.meta.rows[hA].hash === hA, "the original WAV (ArrayBuffer) and its meta (peaks 100/s) are in IndexedDB");
+  var recS = SA["ultimateGorillaDawV1:p:" + P1.id];
+  ok(recS && recS.indexOf(hA) >= 0 && recS.length < 8000 && JSON.parse(recS).project.assets[0].bytes === w1.byteLength && DA.saveState().status === "saved", "the song is saved right after (refs only, no audio data in localStorage)", recS && recS.length);
+  ok(DA.undoDepth() === undo0 + 1 && DA.audio.assetState(hA) === "ready", "one undo step; the asset is ready");
+  // 同じ中身をもう一度: 書かずに使う
+  var r1b = await imp(w1.slice(0), "ukulele-copy.wav", { track: tA.id });
+  ok(r1b.ok && r1b.reused && IDB.writes === 2 && DA.project().assets.length === 1 && r1b.clip.start === 2 * 4 * PPQ && r1b.clip.asset === hA, "the same content again: not written again, the new clip shares the asset", [IDB.writes, r1b.clip.start]);
+  ok(DA.ops.undo() && DA.project().tracks[2].clips.length === 1 && DA.project().assets.length === 1 && !!dbr.stores.blobs.rows[hA], "undo removes the clip; the asset ref and the stored WAV stay");
+  // 容量不足（書きこみの失敗）: 曲は変えない
+  var w3 = makeWav({ sr: 48000, ch: 1, sec: 1, fn: tone(220) }), h3 = MA.hashBytes(new Uint8Array(w3)), before3 = JSON.stringify(DA.project()), save3 = SA["ultimateGorillaDawV1:p:" + P1.id];
+  IDB.failNext = "QuotaExceededError";
+  var r3 = await imp(w3, "voice.wav", { track: tA.id });
+  ok(!r3.ok && /容量/.test(r3.why) && /曲は変えていません/.test(r3.why) && JSON.stringify(DA.project()) === before3 && !dbr.stores.blobs.rows[h3] && SA["ultimateGorillaDawV1:p:" + P1.id] === save3, "quota error: nothing is stored, the song (memory and saved) is unchanged", r3.why);
+  // 断るファイル
+  var rBad = await imp(bytes(["I", "D", "3"]), "a.mp3", { track: tA.id }), rLong = await imp(makeWav({ sr: 8000, ch: 1, sec: 61 }), "long.wav", { track: tA.id }), rBig = await imp(new ArrayBuffer(10 * 1024 * 1024 + 1), "big.wav", { track: tA.id });
+  ok(!rBad.ok && /MP3/.test(rBad.why) && !rLong.ok && /長すぎ/.test(rLong.why) && !rBig.ok && /大きすぎ/.test(rBig.why) && JSON.stringify(DA.project()) === before3, "MP3 / 61 s / over 10 MB are refused with reasons; the song is unchanged", [rBad.why, rLong.why, rBig.why]);
+  var rEnc = await imp(makeWav({ sr: 44100, ch: 1, sec: 0.2, bits: 24 }), "w24.wav", { track: tA.id });
+  ok(!rEnc.ok && /読めません/.test(rEnc.why) && JSON.stringify(DA.project()) === before3, "a file the browser cannot decode is refused (nothing stored)", rEnc.why);
+  // 複製・移動
+  var c1 = DA.project().tracks[2].clips[0], d1 = DA.ops.duplicate(c1.id);
+  ok(d1 && d1.type === "audio" && d1.asset === hA && d1.start === 2 * 4 * PPQ && d1.id !== c1.id, "duplicate: same asset, right after");
+  ok(DA.ops.move(d1.id, 1) && MA.findClip(DA.project(), d1.id).clip.start === 3 * 4 * PPQ, "move by one bar (bar 4)");
+  // 波形
+  DA.select("clip", c1.id);
+  var html1 = RA.innerHTML, sv1 = DA.audio.waveSvg(DA.project(), c1, 224), n1 = DA.audio.state().waveN;
+  ok(html1.indexOf("da-wave") >= 0 && /<path d="M0\.5 /.test(html1) && DA.audio.waveSvg(DA.project(), c1, 224) === sv1 && DA.audio.state().waveN === n1, "waveform SVG in the clip, cached (not re-scanned on every render)");
+  ok((sv1.match(/M/g) || []).length === 70 && html1.indexOf("2小節（4 秒）・音声 2.5 秒") >= 0, "waveform stops where the audio ends (2.5 s of a 4 s clip = 70 lines of 2 px)", (sv1.match(/M/g) || []).length);
+  // --- 再生（120 BPM・1 小節 ＝ 2 秒）---
+  var LOGA = function () { return DA.log().filter(function (x) { return x.audio; }); };
+  function runA(sec) { var P = DA.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DA.pump(); } }
+  DA.setLoop(false); DA.clearLog(); DA.play();
+  var PA = DA.player(), tA0 = PA.segs[0].t0;
+  runA(9);
+  var LA = LOGA(), bufA = DA.audio.state().buf[hA];
+  ok(LA.length === 2 && nearA(LA[0].when, tA0) && nearA(LA[1].when, tA0 + 6) && LA.every(function (x) { return x.ok && x.offset === 0 && nearA(x.dur, 2.5) && !x.cut; }), "3–4. audio starts at bar 1 (0 s) and the moved copy at bar 4 (6 s), full 2.5 s each", LA.map(function (x) { return [(x.when - tA0).toFixed(3), x.dur]; }));
+  var srcA = CA.src.filter(function (s) { return s.buf === bufA; });
+  ok(srcA.length === 2 && nearA(srcA[0].t, tA0) && nearA(srcA[1].t, tA0 + 6), "two AudioBufferSourceNodes are started at those times (same audio clock)");
+  ok(PA.mix[tA.id] && PA.mix[tA.id].syn === null && PA.mix[tA.id].srcs.length === 2, "the audio track has its own output (no SynthTrack), sources are tracked");
+  // シンセ・ドラムと同じ時計
+  DA.stop();
+  var leadA = DA.project().tracks[0]; leadA.clips[0].notes = [[0, 480, 72, 0.8]]; leadA.clips[1].notes = [[0, 480, 74, 0.8]];
+  var drA = DA.ops.addTrack("drum"); DA.openEditor(drA.clips[0].id); DA.steps.toggle(36, 0); DA.select(null);
+  DA.state().view = "arr";
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(9);
+  var lgA = DA.log(), kA = lgA.filter(function (x) { return x.drum; }), nA = lgA.filter(function (x) { return !x.drum && !x.audio && x.track === leadA.id; }), aA = lgA.filter(function (x) { return x.audio; });
+  ok(kA.length === 1 && nA.length === 2 && aA.length === 2 && nearA(kA[0].when, aA[0].when) && nearA(nA[0].when, aA[0].when) && nearA(nA[1].when - nA[0].when, 8) && nearA(aA[0].when, tA0), "5–6. kick, lead and WAV start at exactly the same time at bar 1 (one clock)", [kA.length, nA.length, aA.length]);
+  DA.stop();
+  // 途中から
+  DA.clearLog(); DA.play({ from: 960 }); PA = DA.player(); tA0 = PA.segs[0].t0; runA(1);
+  var mA = LOGA();
+  ok(mA.length === 1 && nearA(mA[0].when, tA0) && nearA(mA[0].offset, 0.5) && nearA(mA[0].dur, 2.0), "playing from beat 2: the clip starts in the middle (offset 0.5 s), no double start", mA);
+  DA.stop();
+  // ループ（1 小節目だけ）: 区切りで重ならない・欠けない
+  var pL = DA.project(); pL.practice.loopA = 0; pL.practice.loopB = 4 * PPQ; DA.setLoop(true);
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(5.9);
+  var lA = LOGA();
+  ok(lA.length === 3 && lA.every(function (x, i) { return nearA(x.when, tA0 + 2 * i) && x.offset === 0 && nearA(x.dur, 2) && x.cut && x.pass === i; }), "loop of bar 1: each pass plays 0–2 s of the WAV, cut exactly at the loop end (no overlap, no gap)", lA.map(function (x) { return [(x.when - tA0).toFixed(3), x.dur, x.pass]; }));
+  DA.stop(); DA.setLoop(false);
+  // ループの途中から（区間の頭に、かかっているクリップを途中から）
+  pL.practice.loopA = 4 * PPQ; pL.practice.loopB = 8 * PPQ; DA.setLoop(true);
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(3.9);
+  var lB = LOGA();
+  ok(lB.length === 2 && lB.every(function (x, i) { return nearA(x.when, tA0 + 2 * i) && nearA(x.offset, 2) && nearA(x.dur, 0.5); }), "loop of bar 2 (inside the clip): every pass starts at 2 s of the WAV (the rest 0.5 s)", lB);
+  DA.stop(); DA.setLoop(false);
+  // M／S・音量・パン
+  var tAo = MA.findTrack(DA.project(), tA.id);
+  tAo.mute = true; DA.clearLog(); DA.play(); runA(1); ok(LOGA().length === 0, "7. a muted audio track does not play"); DA.stop(); tAo.mute = false;
+  leadA.solo = true; DA.clearLog(); DA.play(); runA(1); ok(LOGA().length === 0, "7. solo on another track silences the audio track"); DA.stop(); leadA.solo = false;
+  tAo.solo = true; DA.clearLog(); DA.play(); runA(1); ok(LOGA().length === 1 && DA.log().filter(function (x) { return !x.audio; }).length === 0, "7. solo on the audio track: only the WAV"); DA.stop(); tAo.solo = false;
+  DA.play(); var mxA = DA.player().mix[tA.id];
+  DA.mixer.setVol(tA.id, 40); DA.mixer.setPan(tA.id, -1);
+  var tgA = CA.targets.slice(-4).map(function (x) { return x.v; });
+  ok(tgA.indexOf(0.4) >= 0 && (mxA.main.pn ? tgA.indexOf(-1) >= 0 : true), "7. volume (and pan, where the browser has a panner) of the audio track go to its own gain", tgA);
+  DA.stop(); DA.mixer.setVol(tA.id, 80); DA.mixer.setPan(tA.id, 0);
+  // BPM を変える（位置は拍に・音声は元の速さ）
+  DA.setBpm(60); DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(13);
+  var bA = LOGA();
+  ok(bA.length === 2 && nearA(bA[1].when - tA0, 12) && nearA(bA[0].dur, 2.5) && nearA(bA[1].dur, 2.5), "BPM 60: the copy moves to 12 s (bar 4 follows the beat), the WAV keeps its own speed (2.5 s)", bA.map(function (x) { return [(x.when - tA0).toFixed(3), x.dur]; }));
+  DA.setBpm(120); DA.stop();
+  DA.play(); var PB = DA.player(); DA.setBpm(121);
+  ok(DA.player() !== PB && DA.isPlaying(), "changing BPM while audio clips exist rebuilds playback from the current position");
+  DA.stop(); DA.setBpm(120);
+  // ⏹ で止める
+  DA.play(); runA(0.3); var mxS = DA.player().mix[tA.id], srcsS = mxS.srcs.slice();
+  DA.stop();
+  ok(srcsS.length >= 1 && mxS.srcs.length === 0 && !DA.isPlaying(), "14. stop: the audio sources are stopped and released");
+  // WAV の書き出し（シンセ＋ドラム＋WAV）
+  var offA = CA.offline.length, pjA = JSON.stringify(DA.project());
+  DA.wav.start(); for (var gw = 0; gw < 300 && DA.wav.state().busy; gw++) { await eA.wait(10); }
+  var wsA = DA.wav.state(), wlA = wsA.log.filter(function (x) { return x.audio; });
+  ok(wsA.state === "done" && CA.offline.length === offA + 1 && wlA.length === 2 && wlA.every(function (x) { return x.ok && nearA(x.when, MA.tickToSec(DA.project(), x.tick)); }) && nearA(wlA[1].when, 6), "13. WAV export includes the audio clips at the same times as playback (0 s and 6 s)", wsA.msg || wlA.map(function (x) { return x.when; }));
+  ok(wsA.log.some(function (x) { return x.drum; }) && wsA.log.some(function (x) { return !x.drum && !x.audio; }) && JSON.stringify(DA.project()) === pjA, "the WAV has synth + drums + audio, and the export changes nothing");
+  // 音声だけの曲も書き出せる
+  var pOnly = DA.project(), keepOnly = JSON.stringify(pOnly.tracks); pOnly.tracks.forEach(function (t) { if (!MA.isAudio(t)) { t.clips.forEach(function (c) { c.notes = []; }); } });
+  ok(MA.noteCount(pOnly) === 0 && DA.wav.plan().ok, "a song with only audio clips can be exported (plan ok)");
+  pOnly.tracks = JSON.parse(keepOnly);
+  // --- ページの読みなおし（IndexedDB から戻る）---
+  DA.flushSave(); DA.saveNow();
+  var pid = DA.project().id, savedA = SA["ultimateGorillaDawV1:p:" + pid];
+  var decodes0 = decodes;
+  var pR = DA.reload();
+  ok(pR.id === pid && pR.tracks[2].clips.length === 2 && pR.assets.length === 1 && DA.audio.assetState(hA) === "", "9. reload: the song with its audio clips is back (asset not loaded yet)");
+  await new Promise(function (r) { DA.audio.ensure(DA.project(), r); });
+  ok(DA.audio.assetState(hA) === "ready" && decodes === decodes0 + 1 && DA.audio.state().peaks[hA].length === 250, "9. the asset is read back from IndexedDB and decoded once", [DA.audio.assetState(hA), decodes - decodes0]);
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(7);
+  ok(LOGA().length === 2 && LOGA().every(function (x) { return x.ok; }), "9. after the reload the WAV plays again");
+  DA.stop();
+  // ▶ を押したとき素材をまだ読みこんでいない: 読みこめてから鳴る
+  DA.reload(); DA.clearLog();
+  var pw0 = DA.play();
+  ok(pw0 === true && !DA.isPlaying() && /読みこんで/.test(DA.state().msg), "▶ before the asset is loaded: waits with a message");
+  for (var gw = 0; gw < 200 && !DA.isPlaying(); gw++) { await eA.wait(10); }
+  ok(DA.isPlaying() && DA.audio.assetState(hA) === "ready", "…and starts by itself when loaded", [DA.isPlaying(), DA.audio.assetState(hA), DA.state().msg, !!DA.audio.state().playTok, DA.audio.state().dbState]);
+  DA.stop();
+  // --- 素材がないとき（ほかの端末・データが消えた）---
+  delete dbr.stores.blobs.rows[hA]; delete dbr.stores.meta.rows[hA];
+  var pM = DA.reload(); await new Promise(function (r) { DA.audio.ensure(DA.project(), r); });
+  AA.start("daw", RA, {});
+  for (var gw = 0; gw < 300 && DA.audio.assetState(hA) !== "missing"; gw++) { await eA.wait(10); }
+  await eA.wait(5);
+  ok(DA.audio.assetState(hA) === "missing" && RA.innerHTML.indexOf("素材がありません") >= 0 && DA.project().tracks.length === pM.tracks.length && DA.project().tracks[0].clips.length === 2, "10. missing asset: the clip shows 「素材がありません」; other tracks are kept");
+  DA.select("clip", DA.project().tracks[2].clips[0].id);
+  ok(RA.innerHTML.indexOf('data-cl="relink"') >= 0 && RA.innerHTML.indexOf("素材を選びなおす") >= 0, "10. the clip panel offers 🔗 素材を選びなおす");
+  DA.clearLog(); DA.play();
+  ok(DA.isPlaying() && /素材がない音声のクリップ 2 個/.test(DA.state().msg), "10. playing tells that 2 audio clips have no asset (the rest plays)", DA.state().msg);
+  runA(1); ok(LOGA().length === 1 && !LOGA()[0].ok && LOGA()[0].why === "missing", "10. the missing clip makes no sound (logged as missing)"); DA.stop();
+  DA.wav.start(); for (var gw = 0; gw < 300 && DA.wav.state().busy; gw++) { await eA.wait(10); }
+  ok(DA.wav.state().state === "fail" && /音声の素材がありません/.test(DA.wav.state().msg), "13. WAV export with a missing asset fails (no silent success)", DA.wav.state().msg);
+  // 選びなおす: ちがう中身は断る・同じ中身ならつなぐ
+  var rW = await imp(makeWav({ sr: 44100, ch: 2, sec: 2.5, fn: tone(500) }), "ukulele.wav", { relink: hA });
+  ok(!rW.ok && /中身がちがう/.test(rW.why) && DA.audio.assetState(hA) === "missing", "relink: the same name with different content is refused", rW.why);
+  var rR = await imp(w1.slice(0), "ukulele (1).wav", { relink: hA });
+  ok(rR.ok && rR.relinked && DA.audio.assetState(hA) === "ready" && !!dbr.stores.blobs.rows[hA] && DA.project().assets.length === 1 && DA.project().tracks[2].clips.length === 2, "relink: the same content is stored again and the clips play", rR.why);
+  // JSON の書き出し: 参照は入る・中身は入らない・警告
+  var exA = DA.proj.exportJson();
+  ok(exA.ok && exA.assets === 1 && exA.text.indexOf(hA) >= 0 && exA.text.length < 12000 && /入っていません/.test(DA.saveState().note), "11. JSON export: the refs are in, the audio is not, and the note says so", DA.saveState().note);
+  var imA = DA.proj.importText(exA.text);
+  ok(imA.ok && imA.project.assets.length === 1 && imA.project.tracks[2].clips[0].asset === hA && imA.project.tracks[2].clips[0].type === "audio", "11. JSON import keeps clips and refs (the same device finds the asset)");
+  DA.showProj();
+  ok(RA.innerHTML.indexOf("JSON に音声（WAV）の中身は入っていません") >= 0 && RA.innerHTML.indexOf("ukulele.wav") >= 0 && RA.innerHTML.indexOf("クリップ 2 個") >= 0, "the song screen lists the audio assets with the JSON warning");
+  // 使っていない素材を外す（端末の中身は消さない）
+  var pU = DA.project(); pU.tracks[2].clips = []; DA.showProj();
+  ok(RA.innerHTML.indexOf('data-pj-unasset="' + hA + '"') >= 0 && DA.proj.unasset(hA) && DA.project().assets.length === 0 && !!dbr.stores.blobs.rows[hA], "an unused asset can be removed from the song; the stored WAV is kept");
+  // 互換: v2.37 の曲
+  var fxA = JSON.parse(require("fs").readFileSync(require("path").join(H.ROOT, "tests", "fixtures", "daw-v2.37-song.json"), "utf8")), fxr = MA.fromRecord(fxA.record);
+  ok(fxr.ok && fxr.project.assets.length === 0 && fxr.project.tracks.every(function (t) { return !MA.isAudio(t); }), "12. a v2.37 song still opens (no assets, no audio tracks)");
+  // 画面を出る: デコードした音を捨てる
+  AA.stop();
+  ok(Object.keys(DA.audio.state().buf).length === 0 && Object.keys(DA.audio.state().st).length === 0 && !DA.isPlaying(), "14. leaving the DAW frees the decoded audio (the WAV stays in IndexedDB)");
+  ok(SA.ultimateGorillaSaveV2 === rpgA, "RPG save untouched");
+  DA.reset();
 };
