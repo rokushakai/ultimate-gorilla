@@ -10,7 +10,7 @@
 
   var PX_BEAT = 28, HEAD_W = 96, LANE_H = 64, RULER_H = 24;
   // セッションのあいだのプロジェクト（9A-4 で ultimateGorillaDawV1 に保存する）
-  var st = { project: null, sel: null, scroll: 0 };
+  var st = { project: null, sel: null, scroll: 0, undo: [], anote: "" }; // undo: §341 9A-5 ↶ の列（ピアノロールとアレンジで共通・トラック全部の写し）
 
   // はじめて開いたとき: 最後に開いた曲を読む。保存が無ければ見本（まだ保存しない）。読めなければ見本を開いて理由を出す（壊れたデータは消さない）
   function project() {
@@ -321,6 +321,9 @@
         '<button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
         '<span class="daw-meter">' + m0.num + '/' + m0.den + '</span>' +
       '</div>' +
+      '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
+        '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
+        '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
     h += '<div class="daw-row daw-ruler-row"><div class="daw-corner">トラック</div><div class="daw-ruler daw-grid" style="' + grid + 'height:' + RULER_H + 'px;">';
@@ -341,20 +344,49 @@
         '</div>' +
         '<div class="daw-lane daw-grid" style="' + grid + 'height:' + LANE_H + 'px;">';
       for (j = 0; j < t.clips.length; j++) { h += clipHtml(p, t, t.clips[j]); }
+      if (t.kind === "midi") { h += '<button class="da-add" data-addclip="' + t.id + '" style="left:' + (tickX(M.trackEnd(t)) + 3) + 'px;" title="ここに空のクリップを足す" aria-label="クリップを足す">&#xFF0B;</button>'; }
       h += '</div></div>';
     }
     h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;"></div></div>';
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
-      '<div class="daw-info">' + infoHtml(p) + '</div>' +
+      '<div class="da-area">' + panelHtml(p) + '</div>' + // 9A-5: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
       saveNoteHtml() +
-      '<p class="small daw-note">クリップをタップすると、ピアノロールで音符を直せます。</p></div>';
+      '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p></div>';
     root.innerHTML = h;
     var arr = root.querySelector && root.querySelector(".daw-arr");
     if (arr && st.scroll) { try { arr.scrollLeft = st.scroll; } catch (e) {} }
+    // 9A-5: 足した・複製した・動かしたクリップが見えるように横へスクロール
+    var fsel = st.reveal && st.sel && st.sel.kind === "clip" ? M.findClip(p, st.sel.id) : null;
+    st.reveal = false;
+    if (arr && fsel && arr.clientWidth) {
+      var cx = tickX(fsel.clip.start), cw = tickX(fsel.clip.start + fsel.clip.len) - cx, vis = arr.clientWidth - HEAD_W;
+      if (cx < arr.scrollLeft || cx + Math.min(cw, vis) > arr.scrollLeft + vis) { try { arr.scrollLeft = Math.max(0, cx - 24); st.scroll = arr.scrollLeft; } catch (e2) {} }
+    }
     bind(root, ctl);
     drawHead();
   }
 
+  // §341 9A-5: 選んだクリップ・トラックの操作の欄（小さい画面でも押しやすいボタン）
+  function panelHtml(p) {
+    var M = DM(), s = st.sel, h = st.anote ? '<div class="da-note">' + st.anote + '</div>' : '';
+    function b(kind, act, label, cls) { return '<button class="modal-btn' + (cls ? " " + cls : "") + '" data-' + kind + '="' + act + '">' + label + '</button>'; }
+    if (s && s.kind === "clip") {
+      var f = M.findClip(p, s.id);
+      if (f) {
+        var c = f.clip, a = M.tickToBar(p, c.start), bars = Math.round(c.len / M.barTicks(p) * 100) / 100, hid = M.hiddenNotes(c);
+        return h + '<div class="daw-info da-panel"><div>&#x1F3B5; <b>' + escHtml(clipLabel(c)) + '</b>（' + escHtml(f.track.name) + '）: ' + a.bar + '小節目から ' + bars + '小節・音符 ' + (c.notes.length - hid) + ' 個' + (hid ? '（はみ出て鳴らない音符 ' + hid + ' 個）' : '') + '</div>' +
+          '<div class="da-btns">' + b("cl", "roll", "&#x1F3B9; 音符を直す", "da-wide") + b("cl", "dup", "&#x29C9; 複製") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") +
+          b("cl", "shorter", "&#x2212; 短く") + b("cl", "longer", "&#xFF0B; 長く") + b("cl", "name", "&#x270F;&#xFE0F; 名前") + b("cl", "del", "&#x1F5D1;&#xFE0F; 削除") + '</div></div>';
+      }
+    }
+    if (s && s.kind === "track") {
+      var t = M.findTrack(p, s.id);
+      if (t) {
+        return h + '<div class="daw-info da-panel"><div>' + infoHtml(p) + '</div><div class="da-btns">' + b("tr", "clip", "&#xFF0B; クリップ", "da-wide") + b("tr", "name", "&#x270F;&#xFE0F; 名前") + b("tr", "up", "&#x25B2; 上へ") + b("tr", "down", "&#x25BC; 下へ") + '</div></div>';
+      }
+    }
+    return h + '<div class="daw-info">' + infoHtml(p) + '</div>';
+  }
   function infoHtml(p) {
     var M = DM(), s = st.sel;
     if (s && s.kind === "clip") {
@@ -371,7 +403,7 @@
       var t = M.findTrack(p, s.id);
       if (t) { return ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b>: ゴリラシンセ「' + instName(t) + '」・クリップ ' + t.clips.length + ' 個・音量 ' + t.vol + (t.mute ? '・ミュート' : '') + (t.solo ? '・ソロ' : ''); }
     }
-    return '<span class="small">トラックやクリップをタップすると、ここに説明が出ます。全部で ' + p.tracks.length + ' トラック・' + M.viewBars(p) + ' 小節。</span>';
+    return '<span class="small">クリップをタップすると選べて、下に操作が出ます（もう一度タップで音符を直す）。トラック名をタップするとトラックを選べます。全部で ' + p.tracks.length + ' トラック・' + M.viewBars(p) + ' 小節。</span>';
   }
 
   // ---------- §341 9A-3: ピアノロール ----------
@@ -496,7 +528,7 @@
   function switchTo(p, status) {
     flushSave();
     stopPlay(false);
-    st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0;
+    st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0; st.undo.length = 0; st.anote = "";
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
   var proj = {
@@ -638,14 +670,75 @@
     if (!f || f.clip.type !== "midi") { return false; }
     st.view = "roll";
     st.sel = { kind: "clip", id: id };
-    st.roll = { clip: id, track: f.track.id, sel: null, snap: st.rollSnap || 480, undo: [], init: true, sx: 0, sy: 0 };
+    st.roll = { clip: id, track: f.track.id, sel: null, snap: st.rollSnap || 480, undo: st.undo, init: true, sx: 0, sy: 0 };
     return true;
   }
   function closeRoll() { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.roll = null; }
-  function copyNotes(c) { return JSON.parse(JSON.stringify(c.notes)); }
-  function pushUndo(snap) { var r = st.roll; r.undo.push(snap); if (r.undo.length > UNDO_MAX) { r.undo.shift(); } }
+  // §341 9A-5: ↶ はトラック全部の写し（音符もふくむ）を覚える。ピアノロールとアレンジで同じ列
+  function snapTracks() { return JSON.parse(JSON.stringify(project().tracks)); }
+  function pushUndo(snap) { var u = st.undo; u.push(snap); if (u.length > UNDO_MAX) { u.shift(); } }
   // 直したあと: 再生中なら同じ位置から鳴らしなおす（古い予約の音を消す）・描きなおす
   function afterEdit() { if (pl) { resync(); } rerender(); }
+  // ---------- §341 9A-5: アレンジの操作（トラック・クリップ）。どれも ↶ に写しを積み、自動保存し、再生中なら同じ位置から鳴らしなおす ----------
+  function findSelClip() { return st.sel && st.sel.kind === "clip" ? DM().findClip(project(), st.sel.id) : null; }
+  function clipLabel(c) { return (c.ext && c.ext.name) || "クリップ"; }
+  function done(snap, note) { pushUndo(snap); st.anote = note || ""; st.reveal = true; markDirty(); if (pl) { resync(); } rerender(); return true; }
+  function nope(why) { st.anote = "&#x26A0;&#xFE0F; " + escHtml(why); rerender(); return false; }
+  var ops = {
+    addTrack: function () {
+      var p = project(), s = snapTracks(), t = DM().addTrack(p);
+      if (!t) { return nope("トラックは " + DM().MAX_TRACKS + " 本までです"); }
+      st.sel = { kind: "track", id: t.id };
+      done(s, "「" + escHtml(t.name) + "」を足しました。＋ でクリップを足せます");
+      return t;
+    },
+    renameTrack: function (id, name) {
+      var t = DM().findTrack(project(), id); name = String(name || "").replace(/[\u0000-\u001f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40);
+      if (!t || !name || name === t.name) { return false; }
+      var s = snapTracks(); t.name = name; return done(s, "");
+    },
+    moveTrack: function (id, dir) {
+      var s = snapTracks();
+      if (!DM().moveTrack(project(), id, dir)) { return nope(dir < 0 ? "いちばん上です" : "いちばん下です"); }
+      return done(s, "");
+    },
+    addClip: function (trackId, start) {
+      var p = project(), s = snapTracks(), c = DM().addClip(p, trackId, start, 4);
+      if (!c) { return nope("ここにはクリップを足せません（曲が長すぎます）"); }
+      st.sel = { kind: "clip", id: c.id };
+      done(s, "空のクリップを足しました。もう一度タップすると音符を入れられます");
+      return c;
+    },
+    duplicate: function (id) {
+      var s = snapTracks(), c = DM().duplicateClip(project(), id);
+      if (!c) { return nope("複製できませんでした（曲が長すぎます）"); }
+      st.sel = { kind: "clip", id: c.id };
+      done(s, "複製しました（" + DM().tickToBar(project(), c.start).bar + " 小節目）");
+      return c;
+    },
+    move: function (id, bars) {
+      var s = snapTracks(), r = DM().moveClip(project(), id, bars);
+      if (!r.ok) { return nope(r.why); }
+      return done(s, "");
+    },
+    resize: function (id, bars) {
+      var s = snapTracks(), r = DM().resizeClip(project(), id, bars);
+      if (!r.ok) { return nope(r.why); }
+      return done(s, r.hidden ? "はみ出た音符 " + r.hidden + " 個は鳴りません（長くすると戻ります）" : "");
+    },
+    renameClip: function (id, name) {
+      var f = DM().findClip(project(), id); name = String(name || "").replace(/[\u0000-\u001f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40);
+      if (!f || !name || name === clipLabel(f.clip)) { return false; }
+      var s = snapTracks(); f.clip.ext = f.clip.ext || {}; f.clip.ext.name = name; return done(s, "");
+    },
+    remove: function (id) {
+      var f = DM().findClip(project(), id), s = snapTracks();
+      if (!f || !DM().deleteClip(project(), id)) { return false; }
+      st.sel = null;
+      return done(s, "「" + escHtml(clipLabel(f.clip)) + "」を消しました（&#x21B6; で戻せます）");
+    },
+    undo: function () { var ok = edit.undo(); if (ok) { st.anote = "1 つ戻しました"; if (st.sel && st.sel.kind === "clip" && !DM().findClip(project(), st.sel.id)) { st.sel = null; } rerender(); } return ok; }
+  };
   // 音を短く鳴らす（足した・高さを変えたとき。再生中は鳴らさない）
   function preview(t, m) {
     if (pl) { return; }
@@ -657,13 +750,13 @@
   var edit = {
     add: function (t, m) {
       var f = rollClip(); if (!f) { return null; }
-      var snap = copyNotes(f.clip), n = DM().noteAdd(f.clip, t, m, st.roll.snap, 0.8);
+      var snap = snapTracks(), n = DM().noteAdd(f.clip, t, m, st.roll.snap, 0.8);
       if (n) { pushUndo(snap); st.roll.sel = n; preview(f.track, n[2]); markDirty(); afterEdit(); }
       return n;
     },
     set: function (n, o, snap) {
       var f = rollClip(); if (!f || !n) { return null; }
-      var before = snap || copyNotes(f.clip), m0 = n[2], t0 = n[0], d0 = n[1];
+      var before = snap || snapTracks(), m0 = n[2], t0 = n[0], d0 = n[1];
       DM().noteSet(f.clip, n, o);
       if (n[0] === t0 && n[1] === d0 && n[2] === m0) { rerender(); return n; }
       pushUndo(before); st.roll.sel = n; markDirty();
@@ -673,14 +766,14 @@
     },
     del: function (n) {
       var f = rollClip(); n = n || (st.roll && st.roll.sel); if (!f || !n) { return false; }
-      var snap = copyNotes(f.clip);
+      var snap = snapTracks();
       if (!DM().noteDelete(f.clip, n)) { return false; }
       pushUndo(snap); st.roll.sel = null; markDirty(); afterEdit();
       return true;
     },
     undo: function () {
-      var f = rollClip(), r = st.roll; if (!f || !r.undo.length) { return false; }
-      f.clip.notes = r.undo.pop(); r.sel = null; markDirty(); afterEdit(); // 戻したあとの状態を保存
+      var u = st.undo; if (!u.length || !st.project) { return false; }
+      st.project.tracks = u.pop(); if (st.roll) { st.roll.sel = null; } markDirty(); afterEdit(); // 戻したあとの状態を保存
       return true;
     }
   };
@@ -782,7 +875,7 @@
         var n = c.notes[Number(nEl.getAttribute("data-n"))];
         if (!n) { return; }
         if (r.sel !== n) { var prev = grid.querySelector(".pr-sel"); if (prev) { prev.className = prev.className.replace(" pr-sel", ""); } nEl.className += " pr-sel"; r.sel = n; }
-        drag = { kind: hEl !== null ? "len" : "move", n: n, el: nEl, x0: e.clientX, y0: e.clientY, t0: n[0], m0: n[2], d0: n[1] > 0 ? n[1] : 240, snap: copyNotes(c), moved: false, nt: n[0], nm: n[2], nd: n[1] };
+        drag = { kind: hEl !== null ? "len" : "move", n: n, el: nEl, x0: e.clientX, y0: e.clientY, t0: n[0], m0: n[2], d0: n[1] > 0 ? n[1] : 240, snap: snapTracks(), moved: false, nt: n[0], nm: n[2], nd: n[1] };
         try { grid.setPointerCapture(e.pointerId); } catch (e2) {}
         if (e.preventDefault) { e.preventDefault(); }
         return;
@@ -849,8 +942,31 @@
         }
         if ((v = el.getAttribute("data-mute"))) { var tm = M.findTrack(p, v); if (tm) { tm.mute = !tm.mute; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
-        if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } if (!openRoll(v)) { st.sel = { kind: "clip", id: v }; } render(root, ctl); return; } // 9A-3: タップでピアノロール
-        if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; redraw(); }
+        if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } st.anote = ""; if (st.sel && st.sel.kind === "clip" && st.sel.id === v && openRoll(v)) { render(root, ctl); return; } st.sel = { kind: "clip", id: v }; render(root, ctl); return; } // 9A-5: タップで選ぶ・もう一度でピアノロール
+        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { ops.addTrack(); } else if (v === "undo") { ops.undo(); } return; }
+        if ((v = el.getAttribute("data-addclip"))) { keepScroll(root); ops.addClip(v); return; }
+        if ((v = el.getAttribute("data-cl")) && st.sel && st.sel.kind === "clip") {
+          var cid = st.sel.id, fc = M.findClip(p, cid);
+          keepScroll(root);
+          if (!fc) { return; }
+          if (v === "roll") { st.anote = ""; if (openRoll(cid)) { render(root, ctl); } return; }
+          if (v === "dup") { ops.duplicate(cid); return; }
+          if (v === "left" || v === "right") { ops.move(cid, v === "left" ? -1 : 1); return; }
+          if (v === "shorter" || v === "longer") { ops.resize(cid, v === "shorter" ? -1 : 1); return; }
+          if (v === "name") { var cn = window.prompt ? window.prompt("クリップの名前（40 文字まで）", clipLabel(fc.clip)) : null; if (cn !== null && cn !== undefined) { ops.renameClip(cid, cn); } return; }
+          if (v === "del") { ops.remove(cid); }
+          return;
+        }
+        if ((v = el.getAttribute("data-tr")) && st.sel && st.sel.kind === "track") {
+          var tid = st.sel.id, ft = M.findTrack(p, tid);
+          keepScroll(root);
+          if (!ft) { return; }
+          if (v === "clip") { ops.addClip(tid); return; }
+          if (v === "up" || v === "down") { ops.moveTrack(tid, v === "up" ? -1 : 1); return; }
+          if (v === "name") { var tn = window.prompt ? window.prompt("トラックの名前（40 文字まで）", ft.name) : null; if (tn !== null && tn !== undefined) { ops.renameTrack(tid, tn); } }
+          return;
+        }
+        if ((v = el.getAttribute("data-track"))) { st.sel = { kind: "track", id: v }; st.anote = ""; redraw(); }
       };
     }
     bindProjBar(root, ctl);
@@ -870,6 +986,7 @@
     st.view = "arr";
     st.roll = null;
     st.sel = null;
+    st.anote = "";
     st.scroll = 0;
     st.msg = "";
     st.root = root;
@@ -896,14 +1013,15 @@
   window.UGDaw = {
     state: function () { return st; },
     project: project,
-    reset: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
+    reset: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.undo.length = 0; st.anote = ""; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
+    ops: ops, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
-    reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
+    reload: function () { if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); st.undo.length = 0; st.anote = ""; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
     ROLL: { RB: RB, RH: RH, LO: LO, HI: HI, KEYW: KEYW },
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,

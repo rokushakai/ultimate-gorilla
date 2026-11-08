@@ -1434,3 +1434,18 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dp-rn { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .dp-row .modal-btn { margin: 0; flex: 0 0 auto; min-height: 34px; padding: 2px 12px; }
 .dp-now { color: #ffd166; flex: 0 0 auto; }
+/* §341 9A-5: トラック・クリップの編集 */
+.da-tools { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; flex-wrap: wrap; }
+.da-tools .daw-small small { font-size: 10px; margin-left: 2px; }
+.da-tools .daw-small:disabled { opacity: 0.45; }
+.da-hint { color: #adb5bd; flex: 1 1 120px; min-width: 0; }
+.da-add { position: absolute; top: 6px; bottom: 6px; width: 40px; z-index: 1; border: 2px dashed #4cc9f0; border-radius: 6px; background: rgba(76, 201, 240, 0.12); color: #4cc9f0; font-size: 20px; font-weight: bold; padding: 0; }
+.da-panel { display: flex; flex-direction: column; gap: 6px; }
+.da-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.da-btns .modal-btn { margin: 0; min-height: 40px; padding: 2px 4px; font-size: 12px; line-height: 1.2; }
+.da-btns .da-wide { grid-column: span 4; font-size: 14px; }
+.da-note { margin-top: 6px; padding: 5px 8px; background: #11263a; border: 1px solid #4cc9f0; border-radius: 6px; font-size: 12px; color: #e0fbfc; }
+/* §341 9A-5: すばやい 2 回のタップ（選ぶ → ピアノロール）が「ダブルタップで拡大」に取られないように */
+.daw, .daw button, .daw-clip, .daw-head { touch-action: manipulation; }
+/* 選ぶと出る操作の欄の高さをあらかじめ取っておく（箱がまん中ぞろえなので、高さが変わると上の部分がずれて 2 回目のタップが別のクリップに当たる） */
+.da-area { min-height: 252px; }

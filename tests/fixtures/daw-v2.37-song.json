@@ -1,0 +1,252 @@
+{
+ "note": "Saved by the v2.37 DAW code (417b8c5) — used to check that later versions still load it unchanged",
+ "index": {
+  "format": "ultimate-gorilla-daw-store",
+  "schemaVersion": 1,
+  "last": "pmw72kncmj8bi",
+  "list": [
+   {
+    "id": "pmw72kncmj8bi",
+    "name": "v2.37 のテスト曲",
+    "saved": 1794096230827,
+    "created": 1794096230709,
+    "notes": 5,
+    "tracks": 2
+   }
+  ]
+ },
+ "record": {
+  "format": "ultimate-gorilla-daw",
+  "schemaVersion": 1,
+  "saved": 1794096230827,
+  "project": {
+   "type": "ultimate-gorilla-project",
+   "version": 1,
+   "id": "pmw72kncmj8bi",
+   "name": "v2.37 のテスト曲",
+   "created": 1794096230709,
+   "saved": 1794096230827,
+   "ppq": 960,
+   "tempo": {
+    "points": [
+     {
+      "tick": 0,
+      "bpm": 100
+     }
+    ],
+    "meters": [
+     {
+      "tick": 0,
+      "num": 4,
+      "den": 4
+     }
+    ]
+   },
+   "key": [],
+   "markers": [],
+   "tracks": [
+    {
+     "id": "t1",
+     "name": "リード",
+     "kind": "midi",
+     "instrument": {
+      "type": "synth",
+      "patch": {
+       "mode": "inline",
+       "patch": {
+        "w1": "saw",
+        "w2": "saw",
+        "lto": "pitch",
+        "mono": true,
+        "uni": 1,
+        "mix": 0.6,
+        "det": 12,
+        "oct2": 0,
+        "sub": 0,
+        "cut": 0.62,
+        "res": 0.25,
+        "env": 0.35,
+        "fd": 0.3,
+        "fs": 0.4,
+        "a": 0.005,
+        "d": 0.2,
+        "s": 0.8,
+        "r": 0.15,
+        "lrate": 5.5,
+        "ldep": 0.12,
+        "glide": 0.06,
+        "vol": 0.75
+       },
+       "hash": "h3bc1ea72"
+      },
+      "ext": {
+       "preset": "lead",
+       "presetName": "&#x1F3B8; のこぎりリード"
+      }
+     },
+     "vol": 80,
+     "pan": 0,
+     "mute": false,
+     "solo": false,
+     "fx": {
+      "items": []
+     },
+     "clips": [
+      {
+       "id": "c1",
+       "type": "midi",
+       "start": 0,
+       "len": 15360,
+       "offset": 0,
+       "loop": null,
+       "notes": [
+        [
+         0,
+         480,
+         72,
+         0.8
+        ],
+        [
+         960,
+         480,
+         76,
+         0.8
+        ],
+        [
+         1920,
+         1920,
+         79,
+         0.8
+        ]
+       ],
+       "ext": {
+        "name": "メロディ A"
+       }
+      },
+      {
+       "id": "c2",
+       "type": "midi",
+       "start": 15360,
+       "len": 15360,
+       "offset": 0,
+       "loop": null,
+       "notes": [],
+       "ext": {
+        "name": "メロディ B"
+       }
+      }
+     ],
+     "auto": [],
+     "ext": {
+      "icon": "&#x1F3B8;"
+     }
+    },
+    {
+     "id": "t2",
+     "name": "ベース",
+     "kind": "midi",
+     "instrument": {
+      "type": "synth",
+      "patch": {
+       "mode": "inline",
+       "patch": {
+        "w1": "square",
+        "w2": "saw",
+        "lto": "pitch",
+        "mono": true,
+        "uni": 1,
+        "mix": 0.5,
+        "det": 5,
+        "oct2": 0,
+        "sub": 0.6,
+        "cut": 0.3,
+        "res": 0.2,
+        "env": 0.35,
+        "fd": 0.2,
+        "fs": 0.2,
+        "a": 0.003,
+        "d": 0.25,
+        "s": 0.7,
+        "r": 0.08,
+        "lrate": 5,
+        "ldep": 0,
+        "glide": 0,
+        "vol": 0.85
+       },
+       "hash": "hb600b0f3"
+      },
+      "ext": {
+       "preset": "bass",
+       "presetName": "&#x1F50A; モノベース"
+      }
+     },
+     "vol": 80,
+     "pan": 0,
+     "mute": true,
+     "solo": false,
+     "fx": {
+      "items": []
+     },
+     "clips": [
+      {
+       "id": "c3",
+       "type": "midi",
+       "start": 0,
+       "len": 15360,
+       "offset": 0,
+       "loop": null,
+       "notes": [],
+       "ext": {
+        "name": "ベース A"
+       }
+      },
+      {
+       "id": "c4",
+       "type": "midi",
+       "start": 15360,
+       "len": 15360,
+       "offset": 0,
+       "loop": null,
+       "notes": [
+        [
+         0,
+         480,
+         40,
+         0.8
+        ],
+        [
+         1440,
+         480,
+         43,
+         0.8
+        ]
+       ],
+       "ext": {
+        "name": "ベース B"
+       }
+      }
+     ],
+     "auto": [],
+     "ext": {
+      "icon": "&#x1F50A;"
+     }
+    }
+   ],
+   "assets": [],
+   "master": {
+    "vol": 80,
+    "rev": 0,
+    "dly": 0,
+    "fx": {
+     "items": []
+    }
+   },
+   "practice": {
+    "loopOn": false,
+    "loopA": 0,
+    "loopB": 30720
+   },
+   "ext": {}
+  }
+ }
+}

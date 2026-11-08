@@ -213,6 +213,7 @@ module.exports = async function () {
   var rootR = H.makeEl("div");
   A.start("daw", rootR, {});
   var pr = D.project(), lead = pr.tracks[0], cA = lead.clips[0], cB = lead.clips[1], nA = cA.notes.length;
+  function CA() { return M.findClip(D.project(), cA.id).clip; } // ↶ はトラック全部を写しから戻すので、いまのクリップを探しなおす（9A-5）
   ok(D.openRoll(cA.id) === true && D.roll().clip === cA.id && D.state().view === "roll", "tapping a clip opens its piano roll");
   var rh = rootR.innerHTML;
   ok(rh.indexOf("pr-wrap") >= 0 && (rh.match(/class="pr-note/g) || []).length === nA && rh.indexOf("dp-bar") >= 0 && rh.indexOf("dsv-slot") >= 0 && rh.indexOf("もどる") >= 0, "piano roll shows the notes, the save status bar and the back button");
@@ -227,17 +228,17 @@ module.exports = async function () {
   ok(add1[1] === 960 && D.roll().undo.length === 3, "edit.set changes the length");
   E1.set(add1, { d: 960 });
   ok(D.roll().undo.length === 3, "no undo step when nothing changed");
-  ok(E1.undo() && cA.notes.filter(function (n) { return n[2] === 86 && n[1] === 480; }).length === 1 && D.roll().undo.length === 2, "undo restores the previous length");
-  var added = cA.notes.filter(function (n) { return n[2] === 86; })[0];
-  ok(E1.del(added) && cA.notes.length === nA && D.roll().sel === null, "edit.del removes the note");
-  ok(E1.undo() && cA.notes.length === nA + 1, "undo brings a deleted note back");
-  ok(E1.undo() && E1.undo() && cA.notes.length === nA && !E1.undo(), "undo all the way back to the original, then nothing more");
-  ok(JSON.stringify(cA.notes) === JSON.stringify(M.demoProject(0).tracks[0].clips[0].notes), "after undoing everything the clip equals the original demo");
+  ok(E1.undo() && CA().notes.filter(function (n) { return n[2] === 86 && n[1] === 480; }).length === 1 && D.roll().undo.length === 2, "undo restores the previous length");
+  var added = CA().notes.filter(function (n) { return n[2] === 86; })[0];
+  ok(E1.del(added) && CA().notes.length === nA && D.roll().sel === null, "edit.del removes the note");
+  ok(E1.undo() && CA().notes.length === nA + 1, "undo brings a deleted note back");
+  ok(E1.undo() && E1.undo() && CA().notes.length === nA && !E1.undo(), "undo all the way back to the original, then nothing more");
+  ok(JSON.stringify(CA().notes) === JSON.stringify(M.demoProject(0).tracks[0].clips[0].notes), "after undoing everything the clip equals the original demo");
 
   // 直した音符が再生に入る（クリップだけ再生・M／S は見ない）
   var addP = E1.add(2 * PPQ + 240, 90);
   D.clearLog();
-  lead.mute = true;
+  D.project().tracks[0].mute = true;
   D.play({ clip: cA.id, a: cA.start, b: cA.start + cA.len, loop: true });
   P = D.player(); ac = P.ac; t0 = P.segs[0].t0;
   run(t0 + 16 * spb + 0.5);
@@ -246,7 +247,7 @@ module.exports = async function () {
   var hit = LR.filter(function (x) { return x.m === 90 && x.tick === 2 * PPQ + 240 && x.pass === 0; })[0];
   ok(hit && eqT(hit.when, t0 + (2 * PPQ + 240) / PPQ * spb) && eqT(hit.sec, 480 / PPQ * spb) && hit.v === 0.8, "the added note plays at its tick with its length and velocity", hit);
   ok(LR.some(function (x) { return x.pass === 1 && x.tick === 0; }), "clip play loops at the clip end");
-  lead.mute = false;
+  D.project().tracks[0].mute = false;
   // 再生中に直す → 止めて同じ位置から鳴らしなおす（古い予約の音を残さない）
   var Pold = D.player(), mOld = Pold.mix[lead.id], sOld = mOld.syn, tickNow = D.playTick();
   E1.del(addP);
@@ -379,4 +380,94 @@ module.exports = async function () {
   ok(S4.ultimateGorillaSaveV2 === rpg0 && S4.ultimateGorillaUkuleleSeqV1 === uke0 && Object.keys(S4).every(function (k) { return k === "ultimateGorillaSaveV2" || k === "ultimateGorillaUkuleleSeqV1" || k.indexOf(KEY) === 0; }), "10. the RPG save and other saves are untouched; only ultimateGorillaDawV1* keys are written");
   A4.stop();
   D4.reset();
+
+  // ================= 9A-5: トラック・クリップの編集（§341）=================
+  var fx = JSON.parse(require("fs").readFileSync(require("path").join(H.ROOT, "tests", "fixtures", "daw-v2.37-song.json"), "utf8"));
+  var e5 = H.load(), W5 = e5.window, M5 = W5.UGDawModel, D5 = W5.UGDaw, A5 = W5.UGArcade, S5 = e5.store, K5 = M5.STORE_KEY, BAR = 4 * PPQ;
+  S5.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 7 });
+  var rpg5 = S5.ultimateGorillaSaveV2;
+  // --- v2.37 で保存した曲がそのまま開ける ---
+  S5[K5] = JSON.stringify(fx.index);
+  S5[K5 + ":p:" + fx.record.project.id] = JSON.stringify(fx.record);
+  var R5 = H.makeEl("div");
+  D5.reset();
+  A5.start("daw", R5, {});
+  var old = D5.project();
+  ok(D5.saveState().status === "saved" && old.id === fx.record.project.id && old.name === "v2.37 のテスト曲" && JSON.stringify(old) === JSON.stringify(M5.clean(fx.record.project)), "a song saved by v2.37 opens unchanged");
+  ok(M5.noteCount(old) === 5 && M5.bpmAt(old, 0) === 100 && old.tracks[1].mute === true && JSON.stringify(old.tracks[0].clips[0].notes) === JSON.stringify([[0, 480, 72, 0.8], [960, 480, 76, 0.8], [1920, 1920, 79, 0.8]]), "v2.37 song: notes, BPM and mute as saved");
+  function run5(sec) { var P = D5.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 20000) { ac.currentTime += 0.025; D5.pump(); } }
+  D5.clearLog(); D5.play(); run5(4);
+  ok(D5.log().some(function (x) { return x.m === 79 && x.tick === 1920 && x.ok; }), "the v2.37 song plays");
+  D5.stop();
+  // --- ゼロから: 新しい曲 → トラック → クリップ → 音符 → 再生 ---
+  var z = D5.proj.create("empty");
+  ok(z.tracks.length === 2 && M5.noteCount(z) === 0 && D5.undoDepth() === 0, "new empty song (undo list empty)");
+  var t3 = D5.ops.addTrack();
+  ok(t3 && z.tracks.length === 3 && t3.name === "トラック 3" && t3.instrument.type === "synth" && t3.vol === 80 && t3.pan === 0 && t3.clips.length === 0 && D5.undoDepth() === 1, "add a track (name, synth preset, volume, pan)");
+  ok(R5.innerHTML.indexOf('data-addclip="' + t3.id + '"') >= 0 && R5.innerHTML.indexOf('data-ar="addTrack"') >= 0, "the screen has ＋ トラック and a ＋ tile on each track");
+  t3.instrument = M5.synthInstrument("bell");
+  var c3 = D5.ops.addClip(t3.id);
+  ok(c3 && c3.start === 0 && c3.len === 4 * BAR && c3.notes.length === 0 && c3.ext.name === "クリップ 1" && D5.state().sel.id === c3.id, "add an empty clip (4 bars) at the end of the track; it is selected");
+  ok(R5.innerHTML.indexOf('data-cl="dup"') >= 0 && R5.innerHTML.indexOf('data-cl="right"') >= 0 && R5.innerHTML.indexOf('data-cl="del"') >= 0, "the selected clip shows the edit buttons");
+  D5.openRoll(c3.id);
+  D5.edit.add(0, 84); D5.edit.add(2 * BAR, 88); D5.edit.add(4 * BAR - 480, 91);
+  D5.closeRoll();
+  c3 = M5.findClip(D5.project(), c3.id).clip;
+  D5.clearLog(); D5.play(); run5(4 * 4 * 0.5 + 0.5);
+  ok(D5.log().filter(function (x) { return x.track === t3.id; }).map(function (x) { return x.m + "@" + x.tick; }).join() === "84@0,88@7680,91@14880", "the new track plays its notes (120 BPM)", D5.log().filter(function (x) { return x.track === t3.id; }).map(function (x) { return x.m + "@" + x.tick; }));
+  D5.stop();
+  // 複製（独立したデータ）・移動
+  var dup = D5.ops.duplicate(c3.id);
+  ok(dup && dup.id !== c3.id && dup.start === 4 * BAR && dup.len === c3.len && dup.ext.name === "クリップ 1（コピー）" && JSON.stringify(dup.notes) === JSON.stringify(c3.notes), "duplicate goes right after the original with the same notes");
+  dup.notes[0][2] = 60;
+  ok(c3.notes[0][2] === 84, "the duplicate is an independent copy (editing it does not change the original)");
+  dup.notes[0][2] = 84;
+  ok(D5.ops.move(dup.id, 1) && dup.start === 5 * BAR, "move the duplicate one bar right");
+  ok(D5.ops.move(c3.id, 2) === false && c3.start === 0 && D5.state().anote.indexOf("重なる") >= 0, "a move that would overlap is refused with a reason");
+  ok(D5.ops.move(c3.id, -1) === false && c3.start === 0, "cannot move before bar 1");
+  ok(D5.ops.move(c3.id, 1) && c3.start === BAR && D5.ops.move(c3.id, -1) && c3.start === 0, "move right and back");
+  // 長さ
+  ok(D5.ops.resize(dup.id, -1) && dup.len === 3 * BAR && D5.state().anote.indexOf("はみ出た音符 1 個") >= 0 && dup.notes.length === 3 && M5.hiddenNotes(dup) === 1, "shorten: the note past the end is kept but hidden (and said so)");
+  ok(D5.ops.resize(dup.id, 1) && dup.len === 4 * BAR && M5.hiddenNotes(dup) === 0, "lengthen again: the note comes back");
+  ok(D5.ops.resize(c3.id, 2) === false && c3.len === 4 * BAR, "lengthening into the next clip is refused");
+  ok(D5.ops.resize(dup.id, -9) === false && dup.len === 4 * BAR, "cannot be shorter than one bar");
+  // 再生: 移動・複製の位置で鳴る（境目で重ならない・欠けない）
+  D5.clearLog(); D5.play(); run5(9 * 2 + 1);
+  var L5 = D5.log().filter(function (x) { return x.track === t3.id; }).map(function (x) { return x.m + "@" + x.tick; });
+  ok(L5.join() === "84@0,88@7680,91@14880,84@19200,88@26880,91@34080", "the original and the moved copy both play at their places (no doubles, nothing missing)", L5);
+  D5.stop();
+  // 名前・トラックの順番
+  ok(D5.ops.renameClip(dup.id, "  サビ  ") && M5.findClip(D5.project(), dup.id).clip.ext.name === "サビ", "rename a clip (trimmed)");
+  ok(D5.ops.renameTrack(t3.id, "ベル") && M5.findTrack(D5.project(), t3.id).name === "ベル", "rename a track");
+  ok(D5.ops.moveTrack(t3.id, -1) && D5.project().tracks[1].id === t3.id && D5.ops.moveTrack(t3.id, -1) && D5.project().tracks[0].id === t3.id && D5.ops.moveTrack(t3.id, -1) === false, "move a track up (stops at the top)");
+  // 削除と ↶
+  var depth = D5.undoDepth(), dupId = dup.id;
+  ok(D5.ops.remove(dupId) && !M5.findClip(D5.project(), dupId) && D5.state().sel === null && D5.state().anote.indexOf("戻せます") >= 0, "delete a clip (says it can be undone)");
+  ok(D5.ops.undo() && M5.findClip(D5.project(), dupId) && M5.findClip(D5.project(), dupId).clip.ext.name === "サビ" && D5.undoDepth() === depth, "undo brings the deleted clip back");
+  ok(D5.ops.undo() && D5.project().tracks[1].id === t3.id, "undo also reverts a track move");
+  // ピアノロールの ↶ とアレンジの ↶ は同じ列
+  D5.openRoll(c3.id); var dd = D5.undoDepth(); D5.edit.add(BAR, 70);
+  ok(D5.undoDepth() === dd + 1 && D5.roll().undo === D5.roll().undo && D5.roll().undo.length === dd + 1, "piano roll edits use the same undo list");
+  D5.edit.undo(); D5.closeRoll();
+  ok(M5.findClip(D5.project(), c3.id).clip.notes.length === 3, "undo in the roll restores the clip");
+  // 保存 → 読みなおし（ページの再読みこみと同じ）→ 同じ曲 → 鳴る
+  D5.flushSave();
+  var snapZ = JSON.stringify(D5.project());
+  var z2 = D5.reload();
+  ok(JSON.stringify(z2) === snapZ && D5.saveState().status === "saved" && D5.undoDepth() === 0, "save and reload: the arranged song is identical (undo list starts empty)");
+  D5.clearLog(); D5.play(); run5(9 * 2 + 1);
+  ok(D5.log().filter(function (x) { return x.track === t3.id; }).length === 6, "the reloaded arrangement plays the same notes");
+  D5.stop();
+  // JSON
+  var ex5 = D5.proj.exportJson(), im5 = D5.proj.importText(ex5.text);
+  ok(im5.ok && JSON.stringify(D5.project().tracks) === JSON.stringify(z2.tracks) && D5.project().id !== z2.id, "JSON export / import keeps tracks and clips");
+  // 見本・v2.37 の曲は変わっていない
+  ok(S5[K5 + ":p:" + fx.record.project.id] === JSON.stringify(fx.record), "the v2.37 song in storage was not changed");
+  ok(S5.ultimateGorillaSaveV2 === rpg5 && Object.keys(S5).every(function (k) { return k === "ultimateGorillaSaveV2" || k.indexOf(K5) === 0; }), "the RPG save is untouched");
+  // 16 本まで
+  var cnt = D5.project().tracks.length, added = 0;
+  while (D5.ops.addTrack()) { added++; if (added > 20) { break; } }
+  ok(D5.project().tracks.length === M5.MAX_TRACKS && D5.state().anote.indexOf("16 本まで") >= 0, "tracks are limited to 16", [cnt, added]);
+  A5.stop();
+  D5.reset();
 };

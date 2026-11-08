@@ -349,6 +349,98 @@
     return p;
   }
 
+  // ---------- §341 9A-5: トラック・クリップの編集（クリップの中の音符の tick は動かさない。動かすのは start だけ）----------
+  var MAX_BARS = 256, CLIP_MAX_BARS = 64;
+  function barTicks(p) { return ticksPerBar(meterAt(p, 0)); }
+  // 同じトラックで [start, start＋len) と重なるクリップ（except は数えない）
+  function overlapClip(t, start, len, except) {
+    var i, c;
+    for (i = 0; i < t.clips.length; i++) { c = t.clips[i]; if (c !== except && c.id !== except && start < c.start + c.len && c.start < start + len) { return c; } }
+    return null;
+  }
+  // start から後ろで、len が入る最初の空き
+  function freeStart(t, start, len) {
+    var s = Math.max(0, start), c, guard = 0;
+    while ((c = overlapClip(t, s, len, null)) && guard++ < 500) { s = c.start + c.len; }
+    return s;
+  }
+  function trackEnd(t) { var e = 0, i; for (i = 0; i < t.clips.length; i++) { e = Math.max(e, t.clips[i].start + t.clips[i].len); } return e; }
+  function sortClips(t) { t.clips.sort(function (a, b) { return a.start - b.start; }); }
+  function trackOf(p, t) { return typeof t === "string" ? findTrack(p, t) : t; }
+  function addTrack(p, name, presetId) {
+    if (!p || p.tracks.length >= MAX_TRACKS) { return null; }
+    var t = newTrack(p, str(name, "", 40) || ("トラック " + (p.tracks.length + 1)), synthInstrument(presetId || "lead"));
+    t.ext.icon = "&#x1F3B5;";
+    return t;
+  }
+  function moveTrack(p, id, dir) {
+    var i, j;
+    for (i = 0; i < p.tracks.length; i++) { if (p.tracks[i].id === id) { break; } }
+    j = i + (dir < 0 ? -1 : 1);
+    if (i >= p.tracks.length || j < 0 || j >= p.tracks.length) { return false; }
+    var t = p.tracks[i]; p.tracks[i] = p.tracks[j]; p.tracks[j] = t;
+    return true;
+  }
+  // 空のクリップを足す（start を省くとトラックのいちばん後ろ。小節の頭にそろえ、重なるなら後ろへ）
+  function addClip(p, track, start, bars, name) {
+    var t = trackOf(p, track), bt = barTicks(p), len = Math.max(1, Math.min(CLIP_MAX_BARS, Math.round(bars || 4))) * bt;
+    if (!t || t.kind !== "midi") { return null; }
+    var s = start === undefined || start === null ? trackEnd(t) : snap(Math.max(0, start), bt, true);
+    s = freeStart(t, s, len);
+    if (s + len > MAX_BARS * bt) { return null; }
+    var n = 1, names = {}, i;
+    for (i = 0; i < t.clips.length; i++) { names[(t.clips[i].ext && t.clips[i].ext.name) || ""] = true; }
+    while (names["クリップ " + n]) { n++; }
+    var c = newMidiClip(p, t, s, len, [], name || ("クリップ " + n));
+    sortClips(t);
+    return c;
+  }
+  // 複製（音符は深いコピー・新しい ID・元のすぐ後ろの空き）
+  function duplicateClip(p, id) {
+    var f = findClip(p, id);
+    if (!f) { return null; }
+    var c = f.clip, t = f.track, d = copy(c), s = freeStart(t, c.start + c.len, c.len);
+    if (s + c.len > MAX_BARS * barTicks(p)) { return null; }
+    d.id = nextId(p, "c");
+    d.start = s;
+    d.ext = isObj(d.ext) ? d.ext : {};
+    d.ext.name = str(((c.ext && c.ext.name) || "クリップ") + "（コピー）", "", 40);
+    t.clips.push(d);
+    sortClips(t);
+    return d;
+  }
+  // 小節の単位で動かす（重なる・前に出る・遠すぎるときはやめて理由）
+  function moveClip(p, id, bars) {
+    var f = findClip(p, id);
+    if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+    var c = f.clip, bt = barTicks(p), ns = c.start + Math.round(bars) * bt;
+    if (ns < 0) { return { ok: false, why: "これより前には動かせません" }; }
+    if (ns + c.len > MAX_BARS * bt) { return { ok: false, why: "これより後ろには動かせません" }; }
+    if (overlapClip(f.track, ns, c.len, c)) { return { ok: false, why: "ほかのクリップと重なるので動かせません" }; }
+    c.start = ns;
+    sortClips(f.track);
+    return { ok: true };
+  }
+  // 長さを小節の単位で変える（はみ出た音符は消さない）
+  function resizeClip(p, id, bars) {
+    var f = findClip(p, id);
+    if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+    var c = f.clip, bt = barTicks(p), nl = c.len + Math.round(bars) * bt, i, hid = 0;
+    if (nl < bt) { return { ok: false, why: "1 小節より短くはできません" }; }
+    if (nl > CLIP_MAX_BARS * bt || c.start + nl > MAX_BARS * bt) { return { ok: false, why: "これより長くはできません" }; }
+    if (overlapClip(f.track, c.start, nl, c)) { return { ok: false, why: "うしろのクリップと重なるので長くできません" }; }
+    c.len = nl;
+    for (i = 0; c.notes && i < c.notes.length; i++) { if (c.notes[i][0] - (c.offset || 0) >= nl) { hid++; } }
+    return { ok: true, hidden: hid };
+  }
+  function hiddenNotes(c) { var i, n = 0; for (i = 0; c.notes && i < c.notes.length; i++) { if (c.notes[i][0] - (c.offset || 0) >= c.len) { n++; } } return n; }
+  function deleteClip(p, id) {
+    var f = findClip(p, id);
+    if (!f) { return false; }
+    f.track.clips.splice(f.track.clips.indexOf(f.clip), 1);
+    return true;
+  }
+
   // ---------- §341 9A-4: 保存の形（localStorage の曲 1 つ ＝ JSON の書き出し）----------
   var FORMAT = "ultimate-gorilla-daw", SCHEMA = 1, MAX_JSON = 2 * 1024 * 1024;
   // 新しい曲の ID（時刻 ＋ 乱数・ほかの曲と重ならない）
@@ -408,6 +500,8 @@
     songEndTick: songEndTick, loopRange: loopRange, audible: audible, noteEvents: noteEvents,
     snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete,
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
-    toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText
+    toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
+    MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
+    addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes
   };
 })();
