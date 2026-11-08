@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.39** |
+| 現在バージョン | **v2.40** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.40] 🥁 ゴリラDAW のドラム**（§341 Phase 9A-7）: モデル `addDrumTrack / isDrum / toggleStep / DRUM_KIT / STEP(240)`。画面は `arcade-daw.js` の `renderSteps` と `steps.toggle`。再生は `schedule()` の中で `UGMelody.drum(…, トラックの出口)`。公開前の版はタグ `pages-v2.39`（04357bc）
 - **[v2.39] 🎚️ ゴリラDAW のミキサー Lite**（§341 Phase 9A-6）: `arcade-daw.js` の `mixer`（setVol / setPan / setMaster / resetTrack / commit）と `renderMix`。DAW のマスターは `pl.mix.__master`（ゲイン 2 つ）。トラックの削除は `ops.deleteTrack`（確かめは `st.confirmDel`）。master.vol を音に使うようになった（÷100）。公開前の版はタグ `pages-v2.38`（bb2f8cf）
 - **[v2.38] 🧩 ゴリラDAW のトラック・クリップの編集**（§341 Phase 9A-5）: モデル `addTrack / moveTrack / addClip / duplicateClip / moveClip / resizeClip / deleteClip`（同じトラックで重ねない）。画面は `arcade-daw.js` の `ops`。↶ は `st.undo`（トラック全部の写し・ピアノロールと共通）。公開前の版はタグ `pages-v2.37`（417b8c5）
 - **[v2.37] 💾 ゴリラDAW の曲の保存**（§341 Phase 9A-4）: `ultimateGorillaDawV1`（一覧）＋`ultimateGorillaDawV1:p:<ID>`（曲）。`arcade-daw.js` の `saveNow`（書いて読みなおして確かめる）・`markDirty`（0.5 秒でまとめる）・`proj`（一覧・開く・新しい曲・名前・JSON）。形の確認は `UGDawModel.fromRecord / parseRecordText`。公開前の版はタグ `pages-v2.36`（cb5ce5c）

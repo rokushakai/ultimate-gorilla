@@ -434,6 +434,38 @@
     return { ok: true, hidden: hid };
   }
   function hiddenNotes(c) { var i, n = 0; for (i = 0; c.notes && i < c.notes.length; i++) { if (c.notes[i][0] - (c.offset || 0) >= c.len) { n++; } } return n; }
+  // ---------- §341 9A-7: ドラム（GM の番号の NoteEvent・d＝0・1 ステップ ＝ 16 分音符 ＝ 240 tick）----------
+  var STEP = PPQ / 4, DRUM_V = 0.85;
+  var DRUM_KIT = [[36, "キック"], [38, "スネア"], [39, "クラップ"], [42, "ハイハット（閉）"], [46, "ハイハット（開）"]];
+  function drumInstrument() { return { type: "drum", kit: "gm" }; }
+  function isDrum(t) { return !!(t && t.instrument && t.instrument.type === "drum"); }
+  // ドラムのトラック（1 小節のパターンつき）
+  function addDrumTrack(p, name) {
+    if (!p || p.tracks.length >= MAX_TRACKS) { return null; }
+    var n = 1, i;
+    for (i = 0; i < p.tracks.length; i++) { if (isDrum(p.tracks[i])) { n++; } }
+    var t = newTrack(p, str(name, "", 40) || (n > 1 ? "ドラム " + n : "ドラム"), drumInstrument());
+    t.ext.icon = "&#x1F941;";
+    newMidiClip(p, t, 0, barTicks(p), [], "パターン 1");
+    return t;
+  }
+  function stepCount(c) { return Math.max(1, Math.floor(c.len / STEP)); }
+  function findStep(c, m, step) {
+    var t = (c.offset || 0) + step * STEP, i;
+    for (i = 0; i < c.notes.length; i++) { if (c.notes[i][0] === t && c.notes[i][2] === m) { return c.notes[i]; } }
+    return null;
+  }
+  // マスを切りかえる → true ＝ ON になった / false ＝ OFF になった（null ＝ 範囲の外）
+  function toggleStep(c, m, step) {
+    if (!c || c.type !== "midi" || step < 0 || step >= stepCount(c)) { return null; }
+    var n = findStep(c, m, step);
+    if (n) { c.notes.splice(c.notes.indexOf(n), 1); return false; }
+    if (c.notes.length >= MAX_NOTES) { return null; }
+    c.notes.push([(c.offset || 0) + step * STEP, 0, int(m, 36, 0, 127), DRUM_V]);
+    sortNotes(c);
+    return true;
+  }
+
   // §341 9A-6: トラックを消す（最後の 1 本は消さない）
   function deleteTrack(p, id) {
     var i;
@@ -509,6 +541,7 @@
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
-    addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack
+    addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack,
+    STEP: STEP, DRUM_KIT: DRUM_KIT, drumInstrument: drumInstrument, isDrum: isDrum, addDrumTrack: addDrumTrack, stepCount: stepCount, findStep: findStep, toggleStep: toggleStep
   };
 })();
