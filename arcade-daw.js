@@ -331,6 +331,8 @@
       ph.style.display = pl && rel >= 0 && rel <= rf.clip.len ? "block" : "none";
       ph.style.left = Math.round(rel / DM().PPQ * RB) + "px";
     }
+    var cph = st.view === "comp" && st.cview ? root.querySelector(".cp-ph") : null, cf = cph ? comp.clip() : null; // 9A-16: クリップの箱の秒
+    if (cph && cf) { var cC0 = DM().tickToSec(st.project, cf.clip.start), cbx = DM().tickToSec(st.project, cf.clip.start + cf.clip.len) - cC0, cu = DM().tickToSec(st.project, tick) - cC0; cph.style.display = pl && cbx > 0 && cu >= 0 && cu <= cbx ? "block" : "none"; if (cbx > 0) { cph.style.left = (cu / cbx * 100) + "%"; } }
     var aph = st.view === "aedit" && st.aedit ? root.querySelector(".ae-ph") : null, af = aph ? aedit.clip() : null; // 9A-13: 編集の波形のプレイヘッド（素材の時刻）
     if (aph && af) { var asp = DM().audioSpan(st.project, af.clip), au = DM().tickToSec(st.project, tick) - asp.A + asp.so; aph.style.display = pl && isFinite(asp.dur) && au >= 0 && au <= asp.dur ? "block" : "none"; if (isFinite(asp.dur)) { aph.style.left = (au / asp.dur * 100) + "%"; } }
     var arr = pl ? root.querySelector(".daw-arr") : null;
@@ -382,6 +384,7 @@
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
     if (M && p && st.view === "lib") { renderLib(root, ctl); return; } // 9A-15
+    if (M && p && st.view === "comp") { renderComp(root, ctl); return; } // 9A-16
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -871,6 +874,7 @@
     opts = opts || {};
     function fail(why) { aud.busy = false; cb({ ok: false, why: why }); }
     if (aud.busy) { cb({ ok: false, why: "いま別の音声を読みこんでいます" }); return; }
+    var gw = assetAddWhy(); if (gw) { cb({ ok: false, why: gw }); return; } // 9A-16: 削除の排他ロックのあいだは参照を足さない
     if (!p || p.readOnly) { cb({ ok: false, why: "この曲は読むだけなので、音声を足せません" }); return; }
     if (!ab || typeof ab.byteLength !== "number") { cb({ ok: false, why: "ファイルを読めませんでした" }); return; }
     if (ab.byteLength > M.WAV_MAX_BYTES) { cb({ ok: false, why: M.wavLimitWhy(null, ab.byteLength) }); return; }
@@ -970,7 +974,7 @@
       else {
         try {
           var mx = mixFor(t), ac = pl.ac, dest = mx.dry ? mx.dry.g : mx.main.g, src = ac.createBufferSource(), g = ac.createGain(), cut = off + dur < buf.duration - 0.0005;
-          var env = audEnv(ev, ev.sec, ev.sec + dur, off > 0.0005, cut), k;
+          var env = audEnv(ev, ev.sec, ev.sec + dur, off > 0.0005 && !ev.xIn, cut && !(ev.xOut && endS >= ev.endSec - 1e-9)), k; // 9A-16: 継ぎ目（クロスフェード）の端には小さなフェードをかけない
           src.buffer = buf; src.connect(g); g.connect(dest);
           g.gain.value = env[0][1];
           g.gain.setValueAtTime(env[0][1], when);
@@ -988,6 +992,7 @@
   }  // 波形（2px に 1 本の線の SVG・クリップの位置・長さ・テンポごとにとっておく）
   function waveSvg(p, c, w) {
     var M = DM(), pk = aud.peaks[c.asset], a = M.findAsset(p, c.asset);
+    if (M.compOf(p, c)) { return compWaveSvg(p, c, w); } // 9A-16
     if (!pk || !pk.length || !a) { return ""; }
     var key = c.asset + "|" + c.start + "|" + c.len + "|" + (c.srcOffset || 0) + "|" + (c.trimIn || 0) + "|" + (c.trimOut || 0) + "|" + (c.nudge || 0) + "|" + w + "|" + JSON.stringify(p.tempo.points);
     if (aud.wave[key]) { return aud.wave[key]; }
@@ -1006,6 +1011,29 @@
       }
       out = '<svg class="da-wave" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true"><path d="' + d + '"/></svg>';
     } catch (e) { out = ""; }
+    if (aud.waveN++ > WAVE_CACHE) { aud.wave = {}; aud.waveN = 0; }
+    aud.wave[key] = out;
+    return out;
+  }
+  // 9A-16: コンピングのクリップの波形（区間ごとにそのテイクのピーク・後半は色を変える）
+  function compWaveSvg(p, c, w) {
+    var M = DM(), segs = M.audioSegs(p, c), key = "comp|" + JSON.stringify([c.start, c.len, c.comp, c.takes, c.asset, c.trimIn, c.trimOut, c.nudge, w, p.tempo.points]);
+    if (aud.wave[key]) { return aud.wave[key]; }
+    var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, PR = M.PEAK_RATE, ds = ["", ""], x, i, q, ready = true;
+    for (q = 0; q < segs.length; q++) { if (!aud.peaks[segs[q].id]) { ready = false; } }
+    if (!ready || !segs.length) { return ""; }
+    for (x = 0; x < w; x += 2) {
+      var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ), xm = (x0 + x1) / 2, sg = null, si = 0;
+      for (q = 0; q < segs.length; q++) { var s = segs[q], lo = Math.max(0, s.p0), hi = s.p1; if (xm >= lo && xm < hi && (!sg || (q > 0 && xm >= s.T))) { sg = s; si = s.take === c.comp.b ? 1 : 0; } }
+      if (!sg) { continue; }
+      var pk = aud.peaks[sg.id], t0 = sg.tin + (Math.max(x0, Math.max(0, sg.p0)) - sg.p0), t1 = sg.tin + (Math.min(x1, sg.p1) - sg.p0);
+      var i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
+      for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
+      var hh = Math.max(0.5, m / 255 * H / 2);
+      ds[si] += "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
+    }
+    var cx = Math.round((M.secToTick(p, segs[0].T) - c.start) / M.PPQ * PX_BEAT);
+    var out = '<svg class="da-wave" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true"><path d="' + ds[0] + '"/><path class="da-wave-b" d="' + ds[1] + '"/><line class="da-wave-x" x1="' + cx + '" y1="' + top + '" x2="' + cx + '" y2="' + (top + H) + '"/></svg>';
     if (aud.waveN++ > WAVE_CACHE) { aud.wave = {}; aud.waveN = 0; }
     aud.wave[key] = out;
     return out;
@@ -1134,7 +1162,7 @@
     var p = project(), M = DM(), t = M.findTrack(p, rec.track), UG = window.UGMelody, ac = null, why;
     if (rec.state !== "idle") { return false; }
     rec.msg = ""; recFreeFail();
-    why = recWhy(p, t);
+    why = recWhy(p, t) || assetAddWhy(); // 9A-16
     if (why) { rec.msg = why; return false; }
     try { ac = UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { ac = null; }
     if (!ac || !ac.createMediaStreamSource) { rec.msg = "このブラウザでは録音できません（Web Audio のマイク入力が使えません）"; return false; }
@@ -1570,6 +1598,7 @@
     var Z = ZP(), M = DM();
     function fail(why) { pk.busy = false; cb({ ok: false, why: why }); }
     if (pk.busy) { cb({ ok: false, why: "いま別の ZIP を処理しています" }); return; }
+    var gz = assetAddWhy(); if (gz) { cb({ ok: false, why: gz }); return; } // 9A-16
     if (!Z) { cb({ ok: false, why: "ZIP の道具（arcade-daw-zip.js）を読みこめませんでした" }); return; }
     if (!ab || typeof ab.byteLength !== "number") { cb({ ok: false, why: "ファイルを読めませんでした" }); return; }
     if (ab.byteLength > PACK_MAX_ZIP) { cb({ ok: false, why: "ZIP が大きすぎます（" + mb(ab.byteLength) + "・" + (PACK_MAX_ZIP / 1048576) + "MB まで）" }); return; }
@@ -2265,7 +2294,7 @@
 
 
   // ---------- §341 9A-15: 素材ライブラリ（端末の素材の一覧・容量・参照・どこからも参照されていない素材だけを 1 つずつ削除）----------
-  var lib = { loading: false, list: null, scan: null, est: null, msg: "", confirm: "", busy: false, chan: null };
+  var lib = { loading: false, list: null, scan: null, est: null, msg: "", confirm: "", busy: false, chan: null, ack: false };
   // ほかのタブ（同じゲーム）への問いあわせ。BroadcastChannel が無ければ確かめられない（＝ 削除しない）
   var libChan = { ch: null, id: "", pongs: 0 };
   function libChanInit() {
@@ -2279,6 +2308,55 @@
     } catch (e) { libChan.ch = null; }
   }
   libChanInit();
+  // §341 9A-16: タブ間の排他（Web Locks）。ページを開いているあいだは共有ロック・削除のときだけ排他ロック（すぐ取れるときだけ）
+  // state: off（Web Locks が無い）・wait（共有ロックを待っている ＝ ほかのタブが削除中）・held（共有を持っている）・swap（排他に持ちかえ中）・excl（排他を持っている）
+  var LOCK_NAME = "ultimate-gorilla-daw-assets", lk = { state: "off", rel: null, done: null, gen: 0 };
+  function lockApi() { var n = window.navigator; return n && n.locks && typeof n.locks.request === "function" && typeof Promise === "function" ? n.locks : null; }
+  function lockShared(onHeld) {
+    var L = lockApi(), g = ++lk.gen, fired = false;
+    function fire() { if (!fired && onHeld) { fired = true; onHeld(); } }
+    lk.rel = null;
+    if (!L) { lk.state = "off"; fire(); return; }
+    lk.state = "wait";
+    try {
+      lk.done = L.request(LOCK_NAME, { mode: "shared" }, function () {
+        if (lk.gen !== g) { return null; } // あとから取りなおした（古い要求はすぐ放す）
+        lk.state = "held"; fire();
+        return new Promise(function (res) { lk.rel = res; });
+      });
+      lk.done.then(null, function () { if (lk.gen === g) { lk.state = "off"; } fire(); });
+    } catch (e) { lk.state = "off"; lk.done = null; fire(); }
+    if (onHeld) { setTimeout(fire, 3000); } // ほかのタブが排他を持ちつづけても、返事は返す
+  }
+  lockShared();
+  if (window.addEventListener) { window.addEventListener("pageshow", function (e) { if (e && e.persisted && lk.state !== "held" && lk.state !== "swap" && lk.state !== "excl") { lockShared(); } }); } // 戻る・進むのキャッシュから戻った
+  // 素材の参照を足す処理（WAV の読みこみ・録音・ZIP の復元）を始めてよいか → "" / 理由
+  function assetAddWhy() {
+    if (lib.busy) { return "素材を削除しているあいだは、音声を足せません（少し待ってから）"; }
+    if (lk.state === "wait") { return "ほかのタブで素材を削除しているところです。少し待ってから、もう一度ためしてください"; }
+    return "";
+  }
+  // 自分の共有ロックを放して、排他ロックをすぐ取れるときだけ取る → fn(done)・done(結果)。cb(結果 / 理由の文字) は共有ロックを取りなおしてから
+  function lockExclusive(fn, cb) {
+    var L = lockApi(), NOT = "タブ間の排他ロックを取れませんでした（削除はしません）";
+    if (!L) { cb("このブラウザはタブ間の排他（Web Locks）に対応していないので、削除はできません"); return; }
+    if (lk.state !== "held" || !lk.rel) { cb(lk.state === "wait" ? "ほかのタブで素材を削除しているところです（少し待ってから）" : "タブ間の排他の準備ができていません（少し待ってから、もう一度ためしてください）"); return; }
+    var d = lk.done, r = lk.rel, g = ++lk.gen, got = false, res = null;
+    lk.state = "swap"; lk.rel = null;
+    r();
+    function back(x) { if (lk.gen === g) { lockShared(function () { cb(x); }); } else { cb(x); } }
+    d.then(function () {
+      var pr;
+      try {
+        pr = L.request(LOCK_NAME, { mode: "exclusive", ifAvailable: true }, function (lock) {
+          if (!lock) { return null; }
+          got = true; lk.state = "excl";
+          return new Promise(function (ok) { fn(function (x) { res = x; ok(); }); });
+        });
+      } catch (e) { back(NOT); return; }
+      pr.then(function () { back(got ? res : "ほかのタブでもこのゲームが開いています。ほかのタブを閉じてから、もう一度ためしてください（まだ保存していない変更があるかもしれないため）"); }, function () { back(got ? res : NOT); });
+    }, function () { back(NOT); });
+  }
   function otherTabs(cb) {
     if (!libChan.ch) { cb(null); return; }
     libChan.pongs = 0;
@@ -2388,31 +2466,35 @@
     lib.busy = true;
     if (sv.timer && !saveNow()) { no("保存待ちの変更を保存できなかったので、削除しませんでした"); return; }
     var b = libBusyWhy(); if (b) { no(b); return; }
-    otherTabs(function (n) {
-      if (n === null) { no("このブラウザでは、ほかのタブで開いていないかを確かめられないので、削除はできません"); return; }
-      if (n > 0) { no("ほかのタブでもこのゲームが開いています（" + n + " 個）。ほかのタブを閉じてから、もう一度ためしてください（まだ保存していない変更があるかもしれないため）"); return; }
-      if (sv.timer && !saveNow()) { no("保存待ちの変更を保存できなかったので、削除しませんでした"); return; }
-      var b2 = libBusyWhy(); if (b2) { no(b2); return; }
-      var sc = libScan();
-      if (!sc.ok) { no(sc.why); return; }
-      var rf = libRefs(id, sc);
-      if (rf.raw || rf.mem || rf.undo) { no("この素材は使われています（" + (rf.mem ? "いまの曲" : (rf.undo ? "↶ の履歴" : "保存した曲")) + "）。削除しませんでした"); return; }
-      idbGet("meta", id, function (m) {
-        if (!m) { no("素材の情報が見つかりません（削除しませんでした）"); return; }
-        var nm = m.name, by = m.bytes;
-        idbDelete(id, function (w) {
-          if (w) { no("削除できませんでした（" + w + "）"); return; }
-          idbGet("blobs", id, function (bl) {
-            idbGet("meta", id, function (mm) {
-              delete aud.buf[id]; delete aud.st[id]; delete aud.peaks[id]; delete aud.err[id]; aud.wave = {}; aud.waveN = 0;
-              lib.busy = false;
-              if (bl || mm) { cb({ ok: false, why: "削除のあとで確かめたら、まだ残っていました" }); return; }
-              cb({ ok: true, name: nm, bytes: by });
+    if (!libChan.ch) { no("このブラウザでは、ほかのタブで開いていないかを確かめられないので、削除はできません"); return; }
+    // 9A-16: 排他ロックを持ったまま、問いあわせ・調べなおし・削除・確かめまでを行う（そのあいだ、ほかのタブは参照を足せない）
+    lockExclusive(function (done) {
+      function no2(w) { done({ ok: false, why: w }); }
+      otherTabs(function (n) {
+        if (n === null) { no2("このブラウザでは、ほかのタブで開いていないかを確かめられないので、削除はできません"); return; }
+        if (n > 0) { no2("ほかのタブでもこのゲームが開いています（" + n + " 個）。ほかのタブを閉じてから、もう一度ためしてください（まだ保存していない変更があるかもしれないため）"); return; }
+        if (sv.timer && !saveNow()) { no2("保存待ちの変更を保存できなかったので、削除しませんでした"); return; }
+        var b2 = libBusyWhy(); if (b2) { no2(b2); return; }
+        var sc = libScan();
+        if (!sc.ok) { no2(sc.why); return; }
+        var rf = libRefs(id, sc);
+        if (rf.raw || rf.mem || rf.undo) { no2("この素材は使われています（" + (rf.mem ? "いまの曲" : (rf.undo ? "↶ の履歴" : "保存した曲")) + "）。削除しませんでした"); return; }
+        idbGet("meta", id, function (m) {
+          if (!m) { no2("素材の情報が見つかりません（削除しませんでした）"); return; }
+          var nm = m.name, by = m.bytes;
+          idbDelete(id, function (w) {
+            if (w) { no2("削除できませんでした（" + w + "）"); return; }
+            idbGet("blobs", id, function (bl) {
+              idbGet("meta", id, function (mm) {
+                delete aud.buf[id]; delete aud.st[id]; delete aud.peaks[id]; delete aud.err[id]; aud.wave = {}; aud.waveN = 0;
+                if (bl || mm) { done({ ok: false, why: "削除のあとで確かめたら、まだ残っていました" }); return; }
+                done({ ok: true, name: nm, bytes: by });
+              });
             });
           });
         });
       });
-    });
+    }, function (x) { lib.busy = false; cb(typeof x === "string" ? { ok: false, why: x } : x); }); // 共有ロックを取りなおしてから返す
   }
   // 素材だけを鳴らす（曲は変えない）
   function libHear(id) {
@@ -2447,7 +2529,7 @@
     }
     var est = L.est && L.est.quota ? '<br>ブラウザの保存領域（見積もり）: 使用 ' + mb(L.est.usage || 0) + '／上限の見積もり ' + mb(L.est.quota) + '<br><span class="small">見積もりは目安です。この分を必ず使えるわけではありません</span>' : '<br><span class="small">このブラウザでは保存領域の見積もりを出せません</span>';
     h += '<div class="daw-info dl-sum">端末の素材 <b>' + L.list.length + '</b> 個・WAV の合計 <b>' + libSize(total) + '</b><br>使われている ' + nUse + ' 個・どの曲からも参照されていない ' + nFree + ' 個' + est + '</div>';
-    var why = libBusyWhy() || (sc && !sc.ok ? sc.why : "") || (!libChan.ch ? "このブラウザでは、ほかのタブで開いていないかを確かめられないので、削除はできません" : "");
+    var why = libBusyWhy() || (sc && !sc.ok ? sc.why : "") || (!libChan.ch ? "このブラウザでは、ほかのタブで開いていないかを確かめられないので、削除はできません" : "") || libLockWhy(); // 9A-16
     h += why ? '<div class="daw-msg">&#x26A0;&#xFE0F; 削除はできません: ' + escHtml(why) + '</div>' : '<p class="small dsv-note">どの曲からも参照されていない素材だけ、1 つずつ削除できます（削除の直前に、保存した全部の曲・いまの曲・↶ の履歴・ほかのタブをもう一度調べます）。</p>';
     h += '<div class="daw-msg dl-warn">削除すると元に戻せません。大切な素材は ZIP などでバックアップしてください。v2.47 以前の版で作った ZIP には、使っていないテイクの素材が入っていないことがあります（バックアップは v2.48 以降で）。</div>';
     if (L.msg) { h += '<div class="da-note">' + escHtml(L.msg) + '</div>'; }
@@ -2467,7 +2549,8 @@
         (r.del && !why ? '<button class="modal-btn dl-b dl-del" data-lbd="' + escHtml(A.id) + '">&#x1F5D1;&#xFE0F; 削除</button>' : '') + '</div></div>';
       if (L.confirm === A.id && r.del && !why) { // 消せる素材にだけ確かめの欄を出す
         h += '<div class="daw-info da-confirm dl-confirm"><div>&#x26A0;&#xFE0F; 「<b>' + escHtml(A.name) + '</b>」（' + libSize(A.bytes) + '）を端末から削除します。<b>削除すると元に戻せません。</b>大切な素材は ZIP などでバックアップしてください。</div>' +
-          '<div class="da-btns"><button class="modal-btn da-half da-danger" data-lby="' + escHtml(A.id) + '">&#x1F5D1;&#xFE0F; 削除する</button><button class="modal-btn da-half" data-lbn="1">やめる</button></div></div>';
+          '<label class="dl-ack"><input type="checkbox" data-lbk="1"' + (L.ack ? ' checked' : '') + '> ほかのタブ・ウィンドウでこのゲームを開いていないことを確かめました<br><span class="small">（v2.48 以降のタブは自動で見つけますが、更新の前から開いたままの v2.47 以前のページは見つけられません）</span></label>' + // 9A-16
+          '<div class="da-btns"><button class="modal-btn da-half da-danger" data-lby="' + escHtml(A.id) + '"' + (L.ack ? '' : ' disabled') + '>&#x1F5D1;&#xFE0F; 削除する</button><button class="modal-btn da-half" data-lbn="1">やめる</button></div></div>';
       }
     }
     return h + '<p class="small dsv-note">「テイクを外す」「曲から外す」をしても、端末の素材は消えません。端末の素材を削除しても、1 曲の上限（素材 ' + DM().MAX_ASSETS + ' 個・合計 ' + DM().MAX_ASSET_SEC + ' 秒）は増えません。</p></div>';
@@ -2481,10 +2564,11 @@
         var el = ev.currentTarget, v;
         if (el.getAttribute("data-lb") === "back") { takeHearStop(); lib.confirm = ""; st.view = "proj"; renderProj(root, ctl); return; }
         if ((v = el.getAttribute("data-lbp"))) { if (hearInfo && hearInfo.lib === v) { takeHearStop(); } else { libHear(v); } renderLib(root, ctl); return; }
-        if ((v = el.getAttribute("data-lbd"))) { lib.confirm = v; lib.msg = ""; renderLib(root, ctl); return; }
+        if ((v = el.getAttribute("data-lbd"))) { lib.confirm = v; lib.ack = false; lib.msg = ""; renderLib(root, ctl); return; }
         if (el.getAttribute("data-lbn")) { lib.confirm = ""; lib.msg = "削除をやめました（何も変えていません）"; renderLib(root, ctl); return; }
         if ((v = el.getAttribute("data-lby"))) {
-          lib.confirm = ""; lib.msg = "⏳ 調べています…（ほかのタブも確かめます）"; renderLib(root, ctl);
+          if (!lib.ack) { return; }
+          lib.confirm = ""; lib.ack = false; lib.msg = "⏳ 調べています…（ほかのタブも確かめます）"; renderLib(root, ctl);
           libDelete(v, function (r) {
             lib.msg = r.ok ? "「" + r.name + "」を削除しました（" + libSize(r.bytes) + "）" : "削除しませんでした: " + r.why;
             libLoad(function () { if (st.root && st.view === "lib") { renderLib(st.root, st.ctl); } });
@@ -2492,6 +2576,13 @@
         }
       };
     }
+    var ck = root.querySelector("[data-lbk]"); // 9A-16
+    if (ck) { ck.onchange = function () { lib.ack = !!ck.checked; renderLib(root, ctl); }; }
+  }
+  function libLockWhy() {
+    if (lk.state === "off") { return "このブラウザはタブ間の排他（Web Locks）に対応していないので、削除はできません"; }
+    if (lk.state === "wait") { return "ほかのタブで素材を削除しているところです（少し待ってから）"; }
+    return "";
   }
 
   // ---------- §341 9A-14: テイク（別テイクを録音・切りかえ・試聴・外す）----------
@@ -2529,6 +2620,7 @@
     // 使うテイクを切りかえる（↶ で戻せる・自動保存・再生中は古いノードを止めて鳴らしなおす）
     select: function (cid, id) {
       if (rec.state !== "idle") { takeNote("録音中はテイクを切りかえられません"); if (st.root) { rerender(); } return { ok: false, why: "rec" }; }
+      if (DM().compOf(project(), DM().findClip(project(), cid) ? DM().findClip(project(), cid).clip : null)) { takeNote("組み合わせ中はテイクを切りかえられません（🎧 で単一テイクに戻してから）"); if (st.root) { rerender(); } return { ok: false, why: "comp" }; } // 9A-16
       var p = project(), snap = snapTracks(), r = DM().selectTake(p, cid, id);
       if (!r.ok) { takeNote(r.why); if (st.root) { rerender(); } return r; }
       if (r.same) { return r; }
@@ -2545,18 +2637,179 @@
     }
   };
   function takesHtml(p, c) {
-    var M = DM(), l = M.takesOf(p, c), act = M.activeTakeId(c), i, h, sec = 0, al = p.assets || [];
+    var M = DM(), l = M.takesOf(p, c), act = M.activeTakeId(c), i, h, sec = 0, al = p.assets || [], cp = M.compOf(p, c);
     for (i = 0; i < al.length; i++) { sec += Number(al[i] && al[i].sec) || 0; }
     h = '<div class="tk"><div class="tk-h">&#x1F399;&#xFE0F; テイク（' + l.length + '／' + M.MAX_TAKES + '）<span class="small">この曲の素材 ' + al.length + '／' + M.MAX_ASSETS + ' 個・' + Math.round(sec * 10) / 10 + '／' + M.MAX_ASSET_SEC + ' 秒</span></div>';
+    if (cp) { h += '<div class="tk-comp">&#x1F3A7; 組み合わせ中: 前半 <b>' + escHtml(cp.a) + '</b> → 後半 <b>' + escHtml(cp.b) + '</b>（' + fsec(cp.at) + ' 秒で切りかえ）。テイクの「使う」は、単一テイクに戻してから</div>'; } // 9A-16
+    else if (c.comp) { h += '<div class="tk-comp">&#x26A0;&#xFE0F; 組み合わせのテイクが見つかりません（いま使っているテイクで鳴らしています・設定は残しています）</div>'; }
     for (i = 0; i < l.length; i++) {
       var t = l[i], a = M.findAsset(p, t.asset), on = t.id === act, hearing = !!(hearInfo && hearInfo.clip === c.id && hearInfo.id === t.id);
       h += '<div class="tk-row' + (on ? ' tk-on' : '') + '"><b class="tk-id">' + escHtml(t.id) + '</b><span class="tk-meta">' + escHtml(t.name) + '<br><small>' + (t.at || (a && a.added) ? fmtTime(t.at || a.added) : '—') + '・' + (a ? (Math.round(a.sec * 100) / 100) + ' 秒' : '&#x26A0;&#xFE0F; 素材がありません') + '</small>' + (on ? '<br><b class="tk-use">&#x2705; このテイクを使用中</b>' : '') + '</span>' +
         '<span class="tk-btns"><button class="modal-btn tk-b' + (hearing ? ' daw-on' : '') + '" data-tkp="' + escHtml(t.id) + '" title="試聴">' + (hearing ? '&#x23F9;&#xFE0F;' : '&#x25B6;&#xFE0F;') + '</button>' +
-        (on ? '' : '<button class="modal-btn tk-b" data-tku="' + escHtml(t.id) + '"' + (a ? '' : ' disabled') + '>使う</button>') +
-        (on || t.virtual ? '' : '<button class="modal-btn tk-b tk-x" data-tkx="' + escHtml(t.id) + '" title="一覧から外す（素材は残る）">外す</button>') + '</span></div>';
+        (on || cp ? '' : '<button class="modal-btn tk-b" data-tku="' + escHtml(t.id) + '"' + (a ? '' : ' disabled') + '>使う</button>') +
+        (on || t.virtual || (cp && (cp.a === t.id || cp.b === t.id)) ? '' : '<button class="modal-btn tk-b tk-x" data-tkx="' + escHtml(t.id) + '" title="一覧から外す（素材は残る）">外す</button>') + '</span></div>';
     }
     var why = M.takeRoomWhy(c);
-    return h + '<div class="da-btns"><button class="modal-btn da-wide tk-rec" data-tk="rec"' + (why || rec.state !== "idle" ? ' disabled' : '') + '>&#x1F399;&#xFE0F; 別テイクを録音（' + l.length + '／' + M.MAX_TAKES + '）</button></div>' + (why ? '<div class="small">' + escHtml(why) + '</div>' : '') + '</div>';
+    return h + '<div class="da-btns"><button class="modal-btn da-wide tk-rec" data-tk="rec"' + (why || rec.state !== "idle" ? ' disabled' : '') + '>&#x1F399;&#xFE0F; 別テイクを録音（' + l.length + '／' + M.MAX_TAKES + '）</button></div>' + (why ? '<div class="small">' + escHtml(why) + '</div>' : '') +
+      (l.length >= 2 ? '<div class="da-btns"><button class="modal-btn da-wide tk-cmp" data-tk="comp"' + (rec.state !== "idle" ? ' disabled' : '') + '>&#x1F3A7; テイクを組み合わせる' + (cp ? '（組み合わせ中）' : '') + '</button></div>' : '') + '</div>'; // 9A-16
+  }
+  // 9A-16: 鳴る区間の全体（コンピングなら 2 つの区間の頭〜終わり）→ { p0, p1 }
+  function segsExtent(p, c) {
+    var l = DM().audioSegs(p, c), lo = Infinity, hi = -Infinity, i;
+    for (i = 0; i < l.length; i++) { if (l[i].ok) { lo = Math.min(lo, l[i].p0); hi = Math.max(hi, l[i].p1); } }
+    if (!(hi > lo)) { var s = DM().audioSpan(p, c); return { p0: s.p0, p1: s.p1 }; }
+    return { p0: lo, p1: hi };
+  }
+
+  // ---------- §341 9A-16: コンピング Lite（前半・後半の 2 つのテイクを 1 か所で切りかえる・元の WAV はそのまま）----------
+  var CP_W = 340, CP_H = 84, CP_STEPS = [["-1", "&#x2212;1s"], ["-0.1", "&#x2212;0.1s"], ["-0.01", "&#x2212;10ms"], ["0.01", "＋10ms"], ["0.1", "＋0.1s"], ["1", "＋1s"]], CP_SEAM = 1.5;
+  function openComp(id) {
+    var p = project(), f = DM().findClip(p, id);
+    if (!f || f.clip.type !== "audio" || DM().takesOf(p, f.clip).length < 2 || rec.state !== "idle") { return false; }
+    takeHearStop(); if (pl && pl.clip) { stopPlay(false); }
+    st.view = "comp"; st.sel = { kind: "clip", id: id }; st.aedit = { clip: id, msg: "" }; st.cview = { clip: id, msg: "", draft: null, mode: "" };
+    return true;
+  }
+  var comp = {
+    clip: function () { return st.cview ? DM().findClip(project(), st.cview.clip) : null; },
+    // いまの設定（組み合わせ中ならその値・でなければ下書き（まだ曲に入れていない））→ { a, b, at, live }
+    cur: function () {
+      var f = comp.clip(), p = project(), M = DM();
+      if (!f) { return null; }
+      var cp = M.compOf(p, f.clip);
+      if (cp) { return { a: cp.a, b: cp.b, at: cp.at, live: true }; }
+      var d = st.cview.draft, l = M.takesOf(p, f.clip), act = M.activeTakeId(f.clip), b = "", i;
+      if (d) { return d; }
+      for (i = 0; i < l.length; i++) { if (l[i].id !== act) { b = l[i].id; break; } }
+      d = st.cview.draft = { a: act, b: b, at: M.compDefaultAt(p, f.clip, act, b), live: false };
+      return d;
+    },
+    // 変える（o: setComp と同じ）。組み合わせ中なら曲を変える（↶・自動保存・鳴らしなおす）、まだなら下書きだけ
+    set: function (o) {
+      var f = comp.clip(), p = project(), M = DM();
+      if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+      if (rec.state !== "idle") { st.cview.msg = "録音中は変えられません"; if (st.root) { rerender(); } return { ok: false, why: "rec" }; }
+      var c = f.clip, d = comp.cur(), r;
+      if (!d.live && !o.make && !o.off) { // 下書き: 同じ規則で、曲の写しに当ててみる
+        var tmp = JSON.parse(JSON.stringify(p)), tf = M.findClip(tmp, c.id);
+        tf.clip.comp = { a: d.a, b: d.b, at: d.at }; // 下書きの値を写しに入れて、変える所だけ渡す
+        r = M.setComp(tmp, c.id, o);
+        if (r.ok) { st.cview.draft = { a: tf.clip.comp.a, b: tf.clip.comp.b, at: tf.clip.comp.at, live: false }; st.cview.msg = ""; } else { st.cview.msg = r.why; }
+        if (st.root) { rerender(); }
+        return r;
+      }
+      var snap = snapTracks(), before = JSON.stringify(c), o3 = o;
+      if (o.make) { o3 = { a: d.a, b: d.b, at: d.at }; }
+      r = M.setComp(p, c.id, o3);
+      st.cview.msg = r.ok ? "" : r.why;
+      if (r.ok && JSON.stringify(c) !== before) {
+        pushUndo(snap); markDirty();
+        if (o.off) { st.cview.draft = null; }
+        if (pl && pl.clip) { compPlay(st.cview.mode || "all"); } else if (pl) { resync(); }
+      }
+      if (st.root) { rerender(); }
+      return r;
+    },
+    step: function (d) { var c0 = comp.cur(); return c0 ? comp.set({ at: Math.round((c0.at + d) * 1000) / 1000 }) : { ok: false }; },
+    make: function () { return comp.set({ make: true }); },
+    off: function () { return comp.set({ off: true }); },
+    swap: function () { return comp.set({ swap: true }); }
+  };
+  // 試聴: all ＝ このクリップだけ（くり返し）・seam ＝ 継ぎ目の前後 ±1.5 秒（くり返し）
+  function compPlay(mode) {
+    var f = comp.clip(), M = DM(), p = project();
+    if (!f) { return false; }
+    var cp = M.compOf(p, f.clip), a, b;
+    if (mode === "seam") {
+      if (!cp) { return false; }
+      a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, cp.T - CP_SEAM)))); b = Math.max(a + 1, Math.ceil(M.secToTick(p, cp.T + CP_SEAM)));
+    } else {
+      var ex = segsExtent(p, f.clip);
+      a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, ex.p0)))); b = Math.max(a + 1, Math.ceil(M.secToTick(p, ex.p1)) + 1);
+    }
+    st.cview.mode = mode;
+    return startPlay({ clip: f.clip.id, a: a, b: b, from: a, loop: true });
+  }
+  // 2 色の波形（クリップの箱の秒・前半のテイク ＝ ふつうの色・後半 ＝ ちがう色・切りかえの線）。d ＝ 下書きなら曲の写しで描く
+  function compSvg(p, c, d) {
+    var M = DM(), cc = c;
+    if (!d.live) { cc = JSON.parse(JSON.stringify(c)); cc.comp = { a: d.a, b: d.b, at: d.at }; }
+    var segs = M.audioSegs(p, cc), C0 = M.tickToSec(p, c.start), box = M.tickToSec(p, c.start + c.len) - C0, mid = CP_H / 2, ds = ["", ""], x, i, q;
+    for (q = 0; q < segs.length; q++) { if (!aud.peaks[segs[q].id]) { return '<div class="ae-nowave small">&#x23F3; 波形を読みこんでいます…</div>'; } }
+    if (!segs.length || !segs[0].comp || !(box > 0)) { return '<div class="ae-nowave small">組み合わせを表示できません</div>'; }
+    var T = segs[0].T, PR = M.PEAK_RATE;
+    for (x = 0; x < CP_W; x += 2) {
+      var x0 = C0 + x / CP_W * box, x1 = C0 + (x + 2) / CP_W * box, xm = (x0 + x1) / 2, sg = null;
+      for (q = 0; q < segs.length; q++) { var s = segs[q]; if (xm >= Math.max(0, s.p0) && xm < s.p1 && (!sg || xm >= T)) { sg = s; } }
+      if (!sg) { continue; }
+      var pk = aud.peaks[sg.id], t0 = sg.tin + (Math.max(x0, sg.p0) - sg.p0), t1 = sg.tin + (Math.min(x1, sg.p1) - sg.p0), i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
+      for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
+      var hh = Math.max(0.5, m / 255 * (CP_H / 2 - 12));
+      ds[sg.take === cc.comp.b ? 1 : 0] += "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
+    }
+    var X = Math.round(Math.max(0, Math.min(1, (T - C0) / box)) * CP_W * 10) / 10;
+    return '<svg class="cp-svg" viewBox="0 0 ' + CP_W + ' ' + CP_H + '" preserveAspectRatio="none" aria-hidden="true"><path class="cp-a" d="' + ds[0] + '"/><path class="cp-b" d="' + ds[1] + '"/>' +
+      '<line class="cp-x" x1="' + X + '" y1="0" x2="' + X + '" y2="' + CP_H + '"/><text class="cp-t" x="' + Math.max(2, X - 4) + '" y="11" text-anchor="end">' + escHtml(d.a) + '</text><text class="cp-t" x="' + Math.min(CP_W - 2, X + 4) + '" y="11">' + escHtml(d.b) + '</text></svg>';
+  }
+  function compHtml(p, f) {
+    var M = DM(), c = f.clip, d = comp.cur(), l = M.takesOf(p, c), playing = !!(pl && pl.clip === c.id), i, act = M.activeTakeId(c);
+    var T = M.tickToSec(p, c.start) + d.at, bb = M.tickToBar(p, M.secToTick(p, T));
+    function tb(attr, sel) { var h = '', k; for (k = 0; k < l.length; k++) { var on = l[k].id === sel; h += '<button class="modal-btn cp-tk' + (on ? ' daw-on' : '') + '" data-' + attr + '="' + escHtml(l[k].id) + '"' + (M.findAsset(p, l[k].asset) ? '' : ' disabled') + '>' + (on ? '&#x2705; ' : '') + escHtml(l[k].id) + '</button>'; } return h; }
+    var st0 = d.live ? '&#x1F3A7; <b>組み合わせ中</b>: 前半 テイク ' + escHtml(d.a) + ' → 後半 テイク ' + escHtml(d.b) + '（継ぎ目 ' + Math.round(M.COMP_XF * 1000) + 'ms のクロスフェード）'
+      : (c.comp ? '&#x26A0;&#xFE0F; 前の組み合わせのテイクが見つかりません（いまはテイク ' + escHtml(act) + ' だけで鳴っています）。決めなおして「組み合わせる」を押してください'
+        : 'いまは単一テイク（テイク ' + escHtml(act) + '）です。前半・後半のテイクと切りかえの位置を決めて「&#x1F3A7; 組み合わせる」を押してください（まだ曲は変えていません）');
+    var h = '<div class="daw cp">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-cp="back">&#x2190; 編集</button><b>&#x1F3A7; テイクを組み合わせる</b><span class="daw-pname">' + escHtml(clipLabel(c)) + '</span></div>' +
+      projBarHtml(p) +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (playing && st.cview.mode !== "seam" ? " daw-on" : "") + '" data-cp="play" title="このクリップだけ（くり返し）">&#x25B6;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-small' + (playing && st.cview.mode === "seam" ? " daw-on" : "") + '" data-cp="seam" title="継ぎ目の前後（±' + CP_SEAM + ' 秒・くり返し）"' + (d.live ? '' : ' disabled') + '>&#x25B6;&#xFE0F; 継ぎ目</button>' +
+        '<button class="modal-btn daw-tbtn" data-cp="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn" data-cp="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (st.undo.length || '') + '</small></button><span class="daw-pos">1.1</span></div>' +
+      '<div class="daw-info cp-st">' + st0 + '</div>' +
+      '<div class="ae-wave cp-wave">' + compSvg(p, c, d) + '<i class="ae-ph cp-ph" style="display:none;"></i></div>' +
+      '<div class="cp-row"><span class="cp-lab">前半</span>' + tb("cpa", d.a) + '</div>' +
+      '<div class="cp-row"><span class="cp-lab">後半</span>' + tb("cpb", d.b) + '</div>' +
+      '<div class="ae-row"><span class="ae-lab">切りかえ</span><button class="ae-val" data-cp="atv" title="数字で入れる">' + fsec(d.at) + ' 秒</button></div>' +
+      '<div class="small cp-pos">クリップの頭から ' + fsec(d.at) + ' 秒（' + bb.bar + ' 小節 ' + bb.beat + ' 拍目あたり）</div>' +
+      '<div class="ae-btns">';
+    for (i = 0; i < CP_STEPS.length; i++) { h += '<button class="modal-btn ae-b" data-cps="' + CP_STEPS[i][0] + '">' + CP_STEPS[i][1] + '</button>'; }
+    h += '</div><div class="da-btns"><button class="modal-btn da-half" data-cp="swap">&#x21C4; 入れかえ</button>' +
+      (d.live ? '<button class="modal-btn da-half" data-cp="off">&#x21BA; 単一テイクに戻す（' + escHtml(act) + '）</button>' : '<button class="modal-btn da-half cp-make" data-cp="make">&#x1F3A7; 組み合わせる</button>') + '</div>' +
+      (st.cview.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.cview.msg) + '</div>' : '') +
+      (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
+      saveNoteHtml() +
+      '<p class="small dsv-note">元の WAV は変えません（どのテイクを使うか・切りかえの位置だけを曲に保存）。切りかえの位置はクリップの頭からの秒です（BPM を変えても録音の同じ所で切りかわります）。テイクごとの先頭・末尾・位置の調整は、単一テイクに戻して ✂️ 編集で直します。&#x21B6; で戻せます。</p></div>';
+    return h;
+  }
+  function renderComp(root, ctl) {
+    var p = project(), f = comp.clip();
+    if (!f || DM().takesOf(p, f.clip).length < 2) { st.view = f ? "aedit" : "arr"; st.cview = null; render(root, ctl); return; }
+    audKick(p);
+    root.innerHTML = compHtml(p, f);
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-cp"), t;
+        if ((t = el.getAttribute("data-cpa"))) { comp.set({ a: t }); return; }
+        if ((t = el.getAttribute("data-cpb"))) { comp.set({ b: t }); return; }
+        if ((t = el.getAttribute("data-cps"))) { comp.step(Number(t)); return; }
+        if (v === "back") { if (pl && pl.clip) { stopPlay(false); } st.view = "aedit"; st.cview = null; render(root, ctl); return; }
+        if (v === "play") { compPlay("all"); renderComp(root, ctl); return; }
+        if (v === "seam") { compPlay("seam"); renderComp(root, ctl); return; }
+        if (v === "stop") { transportStop(); rerender(); return; }
+        if (v === "undo") { edit.undo(); return; }
+        if (v === "swap") { comp.swap(); return; }
+        if (v === "make") { comp.make(); return; }
+        if (v === "off") { comp.off(); return; }
+        if (v === "atv") {
+          var c0 = comp.cur(), a = window.prompt ? window.prompt("切りかえの位置（クリップの頭からの秒）", fsec(c0.at)) : null;
+          if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { comp.set({ at: Number(a) }); }
+        }
+      };
+    }
+    bindProjBar(root, ctl);
+    drawHead();
   }
 
   // ---------- §341 9A-13: オーディオ編集 Lite（非破壊: クリップの値だけを変える・元の WAV はそのまま）----------
@@ -2573,7 +2826,9 @@
   // アレンジのクリップの欄に出す、編集の要約（編集していなければ出さない）
   function aeditSummary(p, c) {
     var sp = DM().audioSpan(p, c), out = [], nt = DM().takesOf(p, c).length;
-    if (nt > 1) { out.push("テイク " + DM().activeTakeId(c) + "（" + nt + " 個）"); } // 9A-14
+    var cpS = DM().compOf(p, c); // 9A-16
+    if (cpS) { out.push("&#x1F3A7; 組み合わせ " + escHtml(cpS.a) + "→" + escHtml(cpS.b) + "（" + fsec(cpS.at) + " 秒）"); }
+    else if (nt > 1) { out.push("テイク " + DM().activeTakeId(c) + "（" + nt + " 個）"); } // 9A-14
     if (!sp.edited && nt < 2) { return ""; }
     if (c.hasOwnProperty("trimIn") || c.hasOwnProperty("trimOut")) { out.push("鳴る所 素材の " + fsec(sp.tin) + "〜" + (isFinite(sp.tout) ? fsec(sp.tout) : "?") + " 秒"); }
     if (sp.nudge) { out.push("位置 " + fms(sp.nudge)); }
@@ -2617,7 +2872,7 @@
   function aeditPlay(withAll) {
     var f = aedit.clip(), M = DM(), p = project();
     if (!f) { return false; }
-    var sp = M.audioSpan(p, f.clip);
+    var sp = segsExtent(p, f.clip); // 9A-16: コンピングなら 2 つの区間の全体
     if (withAll) { return startPlay({ from: Math.max(0, f.clip.start - M.barTicks(p)), loop: false }); }
     var a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, sp.p0)))), b = Math.max(a + 1, Math.ceil(M.secToTick(p, sp.p1)) + 1);
     return startPlay({ clip: f.clip.id, a: a, b: b, from: a, loop: true });
@@ -2686,6 +2941,7 @@
         if ((tk = el.getAttribute("data-tku"))) { takes.select(f.clip.id, tk); return; }
         if ((tk = el.getAttribute("data-tkx"))) { takes.remove(f.clip.id, tk); return; }
         if (el.getAttribute("data-tk") === "rec") { if (pl && pl.clip) { stopPlay(false); } if (recOpenTake(f.clip.id)) { render(root, ctl); } return; }
+        if (el.getAttribute("data-tk") === "comp") { if (openComp(f.clip.id)) { render(root, ctl); } return; } // 9A-16
         if (b) { var bp = b.split("|"), fd = bp[0], dv = Number(bp[1]); aedit.step(fd, fd === "fadeIn" || fd === "fadeOut" ? dv : dv); return; }
         if (fv) {
           var sp = DM().audioSpan(project(), f.clip), ms = fv === "nudge" || fv === "fadeIn" || fv === "fadeOut", cur = fv === "trimIn" ? sp.tin : (fv === "trimOut" ? sp.tout : (fv === "nudge" ? sp.nudge : sp[fv] * 1000));
@@ -2899,7 +3155,8 @@
     // §341 9A-12: マイク録音（テストからも呼ぶ）
     aedit: { open: function (id) { var ok = openAedit(id); if (ok && st.root) { rerender(); } return ok; }, set: aedit.set, step: aedit.step, reset: aedit.reset, play: aeditPlay, svg: aeditSvg, env: audEnv }, // 9A-13
     transportStop: transportStop,
-    lib: { open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
+    lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
+    comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, set: comp.set, step: comp.step, make: comp.make, off: comp.off, swap: comp.swap, cur: comp.cur, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg }, // 9A-16
     takes: { select: function (cid, id) { return takes.select(cid, id); }, remove: function (cid, id) { return takes.remove(cid, id); }, hear: takeHear, stop: takeHearStop, info: function () { return hearInfo; }, html: function (cid) { var f = DM().findClip(project(), cid); return f ? takesHtml(project(), f.clip) : ""; }, openRec: function (cid) { var ok = recOpenTake(cid); if (ok && st.root) { rerender(); } return ok; } }, // 9A-14
     rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）

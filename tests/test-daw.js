@@ -1621,10 +1621,27 @@ module.exports = async function () {
     bus.BC.prototype.close = function () { this.closed = true; };
     return bus;
   }
+  // 9A-16: navigator.locks のまね（同じ「ブラウザ」のタブで共有・shared／exclusive・ifAvailable・並んだ順）
+  function fakeLocks() {
+    var M = { held: [], queue: [], log: [] };
+    function can(q) { return !M.held.some(function (h) { return h.name === q.name && (q.mode === "exclusive" || h.mode === "exclusive"); }); }
+    function grant(q) {
+      var h = { name: q.name, mode: q.mode }, ret; M.held.push(h); M.log.push(q.mode);
+      function drop() { var i = M.held.indexOf(h); if (i >= 0) { M.held.splice(i, 1); } setTimeout(pump, 0); }
+      try { ret = q.cb({ name: q.name, mode: q.mode }); } catch (e) { drop(); q.reject(e); return; }
+      Promise.resolve(ret).then(function (v) { drop(); q.resolve(v); }, function (e) { drop(); q.reject(e); });
+    }
+    function pump() { while (M.queue.length && can(M.queue[0])) { grant(M.queue.shift()); } }
+    M.api = { request: function (name, opts, cb) { if (typeof opts === "function") { cb = opts; opts = {}; } return new Promise(function (res, rej) { var q = { name: name, mode: opts.mode || "exclusive", cb: cb, resolve: res, reject: rej }; if (opts.ifAvailable) { if (can(q) && !M.queue.length) { grant(q); } else { setTimeout(function () { Promise.resolve(cb(null)).then(res, rej); }, 0); } return; } M.queue.push(q); setTimeout(pump, 0); }); } };
+    M.count = function (mode) { return M.held.filter(function (h) { return !mode || h.mode === mode; }).length; };
+    return M;
+  }
   function sha(ab) { return NC.createHash("sha256").update(Buffer.from(new Uint8Array(ab))).digest("hex"); }
   var eL = H.load(), WL = eL.window, ML = WL.UGDawModel, DL = WL.UGDaw, AL = WL.UGArcade, SL = eL.store, IDBL = fakeIDB(), lsCtl = { fail: false }, bus = fakeBus();
   SL.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 15 }); SL.ultimateGorillaUkuleleSeqV1 = JSON.stringify({ bpm: 77 }); var rpgL = SL.ultimateGorillaSaveV2, ukeL = SL.ultimateGorillaUkuleleSeqV1;
   WL.indexedDB = IDBL; fakeDecode(WL); WL.localStorage = richLS(SL, lsCtl); WL.BroadcastChannel = bus.BC; DL.lib.chanInit();
+  var LKM = fakeLocks(); WL.navigator.locks = LKM.api; DL.lib.lockInit(); await eL.wait(5);
+  ok(DL.lib.lockState() === "held" && LKM.count("shared") === 1, "9A-16: the page holds a shared Web Lock while open", DL.lib.lockState());
   var RL = H.makeEl("div"); DL.reset(); AL.start("daw", RL, {}); DL.proj.create("empty");
   function impL(ab, name, o) { return new Promise(function (r) { DL.audio.importWav(ab, name, o, r); }); }
   function loadL() { return new Promise(function (r) { DL.lib.load(r); }); }
@@ -1670,6 +1687,17 @@ module.exports = async function () {
   var dT = await delL(H4);
   ok(!dT.ok && /ほかのタブ/.test(dT.why) && !!rows().blobs.rows[H4], "another tab of the game answers: refused (it may hold unsaved changes)", dT.why);
   bus.list.forEach(function (o) { if (o !== bus.list[0]) { o.close(); } });
+  // 9A-16: Web Locks の共有ロックを持つほかのタブ（BroadcastChannel には返事をしない）
+  var eL3 = H.load(); eL3.window.navigator.locks = LKM.api; eL3.window.UGDaw.lib.lockInit(); await eL.wait(5);
+  var dT3 = await delL(H4); await eL.wait(5);
+  ok(!dT3.ok && /ほかのタブ/.test(dT3.why) && !!rows().blobs.rows[H4] && DL.lib.lockState() === "held" && LKM.count("shared") === 2 && LKM.count("exclusive") === 0, "9A-16: another tab holding the shared lock (no BroadcastChannel answer): the exclusive lock is not available, refused; our shared lock comes back", [dT3.why, DL.lib.lockState(), LKM.count()]);
+  eL3.window.UGDaw.lib.lockDrop(); await eL.wait(5);
+  ok(LKM.count("shared") === 1, "closing that tab releases its lock");
+  // Web Locks の無いブラウザ
+  var lkApi = WL.navigator.locks; WL.navigator.locks = undefined; DL.lib.lockDrop(); DL.lib.lockInit(); await loadL();
+  var dW = await delL(H4), hW = DL.lib.html();
+  ok(!dW.ok && /Web Locks/.test(dW.why) && hW.indexOf("data-lbd=") < 0 && /Web Locks/.test(hW) && !!rows().blobs.rows[H4], "9A-16: no Web Locks: deleting is disabled (no delete buttons, reason shown)", dW.why);
+  WL.navigator.locks = lkApi; DL.lib.lockInit(); await eL.wait(5);
   // BroadcastChannel が無いブラウザ
   WL.BroadcastChannel = undefined; DL.lib.chanInit(); var dN = await delL(H4); WL.BroadcastChannel = bus.BC; DL.lib.chanInit();
   ok(!dN.ok && /確かめられない/.test(dN.why) && !!rows().blobs.rows[H4], "no BroadcastChannel (can't check other tabs): refused");
@@ -1687,7 +1715,18 @@ module.exports = async function () {
   DL.project().assets.pop();
   ok(!dL2.ok && /いまの曲/.test(dL2.why) && !!rows().blobs.rows[H4], "a reference appearing during the check is caught just before deleting", dL2.why);
   // ほんとうに参照されていない X4 を消す
-  var nBefore = Object.keys(rows().blobs.rows).length, dOk = await delL(H4);
+  var nBefore = Object.keys(rows().blobs.rows).length, pOk = delL(H4); await eL.wait(30);
+  // 9A-16: 削除の途中（排他ロックのあいだ）に開いたタブは、共有ロックを待つ（参照を足せない）
+  var eL4 = H.load(), WL4 = eL4.window, DL4 = WL4.UGDaw; WL4.indexedDB = IDBL; fakeDecode(WL4); WL4.navigator.locks = LKM.api; DL4.lib.lockInit(); await eL.wait(5);
+  var RL4 = H.makeEl("div"); DL4.reset(); WL4.UGArcade.start("daw", RL4, {}); DL4.proj.create("empty"); var tL4 = await new Promise(function (r) { DL4.audio.add(r); });
+  var st4 = DL4.lib.lockState(), q4b = await new Promise(function (r) { DL4.audio.importWav(x4.slice(0), "again.wav", { track: tL4.id }, r); });
+  ok(st4 === "wait" && LKM.count("exclusive") === 1 && !q4b.ok && /ほかのタブで素材を削除/.test(q4b.why) && !DL4.project().assets.length, "9A-16: a tab opened during the deletion waits for the lock; it cannot import the same WAV (same id) meanwhile", [st4, q4b.why]);
+  var dOk = await pOk; await eL.wait(10);
+  ok(DL4.lib.lockState() === "held" && DL.lib.lockState() === "held" && LKM.count("exclusive") === 0 && LKM.count("shared") === 2, "after the deletion both tabs hold the shared lock again", [DL4.lib.lockState(), DL.lib.lockState(), LKM.count()]);
+  var q4c = await new Promise(function (r) { DL4.audio.importWav(x4.slice(0), "again.wav", { track: tL4.id }, r); });
+  ok(q4c.ok && !!rows().blobs.rows[H4] && !q4c.reused, "after the lock: importing works again (the WAV is written anew)", q4c.why);
+  delete rows().blobs.rows[H4]; delete rows().meta.rows[H4]; // あとの確かめのため（その曲は保存しない）
+  WL4.UGArcade.stop(); DL4.lib.lockDrop(); await eL.wait(5);
   ok(dOk.ok && !rows().blobs.rows[H4] && !rows().meta.rows[H4] && Object.keys(rows().blobs.rows).length === nBefore - 1, "X4 is deleted (WAV and meta), verified gone", dOk.why);
   ok([H1, H2, H3, H5].every(function (h) { return rows().blobs.rows[h] && sha(rows().blobs.rows[h].data) === sha0[h]; }) && !!rows().blobs.rows[H6], "every protected asset is byte-identical after the deletion (SHA-256)");
   await loadL();
@@ -1704,4 +1743,119 @@ module.exports = async function () {
   ok(exL.ok && exL.assets >= 2, "ZIP export still works after the deletion", exL.why);
   ok(SL.ultimateGorillaSaveV2 === rpgL && SL.ultimateGorillaUkuleleSeqV1 === ukeL && Object.keys(SL).every(function (k) { return k.indexOf("ultimateGorilla") === 0; }) && eL.counters.errors.length === 0, "RPG / ukulele saves untouched; no new storage keys; no errors");
   AL.stop(); DL.reset();
+
+  // ================= 9A-16: コンピング Lite（§341）=================
+  // --- データ ---
+  var pc = ME.emptyProject(0), tc = ME.addAudioTrack(pc).track;
+  var cA = { id: "a:00000000000ca001", name: "A.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000ca001", store: "idb", added: 1 };
+  var cB = { id: "a:00000000000cb002", name: "B.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000cb002", store: "idb", added: 2 };
+  var cC = { id: "a:00000000000cc003", name: "C.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 144000, sec: 3, hash: "a:00000000000cc003", store: "idb", added: 3 };
+  pc.assets.push(cA, cB, cC);
+  var cc = ME.addAudioClip(pc, tc, 3840, cA, "vocal"); ME.addTake(pc, cc.id, cB.id, "B", 2);
+  var evN = ME.audioEvents(pc, 0, 3840 * 4, true);
+  ok(evN.length === 1 && evN[0].asset === cB.id && !evN[0].hasOwnProperty("comp") && !evN[0].hasOwnProperty("xIn") && !cc.hasOwnProperty("comp") && ME.audioSegs(pc, cc).length === 1, "no comp: one event exactly as before (no new fields)");
+  var sc0 = ME.setComp(pc, cc.id, { a: "A", b: "B", at: 1 });
+  ok(sc0.ok && cc.comp.a === "A" && cc.comp.b === "B" && cc.comp.at === 1 && cc.take === "B" && cc.asset === cB.id && ME.compOf(pc, cc).T === 3, "setComp: comp = { a, b, at } (seconds from the clip head); asset / take unchanged", cc.comp);
+  var sg = ME.audioSegs(pc, cc), XF = ME.COMP_XF, h2 = XF / 2;
+  ok(sg.length === 2 && sg[0].id === cA.id && sg[0].p0 === 2 && Math.abs(sg[0].p1 - (3 + h2)) < 1e-9 && sg[0].fadeOut === XF && sg[0].xOut && !sg[0].xIn &&
+    sg[1].id === cB.id && Math.abs(sg[1].p0 - (3 - h2)) < 1e-9 && Math.abs(sg[1].tin - (1 - h2)) < 1e-9 && sg[1].p1 === 4 && sg[1].fadeIn === XF && sg[1].xIn && !sg[1].xOut, "segments: A until T+4ms (fade 8ms), B from T-4ms with the right source time (fade-in 8ms)", sg);
+  var evC = ME.audioEvents(pc, 0, 3840 * 4, true);
+  ok(evC.length === 2 && evC[0].asset === cA.id && evC[0].src === 0 && evC[0].comp && evC[0].xOut && evC[1].asset === cB.id && Math.abs(evC[1].sec - (3 - h2)) < 1e-9 && Math.abs(evC[1].src - (1 - h2)) < 1e-9 && evC[1].xIn && evC[1].take === "B", "audioEvents: two events (A, then B at T-4ms)", evC);
+  var fs35 = ME.secToTick(pc, 3.5), evF = ME.audioEvents(pc, fs35, 3840 * 4, true);
+  ok(evF.length === 1 && evF[0].asset === cB.id && Math.abs(evF[0].src - 1.5) < 1e-6 && evF[0].xIn === false, "starting in the 2nd half: only B, from the right spot, with the normal tiny fade-in (not a seam)", evF);
+  ok(ME.audioEvents(pc, 0, ME.secToTick(pc, 2.99), false).length === 1 && ME.audioEvents(pc, ME.secToTick(pc, 2.99), 3840 * 4, false).length === 1, "split playback windows: each segment is scheduled exactly once");
+  // 範囲・入れかえ・同じテイク・解除・知らない項目
+  ME.setComp(pc, cc.id, { at: 0 }); var lo = cc.comp.at; ME.setComp(pc, cc.id, { at: 99 }); var hi = cc.comp.at;
+  ok(lo === ME.COMP_MIN && Math.abs(hi - (2 - ME.COMP_MIN)) < 1e-9, "at is kept inside the box (0.05 s from each end)", [lo, hi]);
+  ME.setComp(pc, cc.id, { at: 1.23456 }); ok(cc.comp.at === 1.2346, "at is rounded to 0.1 ms");
+  ME.setComp(pc, cc.id, { swap: true }); var sw1 = cc.comp.a + cc.comp.b; ME.setComp(pc, cc.id, { a: "A" }); var sw2 = cc.comp.a + cc.comp.b;
+  ok(sw1 === "BA" && sw2 === "AB" && cc.comp.at === 1.2346, "swap; choosing the same take for both halves swaps them");
+  cc.comp.future = { x: 1 }; ME.setComp(pc, cc.id, { at: 1 }); ok(cc.comp.future && cc.comp.future.x === 1, "unknown comp fields are kept");
+  ok(!ME.setComp(pc, cc.id, { a: "Z" }).ok && cc.comp.a === "A", "an unknown take is refused (nothing changed)");
+  // 複製は別々
+  var dup = ME.duplicateClip(pc, cc.id); dup.comp.at = 0.5;
+  ok(dup.comp !== cc.comp && cc.comp.at === 1 && dup.comp.a === "A" && JSON.stringify(dup.takes) === JSON.stringify(cc.takes) && dup.takes !== cc.takes, "duplicated clip: its comp / takes are independent copies");
+  ME.deleteClip(pc, dup.id);
+  // 外す・切りかえ・長さ
+  ME.addTake(pc, cc.id, cC.id, "C", 3);
+  ok(cc.take === "C" && ME.compOf(pc, cc) && !ME.removeTake(pc, cc.id, "A").ok && /組み合わせ/.test(ME.removeTake(pc, cc.id, "B").why) && cc.takes.length === 3, "a take used by the comp can't be removed");
+  var segBefore = JSON.stringify(ME.audioSegs(pc, cc).map(function (x) { return [x.id, x.p0, x.p1, x.tin]; })), lenB = cc.len;
+  ME.selectTake(pc, cc.id, "A"); ME.setAudioEdit(pc, cc.id, { trimOut: 0.5 });
+  var segAfter = ME.audioSegs(pc, cc).map(function (x) { return [x.id, x.p0, x.p1, x.tin]; });
+  ok(cc.len >= 3840 && segAfter.length === 2 && segAfter[0][2] <= 2.5 + 1e-9 && segAfter[1][0] === cB.id && JSON.parse(segBefore)[1][0] === cB.id, "editing the active take keeps the box long enough for the comp takes; its trim applies to its own half", [segBefore, segAfter, lenB, cc.len]);
+  ME.setAudioEdit(pc, cc.id, { reset: true }); ME.selectTake(pc, cc.id, "B");
+  // BPM: 秒のまま（録音の同じ所）
+  var T120 = ME.compOf(pc, cc).T, at120 = cc.comp.at, tin120 = ME.audioSegs(pc, cc)[1].tin; ME.setBpm(pc, 60); var cp60 = ME.compOf(pc, cc);
+  ok(cc.comp.at === at120 && Math.abs(cp60.T - (ME.tickToSec(pc, cc.start) + at120)) < 1e-9 && cp60.T !== T120 && Math.abs(ME.audioSegs(pc, cc)[1].tin - tin120) < 1e-9, "BPM change: at stays in seconds from the clip head (same spot in the recordings)", [T120, cp60.T]);
+  ME.setBpm(pc, 120);
+  // 保存の形・こわれた値・古い版で外したテイク
+  var rc1 = ME.parseRecordText(JSON.stringify(ME.toRecord(pc, 1))), ccr = rc1.project.tracks[2].clips[0];
+  ok(rc1.ok && JSON.stringify(ccr.comp) === JSON.stringify(cc.comp) && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(rc1.project)))) === JSON.stringify(rc1.project), "JSON round trip keeps comp; clean() is stable");
+  function cl1(comp) { return ME.clean({ assets: [cA, cB], tracks: [{ kind: "audio", instrument: { type: "audio" }, clips: [{ type: "audio", asset: cA.id, take: "A", takes: [{ id: "A", asset: cA.id }, { id: "B", asset: cB.id }], comp: comp }] }] }); }
+  ok(!cl1({ a: "A", b: "A", at: 1 }).tracks[0].clips[0].hasOwnProperty("comp") && !cl1({ a: "x", b: "B", at: 1 }).tracks[0].clips[0].hasOwnProperty("comp") && !cl1({ a: "A", b: "B", at: -1 }).tracks[0].clips[0].hasOwnProperty("comp") && !cl1("AB").tracks[0].clips[0].hasOwnProperty("comp"), "broken comp values are dropped");
+  var stale = cl1({ a: "A", b: "D", at: 1 }), sc1 = stale.tracks[0].clips[0];
+  ok(sc1.comp && sc1.comp.b === "D" && !ME.compOf(stale, sc1) && ME.audioSegs(stale, sc1).length === 1 && ME.audioSegs(stale, sc1)[0].asset === ME.findAsset(stale, cA.id), "comp pointing to a removed take (old version): kept, but plays the active take only");
+  stale.assets.push(cC); ME.addTake(stale, sc1.id, cC.id, "D?", 9);
+  ok(!sc1.hasOwnProperty("comp") && sc1.takes.length === 3, "recording a new take removes the stale comp (a new take with the same id is never mixed up)");
+  ok(ME.setComp(pc, cc.id, { off: true }).ok && !cc.hasOwnProperty("comp") && ME.audioEvents(pc, 0, 3840 * 4, true).length === 1, "off: back to a single take (the field is removed)");
+  ok(JSON.stringify(ME.clipAssets(cc).sort()) === JSON.stringify([cA.id, cB.id, cC.id].sort()), "clipAssets still lists every take");
+
+  // --- 画面・再生・保存・ZIP（まねの IndexedDB）---
+  var eC = H.load(), WC = eC.window, MC = WC.UGDawModel, DC = WC.UGDaw, ACp = WC.UGArcade, SC = eC.store, IDBC = fakeIDB();
+  SC.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 16 }); var rpgC = SC.ultimateGorillaSaveV2;
+  WC.indexedDB = IDBC; fakeDecode(WC);
+  var RC = H.makeEl("div"); DC.reset(); ACp.start("daw", RC, {}); DC.proj.create("empty");
+  function impC(ab, name, o) { return new Promise(function (r) { DC.audio.importWav(ab, name, o, r); }); }
+  var tC = await new Promise(function (r) { DC.audio.add(r); });
+  var wA = makeWav({ sr: 44100, ch: 1, sec: 1.5, fn: tone(330) }), wB = makeWav({ sr: 44100, ch: 1, sec: 1.5, fn: tone(440) });
+  var iA = await impC(wA.slice(0), "takeA.wav", { track: tC.id }), iB = await impC(wB.slice(0), "takeB.wav", { track: tC.id, take: iA.clip.id });
+  var cid = iA.clip.id, hA = iA.asset.id, hB = iB.asset.id, shaA = NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBC.data[DC.audio.IDB_NAME].stores.blobs.rows[hA].data))).digest("hex");
+  ok(iA.ok && iB.ok && DC.project().tracks[2].clips[0].takes.length === 2, "two takes (A, B) on one clip");
+  DC.aedit.open(cid);
+  ok(RC.innerHTML.indexOf('data-tk="comp"') >= 0 && RC.innerHTML.indexOf("テイクを組み合わせる") >= 0, "✂️ 編集: 🎧 テイクを組み合わせる (2+ takes)");
+  var u0 = DC.undoDepth(), before0 = JSON.stringify(DC.project());
+  ok(DC.comp.open(cid) && DC.state().view === "comp" && RC.innerHTML.indexOf('data-cp="make"') >= 0 && RC.innerHTML.indexOf('data-cpa="A"') >= 0 && RC.innerHTML.indexOf('data-cpb="B"') >= 0 && RC.innerHTML.indexOf("まだ曲は変えていません") >= 0, "comp screen (draft): halves, switch point, make button");
+  DC.comp.set({ a: "A" }); DC.comp.step(0.1); var dr = DC.comp.cur();
+  ok(!dr.live && dr.a === "A" && dr.b === "B" && JSON.stringify(DC.project()) === before0 && DC.undoDepth() === u0, "editing the draft does not change the song", dr);
+  DC.comp.set({ at: 0.75 }); DC.comp.make(); var c1 = DC.project().tracks[2].clips[0];
+  ok(c1.comp && c1.comp.a === "A" && c1.comp.b === "B" && c1.comp.at === 0.75 && DC.undoDepth() === u0 + 1 && RC.innerHTML.indexOf("組み合わせ中") >= 0 && RC.innerHTML.indexOf('data-cp="off"') >= 0, "make: comp saved in the clip (↶ +1)", c1.comp);
+  DC.flushSave(); var svC = JSON.parse(SC["ultimateGorillaDawV1:p:" + DC.project().id]).project.tracks[2].clips[0];
+  ok(svC.comp && svC.comp.at === 0.75, "auto-saved (comp in localStorage)");
+  DC.comp.step(0.01); ok(DC.project().tracks[2].clips[0].comp.at === 0.76 && DC.undoDepth() === u0 + 2, "＋10ms");
+  DC.ops.undo(); ok(DC.project().tracks[2].clips[0].comp.at === 0.75, "↶ undoes the switch point");
+  // 再生: A → B・継ぎ目にだけ 8ms の直線
+  function runC(sec) { var P = DC.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DC.pump(); } }
+  DC.setLoop(false); DC.clearLog(); DC.play(); runC(3);
+  var lgC = DC.log().filter(function (x) { return x.audio; }), T0 = 0.75, hh2 = MC.COMP_XF / 2;
+  var envA = lgC[0] && lgC[0].env, envB = lgC[1] && lgC[1].env;
+  ok(lgC.length === 2 && lgC[0].asset === hA && lgC[1].asset === hB && lgC[0].ok && lgC[1].ok && Math.abs(lgC[1].sec - (T0 - hh2)) < 1e-9 && Math.abs(lgC[1].offset - (T0 - hh2)) < 1e-9 && Math.abs(lgC[0].dur - (T0 + hh2)) < 1e-6, "playback: take A until the seam, take B from T-4ms (source offset matches)", lgC.map(function (x) { return [x.asset, x.sec, x.offset, x.dur]; }));
+  ok(envA && envA[envA.length - 1][1] === 0 && Math.abs(envA[envA.length - 2][0] - (T0 - hh2)) < 1e-6 && envA[envA.length - 2][1] === 1 && envB && envB[0][1] === 0 && Math.abs(envB[1][0] - MC.COMP_XF) < 1e-6 && envB[1][1] === 1 && envB.length === 3, "seam: linear 8 ms crossfade (A 1→0, B 0→1), no extra tiny fades", [envA, envB]);
+  DC.stop();
+  // 書き出し
+  await new Promise(function (r) { DC.wav.start(r); }); for (var gC = 0; gC < 300 && DC.wav.state().busy; gC++) { await eC.wait(10); }
+  var wlC = DC.wav.state().log.filter(function (x) { return x.audio; });
+  ok(wlC.length === 2 && wlC[0].asset === hA && wlC[1].asset === hB && JSON.stringify(wlC[1].env) === JSON.stringify(envB), "WAV export uses the same segments and envelopes");
+  // テイクの欄
+  DC.aedit.open(cid); var hT = RC.innerHTML;
+  ok(hT.indexOf("組み合わせ中") >= 0 && hT.indexOf('data-tku="') < 0 && hT.indexOf('data-tkx="A"') < 0 && !DC.takes.remove(cid, "A").ok && !DC.takes.select(cid, "A").ok, "take list while comping: no 使う; comp takes can't be removed / switched");
+  // 解除・↶
+  DC.comp.open(cid); DC.comp.off(); var c2 = DC.project().tracks[2].clips[0];
+  ok(!c2.hasOwnProperty("comp") && c2.take === "B" && RC.innerHTML.indexOf('data-cp="make"') >= 0, "単一テイクに戻す: comp removed, take B in use");
+  DC.ops.undo(); ok(DC.project().tracks[2].clips[0].comp && DC.project().tracks[2].clips[0].comp.at === 0.75, "↶ brings the comp back");
+  // 再読み込み
+  DC.flushSave(); var pidC = DC.project().id; DC.reload(); DC.proj.open(pidC);
+  ok(DC.project().tracks[2].clips[0].comp.at === 0.75 && DC.project().tracks[2].clips[0].takes.length === 2, "after a reload: same comp");
+  // ZIP → 空の保存領域へ
+  var exC = await new Promise(function (r) { DC.pack.exportZip(r); });
+  ok(exC.ok && exC.assets === 2, "ZIP: both take WAVs", exC.why);
+  var eC2 = H.load(), WC2 = eC2.window, DC2 = WC2.UGDaw, IDBC2 = fakeIDB(); WC2.indexedDB = IDBC2; fakeDecode(WC2);
+  var RC2 = H.makeEl("div"); DC2.reset(); WC2.UGArcade.start("daw", RC2, {});
+  var rC2 = await impZ(DC2, blobAB(exC.blob)); DC2.proj.open(rC2.id); await new Promise(function (r) { DC2.audio.ensure(DC2.project(), r); });
+  DC2.setLoop(false); DC2.clearLog(); DC2.play(); var PC2 = DC2.player(), gC2 = 0; while (PC2.ac.currentTime < 3 && gC2++ < 1000) { PC2.ac.currentTime += 0.025; DC2.pump(); }
+  var lgC2 = DC2.log().filter(function (x) { return x.audio; });
+  ok(rC2.ok && DC2.project().tracks[2].clips[0].comp.at === 0.75 && lgC2.length === 2 && lgC2[0].asset === hA && lgC2[1].asset === hB, "restored from the ZIP into empty storage: the comp plays the same way", rC2.why);
+  DC2.stop(); WC2.UGArcade.stop(); DC2.reset();
+  var shaA2 = NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBC.data[DC.audio.IDB_NAME].stores.blobs.rows[hA].data))).digest("hex");
+  ok(shaA2 === shaA && SC.ultimateGorillaSaveV2 === rpgC && eC.counters.errors.length === 0, "the original WAV is byte-identical (SHA-256); RPG save untouched; no errors", eC.counters.errors.slice(0, 3));
+  ACp.stop(); DC.reset();
 };

@@ -250,6 +250,7 @@
       if (c.hasOwnProperty("trimOut")) { var to0 = Number(c.trimOut); if (c.trimOut !== null && isFinite(to0) && to0 > 0) { o.trimOut = r4(to0); } else { delete o.trimOut; } }
       if (c.hasOwnProperty("nudge")) { var nu0 = Number(c.nudge); if (isFinite(nu0) && nu0 !== 0) { o.nudge = Math.max(-NUDGE_MAX, Math.min(NUDGE_MAX, Math.round(nu0 * 10) / 10)); } else { delete o.nudge; } }
       cleanTakes(c, o); // §341 9A-14
+      cleanComp(c, o); // §341 9A-16
       delete o.notes;
     }
     o.ext = isObj(c.ext) ? copy(c.ext) : {};
@@ -659,13 +660,18 @@
       for (j = 0; j < t.clips.length; j++) {
         var c = t.clips[j];
         if (c.type !== "audio" || !c.asset) { continue; }
-        var s = audioSpan(p, c), b = Math.max(0, s.p0), at = null;
-        if (!s.ok) { continue; }
-        if (b >= fs && b < ts) { at = b; } else if (fresh && b < fs && s.p1 > fs) { at = fs; }
-        if (at === null) { continue; }
-        var tk = Math.round(secToTick(p, at) * 1000) / 1000;
-        out.push({ tick: tk, sec: at, src: s.tin + (at - s.p0), p0: s.p0, endSec: s.p1, fadeIn: s.fadeIn, fadeOut: s.fadeOut, gain: s.gain, skip: at > b ? Math.round((tk - secToTick(p, b)) * 1000) / 1000 : 0,
-          start: c.start, end: c.start + c.len, asset: c.asset, srcOffset: s.so, track: t.id, clip: c.id, ti: i });
+        var segs = audioSegs(p, c), q; // 9A-16: コンピングなら 2 つ（ないクリップは audioSpan の 1 つ ＝ いままでと同じ）
+        for (q = 0; q < segs.length; q++) {
+          var s = segs[q], b = Math.max(0, s.p0), at = null;
+          if (!s.ok) { continue; }
+          if (b >= fs && b < ts) { at = b; } else if (fresh && b < fs && s.p1 > fs) { at = fs; }
+          if (at === null) { continue; }
+          var tk = Math.round(secToTick(p, at) * 1000) / 1000;
+          var ev = { tick: tk, sec: at, src: s.tin + (at - s.p0), p0: s.p0, endSec: s.p1, fadeIn: s.fadeIn, fadeOut: s.fadeOut, gain: s.gain, skip: at > b ? Math.round((tk - secToTick(p, b)) * 1000) / 1000 : 0,
+            start: c.start, end: c.start + c.len, asset: s.comp ? s.id : c.asset, srcOffset: s.so, track: t.id, clip: c.id, ti: i };
+          if (s.comp) { ev.comp = true; ev.take = s.take; ev.xIn = !!s.xIn && at === b; ev.xOut = !!s.xOut; }
+          out.push(ev);
+        }
       }
     }
     out.sort(function (a, b) { return a.sec - b.sec || a.ti - b.ti; });
@@ -687,7 +693,7 @@
     if (o.trimOut !== undefined || o.reset) {
       s = audioSpan(p, c);
       if (isFinite(s.dur)) {
-        var len = audioClipLen(p, c.start, s.tout - s.so), t = f.track, nx = Infinity, j;
+        var len = Math.max(audioClipLen(p, c.start, s.tout - s.so), compNeedLen(p, c)), t = f.track, nx = Infinity, j; // 9A-16: コンピングなら長いほうのテイクに合わせる
         for (j = 0; j < t.clips.length; j++) { if (t.clips[j] !== c && t.clips[j].start >= c.start + 1 && t.clips[j].start < nx) { nx = t.clips[j].start; } }
         if (c.start + len > nx) { len = Math.max(barTicks(p), Math.floor((nx - c.start) / barTicks(p)) * barTicks(p)); }
         c.len = len;
@@ -755,6 +761,7 @@
     var c = f.clip, why = takeRoomWhy(c);
     if (why) { return { ok: false, why: why }; }
     if (!isArr(c.takes) || !c.takes.length) { var a0 = findAsset(p, c.asset); c.takes = [{ id: "A", asset: c.asset, name: str(String((a0 && a0.name) || (c.ext && c.ext.name) || "テイク").replace(/\.wav$/i, ""), "テイク", 80), at: int(a0 && a0.added, 0, 0) }]; c.take = "A"; }
+    if (c.hasOwnProperty("comp") && !compOf(p, c)) { delete c.comp; } // 9A-16: テイクが見つからない古い組み合わせ（v2.48 以前で外した）は、同じ ID の新しいテイクとまちがえないように消す
     var used = {}; for (i = 0; i < c.takes.length; i++) { used[c.takes[i].id] = true; }
     for (i = 0; i < TAKE_IDS.length && used[TAKE_IDS.charAt(i)]; i++) {}
     var id = TAKE_IDS.charAt(i);
@@ -791,8 +798,104 @@
     var f = findClip(p, clipId), i;
     if (!f || !isArr(f.clip.takes)) { return { ok: false, why: "テイクがありません" }; }
     if (f.clip.take === id) { return { ok: false, why: "使っているテイクは外せません（ほかのテイクを使ってから）" }; }
+    if (isObj(f.clip.comp) && (f.clip.comp.a === id || f.clip.comp.b === id)) { return { ok: false, why: "組み合わせで使っているテイクは外せません（🎧 で単一テイクに戻してから）" }; } // 9A-16
     for (i = 0; i < f.clip.takes.length; i++) { if (f.clip.takes[i].id === id) { f.clip.takes.splice(i, 1); return { ok: true }; } }
     return { ok: false, why: "テイクが見つかりません" };
+  }
+  // ---------- §341 9A-16: コンピング Lite（AudioClip の comp ＝ { a: 前半のテイク, b: 後半のテイク, at: クリップの頭からの秒 }。GAME_DESIGN §341「9A-16」）----------
+  var COMP_XF = 0.008, COMP_MIN = 0.05;
+  function cleanComp(c, o) {
+    if (!c.hasOwnProperty("comp")) { return; }
+    var cp = c.comp, at = isObj(cp) ? Number(cp.at) : NaN;
+    if (!isObj(cp) || typeof cp.a !== "string" || typeof cp.b !== "string" || !/^[A-H]$/.test(cp.a) || !/^[A-H]$/.test(cp.b) || cp.a === cp.b || !isFinite(at) || at < 0) { delete o.comp; return; }
+    o.comp = copy(cp) || {}; o.comp.at = r4(Math.min(3600, at)); // 知らない項目は残す
+  }
+  function takeById(c, id) { var i; for (i = 0; c && isArr(c.takes) && i < c.takes.length; i++) { if (c.takes[i] && c.takes[i].id === id) { return c.takes[i]; } } return null; }
+  // そのテイクだけを鳴らすときのクリップ（いま使っているテイクはクリップそのもの・ほかは takes[].edit の値）
+  function takeView(p, c, id) {
+    if (id === activeTakeId(c)) { return c; }
+    var t = takeById(c, id), e, k;
+    if (!t) { return null; }
+    var v = { type: "audio", id: c.id, asset: t.asset, start: c.start, len: c.len, srcOffset: c.srcOffset, gain: c.gain, fadeIn: 0, fadeOut: 0 };
+    e = cleanEdit(t.edit); for (k in e) { if (e.hasOwnProperty(k)) { v[k] = e[k]; } }
+    return v;
+  }
+  // 使えるコンピング（テイク・素材がそろっている）→ { a, b, at（箱の中に入れた秒）, raw, T（曲の秒）, C0, box（秒）} / null
+  function compOf(p, c) {
+    if (!c || c.type !== "audio" || !isObj(c.comp) || !isArr(c.takes) || c.takes.length < 2) { return null; }
+    var a = c.comp.a, b = c.comp.b, va, vb;
+    if (a === b || !takeById(c, a) || !takeById(c, b)) { return null; }
+    va = takeView(p, c, a); vb = takeView(p, c, b);
+    var fa = va && findAsset(p, va.asset), fb = vb && findAsset(p, vb.asset);
+    if (!fa || !fb || !(Number(fa.sec) > 0) || !(Number(fb.sec) > 0)) { return null; }
+    var C0 = tickToSec(p, c.start), box = tickToSec(p, c.start + c.len) - C0, raw = Number(c.comp.at);
+    if (!isFinite(raw)) { return null; }
+    var at = Math.max(COMP_MIN, Math.min(Math.max(COMP_MIN, box - COMP_MIN), raw));
+    return { a: a, b: b, at: at, raw: raw, T: C0 + at, C0: C0, box: box };
+  }
+  // 鳴る区間（曲の秒）の列。コンピングでないクリップは audioSpan の 1 つ（いままでと同じ）。
+  // コンピング: 前半 ＝ テイク a を T＋h まで（最後の 2h で 1→0）・後半 ＝ テイク b を T−h から（最初の 2h で 0→1）。h ＝ クロスフェードの半分
+  function audioSegs(p, c) {
+    var cp = compOf(p, c);
+    if (!cp) { return [audioSpan(p, c)]; }
+    var sa = audioSpan(p, takeView(p, c, cp.a)), sb = audioSpan(p, takeView(p, c, cp.b)), T = cp.T, out = [];
+    var xf = Math.max(0, Math.min(COMP_XF, 2 * Math.max(0, T - Math.max(0, sa.p0)), 2 * Math.max(0, sb.p1 - T))), h = xf / 2;
+    function seg(s, id, take, p0, tin, p1, fi, fo, xIn, xOut) {
+      return { comp: true, id: id, take: take, asset: s.asset, dur: s.dur, so: s.so, A: s.A, tin: tin, p0: p0, p1: p1, fadeIn: fi, fadeOut: fo, gain: s.gain, xIn: xIn, xOut: xOut, xf: xf, T: T, ok: p1 > Math.max(0, p0) + 1e-4 };
+    }
+    var ida = takeView(p, c, cp.a).asset, idb = takeView(p, c, cp.b).asset;
+    if (sa.ok && sa.p0 < T - 1e-6) {
+      if (sa.p1 > T + h + 1e-9) { out.push(seg(sa, ida, cp.a, sa.p0, sa.tin, T + h, sa.fadeIn, xf, false, xf > 0)); }
+      else { out.push(seg(sa, ida, cp.a, sa.p0, sa.tin, sa.p1, sa.fadeIn, sa.fadeOut, false, false)); } // T より前に鳴り終わる（自分のフェード）
+    }
+    if (sb.ok && sb.p1 > T + 1e-6) {
+      var s0 = T - h;
+      if (sb.p0 < s0 - 1e-9) { out.push(seg(sb, idb, cp.b, s0, sb.tin + (s0 - sb.p0), sb.p1, xf, sb.fadeOut, xf > 0, false)); }
+      else { out.push(seg(sb, idb, cp.b, sb.p0, sb.tin, sb.p1, sb.fadeIn, sb.fadeOut, false, false)); } // T より後に鳴りはじめる（自分のフェード）
+    }
+    return out;
+  }
+  // 2 つのテイクのうち長いほうに合わせた箱の長さ（tick）・コンピングでなければ 0
+  function compNeedLen(p, c) {
+    var cp = compOf(p, c), n = 0, l = cp ? [cp.a, cp.b] : [], i;
+    for (i = 0; i < l.length; i++) { var s = audioSpan(p, takeView(p, c, l[i])); if (isFinite(s.full)) { n = Math.max(n, audioClipLen(p, c.start, Math.max(0, s.full - tickToSec(p, c.start)))); } }
+    return n;
+  }
+  // はじめの切りかえ位置: 2 つのテイクが両方鳴る所のまん中（なければ箱のまん中）・10ms に丸める
+  function compDefaultAt(p, c, a, b) {
+    var C0 = tickToSec(p, c.start), box = tickToSec(p, c.start + c.len) - C0, va = takeView(p, c, a), vb = takeView(p, c, b);
+    var sa = va ? audioSpan(p, va) : null, sb = vb ? audioSpan(p, vb) : null, lo = 0, hi = box;
+    if (sa && sb) { lo = Math.max(sa.p0, sb.p0) - C0; hi = Math.min(sa.p1, sb.p1) - C0; }
+    var m = hi > lo + 2 * COMP_MIN ? (lo + hi) / 2 : box / 2;
+    return Math.round(Math.max(COMP_MIN, Math.min(Math.max(COMP_MIN, box - COMP_MIN), m)) * 100) / 100;
+  }
+  // 組み合わせを作る・変える（o: { a, b, at（秒）, swap, off }）。同じテイクを選んだら入れかえる。箱は長いほうに合わせて広げる（縮めない・次のクリップと重ねない）
+  function setComp(p, clipId, o) {
+    var f = findClip(p, clipId);
+    if (!f || f.clip.type !== "audio") { return { ok: false, why: "オーディオのクリップが見つかりません" }; }
+    var c = f.clip, cur = isObj(c.comp) ? c.comp : null, j;
+    o = o || {};
+    if (o.off) { if (!c.hasOwnProperty("comp")) { return { ok: true, same: true, clip: c }; } delete c.comp; return { ok: true, clip: c }; }
+    if (!isArr(c.takes) || c.takes.length < 2) { return { ok: false, why: "テイクが 2 つ以上あるときだけ組み合わせられます" }; }
+    var act = activeTakeId(c), a = cur && takeById(c, cur.a) ? cur.a : act, b = cur && takeById(c, cur.b) ? cur.b : "";
+    if (!b || b === a) { b = ""; for (j = 0; j < c.takes.length; j++) { if (c.takes[j].id !== a) { b = c.takes[j].id; break; } } }
+    if (o.a !== undefined) { if (o.a === b) { b = a; } a = o.a; }
+    if (o.b !== undefined) { if (o.b === a) { a = b; } b = o.b; }
+    if (o.swap) { var tmp = a; a = b; b = tmp; }
+    if (!takeById(c, a) || !takeById(c, b) || a === b) { return { ok: false, why: "テイクが見つかりません" }; }
+    var va = takeView(p, c, a), vb = takeView(p, c, b);
+    if (!findAsset(p, va.asset) || !findAsset(p, vb.asset)) { return { ok: false, why: "テイクの素材がありません" }; }
+    var at = o.at !== undefined ? Number(o.at) : (cur && isFinite(Number(cur.at)) ? Number(cur.at) : compDefaultAt(p, c, a, b));
+    if (!isFinite(at)) { return { ok: false, why: "切りかえの位置が数ではありません" }; }
+    var nc = copy(cur) || {};
+    nc.a = a; nc.b = b; nc.at = 0;
+    c.comp = nc;
+    var need = compNeedLen(p, c), nx = Infinity, t = f.track;
+    for (j = 0; j < t.clips.length; j++) { if (t.clips[j] !== c && t.clips[j].start >= c.start + 1 && t.clips[j].start < nx) { nx = t.clips[j].start; } }
+    if (need > c.len) { c.len = Math.max(c.len, Math.min(need, Math.floor((nx - c.start) / barTicks(p)) * barTicks(p), CLIP_MAX_BARS * barTicks(p), MAX_BARS * barTicks(p) - c.start)); }
+    var box = tickToSec(p, c.start + c.len) - tickToSec(p, c.start);
+    nc.at = r4(Math.max(COMP_MIN, Math.min(Math.max(COMP_MIN, box - COMP_MIN), at)));
+    return { ok: true, clip: c, comp: compOf(p, c) };
   }
   // 波形のピーク（1 秒 rate 点・0〜255。チャンネルの大きいほう）。chans: Float32Array の列
   function computePeaks(chans, sr, rate) {
@@ -883,6 +986,7 @@
     WAV_MAX_BYTES: WAV_MAX_BYTES, WAV_MAX_SEC: WAV_MAX_SEC, MAX_AUDIO_TRACKS: MAX_AUDIO_TRACKS, MAX_ASSETS: MAX_ASSETS, MAX_ASSET_SEC: MAX_ASSET_SEC, PEAK_RATE: PEAK_RATE,
     audioInstrument: audioInstrument, isAudio: isAudio, audioTrackCount: audioTrackCount, addAudioTrack: addAudioTrack, parseWav: parseWav, wavLimitWhy: wavLimitWhy, hashBytes: hashBytes,
     assetRef: assetRef, sameAsset: sameAsset, findAsset: findAsset, assetUse: assetUse, audioClipCount: audioClipCount, assetRoomWhy: assetRoomWhy, audioClipLen: audioClipLen,
-    addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, clipAssets: clipAssets, takesOf: takesOf, activeTakeId: activeTakeId, addTake: addTake, selectTake: selectTake, removeTake: removeTake, takeRoomWhy: takeRoomWhy, MAX_TAKES: MAX_TAKES, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
+    addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, clipAssets: clipAssets, takesOf: takesOf, activeTakeId: activeTakeId, addTake: addTake, selectTake: selectTake, removeTake: removeTake, takeRoomWhy: takeRoomWhy, MAX_TAKES: MAX_TAKES,
+    compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
 })();
