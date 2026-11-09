@@ -1814,14 +1814,14 @@ module.exports = async function () {
   DC.aedit.open(cid);
   ok(RC.innerHTML.indexOf('data-tk="comp"') >= 0 && RC.innerHTML.indexOf("テイクを組み合わせる") >= 0, "✂️ 編集: 🎧 テイクを組み合わせる (2+ takes)");
   var u0 = DC.undoDepth(), before0 = JSON.stringify(DC.project());
-  ok(DC.comp.open(cid) && DC.state().view === "comp" && RC.innerHTML.indexOf('data-cp="make"') >= 0 && RC.innerHTML.indexOf('data-cpa="A"') >= 0 && RC.innerHTML.indexOf('data-cpb="B"') >= 0 && RC.innerHTML.indexOf("まだ曲は変えていません") >= 0, "comp screen (draft): halves, switch point, make button");
-  DC.comp.set({ a: "A" }); DC.comp.step(0.1); var dr = DC.comp.cur();
-  ok(!dr.live && dr.a === "A" && dr.b === "B" && JSON.stringify(DC.project()) === before0 && DC.undoDepth() === u0, "editing the draft does not change the song", dr);
-  DC.comp.set({ at: 0.75 }); DC.comp.make(); var c1 = DC.project().tracks[2].clips[0];
-  ok(c1.comp && c1.comp.a === "A" && c1.comp.b === "B" && c1.comp.at === 0.75 && DC.undoDepth() === u0 + 1 && RC.innerHTML.indexOf("組み合わせ中") >= 0 && RC.innerHTML.indexOf('data-cp="off"') >= 0, "make: comp saved in the clip (↶ +1)", c1.comp);
+  ok(DC.comp.open(cid) && DC.state().view === "comp" && RC.innerHTML.indexOf('data-cp="apply"') >= 0 && RC.innerHTML.indexOf('data-cpt="0|A"') >= 0 && RC.innerHTML.indexOf('data-cpt="1|B"') >= 0 && RC.innerHTML.indexOf('data-cpc="0"') >= 0 && RC.innerHTML.indexOf("確定」を押すと") >= 0, "comp screen (draft): sections, switch point, confirm button");
+  DC.comp.take(0, "A"); DC.comp.take(1, "B"); DC.comp.setAt(0, 0.85); var dr = DC.comp.cur();
+  ok(!dr.live && dr.secs.join() === "A,B" && dr.cuts[0] === 0.85 && JSON.stringify(DC.project()) === before0 && DC.undoDepth() === u0 && DC.comp.changed(), "editing the draft does not change the song", dr);
+  DC.comp.setAt(0, 0.75); DC.comp.apply(); var c1 = DC.project().tracks[2].clips[0];
+  ok(c1.comp && c1.comp.a === "A" && c1.comp.b === "B" && c1.comp.at === 0.75 && !c1.comp.hasOwnProperty("cuts") && DC.undoDepth() === u0 + 1 && RC.innerHTML.indexOf("曲の組み合わせ") >= 0 && RC.innerHTML.indexOf('data-cp="off"') >= 0 && !DC.comp.changed(), "確定: comp saved in the clip in the v2.49 shape (↶ +1)", c1.comp);
   DC.flushSave(); var svC = JSON.parse(SC["ultimateGorillaDawV1:p:" + DC.project().id]).project.tracks[2].clips[0];
   ok(svC.comp && svC.comp.at === 0.75, "auto-saved (comp in localStorage)");
-  DC.comp.step(0.01); ok(DC.project().tracks[2].clips[0].comp.at === 0.76 && DC.undoDepth() === u0 + 2, "＋10ms");
+  DC.comp.nudge(0.01); var notYet = DC.project().tracks[2].clips[0].comp.at; DC.comp.apply(); ok(notYet === 0.75 && DC.project().tracks[2].clips[0].comp.at === 0.76 && DC.undoDepth() === u0 + 2, "＋10ms (draft, then 確定)");
   DC.ops.undo(); ok(DC.project().tracks[2].clips[0].comp.at === 0.75, "↶ undoes the switch point");
   // 再生: A → B・継ぎ目にだけ 8ms の直線
   function runC(sec) { var P = DC.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DC.pump(); } }
@@ -1837,10 +1837,12 @@ module.exports = async function () {
   ok(wlC.length === 2 && wlC[0].asset === hA && wlC[1].asset === hB && JSON.stringify(wlC[1].env) === JSON.stringify(envB), "WAV export uses the same segments and envelopes");
   // テイクの欄
   DC.aedit.open(cid); var hT = RC.innerHTML;
-  ok(hT.indexOf("組み合わせ中") >= 0 && hT.indexOf('data-tku="') < 0 && hT.indexOf('data-tkx="A"') < 0 && !DC.takes.remove(cid, "A").ok && !DC.takes.select(cid, "A").ok, "take list while comping: no 使う; comp takes can't be removed / switched");
+  var segK = JSON.stringify(MC.audioSegs(DC.project(), DC.project().tracks[2].clips[0]).map(function (x) { return [x.id, x.p0, x.p1, x.tin, x.fadeIn, x.fadeOut]; }));
+  ok(hT.indexOf("組み合わせ中") >= 0 && hT.indexOf('data-tku="A"') >= 0 && hT.indexOf("直す") >= 0 && hT.indexOf('data-tkx="A"') < 0 && !DC.takes.remove(cid, "A").ok, "take list while comping: 「✏️ 直す」 picks a take to edit; comp takes can't be removed");
+  ok(DC.takes.select(cid, "A").ok && JSON.stringify(MC.audioSegs(DC.project(), DC.project().tracks[2].clips[0]).map(function (x) { return [x.id, x.p0, x.p1, x.tin, x.fadeIn, x.fadeOut]; })) === segK && DC.takes.select(cid, "B").ok, "9A-17: picking another take to edit does not change the comp sound");
   // 解除・↶
   DC.comp.open(cid); DC.comp.off(); var c2 = DC.project().tracks[2].clips[0];
-  ok(!c2.hasOwnProperty("comp") && c2.take === "B" && RC.innerHTML.indexOf('data-cp="make"') >= 0, "単一テイクに戻す: comp removed, take B in use");
+  ok(!c2.hasOwnProperty("comp") && c2.take === "B" && RC.innerHTML.indexOf('data-cp="apply"') >= 0, "単一テイクに戻す: comp removed, take B in use");
   DC.ops.undo(); ok(DC.project().tracks[2].clips[0].comp && DC.project().tracks[2].clips[0].comp.at === 0.75, "↶ brings the comp back");
   // 再読み込み
   DC.flushSave(); var pidC = DC.project().id; DC.reload(); DC.proj.open(pidC);
@@ -1858,4 +1860,128 @@ module.exports = async function () {
   var shaA2 = NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBC.data[DC.audio.IDB_NAME].stores.blobs.rows[hA].data))).digest("hex");
   ok(shaA2 === shaA && SC.ultimateGorillaSaveV2 === rpgC && eC.counters.errors.length === 0, "the original WAV is byte-identical (SHA-256); RPG save untouched; no errors", eC.counters.errors.slice(0, 3));
   ACp.stop(); DC.reset();
+
+  // ================= 9A-17: マルチ区間コンピング（§341）=================
+  // --- データ ---
+  var pm = ME.emptyProject(0), tm = ME.addAudioTrack(pm).track;
+  var mA = { id: "a:00000000000da001", name: "A.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000da001", store: "idb", added: 1 };
+  var mB = { id: "a:00000000000db002", name: "B.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000db002", store: "idb", added: 2 };
+  var mC = { id: "a:00000000000dc003", name: "C.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 144000, sec: 3, hash: "a:00000000000dc003", store: "idb", added: 3 };
+  pm.assets.push(mA, mB, mC);
+  var cm = ME.addAudioClip(pm, tm, 3840, mA, "vocal"); ME.addTake(pm, cm.id, mB.id, "B", 2); ME.addTake(pm, cm.id, mC.id, "C", 3); ME.selectTake(pm, cm.id, "A");
+  // v2.49 の形は、開いただけでは変えない
+  cm.comp = { a: "A", b: "B", at: 1.6, mine: 7 };
+  var v49 = JSON.stringify(cm.comp), cl49 = ME.clean(JSON.parse(JSON.stringify(pm))).tracks[2].clips[0];
+  ok(JSON.stringify(cl49.comp) === v49 && ME.compOf(pm, cm).n === 2 && ME.compOf(pm, cm).secs.join() === "A,B", "v2.49 comp { a, b, at }: kept as is on load (no cuts added); 2 sections");
+  // A→B→A
+  var s3 = ME.setComp(pm, cm.id, { secs: ["A", "B", "A"], cuts: [0.6, 1.2] }), XF2 = ME.COMP_XF / 2;
+  ok(s3.ok && cm.comp.a === "A" && cm.comp.b === "B" && cm.comp.at === 0.6 && cm.comp.cuts.length === 1 && cm.comp.cuts[0].at === 1.2 && cm.comp.cuts[0].take === "A" && cm.comp.mine === 7, "A→B→A: { a, b, at, cuts: [{ at, take }] }; unknown comp fields kept", cm.comp);
+  var g3 = ME.audioSegs(pm, cm);
+  ok(g3.length === 3 && g3[0].id === mA.id && Math.abs(g3[0].p1 - (2.6 + XF2)) < 1e-9 && g3[1].id === mB.id && Math.abs(g3[1].p0 - (2.6 - XF2)) < 1e-9 && Math.abs(g3[1].p1 - (3.2 + XF2)) < 1e-9 && g3[1].xIn && g3[1].xOut && g3[1].fadeIn === ME.COMP_XF && g3[1].fadeOut === ME.COMP_XF &&
+    g3[2].id === mA.id && Math.abs(g3[2].p0 - (3.2 - XF2)) < 1e-9 && Math.abs(g3[2].tin - (1.2 - XF2)) < 1e-9 && g3[2].xIn && !g3[2].xOut, "A→B→A segments: the middle B crossfades in and out; the 2nd A resumes at its own source time", g3.map(function (x) { return [x.take, x.p0, x.p1, x.tin]; }));
+  var e3 = ME.audioEvents(pm, 0, 3840 * 8, true);
+  ok(e3.length === 3 && e3.map(function (x) { return x.take; }).join("") === "ABA", "audioEvents: 3 events A, B, A");
+  // A→B→C→A（C は 3 秒 → 箱が広がる）
+  var s4 = ME.setComp(pm, cm.id, { secs: ["A", "B", "C", "A"], cuts: [0.5, 1.0, 1.5] }), g4 = ME.audioSegs(pm, cm);
+  ok(s4.ok && cm.comp.cuts.length === 2 && cm.comp.cuts[1].take === "A" && g4.length === 4 && g4.map(function (x) { return x.take; }).join("") === "ABCA" && cm.len === 2 * 3840 && Math.abs(g4[2].tin - (1.0 - XF2)) < 1e-9, "A→B→C→A: 4 segments; the box grows for the longer take C", [cm.len, g4.map(function (x) { return [x.take, x.p0, x.p1]; })]);
+  ok(!ME.setComp(pm, cm.id, { secs: ["A", "B", "C", "A", "B"], cuts: [0.3, 0.6, 0.9, 1.2] }).ok && cm.comp.cuts.length === 2, "5 sections are refused (max 4); nothing changed");
+  // 同じテイクのとなりはまとめる・同じだけなら断る・近すぎる
+  var sm = ME.setComp(pm, cm.id, { secs: ["A", "A", "B", "B"], cuts: [0.5, 1.0, 1.5] });
+  ok(sm.ok && cm.comp.a === "A" && cm.comp.b === "B" && cm.comp.at === 1 && !cm.comp.hasOwnProperty("cuts") && ME.audioSegs(pm, cm).length === 2, "adjacent same takes are merged (no seam): A,A,B,B → A→B at 1.0 (v2.49 shape)", cm.comp);
+  var keepC = JSON.stringify(cm.comp);
+  ok(!ME.setComp(pm, cm.id, { secs: ["B", "B"], cuts: [0.5] }).ok && !ME.setComp(pm, cm.id, { secs: ["A", "B", "A"], cuts: [0.5, 0.51] }).ok && JSON.stringify(cm.comp) === keepC, "one take only / cuts closer than 20 ms: refused, comp unchanged");
+  // 20ms の区間: クロスフェードは重ならない
+  ME.setComp(pm, cm.id, { secs: ["A", "B", "A"], cuts: [0.5, 0.52] }); var gN = ME.audioSegs(pm, cm);
+  ok(gN.length === 3 && gN[1].xf === ME.COMP_XF && Math.abs(gN[1].p0 - (2.5 - XF2)) < 1e-9 && Math.abs(gN[1].p1 - (2.52 + XF2)) < 1e-9 && gN[0].p1 <= gN[2].p0 + 0.016 + 1e-9, "a 20 ms section: 8 ms fades on both sides, they do not overlap (4 ms + 4 ms inside 20 ms)", gN.map(function (x) { return [x.p0, x.p1, x.xf]; }));
+  // 手で書いた 5ms の区間（読みこんだデータ）: 鳴らさない所から後ろを使わない・データは残す
+  cm.comp = { a: "A", b: "B", at: 0.5, cuts: [{ at: 0.505, take: "A" }] }; var cpN = ME.compOf(pm, cm);
+  ok(cpN.n === 2 && cpN.bad && cm.comp.cuts.length === 1, "hand-made data with a 5 ms gap: the later section is not played (flagged), data kept");
+  // 長さのちがうテイク・トリム: 区間の途中で終わる → 自分のフェード、あいだは無音
+  ME.setComp(pm, cm.id, { secs: ["A", "B", "C"], cuts: [0.5, 1.5] }); ME.selectTake(pm, cm.id, "B"); ME.setAudioEdit(pm, cm.id, { trimOut: 0.8, fadeOut: 0.01 }); ME.selectTake(pm, cm.id, "A");
+  var gT = ME.audioSegs(pm, cm);
+  ok(gT.length === 3 && gT[1].take === "B" && Math.abs(gT[1].p1 - 2.8) < 1e-9 && !gT[1].xOut && gT[1].fadeOut === 0.01 && gT[2].take === "C" && gT[2].xIn && Math.abs(gT[2].p0 - (3.5 - XF2)) < 1e-9, "a take that ends inside its section (trimmed B): its own fade-out, silence until C crossfades in", gT.map(function (x) { return [x.take, x.p0, x.p1, x.fadeOut]; }));
+  ME.selectTake(pm, cm.id, "B"); ME.setAudioEdit(pm, cm.id, { reset: true }); ME.selectTake(pm, cm.id, "A");
+  // 外す・知らない項目・古い版で動いた at・BPM・動かす・複製
+  ME.setComp(pm, cm.id, { secs: ["A", "B", "C"], cuts: [0.5, 1.5] }); cm.comp.cuts[0].note = "x";
+  ok(!ME.removeTake(pm, cm.id, "C").ok && /組み合わせ/.test(ME.removeTake(pm, cm.id, "C").why), "a take used only in a later section can't be removed");
+  ME.setComp(pm, cm.id, { secs: ["A", "B", "C"], cuts: [0.5, 1.6] });
+  ok(cm.comp.cuts[0].note === "x" && cm.comp.cuts[0].at === 1.6, "unknown fields inside cuts[] survive a re-confirm");
+  var rcm = ME.parseRecordText(JSON.stringify(ME.toRecord(pm, 1))), ccm = rcm.project.tracks[2].clips[0];
+  ok(rcm.ok && JSON.stringify(ccm.comp) === JSON.stringify(cm.comp) && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(rcm.project)))) === JSON.stringify(rcm.project), "JSON round trip keeps cuts; clean() is stable");
+  var old49 = JSON.parse(JSON.stringify(cm.comp)); ME.setComp(pm, cm.id, { at: 1.8 }); var cpO = ME.compOf(pm, cm);
+  ok(cm.comp.cuts && cm.comp.cuts[0].take === "C" && cpO.n === 2 && cpO.bad, "v2.49-style edit moves at past the next cut: cuts kept, later sections not played (flagged)");
+  cm.comp = old49;
+  var Ts0 = ME.compOf(pm, cm).ats.join(); ME.setBpm(pm, 90); var Ts1 = ME.compOf(pm, cm).ats.join(); ME.setBpm(pm, 120);
+  ok(Ts0 === Ts1, "BPM change: switch points stay in seconds from the clip head");
+  var T0m = ME.compOf(pm, cm).Ts[1]; ok(ME.moveClip(pm, cm.id, 3).ok && Math.abs(ME.compOf(pm, cm).Ts[1] - (T0m + 6)) < 1e-9, "moving the clip 3 bars moves every switch with it (+6 s)");
+  var dm = ME.duplicateClip(pm, cm.id); dm.comp.cuts[0].at = 1.0;
+  ok(cm.comp.cuts[0].at === 1.6 && dm.comp.cuts !== cm.comp.cuts, "duplicate: cuts are an independent copy");
+  ME.deleteClip(pm, dm.id);
+  cm.comp.cuts[0].take = "Z"; var cpZ = ME.compOf(pm, cm);
+  ok(cpZ.n === 2 && cpZ.bad && cm.comp.cuts[0].take === "Z", "a cut whose take is gone (removed in an old version): later sections not played, data kept");
+
+  // --- 画面・再生・書き出し・保存・ZIP ---
+  var eM = H.load(), WM = eM.window, MM = WM.UGDawModel, DM2 = WM.UGDaw, AM = WM.UGArcade, SM = eM.store, IDBM = fakeIDB();
+  WM.indexedDB = IDBM; fakeDecode(WM);
+  var RM = H.makeEl("div"); DM2.reset(); AM.start("daw", RM, {}); DM2.proj.create("empty");
+  function impM(ab, name, o) { return new Promise(function (r) { DM2.audio.importWav(ab, name, o, r); }); }
+  var tM = await new Promise(function (r) { DM2.audio.add(r); });
+  var jA = await impM(makeWav({ sr: 44100, ch: 1, sec: 2, fn: tone(440) }).slice(0), "A.wav", { track: tM.id }), cidM = jA.clip.id;
+  var jB = await impM(makeWav({ sr: 44100, ch: 1, sec: 2, fn: tone(660) }).slice(0), "B.wav", { track: tM.id, take: cidM });
+  var jC = await impM(makeWav({ sr: 44100, ch: 1, sec: 1.2, fn: tone(880) }).slice(0), "C.wav", { track: tM.id, take: cidM });
+  DM2.takes.select(cidM, "A");
+  var mHA = jA.asset.id, mHB = jB.asset.id, mHC = jC.asset.id, shaM = {};
+  [mHA, mHB, mHC].forEach(function (h) { shaM[h] = NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBM.data[DM2.audio.IDB_NAME].stores.blobs.rows[h].data))).digest("hex"); });
+  ok(jA.ok && jB.ok && jC.ok && DM2.project().tracks[2].clips[0].takes.length === 3, "three takes A (440 Hz), B (660 Hz), C (880 Hz, shorter)");
+  DM2.comp.open(cidM); var uM = DM2.undoDepth(), beforeM = JSON.stringify(DM2.project());
+  DM2.comp.take(1, "B"); DM2.comp.setAt(0, 0.5); var ad1 = DM2.comp.add(), dM = DM2.comp.cur();
+  ok(ad1.ok && dM.secs.length === 3 && dM.cuts.length === 2 && JSON.stringify(DM2.project()) === beforeM && RM.innerHTML.indexOf('data-cpc="1"') >= 0 && RM.innerHTML.indexOf("確定していない変更") >= 0, "＋ 区間を足す: 3 sections in the draft (song unchanged)", dM);
+  DM2.comp.take(0, "A"); DM2.comp.take(1, "B"); DM2.comp.take(2, "C"); DM2.comp.add(); dM = DM2.comp.cur();
+  DM2.comp.take(0, "A"); DM2.comp.take(1, "B"); DM2.comp.take(2, "C"); DM2.comp.take(3, "A");
+  DM2.comp.setAt(0, 0.5); DM2.comp.setAt(1, 0.9); DM2.comp.setAt(2, 1.1);
+  dM = DM2.comp.cur();
+  ok(dM.secs.join("") === "ABCA" && dM.cuts.join() === "0.5,0.9,1.1" && JSON.stringify(DM2.project()) === beforeM && DM2.undoDepth() === uM, "draft A→B→C→A at 0.5 / 0.9 / 1.1 (song still unchanged)", dM);
+  ok(!DM2.comp.add().ok && /4 つ/.test(DM2.state().cview.msg), "a 5th section is refused");
+  DM2.comp.sel(1); DM2.comp.nudge(-0.001); DM2.comp.nudge(0.1); var nd = DM2.comp.cur().cuts[1];
+  ok(nd === 0.999 && DM2.comp.cur().sel === 1, "±1ms / ±100ms move only the selected switch", nd);
+  DM2.comp.nudge(0.5); ok(DM2.comp.cur().cuts[1] === 1.08 && /置けない/.test(DM2.state().cview.msg), "a switch can't pass the next one (kept 20 ms apart)", DM2.comp.cur().cuts);
+  DM2.comp.undo(); DM2.comp.undo(); DM2.comp.undo(); ok(DM2.comp.cur().cuts[1] === 0.9, "↶ in the comp screen steps back through the draft");
+  // 下書きの試聴（影の曲）
+  function runM(sec) { var P = DM2.player(), ac = P.ac, end = ac.currentTime + sec, g = 0; while (ac.currentTime < end && g++ < 40000) { ac.currentTime += 0.025; DM2.pump(); } }
+  DM2.clearLog(); DM2.comp.play("all"); runM(2.5); var lgD = DM2.log().filter(function (x) { return x.audio; });
+  ok(lgD.length >= 4 && lgD.slice(0, 4).map(function (x) { return x.asset; }).join() === [mHA, mHB, mHC, mHA].join() && JSON.stringify(DM2.project()) === beforeM, "▶ plays the draft (A, B, C, A) without changing the song", lgD.map(function (x) { return x.asset.slice(-4); }));
+  DM2.stop();
+  DM2.comp.apply(); var cM = DM2.project().tracks[2].clips[0], cMj = JSON.stringify(cM.comp);
+  ok(cM.comp.a === "A" && cM.comp.b === "B" && cM.comp.at === 0.5 && cM.comp.cuts.length === 2 && cM.comp.cuts[0].take === "C" && cM.comp.cuts[0].at === 0.9 && cM.comp.cuts[1].take === "A" && cM.comp.cuts[1].at === 1.1 && DM2.undoDepth() === uM + 1, "✅ 確定: saved as { a, b, at, cuts } (↶ +1)", cM.comp);
+  DM2.setLoop(false); DM2.clearLog(); DM2.play(); runM(3); var lgM = DM2.log().filter(function (x) { return x.audio; });
+  var envMid = lgM[1] && lgM[1].env, envC = lgM[2] && lgM[2].env;
+  ok(lgM.length === 4 && lgM.map(function (x) { return x.asset; }).join() === [mHA, mHB, mHC, mHA].join() && lgM.every(function (x) { return x.ok; }) && Math.abs(lgM[3].offset - (1.1 - XF2)) < 1e-6, "playback A→B→C→A; the last A resumes at its source time 1.096 s", lgM.map(function (x) { return [x.asset.slice(-4), x.sec, x.offset, x.dur]; }));
+  ok(envMid && envMid[0][1] === 0 && Math.abs(envMid[1][0] - MM.COMP_XF) < 1e-6 && envMid[1][1] === 1 && envMid[envMid.length - 1][1] === 0 && envMid.length === 4, "middle section: 8 ms in, 8 ms out, no extra tiny fades", envMid);
+  DM2.stop();
+  await new Promise(function (r) { DM2.wav.start(r); }); for (var gM = 0; gM < 300 && DM2.wav.state().busy; gM++) { await eM.wait(10); }
+  var wlM = DM2.wav.state().log.filter(function (x) { return x.audio; });
+  ok(wlM.length === 4 && JSON.stringify(wlM.map(function (x) { return [x.asset, x.env]; })) === JSON.stringify(lgM.map(function (x) { return [x.asset, x.env]; })), "WAV export: the same 4 segments and envelopes");
+  // 下書きを捨てる・消す・単一テイク・↶
+  DM2.comp.open(cidM); DM2.comp.take(3, "B"); ok(DM2.comp.changed() && DM2.comp.cancel() && !DM2.comp.changed() && DM2.project().tracks[2].clips[0].comp.cuts[1].take === "A", "✖ やめる: the draft is dropped, the song stays");
+  DM2.comp.sel(1); DM2.comp.del(); var dd = DM2.comp.cur(); ok(dd.secs.join("") === "ABA" && dd.cuts.join() === "0.5,1.1", "− 切りかえを消す: the section joins the previous one (draft)", dd);
+  DM2.comp.cancel();
+  DM2.comp.off(); ok(!DM2.project().tracks[2].clips[0].hasOwnProperty("comp") && DM2.undoDepth() === uM + 2, "単一テイクに戻す (song changed, ↶ +1)");
+  DM2.comp.undo(); ok(DM2.project().tracks[2].clips[0].comp.cuts.length === 2, "↶ brings the 4-section comp back");
+  // アレンジの波形: テイクごとの色と 3 本の線
+  DM2.state().view = "arr"; DM2.select("clip", cidM); var wv = DM2.comp.svg(DM2.project(), DM2.project().tracks[2].clips[0], 400);
+  ok(wv.indexOf("cp-tA") >= 0 && wv.indexOf("cp-tB") >= 0 && wv.indexOf("cp-tC") >= 0 && wv.split("da-wave-x").length === 4, "arrangement waveform: one colour per take and 3 switch lines");
+  // 保存・読みなおし・ZIP
+  DM2.flushSave(); var pidM = DM2.project().id; DM2.reload(); DM2.proj.open(pidM);
+  ok(JSON.stringify(DM2.project().tracks[2].clips[0].comp) === cMj, "after a reload: the same 4-section comp");
+  var exM = await new Promise(function (r) { DM2.pack.exportZip(r); });
+  ok(exM.ok && exM.assets === 3, "ZIP: all 3 take WAVs", exM.why);
+  var eM2 = H.load(), WM2 = eM2.window, DM3 = WM2.UGDaw, IDBM2 = fakeIDB(); WM2.indexedDB = IDBM2; fakeDecode(WM2);
+  var RM2 = H.makeEl("div"); DM3.reset(); WM2.UGArcade.start("daw", RM2, {});
+  var rM2 = await impZ(DM3, blobAB(exM.blob)); DM3.proj.open(rM2.id); await new Promise(function (r) { DM3.audio.ensure(DM3.project(), r); });
+  DM3.setLoop(false); DM3.clearLog(); DM3.play(); var PM3 = DM3.player(), gM3 = 0; while (PM3.ac.currentTime < 3 && gM3++ < 1000) { PM3.ac.currentTime += 0.025; DM3.pump(); }
+  var lgM3 = DM3.log().filter(function (x) { return x.audio; });
+  ok(rM2.ok && JSON.stringify(DM3.project().tracks[2].clips[0].comp) === cMj && lgM3.map(function (x) { return x.asset; }).join() === [mHA, mHB, mHC, mHA].join(), "restored from the ZIP into empty storage: same comp, same 4 segments", rM2.why);
+  DM3.stop(); WM2.UGArcade.stop(); DM3.reset();
+  ok([mHA, mHB, mHC].every(function (h) { return NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBM.data[DM2.audio.IDB_NAME].stores.blobs.rows[h].data))).digest("hex") === shaM[h]; }) && eM.counters.errors.length === 0, "original WAVs byte-identical (SHA-256); no errors", eM.counters.errors.slice(0, 3));
+  AM.stop(); DM2.reset();
 };

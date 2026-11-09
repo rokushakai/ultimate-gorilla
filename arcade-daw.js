@@ -136,7 +136,7 @@
   function schedule(p, from, to, seg) {
     var M = DM(), evs = M.noteEvents(p, from, to), i, Y = window.UGSynth;
     // §341 9A-10: 音声のクリップ（区間の頭なら、かかっているクリップを途中から）
-    var fresh = !!seg.fresh && !seg.freshDone && from === seg.tick0, aev = M.audioEvents(p, from, to, fresh);
+    var fresh = !!seg.fresh && !seg.freshDone && from === seg.tick0, aev = M.audioEvents(pl.shadow || p, from, to, fresh); // 9A-17: 下書きの試聴は影の曲（同じクリップ ID・トラック）
     if (fresh) { seg.freshDone = true; }
     for (i = 0; i < aev.length; i++) { playAudio(p, aev[i], seg); }
     for (i = 0; i < evs.length; i++) {
@@ -267,7 +267,7 @@
     }
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
     pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD + Math.max(0, Number(opts.delay) || 0), tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
-      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined }, muteClip: opts.muteClip || null };
+      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined }, muteClip: opts.muteClip || null, shadow: opts.shadow || null };
     for (i = 0; i < p.tracks.length; i++) { mixFor(p.tracks[i]); warm(p.tracks[i]); }
     // §341 9A-7: ドラムのトラックがあれば生ドラムのサンプルを読みはじめる（終わるまでは作る音）
     for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { try { if (UG.loadSamples && UG.DRUM !== undefined) { UG.loadSamples([UG.DRUM]); } } catch (e5) {} break; } }
@@ -1015,25 +1015,27 @@
     aud.wave[key] = out;
     return out;
   }
-  // 9A-16: コンピングのクリップの波形（区間ごとにそのテイクのピーク・後半は色を変える）
+  // 9A-16／9A-17: コンピングのクリップの波形（区間ごとにそのテイクのピーク・テイクの色・切りかえの線）
   function compWaveSvg(p, c, w) {
-    var M = DM(), segs = M.audioSegs(p, c), key = "comp|" + JSON.stringify([c.start, c.len, c.comp, c.takes, c.asset, c.trimIn, c.trimOut, c.nudge, w, p.tempo.points]);
+    var M = DM(), segs = M.audioSegs(p, c), key = "comp|" + JSON.stringify([c.start, c.len, c.comp, c.takes, c.asset, c.trimIn, c.trimOut, c.nudge, c.fadeIn, c.fadeOut, w, p.tempo.points]);
     if (aud.wave[key]) { return aud.wave[key]; }
-    var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, PR = M.PEAK_RATE, ds = ["", ""], x, i, q, ready = true;
+    var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, PR = M.PEAK_RATE, ds = {}, x, i, q, k, ready = true, cp = M.compOf(p, c);
     for (q = 0; q < segs.length; q++) { if (!aud.peaks[segs[q].id]) { ready = false; } }
-    if (!ready || !segs.length) { return ""; }
+    if (!ready || !segs.length || !cp) { return ""; }
     for (x = 0; x < w; x += 2) {
-      var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ), xm = (x0 + x1) / 2, sg = null, si = 0;
-      for (q = 0; q < segs.length; q++) { var s = segs[q], lo = Math.max(0, s.p0), hi = s.p1; if (xm >= lo && xm < hi && (!sg || (q > 0 && xm >= s.T))) { sg = s; si = s.take === c.comp.b ? 1 : 0; } }
+      var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ), xm = (x0 + x1) / 2, sg = null;
+      for (q = 0; q < segs.length; q++) { var s = segs[q]; if (xm >= s.from && xm < s.to && xm >= Math.max(0, s.p0) && xm < s.p1) { sg = s; } }
       if (!sg) { continue; }
       var pk = aud.peaks[sg.id], t0 = sg.tin + (Math.max(x0, Math.max(0, sg.p0)) - sg.p0), t1 = sg.tin + (Math.min(x1, sg.p1) - sg.p0);
       var i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
       for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
       var hh = Math.max(0.5, m / 255 * H / 2);
-      ds[si] += "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
+      ds[sg.take] = (ds[sg.take] || "") + "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
     }
-    var cx = Math.round((M.secToTick(p, segs[0].T) - c.start) / M.PPQ * PX_BEAT);
-    var out = '<svg class="da-wave" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true"><path d="' + ds[0] + '"/><path class="da-wave-b" d="' + ds[1] + '"/><line class="da-wave-x" x1="' + cx + '" y1="' + top + '" x2="' + cx + '" y2="' + (top + H) + '"/></svg>';
+    var out = '<svg class="da-wave" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true">';
+    for (k in ds) { if (ds.hasOwnProperty(k)) { out += '<path class="' + cpCls(k) + '" d="' + ds[k] + '"/>'; } }
+    for (i = 0; i < cp.Ts.length; i++) { var cx = Math.round((M.secToTick(p, cp.Ts[i]) - c.start) / M.PPQ * PX_BEAT); out += '<line class="da-wave-x" x1="' + cx + '" y1="' + top + '" x2="' + cx + '" y2="' + (top + H) + '"/>'; }
+    out += '</svg>';
     if (aud.waveN++ > WAVE_CACHE) { aud.wave = {}; aud.waveN = 0; }
     aud.wave[key] = out;
     return out;
@@ -2620,7 +2622,6 @@
     // 使うテイクを切りかえる（↶ で戻せる・自動保存・再生中は古いノードを止めて鳴らしなおす）
     select: function (cid, id) {
       if (rec.state !== "idle") { takeNote("録音中はテイクを切りかえられません"); if (st.root) { rerender(); } return { ok: false, why: "rec" }; }
-      if (DM().compOf(project(), DM().findClip(project(), cid) ? DM().findClip(project(), cid).clip : null)) { takeNote("組み合わせ中はテイクを切りかえられません（🎧 で単一テイクに戻してから）"); if (st.root) { rerender(); } return { ok: false, why: "comp" }; } // 9A-16
       var p = project(), snap = snapTracks(), r = DM().selectTake(p, cid, id);
       if (!r.ok) { takeNote(r.why); if (st.root) { rerender(); } return r; }
       if (r.same) { return r; }
@@ -2640,14 +2641,14 @@
     var M = DM(), l = M.takesOf(p, c), act = M.activeTakeId(c), i, h, sec = 0, al = p.assets || [], cp = M.compOf(p, c);
     for (i = 0; i < al.length; i++) { sec += Number(al[i] && al[i].sec) || 0; }
     h = '<div class="tk"><div class="tk-h">&#x1F399;&#xFE0F; テイク（' + l.length + '／' + M.MAX_TAKES + '）<span class="small">この曲の素材 ' + al.length + '／' + M.MAX_ASSETS + ' 個・' + Math.round(sec * 10) / 10 + '／' + M.MAX_ASSET_SEC + ' 秒</span></div>';
-    if (cp) { h += '<div class="tk-comp">&#x1F3A7; 組み合わせ中: 前半 <b>' + escHtml(cp.a) + '</b> → 後半 <b>' + escHtml(cp.b) + '</b>（' + fsec(cp.at) + ' 秒で切りかえ）。テイクの「使う」は、単一テイクに戻してから</div>'; } // 9A-16
+    if (cp) { h += '<div class="tk-comp">&#x1F3A7; 組み合わせ中: <b>' + escHtml(cp.secs.join(" → ")) + '</b>（' + cp.n + ' 区間）。鳴るのは組み合わせです。「&#x270F;&#xFE0F; 直す」でテイクを選ぶと、そのテイクの先頭・末尾・位置の調整を下で直せます（組み合わせの区間は変わりません）</div>'; } // 9A-16／9A-17
     else if (c.comp) { h += '<div class="tk-comp">&#x26A0;&#xFE0F; 組み合わせのテイクが見つかりません（いま使っているテイクで鳴らしています・設定は残しています）</div>'; }
     for (i = 0; i < l.length; i++) {
       var t = l[i], a = M.findAsset(p, t.asset), on = t.id === act, hearing = !!(hearInfo && hearInfo.clip === c.id && hearInfo.id === t.id);
-      h += '<div class="tk-row' + (on ? ' tk-on' : '') + '"><b class="tk-id">' + escHtml(t.id) + '</b><span class="tk-meta">' + escHtml(t.name) + '<br><small>' + (t.at || (a && a.added) ? fmtTime(t.at || a.added) : '—') + '・' + (a ? (Math.round(a.sec * 100) / 100) + ' 秒' : '&#x26A0;&#xFE0F; 素材がありません') + '</small>' + (on ? '<br><b class="tk-use">&#x2705; このテイクを使用中</b>' : '') + '</span>' +
+      h += '<div class="tk-row' + (on ? ' tk-on' : '') + '"><b class="tk-id">' + escHtml(t.id) + '</b><span class="tk-meta">' + escHtml(t.name) + '<br><small>' + (t.at || (a && a.added) ? fmtTime(t.at || a.added) : '—') + '・' + (a ? (Math.round(a.sec * 100) / 100) + ' 秒' : '&#x26A0;&#xFE0F; 素材がありません') + '</small>' + (on ? '<br><b class="tk-use">' + (cp ? '&#x270F;&#xFE0F; 下で直しているテイク' : '&#x2705; このテイクを使用中') + '</b>' : '') + '</span>' +
         '<span class="tk-btns"><button class="modal-btn tk-b' + (hearing ? ' daw-on' : '') + '" data-tkp="' + escHtml(t.id) + '" title="試聴">' + (hearing ? '&#x23F9;&#xFE0F;' : '&#x25B6;&#xFE0F;') + '</button>' +
-        (on || cp ? '' : '<button class="modal-btn tk-b" data-tku="' + escHtml(t.id) + '"' + (a ? '' : ' disabled') + '>使う</button>') +
-        (on || t.virtual || (cp && (cp.a === t.id || cp.b === t.id)) ? '' : '<button class="modal-btn tk-b tk-x" data-tkx="' + escHtml(t.id) + '" title="一覧から外す（素材は残る）">外す</button>') + '</span></div>';
+        (on ? '' : '<button class="modal-btn tk-b" data-tku="' + escHtml(t.id) + '"' + (a ? '' : ' disabled') + '>' + (cp ? '&#x270F;&#xFE0F; 直す' : '使う') + '</button>') +
+        (on || t.virtual || (c.comp && M.compRaw(c).secs.indexOf(t.id) >= 0) ? '' : '<button class="modal-btn tk-b tk-x" data-tkx="' + escHtml(t.id) + '" title="一覧から外す（素材は残る）">外す</button>') + '</span></div>';
     }
     var why = M.takeRoomWhy(c);
     return h + '<div class="da-btns"><button class="modal-btn da-wide tk-rec" data-tk="rec"' + (why || rec.state !== "idle" ? ' disabled' : '') + '>&#x1F399;&#xFE0F; 別テイクを録音（' + l.length + '／' + M.MAX_TAKES + '）</button></div>' + (why ? '<div class="small">' + escHtml(why) + '</div>' : '') +
@@ -2661,124 +2662,199 @@
     return { p0: lo, p1: hi };
   }
 
-  // ---------- §341 9A-16: コンピング Lite（前半・後半の 2 つのテイクを 1 か所で切りかえる・元の WAV はそのまま）----------
-  var CP_W = 340, CP_H = 84, CP_STEPS = [["-1", "&#x2212;1s"], ["-0.1", "&#x2212;0.1s"], ["-0.01", "&#x2212;10ms"], ["0.01", "＋10ms"], ["0.1", "＋0.1s"], ["1", "＋1s"]], CP_SEAM = 1.5;
+  // ---------- §341 9A-16／9A-17: コンピング（最大 4 区間・下書きを「確定」するまで曲は変えない・元の WAV はそのまま）----------
+  var CP_W = 340, CP_H = 84, CP_STEPS = [["-0.1", "&#x2212;100ms"], ["-0.01", "&#x2212;10ms"], ["-0.001", "&#x2212;1ms"], ["0.001", "＋1ms"], ["0.01", "＋10ms"], ["0.1", "＋100ms"]], CP_SEAM = 1.5;
+  function cpCls(id) { return "cp-t" + (/^[A-H]$/.test(id) ? id : "X"); }
+  function r4s(x) { return Math.round(x * 10000) / 10000; }
   function openComp(id) {
     var p = project(), f = DM().findClip(p, id);
     if (!f || f.clip.type !== "audio" || DM().takesOf(p, f.clip).length < 2 || rec.state !== "idle") { return false; }
     takeHearStop(); if (pl && pl.clip) { stopPlay(false); }
-    st.view = "comp"; st.sel = { kind: "clip", id: id }; st.aedit = { clip: id, msg: "" }; st.cview = { clip: id, msg: "", draft: null, mode: "" };
+    st.view = "comp"; st.sel = { kind: "clip", id: id }; st.aedit = { clip: id, msg: "" }; st.cview = { clip: id, msg: "", draft: null, mode: "", leave: "" };
     return true;
+  }
+  // 曲の値から下書きを作る（組み合わせていなければ、いまのテイクと次のテイクの 2 区間）
+  function compInit(p, c) {
+    var M = DM(), cp = M.compOf(p, c), l, act, b = "", i;
+    if (cp) { return { secs: cp.secs.slice(), cuts: cp.ats.slice(), sel: 0, hist: [], live: true, bad: cp.bad }; }
+    l = M.takesOf(p, c); act = M.activeTakeId(c);
+    for (i = 0; i < l.length; i++) { if (l[i].id !== act) { b = l[i].id; break; } }
+    return { secs: [act, b], cuts: [M.compDefaultAt(p, c, act, b)], sel: 0, hist: [], live: false, bad: false };
+  }
+  // 下書きの comp（となりの同じテイクはまとめる）
+  function compObj(d) {
+    var m = DM().compMerge(d.secs, d.cuts), o = { a: m.secs[0], b: m.secs[1], at: m.cuts[0] }, i;
+    if (m.secs.length > 2) { o.cuts = []; for (i = 2; i < m.secs.length; i++) { o.cuts.push({ at: m.cuts[i - 1], take: m.secs[i] }); } }
+    return o;
+  }
+  // 下書きが曲の値とちがうか（組み合わせていない曲なら、下書きを動かしたか）
+  function compChanged(p, c, d) {
+    var cp = DM().compOf(p, c);
+    if (!cp) { return d.hist.length > 0; }
+    var m = DM().compMerge(d.secs, d.cuts);
+    return JSON.stringify([m.secs, m.cuts.map(r4s)]) !== JSON.stringify([cp.secs, cp.ats.map(r4s)]);
+  }
+  function compBox(p, c) { return DM().tickToSec(p, c.start + c.len) - DM().tickToSec(p, c.start); }
+  // 切りかえ j を v 秒へ（となりと 20ms 以上・箱の中）→ "" / 理由
+  function compSetCut(p, c, d, j, v) {
+    var M = DM(), box = compBox(p, c), lo = j === 0 ? M.COMP_MIN : d.cuts[j - 1] + M.COMP_GAP, hi = j === d.cuts.length - 1 ? Math.max(M.COMP_MIN, box - M.COMP_MIN) : d.cuts[j + 1] - M.COMP_GAP;
+    if (!isFinite(v)) { return "数を入れてください"; }
+    if (hi < lo) { return "ここには動かせません（となりの切りかえと近すぎます）"; }
+    d.cuts[j] = r4s(Math.max(lo, Math.min(hi, v)));
+    return Math.abs(d.cuts[j] - v) > 1e-6 ? "その位置には置けないので、" + fsec(d.cuts[j]) + " 秒にしました（となりと " + Math.round(M.COMP_GAP * 1000) + "ms 以上・クリップの中）" : "";
+  }
+  // いちばん長い区間をまん中で分けて、後ろをほかのテイクに（前後と同じにならないテイクがある区間だけ）
+  function compAddSec(p, c, d) {
+    var M = DM(), l = M.takesOf(p, c), box = compBox(p, c), e = [0].concat(d.cuts).concat([box]), order = [], k, i;
+    if (d.secs.length >= M.COMP_MAX_SECS) { return "区間は " + M.COMP_MAX_SECS + " つまでです"; }
+    for (k = 0; k < d.secs.length; k++) { order.push(k); }
+    order.sort(function (x, y) { return (e[y + 1] - e[y]) - (e[x + 1] - e[x]); });
+    for (i = 0; i < order.length; i++) {
+      k = order[i];
+      var lo = e[k], hi = e[k + 1], mid = r4s(Math.round((lo + hi) / 2 * 1000) / 1000), nt = "", j;
+      if (mid - lo < M.COMP_GAP || hi - mid < M.COMP_GAP || mid < M.COMP_MIN || mid > box - M.COMP_MIN) { continue; }
+      for (j = 0; j < l.length && !nt; j++) { if (l[j].id !== d.secs[k] && (k + 1 >= d.secs.length || l[j].id !== d.secs[k + 1]) && M.findAsset(p, l[j].asset)) { nt = l[j].id; } }
+      if (!nt) { continue; }
+      d.cuts.splice(k, 0, mid); d.secs.splice(k + 1, 0, nt); d.sel = k;
+      return "";
+    }
+    return "分けられる区間がありません（区間が短すぎるか、ちがうテイクがありません）";
   }
   var comp = {
     clip: function () { return st.cview ? DM().findClip(project(), st.cview.clip) : null; },
-    // いまの設定（組み合わせ中ならその値・でなければ下書き（まだ曲に入れていない））→ { a, b, at, live }
-    cur: function () {
-      var f = comp.clip(), p = project(), M = DM();
-      if (!f) { return null; }
-      var cp = M.compOf(p, f.clip);
-      if (cp) { return { a: cp.a, b: cp.b, at: cp.at, live: true }; }
-      var d = st.cview.draft, l = M.takesOf(p, f.clip), act = M.activeTakeId(f.clip), b = "", i;
-      if (d) { return d; }
-      for (i = 0; i < l.length; i++) { if (l[i].id !== act) { b = l[i].id; break; } }
-      d = st.cview.draft = { a: act, b: b, at: M.compDefaultAt(p, f.clip, act, b), live: false };
-      return d;
-    },
-    // 変える（o: setComp と同じ）。組み合わせ中なら曲を変える（↶・自動保存・鳴らしなおす）、まだなら下書きだけ
-    set: function (o) {
-      var f = comp.clip(), p = project(), M = DM();
-      if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+    cur: function () { var f = comp.clip(); if (!f) { return null; } if (!st.cview.draft) { st.cview.draft = compInit(project(), f.clip); } return st.cview.draft; },
+    // 下書きを変える（曲は変えない・下書きの ↶ に積む）。fn(d) → "" ／ 理由（理由なら元に戻す）
+    edit: function (fn, keepOnWhy) {
+      var f = comp.clip(), d = comp.cur();
+      if (!f || !d) { return { ok: false, why: "クリップが見つかりません" }; }
       if (rec.state !== "idle") { st.cview.msg = "録音中は変えられません"; if (st.root) { rerender(); } return { ok: false, why: "rec" }; }
-      var c = f.clip, d = comp.cur(), r;
-      if (!d.live && !o.make && !o.off) { // 下書き: 同じ規則で、曲の写しに当ててみる
-        var tmp = JSON.parse(JSON.stringify(p)), tf = M.findClip(tmp, c.id);
-        tf.clip.comp = { a: d.a, b: d.b, at: d.at }; // 下書きの値を写しに入れて、変える所だけ渡す
-        r = M.setComp(tmp, c.id, o);
-        if (r.ok) { st.cview.draft = { a: tf.clip.comp.a, b: tf.clip.comp.b, at: tf.clip.comp.at, live: false }; st.cview.msg = ""; } else { st.cview.msg = r.why; }
-        if (st.root) { rerender(); }
-        return r;
-      }
-      var snap = snapTracks(), before = JSON.stringify(c), o3 = o;
-      if (o.make) { o3 = { a: d.a, b: d.b, at: d.at }; }
-      r = M.setComp(p, c.id, o3);
-      st.cview.msg = r.ok ? "" : r.why;
-      if (r.ok && JSON.stringify(c) !== before) {
-        pushUndo(snap); markDirty();
-        if (o.off) { st.cview.draft = null; }
-        if (pl && pl.clip) { compPlay(st.cview.mode || "all"); } else if (pl) { resync(); }
-      }
+      var keep = JSON.stringify({ secs: d.secs, cuts: d.cuts, sel: d.sel }), why = fn(d), now = JSON.stringify({ secs: d.secs, cuts: d.cuts, sel: d.sel });
+      if (why && !keepOnWhy) { var k0 = JSON.parse(keep); d.secs = k0.secs; d.cuts = k0.cuts; d.sel = k0.sel; now = keep; }
+      if (now !== keep) { d.hist.push(keep); if (d.hist.length > 40) { d.hist.shift(); } st.cview.leave = ""; if (pl && pl.clip === f.clip.id) { compPlay(st.cview.mode || "all"); } }
+      st.cview.msg = why || "";
+      if (st.root) { rerender(); }
+      return { ok: !why || !!keepOnWhy, why: why };
+    },
+    take: function (k, id) { return comp.edit(function (d) { if (k < 0 || k >= d.secs.length) { return "区間がありません"; } d.secs[k] = id; return ""; }); },
+    sel: function (j) { var d = comp.cur(); if (d && j >= 0 && j < d.cuts.length) { d.sel = j; } if (st.root) { rerender(); } return !!d; },
+    nudge: function (sec) { var p = project(), f = comp.clip(); return comp.edit(function (d) { return compSetCut(p, f.clip, d, d.sel, d.cuts[d.sel] + sec); }, true); },
+    setAt: function (j, v) { var p = project(), f = comp.clip(); return comp.edit(function (d) { if (j < 0 || j >= d.cuts.length) { return "切りかえがありません"; } d.sel = j; return compSetCut(p, f.clip, d, j, Number(v)); }, true); },
+    add: function () { var p = project(), f = comp.clip(); return comp.edit(function (d) { return compAddSec(p, f.clip, d); }); },
+    del: function (j) { return comp.edit(function (d) { if (j === undefined) { j = d.sel; } if (d.secs.length <= 2) { return "2 区間より少なくはできません（やめるときは「単一テイクに戻す」）"; } if (j < 0 || j >= d.cuts.length) { return "切りかえがありません"; } d.cuts.splice(j, 1); d.secs.splice(j + 1, 1); d.sel = Math.max(0, Math.min(j, d.cuts.length - 1)); return ""; }); },
+    // 確定: 下書きを曲へ（↶ 1 つ・自動保存）
+    apply: function () {
+      var f = comp.clip(), d = comp.cur(), p = project();
+      if (!f || !d) { return { ok: false, why: "クリップが見つかりません" }; }
+      if (rec.state !== "idle") { st.cview.msg = "録音中は変えられません"; if (st.root) { rerender(); } return { ok: false, why: "rec" }; }
+      var snap = snapTracks(), before = JSON.stringify(f.clip), r = DM().setComp(p, f.clip.id, { secs: d.secs.slice(), cuts: d.cuts.slice() });
+      if (!r.ok) { st.cview.msg = r.why; if (st.root) { rerender(); } return r; }
+      if (JSON.stringify(f.clip) !== before) { pushUndo(snap); markDirty(); }
+      st.cview.draft = null; st.cview.leave = ""; st.cview.msg = "";
+      st.cview.note = "確定しました（" + DM().compOf(p, f.clip).secs.join("→") + "）";
+      if (pl && pl.clip === f.clip.id) { compPlay(st.cview.mode || "all"); } else if (pl) { resync(); }
       if (st.root) { rerender(); }
       return r;
     },
-    step: function (d) { var c0 = comp.cur(); return c0 ? comp.set({ at: Math.round((c0.at + d) * 1000) / 1000 }) : { ok: false }; },
-    make: function () { return comp.set({ make: true }); },
-    off: function () { return comp.set({ off: true }); },
-    swap: function () { return comp.set({ swap: true }); }
+    cancel: function () { var f = comp.clip(); st.cview.draft = null; st.cview.leave = ""; st.cview.msg = ""; st.cview.note = "下書きを捨てました（曲は変えていません）"; if (pl && f && pl.clip === f.clip.id) { compPlay(st.cview.mode || "all"); } if (st.root) { rerender(); } return true; },
+    // 単一テイクに戻す（曲を変える・↶ で戻せる）
+    off: function () {
+      var f = comp.clip(), p = project();
+      if (!f) { return { ok: false }; }
+      var snap = snapTracks(), had = f.clip.hasOwnProperty("comp"), r = DM().setComp(p, f.clip.id, { off: true });
+      if (r.ok && had) { pushUndo(snap); markDirty(); if (pl && pl.clip === f.clip.id) { compPlay(st.cview.mode || "all"); } else if (pl) { resync(); } }
+      st.cview.draft = null; st.cview.leave = ""; st.cview.note = had ? "単一テイクに戻しました（↶ で戻せます）" : "";
+      if (st.root) { rerender(); }
+      return r;
+    },
+    // ↶: 下書きの 1 つ前（なければ曲の ↶）
+    undo: function () {
+      var d = comp.cur();
+      if (d && d.hist.length) { var h = JSON.parse(d.hist.pop()); d.secs = h.secs; d.cuts = h.cuts; d.sel = h.sel; st.cview.msg = ""; var f = comp.clip(); if (pl && f && pl.clip === f.clip.id) { compPlay(st.cview.mode || "all"); } if (st.root) { rerender(); } return true; }
+      st.cview.draft = null;
+      return edit.undo();
+    },
+    changed: function () { var f = comp.clip(), d = comp.cur(); return !!(f && d && compChanged(project(), f.clip, d)); }
   };
-  // 試聴: all ＝ このクリップだけ（くり返し）・seam ＝ 継ぎ目の前後 ±1.5 秒（くり返し）
+  // 試聴: all ＝ このクリップだけ（くり返し）・seam ＝ 選んだ切りかえの前後 ±1.5 秒（くり返し）。下書きがちがえば「影の曲」（写しに下書きを当てたもの）で鳴らす
   function compPlay(mode) {
-    var f = comp.clip(), M = DM(), p = project();
-    if (!f) { return false; }
-    var cp = M.compOf(p, f.clip), a, b;
+    var f = comp.clip(), M = DM(), p = project(), d = comp.cur();
+    if (!f || !d) { return false; }
+    var shadow = null, c = f.clip, a, b;
+    if (!M.compOf(p, c) || compChanged(p, c, d)) {
+      shadow = JSON.parse(JSON.stringify(p));
+      var r = M.setComp(shadow, c.id, { secs: d.secs.slice(), cuts: d.cuts.slice() });
+      if (!r.ok) { st.cview.msg = r.why; return false; }
+      c = M.findClip(shadow, c.id).clip;
+    }
+    var q = shadow || p;
     if (mode === "seam") {
-      if (!cp) { return false; }
-      a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, cp.T - CP_SEAM)))); b = Math.max(a + 1, Math.ceil(M.secToTick(p, cp.T + CP_SEAM)));
+      var T = M.tickToSec(q, c.start) + d.cuts[Math.min(d.sel, d.cuts.length - 1)];
+      a = Math.max(0, Math.floor(M.secToTick(q, Math.max(0, T - CP_SEAM)))); b = Math.max(a + 1, Math.ceil(M.secToTick(q, T + CP_SEAM)));
     } else {
-      var ex = segsExtent(p, f.clip);
-      a = Math.max(0, Math.floor(M.secToTick(p, Math.max(0, ex.p0)))); b = Math.max(a + 1, Math.ceil(M.secToTick(p, ex.p1)) + 1);
+      var ex = segsExtent(q, c);
+      a = Math.max(0, Math.floor(M.secToTick(q, Math.max(0, ex.p0)))); b = Math.max(a + 1, Math.ceil(M.secToTick(q, ex.p1)) + 1);
     }
     st.cview.mode = mode;
-    return startPlay({ clip: f.clip.id, a: a, b: b, from: a, loop: true });
+    return startPlay({ clip: c.id, a: a, b: b, from: a, loop: true, shadow: shadow });
   }
-  // 2 色の波形（クリップの箱の秒・前半のテイク ＝ ふつうの色・後半 ＝ ちがう色・切りかえの線）。d ＝ 下書きなら曲の写しで描く
+  // 色分けの波形（区間ごとにそのテイクの色・切りかえの線（選んだ線は太く）・区間のテイク名）。下書きをそのまま描く
   function compSvg(p, c, d) {
-    var M = DM(), cc = c;
-    if (!d.live) { cc = JSON.parse(JSON.stringify(c)); cc.comp = { a: d.a, b: d.b, at: d.at }; }
-    var segs = M.audioSegs(p, cc), C0 = M.tickToSec(p, c.start), box = M.tickToSec(p, c.start + c.len) - C0, mid = CP_H / 2, ds = ["", ""], x, i, q;
+    var M = DM(), cc = JSON.parse(JSON.stringify(c));
+    cc.comp = compObj(d);
+    var segs = M.audioSegs(p, cc), C0 = M.tickToSec(p, c.start), box = compBox(p, c), mid = CP_H / 2, ds = {}, x, i, q, PR = M.PEAK_RATE, k;
     for (q = 0; q < segs.length; q++) { if (!aud.peaks[segs[q].id]) { return '<div class="ae-nowave small">&#x23F3; 波形を読みこんでいます…</div>'; } }
-    if (!segs.length || !segs[0].comp || !(box > 0)) { return '<div class="ae-nowave small">組み合わせを表示できません</div>'; }
-    var T = segs[0].T, PR = M.PEAK_RATE;
+    if (!segs.length || !segs[0].comp || !(box > 0)) { return '<div class="ae-nowave small">組み合わせを表示できません（' + escHtml(st.cview.msg || "区間を見なおしてください") + '）</div>'; }
     for (x = 0; x < CP_W; x += 2) {
       var x0 = C0 + x / CP_W * box, x1 = C0 + (x + 2) / CP_W * box, xm = (x0 + x1) / 2, sg = null;
-      for (q = 0; q < segs.length; q++) { var s = segs[q]; if (xm >= Math.max(0, s.p0) && xm < s.p1 && (!sg || xm >= T)) { sg = s; } }
+      for (q = 0; q < segs.length; q++) { var s = segs[q]; if (xm >= s.from && xm < s.to && xm >= Math.max(0, s.p0) && xm < s.p1) { sg = s; } }
       if (!sg) { continue; }
       var pk = aud.peaks[sg.id], t0 = sg.tin + (Math.max(x0, sg.p0) - sg.p0), t1 = sg.tin + (Math.min(x1, sg.p1) - sg.p0), i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
       for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
       var hh = Math.max(0.5, m / 255 * (CP_H / 2 - 12));
-      ds[sg.take === cc.comp.b ? 1 : 0] += "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
+      ds[sg.take] = (ds[sg.take] || "") + "M" + (x + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10);
     }
-    var X = Math.round(Math.max(0, Math.min(1, (T - C0) / box)) * CP_W * 10) / 10;
-    return '<svg class="cp-svg" viewBox="0 0 ' + CP_W + ' ' + CP_H + '" preserveAspectRatio="none" aria-hidden="true"><path class="cp-a" d="' + ds[0] + '"/><path class="cp-b" d="' + ds[1] + '"/>' +
-      '<line class="cp-x" x1="' + X + '" y1="0" x2="' + X + '" y2="' + CP_H + '"/><text class="cp-t" x="' + Math.max(2, X - 4) + '" y="11" text-anchor="end">' + escHtml(d.a) + '</text><text class="cp-t" x="' + Math.min(CP_W - 2, X + 4) + '" y="11">' + escHtml(d.b) + '</text></svg>';
+    function X(t) { return Math.round(Math.max(0, Math.min(1, t / box)) * CP_W * 10) / 10; }
+    var h = '<svg class="cp-svg" viewBox="0 0 ' + CP_W + ' ' + CP_H + '" preserveAspectRatio="none" aria-hidden="true">';
+    for (k in ds) { if (ds.hasOwnProperty(k)) { h += '<path class="' + cpCls(k) + '" d="' + ds[k] + '"/>'; } }
+    var e = [0].concat(d.cuts).concat([box]);
+    for (i = 0; i < d.cuts.length; i++) { h += '<line class="cp-x' + (i === d.sel ? ' cp-xs' : '') + '" x1="' + X(d.cuts[i]) + '" y1="0" x2="' + X(d.cuts[i]) + '" y2="' + CP_H + '"/>'; }
+    for (i = 0; i < d.secs.length; i++) { h += '<text class="cp-lt" x="' + X((e[i] + e[i + 1]) / 2) + '" y="11" text-anchor="middle">' + escHtml(d.secs[i]) + '</text>'; }
+    return h + '</svg>';
   }
   function compHtml(p, f) {
-    var M = DM(), c = f.clip, d = comp.cur(), l = M.takesOf(p, c), playing = !!(pl && pl.clip === c.id), i, act = M.activeTakeId(c);
-    var T = M.tickToSec(p, c.start) + d.at, bb = M.tickToBar(p, M.secToTick(p, T));
-    function tb(attr, sel) { var h = '', k; for (k = 0; k < l.length; k++) { var on = l[k].id === sel; h += '<button class="modal-btn cp-tk' + (on ? ' daw-on' : '') + '" data-' + attr + '="' + escHtml(l[k].id) + '"' + (M.findAsset(p, l[k].asset) ? '' : ' disabled') + '>' + (on ? '&#x2705; ' : '') + escHtml(l[k].id) + '</button>'; } return h; }
-    var st0 = d.live ? '&#x1F3A7; <b>組み合わせ中</b>: 前半 テイク ' + escHtml(d.a) + ' → 後半 テイク ' + escHtml(d.b) + '（継ぎ目 ' + Math.round(M.COMP_XF * 1000) + 'ms のクロスフェード）'
-      : (c.comp ? '&#x26A0;&#xFE0F; 前の組み合わせのテイクが見つかりません（いまはテイク ' + escHtml(act) + ' だけで鳴っています）。決めなおして「組み合わせる」を押してください'
-        : 'いまは単一テイク（テイク ' + escHtml(act) + '）です。前半・後半のテイクと切りかえの位置を決めて「&#x1F3A7; 組み合わせる」を押してください（まだ曲は変えていません）');
+    var M = DM(), c = f.clip, d = comp.cur(), l = M.takesOf(p, c), playing = !!(pl && pl.clip === c.id), i, j, act = M.activeTakeId(c), cp = M.compOf(p, c), ch = compChanged(p, c, d), box = compBox(p, c);
+    var e = [0].concat(d.cuts).concat([box]), merged = M.compMerge(d.secs, d.cuts), sel = Math.min(d.sel, d.cuts.length - 1);
+    var st0 = cp ? '&#x1F3A7; <b>曲の組み合わせ</b>: ' + escHtml(cp.secs.join(" → ")) + '（' + cp.n + ' 区間・継ぎ目は ' + Math.round(M.COMP_XF * 1000) + 'ms のクロスフェード）' + (cp.bad ? '<br>&#x26A0;&#xFE0F; 読めない区間があるので、その後ろは鳴らしていません（データは残しています）' : '')
+      : (c.comp ? '&#x26A0;&#xFE0F; 前の組み合わせのテイクが見つかりません（いまはテイク ' + escHtml(act) + ' だけで鳴っています）' : 'いまは単一テイク（テイク ' + escHtml(act) + '）です');
+    st0 += ch ? '<br>&#x270F;&#xFE0F; <b>確定していない変更があります</b>（▶ は下書きの音・曲はまだ変わっていません）' : (!cp ? '<br>区間とテイクを決めて「&#x2705; 確定」を押すと、曲に入ります' : '');
     var h = '<div class="daw cp">' +
-      '<div class="daw-top"><button class="modal-btn daw-small" data-cp="back">&#x2190; 編集</button><b>&#x1F3A7; テイクを組み合わせる</b><span class="daw-pname">' + escHtml(clipLabel(c)) + '</span></div>' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-cp="back">&#x2190; 編集</button><b>&#x1F3A7; 組み合わせ</b><button class="modal-btn daw-small" data-cp="arr">アレンジへ</button></div>' +
       projBarHtml(p) +
       '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (playing && st.cview.mode !== "seam" ? " daw-on" : "") + '" data-cp="play" title="このクリップだけ（くり返し）">&#x25B6;&#xFE0F;</button>' +
-        '<button class="modal-btn daw-small' + (playing && st.cview.mode === "seam" ? " daw-on" : "") + '" data-cp="seam" title="継ぎ目の前後（±' + CP_SEAM + ' 秒・くり返し）"' + (d.live ? '' : ' disabled') + '>&#x25B6;&#xFE0F; 継ぎ目</button>' +
+        '<button class="modal-btn daw-small' + (playing && st.cview.mode === "seam" ? " daw-on" : "") + '" data-cp="seam" title="選んだ切りかえの前後（±' + CP_SEAM + ' 秒・くり返し）">&#x25B6;&#xFE0F; 継ぎ目 ' + (sel + 1) + '</button>' +
         '<button class="modal-btn daw-tbtn" data-cp="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
-        '<button class="modal-btn daw-tbtn" data-cp="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (st.undo.length || '') + '</small></button><span class="daw-pos">1.1</span></div>' +
+        '<button class="modal-btn daw-tbtn" data-cp="undo" title="戻す"' + (d.hist.length || st.undo.length ? '' : ' disabled') + '>&#x21B6;<small>' + (d.hist.length ? '下' : (st.undo.length || '')) + '</small></button><span class="daw-pos">1.1</span></div>' +
       '<div class="daw-info cp-st">' + st0 + '</div>' +
-      '<div class="ae-wave cp-wave">' + compSvg(p, c, d) + '<i class="ae-ph cp-ph" style="display:none;"></i></div>' +
-      '<div class="cp-row"><span class="cp-lab">前半</span>' + tb("cpa", d.a) + '</div>' +
-      '<div class="cp-row"><span class="cp-lab">後半</span>' + tb("cpb", d.b) + '</div>' +
-      '<div class="ae-row"><span class="ae-lab">切りかえ</span><button class="ae-val" data-cp="atv" title="数字で入れる">' + fsec(d.at) + ' 秒</button></div>' +
-      '<div class="small cp-pos">クリップの頭から ' + fsec(d.at) + ' 秒（' + bb.bar + ' 小節 ' + bb.beat + ' 拍目あたり）</div>' +
-      '<div class="ae-btns">';
+      '<div class="ae-wave cp-wave">' + compSvg(p, c, d) + '<i class="ae-ph cp-ph" style="display:none;"></i></div>';
+    for (i = 0; i < d.secs.length; i++) {
+      h += '<div class="cp-row"><span class="cp-lab"><b class="' + cpCls(d.secs[i]) + '-c">区間 ' + (i + 1) + '</b><small>' + fsec(e[i]) + '〜' + fsec(e[i + 1]) + '</small></span>';
+      for (j = 0; j < l.length; j++) { var on = l[j].id === d.secs[i]; h += '<button class="modal-btn cp-tk ' + cpCls(l[j].id) + '-b' + (on ? ' daw-on' : '') + '" data-cpt="' + i + '|' + escHtml(l[j].id) + '"' + (M.findAsset(p, l[j].asset) ? '' : ' disabled') + '>' + (on ? '&#x2705;' : '') + escHtml(l[j].id) + '</button>'; }
+      h += '</div>';
+    }
+    if (merged.secs.length < d.secs.length) { h += '<div class="small cp-pos">となりが同じテイクの区間は、確定のときに 1 つにまとめます（継ぎ目を作りません）</div>'; }
+    h += '<div class="cp-cuts"><span class="cp-lab">切りかえ</span>';
+    for (i = 0; i < d.cuts.length; i++) { h += '<button class="modal-btn cp-cut' + (i === sel ? ' daw-on' : '') + '" data-cpc="' + i + '">' + (i + 1) + '<small>' + fsec(d.cuts[i]) + '</small></button>'; }
+    h += '</div><div class="ae-row"><span class="ae-lab">切りかえ ' + (sel + 1) + '</span><button class="ae-val" data-cp="atv" title="数字で入れる">' + fsec(d.cuts[sel]) + ' 秒</button></div><div class="ae-btns">';
     for (i = 0; i < CP_STEPS.length; i++) { h += '<button class="modal-btn ae-b" data-cps="' + CP_STEPS[i][0] + '">' + CP_STEPS[i][1] + '</button>'; }
-    h += '</div><div class="da-btns"><button class="modal-btn da-half" data-cp="swap">&#x21C4; 入れかえ</button>' +
-      (d.live ? '<button class="modal-btn da-half" data-cp="off">&#x21BA; 単一テイクに戻す（' + escHtml(act) + '）</button>' : '<button class="modal-btn da-half cp-make" data-cp="make">&#x1F3A7; 組み合わせる</button>') + '</div>' +
+    h += '</div><div class="da-btns"><button class="modal-btn da-half" data-cp="add"' + (d.secs.length >= M.COMP_MAX_SECS ? ' disabled' : '') + '>＋ 区間を足す（' + d.secs.length + '／' + M.COMP_MAX_SECS + '）</button>' +
+      '<button class="modal-btn da-half" data-cp="del"' + (d.secs.length <= 2 ? ' disabled' : '') + '>&#x2212; 切りかえ ' + (sel + 1) + ' を消す</button></div>' +
+      '<div class="da-btns"><button class="modal-btn da-half cp-make" data-cp="apply"' + (ch || !cp ? '' : ' disabled') + '>&#x2705; 確定</button><button class="modal-btn da-half" data-cp="cancel"' + (ch ? '' : ' disabled') + '>&#x2716; やめる</button></div>' +
+      (cp || c.comp ? '<div class="da-btns"><button class="modal-btn da-wide" data-cp="off">&#x21BA; 単一テイクに戻す（いまのテイク ' + escHtml(act) + '）</button></div>' : '') +
       (st.cview.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.cview.msg) + '</div>' : '') +
+      (st.cview.note ? '<div class="da-note">' + escHtml(st.cview.note) + '</div>' : '') +
       (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
       saveNoteHtml() +
-      '<p class="small dsv-note">元の WAV は変えません（どのテイクを使うか・切りかえの位置だけを曲に保存）。切りかえの位置はクリップの頭からの秒です（BPM を変えても録音の同じ所で切りかわります）。テイクごとの先頭・末尾・位置の調整は、単一テイクに戻して ✂️ 編集で直します。&#x21B6; で戻せます。</p></div>';
+      '<p class="small dsv-note">元の WAV は変えません（区間のテイクと切りかえの位置だけを曲に保存）。切りかえの位置はクリップの頭からの秒で、となりとは ' + Math.round(M.COMP_GAP * 1000) + 'ms 以上はなします。区間ごとに、そのテイクの先頭・末尾・位置の調整を使います（テイクの欄の「&#x270F;&#xFE0F; 直す」で選んで ✂️ 編集）。&#x21B6; は下書きの 1 つ前、なければ曲の ↶ です。</p></div>';
     return h;
   }
   function renderComp(root, ctl) {
@@ -2786,25 +2862,34 @@
     if (!f || DM().takesOf(p, f.clip).length < 2) { st.view = f ? "aedit" : "arr"; st.cview = null; render(root, ctl); return; }
     audKick(p);
     root.innerHTML = compHtml(p, f);
+    st.cview.note = "";
     if (!root.querySelectorAll) { return; }
     var els = root.querySelectorAll("button"), k;
+    function leave(where) {
+      if (comp.changed() && st.cview.leave !== where) { st.cview.leave = where; st.cview.msg = "確定していない変更があります。もう一度押すと、下書きを捨てて戻ります"; renderComp(root, ctl); return; }
+      if (pl && pl.clip) { stopPlay(false); }
+      st.view = where === "arr" ? "arr" : "aedit"; st.cview = null; if (where === "arr") { st.aedit = null; }
+      render(root, ctl);
+    }
     for (k = 0; k < els.length; k++) {
       els[k].onclick = function (ev) {
         var el = ev.currentTarget, v = el.getAttribute("data-cp"), t;
-        if ((t = el.getAttribute("data-cpa"))) { comp.set({ a: t }); return; }
-        if ((t = el.getAttribute("data-cpb"))) { comp.set({ b: t }); return; }
-        if ((t = el.getAttribute("data-cps"))) { comp.step(Number(t)); return; }
-        if (v === "back") { if (pl && pl.clip) { stopPlay(false); } st.view = "aedit"; st.cview = null; render(root, ctl); return; }
+        if ((t = el.getAttribute("data-cpt"))) { var tp = t.split("|"); comp.take(Number(tp[0]), tp[1]); return; }
+        if ((t = el.getAttribute("data-cpc"))) { comp.sel(Number(t)); return; }
+        if ((t = el.getAttribute("data-cps"))) { comp.nudge(Number(t)); return; }
+        if (v === "back" || v === "arr") { leave(v); return; }
         if (v === "play") { compPlay("all"); renderComp(root, ctl); return; }
         if (v === "seam") { compPlay("seam"); renderComp(root, ctl); return; }
         if (v === "stop") { transportStop(); rerender(); return; }
-        if (v === "undo") { edit.undo(); return; }
-        if (v === "swap") { comp.swap(); return; }
-        if (v === "make") { comp.make(); return; }
+        if (v === "undo") { comp.undo(); if (st.root) { rerender(); } return; }
+        if (v === "add") { comp.add(); return; }
+        if (v === "del") { comp.del(); return; }
+        if (v === "apply") { comp.apply(); return; }
+        if (v === "cancel") { comp.cancel(); return; }
         if (v === "off") { comp.off(); return; }
         if (v === "atv") {
-          var c0 = comp.cur(), a = window.prompt ? window.prompt("切りかえの位置（クリップの頭からの秒）", fsec(c0.at)) : null;
-          if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { comp.set({ at: Number(a) }); }
+          var d = comp.cur(), sj = Math.min(d.sel, d.cuts.length - 1), a = window.prompt ? window.prompt("切りかえ " + (sj + 1) + " の位置（クリップの頭からの秒・1ms まで）", fsec(d.cuts[sj])) : null;
+          if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { comp.setAt(sj, Number(a)); }
         }
       };
     }
@@ -2827,7 +2912,7 @@
   function aeditSummary(p, c) {
     var sp = DM().audioSpan(p, c), out = [], nt = DM().takesOf(p, c).length;
     var cpS = DM().compOf(p, c); // 9A-16
-    if (cpS) { out.push("&#x1F3A7; 組み合わせ " + escHtml(cpS.a) + "→" + escHtml(cpS.b) + "（" + fsec(cpS.at) + " 秒）"); }
+    if (cpS) { out.push("&#x1F3A7; 組み合わせ " + escHtml(cpS.secs.join("→")) + "（" + cpS.ats.map(fsec).join("・") + " 秒）"); }
     else if (nt > 1) { out.push("テイク " + DM().activeTakeId(c) + "（" + nt + " 個）"); } // 9A-14
     if (!sp.edited && nt < 2) { return ""; }
     if (c.hasOwnProperty("trimIn") || c.hasOwnProperty("trimOut")) { out.push("鳴る所 素材の " + fsec(sp.tin) + "〜" + (isFinite(sp.tout) ? fsec(sp.tout) : "?") + " 秒"); }
@@ -3156,7 +3241,7 @@
     aedit: { open: function (id) { var ok = openAedit(id); if (ok && st.root) { rerender(); } return ok; }, set: aedit.set, step: aedit.step, reset: aedit.reset, play: aeditPlay, svg: aeditSvg, env: audEnv }, // 9A-13
     transportStop: transportStop,
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
-    comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, set: comp.set, step: comp.step, make: comp.make, off: comp.off, swap: comp.swap, cur: comp.cur, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg }, // 9A-16
+    comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17
     takes: { select: function (cid, id) { return takes.select(cid, id); }, remove: function (cid, id) { return takes.remove(cid, id); }, hear: takeHear, stop: takeHearStop, info: function () { return hearInfo; }, html: function (cid) { var f = DM().findClip(project(), cid); return f ? takesHtml(project(), f.clip) : ""; }, openRec: function (cid) { var ok = recOpenTake(cid); if (ok && st.root) { rerender(); } return ok; } }, // 9A-14
     rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
