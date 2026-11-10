@@ -253,7 +253,8 @@
     if (!window.UGSynth) { st.msg = "ゴリラシンセ（arcade-synth.js）を読みこめなかったため、鳴らせません。"; return false; }
     var lr = M.loopRange(p), clip = opts.clip || null, loop = opts.loop !== undefined ? !!opts.loop : !!(p.practice && p.practice.loopOn);
     var a = opts.a !== undefined ? opts.a : lr.a, b = opts.b !== undefined ? opts.b : (loop ? lr.b : M.songEndTick(p));
-    var from = opts.from !== undefined ? opts.from : (loop || clip ? a : 0);
+    var cue = st.cue !== null && st.cue !== undefined && !clip && (!loop || (st.cue >= a && st.cue < b)) ? st.cue : null; // 9B-1: 小節へ
+    var from = opts.from !== undefined ? opts.from : (cue !== null ? cue : (loop || clip ? a : 0));
     if (from >= b || from < 0) { from = loop ? a : 0; }
     from = Math.round(from);
     // §341 9A-10: 音声の素材をまだ読みこんでいるなら、読みこめてから鳴らしはじめる（⏹ を押したらやめる）
@@ -384,6 +385,7 @@
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
     if (M && p && st.view === "lib") { renderLib(root, ctl); return; } // 9A-15
+    if (M && p && st.view === "sec") { renderSec(root, ctl); return; } // 9B-1
     if (M && p && st.view === "comp") { renderComp(root, ctl); return; } // 9A-16
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
@@ -410,10 +412,14 @@
       '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
         '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
         '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
+        '<button class="modal-btn daw-small" data-ar="sections">&#x1F3BC; 曲の構成</button>' + // 9B-1
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
-    h += '<div class="daw-row daw-ruler-row"><div class="daw-corner">トラック</div><div class="daw-ruler daw-grid" style="' + grid + 'height:' + RULER_H + 'px;">';
+    var secL = M.sectionsOf(p), rulerH = secL.length ? RULER_H + 16 : RULER_H; // 9B-1
+    h += '<div class="daw-row daw-ruler-row"><div class="daw-corner">トラック</div><div class="daw-ruler daw-grid" style="' + grid + 'height:' + rulerH + 'px;">';
+    for (i = 0; i < secL.length; i++) { var sx0 = tickX(secL[i].tick), sw0 = Math.max(4, tickX(secL[i].tick + secL[i].len) - sx0 - 1); h += '<button class="daw-secband sc-' + escHtml(secL[i].color || "blue") + '" data-secjump="' + escHtml(secL[i].id) + '" style="left:' + sx0 + 'px;width:' + sw0 + 'px;" title="' + escHtml(secL[i].name) + '（タップでこの小節へ）">' + escHtml(secL[i].name) + '</button>'; }
+    if (st.cue !== null && st.cue !== undefined && !pl) { h += '<i class="daw-cue" style="left:' + tickX(st.cue) + 'px;" title="▶ のはじまり"></i>'; }
     if (loopOn) { h += '<i class="daw-loopband" style="left:' + tickX(lr.a) + 'px;width:' + (tickX(lr.b) - tickX(lr.a)) + 'px;"></i>'; }
     for (b = 0; b < bars; b++) { h += '<span class="daw-barno" style="left:' + tickX(M.barToTick(p, b)) + 'px;">' + (b + 1) + '</span>'; }
     h += '</div></div>';
@@ -469,6 +475,7 @@
     function b(kind, act, label, cls) { return '<button class="modal-btn' + (cls ? " " + cls : "") + '" data-' + kind + '="' + act + '">' + label + '</button>'; }
     if (s && s.kind === "clip") {
       var f = M.findClip(p, s.id);
+      if (f && st.repeat && st.repeat.clip === f.clip.id) { return h + repeatHtml(p, f); } // 9B-1
       if (f && f.clip.type === "audio") { // §341 9A-10: 音声のクリップ
         var ac0 = f.clip, aa0 = M.findAsset(p, ac0.asset), ab0 = M.tickToBar(p, ac0.start), abars = Math.round(ac0.len / M.barTicks(p) * 100) / 100, astate = assetState(ac0.asset);
         var csec = M.tickToSec(p, ac0.start + ac0.len) - M.tickToSec(p, ac0.start), asec = aa0 ? aa0.sec - (ac0.srcOffset || 0) : 0;
@@ -477,13 +484,13 @@
           aeditSummary(p, ac0) +
           '<br><span class="small">' + assetStateText(ac0.asset) + '</span></div>' +
           '<div class="da-btns">' + (astate === "ready" || astate === "loading" || !astate ? b("cl", "edit", "&#x2702;&#xFE0F; 編集（前後・位置・フェード・テイク）", "da-wide da-aedit") + b("cl", "take", "&#x1F399;&#xFE0F; 別テイクを録音", "da-wide da-take") : b("cl", "relink", "&#x1F517; 素材を選びなおす（同じ WAV）", "da-wide")) +
-          b("cl", "dup", "&#x29C9; 複製") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") + b("cl", "shorter", "&#x2212; 短く") +
+          b("cl", "dup", "&#x29C9; 複製") + b("cl", "repeat", "&#x1F501; 繰り返し") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") + b("cl", "shorter", "&#x2212; 短く") +
           b("cl", "longer", "&#xFF0B; 長く") + b("cl", "name", "&#x270F;&#xFE0F; 名前") + b("cl", "del", "&#x1F5D1;&#xFE0F; 削除", "da-half") + '</div></div>';
       }
       if (f) {
         var c = f.clip, a = M.tickToBar(p, c.start), bars = Math.round(c.len / M.barTicks(p) * 100) / 100, hid = M.hiddenNotes(c);
         return h + '<div class="daw-info da-panel"><div>&#x1F3B5; <b>' + escHtml(clipLabel(c)) + '</b>（' + escHtml(f.track.name) + '）: ' + a.bar + '小節目から ' + bars + '小節・音符 ' + (c.notes.length - hid) + ' 個' + (hid ? '（はみ出て鳴らない音符 ' + hid + ' 個）' : '') + '</div>' +
-          '<div class="da-btns">' + (M.isDrum(f.track) ? b("cl", "roll", "&#x1F941; パターンを直す", "da-wide") : b("cl", "roll", "&#x1F3B9; 音符を直す", "da-wide")) + b("cl", "dup", "&#x29C9; 複製") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") +
+          '<div class="da-btns">' + (M.isDrum(f.track) ? b("cl", "roll", "&#x1F941; パターンを直す", "da-wide") : b("cl", "roll", "&#x1F3B9; 音符を直す", "da-wide")) + b("cl", "dup", "&#x29C9; 複製") + b("cl", "repeat", "&#x1F501; 繰り返し") + b("cl", "left", "&#x25C0; 1小節") + b("cl", "right", "1小節 &#x25B6;") +
           b("cl", "shorter", "&#x2212; 短く") + b("cl", "longer", "&#xFF0B; 長く") + b("cl", "name", "&#x270F;&#xFE0F; 名前") + b("cl", "del", "&#x1F5D1;&#xFE0F; 削除") + '</div></div>';
       }
     }
@@ -645,7 +652,7 @@
     wavCancel(); wavFree(); wav.state = "idle"; wav.msg = ""; wav.note = "";
     audFree(p); // 9A-10: 新しい曲で使わない音声を捨てる
     if (!pk.busy) { packFree(); pk.state = "idle"; pk.msg = ""; } pk.istate = "idle"; pk.imsg = ""; // 9A-11
-    st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
+    st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.cue = null; st.secUI = null; st.repeat = null; st.secMsg = ""; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
   var proj = {
@@ -1934,6 +1941,14 @@
       done(s, "空のクリップを足しました。もう一度タップすると音符を入れられます");
       return c;
     },
+    // §342 9B-1: くり返して並べる（全部を先に調べる・↶ 1 回）
+    repeat: function (id, n, destTick) {
+      var p = project(), s = snapTracks(), r = DM().repeatClip(p, id, n, destTick);
+      if (!r.ok) { return nope(r.why); }
+      st.repeat = null;
+      var bt = DM().barTicks(p), last = r.clips[r.clips.length - 1];
+      return done(s, r.clips.length + " 個並べました（" + (Math.round(r.from / bt) + 1) + "〜" + Math.round((last.start + last.len) / bt) + " 小節目・↶ 1 回で戻せます）");
+    },
     duplicate: function (id) {
       var s = snapTracks(), c = DM().duplicateClip(project(), id);
       if (!c) { return nope("複製できませんでした（曲が長すぎます）"); }
@@ -2017,7 +2032,8 @@
     },
     undo: function () {
       var u = st.undo; if (!u.length || !st.project) { return false; }
-      st.project.tracks = u.pop(); if (st.roll) { st.roll.sel = null; } markDirty(); afterEdit(); // 戻したあとの状態を保存
+      var z = u.pop(); if (z && z.__all) { st.project.tracks = z.tracks; st.project.markers = z.markers; } else { st.project.tracks = z; } // 9B-1: セクションの写しも
+      if (st.roll) { st.roll.sel = null; } markDirty(); afterEdit(); // 戻したあとの状態を保存
       return true;
     }
   };
@@ -3112,6 +3128,138 @@
     drawHead();
   }
 
+  // ---------- §342 9B-1: 曲の構成（セクション）・小節へ・クリップの繰り返し・セクションの複製 ----------
+  // ↶ の写し: セクション（markers）も入れる（いままでの写しはトラックの配列のまま）
+  function snapAll() { return { __all: true, tracks: snapTracks(), markers: JSON.parse(JSON.stringify(project().markers || [])) }; }
+  function secBar(p, tick) { return Math.round(tick / DM().barTicks(p)) + 1; }
+  function secBars(p, len) { return Math.round(len / DM().barTicks(p)); }
+  // 小節へ: 鳴っていれば、そこから鳴らしなおす。止まっていれば、▶ のはじまり（キュー）にする。そこが見えるように横へ
+  function jumpTo(tick) {
+    var p = project(), M = DM();
+    if (!p) { return false; }
+    tick = Math.max(0, Math.round(Number(tick) || 0));
+    var bar = M.tickToBar(p, tick).bar;
+    if (rec.state !== "idle") { st.anote = "録音中は小節へ移れません"; if (st.root) { rerender(); } return false; }
+    st.cue = tick;
+    if (pl && !pl.clip) { startPlay({ from: tick }); st.anote = "&#x25B6;&#xFE0F; " + bar + " 小節目から鳴らしています"; }
+    else { st.anote = "&#x25B6;&#xFE0F; ▶ を押すと " + bar + " 小節目から鳴ります（⏹ で頭へ）"; }
+    st.view = "arr"; st.secUI = null; st.scroll = Math.max(0, tickX(tick) - 24); st.reveal = false;
+    if (st.root) { render(st.root, st.ctl); }
+    return true;
+  }
+  var sections = {
+    list: function () { return DM().sectionsOf(project()); },
+    // 足す・変える・消す（↶ に積む・自動保存）
+    add: function (o) { var s = snapAll(), r = DM().addSection(project(), o); if (!r.ok) { st.secMsg = r.why; if (st.root) { rerender(); } return r; } pushUndo(s); markDirty(); st.secMsg = ""; st.secUI = null; st.secNote = "「" + r.section.name + "」を足しました"; if (st.root) { rerender(); } return r; },
+    update: function (id, o) { var s = snapAll(), r = DM().updateSection(project(), id, o); if (!r.ok) { st.secMsg = r.why; if (st.root) { rerender(); } return r; } pushUndo(s); markDirty(); st.secMsg = ""; st.secUI = null; st.secNote = "「" + r.section.name + "」を変えました"; if (st.root) { rerender(); } return r; },
+    remove: function (id) { var s = snapAll(), f = DM().findSection(project(), id), r = DM().deleteSection(project(), id); if (!r.ok) { st.secMsg = r.why; if (st.root) { rerender(); } return r; } pushUndo(s); markDirty(); st.secMsg = ""; st.secUI = null; st.secNote = "「" + (f ? f.name : "") + "」を消しました（クリップはそのまま・↶ で戻せます）"; if (st.root) { rerender(); } return r; },
+    copy: function (id, destBar) {
+      var p = project(), s = snapAll(), r = DM().copySection(p, id, destBar);
+      if (!r.ok) { st.secMsg = r.why; if (st.root) { rerender(); } return r; }
+      pushUndo(s); markDirty(); if (pl) { resync(); }
+      st.secMsg = ""; st.secUI = null;
+      st.secNote = "クリップ " + r.clips.length + " 個を " + secBar(p, r.dest) + " 小節目へ複製しました" + (r.section ? "（セクション「" + r.section.name + "」も足しました）" : "（そこにはセクションがあるので、セクションは足していません）") + (r.cross ? "・境目をまたぐクリップ " + r.cross + " 個は対象外" : "") + "（↶ 1 回で戻せます）";
+      if (st.root) { rerender(); }
+      return r;
+    },
+    jump: function (id) { var f = DM().findSection(project(), id); return f ? jumpTo(f.tick) : false; }
+  };
+  // 下書き（足す・変える・複製の欄）
+  function secDraft(mode, id) {
+    var p = project(), M = DM(), l = M.sectionsOf(p), bt = M.barTicks(p), f = id ? M.findSection(p, id) : null, used = {}, i, name = "";
+    for (i = 0; i < l.length; i++) { used[l[i].name] = true; }
+    if (mode === "add") {
+      for (i = 0; i < M.SECTION_NAMES.length && !name; i++) { if (!used[M.SECTION_NAMES[i]]) { name = M.SECTION_NAMES[i]; } }
+      var after = l.length ? l[l.length - 1].tick + l[l.length - 1].len : 0;
+      return { mode: "add", name: name || "サビ", bar: Math.floor(after / bt) + 1, bars: 4, color: M.SECTION_COLORS[l.length % M.SECTION_COLORS.length] };
+    }
+    if (!f) { return null; }
+    if (mode === "edit") { return { mode: "edit", id: id, name: f.name, bar: secBar(p, f.tick), bars: secBars(p, f.len), color: f.color }; }
+    return { mode: "copy", id: id, dest: Math.ceil(M.songEndTick(p) / bt) + 1 };
+  }
+  function secHtml(p) {
+    var M = DM(), l = M.sectionsOf(p), U = st.secUI, i, h, bt = M.barTicks(p);
+    h = '<div class="daw dsec"><div class="daw-top"><button class="modal-btn daw-small" data-sx="back">&#x2190; アレンジ</button><b>&#x1F3BC; 曲の構成</b></div>' + projBarHtml(p) +
+      '<div class="da-tools"><button class="modal-btn daw-small" data-sx="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
+      '<button class="modal-btn daw-small" data-sx="add"' + (l.length >= M.MAX_SECTIONS ? ' disabled' : '') + '>&#xFF0B; セクションを足す</button></div>';
+    if (st.secNote) { h += '<div class="da-note">' + escHtml(st.secNote) + '</div>'; }
+    if (U && (U.mode === "add" || U.mode === "edit")) {
+      var chk = M.sectionRange(p, U.bar, U.bars, U.mode === "edit" ? U.id : null), nb = '';
+      for (i = 0; i < M.SECTION_NAMES.length; i++) { nb += '<button class="modal-btn sec-nm' + (U.name === M.SECTION_NAMES[i] ? ' daw-on' : '') + '" data-sn="' + escHtml(M.SECTION_NAMES[i]) + '">' + escHtml(M.SECTION_NAMES[i]) + '</button>'; }
+      var cb = ''; for (i = 0; i < M.SECTION_COLORS.length; i++) { cb += '<button class="sec-col sc-' + M.SECTION_COLORS[i] + (U.color === M.SECTION_COLORS[i] ? ' on' : '') + '" data-sc="' + M.SECTION_COLORS[i] + '" aria-label="' + M.SECTION_COLORS[i] + '"></button>'; }
+      h += '<div class="daw-info sec-form"><div><b>' + (U.mode === "add" ? '&#xFF0B; セクションを足す' : '&#x270F;&#xFE0F; セクションを変える') + '</b>（目印だけ。クリップは動きません）</div>' +
+        '<div class="sec-line">名前: <b>' + escHtml(U.name || "（なし）") + '</b> <button class="modal-btn daw-small" data-sx="nameFree">&#x270F;&#xFE0F; 自由入力</button></div><div class="sec-nms">' + nb + '</div>' +
+        '<div class="sec-line">はじまり <button class="modal-btn sec-st" data-sf="bar-">&#x2212;</button><button class="ae-val" data-sf="barv">' + U.bar + ' 小節目</button><button class="modal-btn sec-st" data-sf="bar+">＋</button></div>' +
+        '<div class="sec-line">長さ <button class="modal-btn sec-st" data-sf="bars-">&#x2212;</button><button class="ae-val" data-sf="barsv">' + U.bars + ' 小節</button><button class="modal-btn sec-st" data-sf="bars+">＋</button></div>' +
+        '<div class="sec-line">色 <span class="sec-cols">' + cb + '</span></div>' +
+        (chk.ok ? '<div class="small">' + U.bar + '〜' + (U.bar + U.bars - 1) + ' 小節目</div>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(chk.why) + '</div>') +
+        '<div class="da-btns"><button class="modal-btn da-half" data-sx="save"' + (chk.ok && U.name ? '' : ' disabled') + '>' + (U.mode === "add" ? '&#xFF0B; 足す' : '&#x2705; 変える') + '</button><button class="modal-btn da-half" data-sx="cancel">やめる</button></div></div>';
+    }
+    if (U && U.mode === "copy") {
+      var fs0 = M.findSection(p, U.id), plan = fs0 ? M.sectionCopyPlan(p, U.id, U.dest) : { ok: false, why: "セクションが見つかりません" };
+      var what = plan.ok ? 'クリップ ' + plan.items.length + ' 個（' + (function () { var nm = {}, o = [], q; for (q = 0; q < plan.items.length; q++) { if (!nm[plan.items[q].track.id]) { nm[plan.items[q].track.id] = 1; o.push(plan.items[q].track.name); } } return escHtml(o.join("・")); })() + '）を、' + U.dest + ' 小節目へ' + (plan.newSection ? '（セクションも足す）' : '（そこにはセクションがあるので、セクションは足さない）') : '';
+      h += '<div class="daw-info sec-form"><div><b>&#x1F4CB; 「' + escHtml(fs0 ? fs0.name : "") + '」をまとめて複製</b>（' + (fs0 ? secBar(p, fs0.tick) + '〜' + (secBar(p, fs0.tick) + secBars(p, fs0.len) - 1) + ' 小節目' : '') + 'の中に全部入っているクリップ）</div>' +
+        '<div class="sec-line">コピー先 <button class="modal-btn sec-st" data-sf="dest-">&#x2212;</button><button class="ae-val" data-sf="destv">' + U.dest + ' 小節目から</button><button class="modal-btn sec-st" data-sf="dest+">＋</button></div>' +
+        (plan.ok ? '<div class="small">' + what + (plan.cross ? '<br>境目をまたぐクリップ ' + plan.cross + ' 個は対象外' : '') + '</div>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(plan.why) + '</div>') +
+        '<div class="da-btns"><button class="modal-btn da-half" data-sx="copyGo"' + (plan.ok ? '' : ' disabled') + '>&#x1F4CB; 複製する</button><button class="modal-btn da-half" data-sx="cancel">やめる</button></div></div>';
+    }
+    if (st.secMsg) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.secMsg) + '</div>'; }
+    if (!l.length) { h += '<p class="small dsv-note">まだセクションはありません。「＋ セクションを足す」から、イントロ・Aメロ・サビなどの目印を付けられます。</p>'; }
+    for (i = 0; i < l.length; i++) {
+      var s = l[i], ci = M.clipsInSection(p, s), b0 = secBar(p, s.tick), n0 = secBars(p, s.len);
+      h += '<div class="sec-row"><span class="sec-chip sc-' + escHtml(s.color || "blue") + '"></span><div class="sec-meta"><b>' + escHtml(s.name) + '</b><br><span class="small">' + b0 + '〜' + (b0 + n0 - 1) + ' 小節目（' + n0 + ' 小節）・中のクリップ ' + ci.inside.length + ' 個' + (ci.cross ? '・またぐ ' + ci.cross + ' 個' : '') + '</span></div>' +
+        '<div class="sec-btns"><button class="modal-btn sec-b" data-sj="' + s.id + '" title="この小節へ">&#x25B6;&#xFE0F;</button><button class="modal-btn sec-b" data-se="' + s.id + '" title="変える">&#x270F;&#xFE0F;</button><button class="modal-btn sec-b" data-sc2="' + s.id + '" title="中のクリップをまとめて複製">&#x1F4CB;</button><button class="modal-btn sec-b" data-sd="' + s.id + '" title="消す（クリップは消えない）">&#x1F5D1;&#xFE0F;</button></div></div>';
+    }
+    return h + saveNoteHtml() + '<p class="small dsv-note">セクションは目印です。足す・変える・消すで音符やクリップは動きません。&#x25B6;&#xFE0F; でその小節へ（止まっているときは ▶ のはじまり）。&#x1F4CB; は、セクションの中に全部入っているクリップを、まとめて別の小節へ複製します（重なる所があれば何もしません）。&#x21B6; で戻せます。</p></div>';
+  }
+  function renderSec(root, ctl) {
+    var p = project(), M = DM();
+    root.innerHTML = secHtml(p);
+    st.secNote = "";
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k;
+    function again() { renderSec(root, ctl); }
+    function ask(label, cur) { var a = window.prompt ? window.prompt(label, String(cur)) : null; return a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a)) ? Math.round(Number(a)) : null; }
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-sx"), U = st.secUI, t;
+        if (v === "back") { st.view = "arr"; st.secUI = null; st.secMsg = ""; render(root, ctl); return; }
+        if (v === "undo") { st.secUI = null; st.secMsg = ""; edit.undo(); return; }
+        if (v === "add") { st.secUI = secDraft("add"); st.secMsg = ""; again(); return; }
+        if (v === "cancel") { st.secUI = null; st.secMsg = ""; again(); return; }
+        if ((t = el.getAttribute("data-sj"))) { sections.jump(t); return; }
+        if ((t = el.getAttribute("data-se"))) { st.secUI = secDraft("edit", t); st.secMsg = ""; again(); return; }
+        if ((t = el.getAttribute("data-sc2"))) { st.secUI = secDraft("copy", t); st.secMsg = ""; again(); return; }
+        if ((t = el.getAttribute("data-sd"))) { sections.remove(t); return; }
+        if (!U) { return; }
+        if ((t = el.getAttribute("data-sn"))) { U.name = t; again(); return; }
+        if ((t = el.getAttribute("data-sc"))) { U.color = t; again(); return; }
+        if (v === "nameFree") { var nm = window.prompt ? window.prompt("セクションの名前（20 字まで）", U.name || "") : null; if (nm !== null && nm !== undefined) { U.name = String(nm).replace(/^\s+|\s+$/g, "").substring(0, 20); } again(); return; }
+        if ((t = el.getAttribute("data-sf"))) {
+          if (t === "bar-") { U.bar = Math.max(1, U.bar - 1); } else if (t === "bar+") { U.bar = Math.min(256, U.bar + 1); }
+          else if (t === "bars-") { U.bars = Math.max(1, U.bars - 1); } else if (t === "bars+") { U.bars = Math.min(256, U.bars + 1); }
+          else if (t === "dest-") { U.dest = Math.max(1, U.dest - 1); } else if (t === "dest+") { U.dest = Math.min(256, U.dest + 1); }
+          else if (t === "barv") { var a1 = ask("はじまりの小節（1〜256）", U.bar); if (a1 !== null) { U.bar = Math.max(1, Math.min(256, a1)); } }
+          else if (t === "barsv") { var a2 = ask("長さ（小節）", U.bars); if (a2 !== null) { U.bars = Math.max(1, Math.min(256, a2)); } }
+          else if (t === "destv") { var a3 = ask("コピー先の小節（1〜256）", U.dest); if (a3 !== null) { U.dest = Math.max(1, Math.min(256, a3)); } }
+          again(); return;
+        }
+        if (v === "save") { if (U.mode === "add") { sections.add({ name: U.name, bar: U.bar, bars: U.bars, color: U.color }); } else { sections.update(U.id, { name: U.name, bar: U.bar, bars: U.bars, color: U.color }); } return; }
+        if (v === "copyGo") { sections.copy(U.id, U.dest); }
+      };
+    }
+    bindProjBar(root, ctl);
+  }
+  // クリップの繰り返しの欄（パネルの中）
+  function repeatHtml(p, f) {
+    var M = DM(), R = st.repeat, bt = M.barTicks(p), plan = M.repeatPlan(p, f.clip.id, R.n, (R.bar - 1) * bt), lenB = Math.round(f.clip.len / bt * 100) / 100;
+    return '<div class="daw-info da-panel rp-panel"><div>&#x1F501; <b>' + escHtml(clipLabel(f.clip)) + '</b>（' + lenB + ' 小節）をくり返して並べる（元のクリップはそのまま）</div>' +
+      '<div class="sec-line">回数 <button class="modal-btn sec-st" data-rp="n-">&#x2212;</button><button class="ae-val" data-rp="nv">' + R.n + ' 回</button><button class="modal-btn sec-st" data-rp="n+">＋</button>' +
+      ' コピー先 <button class="modal-btn sec-st" data-rp="b-">&#x2212;</button><button class="ae-val" data-rp="bv">' + R.bar + ' 小節目</button><button class="modal-btn sec-st" data-rp="b+">＋</button></div>' +
+      (plan.ok ? '<div class="small">' + R.bar + '〜' + Math.round((plan.starts[plan.starts.length - 1] + f.clip.len) / bt) + ' 小節目に ' + R.n + ' 個' + (f.clip.type === "audio" ? '（音声の素材は同じものを使います）' : '') + '</div>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(plan.why) + '</div>') +
+      '<div class="da-btns"><button class="modal-btn da-half" data-rp="go"' + (plan.ok ? '' : ' disabled') + '>&#x1F501; 並べる</button><button class="modal-btn da-half" data-rp="cancel">やめる</button></div></div>';
+  }
+
   // ---------- 操作 ----------
   function bind(root, ctl) {
     if (!root.querySelectorAll) { return; }
@@ -3130,7 +3278,7 @@
             redraw(); return;
           }
           if (v === "play") { startPlay(); redraw(); return; }
-          if (v === "stop") { stopPlay(false); redraw(); return; }
+          if (v === "stop") { st.cue = null; stopPlay(false); redraw(); return; }
           if (v === "loop") { setLoop(!(p.practice && p.practice.loopOn)); markDirty(); redraw(); return; }
           if (v === "bpm-" || v === "bpm+") { changeBpm(M.bpmAt(p, 0) + (v === "bpm+" ? 1 : -1)); markDirty(); redraw(); return; }
           if (v === "bpm" && window.prompt) {
@@ -3143,6 +3291,18 @@
         if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } st.anote = ""; if (st.sel && st.sel.kind === "clip" && st.sel.id === v && openEditor(v)) { render(root, ctl); return; } st.sel = { kind: "clip", id: v }; render(root, ctl); return; } // 9A-5: タップで選ぶ・もう一度でピアノロール
         if ((v = el.getAttribute("data-ar")) === "addAudio") { keepScroll(root); addAudio(); return; } // 9A-10
+        if ((v = el.getAttribute("data-ar")) === "sections") { keepScroll(root); st.view = "sec"; st.secUI = null; st.secMsg = ""; renderSec(root, ctl); return; } // 9B-1
+        if ((v = el.getAttribute("data-secjump"))) { keepScroll(root); sections.jump(v); return; } // 9B-1
+        if ((v = el.getAttribute("data-rp")) && st.repeat) { // 9B-1: 繰り返しの欄
+          var R = st.repeat, fr = M.findClip(p, R.clip);
+          keepScroll(root);
+          if (!fr || v === "cancel") { st.repeat = null; rerender(); return; }
+          if (v === "n-") { R.n = Math.max(1, R.n - 1); } else if (v === "n+") { R.n = Math.min(M.REPEAT_MAX, R.n + 1); }
+          else if (v === "b-") { R.bar = Math.max(1, R.bar - 1); } else if (v === "b+") { R.bar = Math.min(256, R.bar + 1); }
+          else if (v === "nv" || v === "bv") { var ra = window.prompt ? window.prompt(v === "nv" ? "回数（1〜" + M.REPEAT_MAX + "）" : "コピー先の小節（1〜256）", String(v === "nv" ? R.n : R.bar)) : null; if (ra !== null && ra !== undefined && isFinite(Number(ra)) && String(ra).replace(/\s/g, "") !== "") { if (v === "nv") { R.n = Math.max(1, Math.min(M.REPEAT_MAX, Math.round(Number(ra)))); } else { R.bar = Math.max(1, Math.min(256, Math.round(Number(ra)))); } } }
+          else if (v === "go") { ops.repeat(R.clip, R.n, (R.bar - 1) * M.barTicks(p)); return; }
+          rerender(); return;
+        }
         if ((v = el.getAttribute("data-addwav"))) { keepScroll(root); st.anote = ""; pickWav(root, { track: v }); return; }
         if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { st.chooseAdd = !st.chooseAdd; st.sel = null; st.confirmDel = null; st.anote = ""; rerender(); } else if (v === "addSynth" || v === "addDrum") { ops.addTrack(v === "addDrum" ? "drum" : "synth"); } else if (v === "addCancel") { st.chooseAdd = false; rerender(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } return; }
         if ((v = el.getAttribute("data-addclip"))) { keepScroll(root); ops.addClip(v); return; }
@@ -3155,6 +3315,7 @@
           if (v === "edit") { st.anote = ""; if (openAedit(cid)) { render(root, ctl); } return; } // 9A-13
           if (v === "take") { st.anote = ""; if (recOpenTake(cid)) { rerender(); } return; } // 9A-14
           if (v === "dup") { ops.duplicate(cid); return; }
+          if (v === "repeat") { st.anote = ""; st.repeat = { clip: cid, n: 2, bar: Math.round((fc.clip.start + fc.clip.len) / M.barTicks(p)) + 1 }; rerender(); return; } // 9B-1
           if (v === "left" || v === "right") { ops.move(cid, v === "left" ? -1 : 1); return; }
           if (v === "shorter" || v === "longer") { ops.resize(cid, v === "shorter" ? -1 : 1); return; }
           if (v === "name") { var cn = window.prompt ? window.prompt("クリップの名前（40 文字まで）", clipLabel(fc.clip)) : null; if (cn !== null && cn !== undefined) { ops.renameClip(cid, cn); } return; }
@@ -3240,13 +3401,15 @@
     // §341 9A-12: マイク録音（テストからも呼ぶ）
     aedit: { open: function (id) { var ok = openAedit(id); if (ok && st.root) { rerender(); } return ok; }, set: aedit.set, step: aedit.step, reset: aedit.reset, play: aeditPlay, svg: aeditSvg, env: audEnv }, // 9A-13
     transportStop: transportStop,
+    sections: { list: sections.list, add: sections.add, update: sections.update, remove: sections.remove, copy: sections.copy, jump: sections.jump, html: function () { return secHtml(project()); }, draft: secDraft, open: function () { st.view = "sec"; st.secUI = null; if (st.root) { rerender(); } }, cue: function () { return st.cue; }, setUI: function (u) { st.secUI = u; if (st.root) { rerender(); } }, ui: function () { return st.secUI; } }, // 9B-1
+    jumpTo: jumpTo, repeatUI: function () { return st.repeat; },
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
     comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17
     takes: { select: function (cid, id) { return takes.select(cid, id); }, remove: function (cid, id) { return takes.remove(cid, id); }, hear: takeHear, stop: takeHearStop, info: function () { return hearInfo; }, html: function (cid) { var f = DM().findClip(project(), cid); return f ? takesHtml(project(), f.clip) : ""; }, openRec: function (cid) { var ok = recOpenTake(cid); if (ok && st.root) { rerender(); } return ok; } }, // 9A-14
     rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
     audio: { importWav: importWav, ensure: ensureAssets, state: function () { return aud; }, add: addAudio, pick: pickWav, waveSvg: waveSvg, used: usedAssets, missing: audMissing, assetState: assetState, IDB_NAME: IDB_NAME, forget: audForget },
-    reload: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
+    reload: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; st.cue = null; st.secUI = null; st.repeat = null; st.secMsg = ""; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
     ROLL: { RB: RB, RH: RH, LO: LO, HI: HI, KEYW: KEYW },
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,

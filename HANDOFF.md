@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.50** |
+| 現在バージョン | **v2.51** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.51] 🎼 ゴリラDAW のソングアレンジャー**（§342 Phase 9B-1）: モデルの `sectionsOf`・`addSection`／`updateSection`／`deleteSection`・`sectionRange`・`repeatPlan`／`repeatClip`・`clipsInSection`・`sectionCopyPlan`／`copySection`（先に全部を調べてから足す）。`arcade-daw.js` の「🎼 曲の構成」の画面（`st.view === "sec"`）・ルーラーのセクションの帯とキュー（`st.cue`）・クリップの「🔁 繰り返し」の欄（`st.repeat`）・↶ の写し `{ __all, tracks, markers }`。データは `project.markers` の `kind: "section"`（schemaVersion 1 のまま）。シンセのエンジンは変えていない
 - **[v2.50] 🎧 ゴリラDAW のマルチ区間コンピング**（§341 Phase 9A-17）: モデルの `compRaw`・`compOf`（secs・ats・Ts・bad）・`audioSegs`（区間ごと）・`setComp`（`{ secs, cuts }`）・`compMerge`。`arcade-daw.js` の「コンピング」の節（下書き `st.cview.draft`・`comp.apply`・影の曲 `pl.shadow` で試聴）。公開前の版はタグ `pages-v2.49`（2145d3e）
 - **[v2.49] 🎧 ゴリラDAW のコンピング Lite・削除の競合対策**（§341 Phase 9A-16）: モデルの `compOf`・`audioSegs`・`setComp`・`takeView`。`arcade-daw.js` の「コンピング Lite」の節（`comp`・`compPlay`・`compHtml`・`compWaveSvg`）と、素材ライブラリの `lockShared`・`lockExclusive`・`assetAddWhy`。公開前の版はタグ `pages-v2.48`（d8b1e1a）
 - **[v2.48] 🎵 ゴリラDAW の素材ライブラリ**（§341 Phase 9A-15）: `arcade-daw.js` の「素材ライブラリ」の節（`libScan`（全部の保存曲）・`libRefs`（文字・メモリ・↶）・`libBusyWhy`・`otherTabs`（BroadcastChannel）・`libDelete`（直前に調べなおし・消えたことを確かめる）・`idbAll`・`idbDelete`・`libHtml`）。公開前の版はタグ `pages-v2.47`（9695432）

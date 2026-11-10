@@ -1630,3 +1630,23 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .cp .ae-btns .ae-b { font-size: 12px; padding: 8px 0; white-space: nowrap; letter-spacing: -0.3px; }
 .cp .da-btns { margin-top: 6px; }
 .cp-cuts .cp-cut.daw-on { box-shadow: inset 0 0 0 3px #ef476f; }
+/* §342 9B-1 ソングアレンジャー（セクションの色: 8 色） */
+.sc-red { --sc: #ef476f; } .sc-orange { --sc: #f78c6b; } .sc-yellow { --sc: #ffd166; } .sc-green { --sc: #06d6a0; }
+.sc-teal { --sc: #2ec4b6; } .sc-blue { --sc: #3a9fd8; } .sc-purple { --sc: #a08cff; } .sc-pink { --sc: #ff8fc7; }
+.daw-secband { position: absolute; bottom: 7px; height: 15px; padding: 0 4px; margin: 0; border: 0; border-radius: 3px; background: var(--sc, #3a9fd8); color: #111; font-size: 10px; line-height: 15px; font-weight: bold; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; opacity: 0.9; z-index: 1; }
+.daw-cue { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed #ef476f; pointer-events: none; z-index: 2; }
+.dsec .sec-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-top: 1px solid #22344a; }
+.dsec .sec-chip { flex: 0 0 14px; height: 36px; border-radius: 4px; background: var(--sc, #3a9fd8); }
+.dsec .sec-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.dsec .sec-btns { display: flex; gap: 4px; flex: 0 0 auto; }
+.dsec .sec-b { min-width: 40px; padding: 8px 4px; font-size: 14px; }
+.sec-form { margin: 6px 0; }
+.sec-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.sec-nms { display: flex; flex-wrap: wrap; gap: 4px; }
+.sec-nms .sec-nm { padding: 6px 8px; font-size: 13px; }
+.sec-st { min-width: 40px; padding: 6px 8px; }
+.sec-cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.sec-col { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; background: var(--sc, #3a9fd8); padding: 0; cursor: pointer; }
+.sec-col.on { border-color: #fff; box-shadow: 0 0 0 2px #ef476f; }
+.rp-panel .sec-line { font-size: 13px; }
+.dsec button:disabled, .rp-panel button:disabled { opacity: 0.45; }

@@ -1984,4 +1984,115 @@ module.exports = async function () {
   DM3.stop(); WM2.UGArcade.stop(); DM3.reset();
   ok([mHA, mHB, mHC].every(function (h) { return NC.createHash("sha256").update(Buffer.from(new Uint8Array(IDBM.data[DM2.audio.IDB_NAME].stores.blobs.rows[h].data))).digest("hex") === shaM[h]; }) && eM.counters.errors.length === 0, "original WAVs byte-identical (SHA-256); no errors", eM.counters.errors.slice(0, 3));
   AM.stop(); DM2.reset();
+
+  // ================= 9B-1: ソングアレンジャー（§342）=================
+  // --- セクション（目印だけ）---
+  var pq = ME.emptyProject(0), BT = 3840, trJ0 = JSON.stringify(pq.tracks);
+  pq.markers.push({ tick: 7680, name: "メモ（§340 の marker）" });
+  var sA = ME.addSection(pq, { name: "Aメロ", bar: 1, bars: 4 });
+  ok(sA.ok && sA.section.kind === "section" && sA.section.tick === 0 && sA.section.len === 4 * BT && sA.section.id === "s1" && ME.sectionsOf(pq).length === 1 && pq.markers.length === 2, "addSection: a section marker { kind, id, tick, len, name, color } in project.markers", sA);
+  ok(!ME.addSection(pq, { name: "Bメロ", bar: 3, bars: 4 }).ok && /重なります/.test(ME.addSection(pq, { name: "Bメロ", bar: 3, bars: 4 }).why) && !ME.addSection(pq, { name: "", bar: 9, bars: 2 }).ok && !ME.addSection(pq, { name: "X", bar: 255, bars: 4 }).ok, "overlaps / empty names / past 256 bars are refused");
+  var sB = ME.addSection(pq, { name: "サビ", bar: 5, bars: 4, color: "pink" }); sB.section.future = 1;
+  ok(sB.ok && sB.section.color === "pink" && ME.sectionsOf(pq).map(function (x) { return x.name; }).join() === "Aメロ,サビ", "second section (sorted by start)");
+  ok(ME.updateSection(pq, "s2", { name: "大サビ", bars: 8, color: "red" }).ok && sB.section.name === "大サビ" && sB.section.len === 8 * BT && sB.section.future === 1 && !ME.updateSection(pq, "s2", { bar: 2 }).ok && sB.section.tick === 4 * BT, "updateSection keeps unknown fields; a change that would overlap is refused (nothing changes)");
+  ok(JSON.stringify(pq.tracks) === trJ0, "adding / changing sections does not move or delete any clip or note");
+  var rtq = ME.parseRecordText(JSON.stringify(ME.toRecord(pq, 1)));
+  ok(rtq.ok && JSON.stringify(rtq.project.markers) === JSON.stringify(pq.markers) && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(rtq.project)))) === JSON.stringify(rtq.project), "JSON round trip keeps markers (sections and the plain marker) as they are");
+  ok(ME.deleteSection(pq, "s1").ok && pq.markers.length === 2 && pq.markers[0].name === "メモ（§340 の marker）" && JSON.stringify(pq.tracks) === trJ0, "deleteSection removes only that marker (clips unchanged)");
+  var old37 = JSON.parse(require("fs").readFileSync(require("path").join(H.ROOT, "tests", "fixtures", "daw-v2.37-song.json"), "utf8")), c37 = ME.fromRecord(old37.record);
+  ok(c37.ok && ME.sectionsOf(c37.project).length === 0 && JSON.stringify(ME.clean(JSON.parse(JSON.stringify(c37.project)))) === JSON.stringify(c37.project), "an old song (v2.37 fixture): no sections, loading changes nothing");
+  // --- 繰り返し ---
+  var pr = ME.emptyProject(0), lead = pr.tracks[0], ca = lead.clips[0];
+  ca.notes = [[0, 480, 60, 0.8], [960, 480, 64, 0.8]];
+  var rp1 = ME.repeatPlan(pr, ca.id, 2);
+  ok(!rp1.ok && /5 小節目/.test(rp1.why) && lead.clips.length === 2, "repeat right after the clip collides with 「メロディ B」 (bar 5): refused, nothing added", rp1.why);
+  var rr = ME.repeatClip(pr, ca.id, 2, 8 * BT);
+  ok(rr.ok && rr.clips.length === 2 && rr.clips[0].start === 8 * BT && rr.clips[1].start === 12 * BT && lead.clips.length === 4 && rr.clips[0].id !== ca.id && rr.clips[0].id !== rr.clips[1].id && JSON.stringify(rr.clips[0].notes) === JSON.stringify(ca.notes), "repeatClip: 2 copies back to back from bar 9, new ids, same notes", rr.clips.map(function (c) { return [c.id, c.start]; }));
+  rr.clips[0].notes[0][2] = 72;
+  ok(ca.notes[0][2] === 60 && rr.clips[1].notes[0][2] === 60, "copies are independent (editing one copy changes nothing else)");
+  ok(!ME.repeatClip(pr, ca.id, 2, 254 * BT).ok && !ME.repeatPlan(pr, ca.id, 0).ok && !ME.repeatPlan(pr, ca.id, 17).ok && lead.clips.length === 4, "past 256 bars / 0 / 17 times are refused");
+  var dt = ME.addDrumTrack(pr), dc = dt.clips[0]; ME.applyPattern(dc, "four");
+  var rd = ME.repeatClip(pr, dc.id, 3);
+  ok(rd.ok && dt.clips.length === 4 && dt.clips[3].start === 3 * BT && JSON.stringify(dt.clips[2].notes) === JSON.stringify(dc.notes) && dc.notes.length > 0, "drum clip ×3 right after the pattern (bars 2-4)");
+  // オーディオ（テイク・コンピング・トリム）: 素材は同じ参照
+  var pa = ME.emptyProject(0), at = ME.addAudioTrack(pa).track;
+  var qa = { id: "a:00000000000e0001", name: "A.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000e0001", store: "idb", added: 1 };
+  var qb = { id: "a:00000000000e0002", name: "B.wav", bytes: 1, sr: 48000, ch: 1, bits: 16, frames: 96000, sec: 2, hash: "a:00000000000e0002", store: "idb", added: 2 };
+  pa.assets.push(qa, qb);
+  var ac = ME.addAudioClip(pa, at, 0, qa, "vocal"); ME.addTake(pa, ac.id, qb.id, "B", 2); ME.setAudioEdit(pa, ac.id, { trimIn: 0.1, nudge: 12, fadeOut: 0.05 }); ME.setComp(pa, ac.id, { secs: ["A", "B", "A"], cuts: [0.5, 1.2] });
+  var assetsJ = JSON.stringify(pa.assets), ra2 = ME.repeatClip(pa, ac.id, 2);
+  var cpy = ra2.clips[0];
+  ok(ra2.ok && JSON.stringify(cpy.takes) === JSON.stringify(ac.takes) && JSON.stringify(cpy.comp) === JSON.stringify(ac.comp) && cpy.trimIn === ac.trimIn && cpy.nudge === 12 && cpy.fadeOut === 0.05 && cpy.asset === ac.asset && cpy.takes !== ac.takes && cpy.comp !== ac.comp, "audio clip ×2: takes A/B, comp (3 sections), trim / nudge / fade copied deeply", cpy);
+  ok(JSON.stringify(pa.assets) === assetsJ && ME.assetUse(pa, qa.id) === 3 && ME.audioSegs(pa, cpy).length === 3, "the audio assets are shared (no new asset entries); the copy plays the same 3 comp segments");
+  cpy.comp.cuts[0].at = 1.5; ok(ac.comp.cuts[0].at === 1.2, "editing the copy's comp leaves the original alone");
+  // --- セクションの複製 ---
+  var ps = ME.emptyProject(0), sl = ps.tracks[0], sb = ps.tracks[1];
+  sl.clips[0].notes = [[0, 480, 67, 0.8]]; sb.clips[0].notes = [[0, 960, 36, 0.8]];
+  var sdt = ME.addDrumTrack(ps); sdt.clips[0].len = 2 * BT; ME.applyPattern(sdt.clips[0], "four");
+  ME.resizeClip(ps, sb.clips[1].id, 1); // ベース B（5〜9 小節）はサビの境目をまたぐ
+  ME.addSection(ps, { name: "Aメロ", bar: 1, bars: 4 }); ME.addSection(ps, { name: "サビ", bar: 5, bars: 4 });
+  var cin = ME.clipsInSection(ps, ME.findSection(ps, "s2"));
+  ok(cin.inside.length === 1 && cin.cross === 1, "clips fully inside a section are counted; one crossing the end is not", [cin.inside.length, cin.cross]);
+  var bad = ME.sectionCopyPlan(ps, "s1", 3);
+  ok(!bad.ok && /上書きはしません/.test(bad.why), "copy onto existing clips: refused with the track and bar (no overwrite)", bad.why);
+  var before = JSON.stringify(ps), cp1 = ME.copySection(ps, "s1", 11);
+  ok(cp1.ok && cp1.clips.length === 3 && cp1.section && cp1.section.name === "Aメロ 2" && cp1.section.tick === 10 * BT && sl.clips.some(function (c) { return c.start === 10 * BT; }) && sdt.clips.some(function (c) { return c.start === 10 * BT && c.len === 2 * BT; }), "copySection: lead / bass / drum clips of Aメロ copied to bar 11 together, plus a section 「Aメロ 2」", cp1);
+  var before2 = JSON.stringify(ps), cp2 = ME.copySection(ps, "s1", 11);
+  ok(!cp2.ok && JSON.stringify(ps) === before2, "copying onto the same place again: refused, the song is unchanged");
+  ME.addSection(ps, { name: "間奏", bar: 21, bars: 4 }); var cp3 = ME.copySection(ps, "s1", 21);
+  ok(cp3.ok && !cp3.section && ME.sectionsOf(ps).length === 4, "copying into an existing section: clips copied, no new section");
+
+  // --- 画面・再生・↶・保存・ZIP・WAV ---
+  var eQ = H.load(), WQ = eQ.window, MQ = WQ.UGDawModel, DQ2 = WQ.UGDaw, AQ = WQ.UGArcade, SQ = eQ.store, IDBQ = fakeIDB();
+  WQ.indexedDB = IDBQ; fakeDecode(WQ);
+  var RQ = H.makeEl("div"); DQ2.reset(); AQ.start("daw", RQ, {}); DQ2.proj.create("empty");
+  var u0q = DQ2.undoDepth();
+  DQ2.sections.add({ name: "イントロ", bar: 1, bars: 4 }); DQ2.sections.add({ name: "Aメロ", bar: 5, bars: 4, color: "green" });
+  ok(MQ.sectionsOf(DQ2.project()).length === 2 && DQ2.undoDepth() === u0q + 2, "UI: sections added (↶ +1 each)");
+  DQ2.sections.open();
+  ok(RQ.innerHTML.indexOf("曲の構成") >= 0 && RQ.innerHTML.indexOf('data-sj="s2"') >= 0 && RQ.innerHTML.indexOf('data-sc2="s2"') >= 0 && RQ.innerHTML.indexOf("セクションを足す") >= 0, "🎼 曲の構成: list with ▶ / ✏️ / 📋 / 🗑 and ＋ add");
+  DQ2.sections.jump("s2");
+  ok(DQ2.state().view === "arr" && DQ2.sections.cue() === 4 * BT && RQ.innerHTML.indexOf("daw-secband") >= 0 && RQ.innerHTML.indexOf("daw-cue") >= 0, "▶ on a section: back to the arrangement, cue at bar 5, coloured bands on the ruler");
+  DQ2.setLoop(false); DQ2.play(); var plq = DQ2.player();
+  ok(plq.segs[0].tick0 === 4 * BT, "▶ starts at the cue (bar 5)", plq.segs[0].tick0);
+  DQ2.sections.jump("s1"); ok(DQ2.player() && DQ2.player().segs[0].tick0 === 0, "jumping while playing restarts from that bar");
+  DQ2.stop();
+  // 繰り返し（UI の欄 → ops.repeat）
+  var lq = DQ2.project().tracks[0], cq = lq.clips[0]; cq.notes = [[0, 480, 60, 0.8]];
+  DQ2.select("clip", cq.id);
+  ok(RQ.innerHTML.indexOf('data-cl="repeat"') >= 0, "clip panel: 🔁 繰り返し");
+  var u1q = DQ2.undoDepth(), nBefore = lq.clips.length;
+  ok(DQ2.ops.repeat(cq.id, 2, 8 * BT) === true && lq.clips.length === nBefore + 2 && DQ2.undoDepth() === u1q + 1, "🔁: 2 copies, one ↶ step");
+  DQ2.ops.undo(); ok(DQ2.project().tracks[0].clips.length === nBefore, "↶ once removes both copies");
+  // セクションの複製 → ↶ 1 回（セクションも）
+  var u2q = DQ2.undoDepth(), cpq = DQ2.sections.copy("s1", 13);
+  ok(cpq.ok && MQ.sectionsOf(DQ2.project()).length === 3 && DQ2.undoDepth() === u2q + 1, "📋 section copy (clips + a new section) is one ↶ step", cpq.why);
+  DQ2.ops.undo(); ok(MQ.sectionsOf(DQ2.project()).length === 2 && DQ2.project().tracks.every(function (t) { return t.clips.every(function (c) { return c.start < 12 * BT; }); }), "↶ restores both the clips and the sections");
+  DQ2.ops.undo(); DQ2.ops.undo(); ok(MQ.sectionsOf(DQ2.project()).length === 0, "↶ also undoes adding sections");
+  DQ2.sections.add({ name: "Aメロ", bar: 1, bars: 4 }); DQ2.flushSave();
+  var pidq = DQ2.project().id; DQ2.reload(); DQ2.proj.open(pidq);
+  ok(MQ.sectionsOf(DQ2.project()).length === 1 && MQ.sectionsOf(DQ2.project())[0].name === "Aメロ" && DQ2.sections.cue() === null, "after a reload: sections kept (the cue is not saved)");
+  // ドラムの繰り返しが WAV に反映
+  DQ2.ops.addTrack("drum"); var dq = DQ2.project().tracks[DQ2.project().tracks.length - 1];
+  dq.clips[0].notes = [[0, 0, 36, 0.9]]; DQ2.ops.repeat(dq.clips[0].id, 3, BT);
+  await new Promise(function (r) { DQ2.wav.start(r); }); for (var gq = 0; gq < 300 && DQ2.wav.state().busy; gq++) { await eQ.wait(10); }
+  var kicks = DQ2.wav.state().log.filter(function (x) { return x.drum && x.m === 36; }).map(function (x) { return x.tick; });
+  ok(kicks.join() === [0, BT, 2 * BT, 3 * BT].join(), "WAV export plays the repeated drum clip on every bar", kicks);
+  // オーディオの繰り返し → ZIP は素材を 1 つだけ
+  var taQ = await new Promise(function (r) { DQ2.audio.add(r); });
+  var wq = makeWav({ sr: 44100, ch: 1, sec: 1, fn: tone(330) }), iq = await new Promise(function (r) { DQ2.audio.importWav(wq.slice(0), "loop.wav", { track: taQ.id }, r); });
+  var blobs0 = Object.keys(IDBQ.data[DQ2.audio.IDB_NAME].stores.blobs.rows).length;
+  ok(DQ2.ops.repeat(iq.clip.id, 3) === true && Object.keys(IDBQ.data[DQ2.audio.IDB_NAME].stores.blobs.rows).length === blobs0 && DQ2.project().assets.length === 1, "audio clip ×3: no new WAV in IndexedDB, one asset entry");
+  DQ2.flushSave();
+  var exQ = await new Promise(function (r) { DQ2.pack.exportZip(r); });
+  ok(exQ.ok && exQ.assets === 1, "ZIP: one WAV for the 4 audio clips", exQ.why);
+  var eQ2 = H.load(), WQ2 = eQ2.window, DQ3 = WQ2.UGDaw, IDBQ2 = fakeIDB(); WQ2.indexedDB = IDBQ2; fakeDecode(WQ2);
+  var RQ2 = H.makeEl("div"); DQ3.reset(); WQ2.UGArcade.start("daw", RQ2, {});
+  var rq = await impZ(DQ3, blobAB(exQ.blob)); DQ3.proj.open(rq.id);
+  var pq3 = DQ3.project(), aud3 = pq3.tracks.filter(function (t) { return t.kind === "audio"; })[0];
+  ok(rq.ok && WQ2.UGDawModel.sectionsOf(pq3).length === 1 && aud3.clips.length === 4 && aud3.clips.every(function (c) { return c.asset === iq.asset.id; }), "restored from the ZIP into empty storage: sections and the 4 audio clips (same asset)", rq.why);
+  WQ2.UGArcade.stop(); DQ3.reset();
+  var errQ = eQ.counters.errors.filter(function (x) { return !/not MP3/.test(x); }); // ドラムの MP3 の素材は、テストの仮の decode では読めない（いままでのテストと同じ）
+  ok(errQ.length === 0, "no Web Audio errors", errQ.slice(0, 3));
+  AQ.stop(); DQ2.reset();
 };

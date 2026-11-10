@@ -1024,6 +1024,152 @@
     return fromRecord(obj);
   }
 
+  // ---------- §342 9B-1: 曲の構成（セクション ＝ markers の { kind: "section", id, tick, len, name, color }・目印だけ）----------
+  var SECTION_NAMES = ["イントロ", "Aメロ", "Bメロ", "サビ", "間奏", "アウトロ"], SECTION_COLORS = ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
+  var MAX_SECTIONS = 32, MAX_CLIPS_PER_TRACK = 256, REPEAT_MAX = 16;
+  function isSection(m) { return isObj(m) && m.kind === "section" && typeof m.id === "string" && isFinite(Number(m.tick)) && Number(m.tick) >= 0 && isFinite(Number(m.len)) && Number(m.len) > 0; }
+  // セクションの一覧（はじまりの順・読めないものは数えない・データは変えない）
+  function sectionsOf(p) {
+    var l = p && isArr(p.markers) ? p.markers : [], out = [], i;
+    for (i = 0; i < l.length; i++) { if (isSection(l[i])) { out.push(l[i]); } }
+    out.sort(function (a, b) { return a.tick - b.tick; });
+    return out;
+  }
+  function findSection(p, id) { var l = sectionsOf(p), i; for (i = 0; i < l.length; i++) { if (l[i].id === id) { return l[i]; } } return null; }
+  function nextSectionId(p) { var used = {}, l = p && isArr(p.markers) ? p.markers : [], i, n = 1; for (i = 0; i < l.length; i++) { if (isObj(l[i]) && l[i].id) { used[l[i].id] = true; } } while (used["s" + n]) { n++; } return "s" + n; }
+  function sectionName(v) { var s = String(v === undefined || v === null ? "" : v).replace(/[\u0000-\u001f]/g, "").replace(/^\s+|\s+$/g, ""); return s.substring(0, 20); }
+  // [tick, tick＋len) と重なるセクション（except は数えない）
+  function sectionOverlap(p, tick, len, except) { var l = sectionsOf(p), i; for (i = 0; i < l.length; i++) { var s = l[i]; if (s !== except && s.id !== except && tick < s.tick + s.len && s.tick < tick + len) { return s; } } return null; }
+  // 小節（1 から）・小節の数 → tick。はみ出し・重なりを調べる → { ok, why, tick, len }
+  function sectionRange(p, bar, bars, except) {
+    var bt = barTicks(p), b = Math.round(Number(bar)), n = Math.round(Number(bars));
+    if (!isFinite(b) || b < 1) { return { ok: false, why: "はじまりの小節は 1 から" }; }
+    if (!isFinite(n) || n < 1) { return { ok: false, why: "長さは 1 小節から" }; }
+    var tick = (b - 1) * bt, len = n * bt;
+    if (tick + len > MAX_BARS * bt) { return { ok: false, why: "曲の長さ（" + MAX_BARS + " 小節）をこえます" }; }
+    var o = sectionOverlap(p, tick, len, except);
+    if (o) { return { ok: false, why: "「" + o.name + "」（" + (Math.round(o.tick / bt) + 1) + " 小節目から）と重なります" }; }
+    return { ok: true, tick: tick, len: len };
+  }
+  function addSection(p, o) {
+    o = o || {};
+    if (sectionsOf(p).length >= MAX_SECTIONS) { return { ok: false, why: "セクションは " + MAX_SECTIONS + " 個までです" }; }
+    var name = sectionName(o.name);
+    if (!name) { return { ok: false, why: "名前を入れてください" }; }
+    var r = sectionRange(p, o.bar, o.bars, null);
+    if (!r.ok) { return r; }
+    if (!isArr(p.markers)) { p.markers = []; }
+    var color = SECTION_COLORS.indexOf(o.color) >= 0 ? o.color : SECTION_COLORS[sectionsOf(p).length % SECTION_COLORS.length];
+    var s = { kind: "section", id: nextSectionId(p), tick: r.tick, len: r.len, name: name, color: color };
+    p.markers.push(s);
+    return { ok: true, section: s };
+  }
+  // 変える（o: { name, bar, bars, color }・省いた値はそのまま）。知らない項目は残す
+  function updateSection(p, id, o) {
+    var s = findSection(p, id), bt = barTicks(p);
+    if (!s) { return { ok: false, why: "セクションが見つかりません" }; }
+    o = o || {};
+    var name = o.name !== undefined ? sectionName(o.name) : s.name;
+    if (!name) { return { ok: false, why: "名前を入れてください" }; }
+    var r = sectionRange(p, o.bar !== undefined ? o.bar : Math.round(s.tick / bt) + 1, o.bars !== undefined ? o.bars : Math.round(s.len / bt), s);
+    if (!r.ok) { return r; }
+    s.name = name; s.tick = r.tick; s.len = r.len;
+    if (o.color !== undefined && SECTION_COLORS.indexOf(o.color) >= 0) { s.color = o.color; }
+    return { ok: true, section: s };
+  }
+  function deleteSection(p, id) {
+    var l = p && isArr(p.markers) ? p.markers : [], i;
+    for (i = 0; i < l.length; i++) { if (isSection(l[i]) && l[i].id === id) { l.splice(i, 1); return { ok: true }; } }
+    return { ok: false, why: "セクションが見つかりません" };
+  }
+  // ---------- §342 9B-1: クリップの繰り返し・セクションの複製（先に全部を調べる・だめなら 1 つも足さない）----------
+  // クリップの写し（深いコピー・新しい ID・はじまりだけ変える。オーディオの素材は同じ参照）
+  function cloneClipAt(p, c, start, usedIds) {
+    var d = copy(c), n = 1;
+    while (usedIds["c" + n]) { n++; }
+    d.id = "c" + n; usedIds[d.id] = true;
+    d.start = start;
+    return d;
+  }
+  function usedIdMap(p) { var used = {}, i, j; for (i = 0; i < p.tracks.length; i++) { used[p.tracks[i].id] = true; for (j = 0; j < p.tracks[i].clips.length; j++) { used[p.tracks[i].clips[j].id] = true; } } return used; }
+  // 並べる場所（コピー先の tick から、元の長さで count 個）→ { ok, why, starts }
+  function repeatPlan(p, clipId, count, destTick) {
+    var f = findClip(p, clipId), bt = barTicks(p), i;
+    if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
+    var c = f.clip, n = Math.round(Number(count));
+    if (!isFinite(n) || n < 1 || n > REPEAT_MAX) { return { ok: false, why: "回数は 1〜" + REPEAT_MAX + " 回です" }; }
+    var d0 = destTick === undefined || destTick === null ? c.start + c.len : Number(destTick);
+    if (!isFinite(d0) || d0 < 0) { return { ok: false, why: "コピー先の小節がおかしいです" }; }
+    d0 = Math.round(d0 / bt) * bt;
+    if (f.track.clips.length + n > MAX_CLIPS_PER_TRACK) { return { ok: false, why: "1 つのトラックのクリップは " + MAX_CLIPS_PER_TRACK + " 個までです" }; }
+    var starts = [];
+    for (i = 0; i < n; i++) {
+      var s = d0 + i * c.len;
+      if (s + c.len > MAX_BARS * bt) { return { ok: false, why: "曲の長さ（" + MAX_BARS + " 小節）をこえます（" + (i + 1) + " 個目）" }; }
+      var o = overlapClip(f.track, s, c.len, null);
+      if (o) { return { ok: false, why: (i + 1) + " 個目（" + (Math.floor(s / bt) + 1) + " 小節目）が「" + ((o.ext && o.ext.name) || "クリップ") + "」（" + (Math.floor(o.start / bt) + 1) + " 小節目から）と重なります", at: s, clash: o.id }; }
+      starts.push(s);
+    }
+    return { ok: true, starts: starts, track: f.track, clip: c, from: d0 };
+  }
+  function repeatClip(p, clipId, count, destTick) {
+    var r = repeatPlan(p, clipId, count, destTick), i, made = [];
+    if (!r.ok) { return r; }
+    var used = usedIdMap(p);
+    for (i = 0; i < r.starts.length; i++) { var d = cloneClipAt(p, r.clip, r.starts[i], used); r.track.clips.push(d); made.push(d); }
+    sortClips(r.track);
+    return { ok: true, clips: made, from: r.from };
+  }
+  // セクションの中に全部入っているクリップ（全部のトラック）と、またいでいるクリップの数
+  function clipsInSection(p, s) {
+    var inside = [], cross = 0, i, j, a = s.tick, b = s.tick + s.len;
+    for (i = 0; i < p.tracks.length; i++) {
+      for (j = 0; j < p.tracks[i].clips.length; j++) {
+        var c = p.tracks[i].clips[j], e = c.start + c.len;
+        if (c.start >= a && e <= b) { inside.push({ track: p.tracks[i], clip: c }); }
+        else if (c.start < b && e > a) { cross++; }
+      }
+    }
+    return { inside: inside, cross: cross };
+  }
+  // セクションの複製の計画（コピー先の小節は 1 から）→ { ok, why, items, delta, cross, newSection }
+  function sectionCopyPlan(p, id, destBar) {
+    var s = findSection(p, id), bt = barTicks(p), i;
+    if (!s) { return { ok: false, why: "セクションが見つかりません" }; }
+    var b = Math.round(Number(destBar));
+    if (!isFinite(b) || b < 1) { return { ok: false, why: "コピー先の小節は 1 から" }; }
+    var dest = (b - 1) * bt, delta = dest - s.tick;
+    if (delta === 0) { return { ok: false, why: "同じ場所にはコピーできません" }; }
+    if (dest + s.len > MAX_BARS * bt) { return { ok: false, why: "曲の長さ（" + MAX_BARS + " 小節）をこえます" }; }
+    var cs = clipsInSection(p, s), count = {};
+    if (!cs.inside.length) { return { ok: false, why: "このセクションの中に、全部入っているクリップがありません" + (cs.cross ? "（境目をまたぐクリップ " + cs.cross + " 個は対象外）" : ""), cross: cs.cross }; }
+    for (i = 0; i < cs.inside.length; i++) {
+      var it = cs.inside[i], ns = it.clip.start + delta, o = overlapClip(it.track, ns, it.clip.len, null);
+      count[it.track.id] = (count[it.track.id] || 0) + 1;
+      if (o) { return { ok: false, why: "「" + it.track.name + "」の " + (Math.floor(ns / bt) + 1) + " 小節目に、もうクリップ（「" + ((o.ext && o.ext.name) || "クリップ") + "」）があります。上書きはしません", cross: cs.cross, clashTrack: it.track.id }; }
+      if (it.track.clips.length + count[it.track.id] > MAX_CLIPS_PER_TRACK) { return { ok: false, why: "「" + it.track.name + "」のクリップが " + MAX_CLIPS_PER_TRACK + " 個をこえます" }; }
+    }
+    var freeSec = !sectionOverlap(p, dest, s.len, null) && sectionsOf(p).length < MAX_SECTIONS;
+    return { ok: true, items: cs.inside, delta: delta, dest: dest, cross: cs.cross, newSection: freeSec, section: s };
+  }
+  function copySection(p, id, destBar) {
+    var r = sectionCopyPlan(p, id, destBar), i, made = [], touched = [];
+    if (!r.ok) { return r; }
+    var used = usedIdMap(p);
+    for (i = 0; i < r.items.length; i++) { var it = r.items[i], d = cloneClipAt(p, it.clip, it.clip.start + r.delta, used); it.track.clips.push(d); made.push(d); if (touched.indexOf(it.track) < 0) { touched.push(it.track); } }
+    for (i = 0; i < touched.length; i++) { sortClips(touched[i]); }
+    var ns = null;
+    if (r.newSection) {
+      var base = r.section.name, k = 2, names = {}, l = sectionsOf(p), j;
+      for (j = 0; j < l.length; j++) { names[l[j].name] = true; }
+      var nm = sectionName(base.replace(/\s\d+$/, "") + " " + k); while (names[nm] && k < 99) { k++; nm = sectionName(base.replace(/\s\d+$/, "") + " " + k); }
+      ns = { kind: "section", id: nextSectionId(p), tick: r.dest, len: r.section.len, name: nm, color: r.section.color };
+      if (!isArr(p.markers)) { p.markers = []; }
+      p.markers.push(ns);
+    }
+    return { ok: true, clips: made, cross: r.cross, section: ns, dest: r.dest };
+  }
+
   window.UGDawModel = {
     PPQ: PPQ, VERSION: VERSION, TYPE: TYPE, STORE_KEY: STORE_KEY, BPM_MIN: BPM_MIN, BPM_MAX: BPM_MAX,
     clean: clean, cleanNotes: cleanNotes, newProject: newProject, newTrack: newTrack, newMidiClip: newMidiClip, synthInstrument: synthInstrument, demoProject: demoProject,
@@ -1042,6 +1188,8 @@
     audioInstrument: audioInstrument, isAudio: isAudio, audioTrackCount: audioTrackCount, addAudioTrack: addAudioTrack, parseWav: parseWav, wavLimitWhy: wavLimitWhy, hashBytes: hashBytes,
     assetRef: assetRef, sameAsset: sameAsset, findAsset: findAsset, assetUse: assetUse, audioClipCount: audioClipCount, assetRoomWhy: assetRoomWhy, audioClipLen: audioClipLen,
     addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, clipAssets: clipAssets, takesOf: takesOf, activeTakeId: activeTakeId, addTake: addTake, selectTake: selectTake, removeTake: removeTake, takeRoomWhy: takeRoomWhy, MAX_TAKES: MAX_TAKES,
+    SECTION_NAMES: SECTION_NAMES, SECTION_COLORS: SECTION_COLORS, MAX_SECTIONS: MAX_SECTIONS, MAX_CLIPS_PER_TRACK: MAX_CLIPS_PER_TRACK, REPEAT_MAX: REPEAT_MAX, sectionsOf: sectionsOf, findSection: findSection, addSection: addSection, updateSection: updateSection, deleteSection: deleteSection, sectionRange: sectionRange,
+    repeatPlan: repeatPlan, repeatClip: repeatClip, clipsInSection: clipsInSection, sectionCopyPlan: sectionCopyPlan, copySection: copySection,
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
 })();
