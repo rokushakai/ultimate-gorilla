@@ -145,6 +145,16 @@
     if (typeof opts.onExit === "function") { opts.onExit(); }
   }
 
+  // §342 9B-2: いまのゲーム（設定画面でも）をやめて、別のゲームを開く（スコアは「やめる」と同じく記録・ハイスコアは 0 から）
+  function switchTo(gameId) {
+    var o = host ? host.opts : (setupState ? setupState.opts : null), r = host ? host.root : (setupState ? setupState.root : null), o2 = {}, k;
+    if (!o || !r || !GAMES[gameId]) { return false; }
+    if (host) { report(); }
+    for (k in o) { if (o.hasOwnProperty(k)) { o2[k] = o[k]; } }
+    o2.config = null; o2.hiScore = 0;
+    return start(gameId, r, o2);
+  }
+
   function togglePause() {
     if (!host || host.over) { return; }
     host.paused = !host.paused;
@@ -2877,7 +2887,8 @@
       BREAK_COLORS: BREAK_COLORS, DIR_CONTROLS: DIR_CONTROLS, DIR_KEYS: DIR_KEYS,
       lsGet: lsGet, lsSet: lsSet, escHtml: escHtml, saveBlob: saveBlob,
       isSetupRoot: function (root) { return !!setupState && setupState.root === root; },
-      addStopHook: function (fn) { stopHooks.push(fn); }
+      addStopHook: function (fn) { stopHooks.push(fn); },
+      switchTo: switchTo // §342 9B-2: 別のゲームへ（ゴリラウクレレ → ゴリラDAW）
     }
   };
 })();

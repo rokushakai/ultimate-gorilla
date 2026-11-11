@@ -1650,3 +1650,20 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .sec-col.on { border-color: #fff; box-shadow: 0 0 0 2px #ef476f; }
 .rp-panel .sec-line { font-size: 13px; }
 .dsec button:disabled, .rp-panel button:disabled { opacity: 0.45; }
+
+/* §342 9B-2: ゴリラウクレレ → ゴリラDAW（送る欄・受け取りの画面） */
+.uke-daw { margin: 8px 0; padding: 10px; border: 1px solid #ffd166; border-radius: 10px; background: rgba(255, 209, 102, 0.08); }
+.uke-daw .small { margin-top: 4px; line-height: 1.5; }
+.uke-daw-parts { margin: 4px 0 4px 1.2em; padding: 0; }
+.uke-daw-warn { color: #ffb4a2; }
+.daw-inb { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dinb .inb-box { margin: 8px 0; }
+.dinb .inb-name { font-size: 1.1em; margin: 2px 0; word-break: break-all; }
+.dinb .inb-sec { margin: 10px 0 4px; font-weight: bold; }
+.dinb .inb-parts { display: flex; flex-wrap: wrap; gap: 6px; }
+.dinb .inb-part { min-height: 44px; }
+.dinb .inb-part small { margin-left: 6px; opacity: 0.8; }
+.dinb .inb-warn { margin: 8px 0; line-height: 1.5; }
+.dinb .da-btns .inb-go { min-height: 48px; font-size: 16px; }
+.dinb .da-btns + .da-btns { margin-top: 10px; }
+.dinb .da-half small { font-size: 0.8em; opacity: 0.85; word-break: break-all; }

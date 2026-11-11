@@ -2095,4 +2095,121 @@ module.exports = async function () {
   var errQ = eQ.counters.errors.filter(function (x) { return !/not MP3/.test(x); }); // ドラムの MP3 の素材は、テストの仮の decode では読めない（いままでのテストと同じ）
   ok(errQ.length === 0, "no Web Audio errors", errQ.slice(0, 3));
   AQ.stop(); DQ2.reset();
+  // ================= 9B-2: ゴリラウクレレ → ゴリラDAW（§342）=================
+  var eG = H.load(), WG = eG.window, MG = WG.UGDawModel, UG2 = WG.UGUkulele, DG = WG.UGDaw, SG = eG.store, BTG = 3840;
+  // --- 受け取り箱の形を調べる ---
+  var goodPay = { name: "テスト", bpm: 90, meter: 4, len: 4 * 960 * 4, tempoRows: 0, parts: [{ key: "uke", name: "ウクレレ", preset: "pluck", notes: [[0, 960, 60, 0.9], [960, 480, 64, 0.5]] }], skipped: ["ドラム"] };
+  var mk = MG.inboxMake("ukulele", goodPay, 1000);
+  ok(mk.ok && mk.box.type === MG.INBOX_TYPE && mk.box.ppq === 960 && mk.box.parts[0].notes.length === 2 && /^g[a-z0-9]+$/.test(mk.box.id) && mk.json.length < 2000, "inboxMake: a small checked box (type / v / id / ppq 960)", mk.why);
+  function badWith(f) { var o = JSON.parse(mk.json); f(o); return MG.inboxClean(o, 1000); }
+  ok(!badWith(function (o) { o.type = "x"; }).ok && !badWith(function (o) { o.from = "piano"; }).ok && !badWith(function (o) { o.ppq = 480; }).ok && !badWith(function (o) { o.bpm = 999; }).ok && !badWith(function (o) { o.meter = 5; }).ok, "inboxClean refuses a wrong type / unknown game / other PPQ / BPM / meter");
+  ok(!badWith(function (o) { o.parts[0].notes[0][2] = 130; }).ok && !badWith(function (o) { o.parts[0].notes[0][3] = 2; }).ok && !badWith(function (o) { o.parts[0].notes[0][1] = 0; }).ok && !badWith(function (o) { o.parts[0].notes = []; }).ok && !badWith(function (o) { o.parts = []; }).ok && !badWith(function (o) { o.parts[0].notes[0] = "x"; }).ok, "inboxClean refuses bad notes (pitch / velocity / length / empty / not an array)");
+  var big = []; for (var bi = 0; bi < 4001; bi++) { big.push([bi, 10, 60, 0.5]); }
+  ok(!badWith(function (o) { o.parts[0].notes = big; }).ok && !badWith(function (o) { o.parts[1] = o.parts[0]; }).ok, "inboxClean: 4000 notes per part, no duplicate part keys");
+  var ex = MG.inboxClean(JSON.parse(mk.json), 1000 + 8 * 86400000), fu = MG.inboxClean(JSON.parse(mk.json), 1000 - 2 * 86400000);
+  ok(!ex.ok && ex.expired && !fu.ok, "inboxClean: older than 7 days = expired, a date in the future = refused");
+  var huge = { name: "大", bpm: 90, meter: 4, len: 960 * 4 * 64, parts: [] }; for (var hp = 0; hp < 8; hp++) { var hn = []; for (bi = 0; bi < 4000; bi++) { hn.push([bi * 60, 9999, 100, 0.123]); } huge.parts.push({ key: "p" + hp, name: "P", preset: "lead", notes: hn }); }
+  var hm = MG.inboxMake("ukulele", huge, 1000);
+  ok(!hm.ok && /大きすぎて/.test(hm.why), "inboxMake: more than 512 KB is not sent", hm.why);
+  // 書く・読む・消す（localStorage の 1 つのキー）
+  ok(MG.inboxRead().box === null && MG.inboxWrite(MG.inboxMake("ukulele", goodPay)).ok && MG.inboxRead().box.name === "テスト" && typeof SG[MG.INBOX_KEY] === "string", "inboxWrite / inboxRead: one localStorage key");
+  SG[MG.INBOX_KEY] = "{broken"; var brk = MG.inboxRead();
+  ok(brk.box === null && brk.bad, "a broken inbox is not used (and not thrown away silently)");
+  MG.inboxClear(); ok(SG[MG.INBOX_KEY] === undefined && MG.inboxRead().box === null, "inboxClear");
+
+  // --- 取りこみの計画 ---
+  var pg = MG.emptyProject(0), boxG = MG.inboxMake("ukulele", goodPay).box, tj = JSON.stringify(pg.tracks);
+  var plG = MG.importPlan(pg, boxG, { parts: ["uke"], bar: 3 });
+  ok(plG.ok && plG.dest === 2 * BTG && plG.span === 4 * BTG && plG.items.length === 1 && plG.items[0].clips[0].start === 2 * BTG && JSON.stringify(pg.tracks) === tj, "importPlan: new track from bar 3, 4 bars, the song is not changed");
+  var apG = MG.importApply(pg, boxG, plG), tG = pg.tracks[pg.tracks.length - 1], cG = apG.clips[0];
+  ok(apG.ok && pg.tracks.length === 3 && tG.name === "ウクレレ" && tG.instrument.ext.preset === "pluck" && cG.start === 2 * BTG && cG.len === 4 * BTG && JSON.stringify(cG.notes) === JSON.stringify([[0, 960, 60, 0.9], [960, 480, 64, 0.5]]) && cG.ext.src.inbox === boxG.id, "importApply: a pluck track, the notes at the same ticks, ext.src keeps the transfer id");
+  var dup = MG.importPlan(pg, boxG, { parts: ["uke"], bar: 9 });
+  ok(!dup.ok && /もう取りこんで/.test(dup.why), "the same transfer is not added twice to one song");
+  var pg2 = MG.emptyProject(0), ow = MG.importPlan(pg2, boxG, { parts: ["uke"], bar: 1, target: pg2.tracks[0].id });
+  ok(!ow.ok && /重なります/.test(ow.why) && /上書き/.test(ow.why), "into an existing track: an overlap is refused (no overwrite)", ow.why);
+  var ok2 = MG.importPlan(pg2, boxG, { parts: ["uke"], bar: 9, target: pg2.tracks[0].id });
+  ok(ok2.ok && ok2.items[0].track === pg2.tracks[0], "into an existing synth track at a free bar");
+  ok(!MG.importPlan(pg2, boxG, { parts: ["uke"], bar: 254 }).ok && !MG.importPlan(pg2, boxG, { parts: [] }).ok && !MG.importPlan(pg2, boxG, { parts: ["uke"], bar: 0 }).ok, "importPlan: 256 bars, at least one part, bar from 1");
+  var pFull = MG.emptyProject(0); while (pFull.tracks.length < 16) { MG.addTrack(pFull, "x"); }
+  ok(!MG.importPlan(pFull, boxG, { parts: ["uke"] }).ok, "importPlan: 16 tracks at most");
+  // 64 小節をこえる → クリップを分ける（境目の音はクリップの終わりで切る）
+  var longPay = { name: "長い", bpm: 120, meter: 4, len: 70 * BTG, parts: [{ key: "uke", name: "ウクレレ", preset: "pluck", notes: [[0, 960, 60, 0.8], [64 * BTG - 480, 1920, 62, 0.8], [69 * BTG, 960, 64, 0.8]] }] };
+  var lp = MG.importPlan(MG.emptyProject(0), MG.inboxMake("ukulele", longPay).box, { parts: ["uke"], bar: 1 });
+  ok(lp.ok && lp.items[0].clips.length === 2 && lp.items[0].clips[0].len === 64 * BTG && lp.items[0].clips[1].start === 64 * BTG && lp.items[0].clips[1].len === 6 * BTG && lp.items[0].clips[0].notes[1][1] === 480, "a 70-bar part becomes 2 clips (64 + 6 bars); the note at the seam is cut at the clip end");
+
+  // --- ウクレレ: 送る形（MIDI の書き出しと同じ音）---
+  var useq = UG2.seqClean({ bpm: 96, meter: 4, swing: 0.5, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G7", len: "w" }, { type: "tempo", bpm: 120 }, { type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }] });
+  useq.tracks.bass.on = true; useq.tracks.drum.on = true; useq = UG2.seqClean(useq);
+  var seqJ = JSON.stringify(useq), upay = UG2.dawPayload(useq, false, "テストの曲"), uk = upay.parts.filter(function (q) { return q.key === "uke"; })[0];
+  ok(JSON.stringify(useq) === seqJ && upay.bpm === 96 && upay.meter === 4 && upay.tempoRows === 1 && upay.len === 16 * 960 && uk && uk.preset === "pluck" && upay.skipped.indexOf("ドラム") >= 0 && !upay.parts.some(function (q) { return q.key === "drum"; }) && upay.parts.some(function (q) { return q.key === "bass" && q.preset === "bass"; }), "dawPayload: bpm / meter / 16 beats / tempo rows counted / drums skipped / the song object is not changed", { tr: upay.tempoRows, len: upay.len, sk: upay.skipped });
+  // MIDI の書き出し（480 tick）を読んで、同じ音か（tick は 2 倍 ±1）
+  function midiOns(bytes) {
+    var out = [], i = 14, tr = 0;
+    while (i < bytes.length) {
+      var len = (bytes[i + 4] << 24) | (bytes[i + 5] << 16) | (bytes[i + 6] << 8) | bytes[i + 7], j = i + 8, end = j + len, t = 0, run = 0, list = [];
+      while (j < end) {
+        var d = 0, c; do { c = bytes[j++]; d = (d << 7) | (c & 127); } while (c & 128); t += d;
+        var s = bytes[j]; if (s & 128) { j++; run = s; } else { s = run; }
+        if (s === 0xFF) { var ml = 0; j++; do { c = bytes[j++]; ml = (ml << 7) | (c & 127); } while (c & 128); j += ml; continue; }
+        var hi = s & 0xF0; if (hi === 0xC0 || hi === 0xD0) { j += 1; continue; }
+        if (hi === 0x90 && bytes[j + 1] > 0) { list.push([t, bytes[j], bytes[j + 1]]); }
+        j += 2;
+      }
+      out.push(list); i = end; tr++;
+    }
+    return out;
+  }
+  var mb = midiOns(UG2.midiBytes(useq, false)), ukOn = mb[1], sameN = ukOn.length === uk.notes.length, worst = 0;
+  for (var mi = 0; sameN && mi < ukOn.length; mi++) { worst = Math.max(worst, Math.abs(uk.notes[mi][0] - 2 * ukOn[mi][0]), uk.notes[mi][2] === ukOn[mi][1] ? 0 : 99, Math.abs(Math.round(uk.notes[mi][3] * 127) - ukOn[mi][2]) > 1 ? 99 : 0); }
+  ok(sameN && worst <= 1 && uk.notes[0][0] === 0, "the ukulele part = the notes of its MIDI export (tick ×2 at PPQ 960 ±1, same pitch and velocity)", { n: uk.notes.length, midi: ukOn.length, worst: worst });
+  var mutedSeq = UG2.seqClean(JSON.parse(seqJ)); mutedSeq.tracks.uke.mute = true;
+  ok(!UG2.dawPayload(mutedSeq, false).parts.some(function (q) { return q.key === "uke"; }), "a muted part is not sent");
+  // 送る（受け取り箱へ）: ウクレレの保存は変えない
+  var seqStore = { cur: useq, songs: [] }; UG2.seqSave(seqStore); var seqRaw = SG[UG2.SEQ_KEY];
+  var sent = UG2.dawSend(useq, false, "テストの曲");
+  ok(sent.ok && MG.inboxRead().box.id === sent.id && MG.inboxRead().box.name === "テストの曲" && SG[UG2.SEQ_KEY] === seqRaw, "dawSend: the box is written and read back; the ukulele's saved songs are untouched", sent.why);
+  ok(UG2.dawCheck(useq, false, "次").prev === "テストの曲", "sending again tells that the unreceived box will be replaced");
+  ok(!UG2.dawCheck(UG2.seqClean({ rows: [{ type: "rest", len: "w" }] }), false).ok, "nothing to send (rests only) → refused");
+
+  // --- DAW の画面: 受け取る・↶・二重・新しい曲 ---
+  var IDBG = fakeIDB(); WG.indexedDB = IDBG; fakeDecode(WG);
+  var RG = H.makeEl("div"); DG.reset(); WG.UGArcade.start("daw", RG, {}); DG.proj.create("empty");
+  var pidG = DG.project().id, tjG = JSON.stringify(DG.project().tracks);
+  ok(RG.innerHTML.indexOf('data-ar="inbox"') >= 0 && RG.innerHTML.indexOf("届いています") >= 0, "arrangement: 📥 取り込み and the 'arrived' note");
+  DG.inbox.open();
+  var ih = RG.innerHTML;
+  ok(ih.indexOf("ゴリラウクレレ") >= 0 && ih.indexOf("テストの曲") >= 0 && ih.indexOf("BPM 96") >= 0 && ih.indexOf('data-ib="go"') >= 0 && ih.indexOf("テンポの変化") >= 0 && ih.indexOf("この曲の BPM（120）") >= 0 && JSON.stringify(DG.project().tracks) === tjG, "📥 screen: game, name, BPM, notes about tempo / BPM; the song is not changed yet");
+  var u0g = DG.undoDepth(), rG = DG.inbox.importNow();
+  var tNew = DG.project().tracks[DG.project().tracks.length - 1];
+  ok(rG.ok && DG.project().tracks.length === 3 && tNew.instrument.ext.preset === "pluck" && DG.undoDepth() === u0g + 1 && MG.inboxRead().box === null && DG.state().view === "arr" && RG.innerHTML.indexOf("取りこみました") >= 0, "✅ 曲に追加: a new pluck track, one ↶ step, the inbox is emptied, back to the arrangement", rG.why);
+  var savedG = JSON.parse(SG["ultimateGorillaDawV1:p:" + pidG]).project;
+  ok(savedG.tracks.length === 3 && savedG.tracks[2].clips[0].ext.src.inbox === sent.id, "saved at once with ext.src");
+  DG.ops.undo(); ok(DG.project().tracks.length === 2 && JSON.stringify(DG.project().tracks) === tjG, "↶ once removes the imported track");
+  // 同じ内容をもう一度（別のタブ・二度押しなどで、取りこんだ箱が残っていたとき）→ 二重にしない
+  UG2.dawSend(useq, false, "テストの曲"); var againJ = SG[MG.INBOX_KEY], rA = DG.inbox.importNow();
+  SG[MG.INBOX_KEY] = againJ; var nT = DG.project().tracks.length, r2 = DG.inbox.importNow();
+  ok(rA.ok && !r2.ok && /もう取りこんで/.test(r2.why) && DG.project().tracks.length === nT, "the same box is not imported twice into the same song", r2.why);
+  // 新しい曲を作る: いまの曲は変えない
+  MG.inboxClear(); UG2.dawSend(useq, false, "新しい曲へ"); DG.flushSave();
+  var rawOld = SG["ultimateGorillaDawV1:p:" + DG.project().id], oldId = DG.project().id;
+  DG.inbox.open(); DG.inbox.ui().dest = "new"; DG.inbox.ui().parts.bass = true;
+  var r3 = DG.inbox.importNow(), np = DG.project();
+  ok(r3.ok && np.id !== oldId && np.name === "新しい曲へ" && MG.bpmAt(np, 0) === 96 && np.tracks.length === 2 && SG["ultimateGorillaDawV1:p:" + oldId] === rawOld && typeof SG["ultimateGorillaDawV1:p:" + np.id] === "string", "新しい曲を作る: BPM 96, 2 tracks (uke + bass), the old song is untouched and the new one is saved", r3.why);
+  // 取りこんだクリップは、ふつうの MIDI のクリップとして使える（🔁・WAV）
+  var cq3 = np.tracks[0].clips[0];
+  ok(DG.ops.repeat(cq3.id, 1) === true && np.tracks[0].clips.length === 2, "🔁 works on an imported clip");
+  await new Promise(function (r) { DG.wav.start(r); }); for (var gw = 0; gw < 300 && DG.wav.state().busy; gw++) { await eG.wait(10); }
+  ok(DG.wav.state().state === "done" && DG.wav.state().log.some(function (x) { return x.track === np.tracks[0].id; }), "WAV export plays the imported track", DG.wav.state().msg);
+  // 7 日たったものは、アレンジを開いたときに消す
+  UG2.dawSend(useq, false, "古い"); var oldBox = JSON.parse(SG[MG.INBOX_KEY]); oldBox.made = Date.now() - 8 * 86400000; SG[MG.INBOX_KEY] = JSON.stringify(oldBox);
+  DG.inbox.open(); DG.state().view = "arr"; var nh = DG.inbox.note();
+  ok(/日たった/.test(nh) && SG[MG.INBOX_KEY] === undefined, "an expired box is removed when the DAW shows the arrangement");
+  WG.UGArcade.stop(); DG.reset();
+  // ゲームセンター: ウクレレ（設定画面）→ DAW へ切りかえる
+  var RS = H.makeEl("div"), endsG = []; WG.UGArcade.start("ukulele", RS, { onEnd: function (g) { endsG.push(g); } });
+  ok(WG.UGArcade.internal.switchTo("daw") === true && RS.innerHTML.indexOf("ゴリラDAW") >= 0, "UGArcade.internal.switchTo: ukulele → DAW");
+  ok(WG.UGArcade.internal.switchTo("nope") === false, "switchTo: unknown game → false");
+  WG.UGArcade.stop(); DG.reset();
+  var errG = eG.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errG.length === 0, "no Web Audio errors (9B-2)", errG.slice(0, 3));
 };

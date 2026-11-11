@@ -1452,9 +1452,9 @@
     d.push(0x00, 0xFF, 0x2F, 0x00);
     return [0x4D, 0x54, 0x72, 0x6B, (d.length >>> 24) & 255, (d.length >>> 16) & 255, (d.length >>> 8) & 255, d.length & 255].concat(d);
   }
-  function ukeMidiBytes(seq, lowG) {
-    var full = ukeSeqExpand(seq), sc = ukeSeqSchedule(full, lowG), TPQ = 480, tr = sc.tracks, i, k;
-    var tick = function (t) { return Math.max(0, Math.round((sc.beatAt ? sc.beatAt(t) : (t - sc.lead) / sc.spb) * TPQ)); };
+  // §342 9B-2: 曲 → トラックごとの音（秒・MIDI・強さ・長さ）。MIDI の書き出しと「DAWへ送る」が同じものを使う
+  function ukeSeqParts(seq, lowG) {
+    var full = ukeSeqExpand(seq), sc = ukeSeqSchedule(full, lowG), tr = sc.tracks, i, k;
     var per = {}, lastOn = {};
     function add(id, t, midi, lv, dur) {
       if (!per[id]) { per[id] = []; }
@@ -1480,6 +1480,11 @@
         if (id === "bass") { lastOn.bass = per.bass[per.bass.length - 1]; }
       } else if (ev.kind === "drum") { add("drum", ev.t, ev.midi, ev.level, 0.1); }
     }
+    return { full: full, sc: sc, tr: tr, per: per };
+  }
+  function ukeMidiBytes(seq, lowG) {
+    var P = ukeSeqParts(seq, lowG), full = P.full, sc = P.sc, tr = P.tr, per = P.per, TPQ = 480, i, k;
+    var tick = function (t) { return Math.max(0, Math.round((sc.beatAt ? sc.beatAt(t) : (t - sc.lead) / sc.spb) * TPQ)); };
     var mtrks = [], cond = [];
     // 道具トラック: 曲名・拍子・テンポ（テンポの区切りごと）
     cond.push([0, 0, [0xFF, 0x03].concat(ukeVlq(ukeUtf8("Ultimate Gorilla Ukulele").length), ukeUtf8("Ultimate Gorilla Ukulele"))]);
@@ -1524,6 +1529,92 @@
     var bytes = ukeMidiBytes(seq, lowG);
     if (!bytes) { return "fail"; }
     return I.saveBlob(new Blob([new Uint8Array(bytes)], { type: "audio/midi" }), "ukulele-" + ukeFileStamp() + ".mid");
+  }
+  // ---------- §342 9B-2: ゴリラDAW へ送る（MIDI のクリップ・PPQ 960・受け取り箱は DAW のモデルが調べる）----------
+  var UKE_DAW_PPQ = 960, UKE_DAW_NAMES = { drum: "ドラム", uke: "ウクレレ", bass: "ベース", pad: "パッド", rec1: "録音1", rec2: "録音2", mel: "メロディ" };
+  var ukeDaw = null; // null ／ { open: true } ／ { sent: 曲の名前 }
+  function ukeDawPreset(id, tr) {
+    if (id === "uke" || id === "rec1" || id === "rec2") { return "pluck"; }
+    if (id === "bass") { return "bass"; }
+    if (id === "pad") { return "pad"; }
+    if (id === "mel") { return "lead"; }
+    var g = tr && tr[id] ? Number(tr[id].prog) : 0;
+    if (g >= 32 && g <= 39) { return "bass"; }
+    if (g >= 40 && g <= 55) { return "spad"; }
+    if (g >= 88 && g <= 95) { return "pad"; }
+    if (g >= 56 && g <= 71) { return "brass"; }
+    if (g >= 16 && g <= 23) { return "organ"; }
+    if (g >= 8 && g <= 15) { return "bell"; }
+    if (g >= 80 && g <= 87) { return "lead"; }
+    return "pluck";
+  }
+  function ukePlain(h) { return String(h || "").replace(/&#x?[0-9a-f]+;/gi, "").replace(/[<>&"]/g, "").replace(/^\s+|\s+$/g, "").slice(0, 20); }
+  // 曲（画面の曲）→ { name, bpm, meter, len, tempoRows, parts, skipped, notes }（元の曲は変えない）
+  function ukeDawPayload(seq0, lowG, name) {
+    var seq = ukeSeqClean(seq0), i, j;
+    seq.loop = false; seq.countIn = false; seq.metronome = false; seq.loopOn = false; seq.rate = 100; seq.rateUp = false;
+    var P = ukeSeqParts(seq, lowG), sc = P.sc, tr = P.tr, ids = ukeTrackIds(tr), parts = [], skipped = [], total = 0;
+    function tk(t) { return Math.max(0, Math.round((sc.beatAt ? sc.beatAt(t) : (t - sc.lead) / sc.spb) * UKE_DAW_PPQ)); }
+    for (i = 0; i < ids.length; i++) {
+      var id = ids[i], list = P.per[id], nm = UKE_DAW_NAMES[id] || ukePlain(tr[id] && tr[id].name) || id;
+      if (!list || !list.length) { continue; }
+      if (id === "drum" || (id.charAt(0) === "x" && tr[id] && tr[id].prog === 128)) { skipped.push(nm); continue; }
+      var notes = [];
+      for (j = 0; j < list.length; j++) {
+        var on = tk(list[j].t), off = Math.max(on + 1, tk(list[j].t + Math.max(0.03, list[j].d)));
+        notes.push([on, off - on, list[j].m, Math.round(list[j].v / 127 * 1000) / 1000]);
+      }
+      total += notes.length;
+      parts.push({ key: id, name: nm, preset: ukeDawPreset(id, tr), notes: notes });
+    }
+    var tempoRows = 0;
+    for (i = 0; i < P.full.rows.length; i++) { if (P.full.rows[i].type === "tempo") { tempoRows++; } }
+    return { name: String(name || "ウクレレの曲").slice(0, 40), bpm: seq.bpm, meter: seq.meter, len: Math.max(1, Math.round(sc.beats * UKE_DAW_PPQ)), tempoRows: tempoRows, parts: parts, skipped: skipped, notes: total,
+      sec: Math.round((sc.time - sc.lead) * 10) / 10, bars: sc.bars, arr: !!(seq.arr && seq.arr.length), rate: seq0 && seq0.rate !== undefined ? Number(seq0.rate) : 100 };
+  }
+  // 調べる（送る前・画面を描くたび）→ { ok, why, pay, made, prev }
+  function ukeDawCheck(seq, lowG, name) {
+    var M = window.UGDawModel;
+    if (!M || !M.inboxMake) { return { ok: false, why: "ゴリラDAW（arcade-daw-model.js）を読みこめませんでした" }; }
+    var pay = ukeDawPayload(seq, lowG, name);
+    if (!pay.parts.length) { return { ok: false, why: "送れる音がありません（コードを鳴らせる行か、音の高さのあるトラックが要ります）", pay: pay }; }
+    var made = M.inboxMake("ukulele", pay), old = M.inboxRead();
+    return { ok: made.ok, why: made.why || "", pay: pay, made: made, prev: old.box ? old.box.name : null };
+  }
+  function ukeDawHtml(seq, lowG, name) {
+    if (!ukeDaw) { return ""; }
+    var h = '<div class="uke-daw">', i;
+    if (ukeDaw.sent) {
+      return h + '<div><b>&#x1F4E4; 「' + I.escHtml(ukeDaw.sent) + '」を送りました</b></div><div class="small">ゴリラDAW の「&#x1F4E5; 取り込み」で受け取れます（' + window.UGDawModel.INBOX_DAYS + ' 日のあいだ）。ウクレレの曲は変わっていません。</div>' +
+        '<div class="melody-actions"><button class="modal-btn" data-seq="dawOpen">&#x1F39A;&#xFE0F; ゴリラDAW を開く</button><button class="modal-btn" data-seq="dawClose">閉じる</button></div></div>';
+    }
+    var c = ukeDawCheck(seq, lowG, name), p = c.pay;
+    h += '<div><b>&#x1F3B9; ゴリラDAW へ送る</b>（MIDI のクリップになります）</div>';
+    if (p) {
+      h += '<div class="small">曲: <b>' + I.escHtml(p.name) + '</b>・BPM ' + p.bpm + '・' + p.meter + '/4 拍子・' + p.bars + ' 小節（' + p.sec + ' 秒）</div><ul class="uke-daw-parts">';
+      for (i = 0; i < p.parts.length; i++) { h += '<li>' + I.escHtml(p.parts[i].name) + '　' + p.parts[i].notes.length + ' 音</li>'; }
+      h += '</ul>';
+      var warn = [];
+      if (p.skipped.length) { warn.push("送らないもの: " + p.skipped.join("・") + "（ドラムは今回送りません）"); }
+      if (p.tempoRows) { warn.push("テンポの行（途中で BPM を変える所）は DAW には入りません。DAW では 1 つの BPM で鳴ります"); }
+      if (p.rate !== 100) { warn.push("練習テンポ（" + p.rate + "%）は使わず、元の BPM で送ります"); }
+      if (p.arr) { warn.push("曲の構成どおりに並べて送ります"); }
+      warn.push("音色は DAW のシンセになります（ウクレレの音そのものではありません）");
+      h += '<div class="small">' + warn.map(function (w) { return "・" + I.escHtml(w); }).join("<br>") + '</div>';
+    }
+    if (c.prev && c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; まだ DAW で受け取っていない「' + I.escHtml(c.prev) + '」があります。送ると、そちらは置きかわります</div>'; }
+    if (!c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + I.escHtml(c.why) + '</div>'; }
+    return h + '<div class="melody-actions"><button class="modal-btn" data-seq="dawSend"' + (c.ok ? '' : ' disabled') + '>&#x1F4E4; 送る</button><button class="modal-btn" data-seq="dawClose">やめる</button></div></div>';
+  }
+  // 送る（確かめてから受け取り箱へ）→ { ok, why, name }
+  function ukeDawSend(seq, lowG, name) {
+    var c = ukeDawCheck(seq, lowG, name);
+    if (!c.ok) { return { ok: false, why: c.why }; }
+    var w = window.UGDawModel.inboxWrite(c.made);
+    if (!w.ok) { return { ok: false, why: w.why }; }
+    var back = window.UGDawModel.inboxRead();
+    if (!back.box || back.box.id !== c.made.box.id) { return { ok: false, why: "保存したデータを読みなおせませんでした" }; }
+    return { ok: true, name: c.made.box.name, id: c.made.box.id };
   }
   // §179: プロジェクトのファイル（曲＋マイコード）
   var UKE_PROJECT_TYPE = "ultimate-gorilla-ukulele-project";
@@ -2545,7 +2636,8 @@
       '<label class="uke-rate-up"><span><input type="checkbox" data-set="rateUp"' + (seq.rateUp ? " checked" : "") + '> ループごとに +5%</span><span class="uke-rate-now"></span></label></div>' +
       '<div class="melody-actions"><button class="modal-btn" data-seq="play">&#x25B6;&#xFE0F; 再生</button><button class="modal-btn" data-seq="stop">&#x23F9; 停止</button></div>' +
       '<div class="uke-lyr"></div>' +
-      '<div class="melody-actions"><button class="modal-btn melody-small-btn" data-seq="midi">&#x1F4BE; MIDI（トラック別）</button><button class="modal-btn melody-small-btn" data-seq="wav"' + (ukeWavBusy ? " disabled" : "") + '>&#x1F3A7; ' + (ukeWavBusy ? "作成中…" : "WAVで保存") + '</button></div>' +
+      '<div class="melody-actions"><button class="modal-btn melody-small-btn" data-seq="midi">&#x1F4BE; MIDI（トラック別）</button><button class="modal-btn melody-small-btn" data-seq="wav"' + (ukeWavBusy ? " disabled" : "") + '>&#x1F3A7; ' + (ukeWavBusy ? "作成中…" : "WAVで保存") + '</button><button class="modal-btn melody-small-btn" data-seq="daw">&#x1F3B9; DAWへ送る</button></div>' +
+      ukeDawHtml(seq, ctx.lowG, ukeDaw && ukeDaw.name) + // §342 9B-2
       ukeArrHtml(seq) +
       ukeLyrHtml(seq, sel) +
       ukeRollHtml(seq, sel) +
@@ -2808,6 +2900,20 @@
         return;
       }
       if (a === "stop") { ukeSeqStop(); showNow(-1, null); ukeTl.play = null; if (ukeTl.redraw) { ukeTl.redraw(); } ukeLyrShow(root, [], null); return; }
+      // §342 9B-2: ゴリラDAW へ送る（確認 → 受け取り箱）
+      if (a === "daw") { var dnEl = root.querySelector("input.uke-song-name"), dn = dnEl ? String(dnEl.value || "").trim().slice(0, 20) : ""; ukeDaw = { open: true, name: dn || "ウクレレの曲" }; ctx.render(); return; }
+      if (a === "dawClose") { ukeDaw = null; ctx.render(); return; }
+      if (a === "dawSend") {
+        if (!ukeDaw || ukeDaw.busy) { return; }
+        ukeDaw.busy = true;
+        var ds = ukeDawSend(seq, ctx.lowG, ukeDaw.name);
+        if (!ds.ok) { ukeDaw.busy = false; ctx.toast("&#x26A0;&#xFE0F; " + I.escHtml(ds.why)); ctx.render(); return; }
+        ukeDaw = { sent: ds.name };
+        ctx.toast("&#x1F4E4; ゴリラDAW へ送りました");
+        ctx.render();
+        return;
+      }
+      if (a === "dawOpen") { ukeDaw = null; ukeSeqStop(); if (!(I.switchTo && I.switchTo("daw"))) { ctx.toast("メニューへ戻って、ゴリラDAW を開いてください"); ctx.render(); } return; }
       if (a === "midi") {
         var hm = ukeSeqExportMidi(ukeSeqClean(seq), ctx.lowG);
         ctx.toast(hm === "fail" ? "MIDIを作れませんでした（鳴らせるコードがありません）" : "&#x1F4BE; MIDIファイルを保存しました");
@@ -4772,6 +4878,7 @@
     seqRec: ukeSeqRec, rollLay: ukeRollLay, ROLL_DRUMS: UKE_ROLL_DRUMS, exportMidi: ukeSeqExportMidi, exportWav: ukeSeqExportWav,
     padsLoad: ukePadsLoad, padsSave: ukePadsSave, padPrefs: ukePadPrefs, detectMore: ukeDetectMore, VIEWS: UKE_VIEWS, PAD_SIZES: UKE_PAD_SIZES, padPlays: ukePadPlays, padPlay: ukePadPlay, PAD_DEFAULT: UKE_PAD_DEFAULT, PADS_KEY: UKE_PADS_KEY, PADPREFS_KEY: UKE_PADPREFS_KEY,
     myPatsLoad: ukeMyPatsLoad, myPatsSave: ukeMyPatsSave, myPatPut: ukeMyPatPut, MYPATS_KEY: UKE_MYPATS_KEY,
+    seqParts: ukeSeqParts, dawPayload: ukeDawPayload, dawCheck: ukeDawCheck, dawSend: ukeDawSend, dawUi: function (v) { if (v !== undefined) { ukeDaw = v; } return ukeDaw; }, // §342 9B-2
     seqClean: ukeSeqClean, seqLoad: ukeSeqLoad, seqSave: ukeSeqSave, seqSchedule: ukeSeqSchedule, seqPresets: ukeSeqPresets, resolve: ukeResolve, SEQ_KEY: UKE_SEQ_KEY,
     strumNotes: ukeStrumNotes, patterns: ukePatterns, GENRES: UKE_GENRES, GENRE_GROUPS: UKE_GENRE_GROUPS, genre: ukeGenre, genresFor: ukeGenresFor, applyGenre: ukeApplyGenre, genreOf: ukeGenreOf, bestLoad: ukeBestLoad, bestSet: ukeBestSet, CHANGE_PAIRS: UKE_CHANGE_PAIRS, BEST_KEY: UKE_BEST_KEY,
     statsLoad: ukeStatsLoad, statsAdd: ukeStatsAdd, weakList: ukeWeakList, rhythmGrade: ukeRhythmGrade, STATS_KEY: UKE_STATS_KEY,

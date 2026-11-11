@@ -1170,6 +1170,129 @@
     return { ok: true, clips: made, cross: r.cross, section: ns, dest: r.dest };
   }
 
+  // ---------- §342 9B-2: ゲームセンターからの受け取り箱（localStorage に 1 つだけ・同じブラウザの中だけ）----------
+  var INBOX_KEY = "ultimateGorillaDawInboxV1", INBOX_TYPE = "ultimate-gorilla-daw-inbox", INBOX_DAYS = 7, INBOX_MAX_BYTES = 512 * 1024, INBOX_MAX_PARTS = 8;
+  var INBOX_FROM = { ukulele: "&#x1F3B8; ゴリラウクレレ（コード・シーケンサー）" };
+  var INBOX_PRESETS = ["pluck", "bass", "pad", "spad", "lead", "soft", "brass", "organ", "bell", "chip"];
+  function inboxId(now) { return "g" + (typeof now === "number" ? now : Date.now()).toString(36) + Math.floor(Math.random() * 1679616).toString(36); }
+  // 受け取ったものを全部調べなおす → { ok, why, box }（値はそろえる・おかしいものは取りこまない）
+  function inboxClean(o, now) {
+    now = typeof now === "number" ? now : Date.now();
+    if (!isObj(o) || o.type !== INBOX_TYPE || o.v !== 1) { return { ok: false, why: "受け取ったデータの形がちがいます" }; }
+    if (!INBOX_FROM.hasOwnProperty(o.from)) { return { ok: false, why: "知らないゲームからのデータです" }; }
+    if (typeof o.id !== "string" || !/^[a-z0-9]{4,40}$/.test(o.id)) { return { ok: false, why: "受け取ったデータの ID がおかしいです" }; }
+    if (Number(o.ppq) !== PPQ) { return { ok: false, why: "時間の単位（PPQ）がちがいます" }; }
+    var made = Number(o.made);
+    if (!isFinite(made) || made > now + 86400000) { return { ok: false, why: "送った日時がおかしいです" }; }
+    if (now - made > INBOX_DAYS * 86400000) { return { ok: false, why: "送ってから " + INBOX_DAYS + " 日たったので、使えません（もう一度送ってください）", expired: true }; }
+    var bpm = Number(o.bpm), meter = Number(o.meter), len = Number(o.len);
+    if (!isFinite(bpm) || bpm < 20 || bpm > 400) { return { ok: false, why: "BPM がおかしいです" }; }
+    if (meter !== 3 && meter !== 4) { return { ok: false, why: "拍子がおかしいです" }; }
+    if (!isFinite(len) || len < 1 || len > MAX_BARS * PPQ * 4) { return { ok: false, why: "長さがおかしいです" }; }
+    if (!isArr(o.parts) || !o.parts.length || o.parts.length > INBOX_MAX_PARTS) { return { ok: false, why: "パートの数がおかしいです" }; }
+    var parts = [], keys = {}, i, j;
+    for (i = 0; i < o.parts.length; i++) {
+      var q = o.parts[i];
+      if (!isObj(q) || typeof q.key !== "string" || !/^[a-z0-9]{1,12}$/.test(q.key) || keys[q.key]) { return { ok: false, why: "パートの名前がおかしいです" }; }
+      if (!isArr(q.notes) || !q.notes.length || q.notes.length > MAX_NOTES) { return { ok: false, why: "パート「" + str(q.name, q.key, 20) + "」の音符の数がおかしいです（1〜" + MAX_NOTES + "）" }; }
+      var ns = [];
+      for (j = 0; j < q.notes.length; j++) {
+        var n = q.notes[j];
+        if (!isArr(n) || n.length < 4) { return { ok: false, why: "音符の形がおかしいです" }; }
+        var t = Number(n[0]), d = Number(n[1]), m = Number(n[2]), v = Number(n[3]);
+        if (!isFinite(t) || t < 0 || t >= len + PPQ * 4 || !isFinite(d) || d < 1 || d > PPQ * 4 * CLIP_MAX_BARS || !isFinite(m) || m < 0 || m > 127 || Math.round(m) !== m || !isFinite(v) || v < 0 || v > 1) { return { ok: false, why: "音符の値がおかしいです（" + (j + 1) + " 個目）" }; }
+        ns.push([Math.round(t), Math.round(d), m, Math.round(v * 1000) / 1000]);
+      }
+      ns.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; });
+      keys[q.key] = true;
+      parts.push({ key: q.key, name: str(q.name, q.key, 20).replace(/[<>&"]/g, "") || q.key, preset: INBOX_PRESETS.indexOf(q.preset) >= 0 ? q.preset : "lead", notes: ns });
+    }
+    var sk = [];
+    if (isArr(o.skipped)) { for (i = 0; i < o.skipped.length && sk.length < 16; i++) { if (typeof o.skipped[i] === "string") { sk.push(o.skipped[i].replace(/[<>&"]/g, "").substring(0, 20)); } } }
+    return { ok: true, box: { type: INBOX_TYPE, v: 1, id: o.id, from: o.from, made: made, name: str(o.name, "ゲームの曲", 40).replace(/[\u0000-\u001f]/g, "") || "ゲームの曲", bpm: Math.round(bpm * 100) / 100, meter: meter, ppq: PPQ, len: Math.round(len), tempoRows: Math.max(0, Math.round(Number(o.tempoRows) || 0)), parts: parts, skipped: sk } };
+  }
+  // 送る側が作る（ゲームのデータ → 受け取り箱の形）→ { ok, why, box, json }
+  function inboxMake(from, o, now) {
+    now = typeof now === "number" ? now : Date.now();
+    var src = { type: INBOX_TYPE, v: 1, id: inboxId(now), from: from, made: now, name: o && o.name, bpm: o && o.bpm, meter: o && o.meter, ppq: PPQ, len: o && o.len, tempoRows: o && o.tempoRows, parts: o && o.parts, skipped: o && o.skipped };
+    var r = inboxClean(src, now);
+    if (!r.ok) { return r; }
+    var json = JSON.stringify(r.box);
+    if (json.length > INBOX_MAX_BYTES) { return { ok: false, why: "大きすぎて送れません（" + Math.round(json.length / 1024) + " KB・" + (INBOX_MAX_BYTES / 1024) + " KB まで）" }; }
+    return { ok: true, box: r.box, json: json };
+  }
+  function inboxLs() { try { return window.localStorage || null; } catch (e) { return null; } }
+  function inboxRaw() { var ls = inboxLs(); try { return ls ? ls.getItem(INBOX_KEY) : null; } catch (e) { return null; } }
+  // 読む → { box（なければ null）, why, bad, expired }
+  function inboxRead(now) {
+    var raw = inboxRaw(), o = null;
+    if (raw === null || raw === undefined) { return { box: null }; }
+    if (raw.length > INBOX_MAX_BYTES) { return { box: null, bad: true, why: "受け取り箱のデータが大きすぎます" }; }
+    try { o = JSON.parse(raw); } catch (e) { return { box: null, bad: true, why: "受け取り箱のデータが読めません" }; }
+    var r = inboxClean(o, now);
+    return r.ok ? { box: r.box } : { box: null, bad: true, expired: !!r.expired, why: r.why };
+  }
+  function inboxWrite(made) { var ls = inboxLs(); if (!ls || !made || !made.ok) { return { ok: false, why: "このブラウザでは保存できません" }; } try { ls.setItem(INBOX_KEY, made.json); return { ok: true }; } catch (e) { return { ok: false, why: "保存できませんでした（容量がいっぱいかもしれません）" }; } }
+  function inboxClear() { var ls = inboxLs(); try { if (ls) { ls.removeItem(INBOX_KEY); } return true; } catch (e) { return false; } }
+  // 取りこんだクリップか（二重の追加をふせぐ）
+  function inboxUsed(p, id) { var i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { var x = p.tracks[i].clips[j].ext; if (isObj(x) && isObj(x.src) && x.src.inbox === id) { return true; } } } return false; }
+  // 取りこみの計画（先に全部を調べる）。o: { parts: [key], bar（1 から）, target: "new" ／ トラックの ID } → { ok, why, items, dest, span }
+  function importPlan(p, box, o) {
+    o = o || {};
+    var bt = barTicks(p), i, j, k, sel = [];
+    if (!box) { return { ok: false, why: "届いているものがありません" }; }
+    if (inboxUsed(p, box.id)) { return { ok: false, why: "この曲には、もう取りこんであります（二重には足しません）" }; }
+    for (i = 0; i < box.parts.length; i++) { if (!o.parts || o.parts.indexOf(box.parts[i].key) >= 0) { sel.push(box.parts[i]); } }
+    if (!sel.length) { return { ok: false, why: "取りこむパートを 1 つ以上選んでください" }; }
+    var b = Math.round(Number(o.bar === undefined ? 1 : o.bar));
+    if (!isFinite(b) || b < 1) { return { ok: false, why: "はじまりの小節は 1 から" }; }
+    var dest = (b - 1) * bt, last = box.len;
+    for (i = 0; i < sel.length; i++) { for (j = 0; j < sel[i].notes.length; j++) { last = Math.max(last, sel[i].notes[j][0] + 1); } }
+    var span = Math.ceil(last / bt) * bt, chunk = CLIP_MAX_BARS * bt;
+    if (dest + span > MAX_BARS * bt) { return { ok: false, why: "曲の長さ（" + MAX_BARS + " 小節）をこえます（" + Math.round(span / bt) + " 小節ぶん・" + b + " 小節目から）" }; }
+    var target = o.target && o.target !== "new" ? findTrack(p, o.target) : null;
+    if (o.target && o.target !== "new") {
+      if (!target || target.kind !== "midi" || isDrum(target)) { return { ok: false, why: "そのトラックには取りこめません（シンセのトラックだけ）" }; }
+      if (sel.length !== 1) { return { ok: false, why: "いまあるトラックに入れるときは、パートを 1 つだけ選んでください" }; }
+    } else if (p.tracks.length + sel.length > MAX_TRACKS) { return { ok: false, why: "トラックは " + MAX_TRACKS + " 本までです（あと " + Math.max(0, MAX_TRACKS - p.tracks.length) + " 本・" + sel.length + " パート）" }; }
+    var items = [];
+    for (i = 0; i < sel.length; i++) {
+      var part = sel[i], clips = [];
+      for (k = 0; k * chunk < span; k++) {
+        var a = k * chunk, z = Math.min(span, a + chunk), ns = [];
+        for (j = 0; j < part.notes.length; j++) { var n = part.notes[j]; if (n[0] >= a && n[0] < z) { ns.push([n[0] - a, Math.max(1, Math.min(n[1], z - n[0])), n[2], n[3]]); } }
+        if (!ns.length) { continue; }
+        if (ns.length > MAX_NOTES) { return { ok: false, why: "「" + part.name + "」の " + (Math.round(a / bt) + 1) + " 小節目からのクリップの音符が " + MAX_NOTES + " 個をこえます" }; }
+        clips.push({ start: dest + a, len: z - a, notes: ns });
+      }
+      if (!clips.length) { continue; }
+      if (target) {
+        if (target.clips.length + clips.length > MAX_CLIPS_PER_TRACK) { return { ok: false, why: "「" + target.name + "」のクリップが " + MAX_CLIPS_PER_TRACK + " 個をこえます" }; }
+        for (j = 0; j < clips.length; j++) { var ov = overlapClip(target, clips[j].start, clips[j].len, null); if (ov) { return { ok: false, why: "「" + target.name + "」の " + (Math.floor(ov.start / bt) + 1) + " 小節目のクリップ（「" + ((ov.ext && ov.ext.name) || "クリップ") + "」）と重なります。上書きはしません" }; } }
+      }
+      items.push({ part: part, clips: clips, track: target });
+    }
+    if (!items.length) { return { ok: false, why: "取りこめる音符がありません" }; }
+    return { ok: true, items: items, dest: dest, span: span, bar: b };
+  }
+  // 計画どおりに足す（importPlan が ok のときだけ）→ { ok, clips, tracks }
+  function importApply(p, box, plan) {
+    var made = [], tracks = [], i, j;
+    if (!plan || !plan.ok) { return { ok: false, why: plan ? plan.why : "計画がありません" }; }
+    for (i = 0; i < plan.items.length; i++) {
+      var it = plan.items[i], t = it.track;
+      if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } t.ext.icon = it.part.preset === "pluck" ? "&#x1F3B8;" : "&#x1F3B5;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
+      for (j = 0; j < it.clips.length; j++) {
+        var q = it.clips[j], nm = str(it.part.name + "（" + box.name + "）" + (it.clips.length > 1 ? " " + (j + 1) : ""), "", 40);
+        var c = newMidiClip(p, t, q.start, q.len, q.notes, nm);
+        c.ext.src = { game: box.from, inbox: box.id, name: box.name };
+        made.push(c);
+      }
+      sortClips(t);
+    }
+    return { ok: true, clips: made, tracks: tracks };
+  }
+
   window.UGDawModel = {
     PPQ: PPQ, VERSION: VERSION, TYPE: TYPE, STORE_KEY: STORE_KEY, BPM_MIN: BPM_MIN, BPM_MAX: BPM_MAX,
     clean: clean, cleanNotes: cleanNotes, newProject: newProject, newTrack: newTrack, newMidiClip: newMidiClip, synthInstrument: synthInstrument, demoProject: demoProject,
@@ -1190,6 +1313,7 @@
     addAudioClip: addAudioClip, audioEvents: audioEvents, audioSpan: audioSpan, setAudioEdit: setAudioEdit, clipAssets: clipAssets, takesOf: takesOf, activeTakeId: activeTakeId, addTake: addTake, selectTake: selectTake, removeTake: removeTake, takeRoomWhy: takeRoomWhy, MAX_TAKES: MAX_TAKES,
     SECTION_NAMES: SECTION_NAMES, SECTION_COLORS: SECTION_COLORS, MAX_SECTIONS: MAX_SECTIONS, MAX_CLIPS_PER_TRACK: MAX_CLIPS_PER_TRACK, REPEAT_MAX: REPEAT_MAX, sectionsOf: sectionsOf, findSection: findSection, addSection: addSection, updateSection: updateSection, deleteSection: deleteSection, sectionRange: sectionRange,
     repeatPlan: repeatPlan, repeatClip: repeatClip, clipsInSection: clipsInSection, sectionCopyPlan: sectionCopyPlan, copySection: copySection,
+    INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
 })();
