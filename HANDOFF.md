@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.52** |
+| 現在バージョン | **v2.52.1** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.52.1] 🎸 ゴリラDAW から元のゲームへ戻る**（§342 9B-2 の続き）: `arcade-daw.js` の `backGame`／`goBackGame`／`backHtml`（`st.backGame` ＝ 取りこんだゲーム・DAW をやめると消す）。`arcade.js` の `switchTo` が `opts.cameFrom` を付け、`internal.cameFrom()` で読む
 - **[v2.52] 🎹 ゴリラウクレレの曲をゴリラDAW へ**（§342 Phase 9B-2）: モデルの受け取り箱 `inboxClean`／`inboxMake`／`inboxRead`／`inboxWrite`／`inboxClear`（`ultimateGorillaDawInboxV1`・1 つ・7 日）・`importPlan`／`importApply`（先に全部調べる・`ext.src.inbox` で二重をふせぐ・64 小節ごとに分ける）。`arcade-ukulele.js` の `ukeSeqParts`（MIDI の書き出しと共通）・`ukeDawPayload`／`ukeDawSend`・「🎹 DAWへ送る」の欄。`arcade-daw.js` の「📥 取り込み」の画面（`st.view === "inbox"`）・試聴（UGSynth に直接）。`arcade.js` の `internal.switchTo`。シンセのエンジンは変えていない
 - **[v2.51] 🎼 ゴリラDAW のソングアレンジャー**（§342 Phase 9B-1）: モデルの `sectionsOf`・`addSection`／`updateSection`／`deleteSection`・`sectionRange`・`repeatPlan`／`repeatClip`・`clipsInSection`・`sectionCopyPlan`／`copySection`（先に全部を調べてから足す）。`arcade-daw.js` の「🎼 曲の構成」の画面（`st.view === "sec"`）・ルーラーのセクションの帯とキュー（`st.cue`）・クリップの「🔁 繰り返し」の欄（`st.repeat`）・↶ の写し `{ __all, tracks, markers }`。データは `project.markers` の `kind: "section"`（schemaVersion 1 のまま）。シンセのエンジンは変えていない
 - **[v2.50] 🎧 ゴリラDAW のマルチ区間コンピング**（§341 Phase 9A-17）: モデルの `compRaw`・`compOf`（secs・ats・Ts・bad）・`audioSegs`（区間ごと）・`setComp`（`{ secs, cuts }`）・`compMerge`。`arcade-daw.js` の「コンピング」の節（下書き `st.cview.draft`・`comp.apply`・影の曲 `pl.shadow` で試聴）。公開前の版はタグ `pages-v2.49`（2145d3e）

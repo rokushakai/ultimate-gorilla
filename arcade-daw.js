@@ -350,7 +350,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
+  I.addStopHook(function () { st.backGame = null; inbPrevStop(); if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -415,7 +415,7 @@
         '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
         '<button class="modal-btn daw-small" data-ar="sections">&#x1F3BC; 曲の構成</button>' + // 9B-1
         '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' + // 9B-2
-        '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() +
+        '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
     var secL = M.sectionsOf(p), rulerH = secL.length ? RULER_H + 16 : RULER_H; // 9B-1
@@ -3325,6 +3325,7 @@
       saved = saveNow();
     }
     if (saved) { M.inboxClear(); }
+    st.backGame = box.from; // 9B-2: 「元のゲームへ戻る」
     st.inb = null; st.view = "arr"; st.sel = { kind: "clip", id: r.clips[0].id }; st.scroll = Math.max(0, tickX(plan.dest) - 24); st.reveal = true;
     var bt = M.barTicks(p);
     st.anote = "&#x1F4E5; 「" + escHtml(box.name) + "」を取りこみました（クリップ " + r.clips.length + " 個・" + (Math.round(plan.dest / bt) + 1) + "〜" + Math.round((plan.dest + plan.span) / bt) + " 小節目" + (u.dest === "new" ? "・新しい曲" : "・↶ 1 回で戻せます") + "）" + (saved ? "" : "。⚠️ 保存できなかったので、受け取り箱は残しています");
@@ -3334,7 +3335,7 @@
   }
   function inbHtml(p) {
     var M = DM(), r0 = inbRead(), box = r0.box, h, i;
-    h = '<div class="daw dinb"><div class="daw-top"><button class="modal-btn daw-small" data-ib="back">&#x2190; アレンジ</button><b>&#x1F4E5; ゲームから取り込む</b></div>' + projBarHtml(p);
+    h = '<div class="daw dinb"><div class="daw-top"><button class="modal-btn daw-small" data-ib="back">&#x2190; アレンジ</button><b>&#x1F4E5; ゲームから取り込む</b></div>' + projBarHtml(p) + backHtml();
     if (st.inbMsg) { h += '<div class="da-note">' + st.inbMsg + '</div>'; }
     if (!box) {
       h += r0.bad ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(r0.why) + '</div><div class="da-btns"><button class="modal-btn" data-ib="trash">&#x1F5D1;&#xFE0F; 受け取り箱を空にする</button></div>' : '';
@@ -3387,6 +3388,7 @@
     for (k = 0; k < els.length; k++) {
       els[k].onclick = function (ev) {
         var v = ev.currentTarget.getAttribute("data-ib"), M = DM(), r0 = inbRead(), box = r0.box, u = box ? inbUi(box) : null;
+        if (ev.currentTarget.getAttribute("data-ar") === "backGame") { goBackGame(); return; } // 9B-2: data-ib の無いボタン
         if (!v) { return; }
         if (v === "back") { inbPrevStop(); st.view = "arr"; render(root, ctl); return; }
         if (v === "trash") {
@@ -3406,6 +3408,17 @@
         if (v === "barv") { var a = window.prompt ? window.prompt("はじまりの小節（1〜256）", String(u.bar)) : null; if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { u.bar = Math.max(1, Math.min(256, Math.round(Number(a)))); } again(); return; }
       };
     }
+  }
+  // §342 9B-2: 元のゲームへ戻る（switchTo で来たとき・ゲームから取りこんだあと）。DAW をやめるときに保存する（stop hook）
+  var BACK_GAMES = { ukulele: "&#x1F3B8; ゴリラウクレレへ戻る" };
+  function backGame() { var c = null; try { c = I.cameFrom ? I.cameFrom() : null; } catch (e) { c = null; } var g = st.backGame || c; return g && BACK_GAMES[g] ? g : null; }
+  function backHtml() { var g = backGame(); return g ? '<div class="da-btns daw-back"><button class="modal-btn da-wide" data-ar="backGame">' + BACK_GAMES[g] + '</button></div>' : ''; }
+  function goBackGame() {
+    var g = backGame();
+    if (!g) { return false; }
+    inbPrevStop(); stopPlay(false); flushSave();
+    if (!(I.switchTo && I.switchTo(g))) { st.anote = "メニューへ戻って、ゲームを開いてください"; if (st.root) { rerender(); } return false; }
+    return true;
   }
   // アレンジの上の「届いています」（7 日たったものは、ここで消す）
   function inbNoteHtml() {
@@ -3446,6 +3459,7 @@
         if ((v = el.getAttribute("data-solo"))) { var ts = M.findTrack(p, v); if (ts) { ts.solo = !ts.solo; st.sel = { kind: "track", id: v }; updateMix(); markDirty(); } redraw(); return; }
         if ((v = el.getAttribute("data-clip"))) { var arr0 = root.querySelector(".daw-arr"); if (arr0) { st.scroll = arr0.scrollLeft || 0; } st.anote = ""; if (st.sel && st.sel.kind === "clip" && st.sel.id === v && openEditor(v)) { render(root, ctl); return; } st.sel = { kind: "clip", id: v }; render(root, ctl); return; } // 9A-5: タップで選ぶ・もう一度でピアノロール
         if ((v = el.getAttribute("data-ar")) === "addAudio") { keepScroll(root); addAudio(); return; } // 9A-10
+        if ((v = el.getAttribute("data-ar")) === "backGame") { goBackGame(); return; } // 9B-2
         if ((v = el.getAttribute("data-ar")) === "inbox") { keepScroll(root); stopPlay(false); st.view = "inbox"; st.inbMsg = ""; renderInbox(root, ctl); return; } // 9B-2
         if ((v = el.getAttribute("data-ar")) === "sections") { keepScroll(root); st.view = "sec"; st.secUI = null; st.secMsg = ""; renderSec(root, ctl); return; } // 9B-1
         if ((v = el.getAttribute("data-secjump"))) { keepScroll(root); sections.jump(v); return; } // 9B-1
@@ -3559,6 +3573,7 @@
     transportStop: transportStop,
     sections: { list: sections.list, add: sections.add, update: sections.update, remove: sections.remove, copy: sections.copy, jump: sections.jump, html: function () { return secHtml(project()); }, draft: secDraft, open: function () { st.view = "sec"; st.secUI = null; if (st.root) { rerender(); } }, cue: function () { return st.cue; }, setUI: function (u) { st.secUI = u; if (st.root) { rerender(); } }, ui: function () { return st.secUI; } }, // 9B-1
     jumpTo: jumpTo, repeatUI: function () { return st.repeat; },
+    backGame: backGame, goBackGame: goBackGame, // 9B-2
     inbox: { read: inbRead, ui: function () { var b = inbRead().box; return b ? inbUi(b) : null; }, plan: function () { var b = inbRead().box; return b ? inbPlan(b, inbUi(b)) : null; }, html: function () { return inbHtml(project()); }, open: function () { st.view = "inbox"; if (st.root) { rerender(); } }, importNow: inbImport, preview: function () { var b = inbRead().box; return b ? inbPreview(b, inbUi(b)) : false; }, stopPreview: inbPrevStop, note: inbNoteHtml }, // 9B-2
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
     comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17

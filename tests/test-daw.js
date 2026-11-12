@@ -2210,6 +2210,32 @@ module.exports = async function () {
   ok(WG.UGArcade.internal.switchTo("daw") === true && RS.innerHTML.indexOf("ゴリラDAW") >= 0, "UGArcade.internal.switchTo: ukulele → DAW");
   ok(WG.UGArcade.internal.switchTo("nope") === false, "switchTo: unknown game → false");
   WG.UGArcade.stop(); DG.reset();
+  // ---- v2.52.1: 元のゲームへ戻る・取りこんだクリップと 🎼／📋・ミキサー ----
+  var RB = H.makeEl("div"); DG.reset(); WG.UGArcade.start("daw", RB, {});
+  ok(DG.backGame() === null && RB.innerHTML.indexOf('data-ar="backGame"') < 0, "opened from the menu: no 'back to the game' button");
+  WG.UGArcade.stop(); DG.reset();
+  var RU = H.makeEl("div"); WG.UGArcade.start("ukulele", RU, {}); WG.UGArcade.internal.switchTo("daw");
+  ok(WG.UGArcade.internal.cameFrom() === "ukulele" && DG.backGame() === "ukulele" && RU.innerHTML.indexOf('data-ar="backGame"') >= 0 && RU.innerHTML.indexOf("ゴリラウクレレへ戻る") >= 0, "opened from the ukulele: 🎸 ゴリラウクレレへ戻る on the arrangement");
+  DG.inbox.open(); ok(RU.innerHTML.indexOf('data-ar="backGame"') >= 0, "… and on the 📥 screen");
+  DG.proj.create("empty"); DG.project().name = "戻る前の曲"; DG.markDirty(); var pidB = DG.project().id;
+  ok(DG.goBackGame() === true && WG.UGArcade.internal.cameFrom() === "daw" && RU.innerHTML.indexOf("ゴリラDAW") < 0 && JSON.parse(SG["ultimateGorillaDawV1:p:" + pidB]).project.name === "戻る前の曲", "back to the ukulele: the DAW song is saved first, the ukulele is open again");
+  ok(DG.backGame() === null, "after leaving the DAW, the 'back' target is forgotten");
+  WG.UGArcade.stop(); DG.reset();
+  // 取りこんだあとは（メニューから開いても）戻るボタン
+  var RC = H.makeEl("div"); WG.UGArcade.start("daw", RC, {}); DG.proj.create("empty"); UG2.dawSend(useq, false, "戻る"); DG.inbox.importNow();
+  ok(DG.backGame() === "ukulele" && RC.innerHTML.indexOf('data-ar="backGame"') >= 0, "after importing from the ukulele: the back button appears");
+  // 🎼 セクション・📋 セクションの複製・ミキサー（ミュート）・ほかのトラックと同時に
+  var pC = DG.project(), tU = pC.tracks[pC.tracks.length - 1], cU = tU.clips[0]; pC.tracks[0].clips[0].notes = [[0, 960, 72, 0.8]];
+  DG.sections.add({ name: "イントロ", bar: 1, bars: 4 }); var cpC = DG.sections.copy("s1", 9);
+  var cU2 = tU.clips.filter(function (c) { return c.start === 8 * BTG; })[0];
+  ok(cpC.ok && cU2 && JSON.stringify(cU2.notes) === JSON.stringify(cU.notes) && cU2.id !== cU.id && cU2.ext.src.inbox === cU.ext.src.inbox, "📋 section copy carries the imported clip (same notes, new id)", cpC.why);
+  await new Promise(function (r) { DG.wav.start(r); }); for (gw = 0; gw < 300 && DG.wav.state().busy; gw++) { await eG.wait(10); }
+  var logA = DG.wav.state().log, both = logA.some(function (x) { return x.track === tU.id; }) && logA.some(function (x) { return x.track === pC.tracks[0].id; });
+  tU.mute = true; DG.updateMix();
+  await new Promise(function (r) { DG.wav.start(r); }); for (gw = 0; gw < 300 && DG.wav.state().busy; gw++) { await eG.wait(10); }
+  ok(both && !DG.wav.state().log.some(function (x) { return x.track === tU.id; }) && DG.wav.state().log.some(function (x) { return x.track === pC.tracks[0].id; }), "WAV: the imported track plays with the others; muted in the mixer → silent", { both: both, st: DG.wav.state().state, msg: DG.wav.state().msg, n: logA.length, tr: logA.slice(0, 3).map(function (x) { return x.track; }), ids: pC.tracks.map(function (t) { return t.id + ":" + t.mute; }) });
+  tU.mute = false;
+  WG.UGArcade.stop(); DG.reset();
   var errG = eG.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errG.length === 0, "no Web Audio errors (9B-2)", errG.slice(0, 3));
 };

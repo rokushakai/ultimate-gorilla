@@ -151,7 +151,7 @@
     if (!o || !r || !GAMES[gameId]) { return false; }
     if (host) { report(); }
     for (k in o) { if (o.hasOwnProperty(k)) { o2[k] = o[k]; } }
-    o2.config = null; o2.hiScore = 0;
+    o2.config = null; o2.hiScore = 0; o2.cameFrom = host ? host.gameId : setupState.gameId; // 9B-2: 元のゲーム（戻るボタン用）
     return start(gameId, r, o2);
   }
 
@@ -2888,7 +2888,8 @@
       lsGet: lsGet, lsSet: lsSet, escHtml: escHtml, saveBlob: saveBlob,
       isSetupRoot: function (root) { return !!setupState && setupState.root === root; },
       addStopHook: function (fn) { stopHooks.push(fn); },
-      switchTo: switchTo // §342 9B-2: 別のゲームへ（ゴリラウクレレ → ゴリラDAW）
+      switchTo: switchTo, // §342 9B-2: 別のゲームへ（ゴリラウクレレ → ゴリラDAW）
+      cameFrom: function () { var o = host ? host.opts : (setupState ? setupState.opts : null); return o && o.cameFrom ? o.cameFrom : null; } // 9B-2: switchTo で来たときの元のゲーム
     }
   };
 })();
