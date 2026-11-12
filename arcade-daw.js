@@ -387,6 +387,7 @@
     if (M && p && st.view === "lib") { renderLib(root, ctl); return; } // 9A-15
     if (M && p && st.view === "sec") { renderSec(root, ctl); return; } // 9B-1
     if (M && p && st.view === "inbox") { renderInbox(root, ctl); return; } // 9B-2
+    if (M && p && st.view === "midi") { renderMidi(root, ctl); return; } // 9B-4
     if (M && p && st.view === "comp") { renderComp(root, ctl); return; } // 9A-16
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
@@ -654,6 +655,7 @@
     wavCancel(); wavFree(); wav.state = "idle"; wav.msg = ""; wav.note = "";
     audFree(p); // 9A-10: 新しい曲で使わない音声を捨てる
     if (!pk.busy) { packFree(); pk.state = "idle"; pk.msg = ""; } pk.istate = "idle"; pk.imsg = ""; // 9A-11
+    midiFree(); // 9B-4
     st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.cue = null; st.secUI = null; st.repeat = null; st.secMsg = ""; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
@@ -1777,6 +1779,7 @@
       (sv.note ? '<div class="daw-info">' + escHtml(sv.note) + '</div>' : '') +
       saveNoteHtml() +
       wavHtml(p) +
+      midiHtml(p) + // 9B-4
       packHtml(p) +
       assetsHtml(p) +
       '<div class="dp-btns dp-lib"><button class="modal-btn" data-pj="lib">&#x1F3B5; 素材ライブラリ（端末の素材・容量・削除）</button></div>' + // 9A-15
@@ -1811,7 +1814,7 @@
     root.innerHTML = projHtml();
     if (!root.querySelectorAll) { return; }
     var btns = root.querySelectorAll("button"), k, file = root.querySelector(".dp-file");
-    function back() { st.view = "arr"; sv.note = ""; render(root, ctl); }
+    function back() { st.view = "arr"; sv.note = ""; st.midErr = ""; render(root, ctl); }
     bindWavFile(root);
     for (k = 0; k < btns.length; k++) {
       btns[k].onclick = function (ev) {
@@ -1820,6 +1823,10 @@
         if ((aid = el.getAttribute("data-pj-unasset"))) { proj.unasset(aid); renderProj(root, ctl); return; }
         if (id) { var r = proj.open(id); if (r.ok) { sv.note = ""; render(root, ctl); } else { renderProj(root, ctl); } return; }
         if (v === "back") { back(); return; }
+        // §342 9B-4: MIDI
+        if (v === "midiOut") { midiExportNow(); renderProj(root, ctl); return; }
+        if (v === "midiSave" && mx.blob) { var hm = "fail"; try { hm = I.saveBlob(mx.blob, mx.name); } catch (em) { hm = "fail"; } mx.note = hm === "fail" ? "保存できませんでした。「ダウンロード」を使ってください" : (hm === "share" ? "共有シートから「ファイルに保存」を選んでください" : ""); renderProj(root, ctl); return; }
+        if (v === "midiIn") { var mf = root.querySelector(".dp-midifile"); if (mf) { mf.value = ""; mf.click(); } return; }
         if (v === "lib") { libOpen(); renderLib(root, ctl); return; } // 9A-15
         if (v === "save") { sv.note = saveNow() ? "保存しました" : ""; renderProj(root, ctl); return; }
         if (v === "rename") {
@@ -1837,6 +1844,18 @@
         if (v === "packSave" && pk.blob) { var hz = "fail"; try { hz = I.saveBlob(pk.blob, pk.name); } catch (ez) { hz = "fail"; } if (hz === "fail") { pk.state = "fail"; pk.msg = "保存できませんでした。「ダウンロード」を使ってください"; } renderProj(root, ctl); return; }
         if (v === "unpack") { var zf = root.querySelector(".dp-zipfile"); if (zf && !pk.busy) { zf.value = ""; zf.click(); } return; }
         if (v === "wavSave" && wav.blob) { var how = "fail"; try { how = I.saveBlob(wav.blob, wav.name); } catch (e) { how = "fail"; } if (how === "fail") { wav.note = "保存できませんでした。「ダウンロード」を使ってください。"; } renderProj(root, ctl); }
+      };
+    }
+    var mfile = root.querySelector(".dp-midifile"); // §342 9B-4
+    if (mfile) {
+      mfile.onchange = function () {
+        var f = mfile.files && mfile.files[0], M = DM();
+        if (!f) { return; }
+        if (f.size > M.MIDI_MAX_BYTES) { st.midErr = "読みこめませんでした: ファイルが大きすぎます（" + Math.round(f.size / 1024) + " KB・" + (M.MIDI_MAX_BYTES / 1048576) + " MB まで）"; renderProj(root, ctl); return; }
+        var rm = new FileReader();
+        rm.onload = function () { var r = midiOpen(new Uint8Array(rm.result), f.name); if (st.root === root) { if (r.ok) { render(root, ctl); } else { renderProj(root, ctl); } } };
+        rm.onerror = function () { st.midErr = "ファイルを読めませんでした"; renderProj(root, ctl); };
+        rm.readAsArrayBuffer(f);
       };
     }
     var zfile = root.querySelector(".dp-zipfile"); // §341 9A-11
@@ -3393,6 +3412,163 @@
       '<div class="da-btns"><button class="modal-btn da-wide" data-ib="trash">' + (u.trashAsk ? '&#x26A0;&#xFE0F; 本当に捨てる（元のゲームのデータは残ります）' : '&#x1F5D1;&#xFE0F; 捨てる') + '</button></div>';
     return h + '<p class="small dsv-note">「✅ 曲に追加」を押すまで、曲は変わりません。取りこんだら受け取り箱は空になります（元のゲームのデータはそのまま・また送れます）。</p></div>';
   }
+  // ---------- §342 9B-4: 標準 MIDI ファイル（.mid）の書き出し・読み込み ----------
+  var mx = { state: "idle", blob: null, url: "", name: "", info: null, msg: "", note: "", bytes: 0 }; // 📤 書き出し
+  // st.mid（📥 確認の画面）: { info（midiRead の結果）, id, kinds: { key: "drum" ／ "synth" }, parts: { key: true }, dest: "new" ／ "cur", bar, tempoOk, busy, msg }
+  function midiFree() { if (mx.url) { try { URL.revokeObjectURL(mx.url); } catch (e) {} } mx.url = ""; mx.blob = null; mx.state = "idle"; mx.msg = ""; mx.note = ""; mx.info = null; mx.bytes = 0; }
+  function midiFileName(p) {
+    var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
+    var base = String(p.name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw";
+    return base + "_" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()) + ".mid";
+  }
+  function midiExportNow() {
+    var M = DM(), p = project(), r = M.midiExport(p), blob = null;
+    midiFree();
+    if (!r.ok) { mx.state = "fail"; mx.msg = r.why; return r; }
+    try { blob = new Blob([new Uint8Array(r.bytes)], { type: "audio/midi" }); } catch (e) { blob = null; }
+    if (!blob) { mx.state = "fail"; mx.msg = "ファイルを作れませんでした"; return { ok: false, why: mx.msg }; }
+    mx.state = "done"; mx.blob = blob; mx.name = midiFileName(p); mx.info = r.info; mx.bytes = r.bytes.length;
+    try { mx.url = URL.createObjectURL(blob); } catch (e2) { mx.url = ""; }
+    return { ok: true, name: mx.name, bytes: r.bytes, info: r.info };
+  }
+  function midiHtml(p) {
+    var M = DM(), x = M.midiExport(p), f = x.info, i, nd = 0, ns = 0, out = [], h;
+    for (i = 0; i < f.tracks.length; i++) { if (f.tracks[i].drum) { nd++; } else { ns++; } }
+    h = '<div class="dp-wav dp-midi"><div class="dp-h">&#x1F3B9; MIDI ファイル（.mid）</div>' +
+      '<div class="small dp-kinds"><b>MIDI</b> ＝ 音符・テンポ・拍子だけ（ほかの音楽ソフトとやりとりする）。<b>音は入りません</b></div>';
+    if (x.ok) {
+      h += '<div class="small">書き出すトラック ' + f.tracks.length + ' 本（シンセ ' + ns + '・ドラム ' + nd + '）・音符 ' + f.notes + ' 個・BPM ' + M.bpmAt(p, 0) + '・' + M.meterAt(p, 0).num + '/' + M.meterAt(p, 0).den + '・Format 1</div>';
+      if (f.audio) { out.push("オーディオトラック " + f.audio + " 本（録音・WAV の素材・コンピング）"); }
+      if (f.empty) { out.push("音符の無いトラック " + f.empty + " 本"); }
+      out.push("エフェクト・マスター・シンセの音色の中身（近い GM の音色の番号と名前だけ入ります）");
+      out.push(f.muted ? "ミュート・ソロ（" + f.muted + " 本。全部のトラックを書き出します）" : "ミュート・ソロ（全部のトラックを書き出します）");
+      if (f.swing) { out.push("ドラムのスイング（格子の位置で書き出します）"); }
+      var dm = [], k; for (k in f.drumMap) { if (f.drumMap.hasOwnProperty(k)) { dm.push(M.drumName(Number(k)) + " " + f.drumMap[k] + " 打 → " + M.drumName(M.DRUM_GM[k])); } }
+      h += '<div class="small">入るもの: 音符（高さ・位置・長さ・強さ）・トラック名・BPM・拍子' + (f.tempos > 1 ? '（テンポの変化 ' + (f.tempos - 1) + ' か所も）' : '') + '・セクションの名前（マーカー）<br>入らないもの: ' + escHtml(out.join("・")) + '</div>';
+      if (dm.length || f.drumDrop) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + (dm.length ? 'ゴリラDAW だけのドラムの番号は GM の近い番号で書きます: ' + escHtml(dm.join("・")) : '') + (f.drumDrop ? (dm.length ? '<br>' : '') + '音のない操作（チョークなど）' + f.drumDrop + ' 個は書きません' : '') + '</div>'; }
+      h += '<div class="small">音色はほかのソフトでは同じになりません（シンセは 1〜16ch・ドラムは 10ch）</div>';
+    }
+    if (mx.state === "done" && mx.blob) {
+      h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(mx.name) + '<br><span class="small">' + mx.bytes + ' バイト・トラック ' + mx.info.tracks.length + ' 本・音符 ' + mx.info.notes + ' 個</span>' + (mx.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(mx.note) + '</span>' : '') + '</div>' +
+        '<div class="dp-btns"><button class="modal-btn" data-pj="midiSave">&#x1F4BE; ファイルに保存（共有）</button>' + (mx.url ? '<a class="modal-btn dp-dl" href="' + mx.url + '" download="' + escHtml(mx.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+    } else if (mx.state === "fail") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(mx.msg) + '</div>'; }
+    h += x.ok ? '<button class="modal-btn dp-wavgo" data-pj="midiOut">&#x1F4E4; MIDI書き出し</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(x.why) + '</div>';
+    h += '<button class="modal-btn dp-wavgo" data-pj="midiIn">&#x1F4E5; MIDIファイルを読み込む</button>' +
+      '<input type="file" class="dp-midifile" accept=".mid,.midi,.smf,audio/midi,audio/x-midi,audio/mid" style="display:none;">';
+    if (st.midErr) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.midErr) + '</div>'; }
+    return h + '<p class="small dsv-note">読み込みは Format 0・1 の .mid（' + (M.MIDI_MAX_BYTES / 1048576) + ' MB まで）。選ぶと、まず中身を確かめる画面になります（曲はまだ変わりません）。iPhone では「ファイルに保存（共有）」で共有シートが開く見こみです（実機では未確認）。</p></div>';
+  }
+  // ファイルのバイト → 確認の画面（曲は変えない）
+  function midiOpen(u8, fileName) {
+    var M = DM(), r = M.midiRead(u8, fileName), i, n = 0;
+    if (!r.ok) { st.mid = null; st.midErr = "読みこめませんでした: " + r.why + "（いまの曲と保存した曲はそのままです）"; return r; }
+    var u = { info: r, id: "m" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36), kinds: {}, parts: {}, dest: "new", bar: 1, tempoOk: !r.tempoChanges.length, busy: false, msg: "" };
+    for (i = 0; i < r.parts.length; i++) { u.kinds[r.parts[i].key] = r.parts[i].drum ? "drum" : "synth"; u.parts[r.parts[i].key] = n < M.MAX_TRACKS; n++; }
+    st.mid = u; st.midErr = ""; st.view = "midi";
+    return r;
+  }
+  function midSel(u) { var o = [], i, l = u.info.parts; for (i = 0; i < l.length; i++) { if (u.parts[l[i].key]) { o.push(l[i].key); } } return o; }
+  function midPlan(u) {
+    var M = DM(), mb = M.midiBox(u.info, u.kinds, u.id), q = u.dest === "new" ? M.midiNewProject(u.info) : project();
+    return { plan: M.importPlan(q, mb.box, { parts: midSel(u), bar: u.dest === "new" ? 1 : u.bar, target: "new" }), box: mb.box, drops: mb.drops };
+  }
+  // ✅ 取りこむ（新しい曲 ＝ いまの曲を保存してから作って保存・いまの曲 ＝ 新しいトラックだけ・↶ 1 回で戻る）
+  function midiImport() {
+    var M = DM(), u = st.mid, r, p, saved, plan, x, i;
+    if (!u) { return { ok: false, why: "MIDI ファイルを選んでください" }; }
+    if (u.busy) { return { ok: false, why: "取りこみ中です" }; }
+    if (!u.tempoOk) { u.msg = "&#x26A0;&#xFE0F; 途中でテンポが変わる曲です。「テンポの変化を入れずに続ける」を選ぶか、やめてください"; return { ok: false, why: "tempo" }; }
+    x = midPlan(u); plan = x.plan;
+    if (!plan.ok) { u.msg = "&#x26A0;&#xFE0F; " + escHtml(plan.why); return { ok: false, why: plan.why }; }
+    u.busy = true;
+    if (u.dest === "new") {
+      flushSave();
+      p = M.midiNewProject(u.info); p.id = M.newProjectId();
+      var ix = readIndex();
+      if (ix.ok) { for (i = 0; i < ix.idx.list.length; i++) { if (ix.idx.list[i] && ix.idx.list[i].name === p.name) { p.name = (p.name + "（MIDI）").substring(0, 40); break; } } }
+      plan = M.importPlan(p, x.box, { parts: midSel(u), bar: 1, target: "new" });
+      r = plan.ok ? M.importApply(p, x.box, plan) : plan;
+      if (!r.ok) { u.busy = false; u.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      switchTo(p, "dirty");
+      saved = saveNow();
+    } else {
+      p = project();
+      var snap = snapTracks();
+      r = M.importApply(p, x.box, plan);
+      if (!r.ok) { p.tracks = snap; u.busy = false; u.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      pushUndo(snap);
+      saved = saveNow();
+    }
+    var bt = M.barTicks(p), info = u.info;
+    st.mid = null; st.midErr = ""; st.view = "arr"; st.sel = { kind: "clip", id: r.clips[0].id }; st.scroll = Math.max(0, tickX(plan.dest) - 24); st.reveal = true;
+    st.anote = "&#x1F3B9; 「" + escHtml(info.file || info.name) + "」を取りこみました（トラック " + r.tracks.length + " 本・クリップ " + r.clips.length + " 個・" + (Math.round(plan.dest / bt) + 1) + "〜" + Math.round((plan.dest + plan.span) / bt) + " 小節目" + (u.dest === "new" ? "・新しい曲" : "・↶ 1 回で戻せます") + "）" + (saved ? "" : "。⚠️ 保存できませんでした");
+    if (pl) { resync(); }
+    if (st.root) { render(st.root, st.ctl); }
+    return { ok: true, clips: r.clips, tracks: r.tracks, saved: saved, project: p };
+  }
+  function midHtml(p) {
+    var M = DM(), u = st.mid, f = u.info, i, h, sel = midSel(u), drums = [];
+    h = '<div class="daw dinb dmid"><div class="daw-top"><button class="modal-btn daw-small" data-mi="back">&#x2190; もどる</button><b>&#x1F4E5; MIDI ファイルを読み込む</b></div>';
+    h += '<div class="daw-info inb-box"><div class="inb-name"><b>' + escHtml(f.file || f.name) + '</b></div>' +
+      '<div class="small">Format ' + f.format + '・トラック ' + f.trks + ' 本・音符 ' + f.notes + ' 個<br>BPM ' + f.bpm + '・' + f.meter.num + '/' + f.meter.den + ' 拍子・' + f.bars + ' 小節（' + f.sec + ' 秒）</div></div>';
+    h += '<div class="inb-sec">パート（' + f.parts.length + '）</div><div class="mid-parts">';
+    for (i = 0; i < f.parts.length; i++) {
+      var pt = f.parts[i], on = !!u.parts[pt.key], dr = u.kinds[pt.key] === "drum";
+      if (pt.drum) { drums.push(pt.name); }
+      h += '<div class="mid-row"><button class="modal-btn inb-part mid-on' + (on ? ' daw-on' : '') + '" data-mi="part:' + pt.key + '">' + (on ? '&#x2705;' : '&#x2B1C;') + ' ' + escHtml(pt.name) + '<small>' + pt.notes.length + ' 音・' + pt.ch + 'ch</small></button>' +
+        '<button class="modal-btn mid-kind' + (dr ? ' daw-on' : '') + '" data-mi="kind:' + pt.key + '">' + (dr ? '&#x1F941; ドラム' : '&#x1F3B9; ' + escHtml(presetName(pt.preset))) + '</button></div>';
+    }
+    h += '</div><div class="small">ドラムの候補（10ch）: ' + (drums.length ? escHtml(drums.join("・")) : 'ありません') + '。「&#x1F3B9;／&#x1F941;」で種類を変えられます</div>';
+    var x = midPlan(u), plan = x.plan, warn = [];
+    for (i = 0; i < x.drops.length; i++) { if (u.parts[x.drops[i].key]) { warn.push("「" + x.drops[i].name + "」: GM の 35〜81 番にない番号は入れません（" + x.drops[i].text + "）"); } }
+    if (f.tempoChanges.length) {
+      var tl = []; for (i = 0; i < f.tempoChanges.length && i < 5; i++) { tl.push(f.tempoChanges[i].bar + " 小節目 → " + f.tempoChanges[i].bpm); }
+      h += '<div class="daw-msg mid-tempo">&#x26A0;&#xFE0F; <b>途中でテンポが変わります（' + f.tempoChanges.length + ' か所）</b><br><span class="small">' + escHtml(tl.join("・")) + (f.tempoChanges.length > 5 ? " ほか" : "") + '<br>ゴリラDAW は最初の BPM（' + f.bpm + '）だけで鳴らします。音符の位置（拍）はそのままで、変わる所から先の速さ（秒）が元のファイルとちがいます</span></div>' +
+        '<div class="da-btns"><button class="modal-btn da-wide' + (u.tempoOk ? ' daw-on' : '') + '" data-mi="tempo">' + (u.tempoOk ? '&#x2705;' : '&#x2B1C;') + ' テンポの変化を入れずに続ける（BPM ' + f.bpm + ' のまま）</button></div>';
+    }
+    if (f.meterChanges.length) { var ml = []; for (i = 0; i < f.meterChanges.length && i < 5; i++) { ml.push(f.meterChanges[i].bar + " 小節目 → " + f.meterChanges[i].num + "/" + f.meterChanges[i].den); } warn.push("途中の拍子の変化（" + ml.join("・") + (f.meterChanges.length > 5 ? " ほか" : "") + "）は入りません。音符は拍の位置のままで、小節の区切りがずれます"); }
+    h += '<div class="inb-sec">取り込み先</div><div class="da-btns"><button class="modal-btn da-half' + (u.dest === "new" ? ' daw-on' : '') + '" data-mi="dest:new">新しい曲<br><small>BPM ' + f.bpm + '・' + f.meter.num + '/' + f.meter.den + '</small></button><button class="modal-btn da-half' + (u.dest === "cur" ? ' daw-on' : '') + '" data-mi="dest:cur">いまの曲に足す<br><small>「' + escHtml(p.name) + '」</small></button></div>';
+    if (u.dest === "cur") {
+      h += '<div class="sec-line">新しいトラック ' + sel.length + ' 本・はじまり <button class="modal-btn sec-st" data-mi="bar-">&#x2212;</button><button class="ae-val" data-mi="barv">' + u.bar + ' 小節目</button><button class="modal-btn sec-st" data-mi="bar+">＋</button></div>';
+      var pb = M.bpmAt(p, 0), pm = M.meterAt(p, 0);
+      if (Math.round(pb * 100) !== Math.round(f.bpm * 100)) { warn.push("この曲の BPM（" + pb + "）で鳴ります（ファイルは " + f.bpm + "）。音符の位置は拍のまま"); }
+      if (pm.num !== f.meter.num || pm.den !== f.meter.den) { warn.push("拍子がちがいます（この曲 " + pm.num + "/" + pm.den + "・ファイル " + f.meter.num + "/" + f.meter.den + "）。拍の位置のまま入るので、小節の区切りがずれます"); }
+      warn.push("いまあるトラックには入れません（新しいトラックを足すだけ・↶ 1 回で戻せます）");
+    }
+    warn.push("音色は DAW のシンセ・ドラムです（ほかのソフトと同じ音にはなりません・あとで変えられます）。クオンタイズはしません");
+    for (i = 0; i < f.notices.length; i++) { warn.push(f.notices[i]); }
+    h += '<div class="small inb-warn">' + warn.map(function (w) { return "・" + escHtml(w); }).join("<br>") + '</div>';
+    if (f.skipped.length) { h += '<div class="small inb-warn">入らないもの: ' + escHtml(f.skipped.join("・")) + '</div>'; }
+    if (plan.ok) { var n2 = 0; for (i = 0; i < plan.items.length; i++) { n2 += plan.items[i].clips.length; } h += '<div class="small">' + (u.dest === "new" ? '新しい曲の ' : '') + plan.bar + '〜' + (plan.bar + Math.round(plan.span / M.barTicks(u.dest === "new" ? M.midiNewProject(f) : p)) - 1) + ' 小節目に、トラック ' + plan.items.length + ' 本・クリップ ' + n2 + ' 個</div>'; }
+    else { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(plan.why) + '</div>'; }
+    if (u.msg) { h += '<div class="da-note">' + u.msg + '</div>'; }
+    h += '<div class="da-btns"><button class="modal-btn da-wide inb-go" data-mi="go"' + (plan.ok && u.tempoOk && !u.busy ? '' : ' disabled') + '>' + (u.dest === "new" ? '&#x2705; 新しい曲として取り込む' : '&#x2705; いまの曲に足す') + '</button></div>' +
+      '<div class="da-btns"><button class="modal-btn da-wide" data-mi="back">やめる</button></div>';
+    return h + '<p class="small dsv-note">「✅」を押すまで、曲は変わりません（いまの曲・保存した曲はそのまま）。</p></div>';
+  }
+  function renderMidi(root, ctl) {
+    if (!st.mid) { st.view = "proj"; renderProj(root, ctl); return; }
+    root.innerHTML = midHtml(project());
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k;
+    function again() { if (st.view === "midi" && st.mid) { renderMidi(root, ctl); } }
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-mi"), u = st.mid;
+        if (!v || !u) { return; }
+        if (v === "back") { st.mid = null; st.view = "proj"; renderProj(root, ctl); return; }
+        if (v === "go") { midiImport(); again(); return; }
+        u.msg = "";
+        if (v.indexOf("part:") === 0) { var key = v.substring(5); u.parts[key] = !u.parts[key]; again(); return; }
+        if (v.indexOf("kind:") === 0) { var k2 = v.substring(5); u.kinds[k2] = u.kinds[k2] === "drum" ? "synth" : "drum"; again(); return; }
+        if (v === "tempo") { u.tempoOk = !u.tempoOk; again(); return; }
+        if (v === "dest:new" || v === "dest:cur") { u.dest = v.substring(5); again(); return; }
+        if (v === "bar-") { u.bar = Math.max(1, u.bar - 1); again(); return; }
+        if (v === "bar+") { u.bar = Math.min(256, u.bar + 1); again(); return; }
+        if (v === "barv") { var a = window.prompt ? window.prompt("はじまりの小節（1〜256）", String(u.bar)) : null; if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { u.bar = Math.max(1, Math.min(256, Math.round(Number(a)))); } again(); return; }
+      };
+    }
+  }
   function presetName(id) { if (id === "drum") { return "ドラム"; } try { var pr = window.UGSynth && window.UGSynth.preset ? window.UGSynth.preset(id) : null; return pr ? String(pr.name).replace(/&#x?[0-9a-f]+;/gi, "").replace(/^\s+|\s+$/g, "") : id; } catch (e) { return id; } }
   function renderInbox(root, ctl) {
     var p = project();
@@ -3592,6 +3768,7 @@
     jumpTo: jumpTo, repeatUI: function () { return st.repeat; },
     backGame: backGame, goBackGame: goBackGame, // 9B-2
     stepRows: stepRows, // 9B-3
+    midi: { exportNow: midiExportNow, state: function () { return mx; }, html: function () { return midiHtml(project()); }, open: function (u8, name) { var r = midiOpen(u8, name); if (st.root) { rerender(); } return r; }, ui: function () { return st.mid; }, plan: function () { return st.mid ? midPlan(st.mid) : null; }, importNow: midiImport, pageHtml: function () { return st.mid ? midHtml(project()) : ""; } }, // 9B-4
     inbox: { read: inbRead, ui: function () { var b = inbRead().box; return b ? inbUi(b) : null; }, plan: function () { var b = inbRead().box; return b ? inbPlan(b, inbUi(b)) : null; }, html: function () { return inbHtml(project()); }, open: function () { st.view = "inbox"; if (st.root) { rerender(); } }, importNow: inbImport, preview: function () { var b = inbRead().box; return b ? inbPreview(b, inbUi(b)) : false; }, stopPreview: inbPrevStop, note: inbNoteHtml }, // 9B-2
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
     comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17

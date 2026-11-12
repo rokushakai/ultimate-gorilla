@@ -1178,7 +1178,7 @@
   var DRUM_NAMES = { 36: "キック", 38: "スネア", 39: "クラップ", 42: "ハイハット（閉）", 46: "ハイハット（開）", 37: "リム", 47: "タム", 49: "クラッシュ", 51: "ライド", 48: "タム（高）", 45: "タム（中）", 43: "フロアタム",
     44: "ペダルHH", 23: "ハーフオープン", 21: "フットスプラッシュ", 24: "リムショット", 22: "フラム", 53: "ライドのベル" };
   var DRUM_SILENT = { 26: "チョーク", 25: "キックをおさえる" };
-  function drumName(m) { return DRUM_NAMES.hasOwnProperty(m) ? DRUM_NAMES[m] : null; }
+  function drumName(m) { return DRUM_NAMES.hasOwnProperty(m) ? DRUM_NAMES[m] : (GM_DRUM_NAMES.hasOwnProperty(m) ? GM_DRUM_NAMES[m] : null); } // 9B-4: GM の 35〜81 の名前も
   function inboxId(now) { return "g" + (typeof now === "number" ? now : Date.now()).toString(36) + Math.floor(Math.random() * 1679616).toString(36); }
   // 受け取ったものを全部調べなおす → { ok, why, box }（値はそろえる・おかしいものは取りこまない）
   function inboxClean(o, now) {
@@ -1316,6 +1316,288 @@
     return { ok: true, clips: made, tracks: tracks };
   }
 
+  // ---------- §342 9B-4: 標準 MIDI ファイル（SMF）の読み込み・書き出し（画面を持たない・バイトの配列）----------
+  var MIDI_MAX_BYTES = 1048576, MIDI_MAX_EVENTS = 200000, MIDI_MAX_NOTES = 20000, MIDI_MAX_MS = 3000, MIDI_MAX_TRKS = 64, MIDI_MAX_TICK = 2147483647;
+  var MIDI_DRUM_LO = 35, MIDI_DRUM_HI = 81, MIDI_DRUM_LEN = PPQ / 8, MIDI_DRUM_CH = 9;
+  // DAW だけのドラムの番号 → GM の番号（ゴリラウクレレ・メロディくずしの書き出しと同じ表。0 ＝ 書かない）
+  var DRUM_GM = { 21: 44, 23: 46, 24: 40, 22: 38, 26: 0, 25: 0 };
+  var GM_DRUM_NAMES = { 35: "バスドラム", 36: "キック", 37: "サイドスティック", 38: "スネア", 39: "クラップ", 40: "エレキスネア", 41: "フロアタム（低）", 42: "ハイハット（閉）", 43: "フロアタム（高）", 44: "ペダルHH", 45: "タム（低）",
+    46: "ハイハット（開）", 47: "タム（中低）", 48: "タム（中高）", 49: "クラッシュ", 50: "タム（高）", 51: "ライド", 52: "チャイナ", 53: "ライドのベル", 54: "タンバリン", 55: "スプラッシュ", 56: "カウベル", 57: "クラッシュ2", 58: "ビブラスラップ",
+    59: "ライド2", 60: "ボンゴ（高）", 61: "ボンゴ（低）", 62: "コンガ（ミュート）", 63: "コンガ（高）", 64: "コンガ（低）", 65: "ティンバレス（高）", 66: "ティンバレス（低）", 67: "アゴゴ（高）", 68: "アゴゴ（低）", 69: "カバサ", 70: "マラカス",
+    71: "ホイッスル（短）", 72: "ホイッスル（長）", 73: "ギロ（短）", 74: "ギロ（長）", 75: "クラベス", 76: "ウッドブロック（高）", 77: "ウッドブロック（低）", 78: "クイーカ（ミュート）", 79: "クイーカ（開）", 80: "トライアングル（ミュート）", 81: "トライアングル（開）" };
+  // シンセのプリセット → 近い GM の音色（0 から）。読みこみは GM の音色 → プリセット
+  var MIDI_PRESET_GM = { lead: 81, chip: 80, pad: 89, spad: 50, brass: 62, bass: 38, acid: 39, pluck: 24, bell: 14, organ: 16, wobble: 87, soft: 79 };
+  function midiGmPreset(g) {
+    g = Number(g);
+    if (!(g >= 0 && g <= 127)) { return "lead"; }
+    if (g < 8 || (g >= 24 && g < 32) || (g >= 104 && g < 112)) { return "pluck"; }
+    if (g < 16 || (g >= 112 && g < 120)) { return "bell"; }
+    if (g < 24) { return "organ"; }
+    if (g < 40) { return "bass"; }
+    if (g < 56) { return "spad"; }
+    if (g < 72) { return "brass"; }
+    if (g < 80) { return "soft"; }
+    if (g < 88 || g >= 120) { return "lead"; }
+    return "pad";
+  }
+  function midiPresetOk(id) {
+    if (typeof id !== "string" || !/^[a-z0-9_-]{1,24}$/.test(id)) { return false; }
+    var S = window.UGSynth;
+    try { if (S && S.preset) { var pr = S.preset(id); return !!(pr && pr.id === id); } } catch (e) { return false; }
+    return MIDI_PRESET_GM.hasOwnProperty(id);
+  }
+  function midiVlq(n) { var b = [n & 0x7F]; n = Math.floor(n / 128); while (n > 0) { b.unshift((n & 0x7F) | 0x80); n = Math.floor(n / 128); } return b; }
+  function midiUtf8(s) { var u = unescape(encodeURIComponent(String(s))), o = [], i; for (i = 0; i < u.length; i++) { o.push(u.charCodeAt(i)); } return o; }
+  function midiText(u8, a, z) {
+    var s = "", i;
+    for (i = a; i < z && i < a + 400; i++) { s += String.fromCharCode(u8[i]); }
+    try { s = decodeURIComponent(escape(s)); } catch (e) {} // UTF-8 でなければ 1 バイトずつの文字のまま
+    return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40);
+  }
+  function midiMeta(type, bytes) { return [0xFF, type].concat(midiVlq(bytes.length), bytes); }
+  // evs: [tick, 順番, バイト, 並び] → MTrk のバイト
+  function midiTrack(evs, out) {
+    var i, j, last = 0, d = [];
+    for (i = 0; i < evs.length; i++) { evs[i][3] = i; }
+    evs.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1] || a[3] - b[3]; });
+    for (i = 0; i < evs.length; i++) { var dv = midiVlq(evs[i][0] - last); last = evs[i][0]; for (j = 0; j < dv.length; j++) { d.push(dv[j]); } for (j = 0; j < evs[i][2].length; j++) { d.push(evs[i][2][j]); } }
+    d.push(0x00, 0xFF, 0x2F, 0x00);
+    out.push(0x4D, 0x54, 0x72, 0x6B, (d.length >>> 24) & 255, (d.length >>> 16) & 255, (d.length >>> 8) & 255, d.length & 255);
+    for (i = 0; i < d.length; i++) { out.push(d[i]); }
+  }
+  // 📤 曲 → SMF Format 1（PPQ 960）。鳴る音符（noteEvents）だけ。→ { ok, why, bytes, info }
+  function midiExport(p) {
+    var ev = noteEvents(p, 0, Infinity), by = {}, i, j, info = { tracks: [], notes: 0, audio: 0, empty: 0, drumMap: {}, drumDrop: 0, tempos: 0, meters: 0, sections: 0, muted: 0, swing: 0 };
+    for (i = 0; i < ev.length; i++) { (by[ev[i].track] = by[ev[i].track] || []).push(ev[i]); }
+    var cond = [[0, 0, midiMeta(0x03, midiUtf8(str(p.name, "Gorilla DAW", 40)))]], ms = meters(p), ps = points(p), sec = sectionsOf(p);
+    for (i = 0; i < ms.length; i++) { var dd = Math.round(Math.log(ms[i].den || 4) / Math.LN2); cond.push([ms[i].tick, 0, [0xFF, 0x58, 0x04, ms[i].num, dd, 24, 8]]); info.meters++; }
+    for (i = 0; i < ps.length; i++) { var us = Math.max(1, Math.min(0xFFFFFF, Math.round(60000000 / ps[i].bpm))); cond.push([ps[i].tick, 0, [0xFF, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255]]); info.tempos++; }
+    for (i = 0; i < sec.length; i++) { cond.push([sec[i].tick, 1, midiMeta(0x06, midiUtf8(sectionName(sec[i].name) || "Section"))]); info.sections++; }
+    var trks = [], synthN = 0;
+    for (i = 0; p && i < p.tracks.length; i++) {
+      var t = p.tracks[i], list = by[t.id] || [];
+      if (isAudio(t)) { info.audio++; continue; }
+      if (t.kind !== "midi") { continue; }
+      if (!list.length) { info.empty++; continue; }
+      var drum = isDrum(t), ch = drum ? MIDI_DRUM_CH : (synthN % 15 < 9 ? synthN % 15 : synthN % 15 + 1), evs = [], n = 0, preset = "";
+      if (!drum) { synthN++; }
+      if (t.mute || t.solo) { info.muted++; }
+      if (drum && swingOf(t)) { info.swing++; }
+      evs.push([0, 0, midiMeta(0x03, midiUtf8(str(t.name, "Track", 40)))]);
+      if (!drum) {
+        preset = t.instrument && t.instrument.ext && typeof t.instrument.ext.preset === "string" ? t.instrument.ext.preset : "";
+        if (/^[a-z0-9_-]{1,24}$/.test(preset)) { evs.push([0, 0, midiMeta(0x04, midiUtf8("ugsynth:" + preset))]); }
+        evs.push([0, 1, [0xC0 | ch, MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : 80]]);
+      }
+      evs.push([0, 1, [0xB0 | ch, 7, Math.max(0, Math.min(127, Math.round(num(t.vol, 80, 0, 100) * 1.27)))]]);
+      evs.push([0, 1, [0xB0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + num(t.pan, 0, -1, 1) * 63)))]]);
+      for (j = 0; j < list.length; j++) {
+        var e = list[j], m = e.m, on = e.tick, off;
+        if (drum && DRUM_GM.hasOwnProperty(m)) {
+          if (!DRUM_GM[m]) { info.drumDrop++; continue; }
+          info.drumMap[m] = (info.drumMap[m] || 0) + 1; m = DRUM_GM[m];
+        }
+        off = drum ? on + MIDI_DRUM_LEN : on + Math.max(1, e.end - e.tick);
+        var vel = Math.max(1, Math.min(127, Math.round(num(e.v, 0.8, 0, 1) * 127)));
+        evs.push([off, 2, [0x80 | ch, m, 0]]);
+        evs.push([on, 3, [0x90 | ch, m, vel]]);
+        n++;
+      }
+      if (!n) { info.empty++; continue; }
+      trks.push(evs); info.notes += n;
+      info.tracks.push({ id: t.id, name: t.name, drum: drum, ch: ch + 1, notes: n, preset: preset });
+    }
+    if (!trks.length) { return { ok: false, why: "書き出せる音符がありません（MIDI のトラックに音符を置いてください）", info: info }; }
+    var out = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, ((trks.length + 1) >> 8) & 255, (trks.length + 1) & 255, (PPQ >> 8) & 255, PPQ & 255];
+    midiTrack(cond, out);
+    for (i = 0; i < trks.length; i++) { midiTrack(trks[i], out); }
+    return { ok: true, bytes: out, info: info };
+  }
+  // 📥 バイト → 調べた結果（曲は作らない）→ { ok, why, ... }。断るときは ok: false と理由
+  function midiParse(u8, clock) {
+    var n = u8 ? u8.length : 0, t0 = clock ? clock() : Date.now(), evN = 0, noteN = 0;
+    var cnt = { cc: 0, sus: 0, bend: 0, at: 0, sysex: 0, text: 0, lyric: 0, marker: 0, key: 0, meta: 0, chunk: 0, orphan: 0, overlap: 0, open: 0, noEot: 0 };
+    var tempos = [], meters0 = [], trks = [];
+    function fail(why) { return { ok: false, why: why }; }
+    function tag(o) { return String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]); }
+    function r32(o) { return u8[o] * 16777216 + (u8[o + 1] << 16) + (u8[o + 2] << 8) + u8[o + 3]; }
+    function r16(o) { return (u8[o] << 8) + u8[o + 1]; }
+    if (!n) { return fail("ファイルが空です"); }
+    if (n > MIDI_MAX_BYTES) { return fail("ファイルが大きすぎます（" + Math.round(n / 1024) + " KB・" + (MIDI_MAX_BYTES / 1048576) + " MB まで）"); }
+    if (n < 14 || tag(0) !== "MThd") { return fail("MIDI ファイルではありません（はじめが MThd ではありません）"); }
+    var hl = r32(4);
+    if (hl < 6 || 8 + hl > n) { return fail("ヘッダーが壊れています（長さ " + hl + "）"); }
+    var fmt = r16(8), ntr = r16(10), div = r16(12);
+    if (fmt === 2) { return fail("Format 2（別々のパターンの集まり）には対応していません（Format 0・1 だけ）"); }
+    if (fmt > 2) { return fail("知らない形式です（Format " + fmt + "）"); }
+    if (div & 0x8000) { return fail("SMPTE の時刻（フレームの単位）には対応していません（4 分音符の単位だけ）"); }
+    if (!div) { return fail("ヘッダーの時刻の単位（division）が 0 です"); }
+    var pos = 8 + hl;
+    function track(a, z, ti) {
+      var p = a, tick = 0, run = 0, notes = [], open = {}, prog = {}, name = "", inst = "", eot = false, k;
+      function vlq() { var v = 0, c, b; for (c = 0; c < 4; c++) { if (p >= z) { return -1; } b = u8[p++]; v = v * 128 + (b & 0x7F); if (!(b & 0x80)) { return v; } } return -2; }
+      while (p < z && !eot) {
+        evN++;
+        if (evN > MIDI_MAX_EVENTS) { return fail("イベントが多すぎます（" + MIDI_MAX_EVENTS + " 個まで）"); }
+        if ((evN & 2047) === 0 && (clock ? clock() : Date.now()) - t0 > MIDI_MAX_MS) { return fail("調べるのに時間がかかりすぎます（" + (MIDI_MAX_MS / 1000) + " 秒まで）"); }
+        var dt = vlq();
+        if (dt < 0) { return fail(dt === -2 ? "トラック " + (ti + 1) + " の可変長の数が壊れています（4 バイトをこえる）" : "トラック " + (ti + 1) + " が途中で終わっています"); }
+        tick += dt;
+        if (tick > MIDI_MAX_TICK) { return fail("曲が長すぎます（時刻があふれます）"); }
+        if (p >= z) { return fail("トラック " + (ti + 1) + " が途中で終わっています"); }
+        var s = u8[p];
+        if (s & 0x80) { p++; } else { if (!run) { return fail("トラック " + (ti + 1) + " にステータスの無いイベントがあります（ランニングステータスの前が無い）"); } s = run; }
+        if (s === 0xFF) {
+          if (p >= z) { return fail("トラック " + (ti + 1) + " が途中で終わっています"); }
+          var ty = u8[p++], ln = vlq();
+          if (ln < 0 || p + ln > z) { return fail("トラック " + (ti + 1) + " のメタイベントの長さがおかしいです"); }
+          var a2 = p; p += ln; // ランニングステータスは残す（メタのあとに続けて書くファイルもある）
+          if (ty === 0x2F) { eot = true; }
+          else if (ty === 0x03) { if (!name) { name = midiText(u8, a2, p); } }
+          else if (ty === 0x04) { if (!inst) { inst = midiText(u8, a2, p); } }
+          else if (ty === 0x51) { if (ln === 3) { var us = (u8[a2] << 16) + (u8[a2 + 1] << 8) + u8[a2 + 2]; if (us > 0) { tempos.push([tick, us, ti]); } } else { cnt.meta++; } }
+          else if (ty === 0x58) { if (ln >= 2) { meters0.push([tick, u8[a2], u8[a2 + 1] <= 6 ? Math.pow(2, u8[a2 + 1]) : 0]); } else { cnt.meta++; } }
+          else if (ty === 0x05) { cnt.lyric++; }
+          else if (ty === 0x06) { cnt.marker++; }
+          else if (ty >= 0x01 && ty <= 0x0F) { cnt.text++; }
+          else if (ty === 0x59) { cnt.key++; }
+          else { cnt.meta++; }
+          continue;
+        }
+        if (s === 0xF0 || s === 0xF7) { var ls = vlq(); if (ls < 0 || p + ls > z) { return fail("トラック " + (ti + 1) + " の SysEx の長さがおかしいです"); } p += ls; cnt.sysex++; continue; }
+        if (s > 0xF0) { return fail("トラック " + (ti + 1) + " に知らない種類のイベントがあります（0x" + s.toString(16).toUpperCase() + "）"); }
+        run = s;
+        var hi = s & 0xF0, ch = s & 0x0F, need = hi === 0xC0 || hi === 0xD0 ? 1 : 2;
+        if (p + need > z) { return fail("トラック " + (ti + 1) + " が途中で終わっています"); }
+        var d1 = u8[p], d2 = need === 2 ? u8[p + 1] : 0;
+        if ((d1 & 0x80) || (d2 & 0x80)) { return fail("トラック " + (ti + 1) + " のデータのバイトがおかしいです（0x80 以上）"); }
+        p += need;
+        var key = ch * 128 + d1;
+        if (hi === 0x90 && d2 > 0) {
+          noteN++;
+          if (noteN > MIDI_MAX_NOTES) { return fail("音符が多すぎます（" + MIDI_MAX_NOTES + " 個まで）"); }
+          if (open[key] && open[key].length) { cnt.overlap++; }
+          (open[key] = open[key] || []).push(notes.length);
+          notes.push([tick, -1, d1, d2, ch]);
+        } else if (hi === 0x80 || hi === 0x90) {
+          var q = open[key];
+          if (q && q.length) { var ix = q.shift(); notes[ix][1] = tick - notes[ix][0]; } else { cnt.orphan++; }
+        } else if (hi === 0xB0) { cnt.cc++; if (d1 === 64) { cnt.sus++; } }
+        else if (hi === 0xC0) { if (prog[ch] === undefined) { prog[ch] = d1; } }
+        else if (hi === 0xE0) { cnt.bend++; }
+        else { cnt.at++; }
+      }
+      if (!eot) { cnt.noEot++; }
+      for (k in open) { if (open.hasOwnProperty(k)) { while (open[k].length) { var oi = open[k].shift(); notes[oi][1] = Math.max(0, tick - notes[oi][0]); cnt.open++; } } }
+      return { ok: true, name: name, inst: inst, notes: notes, prog: prog, end: tick };
+    }
+    while (pos < n) {
+      if (pos + 8 > n) { return fail("ファイルの終わりが壊れています"); }
+      var tg = tag(pos), len = r32(pos + 4), body = pos + 8;
+      if (body + len > n) { return fail("トラックの長さがおかしいです（ファイルの終わりをこえます）"); }
+      if (tg !== "MTrk") { cnt.chunk++; pos = body + len; continue; }
+      if (trks.length >= MIDI_MAX_TRKS) { return fail("トラックが多すぎます（" + MIDI_MAX_TRKS + " 本まで）"); }
+      var r = track(body, body + len, trks.length);
+      if (!r.ok) { return r; }
+      trks.push(r);
+      pos = body + len;
+    }
+    if (!trks.length) { return fail("トラック（MTrk）がありません"); }
+    return { ok: true, format: fmt, ntrks: ntr, division: div, trks: trks, tempos: tempos, meters: meters0, cnt: cnt, notes: noteN };
+  }
+  // 📥 調べた結果 → 確認の画面に出すもの・取りこむパート（PPQ 960 に直す）。fileName は表示だけ
+  function midiRead(u8, fileName, clock) {
+    var r = midiParse(u8, clock), i, j, k;
+    if (!r.ok) { return r; }
+    var div = r.division, cnt = r.cnt, notices = [], skipped = [];
+    function tk(x) { return Math.round(x * PPQ / div); }
+    // 拍子（tick 0）
+    var mt = r.meters.slice().sort(function (a, b) { return a[0] - b[0]; }), mnum = 4, mden = 4, meterChanges = [];
+    for (i = 0; i < mt.length && mt[i][0] === 0; i++) { mnum = mt[i][1]; mden = mt[i][2]; }
+    if (!(mnum >= 1 && mnum <= 32) || [1, 2, 4, 8, 16].indexOf(mden) < 0) { notices.push("拍子（" + mnum + "/" + mden + "）は DAW で使えないので 4/4 にします"); mnum = 4; mden = 4; }
+    var tpb = Math.round(mnum * PPQ * 4 / mden);
+    function barOf(ft) { return Math.floor(tk(ft) / tpb) + 1; }
+    for (; i < mt.length; i++) { var lm = meterChanges.length ? meterChanges[meterChanges.length - 1] : { num: mnum, den: mden }; if (mt[i][1] !== lm.num || mt[i][2] !== lm.den) { meterChanges.push({ tick: tk(mt[i][0]), bar: barOf(mt[i][0]), num: mt[i][1], den: mt[i][2] }); } }
+    // テンポ（tick 0）・途中の変化
+    var tp = r.tempos.slice().sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; }), us0 = 500000, tempoChanges = [];
+    for (i = 0; i < tp.length && tp[i][0] === 0; i++) { us0 = tp[i][1]; }
+    function bpmOf(us) { return Math.round(60000000 / us * 100) / 100; }
+    var bpm = bpmOf(us0), last = bpm;
+    if (bpm < BPM_MIN || bpm > BPM_MAX) { notices.push("BPM " + bpm + " は DAW の範囲（" + BPM_MIN + "〜" + BPM_MAX + "）の外なので " + Math.max(BPM_MIN, Math.min(BPM_MAX, bpm)) + " にします"); bpm = Math.max(BPM_MIN, Math.min(BPM_MAX, bpm)); last = bpm; }
+    for (; i < tp.length; i++) { var b2 = bpmOf(tp[i][1]); if (b2 !== last) { tempoChanges.push({ tick: tk(tp[i][0]), bar: barOf(tp[i][0]), bpm: b2 }); last = b2; } }
+    // パート（Format 1 ＝ MTrk ごと・中でチャンネルが分かれていればチャンネルごと。Format 0 ＝ チャンネルごと）
+    var gprog = {}, parts = [], total = 0, endT = 0;
+    for (i = 0; i < r.trks.length; i++) { for (k in r.trks[i].prog) { if (r.trks[i].prog.hasOwnProperty(k) && gprog[k] === undefined) { gprog[k] = r.trks[i].prog[k]; } } }
+    for (i = 0; i < r.trks.length; i++) {
+      var tr = r.trks[i], chs = [], byc = {};
+      for (j = 0; j < tr.notes.length; j++) { var c0 = tr.notes[j][4]; if (!byc[c0]) { byc[c0] = []; chs.push(c0); } byc[c0].push(tr.notes[j]); }
+      chs.sort(function (a, b) { return a - b; });
+      for (j = 0; j < chs.length; j++) {
+        var ch = chs[j], list = byc[ch], ns = [], pg = tr.prog[ch] !== undefined ? tr.prog[ch] : gprog[ch], m0 = /^ugsynth:([a-z0-9_-]{1,24})$/.exec(tr.inst || ""), nm;
+        for (k = 0; k < list.length; k++) {
+          var a = tk(list[k][0]), z = tk(list[k][0] + Math.max(0, list[k][1]));
+          ns.push([a, z - a, list[k][2], Math.round(list[k][3] / 127 * 1000) / 1000]);
+          endT = Math.max(endT, z, a + 1);
+        }
+        ns.sort(function (x, y) { return x[0] - y[0] || x[2] - y[2]; });
+        nm = tr.name ? (chs.length > 1 ? tr.name.substring(0, 34) + " " + (ch + 1) + "ch" : tr.name) : (r.format === 0 ? "チャンネル " + (ch + 1) : "トラック " + (i + 1) + (chs.length > 1 ? " " + (ch + 1) + "ch" : ""));
+        if (!tr.name && ch === MIDI_DRUM_CH) { nm = r.format === 0 || chs.length > 1 ? "ドラム（10ch）" : "ドラム"; }
+        parts.push({ key: "p" + parts.length, name: str(nm, "トラック", 40), ch: ch + 1, trk: i + 1, drum: ch === MIDI_DRUM_CH, prog: pg === undefined ? null : pg, preset: m0 && midiPresetOk(m0[1]) ? m0[1] : midiGmPreset(pg), notes: ns });
+        total += ns.length;
+      }
+    }
+    if (!total) { return { ok: false, why: "音符（Note On）がありません" }; }
+    var len = Math.max(tpb, Math.ceil(endT / tpb) * tpb), bars = Math.round(len / tpb);
+    if (bars > MAX_BARS) { return { ok: false, why: "曲が長すぎます（" + bars + " 小節・" + MAX_BARS + " 小節まで）" }; }
+    // 入らないもの
+    if (cnt.sus) { skipped.push("サステインペダル " + cnt.sus + " 個（音の長さは鍵盤を離した所まで）"); }
+    if (cnt.cc - cnt.sus > 0) { skipped.push("コントロールチェンジ（音量・定位など）" + (cnt.cc - cnt.sus) + " 個"); }
+    if (cnt.bend) { skipped.push("ピッチベンド " + cnt.bend + " 個"); }
+    if (cnt.at) { skipped.push("アフタータッチ " + cnt.at + " 個"); }
+    if (cnt.sysex) { skipped.push("SysEx " + cnt.sysex + " 個"); }
+    if (cnt.lyric) { skipped.push("歌詞 " + cnt.lyric + " 個"); }
+    if (cnt.marker) { skipped.push("マーカー " + cnt.marker + " 個（セクションにはしません）"); }
+    if (cnt.text) { skipped.push("テキスト " + cnt.text + " 個"); }
+    if (cnt.key) { skipped.push("調号 " + cnt.key + " 個"); }
+    if (cnt.meta) { skipped.push("そのほかのメタイベント " + cnt.meta + " 個"); }
+    if (cnt.chunk) { skipped.push("知らない種類のチャンク " + cnt.chunk + " 個（飛ばしました）"); }
+    if (cnt.overlap) { notices.push("同じ高さの音の重なり " + cnt.overlap + " か所（先に始まった音から順に終わらせました）"); }
+    if (cnt.open) { notices.push("終わり（Note Off）の無い音 " + cnt.open + " 個（トラックの終わりまで伸ばしました）"); }
+    if (cnt.orphan) { notices.push("始まりの無い Note Off " + cnt.orphan + " 個（無視しました）"); }
+    if (cnt.noEot) { notices.push("End of Track の無いトラック " + cnt.noEot + " 本（トラックの終わりまで読みました）"); }
+    if (r.format === 0 && r.trks.length !== 1) { notices.push("Format 0 なのにトラックが " + r.trks.length + " 本あります（全部読みました）"); }
+    if (r.ntrks !== r.trks.length) { notices.push("ヘッダーのトラック数（" + r.ntrks + "）と、実際のトラック（" + r.trks.length + "）がちがいます"); }
+    var base = String(fileName || "MIDI").replace(/\.(mid|midi|smf)$/i, "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40) || "MIDI";
+    return { ok: true, file: str(String(fileName || ""), "", 80), name: base, format: r.format, division: div, trks: r.trks.length, notes: total, bpm: bpm, meter: { num: mnum, den: mden }, len: len, bars: bars,
+      sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, tempoChanges: tempoChanges, meterChanges: meterChanges, parts: parts, skipped: skipped, notices: notices };
+  }
+  // ドラムのパートの音符（GM の 35〜81 はそのまま・ほかは入れない・長さ 0）→ { notes, drop: { 番号: 数 } }
+  function midiDrumNotes(notes) {
+    var o = [], drop = {}, i;
+    for (i = 0; i < notes.length; i++) { var m = notes[i][2]; if (m < MIDI_DRUM_LO || m > MIDI_DRUM_HI) { drop[m] = (drop[m] || 0) + 1; continue; } o.push([notes[i][0], 0, m, notes[i][3]]); }
+    return { notes: o, drop: drop };
+  }
+  // 確認の画面の選び方 → importPlan に渡す箱（受け取り箱と同じ形・保存はしない）。kinds: { パートの key: "drum" ／ "synth" }
+  function midiBox(info, kinds, id) {
+    var parts = [], drops = [], i;
+    for (i = 0; i < info.parts.length; i++) {
+      var pt = info.parts[i], drum = kinds && kinds[pt.key] ? kinds[pt.key] === "drum" : pt.drum;
+      if (drum) {
+        var dn = midiDrumNotes(pt.notes), k, dl = [];
+        for (k in dn.drop) { if (dn.drop.hasOwnProperty(k)) { dl.push("番号 " + k + "（" + dn.drop[k] + " 個）"); } }
+        if (dl.length) { drops.push({ key: pt.key, name: pt.name, text: dl.join("・"), n: pt.notes.length - dn.notes.length }); }
+        parts.push({ key: pt.key, name: pt.name, preset: "drum", notes: dn.notes });
+      } else { parts.push({ key: pt.key, name: pt.name, preset: pt.preset, notes: pt.notes }); }
+    }
+    return { box: { id: id || ("m" + Date.now().toString(36)), from: "midi", name: info.name, bpm: info.bpm, meter: info.meter.num, len: info.len, parts: parts, skipped: [], tempoRows: info.tempoChanges.length }, drops: drops };
+  }
+  // 新しい曲（ファイルの BPM・拍子）
+  function midiNewProject(info) {
+    var p = newProject({ name: info.name, bpm: info.bpm, meter: info.meter.num });
+    p.tempo.meters[0].den = info.meter.den;
+    return p;
+  }
+
   window.UGDawModel = {
     PPQ: PPQ, VERSION: VERSION, TYPE: TYPE, STORE_KEY: STORE_KEY, BPM_MIN: BPM_MIN, BPM_MAX: BPM_MAX,
     clean: clean, cleanNotes: cleanNotes, newProject: newProject, newTrack: newTrack, newMidiClip: newMidiClip, synthInstrument: synthInstrument, demoProject: demoProject,
@@ -1337,6 +1619,8 @@
     SECTION_NAMES: SECTION_NAMES, SECTION_COLORS: SECTION_COLORS, MAX_SECTIONS: MAX_SECTIONS, MAX_CLIPS_PER_TRACK: MAX_CLIPS_PER_TRACK, REPEAT_MAX: REPEAT_MAX, sectionsOf: sectionsOf, findSection: findSection, addSection: addSection, updateSection: updateSection, deleteSection: deleteSection, sectionRange: sectionRange,
     repeatPlan: repeatPlan, repeatClip: repeatClip, clipsInSection: clipsInSection, sectionCopyPlan: sectionCopyPlan, copySection: copySection,
     DRUM_NAMES: DRUM_NAMES, DRUM_SILENT: DRUM_SILENT, drumName: drumName, // 9B-3
+    MIDI_MAX_BYTES: MIDI_MAX_BYTES, MIDI_MAX_EVENTS: MIDI_MAX_EVENTS, MIDI_MAX_NOTES: MIDI_MAX_NOTES, MIDI_MAX_MS: MIDI_MAX_MS, MIDI_DRUM_LO: MIDI_DRUM_LO, MIDI_DRUM_HI: MIDI_DRUM_HI, DRUM_GM: DRUM_GM, GM_DRUM_NAMES: GM_DRUM_NAMES, MIDI_PRESET_GM: MIDI_PRESET_GM, // 9B-4
+    midiExport: midiExport, midiParse: midiParse, midiRead: midiRead, midiBox: midiBox, midiDrumNotes: midiDrumNotes, midiNewProject: midiNewProject, midiGmPreset: midiGmPreset,
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };

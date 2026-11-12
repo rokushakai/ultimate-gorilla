@@ -2332,4 +2332,160 @@ module.exports = async function () {
   WP.UGArcade.stop(); DP.reset();
   var errP = eP.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errP.length === 0, "no Web Audio errors (9B-3)", errP.slice(0, 3));
+  // ================= 9B-4: 標準 MIDI ファイル（.mid）の読み込み・書き出し（§342）=================
+  var eM = H.load(), WM = eM.window, MM = WM.UGDawModel, DM4 = WM.UGDaw, PM = WM.UGPiano, DRM = WM.UGDrum, UM = WM.UGUkulele, SM = eM.store;
+  function vl(n) { var b = [n & 127]; n = Math.floor(n / 128); while (n > 0) { b.unshift((n & 127) | 128); n = Math.floor(n / 128); } return b; }
+  function smfChunk(tag, body) { var l = body.length; return [tag.charCodeAt(0), tag.charCodeAt(1), tag.charCodeAt(2), tag.charCodeAt(3), (l >>> 24) & 255, (l >>> 16) & 255, (l >>> 8) & 255, l & 255].concat(body); }
+  function smf(fmt, div, tracks, ntr) { var o = smfChunk("MThd", [0, fmt, 0, ntr === undefined ? tracks.length : ntr, (div >> 8) & 255, div & 255]); tracks.forEach(function (t) { o = o.concat(smfChunk("MTrk", t)); }); return new Uint8Array(o); }
+  function trk(evs, noEot) { var o = []; evs.forEach(function (e) { o = o.concat(vl(e[0]), e.slice(1)); }); if (!noEot) { o.push(0, 0xFF, 0x2F, 0); } return o; }
+  function bytesOf(s) { return s.split("").map(function (c) { return c.charCodeAt(0); }); }
+  function meta(type, arr) { return [0, 0xFF, type].concat(vl(arr.length), arr); }
+  // --- Format 0（division 480）: ランニングステータス・強さ 0 の Note On・和音・10ch・ペダル・ベンド ---
+  var f0 = smf(0, 480, [trk([[0, 0xFF, 0x51, 3, 0x09, 0x27, 0xC0], [0, 0xFF, 0x58, 4, 3, 2, 24, 8], [0, 0xC0, 0], [0, 0x90, 60, 100], [0, 64, 80], [0, 0x99, 36, 127],
+    [480, 0x89, 36, 0], [0, 0x90, 60, 0], [0, 64, 0], [480, 0x99, 38, 96], [0, 0xB0, 64, 127], [0, 0xE0, 0, 64], [480, 0x89, 38, 0], [0, 0x90, 67, 64], [960, 0x80, 67, 0]])]);
+  var r0 = MM.midiRead(f0, "f0.mid");
+  ok(r0.ok && r0.format === 0 && r0.bpm === 100 && r0.meter.num === 3 && r0.meter.den === 4 && r0.parts.length === 2 && r0.notes === 5, "Format 0: BPM 100, 3/4, split into 2 parts by channel", r0.why || r0);
+  var p0s = r0.parts[0], p0d = r0.parts[1];
+  ok(p0s.name === "チャンネル 1" && !p0s.drum && p0s.preset === "pluck" && JSON.stringify(p0s.notes) === JSON.stringify([[0, 960, 60, 0.787], [0, 960, 64, 0.63], [2880, 1920, 67, 0.504]]), "Format 0: chord + running status + velocity-0 Note On as Note Off; ticks ×2 (480 → 960); velocities /127; program 0 → pluck", p0s.notes);
+  ok(p0d.drum && p0d.ch === 10 && p0d.name === "ドラム（10ch）" && p0d.notes.map(function (n) { return n[0] + ":" + n[2]; }).join() === "0:36,1920:38", "Format 0: channel 10 → a drum part candidate", p0d);
+  ok(r0.skipped.join().indexOf("サステインペダル 1 個") >= 0 && r0.skipped.join().indexOf("ピッチベンド 1 個") >= 0 && r0.bars === 2 && r0.tempoChanges.length === 0, "Format 0: sustain pedal / pitch bend listed as not imported; 2 bars of 3/4", r0.skipped);
+  // --- Format 1（division 96）: 道具トラック・名前・途中のテンポ・範囲の外のドラム番号 ---
+  var f1 = smf(1, 96, [trk([meta(0x03, bytesOf("Song")), [0, 0xFF, 0x51, 3, 0x07, 0xA1, 0x20], [0, 0xFF, 0x58, 4, 4, 2, 24, 8], [768, 0xFF, 0x51, 3, 0x0A, 0x2C, 0x2B], meta(0x06, bytesOf("Chorus")), meta(0x05, bytesOf("la"))]),
+    trk([meta(0x03, bytesOf("Piano <b>")), [0, 0xC1, 48], [0, 0x91, 60, 127], [0, 0x91, 64, 1], [0, 0x91, 67, 64], [96, 0x81, 60, 0], [0, 0x81, 64, 0], [0, 0x81, 67, 0], [0, 0x91, 72, 90], [24, 0x81, 72, 64]]),
+    trk([meta(0x03, bytesOf("Drums")), [0, 0x99, 35, 100], [0, 0x99, 30, 100], [48, 0x99, 81, 50], [0, 0x99, 82, 50], [0, 0x99, 36, 70]])]);
+  var r1 = MM.midiRead(f1, "song.mid");
+  ok(r1.ok && r1.format === 1 && r1.trks === 3 && r1.parts.length === 2 && r1.bpm === 120 && r1.meter.num === 4 && r1.parts[0].name === "Piano <b>" && r1.parts[0].preset === "spad" && r1.parts[1].name === "Drums" && r1.parts[1].drum, "Format 1: conductor track, names, program 48 → strings pad, channel 10 drums", r1.why || r1.parts);
+  ok(JSON.stringify(r1.parts[0].notes) === JSON.stringify([[0, 960, 60, 1], [0, 960, 64, 0.008], [0, 960, 67, 0.504], [960, 240, 72, 0.709]]), "Format 1: ticks ×10 (96 → 960), lengths, velocities 127 / 1 / 64 / 90", r1.parts[0].notes);
+  ok(r1.tempoChanges.length === 1 && r1.tempoChanges[0].bar === 3 && r1.tempoChanges[0].bpm === 90 && r1.tempoChanges[0].tick === 7680 && r1.skipped.join().indexOf("マーカー 1 個") >= 0 && r1.skipped.join().indexOf("歌詞 1 個") >= 0, "Format 1: the tempo change at bar 3 (→ 90) is found; marker / lyric listed", r1.tempoChanges);
+  var mb1 = MM.midiBox(r1, {}, "mtest"), bd1 = mb1.box.parts[1];
+  ok(bd1.preset === "drum" && bd1.notes.map(function (n) { return n[0] + ":" + n[2] + ":" + n[1]; }).join() === "0:35:0,480:36:0,480:81:0" && mb1.drops.length === 1 && mb1.drops[0].text === "番号 30（1 個）・番号 82（1 個）", "drums: GM 35〜81 kept as they are (length 0), 30 / 82 not imported and listed", mb1.drops);
+  var mb1s = MM.midiBox(r1, { p1: "synth", p0: "drum" }, "mtest2");
+  ok(mb1s.box.parts[1].preset !== "drum" && mb1s.box.parts[1].notes.length === 5 && mb1s.box.parts[0].preset === "drum" && mb1s.box.parts[0].notes.length === 4, "the part kind can be switched (drum ⇄ synth)");
+  // --- 重なり・終わりの無い音・始まりの無い Note Off・End of Track が無い・知らないチャンク ---
+  var fo = new Uint8Array(Array.prototype.slice.call(smf(1, 960, [trk([[0, 0x90, 60, 100], [100, 0x90, 60, 90], [100, 0x80, 60, 0], [100, 0x80, 60, 0], [0, 0x80, 61, 0], [0, 0x90, 62, 80], [500, 0x90, 63, 80]], true)])).concat(smfChunk("XFIH", [1, 2, 3])));
+  var ro = MM.midiRead(fo, "o.mid"), on0 = ro.ok ? ro.parts[0].notes : [];
+  ok(ro.ok && JSON.stringify(on0) === JSON.stringify([[0, 200, 60, 0.787], [100, 200, 60, 0.709], [300, 500, 62, 0.63], [800, 0, 63, 0.63]]), "same-pitch overlap: the first started note ends first; a note without Note Off runs to the end of the track", on0);
+  ok(ro.ok && ro.notices.join().indexOf("重なり 1 か所") >= 0 && ro.notices.join().indexOf("Note Off） の") < 0 && ro.notices.join().indexOf("無い音 2 個") >= 0 && ro.notices.join().indexOf("始まりの無い Note Off 1 個") >= 0 && ro.notices.join().indexOf("End of Track の無い") >= 0 && ro.skipped.join().indexOf("チャンク 1 個") >= 0, "overlap / open notes / orphan Note Off / missing End of Track / unknown chunk are all explained", ro.notices.concat(ro.skipped));
+  // --- 断る（理由つき） ---
+  function why(u8, clock) { var r = MM.midiRead(u8, "x.mid", clock); return r.ok ? "OK?" : r.why; }
+  var hdr = [0x4D, 0x54, 0x68, 0x64];
+  var bad = [
+    ["empty", new Uint8Array(0), "空"], ["not MThd", new Uint8Array(bytesOf("RIFF0000WAVEfmt ")), "MThd"], ["header length 4", new Uint8Array(hdr.concat([0, 0, 0, 4, 0, 0, 0, 1, 0, 96])), "ヘッダー"],
+    ["format 2", smf(2, 96, [trk([[0, 0x90, 60, 1]])]), "Format 2"], ["SMPTE", smf(1, 0xE728, [trk([[0, 0x90, 60, 1]])]), "SMPTE"], ["division 0", smf(1, 0, [trk([[0, 0x90, 60, 1]])]), "division"],
+    ["track length", new Uint8Array(smfChunk("MThd", [0, 1, 0, 1, 0, 96]).concat([0x4D, 0x54, 0x72, 0x6B, 0, 0, 1, 0, 0, 0x90, 60, 1])), "トラックの長さ"],
+    ["5-byte VLQ", smf(1, 96, [[0x81, 0x81, 0x81, 0x81, 0x01, 0x90, 60, 1]]), "可変長"], ["no running status", smf(1, 96, [[0, 60, 64]]), "ランニングステータス"],
+    ["unknown status", smf(1, 96, [[0, 0xF4, 0]]), "知らない種類"], ["cut in the middle", smf(1, 96, [[0, 0x90, 60]]), "途中で終わって"], ["data byte ≥ 0x80", smf(1, 96, [[0, 0x90, 60, 0x90, 0, 0xFF, 0x2F, 0]]), "データのバイト"],
+    ["meta length", smf(1, 96, [[0, 0xFF, 0x03, 0x20, 0x41]]), "メタイベントの長さ"], ["no notes", smf(1, 96, [trk([[0, 0xFF, 0x51, 3, 7, 0xA1, 0x20]])]), "音符"], ["no MTrk", new Uint8Array(smfChunk("MThd", [0, 1, 0, 1, 0, 96])), "MTrk"],
+    ["too long", smf(1, 96, [trk([[96 * 4 * 300, 0x90, 60, 64], [96, 0x80, 60, 0]])]), "長すぎ"], ["too big", new Uint8Array(MM.MIDI_MAX_BYTES + 1), "大きすぎ"]
+  ];
+  var badOut = bad.map(function (b) { var w = why(b[1]); return { n: b[0], ok: w.indexOf(b[2]) >= 0, w: w }; });
+  ok(badOut.every(function (x) { return x.ok; }), "broken / unsupported files are refused with a reason (" + bad.length + " kinds)", badOut.filter(function (x) { return !x.ok; }));
+  var many = [0, 0x90, 60, 64], ki; for (ki = 0; ki < MM.MIDI_MAX_NOTES; ki++) { many.push(0, 60, 64); }
+  var fMany = smf(1, 96, [trk([many])]);
+  ok(why(fMany).indexOf("音符が多すぎ") >= 0, "more than " + MM.MIDI_MAX_NOTES + " notes → refused");
+  var tk0 = 0; ok(why(fMany, function () { tk0 += 5000; return tk0; }).indexOf("時間がかかりすぎ") >= 0, "too slow (> 3 s) → refused");
+  var evMany = [], ei; for (ei = 0; ei <= MM.MIDI_MAX_EVENTS; ei++) { evMany.push(0, 0xB0, 7, 100); }
+  ok(why(smf(1, 96, [evMany])).indexOf("イベントが多すぎ") >= 0, "more than " + MM.MIDI_MAX_EVENTS + " events → refused");
+
+  // --- 書き出し: ウクレレ（伴奏）＋ピアノ（メロディ・和音・強さいろいろ）＋ドラム ---
+  var IDBM = fakeIDB(); WM.indexedDB = IDBM; fakeDecode(WM);
+  var RM = H.makeEl("div"); DM4.reset(); WM.UGArcade.start("daw", RM, {});
+  DM4.proj.create("empty"); var pX = DM4.project(); pX.name = "MIDI の往復"; while (pX.tracks.length) { pX.tracks.pop(); } DM4.markDirty();
+  UM.dawSend(UM.seqClean({ bpm: 120, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }, { type: "chord", name: "G7", len: "w" }] }), false, "伴奏"); DM4.inbox.open(); DM4.inbox.importNow();
+  PM.dawSend(PM.takeClean({ id: 8, name: "メロ", bpm: 120, meter: 4, prog: 0, notes: [[0, 1, 72], [1, 1, 74], [2, 2, 76], [4, 1, 77], [4, 1, 72], [6, 2, 79]] }, 0)); DM4.inbox.open(); DM4.inbox.importNow();
+  DRM.dawSend("take", DRM.takeClean({ id: 9, name: "リズム", bpm: 120, notes: [[0, 36, 0.9], [0.5, 42, 0.5], [1, 38, 0.8], [1.5, 42, 0.5], [2, 36, 0.9], [2.5, 42, 0.5], [3, 38, 0.8], [3.5, 46, 0.6], [3.75, 23, 0.66]] }, 0)); DM4.inbox.open(); DM4.inbox.importNow();
+  pX = DM4.project(); var xU = pX.tracks[0], xP = pX.tracks[1], xD = pX.tracks[2];
+  xP.clips[0].notes[0][3] = 0.35; xP.clips[0].notes[1][3] = 1; xP.clips[0].notes[2][3] = 0.12; xP.instrument = MM.synthInstrument("bell"); DM4.markDirty();
+  DM4.sections.add({ name: "イントロ", bar: 1, bars: 2 });
+  ok(pX.tracks.length === 3 && MM.isDrum(xD) && xP.clips[0].notes.length === 6, "a song with ukulele + piano (chord, 4 velocities) + drums");
+  ok(DM4.midi.html().indexOf("MIDI書き出し") >= 0 && DM4.midi.html().indexOf("入らないもの") >= 0 && DM4.midi.html().indexOf("ハーフオープン 1 打 → ハイハット（開）") >= 0 && DM4.midi.html().indexOf("MIDIファイルを読み込む") >= 0, "📁 screen: 📤 MIDI書き出し with what is / is not saved, the drum number change shown before export, 📥 MIDIファイルを読み込む");
+  var xr = DM4.midi.exportNow(), xb = xr.bytes;
+  ok(xr.ok && /\.mid$/.test(xr.name) && DM4.midi.state().blob && String.fromCharCode(xb[0], xb[1], xb[2], xb[3]) === "MThd" && xb[9] === 1 && xb[11] === 4 && (xb[12] * 256 + xb[13]) === 960, "📤 export: SMF Format 1, 4 tracks (tempo + 3), division 960", xr.why);
+  var xp = MM.midiParse(new Uint8Array(xb));
+  ok(xp.ok && xp.trks[1].name === xU.name && xp.trks[2].name === xP.name && xp.trks[3].name === xD.name && xp.trks[3].notes.every(function (n) { return n[4] === 9; }) && xp.trks[1].notes.every(function (n) { return n[4] === 0; }) && xp.trks[2].notes.every(function (n) { return n[4] === 1; }) && xp.trks[2].inst === "ugsynth:bell" && xp.trks[2].prog[1] === 14, "export: track names, synth on ch 1 / 2, drums on ch 10, program + ugsynth preset name", xp.trks.map(function (t) { return t.name + "/" + t.inst; }));
+  ok(xp.tempos.length === 1 && xp.tempos[0][1] === 500000 && xp.meters[0][1] === 4 && xp.meters[0][2] === 4 && xp.cnt.marker === 1, "export: tempo 120, 4/4, the section name as a marker");
+  ok(!MM.midiExport(MM.emptyProject(0)).ok && MM.midiExport(MM.emptyProject(0)).why.indexOf("音符") >= 0, "export: a song without notes → refused with a reason");
+  var pAu = JSON.parse(JSON.stringify(pX)); MM.addAudioTrack(pAu, "うた"); var inAu = MM.midiExport(pAu).info;
+  ok(inAu.audio === 1 && inAu.tracks.length === 3 && inAu.drumMap[23] === 1 && inAu.drumDrop === 0, "export info: audio tracks are counted as not saved; the half-open hat is mapped");
+  // --- 書き出し → 新しい曲へ読み込み → くらべる ---
+  function evByName(p) { var o = {}; MM.noteEvents(p, 0, Infinity).forEach(function (e) { var nm = p.tracks[e.ti].name; (o[nm] = o[nm] || []).push([e.tick, e.end - e.tick, e.m, e.v]); }); for (var k in o) { o[k].sort(function (a, b) { return a[0] - b[0] || a[2] - b[2] || a[1] - b[1]; }); } return o; }
+  var orig = evByName(pX), origKind = pX.tracks.map(function (t) { return t.name + ":" + MM.isDrum(t); }).join(), pidX = pX.id, before = JSON.stringify(pX);
+  var oX = DM4.midi.open(new Uint8Array(xb), "MIDI の往復.mid");
+  ok(oX.ok && DM4.state().view === "midi" && DM4.midi.ui().dest === "new" && DM4.midi.ui().tempoOk && JSON.stringify(DM4.project()) === before, "📥 open: the check screen (new song by default); the current song is unchanged");
+  var pg = DM4.midi.pageHtml();
+  ok(pg.indexOf("Format 1") >= 0 && pg.indexOf("トラック 4 本") >= 0 && pg.indexOf("BPM 120") >= 0 && pg.indexOf("4/4") >= 0 && pg.indexOf("ドラムの候補（10ch）: " + xD.name) >= 0 && pg.indexOf("新しい曲として取り込む") >= 0, "check screen: format, tracks, BPM, meter, drum candidate, confirm button");
+  var rX = DM4.midi.importNow(), pY = DM4.project(), back = evByName(pY), cmp = [], k2;
+  ok(rX.ok && pY.id !== pidX && DM4.state().view === "arr" && pY.tracks.map(function (t) { return t.name + ":" + MM.isDrum(t); }).join() === origKind && MM.bpmAt(pY, 0) === 120 && MM.meterAt(pY, 0).num === 4 && MM.meterAt(pY, 0).den === 4, "✅ new song: the same tracks (names, synth / drum), BPM, meter", rX.why);
+  // MIDI は「同じチャンネル・同じ高さで重なる音」のどの終わりがどの音のものかを持たない → 始まり（時刻・高さ・強さ）と終わり（時刻・高さ）を全部くらべ、組み合わせの入れかわりは数える
+  var swapped = 0, overl = 0;
+  for (k2 in orig) {
+    var a = orig[k2], b = back[k2] || [], isD = k2 === xD.name, i2;
+    if (a.length !== b.length) { cmp.push(k2 + " count " + a.length + "/" + b.length); continue; }
+    var sa = [], sb = [], ea = [], eb = [];
+    for (i2 = 0; i2 < a.length; i2++) {
+      var am = isD && MM.DRUM_GM.hasOwnProperty(a[i2][2]) ? MM.DRUM_GM[a[i2][2]] : a[i2][2];
+      if (a[i2][0] !== b[i2][0] || am !== b[i2][2] || Math.abs(a[i2][3] - b[i2][3]) > 0.0045) { cmp.push(k2 + "#" + i2 + " start " + a[i2] + " / " + b[i2]); }
+      ea.push((a[i2][0] + a[i2][1]) + ":" + am); eb.push((b[i2][0] + b[i2][1]) + ":" + b[i2][2]);
+      if (a[i2][1] !== b[i2][1]) { swapped++; }
+      for (var j2 = 0; j2 < a.length; j2++) { if (j2 !== i2 && a[j2][2] === a[i2][2] && a[j2][0] <= a[i2][0] && a[j2][0] + a[j2][1] > a[i2][0] && (a[j2][0] < a[i2][0] || j2 < i2)) { overl++; break; } }
+    }
+    ea.sort(); eb.sort(); if (ea.join() !== eb.join()) { cmp.push(k2 + " ends differ"); }
+  }
+  ok(cmp.length === 0 && orig[xU.name].length === 128 && orig[xP.name].length === 6 && orig[xD.name].length === 9, "round trip: every note — count, pitch, start tick, velocity (±0.0045), every end tick, drum numbers (half-open → 46) — matches", cmp.slice(0, 5));
+  ok(swapped > 0 && swapped <= overl * 2 && orig[xP.name].every(function (n, i) { return back[xP.name][i][1] === n[1]; }) && orig[xD.name].every(function (n, i) { return back[xD.name][i][1] === n[1]; }), "lengths: exact except same-pitch overlapping ukulele notes (" + swapped + " lengths swapped among " + overl + " overlapping notes — MIDI cannot tell them apart)", { swapped: swapped, overl: overl });
+  ok(pY.tracks[1].instrument.ext.preset === "bell" && pY.tracks[0].instrument.ext.preset === "pluck", "round trip: the synth presets come back (ugsynth name)");
+  var vb = back[xP.name].map(function (n) { return n[3]; });
+  ok(vb.slice().sort().join() === [0.346, 1, 0.118, 0.803, 0.803, 0.803].sort().join(), "velocities after the round trip (0.35 → 44 → 0.346 · 1 → 127 → 1 · 0.12 → 15 → 0.118 · 0.8 → 102 → 0.803)", vb);
+  // --- 取りこんだ曲で: ピアノロール・16 ステップ・🔁・📋・↶・WAV・保存・ZIP ---
+  var yU = pY.tracks[0], yP = pY.tracks[1], yD = pY.tracks[2];
+  DM4.openEditor(yP.clips[0].id); ok(DM4.state().view === "roll", "imported synth clip → piano roll");
+  var nRoll = yP.clips[0].notes.length; DM4.edit.add(1920, 84); ok(yP.clips[0].notes.length === nRoll + 1, "piano roll: a note can be added", yP.clips[0].notes.length);
+  DM4.ops.undo(); pY = DM4.project(); yU = pY.tracks[0]; yP = pY.tracks[1]; yD = pY.tracks[2]; DM4.state().view = "arr";
+  ok(yP.clips[0].notes.length === nRoll, "↶ removes it");
+  DM4.openEditor(yD.clips[0].id); ok(DM4.state().view === "steps" && RM.innerHTML.indexOf('data-m="46"') >= 0, "imported drum clip → 16-step editor");
+  DM4.steps.toggle(47, 2); ok(yD.clips[0].notes.some(function (n) { return n[2] === 47 && n[0] === 480; }), "16 steps: a tom hit added"); DM4.state().view = "arr";
+  ok(DM4.ops.repeat(yD.clips[0].id, 1) === true && yD.clips.length === 2, "🔁 the imported drum clip ×1");
+  DM4.sections.add({ name: "A", bar: 1, bars: 4 }); var cpY = DM4.sections.copy(MM.sectionsOf(DM4.project())[0].id, 9);
+  ok(cpY.ok && yP.clips.length === 2, "📋 a section of the imported song is copied", cpY.why);
+  await new Promise(function (r) { DM4.wav.start(r); }); for (var gM = 0; gM < 600 && DM4.wav.state().busy; gM++) { await eM.wait(10); }
+  var cY = {}; DM4.wav.state().log.forEach(function (x) { cY[x.track] = (cY[x.track] || 0) + 1; });
+  ok(DM4.wav.state().state === "done" && cY[yU.id] >= 128 && cY[yP.id] >= 6 && cY[yD.id] >= 18, "WAV: the imported tracks play", cY);
+  DM4.markDirty(); DM4.flushSave();
+  var pidY = DM4.project().id, songY = JSON.stringify(DM4.project().tracks);
+  DM4.reload(); DM4.proj.open(pidY);
+  ok(JSON.stringify(DM4.project().tracks) === songY && DM4.proj.list().list.some(function (e) { return e.id === pidX; }), "after a reload: the imported song is the same; the original song is still saved");
+  var exY = await new Promise(function (r) { DM4.pack.exportZip(r); });
+  var eM2 = H.load(), WM2 = eM2.window, DM5 = WM2.UGDaw; WM2.indexedDB = fakeIDB(); fakeDecode(WM2);
+  var RM2 = H.makeEl("div"); DM5.reset(); WM2.UGArcade.start("daw", RM2, {});
+  var rqY = await impZ(DM5, blobAB(exY.blob)); DM5.proj.open(rqY.id);
+  ok(exY.ok && rqY.ok && JSON.stringify(DM5.project().tracks) === songY, "ZIP → empty storage: the imported song comes back exactly", rqY.why);
+  WM2.UGArcade.stop(); DM5.reset();
+  // --- いまの曲に足す（新しいトラックだけ・はじまりの小節・↶）---
+  var curJ = JSON.stringify(DM4.project().tracks), nT = DM4.project().tracks.length, u0 = DM4.undoDepth();
+  DM4.midi.open(f0, "f0.mid"); var uf = DM4.midi.ui(); uf.dest = "cur"; uf.bar = 9;
+  var pg0 = DM4.midi.pageHtml();
+  ok(pg0.indexOf("いまの曲に足す") >= 0 && pg0.indexOf("拍子がちがいます") >= 0 && pg0.indexOf("BPM（120）") >= 0 && pg0.indexOf("新しいトラック 2 本") >= 0, "add to the current song: start bar, BPM / meter warnings, new tracks only");
+  var rC = DM4.midi.importNow(), pC = DM4.project();
+  ok(rC.ok && pC.tracks.length === nT + 2 && DM4.undoDepth() === u0 + 1 && pC.tracks[nT].clips[0].start === MM.barToTick(pC, 8) && MM.isDrum(pC.tracks[nT + 1]), "✅ add: 2 new tracks from bar 9, one ↶ step", rC.why);
+  DM4.ops.undo(); ok(JSON.stringify(DM4.project().tracks) === curJ, "↶ the MIDI import is undone exactly");
+  // --- テンポの変化: 選ぶまで取りこめない・やめると何も変わらない ---
+  var curJ2 = JSON.stringify(DM4.project()), nList = DM4.proj.list().list.length;
+  DM4.midi.open(f1, "song.mid"); var u1 = DM4.midi.ui(), pg1 = DM4.midi.pageHtml();
+  ok(!u1.tempoOk && pg1.indexOf("途中でテンポが変わります（1 か所）") >= 0 && pg1.indexOf("3 小節目 → 90") >= 0 && /data-mi="go" disabled/.test(pg1) && pg1.indexOf("Piano &lt;b&gt;") >= 0 && pg1.indexOf("Piano <b>") < 0, "tempo change: warned with the bar, confirm is disabled until chosen; names from the file are escaped");
+  var rT = DM4.midi.importNow();
+  ok(!rT.ok && rT.why === "tempo" && JSON.stringify(DM4.project()) === curJ2 && DM4.proj.list().list.length === nList, "without choosing: nothing is imported, nothing changes");
+  DM4.state().mid = null; DM4.state().view = "proj"; ok(JSON.stringify(DM4.project()) === curJ2, "やめる: nothing changes");
+  DM4.midi.open(f1, "song.mid"); DM4.midi.ui().tempoOk = true; var rT2 = DM4.midi.importNow();
+  ok(rT2.ok && MM.bpmAt(DM4.project(), 0) === 120 && DM4.project().tempo.points.length === 1 && DM4.project().tracks.length === 2 && DM4.project().tracks[1].clips[0].notes.length === 3, "after choosing: imported with BPM 120 only (no tempo map); 30 / 82 left out", rT2.why);
+  // --- 断ったファイル: 画面に理由・曲はそのまま ---
+  var curJ3 = JSON.stringify(DM4.project()); DM4.state().view = "proj";
+  var rB = DM4.midi.open(smf(2, 96, [trk([[0, 0x90, 60, 1]])]), "f2.mid");
+  ok(!rB.ok && DM4.state().view === "proj" && DM4.midi.html().indexOf("Format 2") >= 0 && JSON.stringify(DM4.project()) === curJ3, "a refused file: the reason on the 📁 screen, the song unchanged");
+  // --- 拍子 6/8 の書き出し → 読み込み ---
+  var p68 = MM.newProject({ bpm: 75.5 }); p68.tempo.meters[0] = { tick: 0, num: 6, den: 8 }; var t68 = MM.newTrack(p68, "6/8"); MM.newMidiClip(p68, t68, 0, 2880, [[0, 480, 60, 0.5], [1440, 480, 62, 0.5]]);
+  var r68 = MM.midiRead(new Uint8Array(MM.midiExport(p68).bytes), "68.mid");
+  ok(r68.ok && r68.meter.num === 6 && r68.meter.den === 8 && r68.bpm === 75.5 && r68.bars === 1 && MM.midiNewProject(r68).tempo.meters[0].den === 8, "6/8 and BPM 75.5 survive export → import", r68.meter);
+  WM.UGArcade.stop(); DM4.reset();
+  var errM = eM.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errM.length === 0, "no Web Audio errors (9B-4)", errM.slice(0, 3));
 };

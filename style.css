@@ -1664,6 +1664,11 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dinb .inb-part { min-height: 44px; }
 .dinb .inb-part small { margin-left: 6px; opacity: 0.8; }
 .dinb .inb-warn { margin: 8px 0; line-height: 1.5; }
+/* §342 9B-4: MIDI の確認の画面（1 行 ＝ 取りこむ・種類） */
+.dmid .mid-row { display: flex; gap: 6px; margin: 0 0 6px; align-items: stretch; }
+.dmid .mid-on { flex: 1 1 auto; min-width: 0; text-align: left; word-break: break-all; }
+.dmid .mid-kind { flex: 0 0 auto; max-width: 42%; min-height: 44px; white-space: normal; word-break: break-all; }
+.dmid .mid-tempo { margin: 8px 0 6px; line-height: 1.5; }
 .dinb .da-btns .inb-go { min-height: 48px; font-size: 16px; }
 .dinb .da-btns + .da-btns { margin-top: 10px; }
 .dinb .da-half small { font-size: 0.8em; opacity: 0.85; word-break: break-all; }
