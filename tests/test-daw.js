@@ -2102,7 +2102,7 @@ module.exports = async function () {
   var mk = MG.inboxMake("ukulele", goodPay, 1000);
   ok(mk.ok && mk.box.type === MG.INBOX_TYPE && mk.box.ppq === 960 && mk.box.parts[0].notes.length === 2 && /^g[a-z0-9]+$/.test(mk.box.id) && mk.json.length < 2000, "inboxMake: a small checked box (type / v / id / ppq 960)", mk.why);
   function badWith(f) { var o = JSON.parse(mk.json); f(o); return MG.inboxClean(o, 1000); }
-  ok(!badWith(function (o) { o.type = "x"; }).ok && !badWith(function (o) { o.from = "piano"; }).ok && !badWith(function (o) { o.ppq = 480; }).ok && !badWith(function (o) { o.bpm = 999; }).ok && !badWith(function (o) { o.meter = 5; }).ok, "inboxClean refuses a wrong type / unknown game / other PPQ / BPM / meter");
+  ok(!badWith(function (o) { o.type = "x"; }).ok && !badWith(function (o) { o.from = "guitar"; }).ok && !badWith(function (o) { o.ppq = 480; }).ok && !badWith(function (o) { o.bpm = 999; }).ok && !badWith(function (o) { o.meter = 5; }).ok, "inboxClean refuses a wrong type / unknown game / other PPQ / BPM / meter");
   ok(!badWith(function (o) { o.parts[0].notes[0][2] = 130; }).ok && !badWith(function (o) { o.parts[0].notes[0][3] = 2; }).ok && !badWith(function (o) { o.parts[0].notes[0][1] = 0; }).ok && !badWith(function (o) { o.parts[0].notes = []; }).ok && !badWith(function (o) { o.parts = []; }).ok && !badWith(function (o) { o.parts[0].notes[0] = "x"; }).ok, "inboxClean refuses bad notes (pitch / velocity / length / empty / not an array)");
   var big = []; for (var bi = 0; bi < 4001; bi++) { big.push([bi, 10, 60, 0.5]); }
   ok(!badWith(function (o) { o.parts[0].notes = big; }).ok && !badWith(function (o) { o.parts[1] = o.parts[0]; }).ok, "inboxClean: 4000 notes per part, no duplicate part keys");
@@ -2238,4 +2238,98 @@ module.exports = async function () {
   WG.UGArcade.stop(); DG.reset();
   var errG = eG.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errG.length === 0, "no Web Audio errors (9B-2)", errG.slice(0, 3));
+
+  // ================= 9B-3: ゴリラピアノ・ゴリラドラム → ゴリラDAW（§342）=================
+  var eP = H.load(), WP = eP.window, MP = WP.UGDawModel, PP = WP.UGPiano, DRP = WP.UGDrum, UP = WP.UGUkulele, DP = WP.UGDaw, SP = eP.store;
+  // --- 受け取り箱: ドラムのパート・元のテイク ---
+  var dPay = { name: "D", bpm: 100, meter: 4, len: 3840, parts: [{ key: "drum", name: "ドラム", preset: "drum", notes: [[0, 0, 36, 0.9], [480, 0, 23, 0.7]] }], src: { kind: "take", id: 3, name: "テイク 3" } };
+  var dMk = MP.inboxMake("drum", dPay);
+  ok(dMk.ok && dMk.box.from === "drum" && dMk.box.parts[0].notes[0][1] === 0 && dMk.box.src.kind === "take" && dMk.box.src.id === 3, "inbox: a drum part (length 0 notes) and the source take id", dMk.why);
+  function dBad(f) { var o = JSON.parse(dMk.json); f(o); return MP.inboxClean(o); }
+  ok(!dBad(function (o) { o.parts[0].notes[0][2] = 99; }).ok && !dBad(function (o) { o.parts[0].notes[0][2] = 26; }).ok && !dBad(function (o) { o.parts[0].preset = "pluck"; }).ok, "inbox: a drum number not in the table (99) / the silent choke (26) / a length-0 note in a synth part → refused");
+  ok(dBad(function (o) { delete o.src; }).ok && dBad(function (o) { o.src = { kind: "x", id: 1 }; }).box.src === null, "inbox: src is optional (a v2.52.1 box still reads)");
+  ok(MP.drumName(53) === "ライドのベル" && MP.drumName(36) === "キック" && MP.drumName(26) === null && MP.DRUM_SILENT[26] === "チョーク", "drum names table / silent operations");
+  // --- 計画: ドラムのトラック・同じ種類のトラック・格子にそろえる ---
+  var pD = MP.emptyProject(0), bD = dMk.box, plD = MP.importPlan(pD, bD, { bar: 2 }), apD = MP.importApply(pD, bD, plD), tD = pD.tracks[pD.tracks.length - 1];
+  ok(plD.ok && apD.ok && MP.isDrum(tD) && tD.clips.length === 1 && tD.clips[0].start === 3840 && JSON.stringify(tD.clips[0].notes) === JSON.stringify([[0, 0, 36, 0.9], [480, 0, 23, 0.7]]), "drum part → a new drum track (no empty pattern), notes kept with length 0");
+  var pD2 = MP.emptyProject(0), dTr = MP.addDrumTrack(pD2, "ドラム");
+  ok(!MP.importPlan(pD2, bD, { target: pD2.tracks[0].id, bar: 3 }).ok && MP.importPlan(pD2, bD, { target: dTr.id, bar: 3 }).ok, "a drum part goes only into a drum track");
+  ok(!MP.importPlan(pD2, MP.inboxMake("ukulele", goodPay).box, { parts: ["uke"], target: dTr.id, bar: 3 }).ok, "a synth part does not go into a drum track");
+  var qPay = { name: "Q", bpm: 120, meter: 4, len: 3840, parts: [{ key: "drum", name: "ドラム", preset: "drum", notes: [[0, 0, 42, 0.5], [118, 0, 42, 0.5], [250, 0, 38, 0.8], [235, 0, 42, 0.6], [480, 0, 36, 0.9]] }] };
+  var qb = MP.inboxMake("drum", qPay).box, qp = MP.importPlan(MP.emptyProject(0), qb, { bar: 1, quant: true }), qn = qp.items[0].clips[0].notes;
+  ok(qp.ok && qn.length === 5 && qp.quant.moved === 2 && qp.quant.kept === 1 && qn.some(function (n) { return n[0] === 240 && n[2] === 38; }) && qn.some(function (n) { return n[0] === 240 && n[2] === 42; }) && qn.some(function (n) { return n[0] === 118 && n[2] === 42; }), "16-step quantize: hits snap to 240 ticks; a second hit of the same drum in the same step stays where it was (no hit lost)", { q: qp.quant, n: qn });
+  var qp0 = MP.importPlan(MP.emptyProject(0), qb, { bar: 1, quant: false });
+  ok(JSON.stringify(qp0.items[0].clips[0].notes) === JSON.stringify(qb.parts[0].notes) && qp0.quant.moved === 0, "quantize off: the played timing as it is");
+
+  // --- ゴリラピアノ: テイク → 送る形 ---
+  var pk = PP.takeClean({ id: 7, name: "メロディ", bpm: 100, meter: 3, prog: 4, notes: [[0, 1, 60], [0, 1, 64], [0, 1, 67], [1.001, 0.5, 72, 0.6], [2.5, 0.25, 74]] }, 0);
+  var pPay = PP.dawPayload(pk);
+  ok(pPay.bpm === 100 && pPay.meter === 3 && pPay.chord === 3 && pPay.notes === 5 && pPay.len === 2880 && pPay.parts[0].preset === "pluck" && pPay.src.id === 7 && JSON.stringify(pPay.parts[0].notes) === JSON.stringify([[0, 960, 60, 0.8], [0, 960, 64, 0.8], [0, 960, 67, 0.8], [961, 480, 72, 0.6], [2400, 240, 74, 0.8]]), "piano take → ticks ×960, lengths, pitches, velocity (0.8 when not recorded), a 3-note chord kept, 3/4", pPay.parts[0] && pPay.parts[0].notes);
+  ok(PP.dawPayload(PP.takeClean({ id: 1, bpm: 90, prog: 11, notes: [[0, 1, 60]] }, 0)).parts[0].preset === "bell" && PP.dawPayload(PP.takeClean({ id: 1, bpm: 90, prog: 19, notes: [[0, 1, 60]] }, 0)).parts[0].preset === "organ", "piano voices → DAW presets (vibraphone → bell, organ → organ)");
+  PP.takesSave([pk]); var pRaw = SP[PP.TAKES_KEY];
+  var psent = PP.dawSend(pk);
+  ok(psent.ok && MP.inboxRead().box.from === "piano" && MP.inboxRead().box.src.name === "メロディ" && SP[PP.TAKES_KEY] === pRaw, "piano dawSend: the box is written; the saved takes are untouched", psent.why);
+  ok(!PP.dawCheck(null).ok && !PP.dawCheck(PP.takeClean({ id: 2, bpm: 90, notes: [] }, 0)).ok, "piano: no take / an empty take → refused with a reason");
+  // --- ゴリラドラム: テイク・リズム → 送る形 ---
+  var dk = DRP.takeClean({ id: 4, name: "ビート", bpm: 110, notes: [[0, 36, 0.9], [0.5, 42, 0.6], [1, 38, 0.8], [1, 26, 0.5], [1.25, 25, 0.5], [2, 23, 0.7], [2.004, 22, 0.8], [3.75, 49, 1]] }, 0);
+  var dPay2 = DRP.dawPayload("take", dk), dn2 = dPay2.parts[0].notes;
+  ok(dPay2.notes === 6 && dPay2.meter === 4 && dPay2.bpm === 110 && dPay2.skipped.join() === "チョーク 1 個,キックをおさえる 1 個" && JSON.stringify(dn2) === JSON.stringify([[0, 0, 36, 0.9], [480, 0, 42, 0.6], [960, 0, 38, 0.8], [1920, 0, 23, 0.7], [1924, 0, 22, 0.8], [3600, 0, 49, 1]]), "drum take → ticks ×960, numbers as they are, velocity kept; the silent choke / kick-mute are skipped and counted", dn2);
+  var dpat = { id: 2, name: "マイ8ビート", bpm: 96, kind: "loop", steps: [[36, [0, 8]], [38, [4, 12]], [42, [0, 2, 4, 6, 8, 10, 12, 14]]] };
+  var dPay3 = DRP.dawPayload("pat", dpat);
+  ok(dPay3.notes === 12 && dPay3.len === 3840 && dPay3.parts[0].notes[1][0] === 0 && dPay3.parts[0].notes.every(function (n) { return n[0] % 240 === 0 && n[3] === 0.85; }) && dPay3.src.kind === "pat", "drum pattern → 16 steps × 240 ticks, velocity 0.85, one bar");
+  DRP.takesSave([dk]); var dRaw = SP[DRP.TAKES_KEY];
+  ok(DRP.dawSend("take", dk).ok && MP.inboxRead().box.from === "drum" && SP[DRP.TAKES_KEY] === dRaw, "drum dawSend: the box is written; the saved takes are untouched");
+
+  // --- 制作シナリオ: ウクレレ（伴奏）＋ピアノ（メロディ）＋ドラム（リズム）を 1 曲に ---
+  var IDBP = fakeIDB(); WP.indexedDB = IDBP; fakeDecode(WP);
+  var RP = H.makeEl("div"); DP.reset(); WP.UGArcade.start("drum", RP, {}); WP.UGArcade.internal.switchTo("daw");
+  ok(DP.backGame() === "drum" && RP.innerHTML.indexOf("ゴリラドラムへ戻る") >= 0, "opened from the drum game: 🥁 ゴリラドラムへ戻る");
+  DP.proj.create("empty"); var pS = DP.project(); pS.name = "3 つのゲームの曲"; while (pS.tracks.length) { pS.tracks.pop(); } DP.markDirty();
+  var useq3 = UP.seqClean({ bpm: 120, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }, { type: "chord", name: "G7", len: "w" }] });
+  UP.dawSend(useq3, false, "伴奏"); DP.inbox.open(); var rU = DP.inbox.importNow();
+  var pk3 = PP.takeClean({ id: 8, name: "メロ", bpm: 120, meter: 4, prog: 0, notes: [[0, 1, 72], [1, 1, 74], [2, 2, 76], [4, 1, 77], [4, 1, 72], [6, 2, 79]] }, 0);
+  PP.dawSend(pk3); DP.inbox.open(); ok(RP.innerHTML.indexOf("ゴリラピアノ") >= 0 && RP.innerHTML.indexOf("元のテイク: メロ") >= 0, "📥 screen: from Gorilla Piano, the source take name"); var u0P = DP.undoDepth(), rPi = DP.inbox.importNow();
+  ok(rPi.ok && DP.undoDepth() === u0P + 1 && DP.backGame() === "piano", "piano import: one ↶ step; the back button now goes to the piano", rPi.why);
+  var dk3 = DRP.takeClean({ id: 9, name: "リズム", bpm: 120, notes: [[0, 36, 0.9], [0.49, 42, 0.5], [1, 38, 0.8], [1.5, 42, 0.5], [2, 36, 0.9], [2.52, 42, 0.5], [3, 38, 0.8], [3.5, 46, 0.6], [3.75, 47, 0.7]] }, 0);
+  DRP.dawSend("take", dk3); DP.inbox.open();
+  ok(RP.innerHTML.indexOf('data-ib="quant"') >= 0 && RP.innerHTML.indexOf("ゴリラドラム") >= 0 && RP.innerHTML.indexOf("新しいドラムのトラック") >= 0, "📥 screen for drums: quantize option, a new drum track");
+  var rDr = DP.inbox.importNow(), pS2 = DP.project(), tUk = pS2.tracks[0], tPi = pS2.tracks[1], tDr = pS2.tracks[2];
+  ok(rU.ok && rDr.ok && pS2.tracks.length === 3 && tUk.instrument.ext.preset === "pluck" && tPi.instrument.ext.preset === "pluck" && MP.isDrum(tDr) && tPi.clips[0].notes.length === 6 && tDr.clips[0].notes.length === 9, "the song has ukulele (128 notes) + piano (6, chord kept) + drums (9 hits)", pS2.tracks.map(function (t) { return t.name + ":" + t.clips.map(function (c) { return c.notes.length; }); }));
+  ok(tDr.clips[0].notes.every(function (n) { return n[0] % 240 === 0; }) && tDr.clips[0].notes.map(function (n) { return n[0]; }).join() === "0,480,960,1440,1920,2400,2880,3360,3600", "drums snapped to the 16-step grid (0.49 → 480, 2.52 → 2400)", tDr.clips[0].notes.map(function (n) { return n[0]; }).join());
+  var rows = DP.stepRows(tDr.clips[0]).map(function (r) { return r[0]; });
+  ok(rows.join() === "36,38,39,42,46,47", "16-step rows: the usual 5 + タム (47) found in the clip", rows);
+  DP.openEditor(tDr.clips[0].id); ok(RP.innerHTML.indexOf("タム") >= 0 && RP.innerHTML.indexOf('data-m="47"') >= 0, "16-step editor shows the tom row");
+  DP.steps.toggle(47, 2); ok(tDr.clips[0].notes.some(function (n) { return n[2] === 47 && n[0] === 480; }), "a tom hit can be added in the 16-step editor");
+  DP.ops.undo(); DP.state().view = "arr"; pS2 = DP.project(); tUk = pS2.tracks[0]; tPi = pS2.tracks[1]; tDr = pS2.tracks[2]; // ↶ でトラックは写しに置きかわる
+  ok(!tDr.clips[0].notes.some(function (n) { return n[2] === 47 && n[0] === 480; }), "↶ removes the added tom hit");
+  DP.openEditor(tPi.clips[0].id); ok(DP.state().view === "roll", "the piano clip opens in the piano roll"); DP.state().view = "arr";
+  // 🎼・🔁・📋・ミキサー・WAV
+  DP.sections.add({ name: "イントロ", bar: 1, bars: 4 }); DP.sections.add({ name: "Aメロ", bar: 5, bars: 4 });
+  ok(DP.ops.repeat(tDr.clips[0].id, 3) === true && tDr.clips.length === 4, "🔁 the drum clip ×3 (bars 2-4)");
+  var cpS = DP.sections.copy("s1", 9);
+  ok(cpS.ok && cpS.clips.length >= 3 && tPi.clips.length === 2 && MP.sectionsOf(DP.project()).length === 3, "📋 イントロ → bar 9 copies ukulele, piano and drum clips", cpS.why);
+  await new Promise(function (r) { DP.wav.start(r); }); for (var gP = 0; gP < 600 && DP.wav.state().busy; gP++) { await eP.wait(10); }
+  var lgP = DP.wav.state().log, cnt = {}; lgP.forEach(function (x) { cnt[x.track] = (cnt[x.track] || 0) + 1; });
+  ok(DP.wav.state().state === "done" && cnt[tUk.id] === 256 && cnt[tPi.id] === 12 && cnt[tDr.id] === 9 * 8 && tDr.clips.length === 8, "WAV: ukulele 256 (2 clips), piano 12 (2 clips), drums 72 (8 clips: 4 + the copied イントロ) — every note plays", cnt);
+  var kick0 = lgP.filter(function (x) { return x.track === tDr.id && x.m === 36; }).map(function (x) { return x.tick; });
+  ok(kick0.slice(0, 4).join() === "0,1920,3840,5760", "drum ticks in the export = the imported ticks", kick0.slice(0, 4));
+  tDr.mute = true; DP.updateMix();
+  await new Promise(function (r) { DP.wav.start(r); }); for (gP = 0; gP < 600 && DP.wav.state().busy; gP++) { await eP.wait(10); }
+  ok(!DP.wav.state().log.some(function (x) { return x.track === tDr.id; }) && DP.wav.state().log.some(function (x) { return x.track === tPi.id; }), "mixer: the muted drum track is silent, the others play");
+  tDr.mute = false; DP.markDirty(); DP.flushSave();
+  // 保存・読みなおし・ZIP → 空の保存場所へ
+  var pidS = DP.project().id, songJ = JSON.stringify(DP.project().tracks);
+  DP.reload(); DP.proj.open(pidS);
+  ok(JSON.stringify(DP.project().tracks) === songJ && MP.sectionsOf(DP.project()).length === 3, "after a reload: the 3 tracks and sections are the same");
+  var exP = await new Promise(function (r) { DP.pack.exportZip(r); });
+  var eP2 = H.load(), WP2 = eP2.window, DP3 = WP2.UGDaw; WP2.indexedDB = fakeIDB(); fakeDecode(WP2);
+  var RP2 = H.makeEl("div"); DP3.reset(); WP2.UGArcade.start("daw", RP2, {});
+  var rqP = await impZ(DP3, blobAB(exP.blob)); DP3.proj.open(rqP.id);
+  ok(exP.ok && rqP.ok && JSON.stringify(DP3.project().tracks) === songJ, "ZIP → empty storage: the 3-game song comes back exactly", rqP.why);
+  WP2.UGArcade.stop(); DP3.reset();
+  // 戻る: ドラムへ
+  ok(DP.goBackGame() === true && WP.UGArcade.internal.cameFrom() === "daw" && RP.innerHTML.indexOf("ゴリラドラム") >= 0 && RP.innerHTML.indexOf("daw-top") < 0, "back to the source game (drum) from the DAW");
+  WP.UGArcade.stop(); DP.reset();
+  var errP = eP.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errP.length === 0, "no Web Audio errors (9B-3)", errP.slice(0, 3));
 };

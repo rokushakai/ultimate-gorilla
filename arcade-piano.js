@@ -249,6 +249,58 @@
     var sc = U.seqSchedule(sq, lowG);
     return sc && sc.events && sc.events.length ? { name: name, seq: sq, s: sc, lowG: lowG } : null;
   }
+  // ---------- §342 9B-3: ゴリラDAW へ送る（テイク → MIDI のクリップ・PPQ 960・受け取り箱は DAW のモデルが調べる）----------
+  var PIANO_DAW_PPQ = 960;
+  function pianoDawPreset(prog) { prog = Number(prog) || 0; if (prog >= 8 && prog <= 15) { return "bell"; } if (prog >= 16 && prog <= 23) { return "organ"; } return "pluck"; }
+  function pianoVoiceName(prog) { for (var i = 0; i < PIANO_VOICES.length; i++) { if (PIANO_VOICES[i][0] === prog) { return String(PIANO_VOICES[i][1]).replace(/&#x?[0-9a-f]+;/gi, "").replace(/^\s+|\s+$/g, ""); } } return "ピアノ"; }
+  // テイク → 送る形（元のテイクは変えない）
+  function pianoDawPayload(take) {
+    var notes = [], i, end = 0, at = {}, chord = 0;
+    var src = pianoNotesClean(take && take.notes);
+    for (i = 0; i < src.length; i++) {
+      var n = src[i], t = Math.max(0, Math.round(n[0] * PIANO_DAW_PPQ)), d = Math.max(1, Math.round(n[1] * PIANO_DAW_PPQ));
+      notes.push([t, d, n[2], n.length > 3 ? n[3] : 0.8]);
+      end = Math.max(end, t + d); at[t] = (at[t] || 0) + 1; chord = Math.max(chord, at[t]);
+    }
+    var meter = take && take.meter === 3 ? 3 : 4, bpm = take ? take.bpm : 90, bar = PIANO_DAW_PPQ * meter, len = Math.max(bar, Math.ceil(end / bar) * bar);
+    return { name: String(take && take.name || "ピアノのテイク").slice(0, 40), bpm: bpm, meter: meter, len: len, tempoRows: 0, notes: notes.length, chord: chord, bars: Math.round(len / bar), sec: Math.round(len / PIANO_DAW_PPQ * 60 / bpm * 10) / 10,
+      parts: notes.length ? [{ key: "piano", name: pianoVoiceName(take.prog), preset: pianoDawPreset(take.prog), notes: notes }] : [], skipped: [], src: take ? { kind: "take", id: take.id, name: take.name } : null, prog: take ? take.prog : 0 };
+  }
+  function pianoDawCheck(take) {
+    var M = window.UGDawModel;
+    if (!M || !M.inboxMake) { return { ok: false, why: "ゴリラDAW（arcade-daw-model.js）を読みこめませんでした" }; }
+    if (!take) { return { ok: false, why: "テイクが見つかりません" }; }
+    var pay = pianoDawPayload(take);
+    if (!pay.parts.length) { return { ok: false, why: "音のないテイクは送れません", pay: pay }; }
+    var made = M.inboxMake("piano", pay), old = M.inboxRead();
+    return { ok: made.ok, why: made.why || "", pay: pay, made: made, prev: old.box ? old.box.name : null };
+  }
+  function pianoDawSend(take) {
+    var c = pianoDawCheck(take), M = window.UGDawModel;
+    if (!c.ok) { return { ok: false, why: c.why }; }
+    var w = M.inboxWrite(c.made);
+    if (!w.ok) { return { ok: false, why: w.why }; }
+    var back = M.inboxRead();
+    if (!back.box || back.box.id !== c.made.box.id) { return { ok: false, why: "保存したデータを読みなおせませんでした" }; }
+    return { ok: true, name: c.made.box.name, id: c.made.box.id };
+  }
+  // 確認の欄（u: { id, sent }）
+  function pianoDawHtml(take, u) {
+    var h = '<div class="uke-daw">';
+    if (u.sent) {
+      return h + '<div><b>&#x1F4E4; 「' + escHtml(u.sent) + '」を送りました</b></div><div class="small">ゴリラDAW の「&#x1F4E5; 取り込み」で受け取れます（' + window.UGDawModel.INBOX_DAYS + ' 日のあいだ）。テイクは変わっていません。</div>' +
+        '<div class="melody-actions"><button class="modal-btn" data-dawo="1">&#x1F39A;&#xFE0F; ゴリラDAW を開く</button><button class="modal-btn" data-dawx="1">閉じる</button></div></div>';
+    }
+    var c = pianoDawCheck(take), p = c.pay;
+    h += '<div><b>&#x1F3B9; ゴリラDAW へ送る</b>（MIDI のクリップになります）</div>';
+    if (p) {
+      h += '<div class="small">テイク: <b>' + escHtml(p.name) + '</b>・BPM ' + p.bpm + '・' + p.meter + '/4 拍子・' + p.bars + ' 小節（' + p.sec + ' 秒）・' + p.notes + ' 音' + (p.chord > 1 ? '（和音は最大 ' + p.chord + ' 音）' : '') + '</div>' +
+        '<div class="small">・音色は DAW のシンセ（' + escHtml(p.parts.length ? p.parts[0].preset === "bell" ? "ベル" : (p.parts[0].preset === "organ" ? "オルガン風" : "プラック") : "") + '）になります。ゲームのピアノの音そのものではありません（DAW で変えられます）<br>・録音では強さを記録していないので、どの音も同じ強さ（0.8）で入ります</div>';
+    }
+    if (c.prev && c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; まだ DAW で受け取っていない「' + escHtml(c.prev) + '」があります。送ると、そちらは置きかわります</div>'; }
+    if (!c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + escHtml(c.why) + '</div>'; }
+    return h + '<div class="melody-actions"><button class="modal-btn" data-daws="1"' + (c.ok ? '' : ' disabled') + '>&#x1F4E4; 送る</button><button class="modal-btn" data-dawx="1">やめる</button></div></div>';
+  }
   // テイクを、シーケンサーの編集中の曲へ「🎹 ピアノ打ち込み」トラックとして送る → { ok, id, msg }
   function pianoSendToSeq(take) {
     var U = pianoSeqApi();
@@ -304,7 +356,7 @@
     return true;
   }
   function pianoSetup(root, ctl) {
-    var p = pianoPrefs(), note = "", form = { id: 0, name: "", p: "", unit: 0.5 }, patNote = "";
+    var p = pianoPrefs(), note = "", form = { id: 0, name: "", p: "", unit: 0.5 }, patNote = "", dawU = null; // 9B-3: DAW へ送る欄
     function readForm() {
       var n = root.querySelector("[data-my='name']"), t = root.querySelector("[data-my='p']"), u = root.querySelector("[data-my='unit']");
       if (n) { form.name = n.value; }
@@ -353,7 +405,9 @@
             (takes[i].song ? '・&#x1F3B8; ' + escHtml(takes[i].song) : "") + '</span></span>' +
             '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button>' +
             '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
+            '<button class="modal-btn" data-dawt="' + takes[i].id + '" title="ゴリラDAW へ送る">&#x1F3B9; DAWへ</button>' +
             '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+          if (dawU && dawU.id === takes[i].id) { html += pianoDawHtml(takes[i], dawU); } // 9B-3
         }
         // §222: じぶんの演奏パターン
         var mine = pianoMyPatsLoad(), ui;
@@ -443,6 +497,17 @@
             draw();
             return;
           }
+          // §342 9B-3: ゴリラDAW へ送る
+          if ((v = el.getAttribute("data-dawt"))) { dawU = { id: Number(v) }; draw(); return; }
+          if (el.getAttribute("data-dawx")) { dawU = null; draw(); return; }
+          if (el.getAttribute("data-daws") && dawU && !dawU.busy) {
+            dawU.busy = true;
+            var dr = pianoDawSend(pianoTakeById(pianoTakesLoad(), dawU.id));
+            if (!dr.ok) { dawU.busy = false; note = "&#x26A0;&#xFE0F; " + escHtml(dr.why); } else { dawU = { id: dawU.id, sent: dr.name }; note = ""; }
+            draw();
+            return;
+          }
+          if (el.getAttribute("data-dawo")) { dawU = null; if (!(I.switchTo && I.switchTo("daw"))) { note = "メニューへ戻って、ゴリラDAW を開いてください"; draw(); } return; }
           if ((v = el.getAttribute("data-send"))) {
             var res = pianoSendToSeq(pianoTakeById(pianoTakesLoad(), Number(v)));
             note = (res.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(res.msg);
@@ -1617,7 +1682,7 @@
     keyAt: pianoKeyAt, keyRect: pianoKeyRect, held: pianoHeld, chord: pianoChord, arpOrder: pianoArpOrder, ARPS: PIANO_ARPS, PLAYS: PIANO_PLAYS, playSteps: pianoPlaySteps, patSteps: pianoPatSteps, play: pianoPlay,
     myPatsLoad: pianoMyPatsLoad, myPatsSave: pianoMyPatsSave, myPatPut: pianoMyPatPut, MYPATS_KEY: PIANO_MYPATS_KEY, MYPATS_MAX: PIANO_MYPATS_MAX, UNITS: PIANO_UNITS, padsLoad: pianoPadsLoad, padsSave: pianoPadsSave, padsClean: pianoPadsClean, padRects: pianoPadRects, padAt: pianoPadAt, padLabel: pianoPadLabel,
     PAD_DEFAULT: PIANO_PAD_DEFAULT, PAD_N: PIANO_PAD_N, PADS_KEY: PIANO_PADS_KEY, ALTS: PIANO_ALTS, ALTS_ALL: PIANO_ALTS_ALL, judge: pianoJudge, rank: pianoRank, prefs: pianoPrefs,
-    takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes,
+    takesLoad: pianoTakesLoad, takesSave: pianoTakesSave, takeAdd: pianoTakeAdd, takeById: pianoTakeById, takeClean: pianoTakeClean, notesClean: pianoNotesClean, toSeqNotes: pianoToSeqNotes, dawPayload: pianoDawPayload, dawCheck: pianoDawCheck, dawSend: pianoDawSend, // 9B-3
     backList: pianoBackList, backing: pianoBacking, sendToSeq: pianoSendToSeq, PORT: PIANO_PORT, LAND: PIANO_LAND, landLayout: pianoLandLayout, landH: pianoLandH,
     TABS: PIANO_TABS, voicing: pianoVoicing, barSteps: pianoBarSteps, vol: pianoVol,
     JUDGE: PIANO_JUDGE, SPEEDS: PIANO_SPEEDS, VOICES: PIANO_VOICES, KEYS: PIANO_KEYS, LEAD: PIANO_LEAD, H: PIANO_H, KB_Y: PIANO_KB_Y, SONG_LOW: PIANO_SONG_LOW,

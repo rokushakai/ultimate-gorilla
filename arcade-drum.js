@@ -328,8 +328,75 @@
   }
 
   // ---------- はじめの画面 ----------
+  // ---------- §342 9B-3: ゴリラDAW へ送る（テイク・保存したリズム → ドラムの MIDI のクリップ・PPQ 960）----------
+  // 番号はそのまま（DAW のドラムも同じ melodyDrum で鳴る）。音のない操作（25・26）と DAW の表にない番号は入れない
+  var DRUM_DAW_PPQ = 960;
+  function drumDawPayload(kind, it) {
+    var M = window.UGDawModel, names = M && M.DRUM_NAMES ? M.DRUM_NAMES : {}, silent = M && M.DRUM_SILENT ? M.DRUM_SILENT : {}, notes = [], skip = {}, i, j, end = 0;
+    function sk(nm) { skip[nm] = (skip[nm] || 0) + 1; }
+    if (kind === "pat") {
+      var st = drumStepsClean(it && it.steps);
+      for (i = 0; i < st.length; i++) { for (j = 0; j < st[i][1].length; j++) { var m0 = st[i][0]; if (!names.hasOwnProperty(m0)) { sk("番号 " + m0); continue; } notes.push([st[i][1][j] * DRUM_DAW_PPQ / 4, 0, m0, 0.85]); } }
+      end = DRUM_DAW_PPQ * 4;
+    } else {
+      var src = drumNotesClean(it && it.notes);
+      for (i = 0; i < src.length; i++) {
+        var m = src[i][1];
+        if (silent.hasOwnProperty(m)) { sk(silent[m]); continue; }
+        if (!names.hasOwnProperty(m)) { sk("番号 " + m); continue; }
+        var t = Math.max(0, Math.round(src[i][0] * DRUM_DAW_PPQ));
+        notes.push([t, 0, m, src[i][2]]); end = Math.max(end, t + 1);
+      }
+    }
+    notes.sort(function (a, b) { return a[0] - b[0] || a[2] - b[2]; });
+    var bar = DRUM_DAW_PPQ * 4, len = Math.max(bar, Math.ceil(end / bar) * bar), bpm = it ? it.bpm : 100, skipped = [], k, kinds = {};
+    for (k in skip) { if (skip.hasOwnProperty(k)) { skipped.push(k + " " + skip[k] + " 個"); } }
+    for (i = 0; i < notes.length; i++) { kinds[notes[i][2]] = true; }
+    return { name: String(it && it.name || "ドラム").slice(0, 40), bpm: bpm, meter: 4, len: len, tempoRows: 0, notes: notes.length, bars: Math.round(len / bar), sec: Math.round(len / DRUM_DAW_PPQ * 60 / bpm * 10) / 10, kinds: kinds, kind: kind,
+      parts: notes.length ? [{ key: "drum", name: "ドラム", preset: "drum", notes: notes }] : [], skipped: skipped, src: it ? { kind: kind, id: it.id, name: it.name } : null, fill: !!(it && it.kind === "fill") };
+  }
+  function drumDawCheck(kind, it) {
+    var M = window.UGDawModel;
+    if (!M || !M.inboxMake) { return { ok: false, why: "ゴリラDAW（arcade-daw-model.js）を読みこめませんでした" }; }
+    if (!it) { return { ok: false, why: kind === "pat" ? "リズムが見つかりません" : "テイクが見つかりません" }; }
+    var pay = drumDawPayload(kind, it);
+    if (!pay.parts.length) { return { ok: false, why: "DAW で鳴らせる打がありません", pay: pay }; }
+    var made = M.inboxMake("drum", pay), old = M.inboxRead();
+    return { ok: made.ok, why: made.why || "", pay: pay, made: made, prev: old.box ? old.box.name : null };
+  }
+  function drumDawSend(kind, it) {
+    var c = drumDawCheck(kind, it), M = window.UGDawModel;
+    if (!c.ok) { return { ok: false, why: c.why }; }
+    var w = M.inboxWrite(c.made);
+    if (!w.ok) { return { ok: false, why: w.why }; }
+    var back = M.inboxRead();
+    if (!back.box || back.box.id !== c.made.box.id) { return { ok: false, why: "保存したデータを読みなおせませんでした" }; }
+    return { ok: true, name: c.made.box.name, id: c.made.box.id };
+  }
+  function drumDawHtml(kind, it, u) {
+    var h = '<div class="uke-daw">', M = window.UGDawModel;
+    if (u.sent) {
+      return h + '<div><b>&#x1F4E4; 「' + escHtml(u.sent) + '」を送りました</b></div><div class="small">ゴリラDAW の「&#x1F4E5; 取り込み」で受け取れます（' + M.INBOX_DAYS + ' 日のあいだ）。' + (kind === "pat" ? "リズム" : "テイク") + 'は変わっていません。</div>' +
+        '<div class="melody-actions"><button class="modal-btn" data-dawo="1">&#x1F39A;&#xFE0F; ゴリラDAW を開く</button><button class="modal-btn" data-dawx="1">閉じる</button></div></div>';
+    }
+    var c = drumDawCheck(kind, it), p = c.pay, nm = [], k;
+    h += '<div><b>&#x1F941; ゴリラDAW へ送る</b>（ドラムのトラックの MIDI のクリップになります）</div>';
+    if (p) {
+      for (k in p.kinds) { if (p.kinds.hasOwnProperty(k)) { nm.push(M.drumName(Number(k))); } }
+      h += '<div class="small">' + (kind === "pat" ? "リズム" : "テイク") + ': <b>' + escHtml(p.name) + '</b>・BPM ' + p.bpm + '・' + p.bars + ' 小節（' + p.sec + ' 秒）・' + p.notes + ' 打' + (p.fill ? '・フィル' : '') + '<br>楽器: ' + escHtml(nm.join("・")) + '</div>';
+      var w = [];
+      if (p.skipped.length) { w.push("入れないもの: " + p.skipped.join("・") + "（音のない操作など。シンバルやキックの響きは止まらずに伸びます）"); }
+      if (kind !== "pat") { w.push("拍子は保存されていないので 4/4 として送ります"); w.push("叩いた時刻のまま送ります（DAW で 16 分にそろえるかを選べます）"); }
+      w.push("音は DAW でも同じドラムの音です（ドラムセットの種類はそのとき読みこまれているもの）");
+      h += '<div class="small">' + w.map(function (x) { return "・" + escHtml(x); }).join("<br>") + '</div>';
+    }
+    if (c.prev && c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; まだ DAW で受け取っていない「' + escHtml(c.prev) + '」があります。送ると、そちらは置きかわります</div>'; }
+    if (!c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + escHtml(c.why) + '</div>'; }
+    if (u.err) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + escHtml(u.err) + '</div>'; }
+    return h + '<div class="melody-actions"><button class="modal-btn" data-daws="1"' + (c.ok ? '' : ' disabled') + '>&#x1F4E4; 送る</button><button class="modal-btn" data-dawx="1">やめる</button></div></div>';
+  }
   function drumSetup(root, ctl) {
-    var p = drumPrefs();
+    var p = drumPrefs(), dawU = null; // 9B-3: DAW へ送る欄 { kind, id, sent }
     function draw() {
       var html = '<div class="melody-setup"><h3 style="margin:0 0 4px;">&#x1F941; ゴリラドラム</h3>' +
         '<p class="small" style="color:#adb5bd;margin:0 0 8px;">パッドを叩こう（同時押しもOK）。パソコンは Q W E R / A S D F（Space もキック）。</p><div class="quiz-opts">', i;
@@ -356,7 +423,8 @@
         if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。じゆうの画面の「🔴 録音」で録れます。</p>'; }
         for (i = 0; i < takes.length; i++) {
           html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '打・BPM ' + takes[i].bpm + (takes[i].song ? '・&#x1F3B8; ' + escHtml(takes[i].song) : "") + '</span></span>' +
-            '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button><button class="modal-btn" data-del="t' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+            '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button><button class="modal-btn" data-dawt="t' + takes[i].id + '" title="ゴリラDAW へ送る">&#x1F941; DAWへ</button><button class="modal-btn" data-del="t' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+          if (dawU && dawU.kind === "take" && dawU.id === takes[i].id) { html += drumDawHtml("take", takes[i], dawU); } // 9B-3
         }
       } else if (p.mode === "step") {
         var pats = drumPatsLoad();
@@ -365,7 +433,8 @@
         if (!pats.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。ステップの画面の「💾 保存」で保存できます。</p>'; }
         for (i = 0; i < pats.length; i++) {
           html += '<div class="piano-take"><span>' + escHtml(pats[i].name) + '<br><span class="small" style="color:#adb5bd;">' + (pats[i].kind === "fill" ? "&#x1F338; フィル・" : "") + 'BPM ' + pats[i].bpm + '</span></span>' +
-            '<button class="modal-btn" data-pat="' + pats[i].id + '">&#x25B6;&#xFE0F; ひらく</button><button class="modal-btn" data-del="p' + pats[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+            '<button class="modal-btn" data-pat="' + pats[i].id + '">&#x25B6;&#xFE0F; ひらく</button><button class="modal-btn" data-dawt="p' + pats[i].id + '" title="ゴリラDAW へ送る">&#x1F941; DAWへ</button><button class="modal-btn" data-del="p' + pats[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+          if (dawU && dawU.kind === "pat" && dawU.id === pats[i].id) { html += drumDawHtml("pat", pats[i], dawU); } // 9B-3
         }
       } else {
         var best = drumBest();
@@ -396,6 +465,17 @@
           if (el.getAttribute("data-deep")) { p.deep = !p.deep; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-level"))) { p.level = v; drumSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-speed"))) { p.speed = Number(v); drumSavePrefs(p); draw(); return; }
+          // §342 9B-3: ゴリラDAW へ送る
+          if ((v = el.getAttribute("data-dawt"))) { dawU = { kind: v.charAt(0) === "t" ? "take" : "pat", id: Number(v.substring(1)) }; draw(); return; }
+          if (el.getAttribute("data-dawx")) { dawU = null; draw(); return; }
+          if (el.getAttribute("data-daws") && dawU && !dawU.busy) {
+            dawU.busy = true;
+            var dr = drumDawSend(dawU.kind, drumById(dawU.kind === "take" ? drumTakesLoad() : drumPatsLoad(), dawU.id));
+            if (!dr.ok) { dawU.busy = false; dawU.err = dr.why; } else { dawU = { kind: dawU.kind, id: dawU.id, sent: dr.name }; }
+            draw();
+            return;
+          }
+          if (el.getAttribute("data-dawo")) { dawU = null; if (!(I.switchTo && I.switchTo("daw"))) { draw(); } return; }
           if ((v = el.getAttribute("data-del"))) {
             var isT = v.charAt(0) === "t", list = isT ? drumTakesLoad() : drumPatsLoad(), it = drumById(list, Number(v.substring(1)));
             if (!it || (window.confirm && !window.confirm("「" + it.name + "」を消しますか？"))) { return; }
@@ -1910,6 +1990,7 @@
     SONG_KEY: DRUM_SONG_KEY, SONG_DEFAULT: DRUM_SONG_DEFAULT, moreLoops: DRUM_MORE_LOOPS, kits: DRUM_KITS, PATPAD_N: DRUM_PATPAD_N,
     swings: DRUM_SWINGS, swingOff: drumSwingOff,
     chart: drumChart, judge: drumJudge, rank: drumRank, padRect: drumPadRect, padAt: drumPadAt, cellAt: drumCellAt, prefs: drumPrefs,
+    dawPayload: drumDawPayload, dawCheck: drumDawCheck, dawSend: drumDawSend, // 9B-3
     takesLoad: drumTakesLoad, takesSave: drumTakesSave, patsLoad: drumPatsLoad, patsSave: drumPatsSave, listAdd: drumListAdd, takeClean: drumTakeClean, patClean: drumPatClean,
     H: DRUM_H, TOP: DRUM_TOP, LEAD: DRUM_LEAD, STEPS: DRUM_STEPS, BARS: DRUM_BARS, SPEEDS: DRUM_SPEEDS, JUDGE: DRUM_JUDGE,
     TAKES_KEY: DRUM_TAKES_KEY, PATS_KEY: DRUM_PATS_KEY, PREFS_KEY: DRUM_PREFS_KEY, BEST_KEY: DRUM_BEST_KEY, TAKES_MAX: DRUM_TAKES_MAX, PATS_MAX: DRUM_PATS_MAX

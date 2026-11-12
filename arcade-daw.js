@@ -2232,8 +2232,18 @@
     mode: function (m) { if (st.steps) { st.steps.mode = m === "vel" ? "vel" : "tap"; st.steps.pick = null; } }
   };
   function hear(m, v) { var UG = window.UGMelody; try { var ac = UG.audioInit(); if (ac && UG.drum) { UG.drum(ac, m, ac.currentTime + 0.01, v, (UG.audio && UG.audio.bus) || ac.destination); } } catch (e) {} }
+  // §342 9B-3: 16 ステップの行 ＝ いつもの 5 つ ＋ そのクリップにある、ほかの楽器（ゴリラドラムから取りこんだ音など）
+  var STEP_MORE = [37, 47, 48, 45, 43, 49, 51, 53, 44, 23, 21, 24, 22];
+  function stepRows(c) {
+    var M = DM(), kit = M.DRUM_KIT.slice(), have = {}, i;
+    for (i = 0; i < kit.length; i++) { have[kit[i][0]] = true; }
+    var inClip = {}; for (i = 0; c && i < c.notes.length; i++) { inClip[c.notes[i][2]] = true; }
+    for (i = 0; i < STEP_MORE.length; i++) { if (inClip[STEP_MORE[i]] && !have[STEP_MORE[i]]) { kit.push([STEP_MORE[i], M.drumName(STEP_MORE[i])]); have[STEP_MORE[i]] = true; } }
+    for (var k in inClip) { if (inClip.hasOwnProperty(k) && !have[k]) { kit.push([Number(k), M.drumName(Number(k)) || ("番号 " + k)]); have[k] = true; } }
+    return kit;
+  }
   function stepsHtml(p, f) {
-    var M = DM(), c = f.clip, t = f.track, n = M.stepCount(c), kit = M.DRUM_KIT, i, j, h;
+    var M = DM(), c = f.clip, t = f.track, n = M.stepCount(c), kit = stepRows(c), i, j, h;
     var playing = !!(pl && pl.clip === c.id);
     h = '<div class="daw ds">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-sq="back">&#x2190; もどる</button><b>&#x1F941; ' + escHtml(clipLabel(c)) + '</b><span class="daw-pname">' + escHtml(t.name) + '</span></div>' +
@@ -3267,7 +3277,7 @@
   function inbRead() { var M = DM(); return M && M.inboxRead ? M.inboxRead() : { box: null }; }
   function inbUi(box) {
     var u = st.inb, i;
-    if (!u || u.id !== box.id) { u = st.inb = { id: box.id, parts: {}, dest: "cur", target: "new", bar: 1, busy: false, trashAsk: false, msg: "" }; for (i = 0; i < box.parts.length; i++) { u.parts[box.parts[i].key] = box.parts[i].key === "uke" || box.parts.length === 1; } }
+    if (!u || u.id !== box.id) { u = st.inb = { id: box.id, parts: {}, dest: "cur", target: "new", bar: 1, busy: false, trashAsk: false, msg: "", quant: true }; for (i = 0; i < box.parts.length; i++) { u.parts[box.parts[i].key] = box.parts[i].key === "uke" || box.parts.length === 1; } }
     var any = false; for (i = 0; i < box.parts.length; i++) { if (u.parts[box.parts[i].key]) { any = true; } }
     if (!any && box.parts.length) { u.parts[box.parts[0].key] = true; }
     return u;
@@ -3277,9 +3287,11 @@
   function inbPlan(box, u) {
     var M = DM(), sel = inbSel(box, u), q = u.dest === "new" ? M.newProject({ name: box.name, bpm: box.bpm, meter: box.meter }) : project();
     var tgt = u.dest === "new" || sel.length !== 1 ? "new" : u.target;
-    return M.importPlan(q, box, { parts: sel, bar: u.bar, target: tgt });
+    return M.importPlan(q, box, { parts: sel, bar: u.bar, target: tgt, quant: !!u.quant });
   }
-  function inbSynthTracks(p) { var o = [], i, M = DM(); for (i = 0; i < p.tracks.length; i++) { var t = p.tracks[i]; if (t.kind === "midi" && !M.isDrum(t)) { o.push(t); } } return o; }
+  function inbSynthTracks(p, drum) { var o = [], i, M = DM(); for (i = 0; i < p.tracks.length; i++) { var t = p.tracks[i]; if (t.kind === "midi" && M.isDrum(t) === !!drum) { o.push(t); } } return o; } // 9B-3: drum ＝ ドラムのトラック
+  function inbPart(box, key) { for (var i = 0; i < box.parts.length; i++) { if (box.parts[i].key === key) { return box.parts[i]; } } return null; }
+  function inbHasDrum(box, u) { var sel = inbSel(box, u), i; for (i = 0; i < sel.length; i++) { var pt = inbPart(box, sel[i]); if (pt && pt.preset === "drum") { return true; } } return false; }
   // 試聴: はじめの 8 小節を DAW の音色で（曲は変えない・UGSynth に直接）
   function inbPrevStop() { if (st.inbPrev) { st.inbPrev = null; try { if (window.UGSynth && window.UGSynth.kill) { window.UGSynth.kill(); } } catch (e) {} } }
   function inbPreview(box, u) {
@@ -3291,6 +3303,7 @@
     for (i = 0; i < box.parts.length; i++) {
       var pt = box.parts[i];
       if (sel.indexOf(pt.key) < 0) { continue; }
+      if (pt.preset === "drum") { for (j = 0; j < pt.notes.length && n < 800; j++) { var qd = pt.notes[j]; if (qd[0] >= lim) { break; } try { UG.drum(ac, qd[2], t0 + qd[0] * spt, qd[3], out); n++; } catch (e4) {} } continue; } // 9B-3
       var patch = null; try { patch = Y.preset(pt.preset).patch; } catch (e2) { patch = null; }
       if (!patch) { continue; }
       for (j = 0; j < pt.notes.length && n < 800; j++) { var q = pt.notes[j]; if (q[0] >= lim) { break; } try { Y.note(patch, q[2], out, t0 + q[0] * spt, q[3], Math.max(0.05, Math.min(lim - q[0], q[1]) * spt)); n++; } catch (e3) {} }
@@ -3311,7 +3324,7 @@
     if (u.dest === "new") {
       flushSave();
       p = M.newProject({ name: box.name, bpm: box.bpm, meter: box.meter }); p.id = M.newProjectId();
-      plan = M.importPlan(p, box, { parts: inbSel(box, u), bar: u.bar, target: "new" });
+      plan = M.importPlan(p, box, { parts: inbSel(box, u), bar: u.bar, target: "new", quant: !!u.quant });
       r = plan.ok ? M.importApply(p, box, plan) : plan;
       if (!r.ok) { u.busy = false; u.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
       switchTo(p, "dirty");
@@ -3339,25 +3352,27 @@
     if (st.inbMsg) { h += '<div class="da-note">' + st.inbMsg + '</div>'; }
     if (!box) {
       h += r0.bad ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(r0.why) + '</div><div class="da-btns"><button class="modal-btn" data-ib="trash">&#x1F5D1;&#xFE0F; 受け取り箱を空にする</button></div>' : '';
-      return h + '<p class="small dsv-note">いま届いているものはありません。ゲームセンターの「&#x1F3B8; ゴリラウクレレ」のシーケンサーで「&#x1F3B9; DAWへ送る」を押すと、ここで受け取れます（同じブラウザの中だけ・' + M.INBOX_DAYS + ' 日のあいだ）。</p></div>';
+      return h + '<p class="small dsv-note">いま届いているものはありません。ゲームセンターの「&#x1F3B8; ゴリラウクレレ」のシーケンサー・「&#x1F3B9; ゴリラピアノ」「&#x1F941; ゴリラドラム」のテイクの「DAWへ」を押すと、ここで受け取れます（同じブラウザの中だけ・' + M.INBOX_DAYS + ' 日のあいだ）。</p></div>';
     }
     var u = inbUi(box), sel = inbSel(box, u), bars = Math.ceil(box.len / (M.PPQ * box.meter)), sec = Math.round(box.len / M.PPQ * 60 / box.bpm * 10) / 10, d = new Date(box.made), z = function (x) { return (x < 10 ? "0" : "") + x; };
     h += '<div class="daw-info inb-box"><div>' + (M.INBOX_FROM[box.from] || escHtml(box.from)) + '</div><div class="inb-name"><b>' + escHtml(box.name) + '</b></div>' +
       '<div class="small">BPM ' + box.bpm + '・' + box.meter + '/4 拍子・' + bars + ' 小節（' + sec + ' 秒）・送った日時 ' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()) + '</div>' +
+      (box.src && box.src.name ? '<div class="small">元の' + (box.src.kind === "pat" ? "リズム" : (box.src.kind === "take" ? "テイク" : "曲")) + ': ' + escHtml(box.src.name) + '</div>' : '') + // 9B-3
       (box.skipped.length ? '<div class="small">送られていないもの: ' + escHtml(box.skipped.join("・")) + '</div>' : '') + '</div>';
     h += '<div class="inb-sec">取りこむパート</div><div class="inb-parts">';
     for (i = 0; i < box.parts.length; i++) { var pt = box.parts[i], on = !!u.parts[pt.key]; h += '<button class="modal-btn inb-part' + (on ? ' daw-on' : '') + '" data-ib="part:' + escHtml(pt.key) + '">' + (on ? '&#x2705;' : '&#x2B1C;') + ' ' + escHtml(pt.name) + '<small>' + pt.notes.length + ' 音</small></button>'; }
     h += '</div><div class="inb-sec">取り込み先</div><div class="da-btns"><button class="modal-btn da-half' + (u.dest === "cur" ? ' daw-on' : '') + '" data-ib="dest:cur">いまの曲に足す<br><small>「' + escHtml(p.name) + '」</small></button><button class="modal-btn da-half' + (u.dest === "new" ? ' daw-on' : '') + '" data-ib="dest:new">新しい曲を作る<br><small>BPM ' + box.bpm + '・' + box.meter + '/4</small></button></div>';
-    var tl = inbSynthTracks(p), tname = "";
+    var selDrum = sel.length === 1 && inbPart(box, sel[0]) && inbPart(box, sel[0]).preset === "drum", tl = inbSynthTracks(p, selDrum), tname = "";
     if (u.dest === "cur" && sel.length === 1) {
-      if (u.target !== "new" && !M.findTrack(p, u.target)) { u.target = "new"; }
+      if (u.target !== "new" && (!M.findTrack(p, u.target) || M.isDrum(M.findTrack(p, u.target)) !== selDrum)) { u.target = "new"; }
       var ft = u.target === "new" ? null : M.findTrack(p, u.target), pp = null; for (i = 0; i < box.parts.length; i++) { if (box.parts[i].key === sel[0]) { pp = box.parts[i]; } }
-      tname = ft ? "いまあるトラック「" + escHtml(ft.name) + "」（いまの音色）" : "＋ 新しいトラック「" + escHtml(pp ? pp.name : "") + "」（" + escHtml(presetName(pp ? pp.preset : "lead")) + "）";
+      tname = ft ? "いまあるトラック「" + escHtml(ft.name) + "」（" + (selDrum ? "ドラム" : "いまの音色") + "）" : "＋ 新しい" + (selDrum ? "ドラムの" : "") + "トラック「" + escHtml(pp ? pp.name : "") + "」（" + escHtml(presetName(pp ? pp.preset : "lead")) + "）";
       h += '<div class="sec-line">トラック: <b>' + tname + '</b>' + (tl.length ? ' <button class="modal-btn daw-small" data-ib="tgt">&#x21C4; 変える</button>' : '') + '</div>';
     } else {
       var nn = []; for (i = 0; i < box.parts.length; i++) { if (u.parts[box.parts[i].key]) { nn.push(escHtml(box.parts[i].name) + "（" + escHtml(presetName(box.parts[i].preset)) + "）"); } }
       h += '<div class="sec-line">トラック: <b>新しいトラック ' + sel.length + ' 本</b><br><span class="small">' + nn.join("・") + '</span></div>';
     }
+    if (inbHasDrum(box, u)) { h += '<div class="da-btns"><button class="modal-btn da-wide' + (u.quant ? ' daw-on' : '') + '" data-ib="quant">' + (u.quant ? '&#x2705;' : '&#x2B1C;') + ' ドラムを 16 分の格子にそろえる<br><small>そろえると 16 ステップで直せます（重なる連打は元の位置のまま）</small></button></div>'; } // 9B-3
     h += '<div class="sec-line">はじまり <button class="modal-btn sec-st" data-ib="bar-">&#x2212;</button><button class="ae-val" data-ib="barv">' + u.bar + ' 小節目</button><button class="modal-btn sec-st" data-ib="bar+">＋</button></div>';
     var warn = [];
     if (u.dest === "cur") {
@@ -3366,18 +3381,19 @@
       if (pm.num !== box.meter || pm.den !== 4) { warn.push("拍子がちがいます（この曲 " + pm.num + "/" + pm.den + "・送った曲 " + box.meter + "/4）。拍の位置のまま入るので、小節の区切りがずれます"); }
     }
     if (box.tempoRows) { warn.push("送った曲の途中のテンポの変化（" + box.tempoRows + " か所）は入りません"); }
-    warn.push("音色は DAW のシンセです（ゲームの音そのものではありません）");
+    if (box.from === "drum") { warn.push("ドラムは同じ音で鳴ります（ドラムセットの種類はそのとき読みこまれているもの）"); } else { warn.push("音色は DAW のシンセです（ゲームの音そのものではありません・トラックの音色はあとで変えられます）"); } // 9B-3
     h += '<div class="small inb-warn">' + warn.map(function (w) { return "・" + escHtml(w); }).join("<br>") + '</div>';
     var plan = inbPlan(box, u);
-    if (plan.ok) { h += '<div class="small">' + plan.bar + '〜' + (plan.bar + Math.round(plan.span / M.barTicks(u.dest === "new" ? M.newProject({ meter: box.meter }) : p)) - 1) + ' 小節目に、クリップ ' + plan.items.reduce(function (a, x) { return a + x.clips.length; }, 0) + ' 個</div>'; }
+    if (plan.ok && plan.quant && (plan.quant.moved || plan.quant.kept)) { h += '<div class="small">そろえる打 ' + plan.quant.moved + ' 個（いちばん大きく動くのは ' + Math.round(plan.quant.max / M.PPQ * 60000 / (u.dest === "new" ? box.bpm : M.bpmAt(p, 0))) + 'ms）' + (plan.quant.kept ? '・同じマスに重なるので元の位置のまま ' + plan.quant.kept + ' 個' : '') + '</div>'; } // 9B-3
+    if (plan.ok) { var lastBar = plan.bar + Math.round(plan.span / M.barTicks(u.dest === "new" ? M.newProject({ meter: box.meter }) : p)) - 1; h += '<div class="small">' + (lastBar > plan.bar ? plan.bar + '〜' + lastBar : plan.bar) + ' 小節目に、クリップ ' + plan.items.reduce(function (a, x) { return a + x.clips.length; }, 0) + ' 個</div>'; }
     else { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(plan.why) + '</div>'; }
     if (u.msg) { h += '<div class="da-note">' + u.msg + '</div>'; }
     h += '<div class="da-btns"><button class="modal-btn da-half" data-ib="prev">&#x25B6;&#xFE0F; 試聴</button><button class="modal-btn da-half" data-ib="stop">&#x23F9; 止める</button></div>' +
       '<div class="da-btns"><button class="modal-btn da-wide inb-go" data-ib="go"' + (plan.ok && !u.busy ? '' : ' disabled') + '>&#x2705; 曲に追加</button></div>' +
-      '<div class="da-btns"><button class="modal-btn da-wide" data-ib="trash">' + (u.trashAsk ? '&#x26A0;&#xFE0F; 本当に捨てる（ウクレレの曲は残ります）' : '&#x1F5D1;&#xFE0F; 捨てる') + '</button></div>';
-    return h + '<p class="small dsv-note">「✅ 曲に追加」を押すまで、曲は変わりません。取りこんだら受け取り箱は空になります（ウクレレの曲はそのまま・また送れます）。</p></div>';
+      '<div class="da-btns"><button class="modal-btn da-wide" data-ib="trash">' + (u.trashAsk ? '&#x26A0;&#xFE0F; 本当に捨てる（元のゲームのデータは残ります）' : '&#x1F5D1;&#xFE0F; 捨てる') + '</button></div>';
+    return h + '<p class="small dsv-note">「✅ 曲に追加」を押すまで、曲は変わりません。取りこんだら受け取り箱は空になります（元のゲームのデータはそのまま・また送れます）。</p></div>';
   }
-  function presetName(id) { try { var pr = window.UGSynth && window.UGSynth.preset ? window.UGSynth.preset(id) : null; return pr ? String(pr.name).replace(/&#x?[0-9a-f]+;/gi, "").replace(/^\s+|\s+$/g, "") : id; } catch (e) { return id; } }
+  function presetName(id) { if (id === "drum") { return "ドラム"; } try { var pr = window.UGSynth && window.UGSynth.preset ? window.UGSynth.preset(id) : null; return pr ? String(pr.name).replace(/&#x?[0-9a-f]+;/gi, "").replace(/^\s+|\s+$/g, "") : id; } catch (e) { return id; } }
   function renderInbox(root, ctl) {
     var p = project();
     root.innerHTML = inbHtml(p);
@@ -3402,7 +3418,8 @@
         if (v === "stop") { inbPrevStop(); u.msg = ""; again(); return; }
         if (v.indexOf("part:") === 0) { var key = v.substring(5); u.parts[key] = !u.parts[key]; u.msg = ""; again(); return; }
         if (v === "dest:cur" || v === "dest:new") { u.dest = v.substring(5); u.msg = ""; again(); return; }
-        if (v === "tgt") { var tl = inbSynthTracks(project()), ids = ["new"], i; for (i = 0; i < tl.length; i++) { ids.push(tl[i].id); } u.target = ids[(ids.indexOf(u.target) + 1) % ids.length]; again(); return; }
+        if (v === "quant") { u.quant = !u.quant; u.msg = ""; again(); return; } // 9B-3
+        if (v === "tgt") { var sl0 = inbSel(box, u), tl = inbSynthTracks(project(), sl0.length === 1 && inbPart(box, sl0[0]) && inbPart(box, sl0[0]).preset === "drum"), ids = ["new"], i; for (i = 0; i < tl.length; i++) { ids.push(tl[i].id); } u.target = ids[(ids.indexOf(u.target) + 1) % ids.length]; again(); return; }
         if (v === "bar-") { u.bar = Math.max(1, u.bar - 1); again(); return; }
         if (v === "bar+") { u.bar = Math.min(256, u.bar + 1); again(); return; }
         if (v === "barv") { var a = window.prompt ? window.prompt("はじまりの小節（1〜256）", String(u.bar)) : null; if (a !== null && a !== undefined && String(a).replace(/\s/g, "") !== "" && isFinite(Number(a))) { u.bar = Math.max(1, Math.min(256, Math.round(Number(a)))); } again(); return; }
@@ -3410,7 +3427,7 @@
     }
   }
   // §342 9B-2: 元のゲームへ戻る（switchTo で来たとき・ゲームから取りこんだあと）。DAW をやめるときに保存する（stop hook）
-  var BACK_GAMES = { ukulele: "&#x1F3B8; ゴリラウクレレへ戻る" };
+  var BACK_GAMES = { ukulele: "&#x1F3B8; ゴリラウクレレへ戻る", piano: "&#x1F3B9; ゴリラピアノへ戻る", drum: "&#x1F941; ゴリラドラムへ戻る" }; // 9B-3
   function backGame() { var c = null; try { c = I.cameFrom ? I.cameFrom() : null; } catch (e) { c = null; } var g = st.backGame || c; return g && BACK_GAMES[g] ? g : null; }
   function backHtml() { var g = backGame(); return g ? '<div class="da-btns daw-back"><button class="modal-btn da-wide" data-ar="backGame">' + BACK_GAMES[g] + '</button></div>' : ''; }
   function goBackGame() {
@@ -3574,6 +3591,7 @@
     sections: { list: sections.list, add: sections.add, update: sections.update, remove: sections.remove, copy: sections.copy, jump: sections.jump, html: function () { return secHtml(project()); }, draft: secDraft, open: function () { st.view = "sec"; st.secUI = null; if (st.root) { rerender(); } }, cue: function () { return st.cue; }, setUI: function (u) { st.secUI = u; if (st.root) { rerender(); } }, ui: function () { return st.secUI; } }, // 9B-1
     jumpTo: jumpTo, repeatUI: function () { return st.repeat; },
     backGame: backGame, goBackGame: goBackGame, // 9B-2
+    stepRows: stepRows, // 9B-3
     inbox: { read: inbRead, ui: function () { var b = inbRead().box; return b ? inbUi(b) : null; }, plan: function () { var b = inbRead().box; return b ? inbPlan(b, inbUi(b)) : null; }, html: function () { return inbHtml(project()); }, open: function () { st.view = "inbox"; if (st.root) { rerender(); } }, importNow: inbImport, preview: function () { var b = inbRead().box; return b ? inbPreview(b, inbUi(b)) : false; }, stopPreview: inbPrevStop, note: inbNoteHtml }, // 9B-2
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
     comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17
