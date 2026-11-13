@@ -1172,7 +1172,7 @@
 
   // ---------- §342 9B-2: ゲームセンターからの受け取り箱（localStorage に 1 つだけ・同じブラウザの中だけ）----------
   var INBOX_KEY = "ultimateGorillaDawInboxV1", INBOX_TYPE = "ultimate-gorilla-daw-inbox", INBOX_DAYS = 7, INBOX_MAX_BYTES = 512 * 1024, INBOX_MAX_PARTS = 8;
-  var INBOX_FROM = { ukulele: "&#x1F3B8; ゴリラウクレレ（コード・シーケンサー）", piano: "&#x1F3B9; ゴリラピアノ（テイク）", drum: "&#x1F941; ゴリラドラム" }; // 9B-3: ピアノ・ドラム
+  var INBOX_FROM = { ukulele: "&#x1F3B8; ゴリラウクレレ（コード・シーケンサー）", piano: "&#x1F3B9; ゴリラピアノ（テイク）", drum: "&#x1F941; ゴリラドラム", bass: "&#x1F3B8; ゴリラベース（テイク）", guitar: "&#x1F3B8; ゴリラギター（テイク）" }; // 9B-3: ピアノ・ドラム・9B-5: ベース・ギター
   var INBOX_PRESETS = ["pluck", "bass", "pad", "spad", "lead", "soft", "brass", "organ", "bell", "chip", "drum"]; // "drum" ＝ ドラムのトラック（9B-3）
   // §342 9B-3: ゴリラドラムの番号 → 名前（DAW の 16 ステップの行。5 つのほかは、その音があるクリップだけ）。25・26 は音のない操作（取りこまない）
   var DRUM_NAMES = { 36: "キック", 38: "スネア", 39: "クラップ", 42: "ハイハット（閉）", 46: "ハイハット（開）", 37: "リム", 47: "タム", 49: "クラッシュ", 51: "ライド", 48: "タム（高）", 45: "タム（中）", 43: "フロアタム",
@@ -1297,6 +1297,47 @@
     if (!items.length) { return { ok: false, why: "取りこめる音符がありません" }; }
     return { ok: true, items: items, dest: dest, span: span, bar: b, quant: qs };
   }
+  // ---------- §342 9B-5: 拍のテイク（ゴリラベース・ゴリラギター）→ 送る形・確かめる・送る（2 つの楽器で共通。元のテイクは変えない）----------
+  // take: { id, name, bpm, meter, notes: [[拍, 長さ, MIDI, 強さ?]…] }  o: { key, part（パートの名前）, preset, def（名前が無いとき）}
+  function takePayload(take, o) {
+    o = o || {};
+    var src = take && isArr(take.notes) ? take.notes : [], notes = [], i, end = 0, lo = 127, hi = 0;
+    for (i = 0; i < src.length && notes.length < MAX_NOTES; i++) {
+      var n = src[i];
+      if (!isArr(n)) { continue; }
+      var b = Number(n[0]), d = Number(n[1]), m = Number(n[2]), v = n.length > 3 ? Number(n[3]) : 0.8;
+      if (!isFinite(b) || b < 0 || !isFinite(d) || d <= 0 || !isFinite(m) || m < 0 || m > 127) { continue; }
+      var t = Math.max(0, Math.round(b * PPQ)), dd = Math.max(1, Math.round(d * PPQ));
+      notes.push([t, dd, Math.round(m), Math.round(num(v, 0.8, 0, 1) * 1000) / 1000]);
+      end = Math.max(end, t + dd); lo = Math.min(lo, Math.round(m)); hi = Math.max(hi, Math.round(m));
+    }
+    notes.sort(function (a, c) { return a[0] - c[0] || a[2] - c[2]; });
+    // 同時に鳴る音の最大（ストロークは弦ごとにずれるので、同じ tick ではなく重なりで数える）
+    var evs = [], poly = 0, cur = 0;
+    for (i = 0; i < notes.length; i++) { evs.push([notes[i][0], 1], [notes[i][0] + notes[i][1], -1]); }
+    evs.sort(function (a, c) { return a[0] - c[0] || a[1] - c[1]; });
+    for (i = 0; i < evs.length; i++) { cur += evs[i][1]; poly = Math.max(poly, cur); }
+    var meter = take && take.meter === 3 ? 3 : 4, bpm = take && isFinite(Number(take.bpm)) ? Number(take.bpm) : 100, bar = PPQ * meter, len = Math.max(bar, Math.ceil(end / bar) * bar);
+    return { name: str(String(take && take.name || o.def || "テイク"), "テイク", 40), bpm: bpm, meter: meter, len: len, tempoRows: 0, notes: notes.length, poly: poly, lo: notes.length ? lo : null, hi: notes.length ? hi : null,
+      bars: Math.round(len / bar), sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, parts: notes.length ? [{ key: o.key || "take", name: o.part || "テイク", preset: o.preset || "lead", notes: notes }] : [], skipped: [],
+      src: take ? { kind: "take", id: take.id, name: take.name } : null };
+  }
+  function takeCheck(from, pay, take) {
+    if (!take) { return { ok: false, why: "テイクが見つかりません" }; }
+    if (!pay || !pay.parts.length) { return { ok: false, why: "音のないテイクは送れません", pay: pay }; }
+    var made = inboxMake(from, pay), old = inboxRead();
+    return { ok: made.ok, why: made.why || "", pay: pay, made: made, prev: old.box ? old.box.name : null };
+  }
+  // 書いてから読みなおして確かめる（だめなら理由。元のテイクには触らない）
+  function takeSend(from, pay, take) {
+    var c = takeCheck(from, pay, take);
+    if (!c.ok) { return { ok: false, why: c.why }; }
+    var w = inboxWrite(c.made);
+    if (!w.ok) { return { ok: false, why: w.why }; }
+    var back = inboxRead();
+    if (!back.box || back.box.id !== c.made.box.id) { return { ok: false, why: "保存したデータを読みなおせませんでした" }; }
+    return { ok: true, name: c.made.box.name, id: c.made.box.id };
+  }
   // 計画どおりに足す（importPlan が ok のときだけ）→ { ok, clips, tracks }
   function importApply(p, box, plan) {
     var made = [], tracks = [], i, j;
@@ -1304,7 +1345,7 @@
     for (i = 0; i < plan.items.length; i++) {
       var it = plan.items[i], t = it.track;
       if (!t && it.part.preset === "drum") { if (p.tracks.length >= MAX_TRACKS) { return { ok: false, why: "トラックを足せませんでした" }; } t = newTrack(p, it.part.name, drumInstrument()); t.ext.icon = "&#x1F941;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); } // 9B-3: ドラム（空のパターンは作らない）
-      if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } t.ext.icon = it.part.preset === "pluck" ? "&#x1F3B8;" : "&#x1F3B5;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
+      if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } t.ext.icon = it.part.preset === "pluck" || box.from === "bass" || box.from === "guitar" ? "&#x1F3B8;" : "&#x1F3B5;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
       for (j = 0; j < it.clips.length; j++) {
         var q = it.clips[j], nm = str(it.part.name + "（" + box.name + "）" + (it.clips.length > 1 ? " " + (j + 1) : ""), "", 40);
         var c = newMidiClip(p, t, q.start, q.len, q.notes, nm);
@@ -1621,6 +1662,7 @@
     DRUM_NAMES: DRUM_NAMES, DRUM_SILENT: DRUM_SILENT, drumName: drumName, // 9B-3
     MIDI_MAX_BYTES: MIDI_MAX_BYTES, MIDI_MAX_EVENTS: MIDI_MAX_EVENTS, MIDI_MAX_NOTES: MIDI_MAX_NOTES, MIDI_MAX_MS: MIDI_MAX_MS, MIDI_DRUM_LO: MIDI_DRUM_LO, MIDI_DRUM_HI: MIDI_DRUM_HI, DRUM_GM: DRUM_GM, GM_DRUM_NAMES: GM_DRUM_NAMES, MIDI_PRESET_GM: MIDI_PRESET_GM, // 9B-4
     midiExport: midiExport, midiParse: midiParse, midiRead: midiRead, midiBox: midiBox, midiDrumNotes: midiDrumNotes, midiNewProject: midiNewProject, midiGmPreset: midiGmPreset,
+    takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };

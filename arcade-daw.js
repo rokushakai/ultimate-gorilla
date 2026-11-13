@@ -3371,7 +3371,7 @@
     if (st.inbMsg) { h += '<div class="da-note">' + st.inbMsg + '</div>'; }
     if (!box) {
       h += r0.bad ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(r0.why) + '</div><div class="da-btns"><button class="modal-btn" data-ib="trash">&#x1F5D1;&#xFE0F; 受け取り箱を空にする</button></div>' : '';
-      return h + '<p class="small dsv-note">いま届いているものはありません。ゲームセンターの「&#x1F3B8; ゴリラウクレレ」のシーケンサー・「&#x1F3B9; ゴリラピアノ」「&#x1F941; ゴリラドラム」のテイクの「DAWへ」を押すと、ここで受け取れます（同じブラウザの中だけ・' + M.INBOX_DAYS + ' 日のあいだ）。</p></div>';
+      return h + '<p class="small dsv-note">いま届いているものはありません。ゲームセンターの「&#x1F3B8; ゴリラウクレレ」のシーケンサー・「&#x1F3B9; ゴリラピアノ」「&#x1F941; ゴリラドラム」「&#x1F3B8; ゴリラベース」「&#x1F3B8; ゴリラギター」のテイクの「DAWへ」を押すと、ここで受け取れます（同じブラウザの中だけ・' + M.INBOX_DAYS + ' 日のあいだ）。</p></div>';
     }
     var u = inbUi(box), sel = inbSel(box, u), bars = Math.ceil(box.len / (M.PPQ * box.meter)), sec = Math.round(box.len / M.PPQ * 60 / box.bpm * 10) / 10, d = new Date(box.made), z = function (x) { return (x < 10 ? "0" : "") + x; };
     h += '<div class="daw-info inb-box"><div>' + (M.INBOX_FROM[box.from] || escHtml(box.from)) + '</div><div class="inb-name"><b>' + escHtml(box.name) + '</b></div>' +
@@ -3603,7 +3603,7 @@
     }
   }
   // §342 9B-2: 元のゲームへ戻る（switchTo で来たとき・ゲームから取りこんだあと）。DAW をやめるときに保存する（stop hook）
-  var BACK_GAMES = { ukulele: "&#x1F3B8; ゴリラウクレレへ戻る", piano: "&#x1F3B9; ゴリラピアノへ戻る", drum: "&#x1F941; ゴリラドラムへ戻る" }; // 9B-3
+  var BACK_GAMES = { ukulele: "&#x1F3B8; ゴリラウクレレへ戻る", piano: "&#x1F3B9; ゴリラピアノへ戻る", drum: "&#x1F941; ゴリラドラムへ戻る", bass: "&#x1F3B8; ゴリラベースへ戻る", guitar: "&#x1F3B8; ゴリラギターへ戻る" }; // 9B-3・9B-5
   function backGame() { var c = null; try { c = I.cameFrom ? I.cameFrom() : null; } catch (e) { c = null; } var g = st.backGame || c; return g && BACK_GAMES[g] ? g : null; }
   function backHtml() { var g = backGame(); return g ? '<div class="da-btns daw-back"><button class="modal-btn da-wide" data-ar="backGame">' + BACK_GAMES[g] + '</button></div>' : ''; }
   function goBackGame() {

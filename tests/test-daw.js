@@ -2102,7 +2102,7 @@ module.exports = async function () {
   var mk = MG.inboxMake("ukulele", goodPay, 1000);
   ok(mk.ok && mk.box.type === MG.INBOX_TYPE && mk.box.ppq === 960 && mk.box.parts[0].notes.length === 2 && /^g[a-z0-9]+$/.test(mk.box.id) && mk.json.length < 2000, "inboxMake: a small checked box (type / v / id / ppq 960)", mk.why);
   function badWith(f) { var o = JSON.parse(mk.json); f(o); return MG.inboxClean(o, 1000); }
-  ok(!badWith(function (o) { o.type = "x"; }).ok && !badWith(function (o) { o.from = "guitar"; }).ok && !badWith(function (o) { o.ppq = 480; }).ok && !badWith(function (o) { o.bpm = 999; }).ok && !badWith(function (o) { o.meter = 5; }).ok, "inboxClean refuses a wrong type / unknown game / other PPQ / BPM / meter");
+  ok(!badWith(function (o) { o.type = "x"; }).ok && !badWith(function (o) { o.from = "violin"; }).ok && !badWith(function (o) { o.ppq = 480; }).ok && !badWith(function (o) { o.bpm = 999; }).ok && !badWith(function (o) { o.meter = 5; }).ok, "inboxClean refuses a wrong type / unknown game / other PPQ / BPM / meter");
   ok(!badWith(function (o) { o.parts[0].notes[0][2] = 130; }).ok && !badWith(function (o) { o.parts[0].notes[0][3] = 2; }).ok && !badWith(function (o) { o.parts[0].notes[0][1] = 0; }).ok && !badWith(function (o) { o.parts[0].notes = []; }).ok && !badWith(function (o) { o.parts = []; }).ok && !badWith(function (o) { o.parts[0].notes[0] = "x"; }).ok, "inboxClean refuses bad notes (pitch / velocity / length / empty / not an array)");
   var big = []; for (var bi = 0; bi < 4001; bi++) { big.push([bi, 10, 60, 0.5]); }
   ok(!badWith(function (o) { o.parts[0].notes = big; }).ok && !badWith(function (o) { o.parts[1] = o.parts[0]; }).ok, "inboxClean: 4000 notes per part, no duplicate part keys");
@@ -2488,4 +2488,102 @@ module.exports = async function () {
   WM.UGArcade.stop(); DM4.reset();
   var errM = eM.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errM.length === 0, "no Web Audio errors (9B-4)", errM.slice(0, 3));
+  // ================= 9B-5: ゴリラベース・ゴリラギター → ゴリラDAW（§342）=================
+  var eB = H.load(), WB = eB.window, MB = WB.UGDawModel, DB = WB.UGDaw, BB = WB.UGBass, GB = WB.UGGuitar, PB = WB.UGPiano, DRB = WB.UGDrum, UB = WB.UGUkulele, SB = eB.store;
+  // --- モデルの共通の変換（拍 → tick・重なりの数・おかしい音符は捨てる）---
+  var tp = MB.takePayload({ id: 3, name: "T", bpm: 90, meter: 3, notes: [[0, 1, 40], [0.5, 1, 47, 0.5], [1.001, 0.0625, 52, 1], ["x", 1, 40], [1, -1, 40], [1, 1, 200]] }, { key: "bass", part: "B", preset: "bass" });
+  ok(tp.notes === 3 && tp.meter === 3 && tp.bpm === 90 && tp.len === 2880 && tp.poly === 2 && tp.lo === 40 && tp.hi === 52 && tp.src.id === 3 && JSON.stringify(tp.parts[0].notes) === JSON.stringify([[0, 960, 40, 0.8], [480, 960, 47, 0.5], [961, 60, 52, 1]]), "takePayload: beats → ticks (PPQ 960), length ≥ 1, velocity kept / 0.8, broken notes dropped, overlap count, 3/4", tp);
+  ok(MB.takePayload({ id: 1, notes: [] }, {}).parts.length === 0 && !MB.takeCheck("bass", MB.takePayload({ id: 1, notes: [] }, {}), { id: 1 }).ok && !MB.takeCheck("bass", tp, null).ok, "takeCheck: an empty take / no take → refused with a reason");
+  ok(!MB.takeCheck("violin", tp, { id: 3 }).ok && MB.takeCheck("bass", tp, { id: 3 }).ok && MB.takeCheck("guitar", tp, { id: 3 }).ok, "inbox: bass / guitar are known sources; an unknown game is refused");
+  // --- ゴリラベース ---
+  var bTake = BB.takeClean({ id: 5, name: "ベースライン", bpm: 100, meter: 4, prog: 36, notes: [[0, 1, 36], [1, 0.5, 36, 0.35], [1.5, 0.5, 43], [2, 1, 40, 1], [3, 0.75, 38], [4, 2, 41], [6, 2, 43]] }, 0);
+  var bPay = BB.dawPayload(bTake);
+  ok(bPay.bpm === 100 && bPay.meter === 4 && bPay.notes === 7 && bPay.bars === 2 && bPay.parts[0].preset === "bass" && bPay.parts[0].key === "bass" && bPay.parts[0].name === "スラップ" && bPay.src.kind === "take" && bPay.src.id === 5 &&
+    JSON.stringify(bPay.parts[0].notes) === JSON.stringify([[0, 960, 36, 0.8], [960, 480, 36, 0.35], [1440, 480, 43, 0.8], [1920, 960, 40, 1], [2880, 720, 38, 0.8], [3840, 1920, 41, 0.8], [5760, 1920, 43, 0.8]]), "bass take → 7 notes at PPQ 960, ghost 0.35 / slap 1 kept, preset モノベース (bass)", bPay);
+  BB.takesSave([bTake]); var bRaw = SB[BB.TAKES_KEY];
+  var bs = BB.dawSend(bTake);
+  ok(bs.ok && MB.inboxRead().box.from === "bass" && MB.inboxRead().box.src.name === "ベースライン" && SB[BB.TAKES_KEY] === bRaw, "bass dawSend: the box is written and read back; the saved takes are untouched", bs.why);
+  ok(!BB.dawCheck(null).ok && !BB.dawCheck(BB.takeClean({ id: 9, bpm: 90, notes: [] }, 0)).ok, "bass: no take / an empty take → refused");
+  // --- ゴリラギター（ストロークのずれ・強さ・ミュートの短い音）---
+  var gTake = GB.takeClean({ id: 2, name: "リフ", bpm: 100, meter: 4, voice: "dist", notes: [[0, 2, 48], [0.02, 1.98, 52, 0.9], [0.04, 1.96, 55, 0.6], [0.06, 1.94, 60], [0.08, 1.92, 64], [2, 0.0625, 64], [2.5, 0.0625, 64, 0.4], [3, 1, 67, 0.5], [4, 4, 55, 0.7]] }, 0);
+  var gPay = GB.dawPayload(gTake);
+  ok(gPay.notes === 9 && gPay.poly === 5 && gPay.parts[0].preset === "lead" && gPay.parts[0].key === "guitar" && /ディストーション/.test(gPay.parts[0].name) && gPay.parts[0].notes[1][0] === 19 && gPay.parts[0].notes[4][0] === 77 && gPay.parts[0].notes[5][1] === 60 && gPay.parts[0].notes[1][3] === 0.9, "guitar take: strum offsets kept (0.02 beat → 19 ticks), 5 notes at once, palm-mute length 60, distortion → のこぎりリード", gPay.parts[0].notes.slice(0, 6));
+  ok(GB.dawPayload(GB.takeClean({ id: 1, voice: "nylon", notes: [[0, 1, 60]] }, 0)).parts[0].preset === "pluck" && GB.dawPayload(GB.takeClean({ id: 1, voice: "clean", notes: [[0, 1, 60]] }, 0)).parts[0].preset === "pluck", "guitar voices: nylon / clean → プラック");
+  GB.takesSave([gTake]); var gRaw = SB[GB.TAKES_KEY];
+  ok(GB.dawSend(gTake).ok && MB.inboxRead().box.from === "guitar" && MB.inboxRead().box.name === "リフ" && SB[GB.TAKES_KEY] === gRaw, "guitar dawSend: the box replaces the bass box; the saved takes are untouched");
+  // --- おかしい箱は取りこまない ---
+  var gMade = MB.inboxMake("guitar", gPay);
+  function gBad(f) { var o = JSON.parse(gMade.json); f(o); return MB.inboxClean(o); }
+  ok(!gBad(function (o) { o.parts[0].notes[0][2] = 200; }).ok && !gBad(function (o) { o.parts[0].notes[0][1] = 0; }).ok && !gBad(function (o) { o.from = "violin"; }).ok && !gBad(function (o) { o.made = 0; }).ok && gBad(function (o) { o.parts[0].name = "<b>x</b>"; }).box.parts[0].name === "bx/b", "a broken guitar box (pitch 200 / length 0 / unknown game / expired) is refused; names are cleaned");
+
+  // --- 5 つの楽器の曲 ---
+  var IDBB = fakeIDB(); WB.indexedDB = IDBB; fakeDecode(WB);
+  var RB = H.makeEl("div"); DB.reset(); WB.UGArcade.start("guitar", RB, {});
+  ok(RB.innerHTML.indexOf('data-dawt="2"') >= 0 && RB.innerHTML.indexOf("DAWへ") >= 0, "guitar setup: 🎸 DAWへ on the saved take");
+  WB.UGArcade.internal.switchTo("daw");
+  DB.proj.create("empty"); var p5 = DB.project(); p5.name = "5 つの楽器"; while (p5.tracks.length) { p5.tracks.pop(); } DB.markDirty();
+  MB.inboxClear();
+  UB.dawSend(UB.seqClean({ bpm: 100, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "Am", len: "w" }] }), false, "伴奏"); DB.inbox.open(); var r5u = DB.inbox.importNow();
+  PB.dawSend(PB.takeClean({ id: 8, name: "メロ", bpm: 100, meter: 4, prog: 0, notes: [[0, 1, 72], [1, 1, 74], [2, 2, 76], [4, 1, 77], [4, 1, 72], [6, 2, 79]] }, 0)); DB.inbox.open(); var r5p = DB.inbox.importNow();
+  DRB.dawSend("take", DRB.takeClean({ id: 9, name: "リズム", bpm: 100, notes: [[0, 36, 0.9], [1, 38, 0.8], [2, 36, 0.9], [3, 38, 0.8]] }, 0)); DB.inbox.open(); var r5d = DB.inbox.importNow();
+  // ベース: 受け取りの画面 → やめる（キャンセル）→ 曲は変わらない・箱は残る
+  BB.dawSend(bTake); var before5 = JSON.stringify(DB.project().tracks); DB.inbox.open();
+  var ib5 = DB.inbox.html();
+  ok(ib5.indexOf("ゴリラベース") >= 0 && ib5.indexOf("ベースライン") >= 0 && ib5.indexOf("BPM 100") >= 0 && ib5.indexOf("4/4") >= 0 && ib5.indexOf("2 小節") >= 0 && ib5.indexOf("7 音") >= 0 && ib5.indexOf("曲に追加") >= 0, "📥 screen for the bass: source game, take name, BPM, meter, length, note count");
+  DB.state().view = "arr"; ok(JSON.stringify(DB.project().tracks) === before5 && MB.inboxRead().box && MB.inboxRead().box.from === "bass", "cancel (back without ✅): the song is unchanged, the box stays");
+  var u5 = DB.undoDepth(); DB.inbox.open(); var r5b = DB.inbox.importNow();
+  ok(r5b.ok && DB.undoDepth() === u5 + 1 && DB.backGame() === "bass" && !MB.inboxRead().box, "✅ bass import: one ↶ step, back button → ゴリラベース, the box is emptied", r5b.why);
+  DB.ops.undo(); ok(JSON.stringify(DB.project().tracks) === before5, "↶ removes the bass import exactly");
+  BB.dawSend(bTake); var bMadeJ = SB[MB.INBOX_KEY]; DB.inbox.open(); r5b = DB.inbox.importNow();
+  SB[MB.INBOX_KEY] = bMadeJ; var dup = DB.inbox.plan();
+  ok(r5b.ok && dup && !dup.ok && /もう取りこんであります/.test(dup.why), "the same box twice → refused (no double import)", dup && dup.why);
+  MB.inboxClear();
+  GB.dawSend(gTake); DB.inbox.open(); var r5g = DB.inbox.importNow();
+  var pF = DB.project(), tU = pF.tracks[0], tP = pF.tracks[1], tD = pF.tracks[2], tB = pF.tracks[3], tG = pF.tracks[4];
+  ok(r5u.ok && r5p.ok && r5d.ok && r5g.ok && pF.tracks.length === 5 && tB.instrument.ext.preset === "bass" && tG.instrument.ext.preset === "lead" && tB.ext.icon === "&#x1F3B8;" && tG.ext.icon === "&#x1F3B8;" && DB.backGame() === "guitar", "the song has ukulele + piano + drums + bass + guitar", pF.tracks.map(function (t) { return t.name; }));
+  ok(JSON.stringify(tB.clips[0].notes) === JSON.stringify(bPay.parts[0].notes) && JSON.stringify(tG.clips[0].notes) === JSON.stringify(gPay.parts[0].notes), "imported bass / guitar notes = the take (timing, length, pitch, velocity)");
+  // ピアノロール・ドラム・ミキサー
+  DB.openEditor(tB.clips[0].id); ok(DB.state().view === "roll", "the bass clip opens in the piano roll");
+  var nB = tB.clips[0].notes.length; DB.edit.add(960 * 7, 45); ok(DB.project().tracks[3].clips[0].notes.length === nB + 1, "piano roll: a bass note added");
+  DB.ops.undo(); DB.state().view = "arr"; pF = DB.project(); tU = pF.tracks[0]; tP = pF.tracks[1]; tD = pF.tracks[2]; tB = pF.tracks[3]; tG = pF.tracks[4];
+  ok(tB.clips[0].notes.length === nB, "↶ removes it");
+  DB.openEditor(tD.clips[0].id); DB.steps.toggle(42, 2); ok(tD.clips[0].notes.some(function (n) { return n[2] === 42 && n[0] === 480; }), "16 steps: a hi-hat added to the drum clip"); DB.state().view = "arr";
+  // 🎼・🔁・📋
+  DB.sections.add({ name: "イントロ", bar: 1, bars: 2 });
+  ok(DB.ops.repeat(tD.clips[0].id, 1) === true && DB.ops.repeat(tB.clips[0].id, 1) === true, "🔁 drums and bass repeated");
+  var cp5 = DB.sections.copy("s1", 5);
+  ok(cp5.ok && cp5.clips.length === 6, "📋 イントロ (bars 1-2) → bar 5 copies all 5 instruments (6 clips: the drum clip and its repeat)", cp5.why || cp5.clips.length);
+  // WAV（5 つが同時に鳴る）・ミキサー（音量・定位・ミュート・ソロ）
+  async function wav5() { await new Promise(function (r) { DB.wav.start(r); }); for (var g = 0; g < 600 && DB.wav.state().busy; g++) { await eB.wait(10); } var c = {}; DB.wav.state().log.forEach(function (x) { c[x.track] = (c[x.track] || 0) + 1; }); return c; }
+  tB.vol = 60; tB.pan = -0.5; tG.pan = 0.5; DB.updateMix();
+  var c5 = await wav5();
+  ok(DB.wav.state().state === "done" && c5[tU.id] > 0 && c5[tP.id] === 12 && c5[tD.id] > 0 && c5[tB.id] === 7 * 3 && c5[tG.id] === 9 * 2, "WAV: all 5 instruments play (bass 21 = 3 clips, guitar 18 = 2 clips, piano 12)", c5);
+  tG.solo = true; DB.updateMix(); var c5s = await wav5();
+  ok(Object.keys(c5s).join() === tG.id, "solo the guitar → only the guitar plays", c5s);
+  tG.solo = false; tB.mute = true; DB.updateMix(); var c5m = await wav5();
+  ok(!c5m[tB.id] && c5m[tG.id] === 18, "mute the bass → the bass is silent", c5m);
+  tB.mute = false; DB.markDirty(); DB.flushSave();
+  // 標準 MIDI → 読みなおし（新しい曲）→ くらべる
+  function ev5n(p) { var o = {}; MB.noteEvents(p, 0, Infinity).forEach(function (e) { var nm = p.tracks[e.ti].name; (o[nm] = o[nm] || []).push([e.tick, e.end - e.tick, e.m, e.v]); }); for (var k in o) { o[k].sort(function (a, b) { return a[0] - b[0] || a[2] - b[2] || a[1] - b[1]; }); } return o; }
+  var o5 = ev5n(DB.project()), x5 = DB.midi.exportNow(), pid5 = DB.project().id;
+  DB.midi.open(new Uint8Array(x5.bytes), "five.mid"); var rx5 = DB.midi.importNow(), b5 = ev5n(DB.project()), bad5 = [];
+  for (var k5 in o5) { var A = o5[k5], Bx = b5[k5] || []; if (A.length !== Bx.length) { bad5.push(k5 + " count"); continue; } var sa5 = [], sb5 = [], ea5 = [], eb5 = []; A.forEach(function (n, i) { var am = MB.DRUM_GM.hasOwnProperty(n[2]) && k5 === tD.name ? MB.DRUM_GM[n[2]] : n[2]; if (n[0] !== Bx[i][0] || am !== Bx[i][2] || Math.abs(n[3] - Bx[i][3]) > 0.0045) { bad5.push(k5 + "#" + i); } ea5.push((n[0] + n[1]) + ":" + am); eb5.push((Bx[i][0] + Bx[i][1]) + ":" + Bx[i][2]); }); ea5.sort(); eb5.sort(); if (ea5.join() !== eb5.join()) { bad5.push(k5 + " ends"); } }
+  ok(x5.ok && rx5.ok && Object.keys(o5).length === 5 && bad5.length === 0 && DB.project().tracks.map(function (t) { return t.instrument.type === "drum" ? "drum" : t.instrument.ext.preset; }).join() === "pluck,pluck,drum,bass,lead", "MIDI export → re-import: 5 tracks, every note start / end / pitch / velocity (±0.0045), presets", bad5.slice(0, 5));
+  ok(JSON.stringify(b5[tB.name]) === JSON.stringify(o5[tB.name].map(function (n) { return [n[0], n[1], n[2], Math.round(Math.round(n[3] * 127) / 127 * 1000) / 1000]; })), "bass after the MIDI round trip: start, length and pitch exact; velocity in 127 steps");
+  // 保存・読みなおし・ZIP → 空の保存場所
+  DB.proj.open(pid5); var song5 = JSON.stringify(DB.project().tracks);
+  DB.reload(); DB.proj.open(pid5);
+  ok(JSON.stringify(DB.project().tracks) === song5 && DB.project().tracks.length === 5, "after a reload: the 5-instrument song is the same");
+  var ex5 = await new Promise(function (r) { DB.pack.exportZip(r); });
+  var eB2 = H.load(), WB2 = eB2.window, DB2 = WB2.UGDaw; WB2.indexedDB = fakeIDB(); fakeDecode(WB2);
+  var RB2 = H.makeEl("div"); DB2.reset(); WB2.UGArcade.start("daw", RB2, {});
+  var rq5 = await impZ(DB2, blobAB(ex5.blob)); DB2.proj.open(rq5.id);
+  ok(ex5.ok && rq5.ok && JSON.stringify(DB2.project().tracks) === song5 && MB.noteCount(DB2.project()) === MB.noteCount(DB.project()), "ZIP → empty storage: the 5-instrument song comes back with every note", rq5.why);
+  WB2.UGArcade.stop(); DB2.reset();
+  // 元のゲームへ戻る（ギター）・元のテイクはそのまま
+  ok(DB.goBackGame() === true && RB.innerHTML.indexOf("ゴリラギター") >= 0 && RB.innerHTML.indexOf("daw-top") < 0, "back to the source game (guitar) from the DAW");
+  ok(SB[BB.TAKES_KEY] === bRaw && SB[GB.TAKES_KEY] === gRaw, "the saved bass / guitar takes are unchanged after everything");
+  WB.UGArcade.stop(); DB.reset();
+  var errB = eB.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errB.length === 0, "no Web Audio errors (9B-5)", errB.slice(0, 3));
 };
