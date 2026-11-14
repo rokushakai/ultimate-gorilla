@@ -604,6 +604,85 @@
     return { ok: !why.length, n: l.length, why: why.slice(0, 4) };
   }
 
+  // ---------- §342 9B-13: ラウドネス・True Peak の解析（ITU-R BS.1770-5・EBU Tech 3341）。測るだけ（音は変えない）----------
+  var LU_TP_HALF = 16; // True Peak の補間フィルター: 各相 32 タップ（片側 16）
+  // K 特性: 前段（高域シェルフ）＋ RLB（高域通過）。BS.1770 の 48kHz の係数と同じになる式で、ほかのレートも作る（libebur128 と同じ定数）
+  function kCoef(sr) {
+    var f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196, K = Math.tan(Math.PI * f0 / sr), Vh = Math.pow(10, G / 20), Vb = Math.pow(Vh, 0.4996667741545416), a0 = 1 + K / Q + K * K;
+    var s1 = { b0: (Vh + Vb * K / Q + K * K) / a0, b1: 2 * (K * K - Vh) / a0, b2: (Vh - Vb * K / Q + K * K) / a0, a1: 2 * (K * K - 1) / a0, a2: (1 - K / Q + K * K) / a0 };
+    f0 = 38.13547087602444; Q = 0.5003270373238773; K = Math.tan(Math.PI * f0 / sr);
+    var a02 = 1 + K / Q + K * K, s2 = { b0: 1, b1: -2, b2: 1, a1: 2 * (K * K - 1) / a02, a2: (1 - K / Q + K * K) / a02 };
+    return [s1, s2];
+  }
+  // 4 倍のオーバーサンプリングの多相フィルター（相 1・2・3。相 0 はもとのサンプル）: 窓つき sinc（Blackman）・各相の和を 1 に
+  var tpTapsC = null;
+  function tpTaps() {
+    if (tpTapsC) { return tpTapsC; }
+    var H = LU_TP_HALF, out = [], p, k;
+    for (p = 1; p < 4; p++) {
+      var t = new Float64Array(2 * H), sum = 0;
+      for (k = 0; k < 2 * H; k++) { var x = (k - H + 1) - p / 4, s = x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x), w = 0.42 + 0.5 * Math.cos(Math.PI * x / H) + 0.08 * Math.cos(2 * Math.PI * x / H); t[k] = s * w; sum += t[k]; }
+      for (k = 0; k < 2 * H; k++) { t[k] /= sum; }
+      out.push(t);
+    }
+    tpTapsC = out;
+    return out;
+  }
+  function luDb(x) { return x > 0 ? 20 * Math.log(x) / Math.LN10 : null; }
+  function luL(e) { return e > 0 ? -0.691 + 10 * Math.log(e) / Math.LN10 : -Infinity; }
+  function r2(v) { return v === null || !isFinite(v) ? null : Math.round(v * 100) / 100; }
+  // 測る器: push(L, R, n)（R は無くてよい ＝ モノ）を何回か → finish()
+  function loudMeter(sr, opts) {
+    opts = opts || {};
+    var c = kCoef(sr), s1 = c[0], s2 = c[1], sub = Math.round(sr * 0.1), chn = opts.ch === 1 ? 1 : 2, doTp = opts.tp !== false;
+    var z = [new Float64Array(4), new Float64Array(4)], acc = 0, cnt = 0, subs = [], spk = 0, tpk = 0, frames = 0, done = false;
+    var H = LU_TP_HALF, RN = 2 * H, tb = [new Float64Array(2 * RN), new Float64Array(2 * RN)], tpos = 0, taps = doTp ? tpTaps() : null;
+    function kf(q, x) { var y = s1.b0 * x + q[0]; q[0] = s1.b1 * x - s1.a1 * y + q[1]; q[1] = s1.b2 * x - s1.a2 * y; var y2 = s2.b0 * y + q[2]; q[2] = s2.b1 * y - s2.a1 * y2 + q[3]; q[3] = s2.b2 * y - s2.a2 * y2; return y2; }
+    function tpStep(xl, xr) {
+      var ch, p, k, b, t, a, o;
+      tb[0][tpos] = xl; tb[0][tpos + RN] = xl; tb[1][tpos] = xr; tb[1][tpos + RN] = xr;
+      for (ch = 0; ch < chn; ch++) {
+        b = tb[ch]; o = tpos + 1;
+        for (p = 0; p < 3; p++) { t = taps[p]; a = 0; for (k = 0; k < RN; k++) { a += t[k] * b[o + k]; } if (a < 0) { a = -a; } if (a > tpk) { tpk = a; } }
+      }
+      tpos = tpos + 1 === RN ? 0 : tpos + 1;
+    }
+    return {
+      push: function (L, R, n) {
+        var i, xl, xr, yl, yr, a;
+        for (i = 0; i < n; i++) {
+          xl = L[i]; xr = chn === 2 && R ? R[i] : 0;
+          a = xl < 0 ? -xl : xl; if (a > spk) { spk = a; } a = xr < 0 ? -xr : xr; if (a > spk) { spk = a; }
+          if (doTp) { tpStep(xl, xr); }
+          yl = kf(z[0], xl); acc += yl * yl;
+          if (chn === 2) { yr = kf(z[1], xr); acc += yr * yr; }
+          if (++cnt === sub) { subs.push(acc / sub); acc = 0; cnt = 0; }
+        }
+        frames += n;
+      },
+      finish: function () {
+        var i, j, k;
+        if (!done && doTp) { for (i = 0; i < H; i++) { tpStep(0, 0); } }
+        done = true;
+        tpk = Math.max(tpk, spk);
+        // Momentary（400ms ＝ 小区間 4）・ゲートのブロック（同じ）・Short-Term（3 秒 ＝ 30）
+        var mE = [], sE = [], series = [], maxM = -Infinity, maxS = -Infinity, sum;
+        for (j = 0; j + 4 <= subs.length; j++) { sum = subs[j] + subs[j + 1] + subs[j + 2] + subs[j + 3]; mE.push(sum / 4); maxM = Math.max(maxM, luL(sum / 4)); }
+        for (j = 0; j + 30 <= subs.length; j++) { sum = 0; for (k = j; k < j + 30; k++) { sum += subs[k]; } sE.push(sum / 30); var ls = luL(sum / 30); maxS = Math.max(maxS, ls); if ((j + 30) % 5 === 0) { series.push([Math.round((j + 30) * 10) / 100, isFinite(ls) ? r2(ls) : null]); } }
+        // Integrated: 絶対ゲート −70 LUFS → 相対ゲート −10 LU
+        var g1 = [], tot = 0, gate2, tot2 = 0, n2 = 0, integ = null;
+        for (j = 0; j < mE.length; j++) { if (luL(mE[j]) > -70) { g1.push(mE[j]); tot += mE[j]; } }
+        if (g1.length) {
+          gate2 = luL(tot / g1.length) - 10;
+          for (j = 0; j < g1.length; j++) { if (luL(g1[j]) > gate2) { tot2 += g1[j]; n2++; } }
+          integ = n2 ? luL(tot2 / n2) : null;
+        }
+        var sp = luDb(spk), tp = doTp ? luDb(tpk) : null;
+        return { sr: sr, ch: chn, frames: frames, sec: frames / sr, integrated: r2(integ), relGate: g1.length ? r2(gate2) : null, blocks: mE.length, gated: n2, maxM: mE.length ? (isFinite(maxM) ? r2(maxM) : null) : null, maxS: sE.length ? (isFinite(maxS) ? r2(maxS) : null) : null, samplePeak: r2(sp), truePeak: r2(tp), diff: sp !== null && tp !== null ? r2(tp - sp) : null, series: series, tooShortM: !mE.length, tooShortS: !sE.length, silent: !!mE.length && !g1.length };
+      }
+    };
+  }
+
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
   function demoProject(now) {
     var p = newProject({ name: "ゴリラのはじめの曲", bpm: 110, now: typeof now === "number" ? now : Date.now() });
@@ -1961,6 +2040,7 @@
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
+    kCoef: kCoef, tpTaps: tpTaps, loudMeter: loudMeter, // 9B-13
     TEMPO_MAX: TEMPO_MAX, secBetween: secBetween, tempoList: tempoList, tempoSet: tempoSet, tempoDel: tempoDel, delaySecAt: delaySecAt, midiTempoCheck: midiTempoCheck, // 9B-12
     SEND_DIVS: SEND_DIVS, SEND_DIV_ORDER: SEND_DIV_ORDER, SEND_FX: SEND_FX, REV_SEC: REV_SEC, TAIL_MAX: TAIL_MAX, sendClean: sendClean, sendOf: sendOf, sendSet: sendSet, sendFxClean: sendFxClean, sendFxOf: sendFxOf, sendFxSet: sendFxSet, sendFxReset: sendFxReset, sendLive: sendLive, sendKey: sendKey, delaySec: delaySec, sendTail: sendTail, // 9B-11
     AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9

@@ -737,6 +737,7 @@
     if (M && p && st.view === "master") { renderMaster(root, ctl); return; } // 9B-10
     if (M && p && st.view === "sendfx") { renderSendFx(root, ctl); return; } // 9B-11
     if (M && p && st.view === "tempo") { renderTempo(root, ctl); return; } // 9B-12
+    if (M && p && st.view === "lufs") { renderLufs(root, ctl); return; } // 9B-13
     if (M && p && st.view === "auto") { renderAuto(root, ctl); return; } // 9B-9
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
@@ -1891,8 +1892,8 @@
     wav.plan = plan; wav.stats = null; wav.note = ""; wav.msg = "";
     if (!plan.ok) { wav.state = "fail"; wav.msg = plan.why; if (onDone) { onDone(); } return false; }
     for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { hasDrum = true; } }
-    wav.busy = true; wav.state = "busy";
-    var job = wav.job = { canceled: false, t0: Date.now() }, started = false, tm = null;
+    wav.busy = true; wav.state = "busy"; wav.sig = "";
+    var job = wav.job = { canceled: false, t0: Date.now() }, started = false, tm = null, lim0 = DM().masterLive(p).lim ? DM().masterFx(p).lim.ceiling : null; // 9B-13: 書き出したときの Ceiling
     function go() {
       if (started) { return; }
       started = true;
@@ -1903,7 +1904,7 @@
         if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
         else if (!blob) { wav.state = "fail"; wav.msg = why || "書き出せませんでした"; }
         else {
-          wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav";
+          wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav"; wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
           wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
@@ -3625,6 +3626,114 @@
     drawHead();
   }
 
+  // ---------- §342 9B-13: 📊 曲を解析（LUFS・True Peak）。書き出す WAV（16 bit）のバイトを読んで測るだけ ----------
+  // 曲のしるし（同じなら、前に書き出した WAV をそのまま測る）: トラック・テンポ・マスター・素材・ゲームの残響の送り・全体の音量
+  function luSig(p) { var A = window.UGMelody && window.UGMelody.audio || {}; return DM().hash(JSON.stringify([p.tracks, p.tempo, p.master, p.assets, A.revSend ? A.revSend.gain.value : null, A.dlySend ? A.dlySend.gain.value : null, A.master ? A.master.gain.value : null])); }
+  var lu = { busy: false, state: "idle", pct: 0, msg: "", res: null, job: null };
+  function luReadBlob(blob, cb) {
+    try {
+      if (blob && blob.arrayBuffer) { blob.arrayBuffer().then(function (ab) { cb(ab); }, function () { cb(null); }); return; }
+      var fr = new window.FileReader(); fr.onload = function () { cb(fr.result); }; fr.onerror = function () { cb(null); }; fr.readAsArrayBuffer(blob);
+    } catch (e) { cb(null); }
+  }
+  function luFail(msg) { lu.busy = false; lu.state = "fail"; lu.msg = msg; luRedraw(); }
+  function luRedraw() { if (st.root && st.view === "lufs") { renderLufs(st.root, st.ctl); } }
+  // 1 秒ずつ区切って測る（画面を止めない・大きな配列を作らない）
+  function luAnalyze(blob, sig) {
+    var M = DM(), job = lu.job;
+    lu.state = "read"; luRedraw();
+    luReadBlob(blob, function (ab) {
+      if (job !== lu.job) { return; }
+      var info = ab ? M.parseWav(ab) : null;
+      if (!info || !info.ok || info.bits !== 16) { luFail("WAV を読めませんでした"); return; }
+      var v = new DataView(ab), sr = info.sr, ch = info.ch, n = info.frames, pos = 0, step = sr, L = new Float32Array(step), Rr = new Float32Array(step), meter = M.loudMeter(sr, { ch: ch }), t0 = Date.now();
+      lu.state = "calc"; lu.pct = 0; luRedraw();
+      function next() {
+        if (job !== lu.job) { return; }
+        var m = Math.min(step, n - pos), i, o;
+        for (i = 0; i < m; i++) { o = info.dataOffset + (pos + i) * ch * 2; L[i] = v.getInt16(o, true) / 32768; if (ch > 1) { Rr[i] = v.getInt16(o + 2, true) / 32768; } }
+        meter.push(L, Rr, m); pos += m; lu.pct = Math.round(pos / Math.max(1, n) * 100);
+        var pe = st.root && st.root.querySelector ? st.root.querySelector(".dlu-pct") : null; if (pe) { pe.textContent = lu.pct + "%"; }
+        if (pos < n) { setTimeout(next, 0); return; }
+        var r = meter.finish();
+        r.ms = Date.now() - t0; r.sig = sig; r.lim = wav.stats && wav.stats.lim || ""; r.ceil = wav.limCeil; r.bits = 16;
+        lu.res = r; lu.busy = false; lu.state = "done"; luRedraw();
+      }
+      next();
+    });
+  }
+  var luApi = {
+    // 解析する（曲が前の書き出しと同じなら、その WAV を読む・ちがえば書き出してから）
+    run: function () {
+      if (lu.busy || wav.busy) { return false; }
+      try { if (window.UGMelody && window.UGMelody.audioInit) { window.UGMelody.audioInit(); } } catch (e0) {} // しるしに入る「ゲームの残響の送り」をそろえる（書き出しと同じ準備）
+      var p = project(), sig = luSig(p);
+      lu.busy = true; lu.msg = ""; lu.pct = 0; lu.job = {}; lu.res = null; // 前の結果は消す（失敗したときに古い数字を残さない）
+      if (wav.state === "done" && wav.blob && wav.sig === sig) { lu.reused = true; luAnalyze(wav.blob, sig); return true; }
+      lu.reused = false; lu.state = "render"; luRedraw();
+      var job = lu.job;
+      var ok = wavExport(function () { if (job !== lu.job) { return; } if (wav.state === "done" && wav.blob) { luAnalyze(wav.blob, wav.sig); } else { luFail(wav.msg || "書き出せませんでした"); } });
+      if (!ok && lu.busy && wav.state !== "busy") { luFail(wav.msg || "書き出せませんでした"); }
+      return true;
+    },
+    cancel: function () { lu.job = null; lu.busy = false; lu.state = "idle"; if (wav.busy) { wavCancel(); } },
+    state: function () { return lu; },
+    stale: function () { return !!(lu.res && lu.res.sig !== luSig(project())); }
+  };
+  function luFmt(v, unit, why) { return v === null || v === undefined || !isFinite(v) ? '<span class="dlu-na">— ' + (why || "") + '</span>' : (Math.round(v * 10) / 10).toFixed(1) + ' ' + unit; }
+  function luSvg(r) {
+    var s = r.series, W = 340, H = 100, i, pts = [], lo = -60, hi = 0, tmax = Math.max(1, r.sec);
+    function Y(v) { return Math.round((hi - Math.max(lo, Math.min(hi, v))) / (hi - lo) * (H - 8) * 10) / 10 + 4; }
+    for (i = 0; i < s.length; i++) { if (s[i][1] !== null) { pts.push(Math.round(s[i][0] / tmax * W * 10) / 10 + "," + Y(s[i][1])); } }
+    var gl = [-10, -20, -30, -40, -50].map(function (v) { return '<line class="dlu-gl" x1="0" x2="' + W + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/><text class="dlu-gt" x="2" y="' + (Y(v) - 2) + '">' + v + '</text>'; }).join("");
+    var il = r.integrated !== null ? '<line class="dlu-il" x1="0" x2="' + W + '" y1="' + Y(r.integrated) + '" y2="' + Y(r.integrated) + '"/>' : "";
+    return '<svg class="dlu-g" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Short-Term ラウドネスのグラフ">' + gl + il + (pts.length > 1 ? '<polyline class="dlu-line" points="' + pts.join(" ") + '"/>' : '') + '</svg>';
+  }
+  function luHtml(p) {
+    var r = lu.res, h, stale = luApi.stale(), busy = lu.busy;
+    h = '<div class="daw dm dfx dlu">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-lu="back">&#x2190; MASTER</button><b>&#x1F4CA; 曲を解析</b></div>' +
+      '<p class="small dfx-note">書き出す WAV（16 bit）をそのまま測ります（MASTER の EQ・リミッター・残響・余韻のあと）。音・曲・WAV は変えません。結果は保存しません。</p>' +
+      '<div class="da-btns"><button class="modal-btn da-wide dlu-run" data-lu="run"' + (busy ? ' disabled' : '') + '>&#x1F4CA; ' + (r ? 'もう一度解析する' : '解析する') + '</button>' + (busy ? '<button class="modal-btn da-half" data-lu="cancel">やめる</button>' : '') + '</div>';
+    if (busy) { h += '<p class="small dfx-note">' + (lu.state === "render" ? "WAV を書き出しています…（そのあとで測ります）" : (lu.state === "read" ? "WAV を読んでいます…" : 'ラウドネスを計算しています… <b class="dlu-pct">' + lu.pct + '%</b>')) + '</p>'; }
+    if (lu.state === "fail") { h += '<p class="small dfx-warn">&#x26A0;&#xFE0F; ' + escHtml(lu.msg) + '（曲は変えていません）</p>'; }
+    if (r && !busy) {
+      var warn = [];
+      if (stale) { warn.push("解析のあとで曲を変えたので、この数字は古くなっています。もう一度解析してください。"); }
+      if (r.lim === "none") { warn.push("この WAV はリミッターを使えずに書き出されました（このブラウザでは AudioWorklet が使えません）。リミッターなしの音を測っています。"); }
+      if (r.ceil !== null && r.ceil !== undefined && r.truePeak !== null && r.truePeak > r.ceil) { warn.push("True Peak（4× 推定）が、リミッターの Ceiling（" + r.ceil + " dBFS）より " + (Math.round((r.truePeak - r.ceil) * 10) / 10).toFixed(1) + " dB 上です（リミッターはサンプルピークだけを抑えるため、サンプルの間のピークは上に出ます）。"); }
+      if (r.truePeak !== null && r.truePeak > 0) { warn.push("True Peak（4× 推定）が 0 dBTP をこえています。ほかの形式（MP3 など）に変えたり、ほかの機械で鳴らしたりすると、割れることがあります。"); }
+      h += '<div class="dm-row dlu-res">' +
+        '<div class="dlu-kv"><span>Integrated（曲全体）</span><b class="dlu-i">' + luFmt(r.integrated, "LUFS", r.tooShortM ? "（400ms 未満）" : (r.silent ? "（無音・−70 LUFS より小さい）" : "")) + '</b></div>' +
+        '<div class="dlu-kv"><span>最大 Momentary（400ms）</span><b>' + luFmt(r.maxM, "LUFS", r.tooShortM ? "（400ms 未満）" : "（無音）") + '</b></div>' +
+        '<div class="dlu-kv"><span>最大 Short-Term（3 秒）</span><b>' + luFmt(r.maxS, "LUFS", r.tooShortS ? "（3 秒未満）" : "（無音）") + '</b></div>' +
+        '<div class="dlu-kv"><span>Sample Peak</span><b>' + luFmt(r.samplePeak, "dBFS", "（無音）") + '</b></div>' +
+        '<div class="dlu-kv"><span>True Peak（4× 推定）</span><b class="dlu-tp">' + luFmt(r.truePeak, "dBTP", "（無音）") + '</b></div>' +
+        '<div class="dlu-kv"><span>True Peak − Sample Peak</span><b>' + luFmt(r.diff, "dB", "") + '</b></div>' +
+        '<div class="dlu-kv"><span>長さ（余韻もふくむ）</span><b>' + (Math.round(r.sec * 100) / 100).toFixed(2) + ' 秒</b></div>' +
+        '<div class="dlu-kv"><span>サンプルレート・形</span><b>' + r.sr + ' Hz・' + r.bits + ' bit・' + (r.ch === 2 ? 'ステレオ' : 'モノ') + '</b></div>' +
+        '<p class="small dfx-note">Short-Term（3 秒）の変化（横 ＝ 時間・点線 ＝ Integrated）</p>' + luSvg(r) +
+        '<p class="small dfx-note">計算 ' + (r.ms / 1000).toFixed(2) + ' 秒' + (lu.reused ? '（前に書き出した WAV を使いました）' : '（WAV を書き出して測りました）') + '</p></div>';
+      if (warn.length) { h += '<p class="small dfx-warn">&#x26A0;&#xFE0F; ' + warn.join('<br>&#x26A0;&#xFE0F; ') + '</p>'; }
+    }
+    h += '<p class="small dsv-note">測り方: ITU-R BS.1770-5（K 特性・ゲート −70 LUFS と −10 LU）と EBU Tech 3341（Momentary 400ms・Short-Term 3 秒）。True Peak は 4 倍のオーバーサンプリングで出した推定です（規格の試験をすべて通したものではありません）。<br>' +
+      '数字の目安: −23 LUFS は EBU R128（放送）の目安で、すべての曲の目標ではありません。配信サービスごとに目安はちがいます。LUFS が大きいほど音がよい、というわけではありません。True Peak が低くても、ほかの形式に変えたときなどに音割れが絶対に起きないとは言えません。音量を自動でそろえる機能はありません。</p></div>';
+    return h;
+  }
+  function renderLufs(root, ctl) {
+    root.innerHTML = luHtml(project());
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button[data-lu]"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-lu");
+        if (v === "back") { st.view = "master"; renderMaster(root, ctl); return; }
+        if (v === "run") { luApi.run(); renderLufs(root, ctl); return; }
+        if (v === "cancel") { luApi.cancel(); renderLufs(root, ctl); }
+      };
+    }
+  }
+
   // ---------- §342 9B-12: ⏱ テンポ（曲の頭の BPM・変更点）----------
   // 再生中にオートメーション・ディレイの予約があるか（テンポを変えたら鳴らしなおす）
   function tempoSched(p) { var M = DM(), i, k; if (M.sendLive(p).dly) { return true; } for (i = 0; i < p.tracks.length; i++) { for (k = 0; k < M.AUTO_ORDER.length; k++) { if (M.autoActive(p.tracks[i], M.AUTO_ORDER[k])) { return true; } } } return false; }
@@ -3779,6 +3888,7 @@
       (ls === "fail" ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; このブラウザではリミッター（AudioWorklet）を使えません。リミッターなしで鳴らし、書き出します。</p>' : '') + '</div>' +
       '<p class="small dfx-warn"' + (boost > 0 && !(f.lim.on && !f.bypass) ? '' : ' hidden') + '>&#x26A0;&#xFE0F; リミッターが OFF のまま音を上げています（＋' + boost + 'dB）。音割れのおそれがあります。リミッターを ON にするか、値を下げてください。</p>' +
       (wst ? '<p class="small dfx-note">さいごの WAV: ピーク ' + msDb(wst.peak) + ' dBFS' + (wst.clip ? '・0dBFS に届いたサンプル ' + wst.clip + ' 個' : '') + (wst.lim === "ok" ? '・リミッターあり' : (wst.lim === "none" ? '・リミッターを使えませんでした' : '')) + '</p>' : '') +
+      '<button class="modal-btn daw-small dfx-all dms-lu" data-ms="lufs">&#x1F4CA; 曲を解析（LUFS・True Peak）</button>' +
       '<button class="modal-btn daw-small dfx-all" data-ms="resetAll">&#x21BA; 全部をはじめに戻す</button>' +
       saveNoteHtml() + '<p class="small dsv-note">MASTER の値は ↶ の対象外です。MIDI の書き出しには入りません（JSON・ZIP には入ります）。MASTER FX・リミッターの ON／OFF を再生中に変えると、同じ位置から鳴らしなおします。</p></div>';
     return h;
@@ -3798,6 +3908,7 @@
       els[k].onclick = function (ev) {
         var v = ev.currentTarget.getAttribute("data-ms"), f = M.masterFx(p);
         if (v === "back") { st.view = "mix"; renderMix(root, ctl); return; }
+        if (v === "lufs") { st.view = "lufs"; renderLufs(root, ctl); return; } // 9B-13
         if (v === "play") { startPlay(); renderMaster(root, ctl); return; }
         if (v === "stop") { transportStop(); renderMaster(root, ctl); return; }
         if (v === "bypass") { msApi.set("bypass", "", !f.bypass); markDirty(); }
@@ -4539,7 +4650,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, master: msApi, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）

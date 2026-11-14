@@ -5,6 +5,18 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.63] - 2026-11-14 — 📊 ゴリラDAW の LUFS・True Peak の解析 (§342 Phase 9B-13)
+
+### Added
+- MASTER の「📊 曲を解析（LUFS・True Peak）」: Integrated・最大 Momentary（400ms）・最大 Short-Term（3 秒）・Sample Peak・**True Peak（4× 推定）**・その差・長さ・サンプルレート・Short-Term のグラフ。注意（Ceiling をこえた True Peak・0 dBTP こえ・リミッターを使えなかった・曲を変えたので古い）と説明（−23 LUFS は放送の目安で、すべての曲の目標ではない など）
+- **測るのは書き出す WAV（16 bit）のバイトそのもの**。曲が前の書き出しと同じならその WAV を読む（2 回描かない）。1 秒ずつ区切って計算（画面を止めない・大きな配列を作らない）
+- モデルに `kCoef`（BS.1770 の K 特性・どのレートでも）・`loudMeter`（100ms の小区間・ゲート −70 LUFS／−10 LU・Momentary・Short-Term・Sample Peak・4 倍の多相 FIR の True Peak）・`tpTaps`
+### Notes
+- 測るだけ: 音・FX・曲・WAV のバイトは変えない。結果は曲に保存しない。自動のノーマライズはしない
+- 規格: ITU-R BS.1770-5・EBU R128・EBU Tech 3341（ステレオ・LRA はしない）。True Peak は BS.1770 Annex 2 の例のフィルターそのものではないので「4× 推定」
+- QA: Tech 3341 の試験 1〜5（48kHz・44.1kHz）±0.02 LU・解析的な正弦波の True Peak は +0.2／−0.4 dB の中・参照（pyloudnorm・scipy）との差は LUFS +0.04〜0.05（参照のフィルターの差）・True Peak 0.02 dB 以内
+- Phase 8 の新しいシンセのエンジン・Pitch8・ハイブリッドは使っていない。シンセのエンジン・DSP・Golden・保存の形・MIDI は変えていない
+
 ## [2.62] - 2026-11-14 — ⏱ ゴリラDAW のテンポマップ（途中の BPM の変化）(§342 Phase 9B-12)
 
 ### Added

@@ -147,7 +147,7 @@ function load(opts) {
   sandbox.localStorage = { getItem: function (k) { return store[k] === undefined ? null : store[k]; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } };
   sandbox.atob = function (s) { return Buffer.from(s, "base64").toString("binary"); };
   sandbox.confirm = function () { return opts.confirm !== false; };
-  sandbox.Blob = function (parts, o) { this.parts = parts; this.type = o && o.type; };
+  sandbox.Blob = function (parts, o) { this.parts = parts; this.type = o && o.type; var self = this; this.arrayBuffer = function () { var n = 0, i, bs = self.parts.map(function (x) { return x instanceof ArrayBuffer ? new Uint8Array(x) : (x && x.buffer ? new Uint8Array(x.buffer, x.byteOffset, x.byteLength) : new Uint8Array(Buffer.from(String(x)))); }); for (i = 0; i < bs.length; i++) { n += bs[i].length; } var u = new Uint8Array(n), o2 = 0; for (i = 0; i < bs.length; i++) { u.set(bs[i], o2); o2 += bs[i].length; } return Promise.resolve(u.buffer); }; }; // 9B-13: arrayBuffer（本物の Blob と同じ）
   sandbox.File = function (parts, name, o) { this.parts = parts; this.name = name; this.type = o && o.type; };
   sandbox.URL = { createObjectURL: function () { return "blob:test"; }, revokeObjectURL: function () {} };
   var nav = {};

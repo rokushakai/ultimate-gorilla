@@ -3262,4 +3262,59 @@ module.exports = async function () {
   AT.stop(); DT2.reset();
   var errT = CT.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errT.length === 0, "no Web Audio errors (9B-12)", errT.slice(0, 3));
+
+  // ================= 9B-13: LUFS・True Peak の解析（§342）=================
+  var eU = H.load(), WU = eU.window, MU = WU.UGDawModel, DU = WU.UGDaw, AU = WU.UGArcade, SU = eU.store, CU = eU.counters;
+  SU.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgU = SU.ultimateGorillaSaveV2;
+  WU.indexedDB = fakeIDB(); fakeDecode(WU);
+  // BS.1770 の 48kHz の K 特性の係数（規格の表の値）
+  var kc = MU.kCoef(48000), kOk = [[kc[0].b0, 1.53512485958697], [kc[0].b1, -2.69169618940638], [kc[0].b2, 1.19839281085285], [kc[0].a1, -1.69065929318241], [kc[0].a2, 0.73248077421585], [kc[1].a1, -1.99004745483398], [kc[1].a2, 0.99007225036621]].every(function (q) { return Math.abs(q[0] - q[1]) < 1e-12; });
+  ok(kOk && kc[1].b0 === 1 && kc[1].b1 === -2 && kc[1].b2 === 1, "K-weighting at 48 kHz = the BS.1770 table (pre-filter and RLB high-pass)");
+  // EBU Tech 3341 の試験の信号（ステレオ・1kHz の正弦波・dBFS の区間）→ 期待値 ±0.1 LU
+  function seg3341(sr, parts) { var n = 0, i, k; parts.forEach(function (q) { n += Math.round(q[1] * sr); }); var x = new Float32Array(n), o = 0; parts.forEach(function (q) { var a = Math.pow(10, q[0] / 20), m = Math.round(q[1] * sr); for (k = 0; k < m; k++) { x[o + k] = a * Math.sin(2 * Math.PI * 1000 * (o + k) / sr); } o += m; }); return x; }
+  function meas(sr, x, o) { var m = MU.loudMeter(sr, o || { tp: false }); m.push(x, x, x.length); return m.finish(); }
+  [48000, 44100].forEach(function (sr) {
+    var c1 = meas(sr, seg3341(sr, [[-23, 20]])), c2 = meas(sr, seg3341(sr, [[-33, 20]])), c3 = meas(sr, seg3341(sr, [[-36, 10], [-23, 60], [-36, 10]])), c4 = meas(sr, seg3341(sr, [[-72, 10], [-36, 10], [-23, 60], [-36, 10], [-72, 10]])), c5 = meas(sr, seg3341(sr, [[-26, 20], [-20, 20.1], [-26, 20]]));
+    var vals = [c1.integrated, c1.maxM, c1.maxS, c2.integrated, c2.maxM, c2.maxS, c3.integrated, c4.integrated, c5.integrated];
+    var want = [-23, -23, -23, -33, -33, -33, -23, -23, -23];
+    ok(vals.every(function (v, i) { return v !== null && Math.abs(v - want[i]) <= 0.1; }), "EBU Tech 3341 cases 1–5 at " + sr + " Hz: I / M / S within ±0.1 LU (" + vals.join(", ") + ")", vals);
+  });
+  // True Peak（計算で分かる正弦波・−6 dB）: 期待 −6.0 dBTP（Tech 3341 の許容 +0.2／−0.4 dB）
+  // 頭と終わりに 10ms のフェード（いきなり始まる・切れる段差は、補間すると本当に上へはみ出す ＝ 止まっている所のピークを測るため）
+  function sine(sr, sec, f, db, ph) { var n = Math.round(sr * sec), a = Math.pow(10, db / 20), x = new Float32Array(n), fd = Math.round(sr * 0.01), i; for (i = 0; i < n; i++) { x[i] = a * Math.sin(2 * Math.PI * f * i / sr + (ph || 0)) * Math.min(1, i / fd, (n - 1 - i) / fd); } return x; }
+  var tpc = [[48000, 12000, 0], [48000, 12000, Math.PI / 4], [48000, 8000, Math.PI / 3], [48000, 6000, Math.PI * 3 / 8], [44100, 11025, Math.PI / 4], [44100, 1000, 0.3], [48000, 997, 0.7]].map(function (q) { var r = meas(q[0], sine(q[0], 1, q[1], -6, q[2]), { tp: true }); return [q[0], q[1], r.samplePeak, r.truePeak]; });
+  ok(tpc.every(function (q) { return q[3] - -6 <= 0.2 && q[3] - -6 >= -0.4 && q[3] >= q[2]; }) && tpc[1][2] < -8.9, "True Peak (4×) of −6 dB sines incl. fs/4 at 45° (sample peak −9 dB): all within +0.2 / −0.4 dB of −6 dBTP", tpc);
+  var imp = new Float32Array(48000); imp[24000] = 0.5; var ri = meas(48000, imp, { tp: true });
+  ok(Math.abs(ri.samplePeak - 20 * Math.log10(0.5)) < 0.01 && ri.truePeak >= ri.samplePeak && ri.truePeak - ri.samplePeak < 0.05, "impulse 0.5: sample peak −6.02 dBFS, true peak at the sample", [ri.samplePeak, ri.truePeak]);
+  var clp = sine(48000, 1, 3000, 3, 0.2); for (var iU = 0; iU < clp.length; iU++) { clp[iU] = Math.max(-0.9, Math.min(0.9, clp[iU])); } var rc = meas(48000, clp, { tp: true });
+  ok(Math.abs(rc.samplePeak - 20 * Math.log10(0.9)) < 0.01 && rc.truePeak > rc.samplePeak + 0.1, "clipped sine (flat tops at 0.9): true peak above the sample peak (overshoot found)", [rc.samplePeak, rc.truePeak]);
+  // 無音・短い音・モノ
+  var rs0 = meas(48000, new Float32Array(48000 * 2)), rs1 = meas(48000, sine(48000, 0.3, 1000, -20)), rs2 = meas(48000, sine(48000, 2, 1000, -20));
+  ok(rs0.integrated === null && rs0.silent && rs0.samplePeak === null && rs1.integrated === null && rs1.tooShortM && rs1.maxM === null && rs2.integrated !== null && rs2.tooShortS && rs2.maxS === null && Math.abs(rs2.integrated - -20) <= 0.1, "silence → no value (not −∞); < 400 ms → no I / M; < 3 s → no S (I still measured)", [rs0, rs1.integrated, rs2.integrated]);
+  var mono = MU.loudMeter(48000, { ch: 1, tp: false }), xm = seg3341(48000, [[-23, 10]]); mono.push(xm, null, xm.length); var rm = mono.finish();
+  ok(Math.abs(rm.integrated - (-23 - 3.01)) <= 0.1, "mono −23 dBFS sine → −26.0 LUFS (one channel; stereo doubles the power)", rm.integrated);
+  // --- DAW: 書き出す WAV を測る（測るだけ）---
+  var RU = H.makeEl("div"); DU.reset(); AU.start("daw", RU, {});
+  var pU = DU.proj.create("demo"); DU.flushSave();
+  async function luWait() { for (var g = 0; g < 2000 && DU.lufs.state().busy; g++) { await eU.wait(5); } return DU.lufs.state(); }
+  var projJ = JSON.stringify(DU.project()), off0 = CU.offline.length;
+  ok(DU.lufs.run(), "📊 run");
+  var lsU = await luWait(), r1 = lsU.res;
+  ok(lsU.state === "done" && r1 && r1.sr === 44100 && r1.ch === 2 && r1.bits === 16 && isFinite(r1.integrated) && isFinite(r1.truePeak) && isFinite(r1.samplePeak) && r1.truePeak >= r1.samplePeak && CU.offline.length === off0 + 1 && !lsU.reused, "no WAV yet: one render, then the 16-bit WAV is measured (I, peaks finite, 44.1 kHz stereo)", r1);
+  var blobB = await DU.wav.state().blob.arrayBuffer(), shaB = MU.hashBytes(new Uint8Array(blobB));
+  ok(DU.lufs.run(), "📊 again"); var lsU2 = await luWait();
+  ok(lsU2.reused && CU.offline.length === off0 + 1 && JSON.stringify(lsU2.res.integrated) === JSON.stringify(r1.integrated), "same song: the existing WAV is measured again (no second render), same values");
+  ok(MU.hashBytes(new Uint8Array(await DU.wav.state().blob.arrayBuffer())) === shaB && JSON.stringify(DU.project()) === projJ && JSON.stringify(DU.project()).indexOf("LUFS") < 0 && JSON.stringify(DU.project()).indexOf("integrated") < 0, "measuring does not change the WAV bytes or the song; nothing is saved into the song");
+  DU.showLufs(); var hU = RU.innerHTML;
+  ok(hU.indexOf("Integrated") >= 0 && hU.indexOf("Momentary") >= 0 && hU.indexOf("Short-Term") >= 0 && hU.indexOf("Sample Peak") >= 0 && hU.indexOf("True Peak（4× 推定）") >= 0 && hU.indexOf("44100 Hz・16 bit・ステレオ") >= 0 && hU.indexOf("dlu-g") >= 0 && hU.indexOf("−23 LUFS は EBU R128（放送）の目安") >= 0 && hU.indexOf("NaN") < 0 && hU.indexOf("Infinity") < 0, "📊 screen: I / M / S / sample peak / true peak (4× estimate) / difference / length / rate, the graph, the notes; no NaN / Infinity");
+  pU = DU.project(); pU.tracks[0].vol = 50; ok(DU.lufs.stale() && (DU.showLufs(), RU.innerHTML.indexOf("この数字は古くなっています") >= 0), "after changing the song the result is marked as old");
+  DU.master.set("lim", "on", true); DU.lufs.run(); var lsU3 = await luWait();
+  ok(!lsU3.reused && CU.offline.length === off0 + 2 && lsU3.res.lim === "none" && lsU3.res.ceil === -1 && (DU.showLufs(), RU.innerHTML.indexOf("リミッターを使えずに書き出されました") >= 0), "changed song: rendered again; without AudioWorklet the screen says the limiter was not used");
+  ok(lsU3.res.truePeak > -1 ? RU.innerHTML.indexOf("Ceiling（-1 dBFS）より") >= 0 : true, "true peak above the ceiling → warned");
+  DU.flushSave(); var savedU = SU[MU.STORE_KEY + ":p:" + DU.project().id] || "";
+  ok(savedU.indexOf("truePeak") < 0 && savedU.indexOf("integrated") < 0, "the saved song has no analysis data");
+  ok(SU.ultimateGorillaSaveV2 === rpgU, "the RPG save is untouched (9B-13)");
+  AU.stop(); DU.reset();
+  var errU = CU.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errU.length === 0, "no Web Audio errors (9B-13)", errU.slice(0, 3));
 };

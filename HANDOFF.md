@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.62** |
+| 現在バージョン | **v2.63** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.63] 📊 ゴリラDAW の LUFS・True Peak の解析**（§342 Phase 9B-13）: モデルの `kCoef`／`loudMeter`／`tpTaps`（BS.1770-5・Tech 3341）。`arcade-daw.js` の `luSig`（曲のしるし・WAV を使い回すか）・`luAnalyze`（WAV の 16 bit を 1 秒ずつ）・`luApi`（`UGDaw.lufs`）・📊 の画面 `renderLufs`・`wav.sig`／`wav.limCeil`。テストのハーネスの Blob に `arrayBuffer`
 - **[v2.62] ⏱ ゴリラDAW のテンポマップ**（§342 Phase 9B-12）: データは `tempo.points`（§340）。モデルの `tempoSet`／`tempoDel`／`tempoList`／`secBetween`／`delaySecAt`／`midiTempoCheck`・`midiNewProject(info, withTempo)`・`TEMPO_MAX`（64）・`sendTail` はいちばん長いディレイ。`arcade-daw.js` の `dlySeg`／`dlyPlan`（ディレイの時間の予約）・`tempoSched`（BPM を変えたら鳴らしなおすか）・`snapAll` にテンポ・⏱ の画面 `renderTempo`・`UGDaw.tempo`／`showTempo`・ルーラーの `.daw-tmk`・MIDI の読み込みの `midTempoMap`
 - **[v2.61] 🌊 ゴリラDAW のトラック別リバーブ・ディレイ（センド FX）**（§342 Phase 9B-11）: モデルの `sendClean`／`sendOf`／`sendSet`・`sendFxClean`／`sendFxOf`／`sendFxSet`／`sendFxReset`・`sendLive`／`sendKey`（つなぎの形）・`delaySec`・`sendTail`（余韻・上限 10 秒）。`arcade-daw.js` の `revImpulse`（44.1kHz で作って写す・自分で正規化）・`sendBuild`（DAW のマスターの dry へ Wet だけ）／`sendOff`／`sendTaps`（パンのあと）／`sendUpdate`・`wavPlan` の余韻・🌊 FX の画面 `renderSendFx`・`UGDaw.sendFx`・`mixer.setSend`
 - **[v2.60] 🎚️ ゴリラDAW のマスター EQ・ピークリミッター**（§342 Phase 9B-10）: モデルの `FX_LIM`・`fxItem`／`fxClean`／`fxOf`／`fxSet`／`fxReset` に `limiter`・`masterFx`／`masterLive`・`clean` で `master.fx` を整える。`arcade-daw.js` の `LIM_WORKLET`（`ug-daw-limiter`・mode lim／meter）・`limLoad`／`limState`／`limNode`・`masterRtKey`／`masterPriv`（DAW 専用の出口）／`masterPrivOff`／`masterUpdate`／`masterLatency`（録音の補正）・`renderSong` の `build`（ワークレットを待つ・5ms 戻す）・🎚️ MASTER の画面 `renderMaster`・`UGDaw.master`（`src` はテストでワークレットを Node で動かす）

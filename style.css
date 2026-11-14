@@ -1521,6 +1521,16 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dm .dm-mfx { min-width: 92px; }
 .dms-gr, .dms-pk, .dms-max { color: #ffd166; font-variant-numeric: tabular-nums; }
 .dms .dfx-unit { flex: 0 0 32px; width: 32px; }
+/* §342 9B-13: 解析 */
+.dlu-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid #22344d; font-size: 13px; }
+.dlu-kv span { color: #adb5bd; min-width: 0; }
+.dlu-kv b { color: #ffd166; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dlu-na { color: #adb5bd; font-weight: normal; white-space: normal; }
+.dlu-g { display: block; width: 100%; height: 100px; background: #10202e; border-radius: 6px; margin-top: 4px; }
+.dlu-g .dlu-line { fill: none; stroke: #4cc9f0; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.dlu-g .dlu-gl { stroke: #22344d; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.dlu-g .dlu-il { stroke: #ffd166; stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.dlu-g .dlu-gt { fill: #5c6f89; font-size: 8px; }
 /* §342 9B-12: テンポ */
 .daw-tmk { position: absolute; bottom: 1px; padding-left: 2px; font-size: 10px; color: #4cc9f0; border-left: 2px solid #4cc9f0; white-space: nowrap; line-height: 1.1; pointer-events: none; }
 .dtp-now { color: #ffd166; font-variant-numeric: tabular-nums; }
