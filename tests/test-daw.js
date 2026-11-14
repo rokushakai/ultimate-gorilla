@@ -2469,15 +2469,17 @@ module.exports = async function () {
   var rC = DM4.midi.importNow(), pC = DM4.project();
   ok(rC.ok && pC.tracks.length === nT + 2 && DM4.undoDepth() === u0 + 1 && pC.tracks[nT].clips[0].start === MM.barToTick(pC, 8) && MM.isDrum(pC.tracks[nT + 1]), "✅ add: 2 new tracks from bar 9, one ↶ step", rC.why);
   DM4.ops.undo(); ok(JSON.stringify(DM4.project().tracks) === curJ, "↶ the MIDI import is undone exactly");
-  // --- テンポの変化: 選ぶまで取りこめない・やめると何も変わらない ---
+  // --- テンポの変化（9B-12）: 新しい曲ならテンポの点にそのまま入れる。いまの曲へ・入れられない変化は、選ぶまで取りこめない ---
   var curJ2 = JSON.stringify(DM4.project()), nList = DM4.proj.list().list.length;
   DM4.midi.open(f1, "song.mid"); var u1 = DM4.midi.ui(), pg1 = DM4.midi.pageHtml();
-  ok(!u1.tempoOk && pg1.indexOf("途中でテンポが変わります（1 か所）") >= 0 && pg1.indexOf("3 小節目 → 90") >= 0 && /data-mi="go" disabled/.test(pg1) && pg1.indexOf("Piano &lt;b&gt;") >= 0 && pg1.indexOf("Piano <b>") < 0, "tempo change: warned with the bar, confirm is disabled until chosen; names from the file are escaped");
-  var rT = DM4.midi.importNow();
-  ok(!rT.ok && rT.why === "tempo" && JSON.stringify(DM4.project()) === curJ2 && DM4.proj.list().list.length === nList, "without choosing: nothing is imported, nothing changes");
+  ok(!u1.tempoOk && pg1.indexOf("途中のテンポの変化（1 か所）もそのまま入れます") >= 0 && pg1.indexOf("3 小節目 → 90") >= 0 && !/data-mi="go" disabled/.test(pg1) && pg1.indexOf("Piano &lt;b&gt;") >= 0 && pg1.indexOf("Piano <b>") < 0, "9B-12: a tempo change in a new song is shown and will be kept (confirm enabled); names from the file are escaped");
+  u1.dest = "cur"; var pgC = DM4.midi.pageHtml(), rT = DM4.midi.importNow();
+  ok(pgC.indexOf("途中でテンポが変わります（1 か所）") >= 0 && pgC.indexOf("いまの曲のテンポのまま") >= 0 && /data-mi="go" disabled/.test(pgC) && !rT.ok && rT.why === "tempo" && JSON.stringify(DM4.project()) === curJ2 && DM4.proj.list().list.length === nList, "into the current song: the tempo change cannot be kept → must choose; without choosing nothing is imported");
+  u1.dest = "new"; u1.info.tempoChanges[0].bpm = 999; var pgX = DM4.midi.pageHtml(), rX = DM4.midi.importNow();
+  ok(pgX.indexOf("テンポの点に入れられない理由") >= 0 && pgX.indexOf("999") >= 0 && /data-mi="go" disabled/.test(pgX) && !rX.ok && JSON.stringify(DM4.project()) === curJ2, "a tempo the DAW cannot hold (999 BPM): the reason is shown, nothing is rounded or imported until chosen");
   DM4.state().mid = null; DM4.state().view = "proj"; ok(JSON.stringify(DM4.project()) === curJ2, "やめる: nothing changes");
-  DM4.midi.open(f1, "song.mid"); DM4.midi.ui().tempoOk = true; var rT2 = DM4.midi.importNow();
-  ok(rT2.ok && MM.bpmAt(DM4.project(), 0) === 120 && DM4.project().tempo.points.length === 1 && DM4.project().tracks.length === 2 && DM4.project().tracks[1].clips[0].notes.length === 3, "after choosing: imported with BPM 120 only (no tempo map); 30 / 82 left out", rT2.why);
+  DM4.midi.open(f1, "song.mid"); var rT2 = DM4.midi.importNow();
+  ok(rT2.ok && MM.bpmAt(DM4.project(), 0) === 120 && JSON.stringify(DM4.project().tempo.points) === '[{"tick":0,"bpm":120},{"tick":7680,"bpm":90}]' && DM4.project().tracks.length === 2 && DM4.project().tracks[1].clips[0].notes.length === 3, "9B-12: imported as a new song with the tempo map (120 → 90 at bar 3)", [rT2.why, DM4.project().tempo.points]);
   // --- 断ったファイル: 画面に理由・曲はそのまま ---
   var curJ3 = JSON.stringify(DM4.project()); DM4.state().view = "proj";
   var rB = DM4.midi.open(smf(2, 96, [trk([[0, 0x90, 60, 1]])]), "f2.mid");
@@ -3143,8 +3145,8 @@ module.exports = async function () {
   // --- 再生 ---
   DS.play(); var PS = DS.player(), msS = PS.mix.__master, mxL = PS.mix[LS.id], mxB = PS.mix[BS.id];
   ok(msS.send && msS.send.rev && msS.send.dly && msS.send.rev.ret.gain.value === 0.8 && Math.abs(msS.send.dly.d.delayTime.value - 0.25) < 1e-12 && msS.send.dly.fb.gain.value === 0.3 && mxL.main.tr && mxL.main.tr.gain.value === 0.4 && !mxL.main.td && mxB.main.td && mxB.main.td.gain.value === 0.3, "playback: DAW reverb (return 80%) and delay (1/8 = 0.25 s at 120 BPM, feedback 30%), taps after the pan with the send amounts");
-  var nS = CS.targets.length; DS.mixer.setSend(LS.id, "rev", 0.7); DS.sendFx.set("rev", "level", 30); DS.sendFx.set("dly", "div", "1/4"); var tgS = CS.targets.slice(nS);
-  ok(DS.player() === PS && tgS.some(function (x) { return x.v === 0.7 && x.tau === 0.01; }) && tgS.some(function (x) { return x.v === 0.3 && x.tau === 0.01; }) && tgS.some(function (x) { return x.v === 0.5 && x.tau === 0.05; }), "moving a send / return / delay time while playing: smooth, no restart");
+  var nS = CS.targets.length; CS.rec = []; DS.mixer.setSend(LS.id, "rev", 0.7); DS.sendFx.set("rev", "level", 30); DS.sendFx.set("dly", "div", "1/4"); var tgS = CS.targets.slice(nS), rcS = CS.rec; CS.rec = null;
+  ok(DS.player() === PS && tgS.some(function (x) { return x.v === 0.7 && x.tau === 0.01; }) && tgS.some(function (x) { return x.v === 0.3 && x.tau === 0.01; }) && (tgS.some(function (x) { return x.v === 0.5 && x.tau === 0.05; }) || rcS.some(function (x) { return x.name === "delayTime" && x.v === 0.5; })), "moving a send / return / delay time while playing: smooth, no restart (9B-12: the delay time is re-planned from the tempo map)");
   DS.mixer.setSend(BS.id, "rev", 0.2); DS.mixer.commit(); WS.UGDaw.sendFx.commit(); DS.mixer.setSend(BS.id, "rev", 0.2);
   var keyBefore = msS.send.key; DS.sendFx.set("rev", "level", 40);
   ok(DS.player() !== PS && DS.player().mix.__master.send.key !== keyBefore && DS.player().mix[BS.id].main.tr, "a new send on another track changes the routing → restarts at the same place with the new tap");
@@ -3174,4 +3176,90 @@ module.exports = async function () {
   AS.stop(); DS.reset();
   var errS = CS.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errS.length === 0, "no Web Audio errors (9B-11)", errS.slice(0, 3));
+
+  // ================= 9B-12: テンポマップ（§342）=================
+  var eT = H.load(), WT2 = eT.window, MT = WT2.UGDawModel, DT2 = WT2.UGDaw, AT = WT2.UGArcade, ST = eT.store, CT = eT.counters;
+  ST.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgT = ST.ultimateGorillaSaveV2;
+  WT2.indexedDB = fakeIDB(); fakeDecode(WT2);
+  function nearT12(a, b, e) { return Math.abs(a - b) < (e || 1e-9); }
+  // --- 時間の変換 ---
+  var pT = MT.newProject({ now: 0, bpm: 120 });
+  ok(nearT12(MT.tickToSec(pT, 3840), 2) && nearT12(MT.secToTick(pT, 2), 3840) && MT.tempoList(pT).length === 1, "constant 120 BPM: bar 2 at 2 s (same as before)");
+  ok(MT.tempoSet(pT, 3840, 60).ok, "add 60 BPM at bar 2");
+  ok(nearT12(MT.tickToSec(pT, 3840), 2) && nearT12(MT.tickToSec(pT, 4800), 3) && nearT12(MT.tickToSec(pT, 7680), 6) && nearT12(MT.secBetween(pT, 2880, 4800), 1.5), "120 → 60: a note from beat 4 of bar 1 to beat 2 of bar 2 lasts 0.5 s + 1 s = 1.5 s (each side at its own tempo)");
+  ok(nearT12(MT.tickToSec(pT, 3839), 2 - 0.5 / 960) && nearT12(MT.tickToSec(pT, 3841), 2 + 1 / 960), "just before / after the boundary: 120 BPM side and 60 BPM side");
+  var pT2 = MT.newProject({ now: 0, bpm: 60 }); MT.tempoSet(pT2, 1920, 180); MT.tempoSet(pT2, 5760, 90); MT.tempoSet(pT2, 9600, 150);
+  ok(nearT12(MT.tickToSec(pT2, 1920), 2) && nearT12(MT.tickToSec(pT2, 5760), 2 + 4 / 3) && nearT12(MT.tickToSec(pT2, 9600), 2 + 4 / 3 + 8 / 3) && nearT12(MT.bpmAt(pT2, 5759), 180) && MT.bpmAt(pT2, 5760) === 90, "60 → 180 → 90 → 150: each stretch at its own tempo; tempo at the boundary is the new one");
+  var mono = true, rtErr = 0, prevS = -1, tkT;
+  for (tkT = 0; tkT < 20000; tkT += 13) { var sT = MT.tickToSec(pT2, tkT); if (sT <= prevS) { mono = false; } prevS = sT; rtErr = Math.max(rtErr, Math.abs(MT.secToTick(pT2, sT) - tkT)); }
+  ok(mono && rtErr < 1e-6, "tick → seconds is increasing; tick → seconds → tick comes back (max error " + rtErr.toExponential(1) + " tick)");
+  ok(!MT.tempoSet(pT, 100, 999).ok && !MT.tempoSet(pT, 100, "x").ok && !MT.tempoSet(pT, -5, 100).ok && !MT.tempoSet(pT, 1.5, 100).ok && !MT.tempoSet(pT, MT.barToTick(pT, 256), 100).ok && !MT.tempoSet(pT, 100, NaN).ok && MT.tempoSet(pT, 3840, 72).replaced && !MT.tempoDel(pT, 0), "bad tempo values / positions refused, same tick replaced, the start can't be deleted");
+  var manyT = { tempo: { points: [] } }; for (tkT = 0; tkT < 100; tkT++) { manyT.tempo.points.push({ tick: tkT * 960, bpm: 100 + tkT }); }
+  ok(MT.clean(manyT).tempo.points.length === MT.TEMPO_MAX && MT.TEMPO_MAX === 64, "at most 64 tempo points are read");
+  var p64 = MT.newProject({ now: 0 }); for (tkT = 1; tkT < 64; tkT++) { MT.tempoSet(p64, tkT * 960, 100); } ok(!MT.tempoSet(p64, 99999, 100).ok, "the 65th point is refused");
+  ok(JSON.stringify(MT.clean(fx.record.project).tempo) === JSON.stringify(MT.clean(JSON.parse(JSON.stringify(fx.record.project))).tempo) && MT.clean(fx.record.project).tempo.points.length === 1, "the v2.37 song: one tempo point, unchanged");
+  ok(MT.midiTempoCheck({ tempoChanges: [{ tick: 100, bar: 1, bpm: 500 }] }).ok === false && MT.midiTempoCheck({ tempoChanges: [{ tick: 3840, bar: 2, bpm: 90 }] }).ok, "MIDI tempo check: out of range refused, normal accepted");
+  // --- 再生: 予約の時刻（音符の頭・長さ・ドラム）---
+  var RT2 = H.makeEl("div"); DT2.reset(); AT.start("daw", RT2, {});
+  var pD = DT2.proj.create("demo"); MT.setBpm(pD, 120); MT.tempoSet(pD, 3840 * 2, 60); DT2.markDirty();
+  var acT = WT2.UGMelody.audioInit(); acT.currentTime = 1;
+  function runT12(sec) { var end = acT.currentTime + sec, g = 0; while (acT.currentTime < end && g++ < 20000) { acT.currentTime += 0.025; DT2.pump(); } }
+  DT2.clearLog(); DT2.play(); var PT = DT2.player(), t0T = PT.segs[0].t0; runT12(12);
+  var LT = DT2.log(), badW = 0, badD = 0, cross = 0;
+  LT.forEach(function (x) { if (x.drum) { if (!nearT12(x.when, t0T + MT.tickToSec(pD, x.tick), 1e-6)) { badW++; } return; } if (!nearT12(x.when, t0T + MT.tickToSec(pD, x.tick), 1e-6)) { badW++; } });
+  pD.tracks.forEach(function (t) { t.clips.forEach(function (c) { (c.notes || []).forEach(function (n) { var a = c.start + n[0] - (c.offset || 0), b = a + n[1]; if (a < 7680 && b > 7680) { cross++; var lg = LT.filter(function (x) { return x.tick === a && x.m === n[2] && !x.drum; })[0]; if (lg && !nearT12(lg.sec, Math.max(0.05, MT.secBetween(pD, a, b)), 1e-6)) { badD++; } } }); }); });
+  ok(LT.length > 20 && badW === 0 && badD === 0, "playback: every note / drum hit starts at its tick's time through the tempo map (" + LT.length + " events); notes across the change (" + cross + ") last start side + end side", [badW, badD]);
+  DT2.stop(); DT2.clearLog(); DT2.play({ from: 7680 + 960 }); PT = DT2.player(); var tm = PT.segs[0].t0; runT12(3);
+  ok(DT2.log().every(function (x) { return nearT12(x.when, tm + MT.tickToSec(pD, x.tick) - MT.tickToSec(pD, 8640), 1e-6); }) && DT2.log().length > 0, "play from the middle (after the change): times from the tempo map");
+  DT2.stop(); DT2.setLoop(true); DT2.play(); PT = DT2.player(); var la = PT.la, se = PT.segEnd; runT12(MT.tickToSec(pD, se) + 2);
+  ok(PT.segs.length >= 2 && nearT12(PT.segs[1].t0 - PT.segs[0].t0, MT.tickToSec(pD, se) - MT.tickToSec(pD, la), 1e-6), "loop: the wrap comes after the loop's real length (tempo map)");
+  DT2.stop(); DT2.setLoop(false);
+  // --- WAV の長さ ---
+  await new Promise(function (r) { DT2.wav.start(r); }); for (var gT = 0; gT < 900 && DT2.wav.state().busy; gT++) { await eT.wait(10); }
+  ok(DT2.wav.state().state === "done" && nearT12(DT2.wav.state().plan.music, MT.tickToSec(pD, MT.songEndTick(pD)), 1e-9) && nearT12(DT2.wav.state().plan.music, 2 * 2 + 6 * 4, 1e-9), "WAV: song length from the tempo map (8 bars: 2 at 120 + 6 at 60 from bar 3 = 28 s)", DT2.wav.state().plan.music);
+  // --- ディレイ: テンポの点ごとに時間を予約 ---
+  DT2.mixer.setSend(pD.tracks[0].id, "dly", 0.5); DT2.sendFx.set("dly", "div", "1/8");
+  ok(nearT12(MT.delaySecAt(pD, 0), 0.25) && nearT12(MT.delaySecAt(pD, 7680), 0.5) && nearT12(MT.sendTail(pD).sec, Math.max(3, 0.5 * (Math.ceil(Math.log(0.001) / Math.log(0.3)) + 1) + 0.5)), "delay time follows the tempo (1/8: 0.25 s at 120, 0.5 s at 60); the WAV tail uses the longest delay");
+  CT.rec = []; DT2.play(); PT = DT2.player(); var dRec = CT.rec.filter(function (x) { return x.name === "delayTime"; }); CT.rec = null; t0T = PT.segs[0].t0;
+  ok(dRec.some(function (x) { return x.k === "set" && nearT12(x.v, 0.25) && nearT12(x.t, t0T); }) && CT.targets.some(function (x) { return nearT12(x.v, 0.5) && x.tau === 0.05 && nearT12(x.t, t0T + 4, 1e-6); }), "playback: delay 0.25 s from the start, glides (50 ms) to 0.5 s at the tempo change (bar 3 = 4 s)", dRec);
+  // 再生中にテンポを変える → 鳴らしなおし（古い予約を残さない）
+  var plT = DT2.player(); DT2.tempo.set(5, 1, 90); ok(DT2.player() && DT2.player() !== plT && MT.bpmAt(pD, 3840 * 4) === 90, "adding a tempo point while playing restarts at the same place (no stale schedule)");
+  plT = DT2.player(); DT2.setBpm(100); ok(DT2.player() !== plT && MT.bpmAt(pD, 0) === 100, "changing the start BPM while playing with a delay send: restart (no stale delay / automation schedule)");
+  DT2.stop();
+  // --- ↶・画面 ---
+  var uT = DT2.undoDepth(), tl0 = JSON.stringify(MT.tempoList(pD));
+  var rAdd = DT2.tempo.set(9, 1, 140), rBad = DT2.tempo.set(9, 9, 140), rBad2 = DT2.tempo.set(9, 1, 1000);
+  ok(rAdd.ok && !rBad.ok && !rBad2.ok && DT2.undoDepth() === uT + 1 && MT.bpmAt(pD, 3840 * 8) === 140, "⏱ add a change at bar 9 (one ↶ step); bad beat / BPM refused", [rBad.why, rBad2.why]);
+  DT2.ops.undo(); ok(JSON.stringify(MT.tempoList(DT2.project())) === tl0, "↶ removes the tempo change again");
+  DT2.tempo.set(9, 1, 140); pD = DT2.project();
+  ok(DT2.showTempo() && RT2.innerHTML.indexOf("曲の頭の BPM") >= 0 && (RT2.innerHTML.match(/data-tpd="/g) || []).length === MT.tempoList(pD).length - 1 && RT2.innerHTML.indexOf("dtp-now") >= 0 && RT2.innerHTML.indexOf('data-tpf="bpm"') >= 0, "⏱ screen: start BPM, add form, the list of changes with BPM and seconds");
+  DT2.flushSave(); DT2.reload(); DT2.proj.open(pD.id); pD = DT2.project(); DT2.select(null); var dbgT = RT2.innerHTML.indexOf("daw-ruler");
+  ok((RT2.innerHTML.match(/class="daw-tmk"/g) || []).length === MT.tempoList(pD).length - 1 && RT2.innerHTML.indexOf("&#x2669;140") >= 0 && RT2.innerHTML.indexOf('data-ar="tempo"') >= 0, "arrangement: ⏱ テンポ button and tempo marks on the ruler", [dbgT, (RT2.innerHTML.match(/class="daw-tmk"/g) || []).length, MT.tempoList(pD).length, RT2.innerHTML.slice(0, 200)]);
+  // --- 保存・ZIP・MIDI ---
+  var tpS = JSON.stringify(pD.tempo);
+  ok(tpS.indexOf('"bpm":140') >= 0 && tpS.indexOf('"bpm":60') >= 0, "after a reload the tempo map is the same", tpS);
+  var exT = await new Promise(function (r) { DT2.pack.exportZip(r); });
+  var eT2 = H.load(), WT3 = eT2.window, DT3 = WT3.UGDaw; WT3.indexedDB = fakeIDB(); fakeDecode(WT3);
+  var RT3 = H.makeEl("div"); DT3.reset(); WT3.UGArcade.start("daw", RT3, {});
+  var rqT = await impZ(DT3, blobAB(exT.blob)); DT3.proj.open(rqT.id);
+  ok(exT.ok && rqT.ok && JSON.stringify(DT3.project().tempo) === tpS, "ZIP → empty storage: the tempo map comes back", rqT.why);
+  WT3.UGArcade.stop(); DT3.reset();
+  var notesT = JSON.stringify(MT.noteEvents(pD, 0, Infinity).map(function (e) { return [e.tick, e.end, e.m]; }));
+  var xT = DT2.midi.exportNow(); DT2.midi.open(new Uint8Array(xT.bytes), "tempo.mid"); var miT = DT2.midi.ui(), pgT = DT2.midi.pageHtml(); var rxT = DT2.midi.importNow();
+  ok(xT.ok && rxT.ok && pgT.indexOf("もそのまま入れます") >= 0 && JSON.stringify(DT2.project().tempo.points) === JSON.stringify(pD.tempo.points) && JSON.stringify(MT.noteEvents(DT2.project(), 0, Infinity).map(function (e) { return [e.tick, e.end, e.m]; })) === notesT, "MIDI export → import as a new song: every tempo point and note tick comes back", [DT2.project().tempo.points, pD.tempo.points]);
+  // 録音: テンポが変わったあとの小節から録る → カウントインはその小節の BPM（60 BPM → 1 拍 1 秒）
+  var eC9 = H.load(), WC9 = eC9.window, DC9 = WC9.UGDaw, MC9 = WC9.UGDawModel; WC9.indexedDB = fakeIDB(); fakeDecode(WC9);
+  var RC9 = H.makeEl("div"); DC9.reset(); WC9.UGArcade.start("daw", RC9, {});
+  DC9.proj.create("demo"); var pC9 = DC9.project(); MC9.setBpm(pC9, 120); MC9.tempoSet(pC9, MC9.barToTick(pC9, 2), 60);
+  var tC9 = await new Promise(function (r) { DC9.audio.add(r); });
+  var micC9 = fakeMic(WC9), acC9 = WC9.UGMelody.audioInit(); acC9.outputLatency = 0.02; acC9.currentTime = 1;
+  DC9.state().view = "arr"; DC9.rec.open(tC9.id); DC9.rec.state().bar = 2; DC9.select("track", tC9.id);
+  DC9.rec.start(); await (async function () { for (var g = 0; g < 400 && DC9.rec.state().state === "ask"; g++) { await eC9.wait(5); } })();
+  var RS9 = DC9.rec.state(), P9 = DC9.player();
+  ok(RS9.state === "rec" && RS9.beats === 4 && nearA(RS9.beat, 1) && nearA(P9.segs[0].t0, 1 + 0.08 + 4) && P9.segs[0].tick0 === MC9.barToTick(pC9, 2) && nearA(MC9.tickToSec(pC9, MC9.barToTick(pC9, 2)), 4), "recording from bar 3 (60 BPM after the change): count-in 4 beats × 1 s, the take starts at bar 3 (4 s into the song)", [RS9.beat, P9.segs[0].t0]);
+  WC9.UGArcade.stop(); DC9.reset();
+  ok(ST.ultimateGorillaSaveV2 === rpgT, "the RPG save is untouched (9B-12)");
+  AT.stop(); DT2.reset();
+  var errT = CT.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errT.length === 0, "no Web Audio errors (9B-12)", errT.slice(0, 3));
 };

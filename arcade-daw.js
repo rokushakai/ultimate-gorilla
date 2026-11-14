@@ -214,7 +214,8 @@
   }
   // ループの折り返し: 作った出口に、新しい区間を予約（前の区間の終わりの値から 5ms で頭の値へ）
   function autoLoopSeg(s) {
-    var p = st.project, M = DM(), i, j;
+    var p = st.project, M = DM(), i, j, ms = pl.mix.__master;
+    if (ms && ms.send && ms.send.dly) { dlySeg(ms.send.dly.d.delayTime, s, s.tick0, pl.segEnd, "ramp", pl.ac.currentTime); } // 9B-12: ディレイの時間も
     for (i = 0; i < p.tracks.length; i++) {
       var t = p.tracks[i], mx = pl.mix[t.id], l = mx ? [mx.main, mx.dry] : [];
       for (j = 0; j < l.length; j++) {
@@ -222,6 +223,25 @@
         var ps = chainParams(t, l[j]), k;
         for (k in ps) { if (ps.hasOwnProperty(k) && M.autoActive(t, k)) { autoSeg(ps[k], M.autoLane(t, k), k, s, s.tick0, pl.segEnd, "ramp", pl.ac.currentTime); } }
       }
+    }
+  }
+  // ---------- §342 9B-12: ディレイの時間をテンポに合わせる（区間の頭で、その区間のテンポの点ごとに予約。変わる所は 50ms でなめらかに）----------
+  function dlySeg(param, s, from, to, mode, now) {
+    var p = st.project, M = DM(), t0 = Math.max(now, segTime(p, s, from)), ps = M.tempoList(p), i;
+    try {
+      if (mode === "set") { param.setValueAtTime(M.delaySecAt(p, from), t0); } else { param.setTargetAtTime(M.delaySecAt(p, from), t0, 0.05); }
+      for (i = 0; i < ps.length; i++) { if (ps[i].tick > from && ps[i].tick < to) { var tt = segTime(p, s, ps[i].tick); if (tt > t0) { param.setTargetAtTime(M.delaySecAt(p, ps[i].tick), tt, 0.05); } } }
+    } catch (e) {}
+  }
+  function dlyPlan(s, fresh) {
+    var p = st.project, param = s.dly.d.delayTime, now = pl.wav ? 0 : pl.ac.currentTime, i, first = true;
+    if (!fresh && !pl.wav) { holdAt(param, now); }
+    for (i = 0; i < pl.segs.length; i++) {
+      var sg = pl.segs[i], next = pl.segs[i + 1], endT = next ? next.t0 : segTime(p, sg, pl.segEnd);
+      if (endT <= now && next) { continue; }
+      var from = sg.t0 >= now ? sg.tick0 : Math.max(sg.tick0, Math.min(pl.segEnd, Math.floor(segTick(p, sg, now))));
+      dlySeg(param, sg, from, pl.segEnd, first && (fresh || sg.t0 >= now) ? "set" : "ramp", now);
+      first = false;
     }
   }
   // ---------- §342 9B-11: センド FX（DAW 専用のリバーブ・ディレイ。Wet だけを DAW のマスターの dry へ ＝ 共有の残響を二重にしない・Master FX の EQ・リミッターも通る）----------
@@ -253,7 +273,7 @@
     }
     if (lv.dly) {
       var di = ac.createGain(), dn = ac.createDelay(2.1), lp = ac.createBiquadFilter(), fb = ac.createGain(), dr = ac.createGain();
-      dn.delayTime.value = M.delaySec(p); lp.type = "lowpass"; lp.frequency.value = 3000; fb.gain.value = lv.fx.dly.fb; dr.gain.value = lv.fx.dly.level;
+      dn.delayTime.value = M.delaySecAt(p, pl.segs[0].tick0); lp.type = "lowpass"; lp.frequency.value = 3000; fb.gain.value = lv.fx.dly.fb; dr.gain.value = lv.fx.dly.level;
       di.connect(dn); dn.connect(lp); lp.connect(fb); fb.connect(dn); lp.connect(dr); dr.connect(out);
       s.dly = { inp: di, d: dn, lp: lp, fb: fb, ret: dr };
     }
@@ -279,7 +299,7 @@
     var f = M.sendFxOf(p);
     try {
       if (s.rev) { s.rev.ret.gain.setTargetAtTime(f.rev.level, now, 0.01); }
-      if (s.dly) { s.dly.ret.gain.setTargetAtTime(f.dly.level, now, 0.01); s.dly.fb.gain.setTargetAtTime(f.dly.fb, now, 0.01); s.dly.d.delayTime.setTargetAtTime(M.delaySec(p), now, 0.05); }
+      if (s.dly) { s.dly.ret.gain.setTargetAtTime(f.dly.level, now, 0.01); s.dly.fb.gain.setTargetAtTime(f.dly.fb, now, 0.01); dlyPlan(s, false); } // 9B-12: 時間はテンポの点ごとに予約しなおす
       for (i = 0; i < p.tracks.length; i++) {
         var mx = pl.mix[p.tracks[i].id], sv = M.sendOf(p.tracks[i]), l = mx ? [mx.main, mx.dry] : [];
         for (j = 0; j < l.length; j++) { if (!l[j]) { continue; } if (l[j].tr) { l[j].tr.gain.setTargetAtTime(sv.rev, now, 0.01); } if (l[j].td) { l[j].td.gain.setTargetAtTime(sv.dly, now, 0.01); } }
@@ -412,6 +432,7 @@
     if (m.priv) { m.bus.connect(m.priv.fx.bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(m.priv.pm); } }
     else { m.bus.connect(bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(master); } }
     m.send = sendBuild(ac, m); // 9B-11: DAW 専用のリバーブ・ディレイ（センドが無ければ作らない）
+    if (m.send && m.send.dly) { dlyPlan(m.send, true); } // 9B-12: ディレイの時間をテンポの点ごとに予約
     pl.mix.__master = m;
     return m;
   }
@@ -623,6 +644,7 @@
   // BPM: 再生中なら、まだ予約していない音から新しい速さ（すでに予約した音の時刻はそのまま）
   function changeBpm(v) {
     var p = project(), M = DM(), t0 = null, E = SE();
+    if (pl && tempoSched(p)) { var bb = M.setBpm(p, v); resync(); return bb; } // 9B-12: オートメーション・ディレイの予約があれば、同じ位置から鳴らしなおす（古い予約を残さない）
     if (pl) { t0 = segTime(p, pl.segs[pl.segs.length - 1], pl.cur); }
     var b = M.setBpm(p, v);
     if (pl && t0 !== null) { pl.segs.push({ t0: t0, tick0: pl.cur }); if (pl.segs.length > 3) { pl.segs.shift(); } if (pl.endAt) { pl.endAt = 0; } }
@@ -647,6 +669,7 @@
     if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
     if (st.view === "auto" && st.au) { auHead(root, tick); } // 9B-9
     if (st.view === "master") { msHead(root); } // 9B-10
+    if (st.view === "tempo") { var tb = root.querySelector(".dtp-now"); if (tb) { tb.textContent = String(DM().bpmAt(st.project, pl ? tick : Math.max(0, Math.round(st.cue || 0)))); } } // 9B-12
     var gre = st.view === "fx" && st.fxTrack ? root.querySelector(".dfx-gr") : null; if (gre) { var grv = fxReduction(st.fxTrack); gre.textContent = grv === null ? "—" : (Math.round(Math.min(0, grv) * 10) / 10).toFixed(1) + " dB"; } // 9B-8
     var dph = st.steps && st.view === "steps" ? root.querySelector(".ds-ph") : null, df = dph ? DM().findClip(st.project, st.steps.clip) : null;
     if (dph && df) {
@@ -713,6 +736,7 @@
     if (M && p && st.view === "fx") { renderFx(root, ctl); return; } // 9B-8
     if (M && p && st.view === "master") { renderMaster(root, ctl); return; } // 9B-10
     if (M && p && st.view === "sendfx") { renderSendFx(root, ctl); return; } // 9B-11
+    if (M && p && st.view === "tempo") { renderTempo(root, ctl); return; } // 9B-12
     if (M && p && st.view === "auto") { renderAuto(root, ctl); return; } // 9B-9
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
@@ -747,6 +771,7 @@
         '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
         '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
         '<button class="modal-btn daw-small" data-ar="sections">&#x1F3BC; 曲の構成</button>' + // 9B-1
+        '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' + // 9B-12
         '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' + // 9B-2
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
@@ -757,6 +782,7 @@
     if (st.cue !== null && st.cue !== undefined && !pl) { h += '<i class="daw-cue" style="left:' + tickX(st.cue) + 'px;" title="▶ のはじまり"></i>'; }
     if (loopOn) { h += '<i class="daw-loopband" style="left:' + tickX(lr.a) + 'px;width:' + (tickX(lr.b) - tickX(lr.a)) + 'px;"></i>'; }
     for (b = 0; b < bars; b++) { h += '<span class="daw-barno" style="left:' + tickX(M.barToTick(p, b)) + 'px;">' + (b + 1) + '</span>'; }
+    var tps = M.tempoList(p); for (b = 1; b < tps.length; b++) { h += '<span class="daw-tmk" style="left:' + tickX(tps[b].tick) + 'px;" title="BPM ' + tps[b].bpm + '">&#x2669;' + tps[b].bpm + '</span>'; } // 9B-12: テンポの変更点
     h += '</div></div>';
     // トラック
     for (i = 0; i < p.tracks.length; i++) {
@@ -2397,7 +2423,7 @@
     },
     undo: function () {
       var u = st.undo; if (!u.length || !st.project) { return false; }
-      var z = u.pop(); if (z && z.__all) { st.project.tracks = z.tracks; st.project.markers = z.markers; } else { st.project.tracks = z; } // 9B-1: セクションの写しも
+      var z = u.pop(); if (z && z.__all) { st.project.tracks = z.tracks; st.project.markers = z.markers; if (z.tempo) { st.project.tempo = z.tempo; } } else { st.project.tracks = z; } // 9B-1: セクションの写しも・9B-12: テンポも
       if (st.roll) { st.roll.sel = null; } markDirty(); afterEdit(); // 戻したあとの状態を保存
       return true;
     }
@@ -3599,6 +3625,68 @@
     drawHead();
   }
 
+  // ---------- §342 9B-12: ⏱ テンポ（曲の頭の BPM・変更点）----------
+  // 再生中にオートメーション・ディレイの予約があるか（テンポを変えたら鳴らしなおす）
+  function tempoSched(p) { var M = DM(), i, k; if (M.sendLive(p).dly) { return true; } for (i = 0; i < p.tracks.length; i++) { for (k = 0; k < M.AUTO_ORDER.length; k++) { if (M.autoActive(p.tracks[i], M.AUTO_ORDER[k])) { return true; } } } return false; }
+  function tpDone(snap) { pushUndo(snap); markDirty(); if (pl) { resync(); } }
+  var tpApi = {
+    // 変更点（小節・拍・BPM）。同じ位置なら BPM を変える。1 小節 1 拍 ＝ 曲の頭の BPM
+    set: function (bar, beat, bpm) { var p = project(), M = DM(), tick = M.autoTickAt(p, bar, beat); if (tick === null) { return { ok: false, why: "位置がおかしいです（小節 1〜256・拍 1〜その小節の拍の数）" }; } var snap = snapAll(), r = M.tempoSet(p, tick, bpm); if (r.ok) { tpDone(snap); } return r; },
+    setTick: function (tick, bpm) { var snap = snapAll(), r = DM().tempoSet(project(), tick, bpm); if (r.ok) { tpDone(snap); } return r; },
+    del: function (tick) { var snap = snapAll(); if (!DM().tempoDel(project(), tick)) { return false; } tpDone(snap); return true; },
+    list: function () { return DM().tempoList(project()); }
+  };
+  function tpHtml(p) {
+    var M = DM(), ps = M.tempoList(p), tu = st.tpUi || { bar: 9, beat: 1, bpm: M.bpmAt(p, 0), msg: "" }, i, h, na = 0;
+    for (i = 0; i < p.tracks.length; i++) { if (M.isAudio(p.tracks[i])) { na += p.tracks[i].clips.length; } }
+    h = '<div class="daw dm dfx dtp">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-tp="back">&#x2190; アレンジ</button><b>&#x23F1;&#xFE0F; テンポ</b></div>' +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-tp="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-tp="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn" data-tp="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;</button><span class="daw-pos">1.1</span><span class="small">いまの BPM <b class="dtp-now">' + M.bpmAt(p, Math.max(0, Math.round(st.cue || 0))) + '</b></span></div>' +
+      '<div class="dm-row"><div class="dfx-sw"><b>曲の頭の BPM</b><input type="number" class="dfx-num" inputmode="decimal" min="' + M.BPM_MIN + '" max="' + M.BPM_MAX + '" step="1" value="' + ps[0].bpm + '" data-tpv="0" aria-label="曲の頭の BPM"></div></div>' +
+      '<div class="dm-row"><b class="small">テンポの変更点を足す（その小節・拍から、この BPM）</b><div class="dau-add">' +
+        '<label>小節<input type="number" class="dfx-num" inputmode="numeric" min="1" max="256" step="1" value="' + tu.bar + '" data-tpf="bar"></label>' +
+        '<label>拍<input type="number" class="dfx-num" inputmode="numeric" min="1" step="1" value="' + tu.beat + '" data-tpf="beat"></label>' +
+        '<label>BPM<input type="number" class="dfx-num" inputmode="decimal" min="' + M.BPM_MIN + '" max="' + M.BPM_MAX + '" step="1" value="' + tu.bpm + '" data-tpf="bpm"></label>' +
+        '<button class="modal-btn dau-addb" data-tp="add">&#x2795; 足す</button></div>' + (tu.msg ? '<p class="small dau-msg">' + tu.msg + '</p>' : '') + '</div>' +
+      '<div class="dm-row"><b class="small">変更点（' + (ps.length - 1) + ' ／ ' + (M.TEMPO_MAX - 1) + '）</b>';
+    if (ps.length > 1) {
+      for (i = 1; i < ps.length; i++) {
+        var q = auPos(p, ps[i].tick);
+        h += '<div class="dm-ctl dau-pt"><span class="dau-ptpos">' + auPosText(q) + '</span><input type="number" class="dfx-num" inputmode="decimal" min="' + M.BPM_MIN + '" max="' + M.BPM_MAX + '" step="1" value="' + ps[i].bpm + '" data-tpv="' + ps[i].tick + '" aria-label="' + q.bar + ' 小節の BPM"><span class="dfx-unit">BPM</span><span class="dau-sp">' + (Math.round(M.tickToSec(p, ps[i].tick) * 100) / 100) + ' 秒</span><button class="modal-btn dm-reset" data-tpd="' + ps[i].tick + '" title="この変更点を消す">&#x1F5D1;&#xFE0F;</button></div>';
+      }
+    } else { h += '<p class="small dfx-note">まだありません。小節・拍・BPM を入れて「➕ 足す」。</p>'; }
+    h += '</div><p class="small dfx-note">テンポは変更点からすぐに切りかわります（だんだん速くする・遅くするはありません）。テンポを変えても、音符・クリップ・オートメーションの位置（小節・拍）は変わらず、秒が変わります。センドのディレイも、その位置の BPM に合わせます。</p>' +
+      (na ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; 音声のクリップが ' + na + ' 個あります。録音・WAV の音声は伸び縮みしないので、テンポを変えると小節とずれます（頭の位置は小節のまま。クリップの箱の終わりが早くなると、そこで音声が切れます）。録音・テイク・コンピングのデータは変えません。</p>' : '') +
+      saveNoteHtml() + '<p class="small dsv-note">テンポの変更点・曲の頭の BPM（この画面）は ↶ で戻せます。MIDI の書き出しにはテンポの変化も入ります。</p></div>';
+    return h;
+  }
+  function renderTempo(root, ctl) {
+    var p = project();
+    root.innerHTML = tpHtml(p);
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k;
+    function val(n) { var e = root.querySelector('[data-tpf="' + n + '"]'); return e ? e.value : ""; }
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-tp"), x;
+        st.tpUi = st.tpUi || { bar: 9, beat: 1, bpm: DM().bpmAt(p, 0), msg: "" }; st.tpUi.msg = "";
+        if (v === "back") { st.view = "arr"; render(root, ctl); return; }
+        if (v === "play") { startPlay(); renderTempo(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderTempo(root, ctl); return; }
+        if (v === "undo") { ops.undo(); return; }
+        if (v === "add") { st.tpUi.bar = val("bar"); st.tpUi.beat = val("beat"); st.tpUi.bpm = val("bpm"); var r = tpApi.set(val("bar"), val("beat"), val("bpm")); st.tpUi.msg = r.ok ? (r.tick === 0 ? "曲の頭の BPM を " + r.bpm + " にしました" : (r.replaced ? "同じ位置の BPM を " + r.bpm + " にしました" : "変更点を足しました（BPM " + r.bpm + "）")) : "&#x26A0;&#xFE0F; " + r.why; }
+        else if ((x = el.getAttribute("data-tpd"))) { tpApi.del(Number(x)); st.tpUi.msg = "変更点を消しました（↶ で戻せます）"; }
+        renderTempo(root, ctl);
+      };
+    }
+    var ins = root.querySelectorAll("input[data-tpv]");
+    for (k = 0; k < ins.length; k++) {
+      ins[k].onchange = function (ev) { var el = ev.currentTarget, r = tpApi.setTick(Number(el.getAttribute("data-tpv")), el.value); st.tpUi = st.tpUi || { bar: 9, beat: 1, bpm: DM().bpmAt(p, 0), msg: "" }; st.tpUi.msg = r.ok ? "BPM を " + r.bpm + " にしました" : "&#x26A0;&#xFE0F; " + r.why; renderTempo(root, ctl); };
+    }
+    drawHead();
+  }
+
   // ---------- §342 9B-11: 🌊 FX（センドの戻り: リバーブ・ディレイ）----------
   var SF_ROWS = { rev: [["rev", "level", 100, "%", "Return", "戻り"]], dly: [["dly", "fb", 100, "%", "Feedback", "くり返し"], ["dly", "level", 100, "%", "Return", "戻り"]] };
   var sfApi = {
@@ -3623,7 +3711,7 @@
     for (i = 0; i < M.SEND_DIV_ORDER.length; i++) { var dv = M.SEND_DIV_ORDER[i], sec = Math.max(0.02, Math.min(2, 60 / bpm * M.SEND_DIVS[dv])); h += '<button class="modal-btn dau-tg' + (f.dly.div === dv ? " sel" : "") + '" data-sfd="' + dv + '">' + (dv === "1/8." ? "1/8 付点" : dv) + '<small>' + Math.round(sec * 1000) + 'ms</small></button>'; }
     h += '</div>';
     for (i = 0; i < SF_ROWS.dly.length; i++) { h += fxRowHtml(p.master || {}, f, SF_ROWS.dly[i]); }
-    h += '<p class="small dfx-note">送っているトラック: ' + nd + ' 本' + (lv.dly ? '（効いています）' : (f.dly.on ? '（送りが 0 なので鳴りません）' : '（OFF）')) + '・曲の頭の BPM ' + bpm + ' に合わせます（途中のテンポの変化には合わせません）。Feedback は 85% まで。</p></div>' +
+    h += '<p class="small dfx-note">送っているトラック: ' + nd + ' 本' + (lv.dly ? '（効いています）' : (f.dly.on ? '（送りが 0 なので鳴りません）' : '（OFF）')) + '・その位置の BPM に合わせます（ms は曲の頭の BPM ' + bpm + '・テンポが変わる所で 50ms かけて変わります）。Feedback は 85% まで。</p></div>' +
       '<button class="modal-btn daw-small dfx-all" data-sf="resetAll">&#x21BA; 全部をはじめに戻す</button>' +
       saveNoteHtml() + '<p class="small dsv-note">WAV の余韻は残響の長さまで（最大 10 秒・こえるときは最後の 1 秒を小さく）。⏹ を押すと残響も止まります。センドは ↶ の対象外で、MIDI の書き出しには入りません（JSON・ZIP には入ります）。</p></div>';
     return h;
@@ -3849,7 +3937,7 @@
 
   // ---------- §342 9B-1: 曲の構成（セクション）・小節へ・クリップの繰り返し・セクションの複製 ----------
   // ↶ の写し: セクション（markers）も入れる（いままでの写しはトラックの配列のまま）
-  function snapAll() { return { __all: true, tracks: snapTracks(), markers: JSON.parse(JSON.stringify(project().markers || [])) }; }
+  function snapAll() { return { __all: true, tracks: snapTracks(), markers: JSON.parse(JSON.stringify(project().markers || [])), tempo: JSON.parse(JSON.stringify(project().tempo || null)) }; } // 9B-12: テンポも
   function secBar(p, tick) { return Math.round(tick / DM().barTicks(p)) + 1; }
   function secBars(p, len) { return Math.round(len / DM().barTicks(p)); }
   // 小節へ: 鳴っていれば、そこから鳴らしなおす。止まっていれば、▶ のはじまり（キュー）にする。そこが見えるように横へ
@@ -4157,21 +4245,23 @@
   }
   function midSel(u) { var o = [], i, l = u.info.parts; for (i = 0; i < l.length; i++) { if (u.parts[l[i].key]) { o.push(l[i].key); } } return o; }
   function midPlan(u) {
-    var M = DM(), mb = M.midiBox(u.info, u.kinds, u.id), q = u.dest === "new" ? M.midiNewProject(u.info) : project();
+    var M = DM(), mb = M.midiBox(u.info, u.kinds, u.id), q = u.dest === "new" ? M.midiNewProject(u.info, midTempoMap(u)) : project();
     return { plan: M.importPlan(q, mb.box, { parts: midSel(u), bar: u.dest === "new" ? 1 : u.bar, target: "new" }), box: mb.box, drops: mb.drops };
   }
+  // 9B-12: MIDI の途中のテンポの変化を、新しい曲のテンポの点にそのまま入れられるか
+  function midTempoMap(u) { return !!(u && u.dest === "new" && u.info && u.info.tempoChanges && u.info.tempoChanges.length && DM().midiTempoCheck(u.info).ok); }
   // ✅ 取りこむ（新しい曲 ＝ いまの曲を保存してから作って保存・いまの曲 ＝ 新しいトラックだけ・↶ 1 回で戻る）
   function midiImport() {
     var M = DM(), u = st.mid, r, p, saved, plan, x, i;
     if (!u) { return { ok: false, why: "MIDI ファイルを選んでください" }; }
     if (u.busy) { return { ok: false, why: "取りこみ中です" }; }
-    if (!u.tempoOk) { u.msg = "&#x26A0;&#xFE0F; 途中でテンポが変わる曲です。「テンポの変化を入れずに続ける」を選ぶか、やめてください"; return { ok: false, why: "tempo" }; }
+    if (!u.tempoOk && !midTempoMap(u)) { u.msg = "&#x26A0;&#xFE0F; 途中でテンポが変わる曲です。「テンポの変化を入れずに続ける」を選ぶか、やめてください"; return { ok: false, why: "tempo" }; }
     x = midPlan(u); plan = x.plan;
     if (!plan.ok) { u.msg = "&#x26A0;&#xFE0F; " + escHtml(plan.why); return { ok: false, why: plan.why }; }
     u.busy = true;
     if (u.dest === "new") {
       flushSave();
-      p = M.midiNewProject(u.info); p.id = M.newProjectId();
+      p = M.midiNewProject(u.info, midTempoMap(u)); p.id = M.newProjectId(); // 9B-12: テンポの変化もそのまま
       var ix = readIndex();
       if (ix.ok) { for (i = 0; i < ix.idx.list.length; i++) { if (ix.idx.list[i] && ix.idx.list[i].name === p.name) { p.name = (p.name + "（MIDI）").substring(0, 40); break; } } }
       plan = M.importPlan(p, x.box, { parts: midSel(u), bar: 1, target: "new" });
@@ -4209,7 +4299,10 @@
     h += '</div><div class="small">ドラムの候補（10ch）: ' + (drums.length ? escHtml(drums.join("・")) : 'ありません') + '。「&#x1F3B9;／&#x1F941;」で種類を変えられます</div>';
     var x = midPlan(u), plan = x.plan, warn = [];
     for (i = 0; i < x.drops.length; i++) { if (u.parts[x.drops[i].key]) { warn.push("「" + x.drops[i].name + "」: GM の 35〜81 番にない番号は入れません（" + x.drops[i].text + "）"); } }
-    if (f.tempoChanges.length) {
+    var tmc = M.midiTempoCheck(f); // 9B-12
+    if (f.tempoChanges.length && midTempoMap(u)) { var tl2 = []; for (i = 0; i < f.tempoChanges.length && i < 5; i++) { tl2.push(f.tempoChanges[i].bar + " 小節目 → " + f.tempoChanges[i].bpm); } h += '<div class="daw-msg mid-tempo-ok">&#x2705; <b>途中のテンポの変化（' + f.tempoChanges.length + ' か所）もそのまま入れます</b><br><span class="small">' + escHtml(tl2.join("・")) + (f.tempoChanges.length > 5 ? " ほか" : "") + '</span></div>'; }
+    else if (f.tempoChanges.length) {
+      if (u.dest === "new" && !tmc.ok) { h += '<div class="small mid-tempo-why">テンポの点に入れられない理由: ' + escHtml(tmc.why.join("・")) + '</div>'; } else if (u.dest !== "new") { h += '<div class="small mid-tempo-why">いまの曲へ取りこむときは、いまの曲のテンポのままです（テンポの変化は新しい曲のときだけ入ります）</div>'; }
       var tl = []; for (i = 0; i < f.tempoChanges.length && i < 5; i++) { tl.push(f.tempoChanges[i].bar + " 小節目 → " + f.tempoChanges[i].bpm); }
       h += '<div class="daw-msg mid-tempo">&#x26A0;&#xFE0F; <b>途中でテンポが変わります（' + f.tempoChanges.length + ' か所）</b><br><span class="small">' + escHtml(tl.join("・")) + (f.tempoChanges.length > 5 ? " ほか" : "") + '<br>ゴリラDAW は最初の BPM（' + f.bpm + '）だけで鳴らします。音符の位置（拍）はそのままで、変わる所から先の速さ（秒）が元のファイルとちがいます</span></div>' +
         '<div class="da-btns"><button class="modal-btn da-wide' + (u.tempoOk ? ' daw-on' : '') + '" data-mi="tempo">' + (u.tempoOk ? '&#x2705;' : '&#x2B1C;') + ' テンポの変化を入れずに続ける（BPM ' + f.bpm + ' のまま）</button></div>';
@@ -4230,7 +4323,7 @@
     if (plan.ok) { var n2 = 0; for (i = 0; i < plan.items.length; i++) { n2 += plan.items[i].clips.length; } h += '<div class="small">' + (u.dest === "new" ? '新しい曲の ' : '') + plan.bar + '〜' + (plan.bar + Math.round(plan.span / M.barTicks(u.dest === "new" ? M.midiNewProject(f) : p)) - 1) + ' 小節目に、トラック ' + plan.items.length + ' 本・クリップ ' + n2 + ' 個</div>'; }
     else { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(plan.why) + '</div>'; }
     if (u.msg) { h += '<div class="da-note">' + u.msg + '</div>'; }
-    h += '<div class="da-btns"><button class="modal-btn da-wide inb-go" data-mi="go"' + (plan.ok && u.tempoOk && !u.busy ? '' : ' disabled') + '>' + (u.dest === "new" ? '&#x2705; 新しい曲として取り込む' : '&#x2705; いまの曲に足す') + '</button></div>' +
+    h += '<div class="da-btns"><button class="modal-btn da-wide inb-go" data-mi="go"' + (plan.ok && (u.tempoOk || midTempoMap(u)) && !u.busy ? '' : ' disabled') + '>' + (u.dest === "new" ? '&#x2705; 新しい曲として取り込む' : '&#x2705; いまの曲に足す') + '</button></div>' +
       '<div class="da-btns"><button class="modal-btn da-wide" data-mi="back">やめる</button></div>';
     return h + '<p class="small dsv-note">「✅」を押すまで、曲は変わりません（いまの曲・保存した曲はそのまま）。</p></div>';
   }
@@ -4356,7 +4449,7 @@
           rerender(); return;
         }
         if ((v = el.getAttribute("data-addwav"))) { keepScroll(root); st.anote = ""; pickWav(root, { track: v }); return; }
-        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { st.chooseAdd = !st.chooseAdd; st.sel = null; st.confirmDel = null; st.anote = ""; rerender(); } else if (v === "addSynth" || v === "addDrum") { ops.addTrack(v === "addDrum" ? "drum" : "synth"); } else if (v === "addCancel") { st.chooseAdd = false; rerender(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } return; }
+        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { st.chooseAdd = !st.chooseAdd; st.sel = null; st.confirmDel = null; st.anote = ""; rerender(); } else if (v === "addSynth" || v === "addDrum") { ops.addTrack(v === "addDrum" ? "drum" : "synth"); } else if (v === "addCancel") { st.chooseAdd = false; rerender(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } else if (v === "tempo") { st.confirmDel = null; st.view = "tempo"; renderTempo(root, ctl); } return; }
         if ((v = el.getAttribute("data-addclip"))) { keepScroll(root); ops.addClip(v); return; }
         if ((v = el.getAttribute("data-cl")) && st.sel && st.sel.kind === "clip") {
           var cid = st.sel.id, fc = M.findClip(p, cid);
@@ -4446,7 +4539,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, master: msApi, sendFx: sfApi, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, master: msApi, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）

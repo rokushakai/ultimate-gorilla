@@ -291,7 +291,7 @@
     var tp = src.tempo && isArr(src.tempo.points) ? src.tempo.points : [], pts = {};
     for (i = 0; i < tp.length; i++) { if (isObj(tp[i]) && isFinite(Number(tp[i].bpm))) { pts[int(num(tp[i].tick, 0) * scale, 0, 0)] = num(tp[i].bpm, 120, BPM_MIN, BPM_MAX); } }
     if (pts[0] === undefined) { pts[0] = 120; for (i = 0; i < tp.length; i++) { if (isObj(tp[i]) && isFinite(Number(tp[i].bpm))) { pts[0] = num(tp[i].bpm, 120, BPM_MIN, BPM_MAX); break; } } }
-    p.tempo.points = Object.keys(pts).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { return { tick: k, bpm: pts[k] }; });
+    p.tempo.points = Object.keys(pts).map(Number).sort(function (a, b) { return a - b; }).slice(0, TEMPO_MAX).map(function (k) { return { tick: k, bpm: pts[k] }; }); // 9B-12: 64 個まで
     var tm = src.tempo && isArr(src.tempo.meters) ? src.tempo.meters : [], mts = {};
     for (i = 0; i < tm.length; i++) {
       if (!isObj(tm[i])) { continue; }
@@ -562,9 +562,46 @@
   function sendTail(p) {
     var lv = sendLive(p), need = TAIL_MIN, capped = false;
     if (lv.rev) { need = Math.max(need, REV_SEC + 0.5); }
-    if (lv.dly) { var fb = lv.fx.dly.fb, n = fb > 0 ? Math.ceil(Math.log(0.001) / Math.log(fb)) : 1; need = Math.max(need, delaySec(p) * (n + 1) + 0.5); }
+    if (lv.dly) { var fb = lv.fx.dly.fb, n = fb > 0 ? Math.ceil(Math.log(0.001) / Math.log(fb)) : 1, ds = 0, pi, pts = points(p); for (pi = 0; pi < pts.length; pi++) { ds = Math.max(ds, delaySecAt(p, pts[pi].tick)); } need = Math.max(need, ds * (n + 1) + 0.5); } // 9B-12: 曲の中でいちばん長いディレイ
     if (need > TAIL_MAX) { need = TAIL_MAX; capped = true; }
     return { sec: need, capped: capped };
+  }
+
+  // ---------- §342 9B-12: テンポマップ（tempo.points・段々に変わる）----------
+  var TEMPO_MAX = 64;
+  function secBetween(p, a, b) { return tickToSec(p, b) - tickToSec(p, a); }
+  function tempoList(p) { return points(p).map(function (x) { return { tick: x.tick, bpm: x.bpm }; }); }
+  function tempoHost(p) { if (!isObj(p.tempo)) { p.tempo = { points: [], meters: [{ tick: 0, num: 4, den: 4 }] }; } if (!isArr(p.tempo.points) || !p.tempo.points.length) { p.tempo.points = [{ tick: 0, bpm: 120 }]; } return p.tempo.points; }
+  // 変更点を足す・変える（同じ tick なら BPM を変える）→ { ok, why, replaced, tick, bpm }
+  function tempoSet(p, tick, bpm) {
+    if (!p) { return { ok: false, why: "曲がありません" }; }
+    var t = Number(tick), b = Number(bpm);
+    if (typeof tick === "boolean" || tick === null || tick === "" || !isFinite(t) || t < 0 || t !== Math.round(t) || t >= barToTick(p, MAX_BARS)) { return { ok: false, why: "位置がおかしいです（1〜" + MAX_BARS + " 小節）" }; }
+    if (typeof bpm === "boolean" || bpm === null || String(bpm).replace(/\s/g, "") === "" || !isFinite(b)) { return { ok: false, why: "BPM が数ではありません" }; }
+    if (b < BPM_MIN || b > BPM_MAX) { return { ok: false, why: "BPM は " + BPM_MIN + "〜" + BPM_MAX + " です" }; }
+    b = Math.round(b * 100) / 100;
+    var ps = tempoHost(p), i;
+    for (i = 0; i < ps.length; i++) { if (ps[i].tick === t) { ps[i].bpm = b; return { ok: true, replaced: true, tick: t, bpm: b }; } }
+    if (ps.length >= TEMPO_MAX) { return { ok: false, why: "テンポの変更点は " + TEMPO_MAX + " 個までです" }; }
+    ps.push({ tick: t, bpm: b });
+    ps.sort(function (x, y) { return x.tick - y.tick; });
+    return { ok: true, replaced: false, tick: t, bpm: b };
+  }
+  function tempoDel(p, tick) { var ps = tempoHost(p), i; if (tick === 0) { return false; } for (i = 1; i < ps.length; i++) { if (ps[i].tick === tick) { ps.splice(i, 1); return true; } } return false; }
+  // ディレイの時間（その位置の BPM の拍）
+  function delaySecAt(p, tick) { var f = sendFxOf(p); return Math.max(DLY_MIN, Math.min(DLY_MAX, 60 / bpmAt(p, tick) * SEND_DIVS[f.dly.div])); }
+  // MIDI の途中のテンポの変化を、テンポの点にそのまま入れられるか（範囲・数・位置）
+  function midiTempoCheck(info) {
+    var l = info && isArr(info.tempoChanges) ? info.tempoChanges : [], why = [], seen = {}, i;
+    if (!l.length) { return { ok: true, n: 0, why: [] }; }
+    if (l.length + 1 > TEMPO_MAX) { why.push("テンポの変化が " + l.length + " か所あります（" + (TEMPO_MAX - 1) + " か所まで）"); }
+    for (i = 0; i < l.length; i++) {
+      if (!(l[i].bpm >= BPM_MIN && l[i].bpm <= BPM_MAX)) { why.push(l[i].bar + " 小節目の BPM " + l[i].bpm + " は範囲（" + BPM_MIN + "〜" + BPM_MAX + "）の外です"); }
+      if (seen[l[i].tick] || l[i].tick <= 0) { why.push(l[i].bar + " 小節目に、同じ位置のテンポの変化があります"); }
+      seen[l[i].tick] = true;
+      if (l[i].tick >= MAX_BARS * PPQ * 32) { why.push("テンポの変化が曲の上限（" + MAX_BARS + " 小節）の外にあります"); }
+    }
+    return { ok: !why.length, n: l.length, why: why.slice(0, 4) };
   }
 
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
@@ -1891,9 +1928,10 @@
     return { box: { id: id || ("m" + Date.now().toString(36)), from: "midi", name: info.name, bpm: info.bpm, meter: info.meter.num, len: info.len, parts: parts, skipped: [], tempoRows: info.tempoChanges.length }, drops: drops };
   }
   // 新しい曲（ファイルの BPM・拍子）
-  function midiNewProject(info) {
-    var p = newProject({ name: info.name, bpm: info.bpm, meter: info.meter.num });
+  function midiNewProject(info, withTempo) {
+    var p = newProject({ name: info.name, bpm: info.bpm, meter: info.meter.num }), i;
     p.tempo.meters[0].den = info.meter.den;
+    if (withTempo && midiTempoCheck(info).ok) { for (i = 0; i < info.tempoChanges.length; i++) { p.tempo.points.push({ tick: info.tempoChanges[i].tick, bpm: info.tempoChanges[i].bpm }); } p.tempo.points.sort(function (a, b) { return a.tick - b.tick; }); } // 9B-12: 途中のテンポもそのまま
     return p;
   }
 
@@ -1923,6 +1961,7 @@
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
+    TEMPO_MAX: TEMPO_MAX, secBetween: secBetween, tempoList: tempoList, tempoSet: tempoSet, tempoDel: tempoDel, delaySecAt: delaySecAt, midiTempoCheck: midiTempoCheck, // 9B-12
     SEND_DIVS: SEND_DIVS, SEND_DIV_ORDER: SEND_DIV_ORDER, SEND_FX: SEND_FX, REV_SEC: REV_SEC, TAIL_MAX: TAIL_MAX, sendClean: sendClean, sendOf: sendOf, sendSet: sendSet, sendFxClean: sendFxClean, sendFxOf: sendFxOf, sendFxSet: sendFxSet, sendFxReset: sendFxReset, sendLive: sendLive, sendKey: sendKey, delaySec: delaySec, sendTail: sendTail, // 9B-11
     AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
