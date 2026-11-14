@@ -1521,6 +1521,14 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dm .dm-mfx { min-width: 92px; }
 .dms-gr, .dms-pk, .dms-max { color: #ffd166; font-variant-numeric: tabular-nums; }
 .dms .dfx-unit { flex: 0 0 32px; width: 32px; }
+/* §342 9B-11: センド */
+.dm .dm-sfx { min-width: 64px; }
+.dm-send .dm-sf { min-width: 0; }
+.dm-send .dm-sv { width: 40px; }
+.dsf-divs { display: flex; gap: 6px; margin-top: 6px; }
+.dsf .dau-tg { flex: 1 1 25%; min-width: 0; min-height: 40px; padding: 0 2px; font-size: 12px; background: #2a3a4f; color: #adb5bd; line-height: 1.1; }
+.dsf .dau-tg small { display: block; font-size: 10px; }
+.dsf .dau-tg.sel { background: #ffd166; color: #10202e; border-color: #ffd166; font-weight: bold; }
 .da-btns .da-half { grid-column: span 2; font-size: 14px; }
 .da-btns .da-danger { background: #ef476f; color: #fff; }
 .da-btns .da-danger-o { background: transparent; color: #ff8fab; border: 2px solid #ef476f; }

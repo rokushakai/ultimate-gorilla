@@ -3100,4 +3100,78 @@ module.exports = async function () {
   AL.stop(); DL0.reset();
   var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errL.length === 0, "no Web Audio errors (9B-10)", errL.slice(0, 3));
+
+  // ================= 9B-11: センド FX（リバーブ・ディレイ）（§342）=================
+  var eS = H.load(), WS = eS.window, MS = WS.UGDawModel, DS = WS.UGDaw, AS = WS.UGArcade, SS = eS.store, CS = eS.counters;
+  SS.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgS = SS.ultimateGorillaSaveV2;
+  WS.indexedDB = fakeIDB(); fakeDecode(WS);
+  // --- モデル ---
+  var pS0 = MS.newProject({ now: 0 }); MS.setBpm(pS0, 120);
+  var tS0 = { id: "a" }; pS0.tracks = [tS0];
+  ok(JSON.stringify(MS.sendOf(tS0)) === '{"rev":0,"dly":0}' && JSON.stringify(MS.sendFxOf(pS0)) === '{"rev":{"on":true,"level":0.5},"dly":{"on":true,"div":"1/8","fb":0.3,"level":0.5}}' && !MS.sendLive(pS0).rev && !MS.sendLive(pS0).dly && tS0.sends === undefined, "defaults: sends 0, reverb on 50%, delay on 1/8 30% 50%; nothing live; nothing added to the track");
+  ok(MS.sendSet(tS0, "rev", 0.257).value === 0.26 && MS.sendSet(tS0, "rev", 7).value === 1 && !MS.sendSet(tS0, "dly", "x").ok && !MS.sendSet(tS0, "dly", NaN).ok && !MS.sendSet(tS0, "dly", Infinity).ok && !MS.sendSet(tS0, "dly", "").ok && !MS.sendSet(tS0, "zz", 0.5).ok && MS.sendOf(tS0).dly === 0, "sendSet: 0…1 in 1% steps; text / NaN / Infinity / empty / unknown refused");
+  ok(MS.sendFxSet(pS0, "dly", "fb", 0.99).value === 0.85 && MS.sendFxSet(pS0, "dly", "fb", -1).value === 0 && !MS.sendFxSet(pS0, "dly", "fb", "abc").ok && !MS.sendFxSet(pS0, "dly", "div", "1/3").ok && MS.sendFxSet(pS0, "dly", "div", "1/8.").ok && !MS.sendFxSet(pS0, "rev", "div", "1/4").ok && MS.sendFxSet(pS0, "rev", "level", 1.5).value === 1, "sendFxSet: feedback ≤ 85% (no runaway), only 1/4 · 1/8 · 1/8. · 1/16, bad values refused");
+  MS.sendFxSet(pS0, "dly", "fb", 0.3);
+  var divS = ["1/4", "1/8", "1/8.", "1/16"].map(function (d) { MS.sendFxSet(pS0, "dly", "div", d); return MS.delaySec(pS0); });
+  MS.setBpm(pS0, 20); MS.sendFxSet(pS0, "dly", "div", "1/4"); var slowS = MS.delaySec(pS0); MS.setBpm(pS0, 400); MS.sendFxSet(pS0, "dly", "div", "1/16"); var fastS = MS.delaySec(pS0); MS.setBpm(pS0, 120);
+  ok(divS.join() === "0.5,0.25,0.375,0.125" && slowS === 2 && fastS >= 0.02, "delay time from the song's BPM (120: 1/4 0.5 s, 1/8 0.25 s, 1/8. 0.375 s, 1/16 0.125 s), kept in 0.02…2 s", [divS, slowS, fastS]);
+  MS.sendFxSet(pS0, "dly", "div", "1/8");
+  ok(MS.sendLive(pS0).rev && !MS.sendLive(pS0).dly && MS.sendTail(pS0).sec === 3, "a reverb send → reverb live; tail stays 3 s (2.2 s reverb + 0.5)");
+  MS.sendSet(tS0, "dly", 0.5); MS.sendFxSet(pS0, "dly", "fb", 0.85); MS.sendFxSet(pS0, "dly", "div", "1/4"); var tlS = MS.sendTail(pS0);
+  ok(tlS.sec === 10 && tlS.capped, "delay 1/4 at 85% feedback needs > 10 s to fade → tail capped at 10 s (with a fade-out)");
+  MS.sendFxSet(pS0, "rev", "on", false); ok(!MS.sendLive(pS0).rev && MS.sendLive(pS0).dly, "reverb OFF → not live (sends kept)");
+  MS.sendFxReset(pS0); ok(pS0.master.sendFx === undefined && MS.sendFxOf(pS0).dly.fb === 0.3, "↺ all → back to defaults");
+  var clS = MS.clean({ tracks: [{ id: "a", sends: { rev: 5, dly: -1, z: 1 } }, { id: "b" }], master: { vol: 80, sendFx: { rev: { level: 9 }, dly: { div: "x", fb: 2 }, q: 1 } } });
+  ok(JSON.stringify(clS.tracks[0].sends) === '{"rev":1,"dly":0,"z":1}' && clS.tracks[1].sends === undefined && clS.master.sendFx.rev.level === 1 && clS.master.sendFx.dly.div === "1/8" && clS.master.sendFx.dly.fb === 0.85 && clS.master.sendFx.q === 1, "clean: sends / sendFx normalised, unknown keys kept, tracks without sends stay without");
+  var oldS = MS.clean(fx.record.project);
+  ok(oldS.tracks.every(function (t) { return t.sends === undefined; }) && oldS.master.sendFx === undefined && JSON.stringify(oldS) === JSON.stringify(MS.clean(JSON.parse(JSON.stringify(fx.record.project)))), "the v2.37 song: no sends added, unchanged");
+  // --- WAV: センド 0 はノードを足さない・センドありは DAW 専用の FX ---
+  var RS = H.makeEl("div"); DS.reset(); AS.start("daw", RS, {});
+  var pS = DS.proj.create("demo"); MS.setBpm(pS, 120); var LS = pS.tracks[0], BS = pS.tracks[1];
+  function kS() { return JSON.parse(JSON.stringify(CS.kinds)); }
+  async function wavS() { var k0 = kS(); await new Promise(function (r) { DS.wav.start(r); }); for (var g = 0; g < 900 && DS.wav.state().busy; g++) { await eS.wait(10); } var k1 = kS(), d = function (k) { return (k1[k] || 0) - (k0[k] || 0); }; return { st: DS.wav.state().state, gain: d("off:gain"), conv: d("off:conv"), delay: d("off:delay"), filter: d("off:filter"), sec: DS.wav.state().plan && DS.wav.state().plan.sec, music: DS.wav.state().plan && DS.wav.state().plan.music }; }
+  var w0S = await wavS();
+  DS.sendFx.set("rev", "level", 80); DS.sendFx.set("dly", "fb", 50); var w1S = await wavS();
+  ok(w0S.st === "done" && w1S.gain === w0S.gain && w1S.conv === w0S.conv && w1S.delay === w0S.delay && w1S.filter === w0S.filter && Math.abs(w0S.sec - w0S.music - 3) < 1e-9, "all sends 0 (even with FX return settings changed): the WAV graph is the v2.60 one, tail 3 s", [w0S, w1S]);
+  DS.mixer.setSend(LS.id, "rev", 0.4); var w2S = await wavS();
+  ok(w2S.conv === w0S.conv + 1 && w2S.delay === w0S.delay && w2S.gain === w0S.gain + 2 + 2, "reverb send on the lead: one DAW reverb (in + return) + a post-fader tap on each lead output", [w0S, w2S]);
+  DS.mixer.setSend(BS.id, "dly", 0.3); var w3S = await wavS();
+  ok(w3S.conv === w0S.conv + 1 && w3S.delay === w0S.delay + 1 && w3S.filter === w0S.filter + 1 && w3S.gain === w0S.gain + 4 + 5 && Math.abs(w3S.sec - w3S.music - 3.25) < 1e-9, "delay send on the bass: one DAW delay (in, feedback, return, 3 kHz filter) + taps; tail 3.25 s (1/8 = 0.25 s × (10 echoes to −60 dB at 50% + 1) + 0.5)", [w0S, w3S]);
+  DS.sendFx.set("dly", "fb", 85); DS.sendFx.set("dly", "div", "1/4"); var w4S = await wavS();
+  ok(Math.abs(w4S.sec - w4S.music - 10) < 1e-9, "feedback 85% at 1/4: WAV tail 10 s (the cap)", w4S.sec - w4S.music);
+  DS.sendFx.set("dly", "fb", 30); DS.sendFx.set("dly", "div", "1/8");
+  // --- 再生 ---
+  DS.play(); var PS = DS.player(), msS = PS.mix.__master, mxL = PS.mix[LS.id], mxB = PS.mix[BS.id];
+  ok(msS.send && msS.send.rev && msS.send.dly && msS.send.rev.ret.gain.value === 0.8 && Math.abs(msS.send.dly.d.delayTime.value - 0.25) < 1e-12 && msS.send.dly.fb.gain.value === 0.3 && mxL.main.tr && mxL.main.tr.gain.value === 0.4 && !mxL.main.td && mxB.main.td && mxB.main.td.gain.value === 0.3, "playback: DAW reverb (return 80%) and delay (1/8 = 0.25 s at 120 BPM, feedback 30%), taps after the pan with the send amounts");
+  var nS = CS.targets.length; DS.mixer.setSend(LS.id, "rev", 0.7); DS.sendFx.set("rev", "level", 30); DS.sendFx.set("dly", "div", "1/4"); var tgS = CS.targets.slice(nS);
+  ok(DS.player() === PS && tgS.some(function (x) { return x.v === 0.7 && x.tau === 0.01; }) && tgS.some(function (x) { return x.v === 0.3 && x.tau === 0.01; }) && tgS.some(function (x) { return x.v === 0.5 && x.tau === 0.05; }), "moving a send / return / delay time while playing: smooth, no restart");
+  DS.mixer.setSend(BS.id, "rev", 0.2); DS.mixer.commit(); WS.UGDaw.sendFx.commit(); DS.mixer.setSend(BS.id, "rev", 0.2);
+  var keyBefore = msS.send.key; DS.sendFx.set("rev", "level", 40);
+  ok(DS.player() !== PS && DS.player().mix.__master.send.key !== keyBefore && DS.player().mix[BS.id].main.tr, "a new send on another track changes the routing → restarts at the same place with the new tap");
+  PS = DS.player(); DS.sendFx.set("rev", "on", false); ok(DS.player() !== PS && !DS.player().mix.__master.send.rev, "reverb OFF while playing → restart without the reverb (no double sound)");
+  DS.sendFx.set("rev", "on", true);
+  var lgS = [], gS = DS.player().mix[LS.id].main.g; gS.gain.setTargetAtTime = function (v) { lgS.push(v); gS.gain.value = v; };
+  LS.mute = true; DS.updateMix(); ok(lgS[lgS.length - 1] === 0 && DS.player().mix[LS.id].main.tr, "mute: the track gain (before the send tap) goes to 0 → no new sound to the FX (post-fader)"); LS.mute = false; DS.updateMix();
+  DS.stop(); ok(!DS.player(), "stop clears the player (the FX nodes are disconnected)");
+  // --- 画面 ---
+  DS.showMixer(); var mhS = RS.innerHTML;
+  ok((mhS.match(/data-mxsr="/g) || []).length === pS.tracks.length && (mhS.match(/data-mxsd="/g) || []).length === pS.tracks.length && mhS.indexOf('data-mx="sendFx"') >= 0 && mhS.indexOf(">70%<") >= 0, "mixer: REV / DLY per track with %, 🌊 FX on the master row");
+  ok(DS.showSendFx() && RS.innerHTML.indexOf("リバーブ") >= 0 && RS.innerHTML.indexOf("ディレイ") >= 0 && (RS.innerHTML.match(/data-sfd="/g) || []).length === 4 && RS.innerHTML.indexOf("500ms") >= 0 && RS.innerHTML.indexOf("375ms") >= 0 && (RS.innerHTML.match(/data-fxr="/g) || []).length === 3 && RS.innerHTML.indexOf("85") >= 0, "FX return screen: reverb on/return, delay on / 1/4 1/8 1/8. 1/16 with ms / feedback / return, resets");
+  // --- 保存・ZIP・MIDI ---
+  DS.mixer.commit(); DS.sendFx.commit(); DS.flushSave();
+  var idS = DS.project().id, snS = JSON.stringify([DS.project().tracks.map(function (t) { return t.sends; }), DS.project().master.sendFx]);
+  DS.reload(); DS.proj.open(idS);
+  ok(JSON.stringify([DS.project().tracks.map(function (t) { return t.sends; }), DS.project().master.sendFx]) === snS && snS.indexOf('"rev":0.7') >= 0, "after a reload the sends and FX returns are the same", snS);
+  var exS = await new Promise(function (r) { DS.pack.exportZip(r); });
+  var eS2 = H.load(), WS2 = eS2.window, DS2 = WS2.UGDaw; WS2.indexedDB = fakeIDB(); fakeDecode(WS2);
+  var RS2 = H.makeEl("div"); DS2.reset(); WS2.UGArcade.start("daw", RS2, {});
+  var rqS = await impZ(DS2, blobAB(exS.blob)); DS2.proj.open(rqS.id);
+  ok(exS.ok && rqS.ok && JSON.stringify([DS2.project().tracks.map(function (t) { return t.sends; }), DS2.project().master.sendFx]) === snS, "ZIP → empty storage: sends and FX returns come back", rqS.why);
+  WS2.UGArcade.stop(); DS2.reset();
+  var xS = DS.midi.exportNow(); DS.midi.open(new Uint8Array(xS.bytes), "s.mid"); var rxS = DS.midi.importNow();
+  ok(xS.ok && rxS.ok && DS.project().tracks.every(function (t) { return t.sends === undefined; }), "MIDI export / import: the sends are not carried");
+  ok(SS.ultimateGorillaSaveV2 === rpgS, "the RPG save is untouched (9B-11)");
+  AS.stop(); DS.reset();
+  var errS = CS.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errS.length === 0, "no Web Audio errors (9B-11)", errS.slice(0, 3));
 };

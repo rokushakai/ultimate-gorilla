@@ -268,7 +268,7 @@
   }
   // §341 9A-4: 知らない項目は消さずに残す（新しい版で足した値・いまの画面で変えられない値を守る）
   var PROJECT_KEYS = ["type", "version", "id", "name", "created", "saved", "ppq", "tempo", "key", "markers", "tracks", "assets", "master", "practice", "legacy", "ext", "readOnly"];
-  var TRACK_KEYS = ["id", "name", "kind", "instrument", "vol", "pan", "mute", "solo", "fx", "clips", "auto", "ext"];
+  var TRACK_KEYS = ["id", "name", "kind", "instrument", "vol", "pan", "mute", "solo", "fx", "clips", "auto", "ext", "sends"];
   function keepUnknown(src, dst, known) {
     var k, v;
     for (k in src) {
@@ -305,7 +305,7 @@
     p.assets = []; // §341 9A-10: 素材の参照（形のおかしいものは捨てる・同じ ID は 1 つ）
     var sa = isArr(src.assets) ? src.assets : [], aseen = {};
     for (i = 0; i < sa.length && p.assets.length < 64; i++) { var ca = cleanAsset(sa[i]); if (ca && !aseen[ca.id]) { aseen[ca.id] = true; p.assets.push(ca); } }
-    if (isObj(src.master)) { p.master = copy(src.master); p.master.vol = num(p.master.vol, 80, 0, 100); p.master.fx = fxClean(p.master.fx); } // 9B-10: マスターの FX もトラックと同じ整え方
+    if (isObj(src.master)) { p.master = copy(src.master); p.master.vol = num(p.master.vol, 80, 0, 100); p.master.fx = fxClean(p.master.fx); if (p.master.sendFx !== undefined) { p.master.sendFx = sendFxClean(p.master.sendFx); } } // 9B-10: マスターの FX もトラックと同じ整え方・9B-11: センドの戻り
     if (isObj(src.practice)) { p.practice = copy(src.practice); }
     if (isObj(src.legacy)) { p.legacy = copy(src.legacy); }
     p.ext = isObj(src.ext) ? copy(src.ext) : {};
@@ -324,6 +324,7 @@
       t.clips.sort(function (a, b) { return a.start - b.start; });
       t.id = typeof s.id === "string" && s.id && !seen[s.id] ? s.id.substring(0, 20) : "";
       if (t.id) { seen[t.id] = true; }
+      if (s.sends !== undefined) { t.sends = sendClean(s.sends); } // 9B-11: 無いトラックには足さない（旧曲はそのまま）
       keepUnknown(s, t, TRACK_KEYS);
       p.tracks.push(t);
     }
@@ -512,6 +513,59 @@
   // 画面の値（いまの位置）: オートメーションが効いていれば その値、でなければ ふだんの値
   function autoStatic(t, target) { if (target === "vol") { return num(t.vol, 80, 0, 100); } if (target === "pan") { return num(t.pan, 0, -1, 1); } var f = fxOf(t); return f.eq[target.split(".")[1]]; }
   function autoNow(t, target, tick) { return autoActive(t, target) ? autoReal(target, autoValueAt(autoLane(t, target), tick)) : autoStatic(t, target); }
+
+  // ---------- §342 9B-11: センド FX（トラック → DAW 専用のリバーブ・ディレイ → Wet だけ → DAW のマスター）----------
+  // トラック: sends { rev, dly }（0〜1）。曲: master.sendFx { rev: { on, level }, dly: { on, div, fb, level } }
+  var SEND_STEP = 0.01, SEND_DIVS = { "1/4": 1, "1/8": 0.5, "1/8.": 0.75, "1/16": 0.25 }, SEND_DIV_ORDER = ["1/4", "1/8", "1/8.", "1/16"];
+  var SEND_FX = { rev: { level: [0.5, 0, 1, 0.01] }, dly: { level: [0.5, 0, 1, 0.01], fb: [0.3, 0, 0.85, 0.01] } };
+  var REV_SEC = 2.2, DLY_MIN = 0.02, DLY_MAX = 2, TAIL_MIN = 3, TAIL_MAX = 10;
+  function sendNum(v) { var n = Number(v); if (typeof v === "boolean" || v === null || v === "" || !isFinite(n)) { n = 0; } n = Math.max(0, Math.min(1, n)); return Math.round(n / SEND_STEP) * SEND_STEP > 1 ? 1 : Math.round(Math.round(n / SEND_STEP) * SEND_STEP * 100) / 100; }
+  function sendClean(s) { var o = isObj(s) ? copy(s) : {}; o.rev = sendNum(o.rev); o.dly = sendNum(o.dly); return o; }
+  function sendOf(t) { var s = t && isObj(t.sends) ? t.sends : {}; return { rev: sendNum(s.rev), dly: sendNum(s.dly) }; }
+  function sendBad(v) { return typeof v === "boolean" || v === null || v === undefined || String(v).replace(/\s/g, "") === "" || !isFinite(Number(v)); }
+  function sendSet(t, which, v) { if (!t || (which !== "rev" && which !== "dly") || sendBad(v)) { return { ok: false }; } var s = sendOf(t); if (!isObj(t.sends)) { t.sends = { rev: s.rev, dly: s.dly }; } t.sends[which] = sendNum(v); return { ok: true, value: t.sends[which] }; }
+  function sendFxClean(s) {
+    var o = isObj(s) ? copy(s) : {}, k;
+    ["rev", "dly"].forEach(function (part) {
+      var x = isObj(o[part]) ? o[part] : {}, d = SEND_FX[part];
+      x.on = x.on !== false;
+      for (k in d) { if (d.hasOwnProperty(k)) { x[k] = fxNum(x[k], d[k]); } }
+      if (part === "dly") { x.div = SEND_DIVS.hasOwnProperty(x.div) ? x.div : "1/8"; }
+      o[part] = x;
+    });
+    return o;
+  }
+  function sendFxOf(p) { var c = sendFxClean(p && p.master ? p.master.sendFx : null); return { rev: { on: c.rev.on, level: c.rev.level }, dly: { on: c.dly.on, div: c.dly.div, fb: c.dly.fb, level: c.dly.level } }; }
+  // part: "rev" | "dly"、key: "on" | "level" | "fb" | "div"
+  function sendFxSet(p, part, key, v) {
+    if (!p || (part !== "rev" && part !== "dly")) { return { ok: false }; }
+    if (!isObj(p.master)) { p.master = { vol: 80, rev: 0, dly: 0, fx: { items: [] } }; }
+    var cur = sendFxClean(p.master.sendFx), x = cur[part];
+    if (key === "on") { x.on = !!v; }
+    else if (key === "div") { if (part !== "dly" || !SEND_DIVS.hasOwnProperty(v)) { return { ok: false }; } x.div = v; }
+    else if (SEND_FX[part].hasOwnProperty(key)) { if (sendBad(v)) { return { ok: false }; } x[key] = fxNum(v, SEND_FX[part][key]); }
+    else { return { ok: false }; }
+    p.master.sendFx = cur;
+    return { ok: true, value: x[key] };
+  }
+  function sendFxReset(p, part) { if (!p || !isObj(p.master) || !isObj(p.master.sendFx)) { return true; } if (part === "rev" || part === "dly") { delete p.master.sendFx[part]; } else { delete p.master.sendFx; } return true; }
+  // 効くもの: その FX が ON で、送りが 0 でないトラックがある
+  function sendLive(p) {
+    var f = sendFxOf(p), l = p && isArr(p.tracks) ? p.tracks : [], rv = false, dl = false, i;
+    for (i = 0; i < l.length; i++) { var s = sendOf(l[i]); if (s.rev > 0) { rv = true; } if (s.dly > 0) { dl = true; } }
+    return { rev: f.rev.on && rv, dly: f.dly.on && dl, fx: f };
+  }
+  // つなぎの形（変われば鳴らしなおす）: FX の ON とトラックごとの「送りが 0 でない」
+  function sendKey(p) { var lv = sendLive(p), l = p && isArr(p.tracks) ? p.tracks : [], k = (lv.rev ? "R" : "-") + (lv.dly ? "D" : "-"), i; for (i = 0; i < l.length; i++) { var s = sendOf(l[i]); k += "|" + l[i].id + (lv.rev && s.rev > 0 ? "r" : "") + (lv.dly && s.dly > 0 ? "d" : ""); } return k; }
+  function delaySec(p) { var f = sendFxOf(p), b = bpmAt(p, 0); return Math.max(DLY_MIN, Math.min(DLY_MAX, 60 / b * SEND_DIVS[f.dly.div])); }
+  // 余韻（秒）: ふだん 3 秒。リバーブ 2.2＋0.5 秒・ディレイが −60dB になるまで。上限 10 秒（capped: こえた）
+  function sendTail(p) {
+    var lv = sendLive(p), need = TAIL_MIN, capped = false;
+    if (lv.rev) { need = Math.max(need, REV_SEC + 0.5); }
+    if (lv.dly) { var fb = lv.fx.dly.fb, n = fb > 0 ? Math.ceil(Math.log(0.001) / Math.log(fb)) : 1; need = Math.max(need, delaySec(p) * (n + 1) + 0.5); }
+    if (need > TAIL_MAX) { need = TAIL_MAX; capped = true; }
+    return { sec: need, capped: capped };
+  }
 
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
   function demoProject(now) {
@@ -1869,6 +1923,7 @@
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
+    SEND_DIVS: SEND_DIVS, SEND_DIV_ORDER: SEND_DIV_ORDER, SEND_FX: SEND_FX, REV_SEC: REV_SEC, TAIL_MAX: TAIL_MAX, sendClean: sendClean, sendOf: sendOf, sendSet: sendSet, sendFxClean: sendFxClean, sendFxOf: sendFxOf, sendFxSet: sendFxSet, sendFxReset: sendFxReset, sendLive: sendLive, sendKey: sendKey, delaySec: delaySec, sendTail: sendTail, // 9B-11
     AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
