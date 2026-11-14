@@ -385,8 +385,51 @@
   }
 
   // ---------- はじめの画面 ----------
+  // ---------- §342 9B-6: ゴリラDAW へ送る（テイク → MIDI のクリップ・変換と受け取り箱は DAW のモデルの takePayload／takeSend・編成のテイクはパートごと）----------
+  function strDawPreset(inst) { return inst === "pizz" || inst === "harp" ? "pluck" : "spad"; } // 弓 → ストリングスパッド・はじく → プラック
+  function strDawInstName(id) { return String(strOpt(STR_INSTS, id)[1]).replace(/&#x?[0-9a-f]+;/gi, "").replace(/^\s+|\s+$/g, ""); }
+  function strDawPayload(take) {
+    var M = window.UGDawModel, t = take ? strTakeClean(take, 0) : null, o, k;
+    if (!M || !M.takePayload) { return null; }
+    if (t && t.parts && t.parts.length >= 2) {
+      o = { parts: [] };
+      for (k = 0; k < t.parts.length; k++) { o.parts.push({ key: "strings" + k, part: strDawInstName(t.parts[k].inst), preset: strDawPreset(t.parts[k].inst), notes: t.parts[k].notes }); }
+    } else { o = { key: "strings", part: t ? strDawInstName(t.inst) : "ストリングス", preset: t ? strDawPreset(t.inst) : "lead" }; }
+    o.def = "ストリングスのテイク";
+    return M.takePayload(t, o);
+  }
+  function strDawCheck(take) { var M = window.UGDawModel; if (!M || !M.takeCheck) { return { ok: false, why: "ゴリラDAW（arcade-daw-model.js）を読みこめませんでした" }; } return M.takeCheck("strings", strDawPayload(take), take); }
+  function strDawSend(take) { var M = window.UGDawModel; if (!M || !M.takeSend) { return { ok: false, why: "ゴリラDAW（arcade-daw-model.js）を読みこめませんでした" }; } return M.takeSend("strings", strDawPayload(take), take); }
+  function strDawName(m) { var N = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]; return N[m % 12] + (Math.floor(m / 12) - 1); }
+  function strDawPresetName(id) { return { spad: "ストリングスパッド", pluck: "プラック", brass: "シンセブラス", soft: "やさしいサイン", lead: "のこぎりリード", bell: "ベル", pad: "ふわっとパッド", organ: "オルガン風", bass: "モノベース" }[id] || id; }
+  function strDawWarn(t) {
+    var w = ["音色は DAW のシンセ（ストリングスパッド・プラック）です。ゲームの弦楽器の音そのものではありません（DAW で変えられます）", "弓で弾いた音は、録音のときいつも強さ 0.8 です（弓の強弱の変化は入りません）", "なめらかな音程の動き（グリッサンド）・ビブラートは入りません（半音ごとの別々の音として入ります）"];
+    if (t && t.parts && t.parts.length >= 2) { w.push("編成のテイクは楽器ごとのパートで送ります（受け取りの画面で選べます）"); }
+    if (t && t.meter === 3) { w.push("3/4 拍子のテイクです"); }
+    return w;
+  }
+  // 確認の欄（u: { id, sent, err }）
+  function strDawHtml(take, u) {
+    var h = '<div class="uke-daw">', M = window.UGDawModel, k;
+    if (u.sent) {
+      return h + '<div><b>&#x1F4E4; 「' + escHtml(u.sent) + '」を送りました</b></div><div class="small">ゴリラDAW の「&#x1F4E5; 取り込み」で受け取れます（' + M.INBOX_DAYS + ' 日のあいだ）。テイクは変わっていません。</div>' +
+        '<div class="melody-actions"><button class="modal-btn" data-dawo="1">&#x1F39A;&#xFE0F; ゴリラDAW を開く</button><button class="modal-btn" data-dawx="1">閉じる</button></div></div>';
+    }
+    var c = strDawCheck(take), p = c.pay;
+    h += '<div><b>&#x1F3BB; ゴリラDAW へ送る</b>（MIDI のクリップになります）</div>';
+    if (p && p.parts.length) {
+      var pl = []; for (k = 0; k < p.parts.length; k++) { pl.push(p.parts[k].name + "（" + p.parts[k].notes.length + " 音 → " + strDawPresetName(p.parts[k].preset) + "）"); }
+      h += '<div class="small">テイク: <b>' + escHtml(p.name) + '</b>・BPM ' + p.bpm + '・' + p.meter + '/4 拍子・' + p.bars + ' 小節（' + p.sec + ' 秒）・' + p.notes + ' 音' + (p.poly > 1 ? '（同時に鳴る音は最大 ' + p.poly + '）' : '') + '<br>音の高さ: ' + strDawName(p.lo) + '〜' + strDawName(p.hi) +
+        '<br>' + (p.parts.length > 1 ? '編成 ' + p.parts.length + ' パート（DAW では楽器ごとのトラック）: ' : 'DAW の音色: ') + escHtml(pl.join("・")) + '</div>';
+      h += '<div class="small">' + strDawWarn(take).map(function (x) { return "・" + escHtml(x); }).join("<br>") + '</div>';
+    }
+    if (c.prev && c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; まだ DAW で受け取っていない「' + escHtml(c.prev) + '」があります。送ると、そちらは置きかわります</div>'; }
+    if (!c.ok) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + escHtml(c.why) + '</div>'; }
+    if (u.err) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + escHtml(u.err) + '</div>'; }
+    return h + '<div class="melody-actions"><button class="modal-btn" data-daws="1"' + (c.ok ? '' : ' disabled') + '>&#x1F4E4; 送る</button><button class="modal-btn" data-dawx="1">やめる</button></div></div>';
+  }
   function strSetup(root, ctl) {
-    var p = strPrefs(), note = "";
+    var p = strPrefs(), note = "", dawU = null; // 9B-6: DAW へ送る欄 { id, sent, err }
     function opts(list, cur, attr) {
       var h = "", i;
       for (i = 0; i < list.length; i++) { h += '<button class="modal-btn quiz-opt' + (cur === list[i][0] ? " active" : "") + '" data-' + attr + '="' + list[i][0] + '">' + list[i][1] + '</button>'; }
@@ -406,10 +449,12 @@
       if (note) { html += '<p class="small" style="color:#ffd166;margin:0 0 4px;">' + note + '</p>'; }
       if (!takes.length) { html += '<p class="small" style="color:#adb5bd;margin:0;">まだありません。弾く画面の「🔴 録音」で録れます。</p>'; }
       for (i = 0; i < takes.length; i++) {
-        html += '<div class="piano-take"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm + '・' + (takes[i].parts ? "編成 " + takes[i].parts.length + " パート" : strOpt(STR_INSTS, takes[i].inst)[1]) + '</span></span>' +
+        html += '<div class="piano-take take-4"><span>' + escHtml(takes[i].name) + '<br><span class="small" style="color:#adb5bd;">' + takes[i].notes.length + '音・BPM ' + takes[i].bpm + '・' + (takes[i].parts ? "編成 " + takes[i].parts.length + " パート" : strOpt(STR_INSTS, takes[i].inst)[1]) + '</span></span>' +
           '<button class="modal-btn" data-open="' + takes[i].id + '">&#x25B6;&#xFE0F; ひらく</button>' +
           '<button class="modal-btn" data-send="' + takes[i].id + '" title="シーケンサーへ送る">&#x1F3B8; 送る</button>' +
+          '<button class="modal-btn" data-dawt="' + takes[i].id + '" title="ゴリラDAW へ送る">&#x1F3BB; DAWへ</button>' +
           '<button class="modal-btn" data-del="' + takes[i].id + '">&#x1F5D1;&#xFE0F;</button></div>';
+        if (dawU && dawU.id === takes[i].id) { html += strDawHtml(takes[i], dawU); } // 9B-6
       }
       // §303: リズムゲーム
       var best = strBest();
@@ -434,6 +479,17 @@
           if ((v = el.getAttribute("data-rspeed"))) { p.rspeed = Number(v); strSavePrefs(p); draw(); return; }
           if ((v = el.getAttribute("data-song"))) { ctl.done({ mode: "rhythm", song: v, level: p.rlevel, speed: p.rspeed, land: p.land }); return; }
           if ((v = el.getAttribute("data-backing"))) { p.backing = v === "-" ? "" : v; strSavePrefs(p); draw(); return; }
+          // §342 9B-6: ゴリラDAW へ送る
+          if ((v = el.getAttribute("data-dawt"))) { dawU = { id: Number(v) }; note = ""; draw(); return; }
+          if (el.getAttribute("data-dawx")) { dawU = null; draw(); return; }
+          if (el.getAttribute("data-daws") && dawU && !dawU.busy) {
+            dawU.busy = true;
+            var dr = strDawSend(strTakeById(strTakesLoad(), dawU.id));
+            if (!dr.ok) { dawU.busy = false; dawU.err = dr.why; } else { dawU = { id: dawU.id, sent: dr.name }; }
+            draw();
+            return;
+          }
+          if (el.getAttribute("data-dawo")) { dawU = null; if (!(I.switchTo && I.switchTo("daw"))) { note = "メニューへ戻って、ゴリラDAW を開いてください"; draw(); } return; }
           if ((v = el.getAttribute("data-send"))) { var rs = strSendToSeq(strTakeById(strTakesLoad(), Number(v))); note = (rs.ok ? "&#x2705; " : "&#x26A0;&#xFE0F; ") + escHtml(rs.msg); draw(); return; }
           if ((v = el.getAttribute("data-del"))) {
             var list = strTakesLoad(), t = strTakeById(list, Number(v));
@@ -1407,6 +1463,7 @@
   window.UGStrings = {
     H: STR_H, INSTS: STR_INSTS, VIEWS: STR_VIEWS, COLS: STR_COLS, BOARD_Y: STR_BOARD_Y, BOW_X: STR_BOW_X, PREFS_KEY: STR_PREFS_KEY, TAKES_KEY: STR_TAKES_KEY, TAKES_MAX: STR_TAKES_MAX, SEQ_MAX: STR_SEQ_MAX,
     layout: strLayout, colX: strColX, geom: function () { return { H: STR_H, COLS: STR_COLS, BOARD_X: STR_BOARD_X, BOARD_R: STR_BOARD_R, BOARD_Y: STR_BOARD_Y, BOARD_BOT: STR_BOARD_BOT, BOW_X: STR_BOW_X, BOW_R: STR_BOW_R, MIRROR: STR_MIRROR, LAND: STR_LAND }; }, boardAt: strBoardAt, bowRow: strBowRow, bowLevel: strBowLevel, rowLineY: strRowLineY, chordRect: strChordRect, chordAt: strChordAt, voicing: strVoicing,
+    dawPayload: strDawPayload, dawCheck: strDawCheck, dawSend: strDawSend, takeClean: strTakeClean, takesSave: strTakesSave, // 9B-6
     voice: strVoice, sustains: strSustains, note: strNote, hold: strHold, pitch: strPitch, level: strLevel, stop: strStop, vibrato: strVibrato, partsClean: strPartsClean, playList: strPlayList, ORCH_MAX: STR_ORCH_MAX, takeById: strTakeById, ORCH_PRESETS: STR_ORCH_PRESETS, orchClean: strOrchClean, orchNotes: strOrchNotes, presetParts: strPresetParts, SONGS: STR_SONGS, chart: strChart, BEST_KEY: STR_BEST_KEY, PATS: STR_PATS, pat: strPat, vol: strVol, prefs: strPrefs, notesClean: strNotesClean, takesLoad: strTakesLoad, takeAdd: strTakeAdd, sendToSeq: strSendToSeq
   };
 })();

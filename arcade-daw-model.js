@@ -1172,7 +1172,7 @@
 
   // ---------- §342 9B-2: ゲームセンターからの受け取り箱（localStorage に 1 つだけ・同じブラウザの中だけ）----------
   var INBOX_KEY = "ultimateGorillaDawInboxV1", INBOX_TYPE = "ultimate-gorilla-daw-inbox", INBOX_DAYS = 7, INBOX_MAX_BYTES = 512 * 1024, INBOX_MAX_PARTS = 8;
-  var INBOX_FROM = { ukulele: "&#x1F3B8; ゴリラウクレレ（コード・シーケンサー）", piano: "&#x1F3B9; ゴリラピアノ（テイク）", drum: "&#x1F941; ゴリラドラム", bass: "&#x1F3B8; ゴリラベース（テイク）", guitar: "&#x1F3B8; ゴリラギター（テイク）" }; // 9B-3: ピアノ・ドラム・9B-5: ベース・ギター
+  var INBOX_FROM = { ukulele: "&#x1F3B8; ゴリラウクレレ（コード・シーケンサー）", piano: "&#x1F3B9; ゴリラピアノ（テイク）", drum: "&#x1F941; ゴリラドラム", bass: "&#x1F3B8; ゴリラベース（テイク）", guitar: "&#x1F3B8; ゴリラギター（テイク）", strings: "&#x1F3BB; ゴリラストリングス（テイク）", horn: "&#x1F3BA; ゴリラホーン（テイク）" }; // 9B-3: ピアノ・ドラム・9B-5: ベース・ギター・9B-6: ストリングス・ホーン
   var INBOX_PRESETS = ["pluck", "bass", "pad", "spad", "lead", "soft", "brass", "organ", "bell", "chip", "drum"]; // "drum" ＝ ドラムのトラック（9B-3）
   // §342 9B-3: ゴリラドラムの番号 → 名前（DAW の 16 ステップの行。5 つのほかは、その音があるクリップだけ）。25・26 は音のない操作（取りこまない）
   var DRUM_NAMES = { 36: "キック", 38: "スネア", 39: "クラップ", 42: "ハイハット（閉）", 46: "ハイハット（開）", 37: "リム", 47: "タム", 49: "クラッシュ", 51: "ライド", 48: "タム（高）", 45: "タム（中）", 43: "フロアタム",
@@ -1299,27 +1299,33 @@
   }
   // ---------- §342 9B-5: 拍のテイク（ゴリラベース・ゴリラギター）→ 送る形・確かめる・送る（2 つの楽器で共通。元のテイクは変えない）----------
   // take: { id, name, bpm, meter, notes: [[拍, 長さ, MIDI, 強さ?]…] }  o: { key, part（パートの名前）, preset, def（名前が無いとき）}
+  // 9B-6: o.parts ＝ [{ key, part, preset, notes（拍）}]（編成のテイク ＝ 楽器ごと）。無いときは take.notes を 1 パート（9B-5 と同じ結果）
   function takePayload(take, o) {
     o = o || {};
-    var src = take && isArr(take.notes) ? take.notes : [], notes = [], i, end = 0, lo = 127, hi = 0;
-    for (i = 0; i < src.length && notes.length < MAX_NOTES; i++) {
-      var n = src[i];
-      if (!isArr(n)) { continue; }
-      var b = Number(n[0]), d = Number(n[1]), m = Number(n[2]), v = n.length > 3 ? Number(n[3]) : 0.8;
-      if (!isFinite(b) || b < 0 || !isFinite(d) || d <= 0 || !isFinite(m) || m < 0 || m > 127) { continue; }
-      var t = Math.max(0, Math.round(b * PPQ)), dd = Math.max(1, Math.round(d * PPQ));
-      notes.push([t, dd, Math.round(m), Math.round(num(v, 0.8, 0, 1) * 1000) / 1000]);
-      end = Math.max(end, t + dd); lo = Math.min(lo, Math.round(m)); hi = Math.max(hi, Math.round(m));
+    var list = isArr(o.parts) && o.parts.length ? o.parts : [{ key: o.key || "take", part: o.part || "テイク", preset: o.preset || "lead", notes: take && take.notes }];
+    var parts = [], all = [], i, j, end = 0, lo = 127, hi = 0;
+    for (j = 0; j < list.length; j++) {
+      var src = isArr(list[j].notes) ? list[j].notes : [], notes = [];
+      for (i = 0; i < src.length && notes.length < MAX_NOTES; i++) {
+        var n = src[i];
+        if (!isArr(n)) { continue; }
+        var b = Number(n[0]), d = Number(n[1]), m = Number(n[2]), v = n.length > 3 ? Number(n[3]) : 0.8;
+        if (!isFinite(b) || b < 0 || !isFinite(d) || d <= 0 || !isFinite(m) || m < 0 || m > 127) { continue; }
+        var t = Math.max(0, Math.round(b * PPQ)), dd = Math.max(1, Math.round(d * PPQ));
+        notes.push([t, dd, Math.round(m), Math.round(num(v, 0.8, 0, 1) * 1000) / 1000]);
+        end = Math.max(end, t + dd); lo = Math.min(lo, Math.round(m)); hi = Math.max(hi, Math.round(m));
+      }
+      notes.sort(function (a, c) { return a[0] - c[0] || a[2] - c[2]; });
+      if (notes.length) { parts.push({ key: String(list[j].key || "take" + j), name: list[j].part || "テイク", preset: list[j].preset || "lead", notes: notes }); all = all.concat(notes); }
     }
-    notes.sort(function (a, c) { return a[0] - c[0] || a[2] - c[2]; });
-    // 同時に鳴る音の最大（ストロークは弦ごとにずれるので、同じ tick ではなく重なりで数える）
+    // 同時に鳴る音の最大（ストロークは弦ごとにずれるので、同じ tick ではなく重なりで数える。全部のパート）
     var evs = [], poly = 0, cur = 0;
-    for (i = 0; i < notes.length; i++) { evs.push([notes[i][0], 1], [notes[i][0] + notes[i][1], -1]); }
+    for (i = 0; i < all.length; i++) { evs.push([all[i][0], 1], [all[i][0] + all[i][1], -1]); }
     evs.sort(function (a, c) { return a[0] - c[0] || a[1] - c[1]; });
     for (i = 0; i < evs.length; i++) { cur += evs[i][1]; poly = Math.max(poly, cur); }
     var meter = take && take.meter === 3 ? 3 : 4, bpm = take && isFinite(Number(take.bpm)) ? Number(take.bpm) : 100, bar = PPQ * meter, len = Math.max(bar, Math.ceil(end / bar) * bar);
-    return { name: str(String(take && take.name || o.def || "テイク"), "テイク", 40), bpm: bpm, meter: meter, len: len, tempoRows: 0, notes: notes.length, poly: poly, lo: notes.length ? lo : null, hi: notes.length ? hi : null,
-      bars: Math.round(len / bar), sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, parts: notes.length ? [{ key: o.key || "take", name: o.part || "テイク", preset: o.preset || "lead", notes: notes }] : [], skipped: [],
+    return { name: str(String(take && take.name || o.def || "テイク"), "テイク", 40), bpm: bpm, meter: meter, len: len, tempoRows: 0, notes: all.length, poly: poly, lo: all.length ? lo : null, hi: all.length ? hi : null,
+      bars: Math.round(len / bar), sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, parts: parts, skipped: [],
       src: take ? { kind: "take", id: take.id, name: take.name } : null };
   }
   function takeCheck(from, pay, take) {
@@ -1345,7 +1351,7 @@
     for (i = 0; i < plan.items.length; i++) {
       var it = plan.items[i], t = it.track;
       if (!t && it.part.preset === "drum") { if (p.tracks.length >= MAX_TRACKS) { return { ok: false, why: "トラックを足せませんでした" }; } t = newTrack(p, it.part.name, drumInstrument()); t.ext.icon = "&#x1F941;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); } // 9B-3: ドラム（空のパターンは作らない）
-      if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } t.ext.icon = it.part.preset === "pluck" || box.from === "bass" || box.from === "guitar" ? "&#x1F3B8;" : "&#x1F3B5;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
+      if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } t.ext.icon = box.from === "strings" ? "&#x1F3BB;" : (box.from === "horn" ? "&#x1F3BA;" : (it.part.preset === "pluck" || box.from === "bass" || box.from === "guitar" ? "&#x1F3B8;" : "&#x1F3B5;")); t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
       for (j = 0; j < it.clips.length; j++) {
         var q = it.clips[j], nm = str(it.part.name + "（" + box.name + "）" + (it.clips.length > 1 ? " " + (j + 1) : ""), "", 40);
         var c = newMidiClip(p, t, q.start, q.len, q.notes, nm);

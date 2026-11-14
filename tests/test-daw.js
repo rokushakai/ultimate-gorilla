@@ -802,20 +802,21 @@ module.exports = async function () {
     function isAB(v) { return Object.prototype.toString.call(v) === "[object ArrayBuffer]"; }
     function clone(v) { if (isAB(v)) { return v.slice(0); } if (v && typeof v === "object") { var o = Array.isArray(v) ? [] : {}, k; for (k in v) { o[k] = clone(v[k]); } return o; } return v; }
     function makeTx(D, mode) {
-      var tx = { pending: [], aborted: false }, fail = mode === "readwrite" && api.failNext;
+      var tx = { pending: [], aborted: false, reads: 0 }, fail = mode === "readwrite" && api.failNext; // 9B-6: reads ＝ まだ届いていない読みとり（本物と同じく、結果が先・完了があと）
       if (fail) { api.failNext = null; }
       tx.objectStore = function (n) {
         var S = D.stores[n];
         return {
-          get: function (k) { var r = {}; setTimeout(function () { r.result = S.rows[k] ? clone(S.rows[k]) : undefined; if (r.onsuccess) { r.onsuccess(); } }, 0); return r; },
-          getAll: function () { var r = {}; setTimeout(function () { r.result = Object.keys(S.rows).map(function (k) { return clone(S.rows[k]); }); if (r.onsuccess) { r.onsuccess(); } }, 0); return r; }, // 9A-15
-          getAllKeys: function () { var r = {}; setTimeout(function () { r.result = Object.keys(S.rows); if (r.onsuccess) { r.onsuccess(); } }, 0); return r; },
+          get: function (k) { var r = {}; tx.reads++; setTimeout(function () { r.result = S.rows[k] ? clone(S.rows[k]) : undefined; if (r.onsuccess) { r.onsuccess(); } tx.reads--; }, 0); return r; },
+          getAll: function () { var r = {}; tx.reads++; setTimeout(function () { r.result = Object.keys(S.rows).map(function (k) { return clone(S.rows[k]); }); if (r.onsuccess) { r.onsuccess(); } tx.reads--; }, 0); return r; }, // 9A-15
+          getAllKeys: function () { var r = {}; tx.reads++; setTimeout(function () { r.result = Object.keys(S.rows); if (r.onsuccess) { r.onsuccess(); } tx.reads--; }, 0); return r; },
           "delete": function (k) { if (mode !== "readwrite") { throw new Error("ReadOnlyError"); } tx.pending.push([S, k, undefined, true]); },
           put: function (val) { if (mode !== "readwrite") { throw new Error("ReadOnlyError"); } tx.pending.push([S, val[S.key], clone(val)]); }
         };
       };
       tx.abort = function () { tx.aborted = true; };
-      setTimeout(function () {
+      setTimeout(function fin() {
+        if (tx.reads > 0) { setTimeout(fin, 1); return; } // 読みとりの結果がみな届いてから完了（タイマーがまとめて動いても順番を守る）
         if (fail || tx.aborted) { tx.error = { name: fail || "AbortError" }; if (tx.onerror) { tx.onerror(); } if (tx.onabort) { tx.onabort(); } return; }
         tx.pending.forEach(function (x) { if (x[3]) { delete x[0].rows[x[1]]; api.deletes = (api.deletes || 0) + 1; } else { x[0].rows[x[1]] = x[2]; api.writes++; } });
         if (tx.oncomplete) { tx.oncomplete(); }
@@ -1730,7 +1731,7 @@ module.exports = async function () {
   ok(dOk.ok && !rows().blobs.rows[H4] && !rows().meta.rows[H4] && Object.keys(rows().blobs.rows).length === nBefore - 1, "X4 is deleted (WAV and meta), verified gone", dOk.why);
   ok([H1, H2, H3, H5].every(function (h) { return rows().blobs.rows[h] && sha(rows().blobs.rows[h].data) === sha0[h]; }) && !!rows().blobs.rows[H6], "every protected asset is byte-identical after the deletion (SHA-256)");
   await loadL();
-  ok(DL.lib.state().list.length === 5 && DL.lib.state().list.every(function (a) { return a.id !== H4; }), "the list updates after deleting");
+  ok(DL.lib.state().list.length === 5 && DL.lib.state().list.every(function (a) { return a.id !== H4; }), "the list updates after deleting", { ids: DL.lib.state().list.map(function (a) { return a.id.slice(0, 8); }), rows: Object.keys(rows().blobs.rows).length });
   // やめる（確かめの欄）＝ 何も変えない
   DL.lib.state().confirm = H6; var hc = DL.lib.html();
   ok(hc.indexOf('data-lby="' + H6 + '"') < 0 && hc.indexOf("やめる") < 0, "no confirm for a protected asset (X6 is in undo)");
@@ -2586,4 +2587,106 @@ module.exports = async function () {
   WB.UGArcade.stop(); DB.reset();
   var errB = eB.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errB.length === 0, "no Web Audio errors (9B-5)", errB.slice(0, 3));
+  // ================= 9B-6: ゴリラストリングス・ゴリラホーン → ゴリラDAW（§342）=================
+  var eS = H.load(), WS = eS.window, MS = WS.UGDawModel, DS = WS.UGDaw, STR = WS.UGStrings, HRN = WS.UGHorn, SS = eS.store;
+  // --- モデル: 複数のパート（1 パートのときは 9B-5 と同じ）---
+  var mp = MS.takePayload({ id: 4, name: "E", bpm: 80, meter: 4, notes: [] }, { parts: [{ key: "a0", part: "A", preset: "spad", notes: [[0, 2, 60], [2, 2, 62, 0.5]] }, { key: "a1", part: "B", preset: "pluck", notes: [[0, 4, 48]] }, { key: "a2", part: "C", preset: "lead", notes: [] }] });
+  ok(mp.parts.length === 2 && mp.notes === 3 && mp.poly === 2 && mp.len === 3840 && mp.parts[0].key === "a0" && mp.parts[1].preset === "pluck" && JSON.stringify(mp.parts[0].notes) === JSON.stringify([[0, 1920, 60, 0.8], [1920, 1920, 62, 0.5]]), "takePayload with parts: one part per instrument, empty parts left out, overlap counted across parts", mp);
+  var one = MS.takePayload({ id: 1, name: "x", bpm: 100, meter: 4, notes: [[0, 1, 40]] }, { key: "bass", part: "B", preset: "bass" });
+  ok(one.parts.length === 1 && one.parts[0].key === "bass" && JSON.stringify(one.parts[0].notes) === "[[0,960,40,0.8]]", "takePayload without parts: the same single part as 9B-5");
+  // --- ゴリラストリングス ---
+  var sTake = STR.takeClean({ id: 3, name: "メロディ", bpm: 90, meter: 4, inst: "violin", notes: [[0, 2, 76], [2, 1, 74], [3, 1, 72], [4, 4, 71]] }, 0);
+  var sPay = STR.dawPayload(sTake);
+  ok(sPay.parts.length === 1 && sPay.parts[0].key === "strings" && sPay.parts[0].preset === "spad" && sPay.parts[0].name === "バイオリン" && sPay.notes === 4 && sPay.bars === 2 && JSON.stringify(sPay.parts[0].notes) === JSON.stringify([[0, 1920, 76, 0.8], [1920, 960, 74, 0.8], [2880, 960, 72, 0.8], [3840, 3840, 71, 0.8]]), "strings take (violin) → 1 part, ストリングスパッド, bowed notes at velocity 0.8", sPay);
+  ok(STR.dawPayload(STR.takeClean({ id: 1, inst: "pizz", notes: [[0, 0.25, 60, 0.6]] }, 0)).parts[0].preset === "pluck" && STR.dawPayload(STR.takeClean({ id: 1, inst: "harp", notes: [[0, 1, 60]] }, 0)).parts[0].preset === "pluck", "pizzicato / harp → プラック");
+  var eTake = STR.takeClean({ id: 6, name: "合奏", bpm: 90, meter: 4, inst: "violin", notes: [[0, 4, 72], [0, 4, 48], [4, 4, 71], [4, 4, 43]], parts: [{ inst: "violin", notes: [[0, 4, 72], [4, 4, 71]] }, { inst: "cello", notes: [[0, 4, 48], [4, 4, 43]] }] }, 0);
+  var ePay = STR.dawPayload(eTake);
+  ok(ePay.parts.length === 2 && ePay.parts[0].key === "strings0" && ePay.parts[1].key === "strings1" && ePay.parts[0].name === "バイオリン" && ePay.parts[1].name === "チェロ" && ePay.notes === 4 && ePay.poly === 2, "an ensemble take → one part per instrument (violin / cello)", ePay.parts.map(function (q) { return q.key + ":" + q.name; }));
+  STR.takesSave([sTake, eTake]); var sRaw = SS[STR.TAKES_KEY];
+  ok(STR.dawSend(eTake).ok && MS.inboxRead().box.from === "strings" && MS.inboxRead().box.parts.length === 2 && SS[STR.TAKES_KEY] === sRaw, "strings dawSend: the box has 2 parts; the saved takes are untouched");
+  ok(!STR.dawCheck(null).ok && !STR.dawCheck(STR.takeClean({ id: 9, notes: [] }, 0)).ok, "strings: no take / an empty take → refused");
+  // --- ゴリラホーン ---
+  var hTake = HRN.takeClean({ id: 2, name: "ファンファーレ", bpm: 120, meter: 4, inst: "trumpet", notes: [[0, 0.5, 67, 0.9], [0.5, 0.5, 67, 0.6], [1, 1, 72, 1], [2, 2, 76, 0.45]] }, 0);
+  var hPay = HRN.dawPayload(hTake);
+  ok(hPay.parts.length === 1 && hPay.parts[0].key === "horn" && hPay.parts[0].preset === "brass" && hPay.parts[0].name === "トランペット" && JSON.stringify(hPay.parts[0].notes) === JSON.stringify([[0, 480, 67, 0.9], [480, 480, 67, 0.6], [960, 960, 72, 1], [1920, 1920, 76, 0.45]]), "horn take (trumpet) → シンセブラス, velocities kept", hPay);
+  ok(HRN.dawPayload(HRN.takeClean({ id: 1, inst: "flute", notes: [[0, 1, 72]] }, 0)).parts[0].preset === "soft" && HRN.dawPayload(HRN.takeClean({ id: 1, inst: "asax", notes: [[0, 1, 60]] }, 0)).parts[0].preset === "brass", "flute → やさしいサイン, sax → シンセブラス");
+  HRN.takesSave([hTake]); var hRaw = SS[HRN.TAKES_KEY];
+  ok(HRN.dawSend(hTake).ok && MS.inboxRead().box.from === "horn" && SS[HRN.TAKES_KEY] === hRaw, "horn dawSend: the box is written; the saved takes are untouched");
+  var hMade = MS.inboxMake("horn", hPay);
+  function hBad(f) { var o = JSON.parse(hMade.json); f(o); return MS.inboxClean(o); }
+  ok(!hBad(function (o) { o.parts[0].notes[0][2] = 128; }).ok && !hBad(function (o) { o.parts[0].notes[0][3] = 2; }).ok && !hBad(function (o) { o.from = "flute"; }).ok && !hBad(function (o) { o.parts = []; }).ok, "a broken horn box (pitch 128 / velocity 2 / unknown game / no parts) is refused");
+
+  // --- 7 つの楽器の曲 ---
+  var IDBS = fakeIDB(); WS.indexedDB = IDBS; fakeDecode(WS);
+  var RS = H.makeEl("div"); DS.reset(); WS.UGArcade.start("strings", RS, {});
+  ok(RS.innerHTML.indexOf('data-dawt="3"') >= 0 && RS.innerHTML.indexOf("take-4") >= 0, "strings setup: 🎻 DAWへ on each take, buttons under the name");
+  WS.UGArcade.start("horn", RS, {}); ok(RS.innerHTML.indexOf('data-dawt="2"') >= 0 && RS.innerHTML.indexOf("take-4") >= 0, "horn setup: 🎺 DAWへ");
+  WS.UGArcade.stop(); WS.UGArcade.start("daw", RS, {});
+  DS.proj.create("empty"); var p7 = DS.project(); p7.name = "7 つの楽器"; while (p7.tracks.length) { p7.tracks.pop(); } DS.markDirty(); MS.inboxClear();
+  function imp7(send) { send(); DS.inbox.open(); return DS.inbox.importNow(); }
+  var r7 = [];
+  r7.push(imp7(function () { WS.UGUkulele.dawSend(WS.UGUkulele.seqClean({ bpm: 90, rows: [{ type: "chord", name: "C", len: "w" }, { type: "chord", name: "G", len: "w" }] }), false, "伴奏"); }));
+  r7.push(imp7(function () { WS.UGPiano.dawSend(WS.UGPiano.takeClean({ id: 8, name: "メロ", bpm: 90, meter: 4, prog: 0, notes: [[0, 1, 72], [1, 1, 74], [2, 2, 76], [4, 4, 79]] }, 0)); }));
+  r7.push(imp7(function () { WS.UGDrum.dawSend("take", WS.UGDrum.takeClean({ id: 9, name: "リズム", bpm: 90, notes: [[0, 36, 0.9], [1, 38, 0.8], [2, 36, 0.9], [3, 38, 0.8]] }, 0)); }));
+  r7.push(imp7(function () { WS.UGBass.dawSend(WS.UGBass.takeClean({ id: 5, name: "ベース", bpm: 90, meter: 4, prog: 33, notes: [[0, 2, 36], [2, 2, 43], [4, 4, 31]] }, 0)); }));
+  r7.push(imp7(function () { WS.UGGuitar.dawSend(WS.UGGuitar.takeClean({ id: 2, name: "コード", bpm: 90, meter: 4, voice: "steel", notes: [[0, 2, 48], [0.02, 2, 52], [0.04, 2, 55], [4, 2, 43, 0.6]] }, 0)); }));
+  ok(r7.every(function (r) { return r.ok; }) && DS.project().tracks.length === 5, "5 instruments imported (ukulele, piano, drums, bass, guitar)", r7.map(function (r) { return r.why || "ok"; }));
+  // ストリングス（編成 2 パート）: 受け取りの画面 → やめる → 変わらない
+  STR.dawSend(eTake); var b7 = JSON.stringify(DS.project().tracks); DS.inbox.open();
+  var ib7 = DS.inbox.html();
+  ok(ib7.indexOf("ゴリラストリングス") >= 0 && ib7.indexOf("合奏") >= 0 && ib7.indexOf("バイオリン") >= 0 && ib7.indexOf("チェロ") >= 0 && ib7.indexOf("BPM 90") >= 0 && ib7.indexOf("2 小節") >= 0, "📥 screen for strings: source game, take, both parts, BPM, length");
+  DS.state().view = "arr"; ok(JSON.stringify(DS.project().tracks) === b7 && MS.inboxRead().box.from === "strings", "cancel: nothing changes, the box stays");
+  var ui7 = DS.inbox.ui(); ok(ui7.parts.strings0 === true && ui7.parts.strings1 === true, "an ensemble box: both parts are selected from the start");
+  var u7 = DS.undoDepth(), rS7 = DS.inbox.importNow();
+  ok(rS7.ok && rS7.tracks.length === 2 && DS.undoDepth() === u7 + 1 && DS.backGame() === "strings" && DS.project().tracks[5].ext.icon === "&#x1F3BB;", "✅ strings: 2 tracks (violin / cello) in one ↶ step; back → ゴリラストリングス", rS7.why);
+  DS.ops.undo(); ok(JSON.stringify(DS.project().tracks) === b7, "↶ removes both strings tracks exactly");
+  STR.dawSend(eTake); var sJ = SS[MS.INBOX_KEY]; DS.inbox.open(); ui7 = DS.inbox.ui(); ui7.parts.strings0 = true; ui7.parts.strings1 = true; rS7 = DS.inbox.importNow();
+  SS[MS.INBOX_KEY] = sJ; var dup7 = DS.inbox.plan();
+  ok(rS7.ok && dup7 && !dup7.ok && /もう取りこんであります/.test(dup7.why), "the same strings box again → refused (no double import)");
+  MS.inboxClear();
+  var rH7 = imp7(function () { HRN.dawSend(hTake); });
+  var pS7 = DS.project(), T7 = pS7.tracks;
+  ok(rH7.ok && T7.length === 8 && T7[7].instrument.ext.preset === "brass" && T7[7].ext.icon === "&#x1F3BA;" && DS.backGame() === "horn" && T7[5].instrument.ext.preset === "spad", "7 instruments in one song (8 tracks: the ensemble has violin + cello)", T7.map(function (t) { return t.name; }));
+  ok(JSON.stringify(T7[5].clips[0].notes) === JSON.stringify(ePay.parts[0].notes) && JSON.stringify(T7[6].clips[0].notes) === JSON.stringify(ePay.parts[1].notes) && JSON.stringify(T7[7].clips[0].notes) === JSON.stringify(hPay.parts[0].notes), "imported strings / horn notes = the takes (timing, length, pitch, velocity)");
+  // 上限: トラック 16 本をこえる取りこみは理由を出して断る（曲は変えない）
+  var pFull = MS.emptyProject(0); while (pFull.tracks.length < 15) { MS.addTrack(pFull, "t" + pFull.tracks.length, "lead"); }
+  var plFull = MS.importPlan(pFull, MS.inboxMake("strings", ePay).box, { bar: 1 });
+  ok(!plFull.ok && /16 本/.test(plFull.why) && pFull.tracks.length === 15, "a 2-part box into a song with 15 tracks → refused (16 tracks max)", plFull.why);
+  // ピアノロール・🎼・🔁・📋・ミキサー・WAV
+  DS.openEditor(T7[5].clips[0].id); ok(DS.state().view === "roll", "the violin clip opens in the piano roll");
+  var nV = T7[5].clips[0].notes.length; DS.edit.add(960, 79); ok(DS.project().tracks[5].clips[0].notes.length === nV + 1, "piano roll: a violin note added");
+  DS.ops.undo(); DS.state().view = "arr"; pS7 = DS.project(); T7 = pS7.tracks; ok(T7[5].clips[0].notes.length === nV, "↶ removes it");
+  DS.sections.add({ name: "A", bar: 1, bars: 2 });
+  ok(DS.ops.repeat(T7[7].clips[0].id, 1) === true && T7[7].clips.length === 2, "🔁 the horn clip ×1");
+  var cp7 = DS.sections.copy("s1", 5);
+  ok(cp7.ok && cp7.clips.length >= 8, "📋 section A → bar 5 copies every instrument", cp7.why || cp7.clips.length);
+  async function wav7() { await new Promise(function (r) { DS.wav.start(r); }); for (var g = 0; g < 900 && DS.wav.state().busy; g++) { await eS.wait(10); } var c = {}; DS.wav.state().log.forEach(function (x) { c[x.track] = (c[x.track] || 0) + 1; }); return c; }
+  var c7 = await wav7();
+  ok(DS.wav.state().state === "done" && T7.every(function (t) { return c7[t.id] > 0 && c7[t.id] === MS.noteEvents(DS.project(), 0, Infinity).filter(function (e) { return e.track === t.id; }).length; }) && c7[T7[7].id] === 4 * T7[7].clips.length, "WAV: all 8 tracks of the 7 instruments play, every note of every clip (horn " + T7[7].clips.length + " clips)", c7);
+  T7[5].solo = true; T7[6].solo = true; DS.updateMix(); var c7s = await wav7();
+  ok(Object.keys(c7s).sort().join() === [T7[5].id, T7[6].id].sort().join(), "solo the strings → only violin and cello play", c7s);
+  T7[5].solo = false; T7[6].solo = false; T7[7].mute = true; DS.updateMix(); var c7m = await wav7();
+  ok(!c7m[T7[7].id] && c7m[T7[5].id] === 4, "mute the horn → silent", c7m);
+  T7[7].mute = false; DS.markDirty(); DS.flushSave();
+  // MIDI → 読みなおし
+  function ev7(p) { var o = {}; MS.noteEvents(p, 0, Infinity).forEach(function (e) { var nm = p.tracks[e.ti].name; (o[nm] = o[nm] || []).push([e.tick, e.end - e.tick, e.m, e.v]); }); for (var k in o) { o[k].sort(function (a, b) { return a[0] - b[0] || a[2] - b[2] || a[1] - b[1]; }); } return o; }
+  var o7 = ev7(DS.project()), x7 = DS.midi.exportNow(), pid7 = DS.project().id, dn7 = T7[2].name;
+  DS.midi.open(new Uint8Array(x7.bytes), "seven.mid"); var rx7 = DS.midi.importNow(), b7b = ev7(DS.project()), bad7 = [];
+  for (var k7 in o7) { var A7 = o7[k7], B7 = b7b[k7] || []; if (A7.length !== B7.length) { bad7.push(k7 + " count"); continue; } var ea7 = [], eb7 = []; A7.forEach(function (n, i) { var am = k7 === dn7 && MS.DRUM_GM.hasOwnProperty(n[2]) ? MS.DRUM_GM[n[2]] : n[2]; if (n[0] !== B7[i][0] || am !== B7[i][2] || Math.abs(n[3] - B7[i][3]) > 0.0045) { bad7.push(k7 + "#" + i); } ea7.push((n[0] + n[1]) + ":" + am); eb7.push((B7[i][0] + B7[i][1]) + ":" + B7[i][2]); }); ea7.sort(); eb7.sort(); if (ea7.join() !== eb7.join()) { bad7.push(k7 + " ends"); } }
+  ok(x7.ok && rx7.ok && Object.keys(o7).length === 8 && bad7.length === 0 && DS.project().tracks.map(function (t) { return t.instrument.type === "drum" ? "drum" : t.instrument.ext.preset; }).join() === "pluck,pluck,drum,bass,pluck,spad,spad,brass", "MIDI export → re-import: 8 tracks, every note start / end / pitch / velocity, presets", bad7.slice(0, 5));
+  // 保存・読みなおし・ZIP → 空の保存場所・元のゲームへ戻る
+  DS.proj.open(pid7); var song7 = JSON.stringify(DS.project().tracks);
+  DS.reload(); DS.proj.open(pid7);
+  ok(JSON.stringify(DS.project().tracks) === song7 && DS.project().tracks.length === 8, "after a reload: the 7-instrument song is the same");
+  var ex7 = await new Promise(function (r) { DS.pack.exportZip(r); });
+  var eS2 = H.load(), WS2 = eS2.window, DS2 = WS2.UGDaw; WS2.indexedDB = fakeIDB(); fakeDecode(WS2);
+  var RS2 = H.makeEl("div"); DS2.reset(); WS2.UGArcade.start("daw", RS2, {});
+  var rq7 = await impZ(DS2, blobAB(ex7.blob)); DS2.proj.open(rq7.id);
+  ok(ex7.ok && rq7.ok && JSON.stringify(DS2.project().tracks) === song7 && MS.noteCount(DS2.project()) === MS.noteCount(DS.project()), "ZIP → empty storage: the 7-instrument song comes back with every note", rq7.why);
+  WS2.UGArcade.stop(); DS2.reset();
+  ok(DS.goBackGame() === true && RS.innerHTML.indexOf("ゴリラホーン") >= 0 && RS.innerHTML.indexOf("daw-top") < 0, "back to the source game (horn) from the DAW");
+  ok(SS[STR.TAKES_KEY] === sRaw && SS[HRN.TAKES_KEY] === hRaw, "the saved strings / horn takes are unchanged after everything");
+  WS.UGArcade.stop(); DS.reset();
+  var errS = eS.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errS.length === 0, "no Web Audio errors (9B-6)", errS.slice(0, 3));
 };
