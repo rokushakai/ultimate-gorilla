@@ -643,6 +643,7 @@
   }
   // BPM: 再生中なら、まだ予約していない音から新しい速さ（すでに予約した音の時刻はそのまま）
   function changeBpm(v) {
+    var p0c = project(), c0b = DM().audioCutIds(p0c); setTimeout(function () { tpCutCheck(c0b); if (st.tpCut && st.tpCut.length) { st.anote = "&#x26A0;&#xFE0F; テンポを変えたので、音声のクリップ " + st.tpCut.length + " 個が箱の終わりで切れます（⏱ テンポの画面でのばせます）"; if (st.root && st.view === "arr") { rerender(); } } }, 0); // 9B-14
     var p = project(), M = DM(), t0 = null, E = SE();
     if (pl && tempoSched(p)) { var bb = M.setBpm(p, v); resync(); return bb; } // 9B-12: オートメーション・ディレイの予約があれば、同じ位置から鳴らしなおす（古い予約を残さない）
     if (pl) { t0 = segTime(p, pl.segs[pl.segs.length - 1], pl.cur); }
@@ -885,7 +886,7 @@
       var t = M.findTrack(p, s.id);
       if (t) { return ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b>: ' + (M.isAudio(t) ? 'オーディオ（WAV）' : 'ゴリラシンセ「' + instName(t) + '」') + '・クリップ ' + t.clips.length + ' 個・音量 ' + t.vol + (t.mute ? '・ミュート' : '') + (t.solo ? '・ソロ' : '') + (M.isAudio(t) && !t.clips.length ? '<br><span class="small">「&#x1F3B5; WAV を読みこむ」か、トラックの ＋ で WAV を選んでください（' + (M.WAV_MAX_BYTES / 1048576) + 'MB・' + M.WAV_MAX_SEC + ' 秒まで）</span>' : ''); }
     }
-    return '<span class="small">クリップをタップすると選べて、下に操作が出ます（もう一度タップで音符を直す）。トラック名をタップするとトラックを選べます。全部で ' + p.tracks.length + ' トラック・' + M.viewBars(p) + ' 小節。</span>';
+    return '<span class="small">クリップをタップすると選べて、下に操作が出ます（もう一度タップで音符を直す）。トラック名をタップするとトラックを選べます。全部で ' + p.tracks.length + ' トラック・' + M.viewBars(p) + ' 小節・曲の長さ ' + secText(M.tickToSec(p, M.songEndTick(p))) + '。</span>';
   }
 
   // ---------- §341 9A-3: ピアノロール ----------
@@ -1792,18 +1793,20 @@
   if (window.document && document.addEventListener) { document.addEventListener("visibilitychange", function () { if (document.hidden && rec.state !== "idle") { if (rec.state === "rec") { recStop("hidden"); } else if (rec.state === "ask") { recCancel("画面を離れたので、録音をやめました"); } } }); }
 
   // ---------- §341 9A-9: WAV の書き出し（OfflineAudioContext・再生と同じ schedule()・44.1kHz・16bit・ステレオ）----------
-  var WAV_RATE = 44100, WAV_MAX_MUSIC = 60, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000;
+  var WAV_RATE = 44100, WAV_MAX_MUSIC = 330, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000, WAV_LONG = 150, WAV_STEP_FR = 688 * 128, WAV_AHEAD = 4, WAV_VO_KEEP = 1, WAV_SUS_WAIT = 60000; // 9B-14: 5 分 30 秒まで（2 分 30 秒からは注意）
   var wav = { busy: false, job: null, blob: null, url: "", name: "", stats: null, plan: null, msg: "", note: "", state: "idle", log: [], ms: 0 };
   function fileBase(name) { return String(name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw"; }
   function stamp() { var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()); }
   // 書き出す範囲と大きさの見こみ（曲の頭から曲の終わり ＋ 余韻。ループは使わない）
   function wavPlan(p) {
     var M = DM(), end = M.songEndTick(p), music = M.tickToSec(p, end), tl = M.sendTail(p), sec = music + Math.max(WAV_TAIL, tl.sec), frames = Math.ceil(sec * WAV_RATE); // 9B-11: センドの残響の長さまで（最大 10 秒）
-    var r = { endTick: end, bars: M.tickToBar(p, Math.max(0, end - 1)).bar, music: music, sec: sec, frames: frames, bytes: 44 + frames * 4, ok: true, why: "", tail: Math.max(WAV_TAIL, tl.sec), tailCapped: tl.capped };
+    var r = { endTick: end, bars: M.tickToBar(p, Math.max(0, end - 1)).bar, music: music, sec: sec, frames: frames, bytes: 44 + frames * 4, ok: true, why: "", tail: Math.max(WAV_TAIL, tl.sec), tailCapped: tl.capped,
+      memMB: Math.round(frames * 16 / 1048576), long: music > WAV_LONG }; // 9B-14: メモリの見積もり（描く音 8 ＋ WAV 4 ＋ 解析で読む 4 バイト／フレーム）
     if (!(M.noteCount(p) > 0) && !(M.audioClipCount(p) > 0)) { r.ok = false; r.why = "音符も音声のクリップもありません"; }
-    else if (music > WAV_MAX_MUSIC) { r.ok = false; r.why = "曲が " + Math.round(music) + " 秒あります。いまは " + WAV_MAX_MUSIC + " 秒までです（途中で切らないので、書き出しません）"; }
+    else if (music > WAV_MAX_MUSIC) { r.ok = false; r.why = "曲が " + secText(music) + "（" + Math.round(music) + " 秒）あります。WAV は " + secText(WAV_MAX_MUSIC) + " までです（メモリを守るため・途中で切らないので、書き出しません）"; }
     return r;
   }
+  function secText(s) { s = Math.max(0, Math.round(s)); var mm = Math.floor(s / 60), ss = s - mm * 60; return mm + ":" + (ss < 10 ? "0" : "") + ss; } // 9B-14: 分:秒
   function wavFree() { if (wav.url) { try { URL.revokeObjectURL(wav.url); } catch (e) {} } wav.url = ""; wav.blob = null; }
   // 描いた音の検査（左右のピーク・RMS・NaN・0dBFS に届いたサンプル）
   function bufStats(buf) {
@@ -1818,7 +1821,7 @@
     return out;
   }
   // 曲全体を描く → cb(blob, why, stats, plan)
-  function renderSong(cb) {
+  function renderSong(cb, ro) { // ro（9B-14）: { job, onProgress } ＝ 進み具合（約 2 秒ごと）・やめる
     var p = project(), M = DM(), UG = window.UGMelody, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, plan = wavPlan(p), id;
     if (!plan.ok) { cb(null, plan.why); return; }
     if (!OAC || !UG || !UG.audioInit || !UG.encodeWav) { cb(null, "このブラウザでは書き出せません（OfflineAudioContext がありません）"); return; }
@@ -1836,6 +1839,7 @@
     if (mlive.lim) { limLoad(off, function (okL) { build(okL); }); } else { build(false); } // 9B-10: リミッターはワークレットを読みこんでから
     function build(canLim) {
     var A = UG.audio, saved = { ctx: A.ctx, master: A.master, bus: A.bus, revSend: A.revSend, dlySend: A.dlySend }, savedPl = pl, savedLog = plLog, ok = true, err = "", limUsed = false;
+    var chunk = false, pc = p, rcur = 0, rpl = null, rA = null, rlog = null, rvo = []; // 9B-14: 区切って予約・予約した声
     plLog = [];
     try {
       // オフライン側にも、いまと同じ「全体の音量 → 共有の残響（リバーブ・ディレイ）」を作る（送りの量はいまの値を写す）
@@ -1852,17 +1856,30 @@
       pl = { ac: off, mix: {}, segs: [{ t0: 0, tick0: 0, fresh: true }], cur: 0, loop: false, la: 0, segEnd: plan.endTick, endAt: 0, pass: 0, timer: null, raf: null, clip: null, wav: true, opts: { a: 0, b: plan.endTick, loop: false, clip: null } };
       var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, 0)); } catch (e1) {} }
       for (var ti = 0; ti < p.tracks.length; ti++) { mixFor(p.tracks[ti]); }
-      schedule(p, 0, plan.endTick, pl.segs[0]);
-      for (id in pl.mix) { if (pl.mix.hasOwnProperty(id) && pl.mix[id] && pl.mix[id].syn && pl.mix[id].syn.finish) { try { pl.mix[id].syn.finish(); } catch (e3) {} } }
+      // 9B-14: 区切って予約する（suspend で止まるたびに数秒先まで）。全部の音を先に作ると、まだ鳴らない音のノードも毎回処理されて、長い曲ほど（長さの 2 乗に近く）遅くなるため。
+      // 予約は書き出しを始めたときの曲の写し（あとから直しても混ざらない）。SynthTrack（finish が要る）・suspend の無いブラウザは、これまでどおり全部を先に予約する
+      var hasSyn = false;
+      for (id in pl.mix) { if (pl.mix.hasOwnProperty(id) && pl.mix[id] && pl.mix[id].syn) { hasSyn = true; } }
+      chunk = !hasSyn && typeof off.suspend === "function" && !wav.noSuspend;
+      if (chunk) {
+        pc = JSON.parse(JSON.stringify(p));
+        for (ti = 0; ti < pc.tracks.length; ti++) { var ct = pc.tracks[ti], cm = pl.mix[ct.id]; if (cm && M.audible(pc, ct)) { trackIn(ct, cm, "main"); } } // 出口（FX・オートメーション）は頭で作る（途中で作らない）
+        rcur = Math.min(plan.endTick, segTick(pc, pl.segs[0], WAV_AHEAD));
+        schedule(pc, 0, rcur, pl.segs[0]); voCollect(pl);
+      } else {
+        schedule(p, 0, plan.endTick, pl.segs[0]);
+        for (id in pl.mix) { if (pl.mix.hasOwnProperty(id) && pl.mix[id] && pl.mix[id].syn && pl.mix[id].syn.finish) { try { pl.mix[id].syn.finish(); } catch (e3) {} } }
+      }
+      rpl = pl; rA = { ctx: off, master: mst, bus: fx.bus, revSend: fx.revSend || null, dlySend: fx.dlySend || null };
     } catch (e2) { ok = false; err = String(e2 && e2.message ? e2.message : e2); }
-    wav.log = plLog;
+    wav.log = plLog; rlog = plLog;
     pl = savedPl; plLog = savedLog;
     A.ctx = saved.ctx; A.master = saved.master; A.bus = saved.bus; A.revSend = saved.revSend; A.dlySend = saved.dlySend;
     if (!ok) { cb(null, "書き出しに失敗しました（" + err + "）"); return; }
     var done = false;
     function fin(buf) {
       if (done) { return; }
-      done = true;
+      done = true; if (typeof stopWd === "function") { stopWd(); } off.oncomplete = null; // 9B-14: 描いた音への参照はこの関数のあいだだけ
       var stt = null;
       if (limUsed) { var sh = limSamples(WAV_RATE), ci, si; for (ci = 0; ci < buf.numberOfChannels; ci++) { var cd = buf.getChannelData(ci); for (si = 0; si + sh < cd.length; si++) { cd[si] = cd[si + sh]; } for (; si < cd.length; si++) { cd[si] = 0; } } } // 9B-10: 先読みの遅れを戻す（リミッターなしと同じ位置）
       if (plan.tailCapped) { var fl = Math.min(buf.length, WAV_RATE), fc, fi; for (fc = 0; fc < buf.numberOfChannels; fc++) { var fd = buf.getChannelData(fc); for (fi = 0; fi < fl; fi++) { fd[buf.length - fl + fi] *= 1 - fi / fl; } } } // 9B-11: 余韻が 10 秒をこえるときは最後の 1 秒を小さく
@@ -1877,6 +1894,43 @@
       cb(blob, "", stt, plan);
     }
     off.oncomplete = function (ev) { fin(ev.renderedBuffer); };
+    // 9B-14: 鳴り終わった声を出口から外す（つないだままだと、終わった声のノードも毎回処理されて、曲の後ろほど遅くなる）。終わり（はなした音が消える時刻）から WAV_VO_KEEP 秒あとに外す（そのころは音が無い）
+    function voCollect(lp) { var id2, k2, vl; for (id2 in lp.mix) { if (lp.mix.hasOwnProperty(id2) && id2 !== "__master" && lp.mix[id2] && lp.mix[id2].voices) { vl = lp.mix[id2].voices; for (k2 = 0; k2 < vl.length; k2++) { if (vl[k2] && !vl[k2].__wq) { vl[k2].__wq = 1; rvo.push(vl[k2]); } } } } }
+    function voFree(tSec) { var keep = [], k3, v3; for (k3 = 0; k3 < rvo.length; k3++) { v3 = rvo[k3]; if (isFinite(v3.end) && v3.end + WAV_VO_KEEP < tSec && v3.amp) { try { v3.amp.disconnect(); } catch (e8) {} } else { keep.push(v3); } } rvo = keep; }
+    // 9B-14: 止まっているあいだに、tSec ＋ WAV_AHEAD 秒まで（Infinity ＝ 終わりまで）の音を予約する（書き出しの状態に入れかえて・すぐ戻す）
+    function more(tSec) {
+      if (chunk && tSec !== Infinity) { voFree(tSec); }
+      if (!chunk || rcur >= plan.endTick) { return ""; }
+      var to = tSec === Infinity ? plan.endTick : Math.min(plan.endTick, segTick(pc, rpl.segs[0], tSec + WAV_AHEAD)), sv = { ctx: A.ctx, master: A.master, bus: A.bus, revSend: A.revSend, dlySend: A.dlySend }, spl = pl, slog = plLog, er = "";
+      if (!(to > rcur)) { return ""; }
+      pl = rpl; plLog = rlog; A.ctx = rA.ctx; A.master = rA.master; A.bus = rA.bus; A.revSend = rA.revSend; A.dlySend = rA.dlySend;
+      try { schedule(pc, rcur, to, rpl.segs[0]); rcur = to; voCollect(rpl); } catch (e7) { er = String(e7 && e7.message ? e7.message : e7); }
+      pl = spl; plLog = slog; A.ctx = sv.ctx; A.master = sv.master; A.bus = sv.bus; A.revSend = sv.revSend; A.dlySend = sv.dlySend;
+      return er;
+    }
+    // 9B-14: suspend で約 2 秒ごとに止まって、先の音を予約・進み具合を出す（音は変わらない）・やめるなら続けない。止まったまま（60 秒）のブラウザでは失敗にして、次からは使わない
+    var useSus = (chunk || !!(ro && (ro.onProgress || ro.job))) && typeof off.suspend === "function" && !wav.noSuspend, lastAct = Date.now(), wd = null, sk, susOk = true;
+    function stopWd() { if (wd) { clearInterval(wd); wd = null; } }
+    if (useSus) {
+      for (sk = 1; sk * WAV_STEP_FR < plan.frames; sk++) {
+        (function (kk) {
+          var fr = kk * WAV_STEP_FR;
+          var sp; try { sp = off.suspend(fr / WAV_RATE); } catch (es) { susOk = false; return; }
+          if (!sp || !sp.then) { susOk = false; return; }
+          sp.then(function () {
+            lastAct = Date.now();
+            if (done) { return; }
+            if (ro && ro.job && ro.job.canceled) { done = true; stopWd(); off.oncomplete = null; cb(null, "やめました（描いた音は捨てました）"); return; }
+            var erm = more(fr / WAV_RATE);
+            if (erm) { done = true; stopWd(); off.oncomplete = null; cb(null, "書き出しに失敗しました（" + erm + "）"); return; }
+            if (ro && ro.onProgress) { try { ro.onProgress(Math.floor(fr * 100 / plan.frames)); } catch (ep) {} }
+            try { off.resume(); } catch (er) {}
+          }, function () {});
+        })(sk);
+      }
+      wd = setInterval(function () { if (done) { stopWd(); return; } if (Date.now() - lastAct > WAV_SUS_WAIT) { stopWd(); done = true; wav.noSuspend = true; off.oncomplete = null; cb(null, "書き出しが途中で止まりました（このブラウザでは途中の進み具合を使えないようです）。もう一度「WAV を書き出す」を押すと、進み具合なしで書き出します（曲は変えていません）"); } }, 1000);
+    }
+    if (chunk && !susOk) { var erA = more(Infinity); if (erA) { done = true; stopWd(); off.oncomplete = null; cb(null, "書き出しに失敗しました（" + erA + "）"); return; } } // suspend を予約できなかった: 残りを全部いま予約（これまでと同じ）
     try {
       var pr = off.startRendering();
       if (pr && pr.then) { pr.then(fin, function () { if (!done) { done = true; cb(null, "描けませんでした"); } }); }
@@ -1899,6 +1953,7 @@
       started = true;
       if (tm) { clearTimeout(tm); }
       var samplesOk = !hasDrum || !UG.sampleReady || !!UG.sampleReady(UG.DRUM);
+      wav.pct = 0;
       renderSong(function (blob, why, stt, pln) {
         wav.busy = false; wav.job = null; wav.stats = stt || null; wav.ms = Date.now() - job.t0;
         if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
@@ -1910,7 +1965,7 @@
           wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
         }
         if (onDone) { onDone(); }
-      });
+      }, { job: job, onProgress: function (pc) { wav.pct = pc; var r0 = st.root, el = r0 && r0.querySelector ? r0.querySelector(".dp-wpct, .dlu-wpct") : null; if (el) { el.textContent = pc + "%"; } } }); // 9B-14: 進み具合
     }
     function begin() {
       if (job.canceled) { wav.busy = false; wav.job = null; wav.state = "canceled"; wav.msg = "やめました"; if (onDone) { onDone(); } return; }
@@ -2120,8 +2175,9 @@
   function mb(n) { return (Math.round(n / 104857.6) / 10) + " MB"; }
   function wavHtml(p) {
     var pln = wavPlan(p), h = '<div class="dp-wav"><div class="dp-h">&#x1F3B5; WAV を書き出す</div>';
-    h += '<div class="small">「' + escHtml(p.name) + '」・1〜' + pln.bars + ' 小節（曲の全体・ループは使わない）＋ 余韻 ' + WAV_TAIL + ' 秒<br>長さ 約 ' + (Math.round(pln.sec * 10) / 10) + ' 秒・大きさ 約 ' + mb(pln.bytes) + '（44.1kHz・16bit・ステレオ）</div>';
-    if (wav.state === "busy") { h += '<div class="daw-info">&#x23F3; 書き出し中…</div><button class="modal-btn" data-pj="wavCancel">やめる</button>'; }
+    h += '<div class="small">「' + escHtml(p.name) + '」・1〜' + pln.bars + ' 小節（曲の全体・ループは使わない）・曲 ' + secText(pln.music) + ' ＋ 余韻 ' + (Math.round(pln.tail * 10) / 10) + ' 秒<br>長さ 約 ' + (Math.round(pln.sec * 10) / 10) + ' 秒・大きさ 約 ' + mb(pln.bytes) + '（44.1kHz・16bit・ステレオ）</div>';
+    if (pln.ok && pln.long) { h += '<div class="small dp-long">&#x26A0;&#xFE0F; 長い曲なので、書き出しにメモリを多く使います（約 ' + pln.memMB + ' MB）。ほかのタブ・アプリを閉じてから書き出してください。' + secText(WAV_MAX_MUSIC) + ' までです。</div>'; } // 9B-14
+    if (wav.state === "busy") { h += '<div class="daw-info">&#x23F3; 書き出し中… <b class="dp-wpct">' + (wav.pct ? wav.pct + '%' : '') + '</b></div><button class="modal-btn" data-pj="wavCancel">やめる</button>'; }
     else {
       if (wav.state === "done" && wav.blob) {
         var w = wav.stats;
@@ -3695,7 +3751,7 @@
       '<div class="daw-top"><button class="modal-btn daw-small" data-lu="back">&#x2190; MASTER</button><b>&#x1F4CA; 曲を解析</b></div>' +
       '<p class="small dfx-note">書き出す WAV（16 bit）をそのまま測ります（MASTER の EQ・リミッター・残響・余韻のあと）。音・曲・WAV は変えません。結果は保存しません。</p>' +
       '<div class="da-btns"><button class="modal-btn da-wide dlu-run" data-lu="run"' + (busy ? ' disabled' : '') + '>&#x1F4CA; ' + (r ? 'もう一度解析する' : '解析する') + '</button>' + (busy ? '<button class="modal-btn da-half" data-lu="cancel">やめる</button>' : '') + '</div>';
-    if (busy) { h += '<p class="small dfx-note">' + (lu.state === "render" ? "WAV を書き出しています…（そのあとで測ります）" : (lu.state === "read" ? "WAV を読んでいます…" : 'ラウドネスを計算しています… <b class="dlu-pct">' + lu.pct + '%</b>')) + '</p>'; }
+    if (busy) { h += '<p class="small dfx-note">' + (lu.state === "render" ? 'WAV を書き出しています… <b class="dlu-wpct">' + (wav.pct ? wav.pct + '%' : '') + '</b>（そのあとで測ります）' : (lu.state === "read" ? "WAV を読んでいます…" : 'ラウドネスを計算しています… <b class="dlu-pct">' + lu.pct + '%</b>')) + '</p>'; }
     if (lu.state === "fail") { h += '<p class="small dfx-warn">&#x26A0;&#xFE0F; ' + escHtml(lu.msg) + '（曲は変えていません）</p>'; }
     if (r && !busy) {
       var warn = [];
@@ -3737,12 +3793,17 @@
   // ---------- §342 9B-12: ⏱ テンポ（曲の頭の BPM・変更点）----------
   // 再生中にオートメーション・ディレイの予約があるか（テンポを変えたら鳴らしなおす）
   function tempoSched(p) { var M = DM(), i, k; if (M.sendLive(p).dly) { return true; } for (i = 0; i < p.tracks.length; i++) { for (k = 0; k < M.AUTO_ORDER.length; k++) { if (M.autoActive(p.tracks[i], M.AUTO_ORDER[k])) { return true; } } } return false; }
-  function tpDone(snap) { pushUndo(snap); markDirty(); if (pl) { resync(); } }
+  function tpDone(snap, cut0) { pushUndo(snap); markDirty(); tpCutCheck(cut0); if (pl) { resync(); } }
+  // 9B-14: テンポを変えて、新しく箱の終わりで切れるようになった音声のクリップ
+  function tpCutCheck(cut0) { if (!cut0) { return; } var now = DM().audioCutIds(project()), i, nw = []; for (i = 0; i < now.length; i++) { if (cut0.indexOf(now[i]) < 0) { nw.push(now[i]); } } st.tpCut = nw.length ? nw : (st.tpCut || []).filter(function (id) { return now.indexOf(id) >= 0; }); }
   var tpApi = {
     // 変更点（小節・拍・BPM）。同じ位置なら BPM を変える。1 小節 1 拍 ＝ 曲の頭の BPM
-    set: function (bar, beat, bpm) { var p = project(), M = DM(), tick = M.autoTickAt(p, bar, beat); if (tick === null) { return { ok: false, why: "位置がおかしいです（小節 1〜256・拍 1〜その小節の拍の数）" }; } var snap = snapAll(), r = M.tempoSet(p, tick, bpm); if (r.ok) { tpDone(snap); } return r; },
-    setTick: function (tick, bpm) { var snap = snapAll(), r = DM().tempoSet(project(), tick, bpm); if (r.ok) { tpDone(snap); } return r; },
-    del: function (tick) { var snap = snapAll(); if (!DM().tempoDel(project(), tick)) { return false; } tpDone(snap); return true; },
+    set: function (bar, beat, bpm) { var p = project(), M = DM(), tick = M.autoTickAt(p, bar, beat); if (tick === null) { return { ok: false, why: "位置がおかしいです（小節 1〜256・拍 1〜その小節の拍の数）" }; } var snap = snapAll(), c0 = M.audioCutIds(p), r = M.tempoSet(p, tick, bpm); if (r.ok) { tpDone(snap, c0); } return r; },
+    setTick: function (tick, bpm) { var snap = snapAll(), c0 = DM().audioCutIds(project()), r = DM().tempoSet(project(), tick, bpm); if (r.ok) { tpDone(snap, c0); } return r; },
+    cut: function () { return (st.tpCut || []).slice(); },
+    // 新しく切れるようになったクリップの箱を、音声の終わりまでのばす（↶ 1 回で戻る）
+    fit: function () { var p = project(), M = DM(), ids = (st.tpCut || []).slice(), snap = snapAll(), n = 0, still = 0, i; for (i = 0; i < ids.length; i++) { var r = M.fitAudioBox(p, ids[i]); if (r.ok) { n++; if (r.still) { still++; } } else if (M.findClip(p, ids[i])) { still++; } } if (!n) { return { ok: false, n: 0, still: still }; } pushUndo(snap); markDirty(); st.tpCut = M.audioCutIds(p).filter(function (id) { return ids.indexOf(id) >= 0; }); if (pl) { resync(); } return { ok: true, n: n, still: still }; },
+    del: function (tick) { var snap = snapAll(), c0 = DM().audioCutIds(project()); if (!DM().tempoDel(project(), tick)) { return false; } tpDone(snap, c0); return true; },
     list: function () { return DM().tempoList(project()); }
   };
   function tpHtml(p) {
@@ -3766,6 +3827,7 @@
       }
     } else { h += '<p class="small dfx-note">まだありません。小節・拍・BPM を入れて「➕ 足す」。</p>'; }
     h += '</div><p class="small dfx-note">テンポは変更点からすぐに切りかわります（だんだん速くする・遅くするはありません）。テンポを変えても、音符・クリップ・オートメーションの位置（小節・拍）は変わらず、秒が変わります。センドのディレイも、その位置の BPM に合わせます。</p>' +
+      ((st.tpCut || []).length ? '<div class="dm-row dtp-cut"><p class="small dfx-warn">&#x26A0;&#xFE0F; テンポを変えたので、音声のクリップ ' + st.tpCut.length + ' 個が箱の終わりで切れるようになりました（音声そのものは変えていません）。</p><button class="modal-btn daw-small" data-tp="fit">&#x2194;&#xFE0F; 箱を音声の終わりまでのばす（' + st.tpCut.length + ' 個）</button></div>' : '') + // 9B-14
       (na ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; 音声のクリップが ' + na + ' 個あります。録音・WAV の音声は伸び縮みしないので、テンポを変えると小節とずれます（頭の位置は小節のまま。クリップの箱の終わりが早くなると、そこで音声が切れます）。録音・テイク・コンピングのデータは変えません。</p>' : '') +
       saveNoteHtml() + '<p class="small dsv-note">テンポの変更点・曲の頭の BPM（この画面）は ↶ で戻せます。MIDI の書き出しにはテンポの変化も入ります。</p></div>';
     return h;
@@ -3786,6 +3848,7 @@
         if (v === "undo") { ops.undo(); return; }
         if (v === "add") { st.tpUi.bar = val("bar"); st.tpUi.beat = val("beat"); st.tpUi.bpm = val("bpm"); var r = tpApi.set(val("bar"), val("beat"), val("bpm")); st.tpUi.msg = r.ok ? (r.tick === 0 ? "曲の頭の BPM を " + r.bpm + " にしました" : (r.replaced ? "同じ位置の BPM を " + r.bpm + " にしました" : "変更点を足しました（BPM " + r.bpm + "）")) : "&#x26A0;&#xFE0F; " + r.why; }
         else if ((x = el.getAttribute("data-tpd"))) { tpApi.del(Number(x)); st.tpUi.msg = "変更点を消しました（↶ で戻せます）"; }
+        else if (v === "fit") { var rf = tpApi.fit(); st.tpUi.msg = rf.ok ? rf.n + " 個のクリップの箱をのばしました（↶ で戻せます）" + (rf.still ? "。" + rf.still + " 個は次のクリップ・長さの上限で、まだ切れます" : "") : "のばせませんでした（次のクリップ・長さの上限）"; }
         renderTempo(root, ctl);
       };
     }

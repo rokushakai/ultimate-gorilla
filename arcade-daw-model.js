@@ -683,6 +683,27 @@
     };
   }
 
+  // ---------- §342 9B-14: テンポで箱の終わりが切れる音声のクリップ ----------
+  // いまのテンポで、音声が箱の終わりで切れるクリップの ID
+  function audioCutIds(p) {
+    var out = [], i, j, tr = p && isArr(p.tracks) ? p.tracks : [];
+    for (i = 0; i < tr.length; i++) { if (!isAudio(tr[i])) { continue; } for (j = 0; j < tr[i].clips.length; j++) { var c = tr[i].clips[j]; if (c.type === "audio" && audioSpan(p, c).boxCut) { out.push(c.id); } } }
+    return out;
+  }
+  // 箱を音声の終わりまでのばす（音声・トリム・フェード・コンピングは変えない。次のクリップ・64 小節・256 小節はこえない）→ { ok, why, len, still }
+  function fitAudioBox(p, clipId) {
+    var f = findClip(p, clipId);
+    if (!f || f.clip.type !== "audio") { return { ok: false, why: "音声のクリップが見つかりません" }; }
+    var c = f.clip, s = audioSpan(p, c), bt = barTicks(p), i, nx = MAX_BARS * bt;
+    if (!s.boxCut) { return { ok: false, why: "切れていません" }; }
+    for (i = 0; i < f.track.clips.length; i++) { var o = f.track.clips[i]; if (o !== c && o.start > c.start && o.start < nx) { nx = o.start; } }
+    var endT = secToTick(p, s.full + 0.0005), need = Math.ceil((endT - c.start) / bt - 1e-6) * bt;
+    var len = Math.max(c.len, Math.min(need, CLIP_MAX_BARS * bt, nx - c.start, MAX_BARS * bt - c.start));
+    if (len <= c.len) { return { ok: false, why: "次のクリップ・長さの上限があるので、のばせません" }; }
+    c.len = len;
+    return { ok: true, len: len, still: audioSpan(p, c).boxCut };
+  }
+
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
   function demoProject(now) {
     var p = newProject({ name: "ゴリラのはじめの曲", bpm: 110, now: typeof now === "number" ? now : Date.now() });
@@ -2041,6 +2062,7 @@
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
     kCoef: kCoef, tpTaps: tpTaps, loudMeter: loudMeter, // 9B-13
+    audioCutIds: audioCutIds, fitAudioBox: fitAudioBox, // 9B-14
     TEMPO_MAX: TEMPO_MAX, secBetween: secBetween, tempoList: tempoList, tempoSet: tempoSet, tempoDel: tempoDel, delaySecAt: delaySecAt, midiTempoCheck: midiTempoCheck, // 9B-12
     SEND_DIVS: SEND_DIVS, SEND_DIV_ORDER: SEND_DIV_ORDER, SEND_FX: SEND_FX, REV_SEC: REV_SEC, TAIL_MAX: TAIL_MAX, sendClean: sendClean, sendOf: sendOf, sendSet: sendSet, sendFxClean: sendFxClean, sendFxOf: sendFxOf, sendFxSet: sendFxSet, sendFxReset: sendFxReset, sendLive: sendLive, sendKey: sendKey, delaySec: delaySec, sendTail: sendTail, // 9B-11
     AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9

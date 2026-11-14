@@ -715,7 +715,7 @@ module.exports = async function () {
   // ================= 9A-9: WAV の書き出し（§341）=================
   var eW = H.load(), WW = eW.window, MW = eW.window.UGDawModel, DW = WW.UGDaw, AW = WW.UGArcade, SW = eW.store, CW = eW.counters;
   SW.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 5 }); var rpgW = SW.ultimateGorillaSaveV2;
-  ok(typeof WW.UGMelody.buildFx === "function" && DW.wav.RATE === 44100 && DW.wav.MAX === 60 && DW.wav.TAIL === 3, "UGMelody.buildFx is exported; WAV is 44.1 kHz, up to 60 s of music + 3 s tail");
+  ok(typeof WW.UGMelody.buildFx === "function" && DW.wav.RATE === 44100 && DW.wav.MAX === 330 && DW.wav.TAIL === 3, "UGMelody.buildFx is exported; WAV is 44.1 kHz, up to 330 s of music (9B-14) + 3 s tail");
   var RW = H.makeEl("div"); DW.reset(); AW.start("daw", RW, {});
   var pw = DW.proj.create("demo"); // 8 小節・110 BPM・リードとベース
   var plw = DW.wav.plan();
@@ -747,11 +747,11 @@ module.exports = async function () {
   pw.tracks[1].mute = false;
   var dW = DW.ops.addTrack("drum"); DW.openEditor(dW.clips[0].id); DW.steps.pattern("sixteen"); DW.steps.setSwing(100); DW.closeRoll && DW.select(null);
   pw = DW.project();
-  // 60 秒をこえる曲は書き出さない（途中で切らない）
-  var keepBpm = MW.bpmAt(pw, 0); DW.setBpm(25);
+  // 上限（9B-14: 5:30）をこえる曲は書き出さない（途中で切らない）
+  var keepBpm = MW.bpmAt(pw, 0); DW.setBpm(20); var farC = MW.newMidiClip(pw, pw.tracks[0], MW.barToTick(pw, 40), 3840, [[0, 480, 60, 0.8]], "far"); DW.markDirty();
   var offN2 = CW.offline.length;
-  ok(DW.wav.start() === false && DW.wav.state().state === "fail" && DW.wav.state().msg.indexOf("60 秒まで") >= 0 && CW.offline.length === offN2, "a song longer than 60 s is refused with the reason (nothing is cut, no buffer is made)");
-  DW.setBpm(keepBpm);
+  ok(DW.wav.start() === false && DW.wav.state().state === "fail" && DW.wav.state().msg.indexOf("5:30 まで") >= 0 && CW.offline.length === offN2, "a song longer than the limit is refused with the reason (nothing is cut, no buffer is made)");
+  pw.tracks[0].clips = pw.tracks[0].clips.filter(function (c) { return c !== farC; }); DW.setBpm(keepBpm); DW.markDirty();
   // ドラムのサンプルを待つあいだは 2 つ目を受けつけない
   var busy1 = DW.wav.start();
   ok(busy1 === true && DW.wav.state().busy && DW.wav.start() === false, "only one export at a time (the second is refused while busy)");
@@ -3317,4 +3317,64 @@ module.exports = async function () {
   AU.stop(); DU.reset();
   var errU = CU.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errU.length === 0, "no Web Audio errors (9B-13)", errU.slice(0, 3));
+
+  // ================= 9B-14: 長い曲・安定性（§342）=================
+  var eL4 = H.load(), WL4 = eL4.window, ML4 = WL4.UGDawModel, DL4 = WL4.UGDaw, AL4 = WL4.UGArcade, SL4 = eL4.store, CL4 = eL4.counters;
+  SL4.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgL4 = SL4.ultimateGorillaSaveV2;
+  WL4.indexedDB = fakeIDB(); fakeDecode(WL4);
+  var RL4 = H.makeEl("div"); DL4.reset(); AL4.start("daw", RL4, {});
+  var pL4 = DL4.proj.create("demo"); ML4.setBpm(pL4, 100);
+  ok(DL4.wav.MAX === 330, "WAV export up to 330 s (5:30) of music");
+  // 長い曲（約 3 分）: 注意とメモリの見積もり
+  ML4.newMidiClip(pL4, pL4.tracks[0], ML4.barToTick(pL4, 74), 3840, [[0, 480, 60, 0.8]], "おわり"); DL4.markDirty();
+  var plL = DL4.wav.plan();
+  ok(plL.ok && plL.long && Math.abs(plL.music - 75 * 2.4) < 1e-9 && plL.memMB === Math.round(plL.frames * 16 / 1048576) && plL.memMB > 100, "a 3-minute song (75 bars at 100 BPM = 3:00): allowed, marked long, memory estimate " + plL.memMB + " MB", plL);
+  // 330 秒をこえる曲は書き出さない（理由・バッファを作らない）
+  pL4 = DL4.project(); ML4.newMidiClip(pL4, pL4.tracks[0], ML4.barToTick(pL4, 140), 3840, [[0, 480, 62, 0.8]], "とおく"); DL4.markDirty();
+  var offL4 = CL4.offline.length, stL4 = DL4.wav.start();
+  ok(stL4 === false && DL4.wav.state().state === "fail" && DL4.wav.state().msg.indexOf("5:30 まで") >= 0 && DL4.wav.state().msg.indexOf("5:38") >= 0 && CL4.offline.length === offL4, "a 5:38 song is refused with the reason (5:30 limit, nothing cut, no buffer made)", DL4.wav.state().msg);
+  pL4.tracks[0].clips = pL4.tracks[0].clips.filter(function (c) { return c.ext.name !== "とおく" && c.ext.name !== "おわり"; }); DL4.markDirty();
+  // 進み具合（約 2 秒ごと）・区切った予約・やめる（suspend の偽物: 予約した時刻の順に止まる）
+  var OP = WL4.OfflineAudioContext.prototype, origSR = OP.startRendering, susT = [];
+  OP.suspend = function (t) { var self = this; self.__sus = self.__sus || []; susT.push(t); return new Promise(function (r) { self.__sus.push({ t: t, r: r }); }); };
+  OP.resume = function () { var self = this; setTimeout(function () { self.__next(); }, 0); };
+  OP.startRendering = function () { var self = this; return { then: function (okf, ngf) { self.__i = 0; self.__sus = (self.__sus || []).sort(function (a, b) { return a.t - b.t; }); self.__next = function () { if (self.__i < self.__sus.length) { self.__sus[self.__i++].r(); } else { origSR.call(self).then(okf, ngf); } }; self.__next(); } }; };
+  var pcts = [], prevPct = -1; DL4.wav.start(function () {});
+  for (var gL = 0; gL < 400 && DL4.wav.state().busy; gL++) { if (DL4.wav.state().pct !== prevPct) { prevPct = DL4.wav.state().pct; pcts.push(prevPct); } await eL4.wait(2); }
+  ok(DL4.wav.state().state === "done" && susT.length === Math.ceil(DL4.wav.state().plan.frames / 88064) - 1 && susT.length >= 2 && Math.abs(susT[0] - 88064 / 44100) < 1e-9 && pcts.length >= 3 && pcts.every(function (x, i) { return i === 0 || x > pcts[i - 1]; }) && susT.every(function (t, i) { return i === 0 || t > susT[i - 1]; }), "export progress: suspends every 88064 frames (about 2 s), rising % % (rising), the WAV is finished", pcts);
+  var logC = DL4.wav.state().log.map(function (x) { return [x.track, x.tick, x.m, +x.when.toFixed(9), +(x.sec || 0).toFixed(9), x.ok]; });
+  var sv4 = OP.suspend; delete OP.suspend; DL4.wav.start(function () {});
+  for (gL = 0; gL < 400 && DL4.wav.state().busy; gL++) { await eL4.wait(2); }
+  var logA = DL4.wav.state().log.map(function (x) { return [x.track, x.tick, x.m, +x.when.toFixed(9), +(x.sec || 0).toFixed(9), x.ok]; });
+  ok(DL4.wav.state().state === "done" && logC.length > 20 && JSON.stringify(logC) === JSON.stringify(logA), "chunked scheduling (every ~2 s, 4 s ahead) books exactly the same notes, times and lengths as booking everything at once", [logC.length, logA.length]);
+  OP.suspend = sv4;
+  susT = []; DL4.wav.start(function () {}); DL4.wav.cancel();
+  for (gL = 0; gL < 400 && DL4.wav.state().busy; gL++) { await eL4.wait(2); }
+  ok(DL4.wav.state().state === "canceled" && !DL4.wav.state().blob, "やめる during the export: it stops at the next step (not resumed), nothing is kept");
+  OP.startRendering = origSR; delete OP.suspend; delete OP.resume;
+  // --- テンポで箱の終わりが切れる音声のクリップ ---
+  var tA4 = await new Promise(function (r) { DL4.audio.add(r); });
+  var wv4 = makeWav({ sr: 44100, ch: 1, sec: 2.5, fn: tone(330) });
+  var q4 = await new Promise(function (r) { DL4.audio.importWav(wv4, "voice.wav", { track: tA4.id, start: 0 }, r); });
+  var q4b = await new Promise(function (r) { DL4.audio.importWav(wv4.slice(0), "voice.wav", { track: tA4.id }, r); });
+  pL4 = DL4.project(); var cA = ML4.findClip(pL4, q4.clip.id).clip, cB = ML4.findClip(pL4, q4b.clip.id).clip;
+  cB.start = ML4.barToTick(pL4, 12); cB.len = 960; DL4.markDirty(); // 離れた所に・わざと短くした箱（前から切れている）
+  var asset0 = JSON.stringify(pL4.assets), edits0 = JSON.stringify([cA.trimIn, cA.trimOut, cA.fadeIn, cA.fadeOut, cA.nudge, cA.comp, cA.takes]);
+  ok(q4.ok && !ML4.audioSpan(pL4, cA).boxCut && ML4.audioSpan(pL4, cB).boxCut && JSON.stringify(ML4.audioCutIds(pL4)) === JSON.stringify([cB.id]), "a 2.5 s voice in a 2-bar box at 100 BPM is not cut; a box shortened on purpose is");
+  var u4 = DL4.undoDepth(), lenA = cA.len;
+  var rT4 = DL4.tempo.set(1, 1, 240); pL4 = DL4.project(); cA = ML4.findClip(pL4, q4.clip.id).clip;
+  ok(rT4.ok && JSON.stringify(DL4.tempo.cut()) === JSON.stringify([cA.id]) && ML4.audioSpan(pL4, cA).boxCut, "start BPM 240: the voice now ends after its box → listed as newly cut (the short-on-purpose box is not listed)");
+  DL4.showTempo(); ok(RL4.innerHTML.indexOf("箱の終わりで切れるようになりました") >= 0 && RL4.innerHTML.indexOf('data-tp="fit"') >= 0, "⏱ screen: warning and 「箱を音声の終わりまでのばす」");
+  var rF4 = DL4.tempo.fit(); pL4 = DL4.project(); cA = ML4.findClip(pL4, q4.clip.id).clip;
+  ok(rF4.ok && rF4.n === 1 && !ML4.audioSpan(pL4, cA).boxCut && cA.len > lenA && JSON.stringify(pL4.assets) === asset0 && JSON.stringify([cA.trimIn, cA.trimOut, cA.fadeIn, cA.fadeOut, cA.nudge, cA.comp, cA.takes]) === edits0 && ML4.audioSpan(pL4, ML4.findClip(pL4, cB.id).clip).boxCut, "fit: the box grows to the end of the voice; the audio asset, trims, fades, nudge and takes are unchanged; the other clip is untouched", [lenA, cA.len]);
+  ok(DL4.undoDepth() === u4 + 2, "tempo change and fit are two ↶ steps");
+  DL4.ops.undo(); ok(ML4.findClip(DL4.project(), q4.clip.id).clip.len === lenA, "↶ undoes the fit (box back)");
+  // 曲の長さの表示
+  DL4.proj.open(DL4.project().id); DL4.select(null); var arrH = RL4.innerHTML;
+  DL4.state().view = "arr"; DL4.select(null);
+  ok(/曲の長さ \d+:\d\d/.test(RL4.innerHTML), "arrangement: song length shown as m:ss");
+  ok(SL4.ultimateGorillaSaveV2 === rpgL4, "the RPG save is untouched (9B-14)");
+  AL4.stop(); DL4.reset();
+  var errL4 = CL4.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errL4.length === 0, "no Web Audio errors (9B-14)", errL4.slice(0, 3));
 };

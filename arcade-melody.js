@@ -158,7 +158,7 @@
         melodyAudio.noise = buf;
       } catch (e3) { melodyAudio.noise = null; }
     }
-    if (melodyAudio.ctx.state === "suspended" && melodyAudio.ctx.resume) {
+    if ((melodyAudio.ctx.state === "suspended" || melodyAudio.ctx.state === "interrupted") && melodyAudio.ctx.resume) { // §342 9B-14: iPhone の Safari は中断のあと "interrupted"
       try { melodyAudio.ctx.resume(); } catch (e2) {}
     }
     return melodyAudio.ctx;
