@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.57** |
+| 現在バージョン | **v2.58** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.58] 🎛️ ゴリラDAW のトラックごとの EQ・コンプレッサー**（§342 Phase 9B-8）: モデルの `fxClean`（`clean` の中で `track.fx` を整える）・`fxOf`／`fxLive`（効くもの ＝ sig）／`fxSet`／`fxReset`／`fxBoost`／`fxAutoMakeup`（ブラウザの自動のメイクアップの式）・`FX_EQ`／`FX_COMP`／`FX_BANDS`。`arcade-daw.js` の `trackIn`（音を入れる口・はじめて使うときに FX を作る）・`fxBuild`（WAV は効くノードだけ／再生中は道のクロスフェード）・`fxBranch`（パン → EQ → コンプ → メイクアップ）・`fxUpdate`・`rtKey`・`fxReduction`・FX の画面 `renderFx`・`UGDaw.fx`／`showFx`
 - **[v2.57] 🎛️ ゴリラシンセ → ゴリラDAW**（§342 Phase 9B-7）: `arcade-synth.js` の `synDawPayload`／`synDawCheck`／`synDawSend`／`synDawHtml`（テイクの patch を送る）。モデルの `inboxClean` のパートの `patch`（2 KB・`UGSynth.patchClean`）・`patchPreset`／`patchInstrument`（新しいトラックの音色 ＝ inline の patch）・`INBOX_FROM` にシンセ。`arcade-daw.js` の `partSound`（受け取りの画面の音色）・試聴は patch・`BACK_GAMES` にシンセ
 - **[v2.56] 🎻🎺 ゴリラストリングス・ゴリラホーン → ゴリラDAW**（§342 Phase 9B-6）: `arcade-strings.js` の `strDawPayload`／`strDawCheck`／`strDawSend`／`strDawHtml`・`arcade-horn.js` の `hrnDaw…`（編成のテイクはパートごと）。モデルの `takePayload` の `o.parts`・`INBOX_FROM` にストリングス・ホーン。`arcade-daw.js` の `BACK_GAMES`・受け取りの画面のはじめのパートの選び方（ウクレレ以外は全部）。テストの偽の IndexedDB は読みとりのあとに完了
 - **[v2.55] 🎸 ゴリラベース・ゴリラギター → ゴリラDAW**（§342 Phase 9B-5）: モデルの共通の `takePayload`／`takeCheck`／`takeSend`・`INBOX_FROM` にベース・ギター・取りこんだトラックの絵。`arcade-bass.js` の `bassDawPayload`／`bassDawCheck`／`bassDawSend`／`bassDawHtml`（`bassSetup` の `data-dawt`）・`arcade-guitar.js` の `gtrDaw…`（同じ作り）。`arcade-daw.js` の `BACK_GAMES` にベース・ギター

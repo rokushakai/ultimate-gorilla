@@ -79,6 +79,7 @@ function makeAudio(counters) {
   }
   function makeNode(kind, ctxKind) {
     counters.nodes[ctxKind] = (counters.nodes[ctxKind] || 0) + 1;
+    counters.kinds[ctxKind + ":" + kind] = (counters.kinds[ctxKind + ":" + kind] || 0) + 1; // 9B-8: 種類ごとの数
     var n = {
       connect: function (x) { if (!x) { counters.errors.push("connect(undefined)"); } }, disconnect: function () {},
       start: function (t) { if (isNaN(t)) { counters.errors.push("start NaN"); } if (kind === "osc") { counters.osc++; } if (kind === "src") { counters.src.push({ buf: n.buffer, rate: n.playbackRate.value, t: t }); } },
@@ -95,6 +96,7 @@ function makeAudio(counters) {
   function proto(C, ctxKind) {
     C.prototype.createGain = function () { return makeNode("gain", ctxKind); };
     C.prototype.createBiquadFilter = function () { return makeNode("filter", ctxKind); };
+    C.prototype.createDynamicsCompressor = function () { var n = makeNode("comp", ctxKind); n.threshold = param("threshold"); n.knee = param("knee"); n.ratio = param("ratio"); n.attack = param("attack"); n.release = param("release"); n.reduction = 0; return n; }; // 9B-8
     C.prototype.createOscillator = function () { return makeNode("osc", ctxKind); };
     C.prototype.createWaveShaper = function () { return makeNode("ws", ctxKind); };
     C.prototype.createConvolver = function () { return makeNode("conv", ctxKind); };
@@ -124,7 +126,7 @@ function makeAudio(counters) {
 // opts.files: 読み込む JS（ROOT からの相対パス）。opts.midiPort: 偽の Web MIDI 出力ポート
 function load(opts) {
   opts = opts || {};
-  var counters = { osc: 0, src: [], decodes: 0, errors: [], nodes: {}, offline: [], targets: [], stopped: 0, texts: [], downloads: [], shared: [], scripts: [] };
+  var counters = { osc: 0, src: [], decodes: 0, errors: [], nodes: {}, kinds: {}, offline: [], targets: [], stopped: 0, texts: [], downloads: [], shared: [], scripts: [] };
   var audio = makeAudio(counters);
   var store = {};
   var winListeners = {};

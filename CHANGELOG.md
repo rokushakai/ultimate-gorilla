@@ -5,6 +5,21 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.58] - 2026-11-14 — 🎛️ ゴリラDAW のトラックごとの EQ・コンプレッサー (§342 Phase 9B-8)
+
+### Added
+- ミキサーのトラックの行に「🎛️ FX」（効いているときは緑）→ FX の画面: FX 全体（ON／バイパス）・**3 バンド EQ**（LOW 150Hz lowshelf・MID 1kHz peaking Q 1.0・HIGH 7kHz highshelf・−12〜+12dB・ON／OFF・↺）・**コンプレッサー**（Threshold −60〜0dB・Ratio 1〜20・Attack 1〜100ms・Release 20〜1000ms・Makeup −12〜+12dB・はじめ −18dB 3:1 10ms 200ms 0dB・OFF・↺）・再生中の「いまの圧縮」・「↺ 全部をはじめに戻す」・← ミキサー
+- スライダー ＋ 数字の入力（範囲に入れる）＋ 単位。動かすと再生しながら音が変わる。EQ の＋・Makeup の＋で「⚠ 音が大きくなります（音割れは防ぎません）」。WAV で割れたら「FX で上げた値も下げてください」
+- 再生と WAV の書き出しの両方に同じ FX（シンセ・ドラム・音声・テイク・コンピング）。ミュート・ソロ・音量・パンはこれまでどおり
+### Changed
+- トラックの音のつなぎ: 入口 → パン → EQ → コンプ → メイクアップ → 音量 → 出口。**FX が効いていないトラック（OFF・全部 0dB・バイパス）にはノードを足さない**（WAV は v2.57 と同じ）
+- DynamicsCompressorNode はモノの音もステレオで出すため、パンを FX の頭に置く（あとでパンするとモノの音が +3dB になる・Chrome で確かめた）。ブラウザが自分でかける自動のメイクアップ（−18dB・3:1 で約 +6dB）は同じ式で打ち消し、Makeup 0dB ＝ しきい値より小さい音は変わらない
+- 再生中の ON／OFF・バイパスはクロスフェード（約 10ms・コンプの道は先読みの 6ms を待ってから）。コンプのある道では EQ の ON／OFF を 0dB へ動かすだけ（コンプを作りなおさない）
+- データ: トラックの `fx`（§340 の FxChain の形のまま）に `{ type: "eq3", on, low, mid, high }`・`{ type: "comp", on, threshold, ratio, attack, release, makeup }`・`bypass`。読むときに範囲へ入れる・知らない項目は残す。schemaVersion 1 のまま。JSON・ZIP に入る（MIDI には入らない）
+### Notes
+- 旧曲（`items: []`）は FX なし・開いただけでは書かない。FX は ↶ の対象外（音量・パンと同じ）
+- Phase 8 の新しいシンセのエンジン・Pitch8・ハイブリッドは使っていない。シンセのエンジン・DSP・Golden・IndexedDB・MIDI・8 つの楽器の送り方・録音・テイク・コンピングは変えていない
+
 ## [2.57] - 2026-11-14 — 🎛️ ゴリラシンセの演奏と音色をゴリラDAW へ (§342 Phase 9B-7)
 
 ### Added

@@ -84,10 +84,84 @@
     }
     var mm = masterOf(); // §341 9A-6: トラック → DAW のマスター → 共有のバス・マスター（RPG やほかのゲームの音量は変えない）
     mx = { main: chain(mm.bus), dry: mm.dry ? chain(mm.dry) : null, syn: null, voices: [], srcs: [], ac: ac };
-    mx.syn = Y && Y.track && !(t.instrument && t.instrument.type === "drum") && !DM().isAudio(t) ? Y.track(ac, { bus: mx.main.g, dry: mx.dry ? mx.dry.g : null }) : null; // エンジンが無ければ null（UGSynth.note で鳴らす）。9A-10: オーディオは使わない
+    mx.syn = Y && Y.track && !(t.instrument && t.instrument.type === "drum") && !DM().isAudio(t) ? Y.track(ac, { bus: trackIn(t, mx, "main"), dry: mx.dry ? trackIn(t, mx, "dry") : null }) : null; // エンジンが無ければ null（UGSynth.note で鳴らす）。9A-10: オーディオは使わない
     pl.mix[t.id] = mx;
     setGain(t, mx, true);
     return mx;
+  }
+  // ---------- §342 9B-8: トラックの FX（入口 → EQ → コンプ → メイクアップ → これまでの出口（音量 → パン））----------
+  // 効いていないトラックの WAV にはノードを足さない（入口 ＝ 出口のゲイン ＝ v2.57 と同じ）。再生中は 入口 → 道のゲイン → 出口 で、切りかえはクロスフェード
+  function dbGain(db) { return Math.pow(10, (Number(db) || 0) / 20); }
+  function mkGain(c) { return dbGain(c.makeup) / DM().fxAutoMakeup(c.threshold, c.ratio); } // ブラウザの自動のメイクアップを打ち消して、Makeup の dB だけ上げ下げする
+  function fxBranch(ac, t, live, withPan) {
+    var f = live.fx, M = DM(), b = { inp: null, out: null, nodes: [], eq: [], cp: null, mk: null, pn: null }, k, n;
+    function add(x) { if (b.out) { b.out.connect(x); } else { b.inp = x; } b.out = x; b.nodes.push(x); }
+    // パンを先に: DynamicsCompressorNode はモノの音もステレオで出す（Chrome で確かめた）ので、あとのパンだとモノの音の真ん中の −3dB が消えて +3dB になる。
+    // 先にパン（同じ pan）→ 出口のパンは 0（ステレオはそのまま通る）にすると、FX が中立のときは前と同じ音
+    if (withPan && ac.createStereoPanner) { n = ac.createStereoPanner(); n.pan.value = Math.max(-1, Math.min(1, Number(t.pan) || 0)); add(n); b.pn = n; }
+    if (live.eq) {
+      var bands = ["low", "mid", "high"];
+      for (k = 0; k < 3; k++) { var bd = M.FX_BANDS[bands[k]]; n = ac.createBiquadFilter(); n.type = bd.type; n.frequency.value = bd.freq; n.Q.value = bd.q; n.gain.value = eqGain(f, bands[k]); add(n); b.eq.push(n); }
+    }
+    if (live.comp) {
+      n = ac.createDynamicsCompressor(); n.threshold.value = f.comp.threshold; n.knee.value = M.FX_KNEE; n.ratio.value = f.comp.ratio; n.attack.value = f.comp.attack; n.release.value = f.comp.release; add(n); b.cp = n;
+      n = ac.createGain(); n.gain.value = mkGain(f.comp); add(n); b.mk = n;
+    }
+    return b;
+  }
+  function eqGain(f, band) { return !f.bypass && f.eq.on ? f.eq[band] : 0; } // EQ が OFF ＝ 0dB（shelf・peaking の 0dB は素通し）
+  // 再生中の道の形: コンプがあれば EQ もいつも入れておく（EQ の ON／OFF はゲインを 0dB へ動かすだけ ＝ コンプを作りなおさない。作りなおすと新しいコンプは圧縮していない状態から始まり、切りかえで音が跳ねる）
+  function rtKey(live) { var f = live.fx; return live.comp ? "c" : (!f.bypass && f.eq.on ? "e" : ""); }
+  function branchOff(b) { var i, l = b.nodes.concat(b.bg ? [b.bg] : []); for (i = 0; i < l.length; i++) { try { l[i].disconnect(); } catch (e) {} } }
+  // c（main／dry の出口）に、いまの設定の道を作る（now: すぐ／でなければクロスフェード）
+  function fxBuild(t, c, now) {
+    var ac = pl.ac, live = DM().fxLive(t), b;
+    if (pl.wav) { // 書き出し: 設定は変わらないので、道は 1 つ（クロスフェード用のゲインは作らない）
+      if (!live.sig) { c.inp = c.g; c.sig = ""; return; }
+      try { b = fxBranch(ac, t, live, !!c.pn); b.out.connect(c.g); c.inp = b.inp; c.br = b; c.sig = live.sig; if (b.pn) { c.pn.pan.value = 0; } } catch (e) { c.inp = c.g; c.sig = ""; }
+      return;
+    }
+    if (!c.inp) { c.inp = ac.createGain(); c.inp.gain.value = 1; if (c.pn) { try { c.pn.pan.cancelScheduledValues(0); } catch (e0) {} c.pn.pan.value = 0; } } // 再生中は、どの道も頭にパンを持つ（クロスフェードのあいだも同じパン）
+    var key = rtKey(live);
+    try { b = key || c.pn ? fxBranch(ac, t, { eq: !!key, comp: key === "c", fx: live.fx }, !!c.pn) : { inp: null, out: null, nodes: [] }; } catch (e1) { b = { inp: null, out: null, nodes: [] }; live = { sig: "" }; key = ""; }
+    var bg = ac.createGain(), t0 = ac.currentTime, old = c.br;
+    bg.gain.value = now || !old ? 1 : 0;
+    if (b.inp) { c.inp.connect(b.inp); b.out.connect(bg); } else { c.inp.connect(bg); }
+    bg.connect(c.g);
+    b.bg = bg; c.br = b; c.sig = live.sig; c.key = key;
+    if (old) {
+      // コンプの入った道は、先読みの遅れ（Chrome は 6ms）が音で満ちてから入れかえる（空のうちに入れると、つないだ所の段差が遅れて出てプチッとなる）
+      var s0 = t0 + (b.cp ? 0.012 : 0);
+      if (!now) { try { bg.gain.setValueAtTime(0, t0); bg.gain.setTargetAtTime(1, s0, 0.003); old.bg.gain.setValueAtTime(old.bg.gain.value, t0); old.bg.gain.setTargetAtTime(0, s0, 0.003); } catch (e2) { bg.gain.value = 1; old.bg.gain.value = 0; } }
+      else { old.bg.gain.value = 0; }
+      setTimeout(function () { try { c.inp.disconnect(old.inp || old.bg); } catch (e3) {} branchOff(old); }, 150);
+    }
+  }
+  // 音を入れる口（はじめて使うときに FX を作る）
+  function trackIn(t, mx, k) { var c = mx[k] || mx.main; if (!c.inp) { fxBuild(t, c, true); } return c.inp; }
+  // 再生中に設定を変えた: 効くものが変われば道を作りなおす（クロスフェード）、同じなら値をなめらかに
+  function fxUpdate(t) {
+    if (!pl || pl.wav || !pl.mix[t.id]) { return; }
+    var mx = pl.mix[t.id], live = DM().fxLive(t), f = live.fx, l = [mx.main, mx.dry], i, k, now = pl.ac.currentTime, bands = ["low", "mid", "high"];
+    for (i = 0; i < l.length; i++) {
+      var c = l[i];
+      if (!c || !c.inp) { continue; }
+      if (c.key !== rtKey(live)) { fxBuild(t, c, false); continue; }
+      c.sig = live.sig;
+      var b = c.br;
+      if (!b) { continue; }
+      try {
+        for (k = 0; k < b.eq.length; k++) { b.eq[k].gain.setTargetAtTime(eqGain(f, bands[k]), now, 0.01); }
+        if (b.cp) { b.cp.threshold.setTargetAtTime(f.comp.threshold, now, 0.01); b.cp.ratio.setTargetAtTime(f.comp.ratio, now, 0.01); b.cp.attack.setTargetAtTime(f.comp.attack, now, 0.01); b.cp.release.setTargetAtTime(f.comp.release, now, 0.01); }
+        if (b.mk) { b.mk.gain.setTargetAtTime(mkGain(f.comp), now, 0.01); }
+      } catch (e) {}
+    }
+  }
+  // いまの圧縮（dB・0 以下）。コンプが無ければ null
+  function fxReduction(id) {
+    var mx = pl && pl.mix[id], l = mx ? [mx.main, mx.dry] : [], i, r = null;
+    for (i = 0; i < l.length; i++) { var cp = l[i] && l[i].br && l[i].br.cp; if (cp) { var v = typeof cp.reduction === "number" ? cp.reduction : (cp.reduction && cp.reduction.value); if (isFinite(v)) { r = r === null ? v : Math.min(r, v); } } }
+    return r;
   }
   // §341 9A-6: DAW のマスター（ゲイン 2 つ: 共有のバスへ・共有の残響を通さない出口へ）。ゲイン ＝ master.vol ÷ 100
   function masterVol() { var p = st.project, v = p && p.master ? Number(p.master.vol) : 80; return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
@@ -110,7 +184,8 @@
     for (i = 0; i < list.length; i++) {
       if (!list[i]) { continue; }
       rampTo(list[i].g.gain, v, now);
-      if (list[i].pn) { rampTo(list[i].pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9A-6: パンもなめらかに
+      if (list[i].br && list[i].br.pn) { rampTo(list[i].br.pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9B-8: FX の道の頭のパン（出口のパンは 0 のまま）
+      else if (list[i].pn) { rampTo(list[i].pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9A-6: パンもなめらかに
     }
   }
   // ミュート・ソロ・音量を、鳴っているトラックにすぐ反映
@@ -148,14 +223,14 @@
         // 9A-8: スイング（8 分の裏の 16 分だけ・tick で遅らせる・ループの終わりはこえない）
         var dly = M.swingDelay(ev.rel, M.swingOf(t));
         if (ev.tick + dly >= pl.segEnd) { dly = 0; }
-        var mxd = mixFor(t), whd = segTime(p, seg, ev.tick + dly), UGd = window.UGMelody, okd = false, dest = mxd.main.g, choked = null;
+        var mxd = mixFor(t), whd = segTime(p, seg, ev.tick + dly), UGd = window.UGMelody, okd = false, dest = trackIn(t, mxd, "main"), choked = null;
         // 9A-8: ハイハットの開閉（同じトラックの中だけ）: 開いたハイハットは 1 打ごとのゲインを通す → 閉じたハイハット・次の開いたハイハットでそのゲインを 0 へ
         if ((ev.m === 42 || ev.m === 44 || ev.m === 46) && mxd.openHat && mxd.openHat.t < whd) {
           try { var og = mxd.openHat.g.gain; og.setValueAtTime(1, whd); og.setTargetAtTime(0, whd, 0.015); choked = mxd.openHat.tick; } catch (eo) {}
           mxd.openHat = null;
         }
         if (ev.m === 46) {
-          try { var cg = pl.ac.createGain(); cg.gain.value = 1; cg.connect(mxd.main.g); dest = cg; mxd.openHat = { g: cg, t: whd, tick: ev.tick }; } catch (ec) { dest = mxd.main.g; }
+          var din = dest; try { var cg = pl.ac.createGain(); cg.gain.value = 1; cg.connect(din); dest = cg; mxd.openHat = { g: cg, t: whd, tick: ev.tick }; } catch (ec) { dest = din; }
         }
         try { if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, dest); okd = true; } } catch (ed) { okd = false; }
         plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whd, sec: 0, hash: "drum", pass: pl.pass, ok: okd, drum: true, swing: dly, choked: choked });
@@ -169,7 +244,7 @@
       var sec = ev.d > 0 ? Math.max(0.05, segTime(p, seg, end) - when) : zeroSec(patch), v = null;
       try {
         if (mx.syn) { v = mx.syn.note(patch, ev.m, when, ev.v, sec); }
-        else if (Y && Y.note) { v = Y.note(patch, ev.m, mx.main.g, when, ev.v, sec); if (v) { mx.voices.push(v); if (mx.voices.length > 64) { mx.voices = mx.voices.filter(function (x) { return !(x.end < pl.ac.currentTime); }); } } }
+        else if (Y && Y.note) { v = Y.note(patch, ev.m, trackIn(t, mx, "main"), when, ev.v, sec); if (v) { mx.voices.push(v); if (mx.voices.length > 64) { mx.voices = mx.voices.filter(function (x) { return !(x.end < pl.ac.currentTime); }); } } }
       } catch (e) { v = null; }
       plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: when, sec: sec, hash: t.instrument.patch.hash, pass: pl.pass, ok: !!v });
       if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
@@ -208,7 +283,7 @@
       for (i = 0; mx.srcs && i < mx.srcs.length; i++) { try { var sct = mx.ac ? mx.ac.currentTime : 0, sg = mx.srcs[i].g.gain; sg.cancelScheduledValues(sct); sg.setTargetAtTime(0, sct, 0.01); mx.srcs[i].src.stop(sct + 0.06); } catch (e6) {} }
       mx.srcs = [];
       (function (m) { var l0 = [m.main, m.dry], k0; for (k0 = 0; k0 < l0.length; k0++) { if (l0[k0]) { try { l0[k0].g.gain.setTargetAtTime(0, l0[k0].g.context ? l0[k0].g.context.currentTime : 0, 0.01); } catch (e5) {} } } })(mx); // 9A-7: 先に予約したドラムの音も残らないように、外す前に 0 へ
-      (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} } } }, 150); })(mx);
+      (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} if (l[k].br) { branchOff(l[k].br); l[k].br = null; } if (l[k].inp && l[k].inp !== l[k].g) { try { l[k].inp.disconnect(); } catch (e7) {} } } } }, 150); })(mx); // 9B-8: FX のノードも
     }
     var ms = mix.__master;
     if (ms) { setTimeout(function () { try { ms.bus.disconnect(); if (ms.dry) { ms.dry.disconnect(); } } catch (e4) {} }, 150); } // 9A-6: DAW のマスターも外す
@@ -320,6 +395,7 @@
     var el = root.querySelector(".daw-playhead"), pos = root.querySelector(".daw-pos"), tick = playTick(), x = tickX(tick);
     if (el) { el.style.left = (HEAD_W + x) + "px"; }
     if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
+    var gre = st.view === "fx" && st.fxTrack ? root.querySelector(".dfx-gr") : null; if (gre) { var grv = fxReduction(st.fxTrack); gre.textContent = grv === null ? "—" : (Math.round(Math.min(0, grv) * 10) / 10).toFixed(1) + " dB"; } // 9B-8
     var dph = st.steps && st.view === "steps" ? root.querySelector(".ds-ph") : null, df = dph ? DM().findClip(st.project, st.steps.clip) : null;
     if (dph && df) {
       var drel = tick - df.clip.start, dstep = Math.floor(drel / DM().STEP);
@@ -382,6 +458,7 @@
     if (M && p && st.view === "roll") { renderRoll(root, ctl); return; }
     if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
     if (M && p && st.view === "mix") { renderMix(root, ctl); return; }
+    if (M && p && st.view === "fx") { renderFx(root, ctl); return; } // 9B-8
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
     if (M && p && st.view === "lib") { renderLib(root, ctl); return; } // 9A-15
@@ -984,7 +1061,7 @@
       if (!(dur > 0.001)) { rec.why = "end"; }
       else {
         try {
-          var mx = mixFor(t), ac = pl.ac, dest = mx.dry ? mx.dry.g : mx.main.g, src = ac.createBufferSource(), g = ac.createGain(), cut = off + dur < buf.duration - 0.0005;
+          var mx = mixFor(t), ac = pl.ac, dest = trackIn(t, mx, mx.dry ? "dry" : "main"), src = ac.createBufferSource(), g = ac.createGain(), cut = off + dur < buf.duration - 0.0005;
           var env = audEnv(ev, ev.sec, ev.sec + dur, off > 0.0005 && !ev.xIn, cut && !(ev.xOut && endS >= ev.endSec - 1e-9)), k; // 9A-16: 継ぎ目（クロスフェード）の端には小さなフェードをかけない
           src.buffer = buf; src.connect(g); g.connect(dest);
           g.gain.value = env[0][1];
@@ -1536,7 +1613,7 @@
           wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav";
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
-          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" : "");
+          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "");
         }
         if (onDone) { onDone(); }
       });
@@ -3121,12 +3198,13 @@
     for (i = 0; i < p.tracks.length; i++) {
       var t = p.tracks[i], pv = Math.round(clampNum(t.pan, -1, 1, 0) * 100), tv = Math.round(clampNum(t.vol, 0, 100, VOL0));
       h += '<div class="dm-row"><div class="dm-name">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b> <span class="small">' + instName(t) + '</span>' +
+          '<button class="modal-btn dm-fxb' + (DM().fxLive(t).sig ? " on" : "") + '" data-mxf="' + t.id + '" title="EQ・コンプ">&#x1F39B;&#xFE0F; FX</button>' +
           '<span class="daw-ms dm-ms"><button class="daw-m' + (t.mute ? " on" : "") + '" data-mxm="' + t.id + '">M</button><button class="daw-s' + (t.solo ? " on" : "") + '" data-mxs="' + t.id + '">S</button></span></div>' +
         '<div class="dm-ctl"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + tv + '" data-mxv="' + t.id + '" aria-label="' + escHtml(t.name) + ' の音量"><b class="dm-val" data-mxval="' + t.id + '">' + tv + '</b>' +
           '<button class="modal-btn dm-reset" data-mxr="' + t.id + '" title="音量 80・パン C に戻す">&#x21BA;</button></div>' +
         '<div class="dm-ctl"><span class="dm-lab">パン</span><input type="range" class="dm-fader dm-pan" min="-100" max="100" step="1" value="' + pv + '" data-mxp="' + t.id + '" aria-label="' + escHtml(t.name) + ' の左右"' + (ps ? '' : ' disabled') + '><b class="dm-val" data-mxpval="' + t.id + '">' + panText(pv / 100) + '</b><span class="dm-sp"></span></div></div>';
     }
-    return h + saveNoteHtml() + '<p class="small dsv-note">フェーダーは指で左右に動かします。↺ で初期値（音量 80・パン C・マスター 80）に戻ります。音量・パン・マスターは ↶ の対象外です。</p></div>';
+    return h + saveNoteHtml() + '<p class="small dsv-note">フェーダーは指で左右に動かします。↺ で初期値（音量 80・パン C・マスター 80）に戻ります。🎛️ FX でトラックごとの EQ・コンプ。音量・パン・マスター・FX は ↶ の対象外です。</p></div>';
   }
   function renderMix(root, ctl) {
     var p = project();
@@ -3141,6 +3219,7 @@
         if (v === "stop") { transportStop(); renderMix(root, ctl); return; }
         if (v === "resetMaster") { mixer.resetMaster(); renderMix(root, ctl); return; }
         if ((id = el.getAttribute("data-mxr"))) { mixer.resetTrack(id); renderMix(root, ctl); return; }
+        if ((id = el.getAttribute("data-mxf"))) { if (M.findTrack(p, id)) { st.view = "fx"; st.fxTrack = id; renderFx(root, ctl); } return; } // 9B-8
         if ((id = el.getAttribute("data-mxm"))) { var tm = M.findTrack(p, id); if (tm) { tm.mute = !tm.mute; updateMix(); markDirty(); } renderMix(root, ctl); return; }
         if ((id = el.getAttribute("data-mxs"))) { var ts = M.findTrack(p, id); if (ts) { ts.solo = !ts.solo; updateMix(); markDirty(); } renderMix(root, ctl); }
       };
@@ -3155,6 +3234,92 @@
         if (pid) { mixer.setPan(pid, Number(el.value) / 100); lab = root.querySelector('[data-mxpval="' + pid + '"]'); if (lab) { lab.textContent = panText(Number(el.value) / 100); } }
       };
       rs[k].onchange = function () { mixer.commit(); };
+    }
+    drawHead();
+  }
+
+  // ---------- §342 9B-8: 🎛️ FX の画面（EQ・コンプ・バイパス）----------
+  // つまみ: [part, key, 画面の倍率, 単位, 名前, 小さい説明]（Attack・Release は秒で持ち ms で見せる）
+  var FX_ROWS = { eq: [["eq", "low", 1, "dB", "LOW", "150Hz"], ["eq", "mid", 1, "dB", "MID", "1kHz"], ["eq", "high", 1, "dB", "HIGH", "7kHz"]],
+    comp: [["comp", "threshold", 1, "dB", "Threshold", "しきい"], ["comp", "ratio", 1, ":1", "Ratio", "比"], ["comp", "attack", 1000, "ms", "Attack", "かかり"], ["comp", "release", 1000, "ms", "Release", "もどり"], ["comp", "makeup", 1, "dB", "Makeup", "持ち上げ"]] };
+  function fxBoosted(p) { var i; for (i = 0; i < p.tracks.length; i++) { if (DM().audible(p, p.tracks[i]) && DM().fxBoost(p.tracks[i]) > 0) { return true; } } return false; }
+  function fxDef(r) { var M = DM(); return (r[0] === "eq" ? M.FX_EQ : M.FX_COMP)[r[1]]; }
+  function fxShow(v, r) { var x = Math.round(v * r[2] * 1000) / 1000; return String(r[2] > 1 ? Math.round(x) : x); }
+  var fxApi = {
+    // 動かしているあいだ（保存はしない・音だけ変える）。v は画面の単位（ms など）
+    set: function (id, part, key, v) {
+      var t = DM().findTrack(project(), id), r = null, i, l = FX_ROWS[part] || [];
+      if (!t) { return { ok: false }; }
+      for (i = 0; i < l.length; i++) { if (l[i][1] === key) { r = l[i]; } }
+      var out = DM().fxSet(t, part, key, key === "on" || part === "bypass" ? v : (r ? Number(v) / r[2] : v));
+      if (out.ok) { fxUpdate(t); }
+      return out;
+    },
+    reset: function (id, part) { var t = DM().findTrack(project(), id); if (!t) { return false; } DM().fxReset(t, part); fxUpdate(t); markDirty(); return true; },
+    commit: function () { markDirty(); },
+    reduction: function (id) { return fxReduction(id); },
+    nodes: function (id) { var mx = pl && pl.mix[id], o = { main: null, dry: null }; if (mx) { if (mx.main && mx.main.inp) { o.main = { sig: mx.main.sig, n: mx.main.br ? mx.main.br.nodes.length : 0 }; } if (mx.dry && mx.dry.inp) { o.dry = { sig: mx.dry.sig, n: mx.dry.br ? mx.dry.br.nodes.length : 0 }; } } return o; } // テスト・確かめ用
+  };
+  function fxRowHtml(t, f, r) {
+    var df = fxDef(r), v = f[r[0]][r[1]], nm = r[0] + "." + r[1], lo = fxShow(df[1], r), hi = fxShow(df[2], r), stp = r[2] > 1 ? "1" : String(df[3]), sv = fxShow(v, r);
+    return '<div class="dm-ctl dfx-row"><span class="dfx-lab">' + r[4] + '<small>' + r[5] + '</small></span>' +
+      '<input type="range" class="dm-fader" min="' + lo + '" max="' + hi + '" step="' + stp + '" value="' + sv + '" data-fxr="' + nm + '" aria-label="' + r[4] + '">' +
+      '<input type="number" class="dfx-num" inputmode="decimal" min="' + lo + '" max="' + hi + '" step="' + stp + '" value="' + sv + '" data-fxn="' + nm + '" aria-label="' + r[4] + ' の数字"><span class="dfx-unit">' + r[3] + '</span></div>';
+  }
+  function fxHtml(p, t) {
+    var M = DM(), f = M.fxOf(t), live = M.fxLive(t), boost = M.fxBoost(t), i, h;
+    function tog(on, nm, a, b) { return '<button class="modal-btn dfx-tog' + (on ? " on" : "") + '" data-fx="' + nm + '">' + (on ? a : b) + '</button>'; }
+    h = '<div class="daw dm dfx">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-fx="back">&#x2190; ミキサー</button><b>&#x1F39B;&#xFE0F; FX</b></div>' +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-fx="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-fx="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span></div>' +
+      '<div class="dm-row dfx-track"><div class="dm-name">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' <b>' + escHtml(t.name) + '</b> <span class="small">' + instName(t) + '</span></div></div>' +
+      '<div class="dm-row' + (f.bypass ? " dfx-off" : "") + '"><div class="dfx-sw"><b>FX 全体</b>' + tog(!f.bypass, "bypass", "ON", "バイパス") + '</div>' +
+        '<p class="small dfx-note">' + (f.bypass ? "バイパス中: EQ・コンプを通さない（前と同じ音）。" : (live.sig ? "効いています: パン → " + (live.eq ? "EQ" : "") + (live.eq && live.comp ? " → " : "") + (live.comp ? "コンプ" : "") + " → 音量。" : "いまは何も効いていません（前と同じ音）。")) + '</p></div>' +
+      '<div class="dm-row' + (f.eq.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>EQ（3 バンド）</b>' + tog(f.eq.on, "eqOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-fx="eqReset" title="3 つとも 0dB に">&#x21BA;</button></div>';
+    for (i = 0; i < FX_ROWS.eq.length; i++) { h += fxRowHtml(t, f, FX_ROWS.eq[i]); }
+    h += '</div><div class="dm-row' + (f.comp.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>コンプレッサー</b>' + tog(f.comp.on, "compOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-fx="compReset" title="はじめの値に">&#x21BA;</button></div>';
+    for (i = 0; i < FX_ROWS.comp.length; i++) { h += fxRowHtml(t, f, FX_ROWS.comp[i]); }
+    h += '<p class="small dfx-note">いまの圧縮: <b class="dfx-gr">—</b>（再生中・コンプが ON のとき）</p></div>' +
+      '<p class="small dfx-warn"' + (boost > 0 ? '' : ' hidden') + '>&#x26A0;&#xFE0F; 音が大きくなります（いちばん大きい＋ ' + boost + 'dB）。Makeup・EQ の＋は音量を上げるだけで、音割れは防ぎません。割れたら値かトラックの音量を下げてください（WAV の書き出しで、割れたところを数えて知らせます）。</p>' +
+      '<button class="modal-btn daw-small dfx-all" data-fx="resetAll">&#x21BA; 全部をはじめに戻す</button>' +
+      saveNoteHtml() + '<p class="small dsv-note">スライダーを動かすと、再生しながら音が変わります。数字を入れても変えられます（範囲に入れます）。EQ ＝ LOW 150Hz・MID 1kHz（Q 1.0）・HIGH 7kHz。コンプ ＝ パンのあと・音量より前（Knee 6dB・ブラウザが自分でかける持ち上げは打ち消して、Makeup の dB だけ上げ下げ）。FX は ↶ の対象外です。</p></div>';
+    return h;
+  }
+  function renderFx(root, ctl) {
+    var p = project(), M = DM(), t = M.findTrack(p, st.fxTrack);
+    if (!t) { st.view = "mix"; st.fxTrack = null; renderMix(root, ctl); return; }
+    root.innerHTML = fxHtml(p, t);
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button[data-fx]"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-fx"), f = M.fxOf(t);
+        if (v === "back") { st.view = "mix"; st.fxTrack = null; renderMix(root, ctl); return; }
+        if (v === "play") { startPlay(); renderFx(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderFx(root, ctl); return; }
+        if (v === "bypass") { fxApi.set(t.id, "bypass", "", !f.bypass); markDirty(); }
+        else if (v === "eqOn") { fxApi.set(t.id, "eq", "on", !f.eq.on); markDirty(); }
+        else if (v === "compOn") { fxApi.set(t.id, "comp", "on", !f.comp.on); markDirty(); }
+        else if (v === "eqReset") { fxApi.reset(t.id, "eq"); }
+        else if (v === "compReset") { fxApi.reset(t.id, "comp"); }
+        else if (v === "resetAll") { fxApi.reset(t.id); }
+        renderFx(root, ctl);
+      };
+    }
+    function parts(el, a) { var s = (el.getAttribute(a) || "").split("."); return { part: s[0], key: s[1] }; }
+    function warn() { var w = root.querySelector(".dfx-warn"), b = M.fxBoost(t); if (w) { if (b > 0) { w.removeAttribute("hidden"); } else { w.setAttribute("hidden", ""); } } }
+    var rs = root.querySelectorAll("input[data-fxr]");
+    for (k = 0; k < rs.length; k++) {
+      rs[k].oninput = function (ev) {
+        var el = ev.currentTarget, q = parts(el, "data-fxr"), r = fxApi.set(t.id, q.part, q.key, el.value), n = root.querySelector('[data-fxn="' + q.part + "." + q.key + '"]');
+        if (r.ok && n) { var row = null, i, l = FX_ROWS[q.part]; for (i = 0; i < l.length; i++) { if (l[i][1] === q.key) { row = l[i]; } } n.value = fxShow(r.value, row); }
+        warn();
+      };
+      rs[k].onchange = function () { fxApi.commit(); renderFx(root, ctl); };
+    }
+    var ns = root.querySelectorAll("input[data-fxn]");
+    for (k = 0; k < ns.length; k++) {
+      ns[k].onchange = function (ev) { var el = ev.currentTarget, q = parts(el, "data-fxn"); if (String(el.value).replace(/\s/g, "") !== "") { fxApi.set(t.id, q.part, q.key, el.value); fxApi.commit(); } renderFx(root, ctl); };
     }
     drawHead();
   }
@@ -3757,7 +3922,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）

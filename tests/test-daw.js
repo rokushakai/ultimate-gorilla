@@ -587,7 +587,7 @@ module.exports = async function () {
   ok(dk.length === 4 && dk.every(function (c, i) { return near(c.t, t07 + i * 4 * STEP / PPQ * spb7); }), "4. kicks at 0, 0.5, 1.0, 1.5 s (120 BPM)", dk.map(function (c) { return (c.t - t07).toFixed(4); }));
   ok(ds.length === 2 && near(ds[0].t, t07 + 0.5) && near(ds[1].t, t07 + 1.5), "4. snares on beats 2 and 4", ds.map(function (c) { return (c.t - t07).toFixed(4); }));
   ok(dh.length === 8 && dh.every(function (c, i) { return near(c.t, t07 + i * 0.25); }), "4. hats every 8th (0.25 s)", dh.map(function (c) { return (c.t - t07).toFixed(4); }));
-  ok(calls.every(function (c) { return c.lv === 0.85 && c.dest === P7.mix[drumT.id].main.g; }), "drums go to the drum track's own output (volume → pan → DAW master), velocity 0.85");
+  ok(calls.every(function (c) { return c.lv === 0.85 && c.dest === P7.mix[drumT.id].main.inp && P7.mix[drumT.id].main.sig === ""; }), "drums go to the drum track's own output (9B-8: its input → (no FX) → volume → pan → DAW master), velocity 0.85");
   var lg7 = D7.log().filter(function (x) { return x.track === leadT.id && x.pass === 0; });
   ok(lg7.length === 2 && near(lg7[0].when, dk[0].t) && near(lg7[1].when, ds[0].t), "5. lead notes start exactly with the kick / snare (same clock)");
   ok(P7.mix[drumT.id].syn === null && P7.mix[leadT.id] !== P7.mix[drumT.id], "no SynthTrack is made for a drum track");
@@ -2778,4 +2778,108 @@ module.exports = async function () {
   WY.UGArcade.stop(); DY.reset();
   var errY = eY.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errY.length === 0, "no Web Audio errors (9B-7)", errY.slice(0, 3));
+
+  // ================= 9B-8: トラックの EQ・コンプレッサー（§342）=================
+  var eF = H.load(), WF = eF.window, MF = WF.UGDawModel, DF = WF.UGDaw, AF = WF.UGArcade, SF = eF.store, CF = eF.counters;
+  SF.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgF = SF.ultimateGorillaSaveV2;
+  WF.indexedDB = fakeIDB(); fakeDecode(WF);
+  // --- モデル: 正規化・はじめの値・効くかどうか ---
+  var fxc = MF.fxClean({ items: [{ type: "eq3", on: "yes", low: 99, mid: "x", high: -3.3, z: 1 }, { type: "eq3", on: true, low: 5 }, 7, null, { type: "dist", on: true, amt: 0.4 }, { type: "comp", on: true, threshold: -200, ratio: 0.2, attack: 5, release: -1, makeup: NaN }], bypass: "1", future: { k: 2 } });
+  ok(fxc.items.length === 3 && fxc.items[0].type === "eq3" && fxc.items[0].on === false && fxc.items[0].low === 12 && fxc.items[0].mid === 0 && fxc.items[0].high === -3.5 && fxc.items[0].z === 1 && fxc.items[1].type === "dist" && fxc.items[1].amt === 0.4 && fxc.items[2].on === true && fxc.items[2].threshold === -60 && fxc.items[2].ratio === 1 && fxc.items[2].attack === 0.1 && fxc.items[2].release === 0.02 && fxc.items[2].makeup === 0 && fxc.bypass === false && fxc.future.k === 2, "fxClean: values clamped / defaulted, one eq3 and one comp, unknown types and keys kept, non-objects dropped", fxc);
+  ok(JSON.stringify(MF.fxClean({ items: [] })) === '{"items":[]}' && JSON.stringify(MF.fxClean(undefined)) === '{"items":[]}' && JSON.stringify(MF.fxClean({ items: "x", a: 1 })) === '{"items":[],"a":1}', "old / missing / broken fx → { items: [] } (other keys kept)");
+  var tF = { fx: { items: [] } }, oF = MF.fxOf(tF);
+  ok(MF.fxLive(tF).sig === "" && !oF.eq.on && oF.eq.low === 0 && !oF.comp.on && oF.comp.threshold === -18 && oF.comp.ratio === 3 && oF.comp.attack === 0.01 && oF.comp.release === 0.2 && oF.comp.makeup === 0 && !oF.bypass, "defaults: EQ off 0 dB, comp off −18 dB 3:1 10 ms 200 ms makeup 0 dB");
+  MF.fxSet(tF, "eq", "on", true); ok(MF.fxLive(tF).sig === "", "EQ on but all bands 0 dB → nothing is processed");
+  MF.fxSet(tF, "eq", "low", 6); ok(MF.fxLive(tF).sig === "e" && MF.fxBoost(tF) === 6, "LOW +6 → EQ is live, boost warning 6 dB");
+  MF.fxSet(tF, "comp", "on", true); MF.fxSet(tF, "comp", "attack", 0.0004); MF.fxSet(tF, "comp", "ratio", 99); MF.fxSet(tF, "comp", "release", "abc");
+  ok(MF.fxLive(tF).sig === "ec" && MF.fxOf(tF).comp.attack === 0.001 && MF.fxOf(tF).comp.ratio === 20 && MF.fxOf(tF).comp.release === 0.2, "comp on; attack ≥ 1 ms, ratio ≤ 20, a non-number → default");
+  ok(!MF.fxSet(tF, "eq", "nope", 1).ok && !MF.fxSet(tF, "x", "on", 1).ok && !MF.fxSet(null, "eq", "on", 1).ok, "unknown parameters / parts are refused");
+  MF.fxSet(tF, "bypass", "", true); ok(MF.fxLive(tF).sig === "" && MF.fxBoost(tF) === 0 && tF.fx.bypass === true, "bypass → nothing is processed");
+  MF.fxSet(tF, "bypass", "", false); MF.fxReset(tF, "eq"); ok(MF.fxOf(tF).eq.on === true && MF.fxOf(tF).eq.low === 0 && MF.fxLive(tF).sig === "c", "↺ EQ: bands back to 0 dB (ON stays)");
+  tF.fx.items.push({ type: "dist", on: true }); MF.fxReset(tF); ok(JSON.stringify(tF.fx) === '{"items":[{"type":"dist","on":true}]}', "↺ all: eq3 / comp / bypass removed, other items kept");
+  var amF = function (a, b) { return 20 * Math.log(MF.fxAutoMakeup(a, b)) / Math.LN10; };
+  ok(Math.abs(amF(-18, 3) - 6.13) < 0.05 && Math.abs(amF(0, 1)) < 1e-9 && Math.abs(amF(-18, 1)) < 0.1 && amF(-60, 20) > 30 && amF(-24, 4) > amF(-18, 3), "the browser compressor's auto makeup (spec formula): −18 dB 3:1 ≈ +6.1 dB, none at 0 dB / 1:1, ≈ +33 dB at −60 dB 20:1 → cancelled", [amF(-18, 3), amF(-60, 20)]);
+  var oldF = MF.clean(fx.record.project);
+  ok(oldF.tracks.every(function (t, i) { return JSON.stringify(t.fx) === JSON.stringify(fx.record.project.tracks[i].fx || { items: [] }) && MF.fxLive(t).sig === ""; }), "the v2.37 song: fx is read unchanged and nothing is live");
+  // --- 曲: リード・ベース（シンセ）・ドラム・音声 ---
+  var RF = H.makeEl("div"); DF.reset(); AF.start("daw", RF, {});
+  var pF = DF.proj.create("demo"), LF = pF.tracks[0];
+  var tAF = await new Promise(function (r) { DF.audio.add(r); });
+  var wvF = makeWav({ sr: 44100, ch: 1, sec: 1, fn: tone(440) });
+  var qF = await new Promise(function (r) { DF.audio.importWav(wvF, "tone.wav", { track: tAF.id }, r); });
+  DF.flushSave(); pF = DF.project(); LF = pF.tracks[0];
+  var undoF = DF.undoDepth(), savedF0 = JSON.stringify(pF);
+  function kindsF() { return JSON.parse(JSON.stringify(CF.kinds)); }
+  async function wavF() {
+    var k0 = kindsF(); await new Promise(function (r) { DF.wav.start(r); }); for (var g = 0; g < 900 && DF.wav.state().busy; g++) { await eF.wait(10); }
+    var k1 = kindsF(), d = function (k) { return (k1[k] || 0) - (k0[k] || 0); }, c = {};
+    DF.wav.state().log.forEach(function (x) { c[x.track] = (c[x.track] || 0) + 1; });
+    return { st: DF.wav.state().state, filter: d("off:filter"), comp: d("off:comp"), gain: d("off:gain"), notes: c, note: DF.wav.state().note || "" };
+  }
+  var w0F = await wavF();
+  ok(qF.ok && w0F.st === "done" && w0F.comp === 0 && Object.keys(w0F.notes).length >= 2, "song with synth tracks and an audio clip renders (no FX)", w0F);
+  DF.fx.set(LF.id, "eq", "on", true); var w1F = await wavF();
+  ok(w1F.st === "done" && w1F.filter === w0F.filter && w1F.comp === 0 && w1F.gain === w0F.gain, "EQ on with 0 dB: the WAV graph is exactly the v2.57 one (no node added)", [w0F, w1F]);
+  DF.fx.set(LF.id, "eq", "low", 6); DF.fx.set(LF.id, "eq", "mid", -6); DF.fx.set(LF.id, "eq", "high", 3); var w2F = await wavF();
+  ok(w2F.filter === w0F.filter + 3 && w2F.comp === 0 && w2F.gain === w0F.gain && JSON.stringify(w2F.notes) === JSON.stringify(w0F.notes), "EQ live: 3 BiquadFilters on that track only, same notes", [w0F, w2F]);
+  DF.fx.set(LF.id, "comp", "on", true); DF.fx.set(tAF.id, "comp", "on", true); var w3F = await wavF();
+  ok(w3F.filter === w0F.filter + 3 && w3F.comp === 2 && w3F.gain === w0F.gain + 2, "comp on (lead + audio track): 2 compressors + 2 makeup gains", [w0F, w3F]);
+  DF.fx.set(LF.id, "bypass", "", true); DF.fx.set(tAF.id, "comp", "on", false); var w4F = await wavF();
+  ok(w4F.filter === w0F.filter && w4F.comp === 0 && w4F.gain === w0F.gain, "bypass / comp off → back to the v2.57 graph", [w0F, w4F]);
+  DF.fx.set(LF.id, "bypass", "", false);
+  ok(DF.undoDepth() === undoF, "FX changes are not ↶ steps (like volume / pan)");
+  // --- 再生中: 値・なめらかな変化・クロスフェード・道 ---
+  var acF = WF.UGMelody.audioInit(), pnF = []; acF.createStereoPanner = function () { var n = { connect: function () {}, disconnect: function () {}, pan: { value: 0, setTargetAtTime: function (v, t, tau) { n.pan.value = v; pnF.push(v); }, cancelScheduledValues: function () {} } }; return n; };
+  LF.pan = -0.4;
+  DF.play(); var PF = DF.player(), mLF = PF.mix[LF.id].main, bLF = mLF.br;
+  ok(bLF.pn && bLF.nodes[0] === bLF.pn && bLF.pn.pan.value === -0.4 && mLF.pn.pan.value === 0, "the pan comes first in the FX path (the compressor always outputs stereo); the output panner stays at 0");
+  DF.mixer.setPan(LF.id, 0.5); ok(bLF.pn.pan.value === 0.5 && mLF.pn.pan.value === 0 && pnF[pnF.length - 1] === 0.5, "moving the pan while playing moves the FX path's panner (smooth)"); DF.mixer.setPan(LF.id, 0);
+  ok(mLF.sig === "ec" && bLF.eq.length === 3 && bLF.nodes[1] === bLF.eq[0] && bLF.eq[0].type === "lowshelf" && bLF.eq[0].frequency.value === 150 && bLF.eq[0].gain.value === 6 && bLF.eq[1].type === "peaking" && bLF.eq[1].frequency.value === 1000 && bLF.eq[1].Q.value === 1 && bLF.eq[1].gain.value === -6 && bLF.eq[2].type === "highshelf" && bLF.eq[2].frequency.value === 7000 && bLF.eq[2].gain.value === 3 && bLF.cp.threshold.value === -18 && bLF.cp.ratio.value === 3 && bLF.cp.attack.value === 0.01 && bLF.cp.release.value === 0.2 && bLF.cp.knee.value === 6 && Math.abs(bLF.mk.gain.value - 1 / MF.fxAutoMakeup(-18, 3)) < 1e-12, "while playing: lowshelf 150 Hz +6 / peaking 1 kHz Q 1 −6 / highshelf 7 kHz +3 → comp −18 dB 3:1 10 ms 200 ms knee 6 → makeup 0 dB (the browser's own auto makeup is cancelled)");
+  ok(PF.mix[LF.id].main.g.gain.value === 0.8, "the track volume (after the FX) is unchanged");
+  var nTF = CF.targets.length; DF.fx.set(LF.id, "comp", "makeup", 6); var tgF = CF.targets.slice(nTF);
+  ok(mLF.br === bLF && tgF.some(function (x) { return x.name === "gain" && Math.abs(x.v - Math.pow(10, 6 / 20) / MF.fxAutoMakeup(-18, 3)) < 1e-9 && x.tau === 0.01; }), "moving a value while playing ramps it (10 ms), no rebuild");
+  nTF = CF.targets.length; DF.fx.set(LF.id, "eq", "low", 0); tgF = CF.targets.slice(nTF);
+  ok(tgF.some(function (x) { return x.name === "gain" && x.v === 0 && x.tau === 0.01; }) && mLF.br === bLF, "EQ LOW → 0 dB while playing: smooth");
+  nTF = CF.targets.length; DF.fx.set(LF.id, "eq", "on", false); tgF = CF.targets.slice(nTF);
+  ok(mLF.br === bLF && mLF.sig === "c" && tgF.filter(function (x) { return x.name === "gain" && x.v === 0 && x.tau === 0.01; }).length >= 3, "EQ off while the comp is on: the EQ gains ramp to 0 dB, the compressor is kept (no rebuild → no jump)", tgF);
+  DF.fx.set(LF.id, "eq", "on", true); ok(mLF.br === bLF && bLF.eq[1].gain.value === -6, "EQ back on: same path, values ramp back");
+  nTF = CF.targets.length; DF.fx.set(LF.id, "comp", "on", false); tgF = CF.targets.slice(nTF);
+  ok(mLF.sig === "e" && mLF.br !== bLF && !mLF.br.cp && tgF.filter(function (x) { return x.tau === 0.003 && x.t === acF.currentTime; }).length === 2, "comp off while playing: a new path (EQ only) cross-fades in and the old one out (no click)", tgF);
+  var b2F = mLF.br; nTF = CF.targets.length; DF.fx.set(LF.id, "bypass", "", true);
+  ok(mLF.sig === "" && mLF.br !== b2F && mLF.br.nodes.length === 1 && mLF.br.nodes[0] === mLF.br.pn && !mLF.br.cp && !mLF.br.eq.length && CF.targets.slice(nTF).filter(function (x) { return x.tau === 0.003; }).length === 2, "bypass while playing: cross-fade to the plain path");
+  DF.fx.set(LF.id, "bypass", "", false); nTF = CF.targets.length; DF.fx.set(LF.id, "comp", "on", true);
+  ok(CF.targets.slice(nTF).filter(function (x) { return x.tau === 0.003 && Math.abs(x.t - (acF.currentTime + 0.012)) < 1e-9; }).length === 2, "comp on while playing: the cross-fade waits 12 ms for the compressor's look-ahead to fill");
+  var mAF = PF.mix[tAF.id];
+  ok(mAF && mAF.dry && mAF.dry.inp && !mAF.main.inp && DF.fx.nodes(tAF.id).dry.sig === "", "the audio track's FX sits on the path it uses (dry); nothing is built on the unused one");
+  DF.fx.set(tAF.id, "comp", "on", true); ok(DF.fx.nodes(tAF.id).dry.sig === "c" && DF.fx.nodes(tAF.id).dry.n === 6 && DF.fx.reduction(tAF.id) === 0, "audio track comp on while playing (pan + EQ at 0 dB + compressor + makeup), reduction readable");
+  LF.mute = true; DF.updateMix(); ok(PF.mix[LF.id].main.g.gain.value === 0.8 || CF.targets.slice(-4).some(function (x) { return x.name === "gain" && x.v === 0; }), "mute still works after the FX (track gain → 0)"); LF.mute = false; DF.updateMix();
+  var discF = 0, allF = mLF.br.nodes.concat([mLF.br.bg, mLF.inp]); allF.forEach(function (n) { n.disconnect = function () { discF++; }; });
+  DF.stop(); await eF.wait(250);
+  ok(!DF.player() && discF >= allF.length, "stop: the FX nodes are disconnected with the track output", [discF, allF.length]);
+  // --- 画面 ---
+  DF.showMixer(); var mhF = RF.innerHTML;
+  ok((mhF.match(/data-mxf="/g) || []).length === DF.project().tracks.length && /dm-fxb on" data-mxf="/.test(mhF), "mixer: a 🎛️ FX button per track (lit when live)");
+  ok(DF.showFx(LF.id) && RF.innerHTML.indexOf("FX 全体") >= 0 && (RF.innerHTML.match(/data-fxr="/g) || []).length === 8 && (RF.innerHTML.match(/data-fxn="/g) || []).length === 8 && RF.innerHTML.indexOf("Threshold") >= 0 && RF.innerHTML.indexOf("Makeup") >= 0 && RF.innerHTML.indexOf("150Hz") >= 0 && RF.innerHTML.indexOf("ミキサー") >= 0 && RF.innerHTML.indexOf('data-fxn="comp.attack" aria-label="Attack の数字" min="1"') < 0, "FX screen: bypass, EQ 3 bands, 5 comp values, each with a slider and a number, back to the mixer");
+  ok(/class="small dfx-warn">/.test(RF.innerHTML) && RF.innerHTML.indexOf("音割れは防ぎません") >= 0, "boost (+3 dB HIGH, makeup +6 dB) → the clipping warning is shown");
+  ok(RF.innerHTML.indexOf('value="10" data-fxn="comp.attack"') >= 0 && RF.innerHTML.indexOf('value="200" data-fxn="comp.release"') >= 0, "attack / release are shown in ms (10 / 200)");
+  DF.fx.set(LF.id, "comp", "makeup", 0); DF.fx.set(LF.id, "eq", "high", 0); DF.fx.set(LF.id, "eq", "mid", -6); DF.showFx(LF.id);
+  ok(/class="small dfx-warn" hidden>/.test(RF.innerHTML), "no boost (cut only) → no warning");
+  ok(!DF.showFx("nope"), "unknown track → FX screen does not open");
+  // --- 保存・読みなおし・ZIP ---
+  DF.fx.set(LF.id, "eq", "high", 2.5); DF.fx.set(LF.id, "comp", "threshold", -24); DF.fx.set(LF.id, "comp", "attack", 25); DF.fx.commit(); DF.flushSave();
+  var idF = DF.project().id, fxF = JSON.stringify(DF.project().tracks.map(function (t) { return t.fx; }));
+  ok(/"type":"eq3","on":true,"low":0,"mid":-6,"high":2.5/.test(fxF) && /"threshold":-24,"ratio":3,"attack":0.025/.test(fxF), "the FX values are kept in the track (attack in seconds)", fxF);
+  DF.reload(); DF.proj.open(idF);
+  ok(JSON.stringify(DF.project().tracks.map(function (t) { return t.fx; })) === fxF, "after a reload the FX settings are the same");
+  var exF = await new Promise(function (r) { DF.pack.exportZip(r); });
+  var eF2 = H.load(), WF2 = eF2.window, DF2 = WF2.UGDaw; WF2.indexedDB = fakeIDB(); fakeDecode(WF2);
+  var RF2 = H.makeEl("div"); DF2.reset(); WF2.UGArcade.start("daw", RF2, {});
+  var rqF = await impZ(DF2, blobAB(exF.blob)); DF2.proj.open(rqF.id);
+  ok(exF.ok && rqF.ok && JSON.stringify(DF2.project().tracks.map(function (t) { return t.fx; })) === fxF && DF2.project().assets.length === 1, "ZIP → empty storage: the FX settings and the audio come back", rqF.why);
+  WF2.UGArcade.stop(); DF2.reset();
+  var mxF = DF.midi.exportNow(); ok(mxF.ok, "MIDI export still works with FX (FX is not in MIDI)");
+  ok(SF.ultimateGorillaSaveV2 === rpgF, "the RPG save is untouched (9B-8)");
+  AF.stop(); DF.reset();
+  var errF = CF.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errF.length === 0, "no Web Audio errors (9B-8)", errF.slice(0, 3));
 };

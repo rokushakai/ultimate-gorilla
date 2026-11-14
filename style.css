@@ -1470,6 +1470,24 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dm-fader::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -11px; border-radius: 50%; background: #ffd166; border: 2px solid #10202e; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 .dm-fader::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: #ffd166; border: 2px solid #10202e; }
 .dm-fader:disabled { opacity: 0.4; }
+/* §342 9B-8: トラックの FX（EQ・コンプ） */
+.dm .dm-fxb { margin: 0; flex: 0 0 auto; min-height: 30px; min-width: 58px; padding: 0 6px; font-size: 12px; white-space: nowrap; background: #2a3a4f; color: #adb5bd; }
+.dm .dm-fxb.on { background: #06d6a0; color: #10202e; border-color: #06d6a0; font-weight: bold; }
+.dfx-sw { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dfx-sw b { flex: 1 1 auto; min-width: 0; }
+.dfx .dfx-tog { margin: 0; flex: 0 0 auto; min-width: 84px; min-height: 34px; padding: 0 8px; font-size: 13px; background: #2a3a4f; color: #adb5bd; }
+.dfx .dfx-tog.on { background: #06d6a0; color: #10202e; border-color: #06d6a0; font-weight: bold; }
+.dfx .dm-reset { margin: 0; flex: 0 0 auto; min-width: 44px; min-height: 34px; padding: 0; font-size: 16px; }
+.dfx-off .dfx-row { opacity: 0.55; }
+.dfx-lab { flex: 0 0 64px; width: 64px; font-size: 12px; line-height: 1.1; color: #e9ecef; }
+.dfx-lab small { display: block; font-size: 10px; color: #adb5bd; }
+.dfx .dfx-num { flex: 0 0 58px; width: 58px; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 4px; font-size: 14px; text-align: right; background: #10202e; color: #ffd166; border: 1px solid #3a4a63; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.dfx-unit { flex: 0 0 22px; width: 22px; font-size: 11px; color: #adb5bd; }
+.dfx-note { color: #adb5bd; margin: 4px 0 0; line-height: 1.4; }
+.dfx-gr { color: #ffd166; font-variant-numeric: tabular-nums; }
+.dfx-warn { color: #ffd166; background: #3a2a10; border-radius: 8px; padding: 6px 8px; margin: 6px 0 0; line-height: 1.45; }
+.dfx-warn[hidden] { display: none; }
+.dfx .dfx-all { margin-top: 8px; }
 .da-btns .da-half { grid-column: span 2; font-size: 14px; }
 .da-btns .da-danger { background: #ef476f; color: #fff; }
 .da-btns .da-danger-o { background: transparent; color: #ff8fab; border: 2px solid #ef476f; }

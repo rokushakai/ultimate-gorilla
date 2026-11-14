@@ -317,7 +317,7 @@
       var t = {
         id: "", name: str(s.name, "トラック", 40), kind: s.kind === "audio" || s.kind === "gen" ? s.kind : "midi",
         instrument: cleanInstrument(s.instrument), vol: num(s.vol, 80, 0, 100), pan: num(s.pan, 0, -1, 1), mute: !!s.mute, solo: !!s.solo,
-        fx: isObj(s.fx) && isArr(s.fx.items) ? copy(s.fx) : { items: [] }, clips: [], auto: isArr(s.auto) ? copy(s.auto) : [], ext: isObj(s.ext) ? copy(s.ext) : {}
+        fx: fxClean(s.fx), clips: [], auto: isArr(s.auto) ? copy(s.auto) : [], ext: isObj(s.ext) ? copy(s.ext) : {}
       };
       var cl = isArr(s.clips) ? s.clips : [];
       for (j = 0; j < cl.length; j++) { var c = cleanClip(cl[j], p, scale); if (c) { t.clips.push(c); } }
@@ -334,6 +334,83 @@
       for (j = 0; j < p.tracks[i].clips.length; j++) { var cc = p.tracks[i].clips[j]; if (!cc.id || seen[cc.id]) { cc.id = ""; cc.id = nextId(p, "c"); } seen[cc.id] = true; }
     }
     return p;
+  }
+
+  // ---------- §342 9B-8: トラックの FX（3 バンド EQ・コンプレッサー）。§340 の FxChain（{ items: [{ type, on, …値 }] }）の形のまま ----------
+  // 範囲 [はじめ, 下, 上, きざみ]。EQ・Makeup・Threshold は dB、Ratio は :1、Attack・Release は秒
+  var FX_EQ = { low: [0, -12, 12, 0.5], mid: [0, -12, 12, 0.5], high: [0, -12, 12, 0.5] };
+  var FX_COMP = { threshold: [-18, -60, 0, 0.5], ratio: [3, 1, 20, 0.1], attack: [0.01, 0.001, 0.1, 0.001], release: [0.2, 0.02, 1, 0.001], makeup: [0, -12, 12, 0.5] };
+  var FX_BANDS = { low: { type: "lowshelf", freq: 150, q: 1 }, mid: { type: "peaking", freq: 1000, q: 1 }, high: { type: "highshelf", freq: 7000, q: 1 } }, FX_KNEE = 6;
+  function fxNum(v, d) { var n = Number(v); if (typeof v === "boolean" || v === null || v === "" || !isFinite(n)) { n = d[0]; } n = Math.max(d[1], Math.min(d[2], n)); n = Math.round(n / d[3]) * d[3]; return Math.round(n * 10000) / 10000; }
+  function fxItem(type, src) {
+    var def = type === "eq3" ? FX_EQ : FX_COMP, o = isObj(src) ? copy(src) : {}, k;
+    o.type = type; o.on = isObj(src) ? src.on === true : false;
+    for (k in def) { if (def.hasOwnProperty(k)) { o[k] = fxNum(o[k], def[k]); } }
+    return o;
+  }
+  // 読むとき: eq3・comp は値を範囲に入れる（同じ type の 2 つ目からは捨てる）。知らない type・知らない値は残す。オブジェクトでない項目は捨てる
+  function fxClean(src) {
+    if (!isObj(src) || !isArr(src.items)) { var o0 = isObj(src) ? copy(src) : {}; o0.items = []; if (o0.bypass !== undefined) { o0.bypass = o0.bypass === true; } return o0; }
+    var o = copy(src), it = [], seen = {}, i;
+    for (i = 0; i < src.items.length; i++) {
+      var x = src.items[i];
+      if (!isObj(x)) { continue; }
+      if (x.type === "eq3" || x.type === "comp") { if (seen[x.type]) { continue; } seen[x.type] = true; it.push(fxItem(x.type, x)); }
+      else { it.push(copy(x)); }
+    }
+    o.items = it;
+    if (o.bypass !== undefined) { o.bypass = o.bypass === true; }
+    return o;
+  }
+  function fxFind(t, type) { var l = t && isObj(t.fx) && isArr(t.fx.items) ? t.fx.items : [], i; for (i = 0; i < l.length; i++) { if (isObj(l[i]) && l[i].type === type) { return l[i]; } } return null; }
+  // いまの設定（無ければはじめの値・OFF）
+  function fxOf(t) {
+    var e = fxItem("eq3", fxFind(t, "eq3")), c = fxItem("comp", fxFind(t, "comp"));
+    return { bypass: !!(t && isObj(t.fx) && t.fx.bypass === true), eq: { on: e.on, low: e.low, mid: e.mid, high: e.high }, comp: { on: c.on, threshold: c.threshold, ratio: c.ratio, attack: c.attack, release: c.release, makeup: c.makeup } };
+  }
+  // 音に効くもの: EQ ＝ ON で 0dB でないバンドがある・コンプ ＝ ON。バイパスなら何も効かない（そのときはノードを作らない ＝ v2.57 と同じ音）
+  function fxLive(t) {
+    var f = fxOf(t), eq = !f.bypass && f.eq.on && (f.eq.low !== 0 || f.eq.mid !== 0 || f.eq.high !== 0), cp = !f.bypass && f.comp.on;
+    return { eq: eq, comp: cp, sig: (eq ? "e" : "") + (cp ? "c" : ""), fx: f };
+  }
+  // DynamicsCompressorNode が自分でかける「自動のメイクアップ」（Web Audio の仕様・Blink の DynamicsCompressorKernel と同じ計算）＝ (1 / fullRangeGain)^0.6。
+  // これで割って、Makeup 0dB のときは「しきい値より小さい音の大きさは変わらない」にそろえる（そのままだと Threshold −60・Ratio 20 で約 +34dB も上がる）
+  function fxAutoMakeup(threshold, ratio) {
+    var th = Number(threshold), kn = FX_KNEE, sl = 1 / Math.max(1, Number(ratio) || 1);
+    function lin(db) { return Math.pow(10, db / 20); }
+    function db(x) { return 20 * Math.log(x) / Math.LN10; }
+    var lt = lin(th), kdb = th + kn, kt = lin(kdb);
+    function curve(x, k) { return x < lt ? x : lt + (1 - Math.exp(-k * (x - lt))) / k; }
+    function slopeAt(x, k) { if (x < lt) { return 1; } var x2 = x * 1.001; return (db(curve(x2, k)) - db(curve(x, k))) / (db(x2) - db(x)); }
+    var lo = 0.1, hi = 10000, k = 5, i;
+    for (i = 0; i < 15; i++) { if (slopeAt(kt, k) < sl) { hi = k; } else { lo = k; } k = Math.sqrt(lo * hi); }
+    var ykdb = db(curve(kt, k)), full = 1 < kt ? curve(1, k) : lin(ykdb + sl * (0 - kdb));
+    var g = Math.pow(1 / full, 0.6);
+    return isFinite(g) && g > 0 ? g : 1;
+  }
+  // 音を上げる設定か（画面の注意: EQ の + ・Makeup の +）
+  function fxBoost(t) { var l = fxLive(t), f = l.fx, b = 0; if (l.eq) { b = Math.max(b, f.eq.low, f.eq.mid, f.eq.high); } if (l.comp) { b = Math.max(b, f.comp.makeup); } return b; }
+  function fxHost(t) { if (!isObj(t.fx)) { t.fx = { items: [] }; } if (!isArr(t.fx.items)) { t.fx.items = []; } return t.fx; }
+  // 値を 1 つ変える（part: "eq" | "comp" | "bypass"、key: "on" か値の名前）→ { ok, value }
+  function fxSet(t, part, key, v) {
+    if (!t) { return { ok: false }; }
+    if (part === "bypass") { var h0 = fxHost(t); if (v) { h0.bypass = true; } else { delete h0.bypass; } return { ok: true, value: !!v }; }
+    var type = part === "eq" ? "eq3" : (part === "comp" ? "comp" : ""), def = type === "eq3" ? FX_EQ : FX_COMP;
+    if (!type || (key !== "on" && !def.hasOwnProperty(key))) { return { ok: false }; }
+    var h = fxHost(t), it = fxFind(t, type);
+    if (!it) { it = fxItem(type, null); h.items.push(it); }
+    if (key === "on") { it.on = !!v; return { ok: true, value: it.on }; }
+    it[key] = fxNum(v, def[key]);
+    return { ok: true, value: it[key] };
+  }
+  // ↺: part ＝ "eq" | "comp"（その項目をはじめの値・ON／OFF はそのまま）／ 無し（eq3・comp の項目と bypass を消す。ほかの項目は残す）
+  function fxReset(t, part) {
+    if (!t) { return false; }
+    if (part === "eq" || part === "comp") { var type = part === "eq" ? "eq3" : "comp", it = fxFind(t, type); if (it) { var on = it.on, d = fxItem(type, null), k; for (k in d) { if (d.hasOwnProperty(k)) { it[k] = d[k]; } } it.on = on; } return true; }
+    var h = fxHost(t);
+    h.items = h.items.filter(function (x) { return !(isObj(x) && (x.type === "eq3" || x.type === "comp")); });
+    delete h.bypass;
+    return true;
   }
 
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
@@ -1691,6 +1768,7 @@
     midiExport: midiExport, midiParse: midiParse, midiRead: midiRead, midiBox: midiBox, midiDrumNotes: midiDrumNotes, midiNewProject: midiNewProject, midiGmPreset: midiGmPreset,
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
+    FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, // 9B-8
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };
