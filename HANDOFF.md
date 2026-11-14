@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.64** |
+| 現在バージョン | **v2.65** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.65] 🧹 ゴリラDAW の音声ノードの片づけ**（§342 Phase 9B-15）: `masterPrivOff` は `fx.nodes`（`UGMelody.buildFx` が返す 8 個・ディレイのフィードバックの輪）も外し、リミッターの `port` の `onmessage` を外して 200ms 後に閉じる。`renderSong` の `drainGo`（やめたら出口 `mlast` を外して `resume`・止まるたびに続ける）。`wavCanChunk`（suspend・`wav.noSuspend`・SynthTrack）と `WAV_SLOW_MAX`（60 秒）・`wavPlan` の `chunk`。ノードの計測はテストの QA の中だけ（WeakRef・connect／disconnect を包む）
 - **[v2.64] 🎼 ゴリラDAW の長い曲（3〜5 分）・安定性**（§342 Phase 9B-14）: `arcade-daw.js` の `WAV_MAX_MUSIC`（330）・`WAV_LONG`（150）・`wavPlan` の `memMB`／`long`・`secText`。`renderSong(cb, ro)` は `suspend` で `WAV_STEP_FR`（88,064 フレーム）ごとに止まり、`more`（曲の写しで `WAV_AHEAD` 4 秒先まで予約）・`voFree`（鳴り終わって `WAV_VO_KEEP` 1 秒のシンセの声を出口から外す）・進み具合・やめる・60 秒のウォッチドッグ（`wav.noSuspend`）。SynthTrack（`mx.syn`）・`suspend` が無いときは全部を先に予約。モデルの `audioCutIds`／`fitAudioBox`・⏱ の `tpApi.cut`／`fit`。`arcade-melody.js` の `melodyAudioInit` は `"interrupted"` も resume。iPhone の手順は `IPHONE_QA_DAW.md`（実機では未確認）
 - **[v2.63] 📊 ゴリラDAW の LUFS・True Peak の解析**（§342 Phase 9B-13）: モデルの `kCoef`／`loudMeter`／`tpTaps`（BS.1770-5・Tech 3341）。`arcade-daw.js` の `luSig`（曲のしるし・WAV を使い回すか）・`luAnalyze`（WAV の 16 bit を 1 秒ずつ）・`luApi`（`UGDaw.lufs`）・📊 の画面 `renderLufs`・`wav.sig`／`wav.limCeil`。テストのハーネスの Blob に `arrayBuffer`
 - **[v2.62] ⏱ ゴリラDAW のテンポマップ**（§342 Phase 9B-12）: データは `tempo.points`（§340）。モデルの `tempoSet`／`tempoDel`／`tempoList`／`secBetween`／`delaySecAt`／`midiTempoCheck`・`midiNewProject(info, withTempo)`・`TEMPO_MAX`（64）・`sendTail` はいちばん長いディレイ。`arcade-daw.js` の `dlySeg`／`dlyPlan`（ディレイの時間の予約）・`tempoSched`（BPM を変えたら鳴らしなおすか）・`snapAll` にテンポ・⏱ の画面 `renderTempo`・`UGDaw.tempo`／`showTempo`・ルーラーの `.daw-tmk`・MIDI の読み込みの `midTempoMap`

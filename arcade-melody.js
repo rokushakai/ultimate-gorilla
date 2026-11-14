@@ -558,9 +558,9 @@
       dlp.connect(fb);
       fb.connect(dly);
       dlp.connect(master);
-      return { bus: bus, revSend: revSend, dlySend: dlySend };
+      return { bus: bus, revSend: revSend, dlySend: dlySend, nodes: [bus, revSend, rev, revOut, dlySend, dly, dlp, fb] }; // §342 9B-15: nodes ＝ 片づけるときに全部外せるように（ディレイのフィードバックの輪も）
     } catch (e) {
-      return { bus: bus, revSend: null, dlySend: null };
+      return { bus: bus, revSend: null, dlySend: null, nodes: [bus] };
     }
   }
 

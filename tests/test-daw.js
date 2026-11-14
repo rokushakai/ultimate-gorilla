@@ -3327,7 +3327,12 @@ module.exports = async function () {
   ok(DL4.wav.MAX === 330, "WAV export up to 330 s (5:30) of music");
   // 長い曲（約 3 分）: 注意とメモリの見積もり
   ML4.newMidiClip(pL4, pL4.tracks[0], ML4.barToTick(pL4, 74), 3840, [[0, 480, 60, 0.8]], "おわり"); DL4.markDirty();
+  var plN = DL4.wav.plan(); // 9B-15: suspend の無いブラウザ（このハーネス）では 60 秒まで
+  ok(!plN.ok && plN.chunk === false && plN.why.indexOf("1:00 まで") >= 0 && plN.why.indexOf("区切って") >= 0 && plN.why.indexOf("3:00") >= 0, "9B-15: without OfflineAudioContext.suspend a 3-minute song is refused (1:00 limit, reason shown) — booking everything at once is far too slow", plN.why);
+  WL4.OfflineAudioContext.prototype.suspend = function () { return new Promise(function () {}); };
   var plL = DL4.wav.plan();
+  DL4.wav.state().noSuspend = true; var plS = DL4.wav.plan(); DL4.wav.state().noSuspend = false;
+  ok(!plS.ok && plS.why.indexOf("前の書き出しが途中で止まった") >= 0, "9B-15: after a stuck export (suspend no longer used) long songs are refused with the reason", plS.why);
   ok(plL.ok && plL.long && Math.abs(plL.music - 75 * 2.4) < 1e-9 && plL.memMB === Math.round(plL.frames * 16 / 1048576) && plL.memMB > 100, "a 3-minute song (75 bars at 100 BPM = 3:00): allowed, marked long, memory estimate " + plL.memMB + " MB", plL);
   // 330 秒をこえる曲は書き出さない（理由・バッファを作らない）
   pL4 = DL4.project(); ML4.newMidiClip(pL4, pL4.tracks[0], ML4.barToTick(pL4, 140), 3840, [[0, 480, 62, 0.8]], "とおく"); DL4.markDirty();
@@ -3335,6 +3340,7 @@ module.exports = async function () {
   ok(stL4 === false && DL4.wav.state().state === "fail" && DL4.wav.state().msg.indexOf("5:30 まで") >= 0 && DL4.wav.state().msg.indexOf("5:38") >= 0 && CL4.offline.length === offL4, "a 5:38 song is refused with the reason (5:30 limit, nothing cut, no buffer made)", DL4.wav.state().msg);
   pL4.tracks[0].clips = pL4.tracks[0].clips.filter(function (c) { return c.ext.name !== "とおく" && c.ext.name !== "おわり"; }); DL4.markDirty();
   // 進み具合（約 2 秒ごと）・区切った予約・やめる（suspend の偽物: 予約した時刻の順に止まる）
+  delete WL4.OfflineAudioContext.prototype.suspend;
   var OP = WL4.OfflineAudioContext.prototype, origSR = OP.startRendering, susT = [];
   OP.suspend = function (t) { var self = this; self.__sus = self.__sus || []; susT.push(t); return new Promise(function (r) { self.__sus.push({ t: t, r: r }); }); };
   OP.resume = function () { var self = this; setTimeout(function () { self.__next(); }, 0); };
@@ -3350,8 +3356,25 @@ module.exports = async function () {
   OP.suspend = sv4;
   susT = []; DL4.wav.start(function () {}); DL4.wav.cancel();
   for (gL = 0; gL < 400 && DL4.wav.state().busy; gL++) { await eL4.wait(2); }
-  ok(DL4.wav.state().state === "canceled" && !DL4.wav.state().blob, "やめる during the export: it stops at the next step (not resumed), nothing is kept");
+  ok(DL4.wav.state().state === "canceled" && !DL4.wav.state().blob, "やめる during the export: it stops at the next step, nothing is kept");
+  // 9B-15: 描きはじめてから（1 回目に止まったあと）やめる → 出口を外して最後まで流す（止めたまま残さない）
+  var offC = CL4.offline.length, resN = 0, rsv = OP.resume, doneR = 0, srv = OP.startRendering, ctxC = null;
+  OP.resume = function () { if (this === ctxC) { resN++; if (resN === 1) { DL4.wav.cancel(); } } return rsv.apply(this, arguments); };
+  OP.startRendering = function () { ctxC = this; var r0 = srv.apply(this, arguments); return { then: function (a, b) { r0.then(function (x) { doneR++; a(x); }, b); } }; };
+  susT = []; DL4.wav.start(function () {});
+  for (gL = 0; gL < 400 && (DL4.wav.state().busy || !doneR); gL++) { await eL4.wait(2); }
+  OP.startRendering = srv;
+  ok(CL4.offline.length === offC + 1 && susT.length >= 3 && resN === susT.length && doneR === 1 && DL4.wav.state().state === "canceled" && !DL4.wav.state().blob, "9B-15: after やめる the stopped render is let run to the end with its output cut (not left suspended — a suspended context keeps its whole graph and buffer)", [resN, susT.length, doneR]);
+  OP.resume = rsv;
   OP.startRendering = origSR; delete OP.suspend; delete OP.resume;
+  // 9B-15: ⏹ のあと、マスター専用の出口（Master FX が効くとき）の共有と同じ残響のノードを全部外す（ディレイのフィードバックの輪は、外さないとおたがいを生かしつづける）
+  var UGm4 = WL4.UGMelody, bf4 = UGm4.buildFx, fx4 = [];
+  UGm4.buildFx = function (ac, m) { var f = bf4(ac, m); fx4.push({ off: typeof ac.startRendering === "function", f: f }); (f.nodes || []).forEach(function (n) { n.__dc = 0; var d0 = n.disconnect; n.disconnect = function () { n.__dc++; return d0.apply(n, arguments); }; }); return f; };
+  DL4.master.set("eq", "on", true); DL4.master.set("eq", "low", 2);
+  DL4.jumpTo(0); DL4.play(); await eL4.wait(300); DL4.stop(); await eL4.wait(400);
+  var rt4 = fx4.filter(function (x) { return !x.off; });
+  ok(rt4.length >= 1 && rt4.every(function (x) { return x.f.nodes && x.f.nodes.length === 8 && x.f.nodes.every(function (n) { return n.__dc >= 1; }); }), "9B-15: after ⏹ every node of the master output's reverb/delay (8, with the delay feedback loop) is disconnected", rt4.map(function (x) { return (x.f.nodes || []).map(function (n) { return n.__dc; }); }));
+  UGm4.buildFx = bf4; DL4.master.reset();
   // --- テンポで箱の終わりが切れる音声のクリップ ---
   var tA4 = await new Promise(function (r) { DL4.audio.add(r); });
   var wv4 = makeWav({ sr: 44100, ch: 1, sec: 2.5, fn: tone(330) });

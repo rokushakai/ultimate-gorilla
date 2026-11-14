@@ -399,8 +399,13 @@
     return o;
   }
   function masterPrivOff(o) {
-    var l = [o.pm, o.fx && o.fx.bus, o.ing, o.lim].concat(o.eq), i;
-    if (o.lim) { try { o.lim.port.postMessage("stop"); } catch (e0) {} }
+    var l = [o.pm, o.fx && o.fx.bus, o.ing, o.lim].concat(o.eq, (o.fx && o.fx.nodes) || []), i; // 9B-15: 共有と同じ残響のノードも全部（ディレイのフィードバックの輪は、外さないとおたがいを生かしつづける）
+    if (o.lim) {
+      var lp = o.lim.port;
+      try { lp.postMessage("stop"); } catch (e0) {}
+      try { lp.onmessage = null; } catch (e1) {}
+      setTimeout(function () { try { lp.close(); } catch (e2) {} }, 200); // 9B-15: 受け口を閉じる（開いたままだと、ワークレットと出口のノードが GC されない）。"stop" が届いてから
+    }
     for (i = 0; i < l.length; i++) { if (l[i]) { try { l[i].disconnect(); } catch (e) {} } }
   }
   // 再生中に値を変えた: 出口の形が変われば同じ位置から鳴らしなおす、同じなら値をなめらかに
@@ -1793,7 +1798,7 @@
   if (window.document && document.addEventListener) { document.addEventListener("visibilitychange", function () { if (document.hidden && rec.state !== "idle") { if (rec.state === "rec") { recStop("hidden"); } else if (rec.state === "ask") { recCancel("画面を離れたので、録音をやめました"); } } }); }
 
   // ---------- §341 9A-9: WAV の書き出し（OfflineAudioContext・再生と同じ schedule()・44.1kHz・16bit・ステレオ）----------
-  var WAV_RATE = 44100, WAV_MAX_MUSIC = 330, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000, WAV_LONG = 150, WAV_STEP_FR = 688 * 128, WAV_AHEAD = 4, WAV_VO_KEEP = 1, WAV_SUS_WAIT = 60000; // 9B-14: 5 分 30 秒まで（2 分 30 秒からは注意）
+  var WAV_RATE = 44100, WAV_MAX_MUSIC = 330, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000, WAV_LONG = 150, WAV_STEP_FR = 688 * 128, WAV_AHEAD = 4, WAV_VO_KEEP = 1, WAV_SUS_WAIT = 60000, WAV_SLOW_MAX = 60; // 9B-14: 5 分 30 秒まで（2 分 30 秒からは注意）・9B-15: 区切って予約できないブラウザは 60 秒まで（v2.63 と同じ）
   var wav = { busy: false, job: null, blob: null, url: "", name: "", stats: null, plan: null, msg: "", note: "", state: "idle", log: [], ms: 0 };
   function fileBase(name) { return String(name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw"; }
   function stamp() { var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()); }
@@ -1801,10 +1806,16 @@
   function wavPlan(p) {
     var M = DM(), end = M.songEndTick(p), music = M.tickToSec(p, end), tl = M.sendTail(p), sec = music + Math.max(WAV_TAIL, tl.sec), frames = Math.ceil(sec * WAV_RATE); // 9B-11: センドの残響の長さまで（最大 10 秒）
     var r = { endTick: end, bars: M.tickToBar(p, Math.max(0, end - 1)).bar, music: music, sec: sec, frames: frames, bytes: 44 + frames * 4, ok: true, why: "", tail: Math.max(WAV_TAIL, tl.sec), tailCapped: tl.capped,
-      memMB: Math.round(frames * 16 / 1048576), long: music > WAV_LONG }; // 9B-14: メモリの見積もり（描く音 8 ＋ WAV 4 ＋ 解析で読む 4 バイト／フレーム）
+      memMB: Math.round(frames * 16 / 1048576), long: music > WAV_LONG, chunk: wavCanChunk() }; // 9B-14: 音声データだけのメモリの見積もり（描く音 8 ＋ WAV 4 ＋ 解析で読む 4 バイト／フレーム）。ブラウザ全体ではもっと使う（9B-15: PC の Chrome で 3 分の曲に 約 250MB）
     if (!(M.noteCount(p) > 0) && !(M.audioClipCount(p) > 0)) { r.ok = false; r.why = "音符も音声のクリップもありません"; }
     else if (music > WAV_MAX_MUSIC) { r.ok = false; r.why = "曲が " + secText(music) + "（" + Math.round(music) + " 秒）あります。WAV は " + secText(WAV_MAX_MUSIC) + " までです（メモリを守るため・途中で切らないので、書き出しません）"; }
+    else if (!r.chunk && music > WAV_SLOW_MAX) { r.ok = false; r.why = "曲が " + secText(music) + "（" + Math.round(music) + " 秒）あります。" + (wav.noSuspend ? "前の書き出しが途中で止まったため、" : "このブラウザでは") + "長い曲を区切って書き出せないので、WAV は " + secText(WAV_SLOW_MAX) + " までです（区切らないと、長い曲はとても時間がかかります）。PC の Chrome なら " + secText(WAV_MAX_MUSIC) + " まで書き出せます"; } // 9B-15
     return r;
+  }
+  // 9B-15: 区切って予約できるか（OfflineAudioContext の suspend がある・止まったままになったことがない・SynthTrack のエンジンでない）。できないと全部を先に予約するので、長い曲ほどとても遅い（長さの 2 乗に近い）
+  function wavCanChunk() {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, Y = window.UGSynth;
+    return !!(OAC && OAC.prototype && typeof OAC.prototype.suspend === "function") && !wav.noSuspend && !(Y && Y.track);
   }
   function secText(s) { s = Math.max(0, Math.round(s)); var mm = Math.floor(s / 60), ss = s - mm * 60; return mm + ":" + (ss < 10 ? "0" : "") + ss; } // 9B-14: 分:秒
   function wavFree() { if (wav.url) { try { URL.revokeObjectURL(wav.url); } catch (e) {} } wav.url = ""; wav.blob = null; }
@@ -1911,6 +1922,9 @@
     // 9B-14: suspend で約 2 秒ごとに止まって、先の音を予約・進み具合を出す（音は変わらない）・やめるなら続けない。止まったまま（60 秒）のブラウザでは失敗にして、次からは使わない
     var useSus = (chunk || !!(ro && (ro.onProgress || ro.job))) && typeof off.suspend === "function" && !wav.noSuspend, lastAct = Date.now(), wd = null, sk, susOk = true;
     function stopWd() { if (wd) { clearInterval(wd); wd = null; } }
+    // 9B-15: やめたあと: 出口を外して（音は描かない）最後まで流して終わらせる。止めたままだと、このコンテキストと描く途中の音（長い曲で 100MB 以上）がずっと残る
+    var drained = false;
+    function drainGo() { drained = true; try { mlast.disconnect(); } catch (ed) {} try { off.resume(); } catch (er1) {} }
     if (useSus) {
       for (sk = 1; sk * WAV_STEP_FR < plan.frames; sk++) {
         (function (kk) {
@@ -1919,8 +1933,8 @@
           if (!sp || !sp.then) { susOk = false; return; }
           sp.then(function () {
             lastAct = Date.now();
-            if (done) { return; }
-            if (ro && ro.job && ro.job.canceled) { done = true; stopWd(); off.oncomplete = null; cb(null, "やめました（描いた音は捨てました）"); return; }
+            if (done) { if (drained) { try { off.resume(); } catch (er0) {} } return; }
+            if (ro && ro.job && ro.job.canceled) { done = true; stopWd(); off.oncomplete = null; drainGo(); cb(null, "やめました（描いた音は捨てました）"); return; }
             var erm = more(fr / WAV_RATE);
             if (erm) { done = true; stopWd(); off.oncomplete = null; cb(null, "書き出しに失敗しました（" + erm + "）"); return; }
             if (ro && ro.onProgress) { try { ro.onProgress(Math.floor(fr * 100 / plan.frames)); } catch (ep) {} }
@@ -1928,7 +1942,7 @@
           }, function () {});
         })(sk);
       }
-      wd = setInterval(function () { if (done) { stopWd(); return; } if (Date.now() - lastAct > WAV_SUS_WAIT) { stopWd(); done = true; wav.noSuspend = true; off.oncomplete = null; cb(null, "書き出しが途中で止まりました（このブラウザでは途中の進み具合を使えないようです）。もう一度「WAV を書き出す」を押すと、進み具合なしで書き出します（曲は変えていません）"); } }, 1000);
+      wd = setInterval(function () { if (done) { stopWd(); return; } if (Date.now() - lastAct > WAV_SUS_WAIT) { stopWd(); done = true; wav.noSuspend = true; off.oncomplete = null; drained = true; try { mlast.disconnect(); } catch (ew) {} cb(null, "書き出しが途中で止まりました（このブラウザでは途中の進み具合を使えないようです）。もう一度「WAV を書き出す」を押すと、進み具合なしで書き出します（曲は変えていません）"); } }, 1000);
     }
     if (chunk && !susOk) { var erA = more(Infinity); if (erA) { done = true; stopWd(); off.oncomplete = null; cb(null, "書き出しに失敗しました（" + erA + "）"); return; } } // suspend を予約できなかった: 残りを全部いま予約（これまでと同じ）
     try {
@@ -2176,7 +2190,7 @@
   function wavHtml(p) {
     var pln = wavPlan(p), h = '<div class="dp-wav"><div class="dp-h">&#x1F3B5; WAV を書き出す</div>';
     h += '<div class="small">「' + escHtml(p.name) + '」・1〜' + pln.bars + ' 小節（曲の全体・ループは使わない）・曲 ' + secText(pln.music) + ' ＋ 余韻 ' + (Math.round(pln.tail * 10) / 10) + ' 秒<br>長さ 約 ' + (Math.round(pln.sec * 10) / 10) + ' 秒・大きさ 約 ' + mb(pln.bytes) + '（44.1kHz・16bit・ステレオ）</div>';
-    if (pln.ok && pln.long) { h += '<div class="small dp-long">&#x26A0;&#xFE0F; 長い曲なので、書き出しにメモリを多く使います（約 ' + pln.memMB + ' MB）。ほかのタブ・アプリを閉じてから書き出してください。' + secText(WAV_MAX_MUSIC) + ' までです。</div>'; } // 9B-14
+    if (pln.ok && pln.long) { h += '<div class="small dp-long">&#x26A0;&#xFE0F; 長い曲なので、書き出しにメモリを多く使います。音声データだけで 約 ' + pln.memMB + ' MB（描く音・WAV・解析）。ブラウザ全体では、さらに多くのメモリを使います（PC の Chrome で 3 分の曲に 約 250MB 増えました）。端末の空きメモリによっては失敗することがあります。ほかのタブ・アプリを閉じてから書き出してください。' + secText(WAV_MAX_MUSIC) + ' までです。</div>'; } // 9B-14
     if (wav.state === "busy") { h += '<div class="daw-info">&#x23F3; 書き出し中… <b class="dp-wpct">' + (wav.pct ? wav.pct + '%' : '') + '</b></div><button class="modal-btn" data-pj="wavCancel">やめる</button>'; }
     else {
       if (wav.state === "done" && wav.blob) {
@@ -2186,7 +2200,7 @@
       } else if (wav.state === "fail" || wav.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(wav.msg) + '</div>'; }
       h += pln.ok ? '<button class="modal-btn dp-wavgo" data-pj="wav">&#x1F3B5; WAV を書き出す</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div>';
     }
-    return h + '<p class="small dsv-note">書き出しは数秒かかります（曲の長さを待ちません）。iPhone では「ファイルに保存（共有）」で共有シートが開きます（実機では未確認）。開かないときは「ダウンロード」を使ってください。</p></div>';
+    return h + '<p class="small dsv-note">書き出しは数秒かかります（曲の長さを待ちません。長い曲は、PC の Chrome で 3 分の曲に 1 分半ほど）。iPhone では「ファイルに保存（共有）」で共有シートが開きます（実機では未確認）。開かないときは「ダウンロード」を使ってください。</p></div>';
   }
 
   function projHtml() {
