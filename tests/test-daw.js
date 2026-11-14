@@ -2882,4 +2882,116 @@ module.exports = async function () {
   AF.stop(); DF.reset();
   var errF = CF.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errF.length === 0, "no Web Audio errors (9B-8)", errF.slice(0, 3));
+
+  // ================= 9B-9: トラック・オートメーション（§342）=================
+  var eA = H.load(), WA = eA.window, MA = WA.UGDawModel, DA9 = WA.UGDaw, AA = WA.UGArcade, SA = eA.store, CA = eA.counters;
+  SA.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgA = SA.ultimateGorillaSaveV2;
+  WA.indexedDB = fakeIDB(); fakeDecode(WA);
+  // --- モデル ---
+  ok(JSON.stringify(MA.autoClean([])) === "[]" && JSON.stringify(MA.autoClean(undefined)) === "[]" && JSON.stringify(MA.autoClean("x")) === "[]", "old / missing auto → [] (unchanged)");
+  var clA = MA.autoClean([{ target: "vol", points: [[3840, 0.7], [0, 0.4, "lin"], [3840, 0.9], ["x", 1], [-5, 0], [10, NaN], [20, Infinity], [7680, 2], [100, 0.5, "step"], [30, "0.5"]], extra: 1 }, { target: "fx.0.mix", points: [[1, 2]] }, 5, { target: "vol", points: [] }, { target: "pan", on: false, points: [] }]);
+  ok(clA.length === 3 && JSON.stringify(clA[0].points) === '[[0,0.4,"lin"],[100,0.5,"step"],[3840,0.9,"lin"],[7680,1,"lin"]]' && clA[0].on === true && clA[0].extra === 1 && clA[1].target === "fx.0.mix" && JSON.stringify(clA[1].points) === "[[1,2]]" && clA[2].target === "pan" && clA[2].on === false, "autoClean: bad points (NaN / Infinity / negative / text) dropped, sorted, same tick once (the later), values clamped to 0…1, unknown targets / keys kept, a second lane for a target dropped", clA);
+  var manyA = []; for (var iA = 0; iA < 100; iA++) { manyA.push([iA * 10, 0.5]); }
+  ok(MA.autoClean([{ target: "pan", points: manyA }])[0].points.length === MA.AUTO_MAX_POINTS && MA.AUTO_MAX_POINTS === 64, "at most 64 points per lane");
+  var lnA = { target: "vol", on: true, points: [[960, 0.2, "lin"], [2880, 0.8, "lin"], [3840, 0.4, "step"]] };
+  ok(MA.autoValueAt(lnA, 0) === 0.2 && Math.abs(MA.autoValueAt(lnA, 1920) - 0.5) < 1e-12 && MA.autoValueAt(lnA, 3000) === 0.8 && MA.autoValueAt(lnA, 3840) === 0.4 && MA.autoValueAt(lnA, 99999) === 0.4, "values: hold the first before it, straight line between, step jumps at its point, hold the last after it");
+  var pTA = MA.newProject({ now: 0 }); pTA.tempo.points = [{ tick: 0, bpm: 120 }, { tick: 1920, bpm: 60 }];
+  var anA = MA.autoAnchors(pTA, { target: "vol", points: [[0, 0, "lin"], [3840, 1, "lin"]] }, 0, 7680);
+  ok(JSON.stringify(anA) === '[[1920,0.5,"lin"],[3840,1,"lin"],[7680,1,"lin"]]', "anchors add the tempo-change tick (straight in ticks across a tempo change) and the end", anA);
+  ok(MA.autoTickAt(pTA, 1, 1) === 0 && MA.autoTickAt(pTA, 2, 2.5) === 5280 && MA.autoTickAt(pTA, 0, 1) === null && MA.autoTickAt(pTA, 257, 1) === null && MA.autoTickAt(pTA, 1, 5) === null && MA.autoTickAt(pTA, 1.5, 1) === null && MA.autoTickAt(pTA, NaN, 1) === null && MA.autoTickAt(pTA, 1, Infinity) === null, "position: bar 1…256, beat 1…(beats in the bar), no NaN / Infinity / half bars");
+  var tA0 = { vol: 80, pan: 0, fx: { items: [] }, auto: [] };
+  ok(MA.autoSet(pTA, tA0, "vol", 3840, 70).ok && MA.autoSet(pTA, tA0, "vol", 0, 40).ok && MA.autoSet(pTA, tA0, "vol", 0, 45).replaced && !MA.autoSet(pTA, tA0, "vol", NaN, 1).ok && !MA.autoSet(pTA, tA0, "vol", 10, "abc").ok && !MA.autoSet(pTA, tA0, "vol", 10, Infinity).ok && !MA.autoSet(pTA, tA0, "zzz", 0, 1).ok && !MA.autoSet(pTA, tA0, "vol", 1.5, 1).ok && JSON.stringify(tA0.auto[0].points) === '[[0,0.45,"lin"],[3840,0.7,"lin"]]', "autoSet: same tick → value replaced, bad tick / value / target refused");
+  ok(MA.autoSet(pTA, tA0, "pan", 0, -1).value === -1 && MA.autoSet(pTA, tA0, "pan", 960, 0.333).value === 0.33 && MA.autoSet(pTA, tA0, "eq.low", 0, 99).value === 12 && MA.autoSet(pTA, tA0, "eq.low", 960, -3.3).value === -3.5, "values clamped / rounded: pan to 0.01, EQ to 0.5 dB in −12…+12");
+  ok(MA.autoNow(tA0, "vol", 1920) === 57.5 || MA.autoNow(tA0, "vol", 1920) === 58 || MA.autoNow(tA0, "vol", 1920) === 57, "current value between points", MA.autoNow(tA0, "vol", 1920));
+  MA.autoOn(tA0, "vol", false); ok(!MA.autoActive(tA0, "vol") && MA.autoNow(tA0, "vol", 1920) === 80 && tA0.auto[0].points.length === 2, "OFF: the fader value is used, the points stay");
+  var tE0 = { vol: 80, pan: 0, fx: { items: [{ type: "eq3", on: true, low: 0, mid: 0, high: 0 }] }, auto: [{ target: "eq.mid", on: true, points: [[0, 0.5, "lin"], [3840, 0.5, "lin"]] }] };
+  ok(MA.fxLive(tE0).sig === "", "EQ automation that stays at 0 dB → no EQ nodes");
+  tE0.auto[0].points[1][1] = 0; ok(MA.fxLive(tE0).sig === "e" && !MA.fxLive({ vol: 80, pan: 0, fx: { items: [{ type: "eq3", on: false }] }, auto: tE0.auto }).eq, "EQ automation away from 0 dB → EQ nodes are made (only when the EQ is ON)");
+  var oldA = MA.clean(fx.record.project);
+  ok(oldA.tracks.every(function (t, i) { return JSON.stringify(t.auto) === JSON.stringify(fx.record.project.tracks[i].auto || []); }), "the v2.37 song: auto is read unchanged");
+  // --- DAW: 曲（120 BPM・1 小節 ＝ 2 秒）---
+  var RA9 = H.makeEl("div"); DA9.reset(); AA.start("daw", RA9, {});
+  var pA = DA9.proj.create("demo"); MA.setBpm(pA, 120); var LA = pA.tracks[0], BA = pA.tracks[1];
+  function kindsA() { return JSON.parse(JSON.stringify(CA.kinds)); }
+  async function wavA() {
+    var k0 = kindsA(); CA.rec = []; await new Promise(function (r) { DA9.wav.start(r); }); for (var g = 0; g < 900 && DA9.wav.state().busy; g++) { await eA.wait(10); }
+    var k1 = kindsA(), rec = CA.rec; CA.rec = null;
+    return { st: DA9.wav.state().state, gain: (k1["off:gain"] || 0) - (k0["off:gain"] || 0), filter: (k1["off:filter"] || 0) - (k0["off:filter"] || 0), rec: rec };
+  }
+  function has(rec, name, k, v, t) { return rec.some(function (x) { return x.name === name && x.k === k && Math.abs(x.v - v) < 1e-9 && Math.abs(x.t - t) < 1e-6; }); }
+  var w0A = await wavA();
+  var u0A = DA9.undoDepth();
+  var r1A = DA9.auto.set(LA.id, "vol", 1, 1, 20), r2A = DA9.auto.set(LA.id, "vol", 2, 1, 100), r3A = DA9.auto.set(LA.id, "vol", 0, 1, 50), r4A = DA9.auto.set(LA.id, "vol", 1, 1, "abc");
+  ok(r1A.ok && r2A.ok && !r3A.ok && !r4A.ok && DA9.undoDepth() === u0A + 2 && JSON.stringify(MA.autoLane(LA, "vol").points) === '[[0,0.2,"lin"],[3840,1,"lin"]]', "📈 add points (bar 1 → 20, bar 2 → 100); bad position / value refused; each add is one ↶ step", [r3A.why, r4A.why]);
+  var w1A = await wavA();
+  ok(w0A.st === "done" && w1A.st === "done" && w1A.gain === w0A.gain + 1 && w1A.filter === w0A.filter && has(w1A.rec, "gain", "set", 0.2, 0) && has(w1A.rec, "gain", "lin", 1, 2), "WAV: one volume-automation gain on that track only; 0.2 at 0 s → straight to 1.0 at 2 s (bar 2)", [w0A.gain, w1A.gain]);
+  // パン（偽の StereoPanner: 予約を記録）
+  function fakePan(o) { o.createStereoPanner = function () { var pr = { value: 0, setValueAtTime: function (v, t) { if (CA.rec) { CA.rec.push({ name: "pan", k: "set", v: v, t: t }); } }, linearRampToValueAtTime: function (v, t) { if (CA.rec) { CA.rec.push({ name: "pan", k: "lin", v: v, t: t }); } }, setTargetAtTime: function (v) { pr.value = v; }, cancelScheduledValues: function () {} }; return { connect: function () {}, disconnect: function () {}, pan: pr }; }; }
+  fakePan(WA.OfflineAudioContext.prototype); var acA = WA.UGMelody.audioInit(); fakePan(acA);
+  DA9.auto.set(BA.id, "pan", 1, 1, -100); DA9.auto.set(BA.id, "pan", 2, 1, 0); DA9.auto.set(BA.id, "pan", 3, 1, 100);
+  var w2A = await wavA();
+  ok(has(w2A.rec, "pan", "set", -1, 0) && has(w2A.rec, "pan", "lin", 0, 2) && has(w2A.rec, "pan", "lin", 1, 4), "WAV: pan L100 at 0 s → C at 2 s → R100 at 4 s (straight)");
+  // EQ（EQ が ON のときだけ・0dB から動くならフィルターを作る）
+  DA9.auto.set(LA.id, "eq.mid", 1, 1, 0); DA9.auto.set(LA.id, "eq.mid", 2, 1, -12);
+  var w3A = await wavA();
+  ok(w3A.filter === w0A.filter && !has(w3A.rec, "gain", "lin", -12, 2), "EQ automation while the EQ is OFF: no filters, no effect (points kept)");
+  DA9.fx.set(LA.id, "eq", "on", true); var w4A = await wavA();
+  ok(w4A.filter === w0A.filter + 3 && has(w4A.rec, "gain", "set", 0, 0) && has(w4A.rec, "gain", "lin", -12, 2), "EQ ON: the filters are made (0 dB static) and MID goes 0 → −12 dB by bar 2");
+  DA9.fx.set(LA.id, "bypass", "", true); var w5A = await wavA();
+  ok(w5A.filter === w0A.filter && !has(w5A.rec, "gain", "lin", -12, 2), "FX bypass: no EQ automation either");
+  DA9.fx.set(LA.id, "bypass", "", false);
+  // --- 再生: 頭から・途中から・ループ・直したとき ---
+  CA.rec = []; DA9.play(); var PA = DA9.player(), avA = PA.mix[LA.id].main.av, t0A = PA.segs[0].t0;
+  ok(avA && PA.mix[LA.id].main.g.gain.value === 1 && CA.rec.some(function (x) { return x.p === avA.gain && x.k === "set" && x.v === 0.2 && Math.abs(x.t - t0A) < 1e-9; }) && CA.rec.some(function (x) { return x.p === avA.gain && x.k === "lin" && x.v === 1 && Math.abs(x.t - (t0A + 2)) < 1e-9; }), "▶ from the top: the fader gain is 1 and the automation gain is scheduled (AudioParam ramps, no timer)");
+  ok(CA.rec.some(function (x) { return x.name === "pan" && x.k === "set" && x.v === -1; }) && PA.mix[BA.id].main.br && PA.mix[BA.id].main.pn.pan.value === 0, "▶: pan automation on the FX path's panner (the output panner stays at 0)");
+  DA9.stop(); CA.rec = [];
+  DA9.play({ from: 1920 }); PA = DA9.player(); avA = PA.mix[LA.id].main.av; t0A = PA.segs[0].t0;
+  ok(CA.rec.some(function (x) { return x.p === avA.gain && x.k === "set" && Math.abs(x.v - 0.6) < 1e-9 && Math.abs(x.t - t0A) < 1e-9; }) && CA.rec.some(function (x) { return x.p === avA.gain && x.k === "lin" && x.v === 1 && Math.abs(x.t - (t0A + 1)) < 1e-9; }), "▶ from the middle (beat 3 of bar 1): starts at the interpolated value 0.6, reaches 1.0 one second later");
+  // 止める → 予約は新しいノードごと消える（同じノードを使わない）
+  var avOld = avA; DA9.stop(); ok(!DA9.player(), "stop clears the player"); DA9.play(); ok(DA9.player().mix[LA.id].main.av !== avOld, "play again: new automation nodes (no old schedule left)"); DA9.stop();
+  // ループ: 折り返しで頭の値へ 5ms で戻る
+  DA9.setLoop(true); CA.rec = []; DA9.play(); PA = DA9.player(); avA = PA.mix[LA.id].main.av;
+  var endA = PA.segEnd, runA = 0; while (PA.segs.length < 2 && runA++ < 4000) { acA.currentTime += 0.025; DA9.pump(); }
+  var s1A = PA.segs[1];
+  ok(s1A && CA.rec.some(function (x) { return x.p === avA.gain && x.k === "lin" && x.v === 0.2 && Math.abs(x.t - (s1A.t0 + 0.005)) < 1e-9; }) && CA.rec.some(function (x) { return x.p === avA.gain && x.k === "lin" && x.v === 1 && Math.abs(x.t - (s1A.t0 + 2)) < 1e-9; }), "loop: at the wrap the value moves back to 0.2 in 5 ms, then the same ramps again");
+  // 再生中に直す → 同じ位置から鳴らしなおす（新しいノード・新しい値）
+  var plOld = DA9.player(); DA9.auto.set(LA.id, "vol", 1, 1, 50);
+  ok(DA9.player() && DA9.player() !== plOld && DA9.player().mix[LA.id].main.av !== avA, "editing a point while playing restarts from the same position with the new values (old schedule dropped)");
+  // ミュート・ソロ・フェーダー
+  PA = DA9.player(); var gA = PA.mix[LA.id].main.g, lgA = []; gA.gain.setTargetAtTime = function (v) { lgA.push(v); gA.gain.value = v; };
+  LA.mute = true; DA9.updateMix(); LA.mute = false; DA9.updateMix(); DA9.mixer.setVol(LA.id, 30);
+  ok(lgA.join() === "0,1,1" && LA.vol === 30, "mute → 0, unmute → 1 (not the fader); moving the fader keeps the automation (fader value only stored)", lgA);
+  DA9.mixer.setVol(LA.id, 80); DA9.stop(); DA9.setLoop(false);
+  // OFF → フェーダーへ戻る
+  DA9.auto.on(LA.id, "vol", false); DA9.play(); PA = DA9.player();
+  ok(PA.mix[LA.id].main.g.gain.value === 0.8 && MA.autoLane(LA, "vol").points.length === 2, "automation OFF: back to the mixer volume (0.8), points kept"); DA9.stop();
+  DA9.auto.on(LA.id, "vol", true);
+  // ↶
+  var nPA = MA.autoLane(BA, "pan").points.length; DA9.auto.del(BA.id, "pan", 7680); ok(MA.autoLane(BA, "pan").points.length === nPA - 1, "🗑 deletes a point");
+  DA9.ops.undo(); ok(MA.autoLane(DA9.project().tracks[1], "pan").points.length === nPA, "↶ brings the deleted point back");
+  // --- 画面 ---
+  pA = DA9.project(); LA = pA.tracks[0]; BA = pA.tracks[1];
+  ok(DA9.showAuto(LA.id, "vol") && RA9.innerHTML.indexOf("オートメーション") >= 0 && (RA9.innerHTML.match(/data-aut="/g) || []).length === 5 && (RA9.innerHTML.match(/<circle /g) || []).length === 2 && (RA9.innerHTML.match(/data-aupv="/g) || []).length === 2 && RA9.innerHTML.indexOf("点（2 ／ 64）") >= 0 && RA9.innerHTML.indexOf('data-auf="bar"') >= 0 && RA9.innerHTML.indexOf("dau-now") >= 0, "📈 screen: track, 5 targets, graph with the points, point list with values, add form, current value");
+  ok(DA9.showAuto(LA.id, "eq.mid") && RA9.innerHTML.indexOf("dau-tg sel on") >= 0, "EQ MID lane is shown as active");
+  DA9.fx.set(LA.id, "eq", "on", false); DA9.showAuto(LA.id, "eq.mid"); ok(RA9.innerHTML.indexOf("EQ が OFF") >= 0, "EQ OFF → the 📈 screen says it has no effect"); DA9.fx.set(LA.id, "eq", "on", true);
+  DA9.showMixer(); var mhA = RA9.innerHTML;
+  ok(/data-mxv="[^"]+" aria-label="[^"]*" disabled>/.test(mhA) && (mhA.match(/data-mxa="/g) || []).length === pA.tracks.length && /data-mxp="[^"]+" aria-label="[^"]*" disabled>/.test(mhA), "mixer: 📈 per track; the volume / pan of automated tracks are stopped", null);
+  DA9.showFx(LA.id); ok(/data-fxr="eq.mid"[^>]*disabled/.test(RA9.innerHTML) && !/data-fxr="eq.low"[^>]*disabled/.test(RA9.innerHTML), "FX screen: the automated EQ band is locked, the others are not");
+  // --- 保存・読みなおし・ZIP・MIDI ---
+  DA9.flushSave(); var idA = DA9.project().id, autoA = JSON.stringify(DA9.project().tracks.map(function (t) { return t.auto; }));
+  DA9.reload(); DA9.proj.open(idA);
+  ok(JSON.stringify(DA9.project().tracks.map(function (t) { return t.auto; })) === autoA && autoA.indexOf('"target":"vol"') >= 0, "after a reload the automation is the same");
+  DA9.select("track", DA9.project().tracks[0].id); ok(RA9.innerHTML.indexOf('data-tr="auto"') >= 0, "arrangement: the selected track has 📈 オートメーション");
+  var exA = await new Promise(function (r) { DA9.pack.exportZip(r); });
+  var eA2 = H.load(), WA2 = eA2.window, DA2 = WA2.UGDaw; WA2.indexedDB = fakeIDB(); fakeDecode(WA2);
+  var RA2 = H.makeEl("div"); DA2.reset(); WA2.UGArcade.start("daw", RA2, {});
+  var rqA = await impZ(DA2, blobAB(exA.blob)); DA2.proj.open(rqA.id);
+  ok(exA.ok && rqA.ok && JSON.stringify(DA2.project().tracks.map(function (t) { return t.auto; })) === autoA, "ZIP → empty storage: the automation comes back", rqA.why);
+  WA2.UGArcade.stop(); DA2.reset();
+  var xA = DA9.midi.exportNow(); DA9.midi.open(new Uint8Array(xA.bytes), "auto.mid"); var rxA = DA9.midi.importNow();
+  ok(xA.ok && rxA.ok && DA9.project().tracks.every(function (t) { return !t.auto.length; }), "MIDI export / import: the automation is not carried (MIDI has no lanes here)");
+  ok(SA.ultimateGorillaSaveV2 === rpgA, "the RPG save is untouched (9B-9)");
+  AA.stop(); DA9.reset();
+  var errA = CA.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errA.length === 0, "no Web Audio errors (9B-9)", errA.slice(0, 3));
 };

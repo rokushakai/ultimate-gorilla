@@ -317,7 +317,7 @@
       var t = {
         id: "", name: str(s.name, "トラック", 40), kind: s.kind === "audio" || s.kind === "gen" ? s.kind : "midi",
         instrument: cleanInstrument(s.instrument), vol: num(s.vol, 80, 0, 100), pan: num(s.pan, 0, -1, 1), mute: !!s.mute, solo: !!s.solo,
-        fx: fxClean(s.fx), clips: [], auto: isArr(s.auto) ? copy(s.auto) : [], ext: isObj(s.ext) ? copy(s.ext) : {}
+        fx: fxClean(s.fx), clips: [], auto: autoClean(s.auto), ext: isObj(s.ext) ? copy(s.ext) : {}
       };
       var cl = isArr(s.clips) ? s.clips : [];
       for (j = 0; j < cl.length; j++) { var c = cleanClip(cl[j], p, scale); if (c) { t.clips.push(c); } }
@@ -370,7 +370,7 @@
   }
   // 音に効くもの: EQ ＝ ON で 0dB でないバンドがある・コンプ ＝ ON。バイパスなら何も効かない（そのときはノードを作らない ＝ v2.57 と同じ音）
   function fxLive(t) {
-    var f = fxOf(t), eq = !f.bypass && f.eq.on && (f.eq.low !== 0 || f.eq.mid !== 0 || f.eq.high !== 0), cp = !f.bypass && f.comp.on;
+    var f = fxOf(t), eq = !f.bypass && f.eq.on && (f.eq.low !== 0 || f.eq.mid !== 0 || f.eq.high !== 0 || autoMoves(t, "eq.low") || autoMoves(t, "eq.mid") || autoMoves(t, "eq.high")), cp = !f.bypass && f.comp.on; // 9B-9: EQ のオートメーションに 0dB でない点があれば EQ を作る
     return { eq: eq, comp: cp, sig: (eq ? "e" : "") + (cp ? "c" : ""), fx: f };
   }
   // DynamicsCompressorNode が自分でかける「自動のメイクアップ」（Web Audio の仕様・Blink の DynamicsCompressorKernel と同じ計算）＝ (1 / fullRangeGain)^0.6。
@@ -412,6 +412,102 @@
     delete h.bypass;
     return true;
   }
+
+  // ---------- §342 9B-9: トラック・オートメーション（§340 の Automation: { target, on, points: [[tick, 0〜1, "lin"|"step"]] }）----------
+  // 画面の値 ↔ 0〜1: 音量 0〜100 ÷ 100・パン (−1〜1 + 1) ÷ 2・EQ (−12〜+12dB + 12) ÷ 24
+  var AUTO_MAX_POINTS = 64;
+  var AUTO_TARGETS = {
+    "vol": { name: "音量", lo: 0, hi: 100, step: 1, unit: "" },
+    "pan": { name: "パン", lo: -1, hi: 1, step: 0.01, unit: "" },
+    "eq.low": { name: "EQ LOW", lo: -12, hi: 12, step: 0.5, unit: "dB" },
+    "eq.mid": { name: "EQ MID", lo: -12, hi: 12, step: 0.5, unit: "dB" },
+    "eq.high": { name: "EQ HIGH", lo: -12, hi: 12, step: 0.5, unit: "dB" }
+  };
+  var AUTO_ORDER = ["vol", "pan", "eq.low", "eq.mid", "eq.high"];
+  function autoMaxTick() { return MAX_BARS * PPQ * 32; } // 曲の上限の外（拍子が変わっても 256 小節に収まる大きさ）。画面では曲の上限で調べる
+  function autoNorm(target, v) { var d = AUTO_TARGETS[target]; v = Number(v); if (!d || typeof v !== "number" || !isFinite(v)) { return null; } v = Math.max(d.lo, Math.min(d.hi, Math.round(v / d.step) * d.step)); return Math.round((v - d.lo) / (d.hi - d.lo) * 1e6) / 1e6; }
+  function autoReal(target, n) { var d = AUTO_TARGETS[target]; if (!d) { return 0; } var v = d.lo + Math.max(0, Math.min(1, Number(n) || 0)) * (d.hi - d.lo); return Math.round(Math.round(v / d.step) * d.step * 1000) / 1000; }
+  // 読むとき: 知っている target は点を整える（数でない・範囲の外の tick は捨てる・tick の順・同じ tick は 1 つ・64 個まで）。知らない target・値は残す
+  function autoClean(src) {
+    if (!isArr(src)) { return []; }
+    var out = [], seen = {}, i, j;
+    for (i = 0; i < src.length; i++) {
+      var a = src[i];
+      if (!isObj(a)) { continue; }
+      if (typeof a.target !== "string" || !AUTO_TARGETS[a.target]) { out.push(copy(a)); continue; }
+      if (seen[a.target]) { continue; }
+      seen[a.target] = true;
+      var o = copy(a), byTick = {}, ps = isArr(a.points) ? a.points : [];
+      o.on = a.on !== false;
+      for (j = 0; j < ps.length; j++) {
+        var q = ps[j];
+        if (!isArr(q) || q.length < 2) { continue; }
+        var tk = Number(q[0]), v = Number(q[1]);
+        if (typeof q[0] !== "number" || typeof q[1] !== "number" || !isFinite(tk) || !isFinite(v) || tk < 0 || tk >= autoMaxTick()) { continue; }
+        byTick[Math.round(tk)] = [Math.round(tk), Math.round(Math.max(0, Math.min(1, v)) * 1e6) / 1e6, q[2] === "step" ? "step" : "lin"];
+      }
+      o.points = Object.keys(byTick).map(Number).sort(function (x, y) { return x - y; }).slice(0, AUTO_MAX_POINTS).map(function (k) { return byTick[k]; });
+      out.push(o);
+    }
+    return out;
+  }
+  function autoLane(t, target) { var l = t && isArr(t.auto) ? t.auto : [], i; for (i = 0; i < l.length; i++) { if (isObj(l[i]) && l[i].target === target) { return l[i]; } } return null; }
+  // 音に効く（ON で点がある）
+  function autoActive(t, target) { var a = autoLane(t, target); return !!(a && a.on !== false && isArr(a.points) && a.points.length); }
+  function autoMoves(t, target) { var a = autoLane(t, target), i; if (!autoActive(t, target)) { return false; } for (i = 0; i < a.points.length; i++) { if (Math.abs(a.points[i][1] - 0.5) > 1e-9) { return true; } } return false; } // EQ: 0dB（0.5）でない点がある
+  // tick での値（0〜1）。点の間は直線（"step" の点は、そこから次の点まで同じ値）
+  function autoValueAt(a, tick) {
+    var ps = a && isArr(a.points) ? a.points : [], i;
+    if (!ps.length) { return null; }
+    if (tick <= ps[0][0]) { return ps[0][1]; }
+    for (i = 1; i < ps.length; i++) {
+      if (tick < ps[i][0]) { var p0 = ps[i - 1], p1 = ps[i]; if (p1[2] === "step") { return p0[1]; } return p0[1] + (p1[1] - p0[1]) * (tick - p0[0]) / (p1[0] - p0[0]); }
+    }
+    return ps[ps.length - 1][1];
+  }
+  // (from, to] の予約の点: [tick, 0〜1, "lin"|"step"]。点の tick と、テンポの変わる tick（tick で直線 ＝ テンポごとに時間で直線）、to の点
+  function autoAnchors(p, a, from, to) {
+    var ps = a && isArr(a.points) ? a.points : [], ks = {}, i, out = [];
+    for (i = 0; i < ps.length; i++) { if (ps[i][0] > from && ps[i][0] < to) { ks[ps[i][0]] = ps[i][2] === "step" ? "step" : "lin"; } }
+    var tp = p && p.tempo && isArr(p.tempo.points) ? p.tempo.points : [];
+    for (i = 0; i < tp.length; i++) { if (tp[i].tick > from && tp[i].tick < to && !ks[tp[i].tick]) { ks[tp[i].tick] = "lin"; } }
+    ks[to] = ks[to] || "lin";
+    Object.keys(ks).map(Number).sort(function (x, y) { return x - y; }).forEach(function (k) {
+      if (ks[k] === "step") { var j; for (j = 0; j < ps.length; j++) { if (ps[j][0] === k) { break; } } out.push([k, j < ps.length ? ps[j][1] : autoValueAt(a, k), "step"]); return; }
+      out.push([k, autoValueAt(a, k), "lin"]);
+    });
+    return out;
+  }
+  function autoHost(t, target) { if (!isArr(t.auto)) { t.auto = []; } var a = autoLane(t, target); if (!a) { a = { target: target, on: true, points: [] }; t.auto.push(a); } if (!isArr(a.points)) { a.points = []; } return a; }
+  // 曲の位置（小節 1 から・拍 1 から・拍の中は 0〜）→ tick。曲の上限（256 小節）の外・数でないものは null
+  function autoTickAt(p, bar, beat) {
+    bar = Number(bar); beat = Number(beat);
+    if (!isFinite(bar) || !isFinite(beat) || bar !== Math.floor(bar) || bar < 1 || bar > MAX_BARS || beat < 1) { return null; }
+    var t0 = barToTick(p, bar - 1), m = meterAt(p, t0), bt = PPQ * 4 / m.den;
+    if (beat >= m.num + 1) { return null; }
+    var tk = Math.round(t0 + (beat - 1) * bt);
+    return tk >= barToTick(p, MAX_BARS) ? null : tk;
+  }
+  // 点を足す（同じ tick があれば値を変える）→ { ok, why, replaced, tick, value }
+  function autoSet(p, t, target, tick, real) {
+    if (!t || !AUTO_TARGETS[target]) { return { ok: false, why: "オートメーションできない値です" }; }
+    tick = Number(tick);
+    if (typeof tick !== "number" || !isFinite(tick) || tick < 0 || tick !== Math.round(tick) || tick >= barToTick(p, MAX_BARS)) { return { ok: false, why: "位置がおかしいです（1〜" + MAX_BARS + " 小節）" }; }
+    var n = autoNorm(target, real);
+    if (n === null) { return { ok: false, why: "値が数ではありません" }; }
+    var a = autoHost(t, target), i;
+    for (i = 0; i < a.points.length; i++) { if (a.points[i][0] === tick) { a.points[i] = [tick, n, "lin"]; return { ok: true, replaced: true, tick: tick, value: autoReal(target, n) }; } }
+    if (a.points.length >= AUTO_MAX_POINTS) { return { ok: false, why: "点は " + AUTO_MAX_POINTS + " 個までです" }; }
+    a.points.push([tick, n, "lin"]);
+    a.points.sort(function (x, y) { return x[0] - y[0]; });
+    return { ok: true, replaced: false, tick: tick, value: autoReal(target, n) };
+  }
+  function autoDel(t, target, tick) { var a = autoLane(t, target), i; if (!a || !isArr(a.points)) { return false; } for (i = 0; i < a.points.length; i++) { if (a.points[i][0] === tick) { a.points.splice(i, 1); return true; } } return false; }
+  function autoOn(t, target, on) { if (!t || !AUTO_TARGETS[target]) { return false; } autoHost(t, target).on = !!on; return true; }
+  function autoClear(t, target) { var a = autoLane(t, target); if (!a) { return false; } a.points = []; return true; }
+  // 画面の値（いまの位置）: オートメーションが効いていれば その値、でなければ ふだんの値
+  function autoStatic(t, target) { if (target === "vol") { return num(t.vol, 80, 0, 100); } if (target === "pan") { return num(t.pan, 0, -1, 1); } var f = fxOf(t); return f.eq[target.split(".")[1]]; }
+  function autoNow(t, target, tick) { return autoActive(t, target) ? autoReal(target, autoValueAt(autoLane(t, target), tick)) : autoStatic(t, target); }
 
   // ---------- 見本のプロジェクト（8 小節・2 トラック）----------
   function demoProject(now) {
@@ -1769,6 +1865,7 @@
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, // 9B-8
+    AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset
   };

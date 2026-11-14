@@ -70,11 +70,11 @@ function makeAudio(counters) {
   function param(name) {
     return {
       value: 0,
-      setValueAtTime: function (v, t) { if (isNaN(v) || isNaN(t)) { counters.errors.push(name + " setValue NaN"); } },
+      setValueAtTime: function (v, t) { if (isNaN(v) || isNaN(t)) { counters.errors.push(name + " setValue NaN"); } if (counters.rec) { counters.rec.push({ p: this, name: name, k: "set", v: v, t: t }); } },
       exponentialRampToValueAtTime: function (v, t) { if (!(v > 0)) { counters.errors.push(name + " expRamp to " + v); } if (isNaN(t)) { counters.errors.push(name + " ramp NaN time"); } },
-      linearRampToValueAtTime: function () {},
+      linearRampToValueAtTime: function (v, t) { if (isNaN(v) || isNaN(t)) { counters.errors.push(name + " linRamp NaN"); } if (counters.rec) { counters.rec.push({ p: this, name: name, k: "lin", v: v, t: t }); } }, // 9B-9: 予約の記録（counters.rec が配列のときだけ）
       setTargetAtTime: function (v, t, tau) { if (isNaN(v) || isNaN(t) || !(tau > 0)) { counters.errors.push(name + " setTarget NaN"); } counters.targets.push({ name: name, v: v, t: t, tau: tau }); },
-      cancelScheduledValues: function () {}
+      cancelScheduledValues: function (t) { if (counters.rec) { counters.rec.push({ p: this, name: name, k: "cancel", t: t }); } }
     };
   }
   function makeNode(kind, ctxKind) {

@@ -1488,6 +1488,34 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dfx-warn { color: #ffd166; background: #3a2a10; border-radius: 8px; padding: 6px 8px; margin: 6px 0 0; line-height: 1.45; }
 .dfx-warn[hidden] { display: none; }
 .dfx .dfx-all { margin-top: 8px; }
+/* §342 9B-9: オートメーション */
+.dm .dm-autob { margin: 0; flex: 0 0 auto; min-width: 44px; min-height: 34px; padding: 0; font-size: 16px; background: #2a3a4f; }
+.dm .dm-autob.on { background: #4cc9f0; border-color: #4cc9f0; }
+.dau-trk { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dau-trk select { flex: 1 1 auto; min-width: 0; height: 34px; font-size: 14px; background: #10202e; color: #e9ecef; border: 1px solid #3a4a63; border-radius: 6px; }
+.dau-tgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dau .dau-tg { margin: 0; flex: 1 1 18%; min-width: 58px; min-height: 34px; padding: 0 4px; font-size: 12px; background: #2a3a4f; color: #adb5bd; white-space: nowrap; }
+.dau .dau-tg.on { color: #4cc9f0; }
+.dau .dau-tg.sel { background: #ffd166; color: #10202e; border-color: #ffd166; font-weight: bold; }
+.dau .dfx-tog { margin: 0; flex: 0 0 auto; min-width: 84px; min-height: 34px; padding: 0 8px; font-size: 13px; background: #2a3a4f; color: #adb5bd; }
+.dau .dfx-tog.on { background: #4cc9f0; color: #10202e; border-color: #4cc9f0; font-weight: bold; }
+.dau-g { display: block; width: 100%; height: 96px; margin-top: 6px; background: #10202e; border-radius: 6px; }
+.dau-g .dau-line { fill: none; stroke: #4cc9f0; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.dau-g .dau-line.off { stroke: #3a4a63; stroke-dasharray: 4 3; }
+.dau-g circle { fill: #ffd166; }
+.dau-g .dau-mid { stroke: #2a3a4f; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.dau-g .dau-ph { stroke: #ef476f; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.dau-now { color: #ffd166; font-variant-numeric: tabular-nums; }
+.dau-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; margin-top: 6px; }
+.dau-add label { display: flex; flex-direction: column; font-size: 11px; color: #adb5bd; gap: 2px; }
+.dau .dau-add .dfx-num { width: 64px; flex: 0 0 64px; }
+.dau .dau-addb { margin: 0; flex: 1 1 auto; min-height: 34px; font-size: 14px; }
+.dau .dfx-num { flex: 0 0 64px; width: 64px; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 4px; font-size: 14px; text-align: right; background: #10202e; color: #ffd166; border: 1px solid #3a4a63; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.dau-pt { margin-top: 6px; }
+.dau-ptpos { flex: 0 0 88px; font-size: 12px; color: #e9ecef; font-variant-numeric: tabular-nums; }
+.dau-sp { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #adb5bd; text-align: right; }
+.dau .dm-reset { margin: 0; flex: 0 0 auto; min-width: 44px; min-height: 34px; padding: 0; font-size: 16px; }
+.dau-msg { color: #ffd166; margin: 4px 0 0; }
 .da-btns .da-half { grid-column: span 2; font-size: 14px; }
 .da-btns .da-danger { background: #ef476f; color: #fff; }
 .da-btns .da-danger-o { background: transparent; color: #ff8fab; border: 2px solid #ef476f; }
