@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.60] - 2026-11-14 — 🎚️ ゴリラDAW のマスター EQ・ピークリミッター (§342 Phase 9B-10)
+
+### Added
+- ミキサーの「DAW のマスター」の行に「🎚️ MASTER」→ MASTER FX（ON／バイパス）・**マスター EQ**（150Hz lowshelf・1kHz peaking Q 1.0・7kHz highshelf・±12dB・ON／OFF・↺）・**ピークリミッター**（Ceiling −12〜0dBFS・Input −12〜+18dB・Release 10〜1000ms・はじめ −1dBFS／0dB／100ms・OFF）・再生中のゲインリダクションと出力ピーク・さいごの WAV のピーク・注意・↺ 全部
+- ピークリミッター ＝ マスター専用の AudioWorklet（data: URL・だめなら Blob URL）。左右連動・先読み 5ms・必要なゲインの最小値の保持 → リリース → 箱型の平均 → 遅らせた音に掛ける。**出力のサンプルピークは Ceiling をこえない**（True Peak ではない）。DynamicsCompressorNode は使わない
+### Changed
+- Master FX が効くときは、DAW 専用の出口（共有と同じ残響・全体の音量を写して → EQ → 入力ゲイン → リミッター → スピーカー）。リミッターがいちばん最後。効いていないときは v2.59 と同じつなぎ
+- WAV: 全体の音量（＋残響）のあとに EQ・リミッター。リミッターの先読みの 5ms は描いたあとで戻す（リミッターなしと同じ位置）。AudioWorklet を使えないときはリミッターなしで書き出して、そう知らせる
+- 再生中: EQ・Input・Ceiling・Release はなめらかに。MASTER FX・リミッターの ON／OFF は同じ位置から鳴らしなおす。録音の自動の補正に先読みの 5ms を足す
+- データ: `project.master.fx`（§340 の FxChain）に `eq3`・`limiter`（`ceiling`・`gain`・`release`）・`bypass`。トラックと同じ `fxClean`。schemaVersion 1 のまま。JSON・ZIP に入る（MIDI には入らない）
+### Notes
+- インターサンプルピークは抑えない（4 倍オーバーサンプリングで、曲は +0.03dB・鋭い山は +0.8dB・最悪の信号は +3.1dB）。Ceiling は −1dBFS くらいをすすめる
+- Phase 8 の新しいシンセのエンジン・Pitch8・ハイブリッドは使っていない。シンセのエンジン・DSP・Golden・IndexedDB・MIDI・8 つの楽器の送り方・録音・テイク・コンピング・トラックの FX・オートメーションは変えていない
+
 ## [2.59] - 2026-11-14 — 📈 ゴリラDAW のトラック・オートメーション (§342 Phase 9B-9)
 
 ### Added

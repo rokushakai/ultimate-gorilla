@@ -223,6 +223,117 @@
       }
     }
   }
+  // ---------- §342 9B-10: マスターの EQ・ピークリミッター ----------
+  // ピークリミッター（AudioWorklet・サンプルピーク・左右連動・先読み LIM_LOOK）:
+  // 必要なゲイン g＝min(1, Ceiling÷max|L|,|R|) → 先読み＋1 サンプルの最小値 → リリース（上がるときだけゆっくり）→ 先読みの長さの箱型の平均 → 先読みだけ遅らせた音に掛ける。
+  // 平均する値は全部そのサンプルに必要なゲイン以下なので、出力のサンプルピークは Ceiling をこえない（True Peak ではない）。mode "meter" は遅らせずに通してピークだけ知らせる
+  var LIM_NAME = "ug-daw-limiter", LIM_LOOK = 0.005;
+  var LIM_WORKLET = [
+    "class P extends AudioWorkletProcessor {",
+    "  static get parameterDescriptors() { return [{ name: 'ceiling', defaultValue: 0.891, minValue: 0.0001, maxValue: 1, automationRate: 'k-rate' }, { name: 'release', defaultValue: 0.1, minValue: 0.001, maxValue: 2, automationRate: 'k-rate' }]; }",
+    "  constructor(o) {",
+    "    super(); var q = (o && o.processorOptions) || {}, i;",
+    "    this.lim = q.mode !== 'meter'; this.D = Math.max(1, Math.round((q.look || 0.005) * sampleRate)); var D = this.D;",
+    "    this.dl = new Float32Array(D); this.dr = new Float32Array(D); this.p = 0; this.H = D + 1; this.Q = D + 2;",
+    "    this.qv = new Float64Array(this.Q); this.qi = new Float64Array(this.Q); this.qh = 0; this.qt = 0; this.n = 0; this.r = 1;",
+    "    this.rb = new Float64Array(D); for (i = 0; i < D; i++) { this.rb[i] = 1; } this.sum = D; this.bp = 0;",
+    "    this.rep = !!q.report; this.cnt = 0; this.pk = 0; this.mg = 1; this.every = Math.round(sampleRate * 0.1); this.alive = true;",
+    "    var s = this; this.port.onmessage = function (e) { if (e.data === 'stop') { s.alive = false; } };",
+    "  }",
+    "  process(inp, out, prm) {",
+    "    if (!this.alive) { return false; }",
+    "    var a = inp[0] || [], o = out[0], L = a[0], R = a[1] || a[0], oL = o[0], oR = o[1] || o[0], N = oL.length, i;",
+    "    var c = prm.ceiling[0] * (1 - 1e-6), rc = Math.exp(-1 / (Math.max(0.001, prm.release[0]) * sampleRate)), D = this.D, H = this.H, Q = this.Q, qv = this.qv, qi = this.qi;",
+    "    for (i = 0; i < N; i++) {",
+    "      var xl = L ? L[i] : 0, xr = R ? R[i] : 0, yl = xl, yr = xr, gg = 1;",
+    "      if (this.lim) {",
+    "        var ax = Math.max(Math.abs(xl), Math.abs(xr)), g = ax > c ? c / ax : 1, n = this.n;",
+    "        while (this.qt > this.qh && qv[(this.qt - 1) % Q] >= g) { this.qt--; }",
+    "        qv[this.qt % Q] = g; qi[this.qt % Q] = n; this.qt++;",
+    "        while (qi[this.qh % Q] <= n - H) { this.qh++; }",
+    "        var h = qv[this.qh % Q];",
+    "        this.r = h < this.r ? h : h + (this.r - h) * rc;",
+    "        this.sum += this.r - this.rb[this.bp]; this.rb[this.bp] = this.r; this.bp = (this.bp + 1) % D;",
+    "        gg = this.sum / D; if (gg > 1) { gg = 1; }",
+    "        yl = this.dl[this.p] * gg; yr = this.dr[this.p] * gg; this.dl[this.p] = xl; this.dr[this.p] = xr; this.p = (this.p + 1) % D; this.n = n + 1;",
+    "      }",
+    "      oL[i] = yl; if (oR !== oL) { oR[i] = yr; }",
+    "      var ap = Math.max(Math.abs(yl), Math.abs(yr)); if (ap > this.pk) { this.pk = ap; } if (gg < this.mg) { this.mg = gg; }",
+    "    }",
+    "    if (this.lim) { var s2 = 0; for (i = 0; i < D; i++) { s2 += this.rb[i]; } this.sum = s2; }",
+    "    if (this.rep) { this.cnt += N; if (this.cnt >= this.every) { this.port.postMessage({ pk: this.pk, mg: this.mg }); this.cnt = 0; this.pk = 0; this.mg = 1; } }",
+    "    return true;",
+    "  }",
+    "}",
+    "registerProcessor('" + LIM_NAME + "', P);"
+  ].join("\n");
+  // ワークレットを読みこむ（コンテキストごとに 1 回・data: URL → だめなら Blob URL）→ cb(ok)
+  function limState(ac) { return ac && ac.__ugLim ? ac.__ugLim.st : ""; }
+  function limLoad(ac, cb) {
+    var s = ac ? ac.__ugLim : null;
+    if (!ac) { cb(false); return; }
+    if (s && s.st === "ok") { cb(true); return; }
+    if (s && s.st === "fail") { cb(false); return; }
+    if (s) { s.cbs.push(cb); return; }
+    s = { st: "loading", cbs: [cb] };
+    try { ac.__ugLim = s; } catch (e0) { cb(false); return; }
+    function end(ok) { s.st = ok ? "ok" : "fail"; var l = s.cbs, i; s.cbs = []; for (i = 0; i < l.length; i++) { try { l[i](ok); } catch (e) {} } }
+    if (!ac.audioWorklet || !window.AudioWorkletNode) { end(false); return; }
+    function load(u, next) { var pr; try { pr = ac.audioWorklet.addModule(u); } catch (e) { next(); return; } if (!pr || !pr.then) { next(); return; } pr.then(function () { end(true); }, function () { next(); }); }
+    load("data:application/javascript;charset=utf-8," + encodeURIComponent(LIM_WORKLET), function () {
+      var bu = ""; try { bu = URL.createObjectURL(new Blob([LIM_WORKLET], { type: "application/javascript" })); } catch (e) { bu = ""; }
+      if (!bu) { end(false); return; }
+      load(bu, function () { end(false); });
+    });
+  }
+  function limNode(ac, mode, report) {
+    if (limState(ac) !== "ok") { return null; }
+    try { return new window.AudioWorkletNode(ac, LIM_NAME, { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers", processorOptions: { mode: mode, look: LIM_LOOK, report: !!report } }); } catch (e) { return null; }
+  }
+  function limSamples(rate) { return Math.max(1, Math.round(LIM_LOOK * rate)); }
+  function limParams(n, f, now) {
+    var c = n.parameters && n.parameters.get ? n.parameters.get("ceiling") : null, r = n.parameters && n.parameters.get ? n.parameters.get("release") : null, cl = dbGain(f.lim.ceiling);
+    if (c) { if (now === undefined) { c.value = cl; } else { c.setTargetAtTime(cl, now, 0.01); } }
+    if (r) { if (now === undefined) { r.value = f.lim.release; } else { r.setValueAtTime(f.lim.release, now); } }
+  }
+  // 再生中の出口の形（"" ＝ v2.59 と同じ共有の出口・"e" ＝ EQ（＋メーター）・"l" ＝ EQ ＋ リミッター）
+  function masterRtKey(p) { var f = DM().masterFx(p); return f.bypass ? "" : (f.lim.on ? "l" : (f.eq.on ? "e" : "")); }
+  // DAW 専用の出口（再生中）: 全体の音量（共有の値を写す）＋ 共有と同じ残響（送りの量を写す）→ EQ（いつも・OFF は 0dB）→ [入力ゲイン → リミッター] or メーター → スピーカー
+  function masterPriv(ac, key) {
+    var UG = window.UGMelody, A = UG.audio, M = DM(), f = M.masterFx(st.project), bands = ["low", "mid", "high"], k, last;
+    var pm = ac.createGain(); pm.gain.value = A.master ? A.master.gain.value : 0.25;
+    var fx = UG.buildFx ? UG.buildFx(ac, pm) : { bus: pm, revSend: null, dlySend: null };
+    if (fx.revSend && A.revSend) { fx.revSend.gain.value = A.revSend.gain.value; }
+    if (fx.dlySend && A.dlySend) { fx.dlySend.gain.value = A.dlySend.gain.value; }
+    var o = { key: key, pm: pm, fx: fx, eq: [], ing: null, lim: null, out: null }; last = pm;
+    for (k = 0; k < 3; k++) { var bd = M.FX_BANDS[bands[k]], n = ac.createBiquadFilter(); n.type = bd.type; n.frequency.value = bd.freq; n.Q.value = bd.q; n.gain.value = eqGain(f, bands[k]); last.connect(n); last = n; o.eq.push(n); }
+    o.lim = limNode(ac, key === "l" ? "lim" : "meter", true);
+    if (o.lim && key === "l") { o.ing = ac.createGain(); o.ing.gain.value = dbGain(f.lim.gain); last.connect(o.ing); o.ing.connect(o.lim); limParams(o.lim, f); }
+    else if (o.lim) { last.connect(o.lim); }
+    o.out = o.lim || last; o.out.connect(ac.destination);
+    if (o.lim) { o.lim.port.onmessage = function (e) { var m = e.data, s = st.mstat; if (!m || !s || s.node !== o.lim) { return; } s.pk = m.pk; s.gr = m.mg; s.max = Math.max(s.max, m.pk); s.minGr = Math.min(s.minGr, m.mg); }; }
+    st.mstat = { node: o.lim, pk: 0, gr: 1, max: 0, minGr: 1, key: key, lim: !!o.lim };
+    return o;
+  }
+  function masterPrivOff(o) {
+    var l = [o.pm, o.fx && o.fx.bus, o.ing, o.lim].concat(o.eq), i;
+    if (o.lim) { try { o.lim.port.postMessage("stop"); } catch (e0) {} }
+    for (i = 0; i < l.length; i++) { if (l[i]) { try { l[i].disconnect(); } catch (e) {} } }
+  }
+  // 再生中に値を変えた: 出口の形が変われば同じ位置から鳴らしなおす、同じなら値をなめらかに
+  function masterUpdate() {
+    if (!pl || pl.wav || !pl.mix.__master) { return; }
+    var m = pl.mix.__master, p = st.project, key = masterRtKey(p), pv = m.priv, M = DM(), f = M.masterFx(p), now = pl.ac.currentTime, bands = ["low", "mid", "high"], k;
+    if ((pv ? pv.key : "") !== key) { resync(); return; }
+    if (!pv) { return; }
+    try {
+      for (k = 0; k < pv.eq.length; k++) { pv.eq[k].gain.setTargetAtTime(eqGain(f, bands[k]), now, 0.01); }
+      if (pv.ing) { pv.ing.gain.setTargetAtTime(dbGain(f.lim.gain), now, 0.01); }
+      if (pv.lim && pv.key === "l") { limParams(pv.lim, f, now); }
+    } catch (e) {}
+  }
+  // 再生中の出口の遅れ（秒）: リミッターの先読み（録音の自動の補正に足す）
+  function masterLatency(ac) { return ac && masterRtKey(st.project) === "l" && limState(ac) === "ok" ? limSamples(ac.sampleRate) / ac.sampleRate : 0; }
   // §341 9A-6: DAW のマスター（ゲイン 2 つ: 共有のバスへ・共有の残響を通さない出口へ）。ゲイン ＝ master.vol ÷ 100
   function masterVol() { var p = st.project, v = p && p.master ? Number(p.master.vol) : 80; return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
   function masterOf() {
@@ -231,9 +342,12 @@
     var ac = pl.ac, UG = window.UGMelody;
     var bus = UG && UG.audio && UG.audio.ctx === ac && UG.audio.bus ? UG.audio.bus : ac.destination;
     var master = UG && UG.audio && UG.audio.ctx === ac && UG.audio.master ? UG.audio.master : null;
-    m = { bus: ac.createGain(), dry: master ? ac.createGain() : null };
-    m.bus.gain.value = masterVol(); m.bus.connect(bus);
-    if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(master); }
+    m = { bus: ac.createGain(), dry: master ? ac.createGain() : null, priv: null };
+    m.bus.gain.value = masterVol();
+    var mk = !pl.wav && master ? masterRtKey(st.project) : ""; // 9B-10: Master FX が効くときは DAW 専用の出口（共有の残響・全体の音量を写して、そのあと EQ・リミッター → スピーカー）
+    if (mk) { try { m.priv = masterPriv(ac, mk); } catch (e0) { m.priv = null; } }
+    if (m.priv) { m.bus.connect(m.priv.fx.bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(m.priv.pm); } }
+    else { m.bus.connect(bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(master); } }
     pl.mix.__master = m;
     return m;
   }
@@ -348,7 +462,7 @@
       (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} if (l[k].br) { branchOff(l[k].br); l[k].br = null; } if (l[k].inp && l[k].inp !== l[k].g && l[k].inp !== l[k].av) { try { l[k].inp.disconnect(); } catch (e7) {} } if (l[k].av) { try { l[k].av.disconnect(); } catch (e8) {} } } } }, 150); })(mx); // 9B-8: FX のノードも・9B-9: オートメーションのゲインも
     }
     var ms = mix.__master;
-    if (ms) { setTimeout(function () { try { ms.bus.disconnect(); if (ms.dry) { ms.dry.disconnect(); } } catch (e4) {} }, 150); } // 9A-6: DAW のマスターも外す
+    if (ms) { setTimeout(function () { try { ms.bus.disconnect(); if (ms.dry) { ms.dry.disconnect(); } } catch (e4) {} if (ms.priv) { masterPrivOff(ms.priv); ms.priv = null; } }, 150); } // 9A-6: DAW のマスターも外す・9B-10: DAW 専用の出口も
   }
   var tailTimer = null, tailMix = null;
   function clearTail() { if (tailTimer) { clearTimeout(tailTimer); tailTimer = null; } if (tailMix) { var m = tailMix; tailMix = null; disposeMix(m); } }
@@ -403,6 +517,15 @@
       ensureAssets(p, function () { if (aud.playTok === tok && st.project === p) { aud.playTok = null; startPlay(o2); rerender(); } });
       return true;
     }
+    // 9B-10: Master FX が効くなら、リミッター（ワークレット）を読みこめてから鳴らす（録音の伴奏は待たない）
+    if (!opts.noLim && !opts.rec && masterRtKey(p) && limState(ac) !== "ok" && limState(ac) !== "fail") {
+      var tokL = aud.playTok = {}, o3 = {}, k3;
+      for (k3 in opts) { if (opts.hasOwnProperty(k3)) { o3[k3] = opts[k3]; } }
+      o3.noLim = true; o3.noWait = true;
+      st.msg = "マスターのリミッターを準備しています…";
+      limLoad(ac, function () { if (aud.playTok === tokL && st.project === p) { aud.playTok = null; st.msg = ""; startPlay(o3); rerender(); } });
+      return true;
+    }
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
     pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD + Math.max(0, Number(opts.delay) || 0), tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
       opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined }, muteClip: opts.muteClip || null, shadow: opts.shadow || null };
@@ -412,6 +535,7 @@
     pump();
     pl.timer = setInterval(pump, PUMP_MS);
     loopHead();
+    if (masterRtKey(p) === "l" && limState(ac) === "fail") { st.msg = "このブラウザではマスターのリミッターを使えません（リミッターなしで鳴らしています）"; } // 9B-10
     var miss = audMissing(p, clip);
     if (miss) { st.msg = "素材がない音声のクリップ " + miss + " 個は鳴りません（クリップを選んで「🔗 素材を選びなおす」）"; }
     return true;
@@ -458,6 +582,7 @@
     if (el) { el.style.left = (HEAD_W + x) + "px"; }
     if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
     if (st.view === "auto" && st.au) { auHead(root, tick); } // 9B-9
+    if (st.view === "master") { msHead(root); } // 9B-10
     var gre = st.view === "fx" && st.fxTrack ? root.querySelector(".dfx-gr") : null; if (gre) { var grv = fxReduction(st.fxTrack); gre.textContent = grv === null ? "—" : (Math.round(Math.min(0, grv) * 10) / 10).toFixed(1) + " dB"; } // 9B-8
     var dph = st.steps && st.view === "steps" ? root.querySelector(".ds-ph") : null, df = dph ? DM().findClip(st.project, st.steps.clip) : null;
     if (dph && df) {
@@ -522,6 +647,7 @@
     if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
     if (M && p && st.view === "mix") { renderMix(root, ctl); return; }
     if (M && p && st.view === "fx") { renderFx(root, ctl); return; } // 9B-8
+    if (M && p && st.view === "master") { renderMaster(root, ctl); return; } // 9B-10
     if (M && p && st.view === "auto") { renderAuto(root, ctl); return; } // 9B-9
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
@@ -1259,6 +1385,7 @@
   function recAuto(ac, stream) {
     var o = 0, i = 0;
     try { o = Number(ac.outputLatency); if (!(o > 0 && o < 1)) { o = Number(ac.baseLatency); } if (!(o > 0 && o < 1)) { o = 0; } } catch (e) { o = 0; }
+    o += masterLatency(ac); // 9B-10: マスターのリミッターの先読み（5ms）
     try { var tr = stream && stream.getAudioTracks ? stream.getAudioTracks()[0] : null, s = tr && tr.getSettings ? tr.getSettings() : null; i = s && Number(s.latency) > 0 && Number(s.latency) < 1 ? Number(s.latency) : 0; } catch (e2) { i = 0; }
     return { out: o, inp: i, sec: o + i };
   }
@@ -1612,13 +1739,20 @@
       for (cj = 0; cj < at.clips.length; cj++) { var acl = at.clips[cj]; if (acl.type === "audio" && !aud.buf[acl.asset]) { var aa = M.findAsset(p, acl.asset); miss.push((aa && aa.name) || clipLabel(acl)); } }
     }
     if (miss.length) { cb(null, "音声の素材がありません（「" + miss[0] + "」" + (miss.length > 1 ? " ほか " + (miss.length - 1) + " 個" : "") + "）。クリップを選んで「🔗 素材を選びなおす」でつなぎなおしてから書き出してください"); return; }
-    var off;
+    var off, mlive = M.masterLive(p);
     try { off = new OAC(2, plan.frames, WAV_RATE); } catch (e) { cb(null, "書き出しの準備ができませんでした（メモリが足りないかもしれません）"); return; }
-    var A = UG.audio, saved = { ctx: A.ctx, master: A.master, bus: A.bus, revSend: A.revSend, dlySend: A.dlySend }, savedPl = pl, savedLog = plLog, ok = true, err = "";
+    if (mlive.lim) { limLoad(off, function (okL) { build(okL); }); } else { build(false); } // 9B-10: リミッターはワークレットを読みこんでから
+    function build(canLim) {
+    var A = UG.audio, saved = { ctx: A.ctx, master: A.master, bus: A.bus, revSend: A.revSend, dlySend: A.dlySend }, savedPl = pl, savedLog = plLog, ok = true, err = "", limUsed = false;
     plLog = [];
     try {
       // オフライン側にも、いまと同じ「全体の音量 → 共有の残響（リバーブ・ディレイ）」を作る（送りの量はいまの値を写す）
-      var mst = off.createGain(); mst.gain.value = A.master ? A.master.gain.value : 0.25; mst.connect(off.destination);
+      var mst = off.createGain(); mst.gain.value = A.master ? A.master.gain.value : 0.25;
+      // 9B-10: 全体の音量（＋残響）→ マスター EQ → 入力ゲイン → リミッター → 出口（リミッターがいちばん最後）。効いていなければ v2.59 と同じ（mst → 出口）
+      var mlast = mst, mf = mlive.fx, mb = ["low", "mid", "high"], mk;
+      if (mlive.eq) { for (mk = 0; mk < 3; mk++) { var mbd = M.FX_BANDS[mb[mk]], mn = off.createBiquadFilter(); mn.type = mbd.type; mn.frequency.value = mbd.freq; mn.Q.value = mbd.q; mn.gain.value = mf.eq[mb[mk]]; mlast.connect(mn); mlast = mn; } }
+      if (mlive.lim && canLim) { var mln = limNode(off, "lim", false); if (mln) { var mig = off.createGain(); mig.gain.value = dbGain(mf.lim.gain); mlast.connect(mig); mig.connect(mln); limParams(mln, mf); mlast = mln; limUsed = true; } }
+      mlast.connect(off.destination);
       var fx = UG.buildFx ? UG.buildFx(off, mst) : { bus: mst, revSend: null, dlySend: null };
       if (fx.revSend && A.revSend) { fx.revSend.gain.value = A.revSend.gain.value; }
       if (fx.dlySend && A.dlySend) { fx.dlySend.gain.value = A.dlySend.gain.value; }
@@ -1638,10 +1772,12 @@
       if (done) { return; }
       done = true;
       var stt = null;
+      if (limUsed) { var sh = limSamples(WAV_RATE), ci, si; for (ci = 0; ci < buf.numberOfChannels; ci++) { var cd = buf.getChannelData(ci); for (si = 0; si + sh < cd.length; si++) { cd[si] = cd[si + sh]; } for (; si < cd.length; si++) { cd[si] = 0; } } } // 9B-10: 先読みの遅れを戻す（リミッターなしと同じ位置）
       try { stt = bufStats(buf); } catch (e5) { cb(null, "描いた音を調べられませんでした"); return; }
       if (stt.rate !== WAV_RATE || stt.ch < 2) { cb(null, "描いた音の形がちがいます（" + stt.rate + "Hz・" + stt.ch + "ch）", stt, plan); return; }
       if (stt.nan > 0) { cb(null, "描いた音がこわれていました（NaN " + stt.nan + " 個）", stt, plan); return; }
       if (stt.peak < 0.0001) { cb(null, "音がありません（全部ミュート・マスター 0 などではありませんか）", stt, plan); return; }
+      stt.lim = mlive.lim ? (limUsed ? "ok" : "none") : ""; // 9B-10
       var blob = null;
       try { blob = UG.encodeWav(buf); } catch (e6) { blob = null; }
       if (!blob) { cb(null, "WAV にできませんでした", stt, plan); return; }
@@ -1652,6 +1788,7 @@
       var pr = off.startRendering();
       if (pr && pr.then) { pr.then(fin, function () { if (!done) { done = true; cb(null, "描けませんでした"); } }); }
     } catch (e4) { if (!done) { done = true; cb(null, "描けませんでした"); } }
+    }
   }
   // 書き出す（再生を止めてから・一度に 1 つ・データは変えない）
   function wavExport(onDone) {
@@ -1677,7 +1814,7 @@
           wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav";
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
-          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "");
+          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
         }
         if (onDone) { onDone(); }
       });
@@ -3255,7 +3392,7 @@
       '<div class="daw-top"><button class="modal-btn daw-small" data-mx="back">&#x2190; アレンジ</button><b>&#x1F39A;&#xFE0F; ミキサー</b></div>' +
       projBarHtml(p) +
       '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-mx="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-mx="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span></div>' +
-      '<div class="dm-row dm-master"><div class="dm-name"><b>DAW のマスター</b></div>' +
+      '<div class="dm-row dm-master"><div class="dm-name"><b>DAW のマスター</b><span class="small"></span><button class="modal-btn dm-fxb dm-mfx' + (DM().masterLive(p).sig ? " on" : "") + '" data-mx="masterFx" title="マスター EQ・ピークリミッター">&#x1F39A;&#xFE0F; MASTER</button></div>' +
         '<div class="dm-ctl"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + mv + '" data-mxv="master" aria-label="マスター音量"><b class="dm-val" data-mxval="master">' + mv + '</b>' +
         '<button class="modal-btn dm-reset" data-mx="resetMaster" title="80 に戻す">&#x21BA;</button></div></div>';
     if (!ps) { h += '<p class="small dsv-note">このブラウザでは左右（パン）を変えられません（音量・M／S は使えます）。</p>'; }
@@ -3282,6 +3419,7 @@
         if (v === "play") { startPlay(); renderMix(root, ctl); return; }
         if (v === "stop") { transportStop(); renderMix(root, ctl); return; }
         if (v === "resetMaster") { mixer.resetMaster(); renderMix(root, ctl); return; }
+        if (v === "masterFx") { st.view = "master"; renderMaster(root, ctl); return; } // 9B-10
         if ((id = el.getAttribute("data-mxr"))) { mixer.resetTrack(id); renderMix(root, ctl); return; }
         if ((id = el.getAttribute("data-mxa"))) { if (M.findTrack(p, id)) { openAuto(id, "mix"); renderAuto(root, ctl); } return; } // 9B-9
         if ((id = el.getAttribute("data-mxf"))) { if (M.findTrack(p, id)) { st.view = "fx"; st.fxTrack = id; renderFx(root, ctl); } return; } // 9B-8
@@ -3306,9 +3444,10 @@
   // ---------- §342 9B-8: 🎛️ FX の画面（EQ・コンプ・バイパス）----------
   // つまみ: [part, key, 画面の倍率, 単位, 名前, 小さい説明]（Attack・Release は秒で持ち ms で見せる）
   var FX_ROWS = { eq: [["eq", "low", 1, "dB", "LOW", "150Hz"], ["eq", "mid", 1, "dB", "MID", "1kHz"], ["eq", "high", 1, "dB", "HIGH", "7kHz"]],
-    comp: [["comp", "threshold", 1, "dB", "Threshold", "しきい"], ["comp", "ratio", 1, ":1", "Ratio", "比"], ["comp", "attack", 1000, "ms", "Attack", "かかり"], ["comp", "release", 1000, "ms", "Release", "もどり"], ["comp", "makeup", 1, "dB", "Makeup", "持ち上げ"]] };
+    comp: [["comp", "threshold", 1, "dB", "Threshold", "しきい"], ["comp", "ratio", 1, ":1", "Ratio", "比"], ["comp", "attack", 1000, "ms", "Attack", "かかり"], ["comp", "release", 1000, "ms", "Release", "もどり"], ["comp", "makeup", 1, "dB", "Makeup", "持ち上げ"]],
+    lim: [["lim", "ceiling", 1, "dBFS", "Ceiling", "上限"], ["lim", "gain", 1, "dB", "Input", "入力"], ["lim", "release", 1000, "ms", "Release", "もどり"]] }; // 9B-10
   function fxBoosted(p) { var i; for (i = 0; i < p.tracks.length; i++) { if (DM().audible(p, p.tracks[i]) && DM().fxBoost(p.tracks[i]) > 0) { return true; } } return false; }
-  function fxDef(r) { var M = DM(); return (r[0] === "eq" ? M.FX_EQ : M.FX_COMP)[r[1]]; }
+  function fxDef(r) { var M = DM(); return (r[0] === "eq" ? M.FX_EQ : (r[0] === "lim" ? M.FX_LIM : M.FX_COMP))[r[1]]; }
   function fxShow(v, r) { var x = Math.round(v * r[2] * 1000) / 1000; return String(r[2] > 1 ? Math.round(x) : x); }
   var fxApi = {
     // 動かしているあいだ（保存はしない・音だけ変える）。v は画面の単位（ms など）
@@ -3385,6 +3524,83 @@
     var ns = root.querySelectorAll("input[data-fxn]");
     for (k = 0; k < ns.length; k++) {
       ns[k].onchange = function (ev) { var el = ev.currentTarget, q = parts(el, "data-fxn"); if (String(el.value).replace(/\s/g, "") !== "") { fxApi.set(t.id, q.part, q.key, el.value); fxApi.commit(); } renderFx(root, ctl); };
+    }
+    drawHead();
+  }
+
+  // ---------- §342 9B-10: 🎚️ MASTER の画面（マスター EQ・ピークリミッター）----------
+  function msRowVal(part, key, v) { var l = FX_ROWS[part] || [], i; for (i = 0; i < l.length; i++) { if (l[i][1] === key) { return Number(v) / l[i][2]; } } return v; }
+  var msApi = {
+    // 動かしているあいだ（保存はしない・音だけ変える）。v は画面の単位（ms など）
+    set: function (part, key, v) { var p = project(); if (!p.master) { p.master = { vol: VOL0, rev: 0, dly: 0, fx: { items: [] } }; } var r = DM().fxSet(p.master, part, key, key === "on" || part === "bypass" ? v : msRowVal(part, key, v)); if (r.ok) { if (part === "lim" && key === "on" && v) { try { limLoad(window.UGMelody.audioInit(), function () {}); } catch (e) {} } masterUpdate(); } return r; },
+    reset: function (part) { var p = project(); if (!p.master) { return false; } DM().fxReset(p.master, part); masterUpdate(); markDirty(); return true; },
+    commit: function () { markDirty(); },
+    stat: function () { return st.mstat ? { pk: st.mstat.pk, gr: st.mstat.gr, max: st.mstat.max, minGr: st.mstat.minGr, key: st.mstat.key, lim: st.mstat.lim } : null; },
+    limState: function () { var UG = window.UGMelody; return limState(UG && UG.audio ? UG.audio.ctx : null); },
+    out: function () { var m = pl && pl.mix.__master; return m && m.priv ? m.priv.out : null; }, // テスト・確かめ用（DAW 専用の出口の最後のノード）
+    key: function () { return masterRtKey(project()); }, latency: function () { var UG = window.UGMelody; return masterLatency(UG && UG.audio ? UG.audio.ctx : null); }, LOOK: LIM_LOOK, src: LIM_WORKLET, NAME: LIM_NAME
+  };
+  function msDb(x) { return x > 0 ? (Math.round(20 * Math.log(x) / Math.LN10 * 10) / 10).toFixed(1) : "−∞"; }
+  function msHtml(p) {
+    var M = DM(), mp = p.master || { fx: { items: [] } }, f = M.masterFx(p), live = M.masterLive(p), i, h, ls = msApi.limState(), boost = Math.max(f.eq.on ? Math.max(f.eq.low, f.eq.mid, f.eq.high) : 0, f.lim.on ? f.lim.gain : 0);
+    function tog(on, nm, a, b) { return '<button class="modal-btn dfx-tog' + (on ? " on" : "") + '" data-ms="' + nm + '">' + (on ? a : b) + '</button>'; }
+    var wst = wav.stats && wav.state === "done" ? wav.stats : null;
+    h = '<div class="daw dm dfx dms">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-ms="back">&#x2190; ミキサー</button><b>&#x1F39A;&#xFE0F; MASTER</b></div>' +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-ms="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-ms="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span></div>' +
+      '<div class="dm-row' + (f.bypass ? " dfx-off" : "") + '"><div class="dfx-sw"><b>MASTER FX</b>' + tog(!f.bypass, "bypass", "ON", "バイパス") + '</div>' +
+        '<p class="small dfx-note">' + (f.bypass ? "バイパス中: マスターの EQ・リミッターを通さない（前と同じ音）。" : (live.sig ? "効いています: 全部のトラック → 残響 → 全体の音量 → " + (live.eq ? "EQ → " : "") + (live.lim ? "入力ゲイン → ピークリミッター → " : "") + "出口。" : "いまは何も効いていません（前と同じ音）。")) + '</p></div>' +
+      '<div class="dm-row' + (f.eq.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>マスター EQ</b>' + tog(f.eq.on, "eqOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-ms="eqReset" title="3 つとも 0dB に">&#x21BA;</button></div>';
+    for (i = 0; i < FX_ROWS.eq.length; i++) { h += fxRowHtml(mp, f, FX_ROWS.eq[i]); }
+    h += '</div><div class="dm-row' + (f.lim.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>ピークリミッター</b>' + tog(f.lim.on, "limOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-ms="limReset" title="はじめの値に">&#x21BA;</button></div>';
+    for (i = 0; i < FX_ROWS.lim.length; i++) { h += fxRowHtml(mp, f, FX_ROWS.lim[i]); }
+    h += '<p class="small dfx-note">ゲインリダクション: <b class="dms-gr">—</b>・出力ピーク: <b class="dms-pk">—</b>（再生中・0.1 秒ごと）・いちばん大きいピーク: <b class="dms-max">—</b></p>' +
+      '<p class="small dfx-note">サンプルピークのリミッター（先読み 5ms・左右いっしょ）。出力のサンプルは Ceiling をこえませんが、サンプルとサンプルの間のピーク（True Peak）は抑えません。Ceiling は −1dBFS くらいの余裕をおすすめします。再生は 5ms 遅れます（WAV はずれません）。</p>' +
+      (ls === "fail" ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; このブラウザではリミッター（AudioWorklet）を使えません。リミッターなしで鳴らし、書き出します。</p>' : '') + '</div>' +
+      '<p class="small dfx-warn"' + (boost > 0 && !(f.lim.on && !f.bypass) ? '' : ' hidden') + '>&#x26A0;&#xFE0F; リミッターが OFF のまま音を上げています（＋' + boost + 'dB）。音割れのおそれがあります。リミッターを ON にするか、値を下げてください。</p>' +
+      (wst ? '<p class="small dfx-note">さいごの WAV: ピーク ' + msDb(wst.peak) + ' dBFS' + (wst.clip ? '・0dBFS に届いたサンプル ' + wst.clip + ' 個' : '') + (wst.lim === "ok" ? '・リミッターあり' : (wst.lim === "none" ? '・リミッターを使えませんでした' : '')) + '</p>' : '') +
+      '<button class="modal-btn daw-small dfx-all" data-ms="resetAll">&#x21BA; 全部をはじめに戻す</button>' +
+      saveNoteHtml() + '<p class="small dsv-note">MASTER の値は ↶ の対象外です。MIDI の書き出しには入りません（JSON・ZIP には入ります）。MASTER FX・リミッターの ON／OFF を再生中に変えると、同じ位置から鳴らしなおします。</p></div>';
+    return h;
+  }
+  function msHead(root) {
+    var s = st.mstat, gr = root.querySelector(".dms-gr"), pk = root.querySelector(".dms-pk"), mx = root.querySelector(".dms-max");
+    if (!gr || !pk) { return; }
+    if (!pl || !s || !s.node) { gr.textContent = "—"; pk.textContent = "—"; if (mx) { mx.textContent = s && s.max ? msDb(s.max) + " dBFS" : "—"; } return; }
+    gr.textContent = s.key === "l" ? msDb(s.gr) + " dB" : "—"; pk.textContent = msDb(s.pk) + " dBFS"; if (mx) { mx.textContent = msDb(s.max) + " dBFS"; }
+  }
+  function renderMaster(root, ctl) {
+    var p = project(), M = DM();
+    root.innerHTML = msHtml(p);
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button[data-ms]"), k;
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-ms"), f = M.masterFx(p);
+        if (v === "back") { st.view = "mix"; renderMix(root, ctl); return; }
+        if (v === "play") { startPlay(); renderMaster(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderMaster(root, ctl); return; }
+        if (v === "bypass") { msApi.set("bypass", "", !f.bypass); markDirty(); }
+        else if (v === "eqOn") { msApi.set("eq", "on", !f.eq.on); markDirty(); }
+        else if (v === "limOn") { msApi.set("lim", "on", !f.lim.on); markDirty(); }
+        else if (v === "eqReset") { msApi.reset("eq"); }
+        else if (v === "limReset") { msApi.reset("lim"); }
+        else if (v === "resetAll") { msApi.reset(); }
+        renderMaster(root, ctl);
+      };
+    }
+    function parts(el, a) { var s = (el.getAttribute(a) || "").split("."); return { part: s[0], key: s[1] }; }
+    var rs = root.querySelectorAll("input[data-fxr]");
+    for (k = 0; k < rs.length; k++) {
+      rs[k].oninput = function (ev) {
+        var el = ev.currentTarget, q = parts(el, "data-fxr"), r = msApi.set(q.part, q.key, el.value), n = root.querySelector('[data-fxn="' + q.part + "." + q.key + '"]');
+        if (r.ok && n) { var row = null, i, l = FX_ROWS[q.part]; for (i = 0; i < l.length; i++) { if (l[i][1] === q.key) { row = l[i]; } } n.value = fxShow(r.value, row); }
+      };
+      rs[k].onchange = function () { msApi.commit(); renderMaster(root, ctl); };
+    }
+    var ns = root.querySelectorAll("input[data-fxn]");
+    for (k = 0; k < ns.length; k++) {
+      ns[k].onchange = function (ev) { var el = ev.currentTarget, q = parts(el, "data-fxn"); if (String(el.value).replace(/\s/g, "") !== "") { msApi.set(q.part, q.key, el.value); msApi.commit(); } renderMaster(root, ctl); };
     }
     drawHead();
   }
@@ -4098,7 +4314,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, master: msApi, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）

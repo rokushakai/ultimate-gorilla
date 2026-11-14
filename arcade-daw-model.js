@@ -305,7 +305,7 @@
     p.assets = []; // §341 9A-10: 素材の参照（形のおかしいものは捨てる・同じ ID は 1 つ）
     var sa = isArr(src.assets) ? src.assets : [], aseen = {};
     for (i = 0; i < sa.length && p.assets.length < 64; i++) { var ca = cleanAsset(sa[i]); if (ca && !aseen[ca.id]) { aseen[ca.id] = true; p.assets.push(ca); } }
-    if (isObj(src.master)) { p.master = copy(src.master); p.master.vol = num(p.master.vol, 80, 0, 100); if (!isObj(p.master.fx)) { p.master.fx = { items: [] }; } }
+    if (isObj(src.master)) { p.master = copy(src.master); p.master.vol = num(p.master.vol, 80, 0, 100); p.master.fx = fxClean(p.master.fx); } // 9B-10: マスターの FX もトラックと同じ整え方
     if (isObj(src.practice)) { p.practice = copy(src.practice); }
     if (isObj(src.legacy)) { p.legacy = copy(src.legacy); }
     p.ext = isObj(src.ext) ? copy(src.ext) : {};
@@ -340,10 +340,11 @@
   // 範囲 [はじめ, 下, 上, きざみ]。EQ・Makeup・Threshold は dB、Ratio は :1、Attack・Release は秒
   var FX_EQ = { low: [0, -12, 12, 0.5], mid: [0, -12, 12, 0.5], high: [0, -12, 12, 0.5] };
   var FX_COMP = { threshold: [-18, -60, 0, 0.5], ratio: [3, 1, 20, 0.1], attack: [0.01, 0.001, 0.1, 0.001], release: [0.2, 0.02, 1, 0.001], makeup: [0, -12, 12, 0.5] };
+  var FX_LIM = { ceiling: [-1, -12, 0, 0.1], gain: [0, -12, 18, 0.5], release: [0.1, 0.01, 1, 0.001] }; // 9B-10: マスターのピークリミッター（dBFS・dB・秒）
   var FX_BANDS = { low: { type: "lowshelf", freq: 150, q: 1 }, mid: { type: "peaking", freq: 1000, q: 1 }, high: { type: "highshelf", freq: 7000, q: 1 } }, FX_KNEE = 6;
   function fxNum(v, d) { var n = Number(v); if (typeof v === "boolean" || v === null || v === "" || !isFinite(n)) { n = d[0]; } n = Math.max(d[1], Math.min(d[2], n)); n = Math.round(n / d[3]) * d[3]; return Math.round(n * 10000) / 10000; }
   function fxItem(type, src) {
-    var def = type === "eq3" ? FX_EQ : FX_COMP, o = isObj(src) ? copy(src) : {}, k;
+    var def = type === "eq3" ? FX_EQ : (type === "limiter" ? FX_LIM : FX_COMP), o = isObj(src) ? copy(src) : {}, k;
     o.type = type; o.on = isObj(src) ? src.on === true : false;
     for (k in def) { if (def.hasOwnProperty(k)) { o[k] = fxNum(o[k], def[k]); } }
     return o;
@@ -355,7 +356,7 @@
     for (i = 0; i < src.items.length; i++) {
       var x = src.items[i];
       if (!isObj(x)) { continue; }
-      if (x.type === "eq3" || x.type === "comp") { if (seen[x.type]) { continue; } seen[x.type] = true; it.push(fxItem(x.type, x)); }
+      if (x.type === "eq3" || x.type === "comp" || x.type === "limiter") { if (seen[x.type]) { continue; } seen[x.type] = true; it.push(fxItem(x.type, x)); }
       else { it.push(copy(x)); }
     }
     o.items = it;
@@ -365,8 +366,8 @@
   function fxFind(t, type) { var l = t && isObj(t.fx) && isArr(t.fx.items) ? t.fx.items : [], i; for (i = 0; i < l.length; i++) { if (isObj(l[i]) && l[i].type === type) { return l[i]; } } return null; }
   // いまの設定（無ければはじめの値・OFF）
   function fxOf(t) {
-    var e = fxItem("eq3", fxFind(t, "eq3")), c = fxItem("comp", fxFind(t, "comp"));
-    return { bypass: !!(t && isObj(t.fx) && t.fx.bypass === true), eq: { on: e.on, low: e.low, mid: e.mid, high: e.high }, comp: { on: c.on, threshold: c.threshold, ratio: c.ratio, attack: c.attack, release: c.release, makeup: c.makeup } };
+    var e = fxItem("eq3", fxFind(t, "eq3")), c = fxItem("comp", fxFind(t, "comp")), l = fxItem("limiter", fxFind(t, "limiter"));
+    return { bypass: !!(t && isObj(t.fx) && t.fx.bypass === true), eq: { on: e.on, low: e.low, mid: e.mid, high: e.high }, comp: { on: c.on, threshold: c.threshold, ratio: c.ratio, attack: c.attack, release: c.release, makeup: c.makeup }, lim: { on: l.on, ceiling: l.ceiling, gain: l.gain, release: l.release } };
   }
   // 音に効くもの: EQ ＝ ON で 0dB でないバンドがある・コンプ ＝ ON。バイパスなら何も効かない（そのときはノードを作らない ＝ v2.57 と同じ音）
   function fxLive(t) {
@@ -388,6 +389,9 @@
     var g = Math.pow(1 / full, 0.6);
     return isFinite(g) && g > 0 ? g : 1;
   }
+  // §342 9B-10: マスターの FX（project.master.fx）。効くもの: EQ（ON で 0dB でないバンド）・リミッター（ON）。バイパスなら何も
+  function masterFx(p) { return fxOf(p && p.master ? p.master : null); }
+  function masterLive(p) { var f = masterFx(p), eq = !f.bypass && f.eq.on && (f.eq.low !== 0 || f.eq.mid !== 0 || f.eq.high !== 0), lim = !f.bypass && f.lim.on; return { eq: eq, lim: lim, sig: (eq ? "e" : "") + (lim ? "l" : ""), fx: f }; }
   // 音を上げる設定か（画面の注意: EQ の + ・Makeup の +）
   function fxBoost(t) { var l = fxLive(t), f = l.fx, b = 0; if (l.eq) { b = Math.max(b, f.eq.low, f.eq.mid, f.eq.high); } if (l.comp) { b = Math.max(b, f.comp.makeup); } return b; }
   function fxHost(t) { if (!isObj(t.fx)) { t.fx = { items: [] }; } if (!isArr(t.fx.items)) { t.fx.items = []; } return t.fx; }
@@ -395,7 +399,7 @@
   function fxSet(t, part, key, v) {
     if (!t) { return { ok: false }; }
     if (part === "bypass") { var h0 = fxHost(t); if (v) { h0.bypass = true; } else { delete h0.bypass; } return { ok: true, value: !!v }; }
-    var type = part === "eq" ? "eq3" : (part === "comp" ? "comp" : ""), def = type === "eq3" ? FX_EQ : FX_COMP;
+    var type = part === "eq" ? "eq3" : (part === "comp" ? "comp" : (part === "lim" ? "limiter" : "")), def = type === "eq3" ? FX_EQ : (type === "limiter" ? FX_LIM : FX_COMP);
     if (!type || (key !== "on" && !def.hasOwnProperty(key))) { return { ok: false }; }
     var h = fxHost(t), it = fxFind(t, type);
     if (!it) { it = fxItem(type, null); h.items.push(it); }
@@ -406,9 +410,9 @@
   // ↺: part ＝ "eq" | "comp"（その項目をはじめの値・ON／OFF はそのまま）／ 無し（eq3・comp の項目と bypass を消す。ほかの項目は残す）
   function fxReset(t, part) {
     if (!t) { return false; }
-    if (part === "eq" || part === "comp") { var type = part === "eq" ? "eq3" : "comp", it = fxFind(t, type); if (it) { var on = it.on, d = fxItem(type, null), k; for (k in d) { if (d.hasOwnProperty(k)) { it[k] = d[k]; } } it.on = on; } return true; }
+    if (part === "eq" || part === "comp" || part === "lim") { var type = part === "eq" ? "eq3" : (part === "lim" ? "limiter" : "comp"), it = fxFind(t, type); if (it) { var on = it.on, d = fxItem(type, null), k; for (k in d) { if (d.hasOwnProperty(k)) { it[k] = d[k]; } } it.on = on; } return true; }
     var h = fxHost(t);
-    h.items = h.items.filter(function (x) { return !(isObj(x) && (x.type === "eq3" || x.type === "comp")); });
+    h.items = h.items.filter(function (x) { return !(isObj(x) && (x.type === "eq3" || x.type === "comp" || x.type === "limiter")); });
     delete h.bypass;
     return true;
   }
@@ -1864,7 +1868,7 @@
     midiExport: midiExport, midiParse: midiParse, midiRead: midiRead, midiBox: midiBox, midiDrumNotes: midiDrumNotes, midiNewProject: midiNewProject, midiGmPreset: midiGmPreset,
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
-    FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, // 9B-8
+    FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
     AUTO_TARGETS: AUTO_TARGETS, AUTO_ORDER: AUTO_ORDER, AUTO_MAX_POINTS: AUTO_MAX_POINTS, autoClean: autoClean, autoLane: autoLane, autoActive: autoActive, autoMoves: autoMoves, autoValueAt: autoValueAt, autoAnchors: autoAnchors, autoNorm: autoNorm, autoReal: autoReal, autoTickAt: autoTickAt, autoSet: autoSet, autoDel: autoDel, autoOn: autoOn, autoClear: autoClear, autoStatic: autoStatic, autoNow: autoNow, // 9B-9
     INBOX_KEY: INBOX_KEY, INBOX_TYPE: INBOX_TYPE, INBOX_DAYS: INBOX_DAYS, INBOX_MAX_BYTES: INBOX_MAX_BYTES, INBOX_FROM: INBOX_FROM, inboxClean: inboxClean, inboxMake: inboxMake, inboxRead: inboxRead, inboxWrite: inboxWrite, inboxClear: inboxClear, inboxUsed: inboxUsed, importPlan: importPlan, importApply: importApply, // 9B-2
     compOf: compOf, audioSegs: audioSegs, setComp: setComp, takeView: takeView, compDefaultAt: compDefaultAt, compRaw: compRaw, compMerge: compMerge, COMP_XF: COMP_XF, COMP_MIN: COMP_MIN, COMP_GAP: COMP_GAP, COMP_MAX_SECS: COMP_MAX_SECS, NUDGE_MAX: NUDGE_MAX, FADE_MAX: FADE_MAX, computePeaks: computePeaks, cleanAsset: cleanAsset

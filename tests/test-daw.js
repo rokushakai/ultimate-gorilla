@@ -2994,4 +2994,110 @@ module.exports = async function () {
   AA.stop(); DA9.reset();
   var errA = CA.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errA.length === 0, "no Web Audio errors (9B-9)", errA.slice(0, 3));
+
+  // ================= 9B-10: マスター EQ・ピークリミッター（§342）=================
+  var eL = H.load(), WL = eL.window, ML = WL.UGDawModel, DL0 = WL.UGDaw, AL = WL.UGArcade, SL = eL.store, CL = eL.counters;
+  SL.ultimateGorillaSaveV2 = JSON.stringify({ hero: "gorilla", lv: 9 }); var rpgL = SL.ultimateGorillaSaveV2;
+  WL.indexedDB = fakeIDB(); fakeDecode(WL);
+  // --- モデル ---
+  var pL0 = ML.newProject({ now: 0 });
+  ok(JSON.stringify(pL0.master.fx) === '{"items":[]}' && ML.masterLive(pL0).sig === "" && ML.masterFx(pL0).lim.ceiling === -1 && ML.masterFx(pL0).lim.gain === 0 && ML.masterFx(pL0).lim.release === 0.1 && !ML.masterFx(pL0).lim.on && !ML.masterFx(pL0).eq.on, "new song: Master FX off (EQ off, limiter off: −1 dBFS, 0 dB, 100 ms)");
+  var qL = ML.clean({ master: { vol: 70, rev: 0, fx: { items: [{ type: "limiter", on: true, ceiling: "x", gain: 99, release: 0 }, { type: "limiter" }, { type: "eq3", on: true, low: 30 }, { type: "dist", k: 1 }], z: 2 } } });
+  ok(JSON.stringify(qL.master.fx) === '{"items":[{"type":"limiter","on":true,"ceiling":-1,"gain":18,"release":0.01},{"type":"eq3","on":true,"low":12,"mid":0,"high":0},{"type":"dist","k":1}],"z":2}' && qL.master.vol === 70, "master.fx cleaned like the tracks (ranges, one limiter, unknown kept)", qL.master.fx);
+  ok(JSON.stringify(ML.clean(fx.record.project).master) === JSON.stringify(ML.clean(JSON.parse(JSON.stringify(fx.record.project))).master) && ML.masterLive(ML.clean(fx.record.project)).sig === "", "the v2.37 song: master read unchanged, Master FX off");
+  ML.fxSet(pL0.master, "lim", "on", true); ML.fxSet(pL0.master, "lim", "ceiling", -0.07); ML.fxSet(pL0.master, "lim", "release", 5);
+  ok(ML.masterLive(pL0).sig === "l" && ML.masterFx(pL0).lim.ceiling === -0.1 && ML.masterFx(pL0).lim.release === 1, "limiter on; ceiling to 0.1 dB, release ≤ 1 s");
+  ML.fxSet(pL0.master, "bypass", "", true); ok(ML.masterLive(pL0).sig === "", "MASTER FX bypass → nothing");
+  // --- リミッターのワークレットを Node で動かす（同じソース）---
+  var VM = require("vm");
+  function limRun(opts, chans, prm) {
+    var reg = null, sb = { sampleRate: opts.rate || 44100, Math: Math, Float32Array: Float32Array, Float64Array: Float64Array, registerProcessor: function (n, c) { reg = c; } };
+    VM.runInNewContext("class AudioWorkletProcessor { constructor() { this.port = { onmessage: null, postMessage: function (m) { msgs.push(m); } }; } }\nvar msgs = [];\n" + DL0.master.src + "\nthis.__c = typeof P !== 'undefined' ? P : null; this.__m = msgs;", sb);
+    var P = new reg({ processorOptions: opts }), n = chans[0].length, outL = new Float32Array(n), outR = new Float32Array(n), i, k;
+    for (i = 0; i < n; i += 128) {
+      var m = Math.min(128, n - i), a = [chans[0].subarray(i, i + m), (chans[1] || chans[0]).subarray(i, i + m)], o = [new Float32Array(m), new Float32Array(m)];
+      var pr = { ceiling: [prm.ceiling], release: [prm.release] };
+      if (typeof prm.at === "function") { pr = prm.at(i); }
+      P.process([a], [o], pr);
+      outL.set(o[0], i); outR.set(o[1], i);
+    }
+    return { L: outL, R: outR, D: P.D, msgs: sb.__m };
+  }
+  var srL = 44100, NL = srL * 3, seed = 7; function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+  var sigL = new Float32Array(NL), sigR = new Float32Array(NL);
+  for (var iL = 0; iL < NL; iL++) {
+    var tL = iL / srL, env = tL < 1 ? 0.1 : (tL < 2 ? 1.6 : 0.3);
+    sigL[iL] = env * (0.6 * Math.sin(2 * Math.PI * 220 * tL) + 0.4 * Math.sin(2 * Math.PI * 3300 * tL)) + (iL % 4410 === 0 ? 1.9 : 0) + (rnd() - 0.5) * 0.2;
+    sigR[iL] = 0.3 * sigL[iL] + (iL % 7000 === 3 ? -2.5 : 0);
+  }
+  var cL = Math.pow(10, -1 / 20), rL = limRun({ mode: "lim", look: 0.005 }, [sigL, sigR], { ceiling: cL, release: 0.1 }), pkL = 0, pkIn = 0;
+  for (iL = 0; iL < NL; iL++) { pkL = Math.max(pkL, Math.abs(rL.L[iL]), Math.abs(rL.R[iL])); pkIn = Math.max(pkIn, Math.abs(sigL[iL]), Math.abs(sigR[iL])); }
+  ok(rL.D === Math.round(0.005 * srL) && pkIn > 2 && pkL <= cL * (1 + 1e-6) && pkL > cL * 0.99, "limiter (worklet source in Node): loud sines, 1.9 spikes, −2.5 one-sample spikes, noise → output sample peak ≤ −1 dBFS (peak " + (20 * Math.log10(pkL)).toFixed(4) + " dBFS, input " + (20 * Math.log10(pkIn)).toFixed(2) + " dBFS)", [pkL, cL]);
+  var quietL = new Float32Array(srL), dQ = 0; for (iL = 0; iL < srL; iL++) { quietL[iL] = 0.5 * Math.sin(2 * Math.PI * 440 * iL / srL); }
+  var rQ = limRun({ mode: "lim", look: 0.005 }, [quietL], { ceiling: cL, release: 0.1 });
+  for (iL = rQ.D; iL < srL; iL++) { dQ = Math.max(dQ, Math.abs(rQ.L[iL] - quietL[iL - rQ.D])); }
+  ok(dQ === 0, "below the ceiling the output is the input exactly, delayed by the look-ahead (" + rQ.D + " samples)");
+  // 左右連動: L だけ大きい → R も同じ比で下がる
+  var lk = new Float32Array(srL), rk = new Float32Array(srL); for (iL = 0; iL < srL; iL++) { lk[iL] = 1.8 * Math.sin(2 * Math.PI * 100 * iL / srL); rk[iL] = 0.2 * Math.sin(2 * Math.PI * 100 * iL / srL); }
+  var rS = limRun({ mode: "lim", look: 0.005 }, [lk, rk], { ceiling: cL, release: 0.1 }), worst = 0;
+  for (iL = srL / 2; iL < srL; iL++) { if (Math.abs(rS.L[iL]) > 0.05) { worst = Math.max(worst, Math.abs(rS.R[iL] / rS.L[iL] - rk[iL - rS.D] / lk[iL - rS.D])); } }
+  ok(worst < 1e-5, "stereo-linked: the quiet right side is turned down by the same gain (L/R balance kept)", worst);
+  // リリース: 大きい音のあと、ゲインがもどる（100ms → 300ms で約 95%）
+  var bump = new Float32Array(srL), g100 = [], gx = [];
+  for (iL = 0; iL < srL; iL++) { bump[iL] = (iL < 4410 ? 2 : 0.5) * Math.sin(2 * Math.PI * 200 * iL / srL); }
+  function gainAt(r, t) { var a = Math.round(t * srL), q = 0, x = 0, j; for (j = a; j < a + 441; j++) { q += r.L[j] * r.L[j]; x += bump[j - r.D] * bump[j - r.D]; } return Math.sqrt(q / x); }
+  var rR1 = limRun({ mode: "lim", look: 0.005 }, [bump], { ceiling: cL, release: 0.1 }), rR2 = limRun({ mode: "lim", look: 0.005 }, [bump], { ceiling: cL, release: 0.02 });
+  var g0L = cL / 2, a1 = gainAt(rR1, 0.11), b1 = gainAt(rR1, 0.4), a2 = gainAt(rR2, 0.11), b2 = gainAt(rR2, 0.2);
+  function relW(rel, dt) { return 1 - (1 - g0L) * Math.exp(-dt / rel); }
+  ok(Math.abs(a1 - relW(0.1, 0.01)) < 0.05 && Math.abs(b1 - relW(0.1, 0.3)) < 0.02 && Math.abs(a2 - relW(0.02, 0.01)) < 0.05 && b2 > 0.99 && a1 < a2, "release: the gain comes back exponentially (100 ms: " + a1.toFixed(3) + " after 10 ms, " + b1.toFixed(3) + " after 300 ms; 20 ms: " + a2.toFixed(3) + " / " + b2.toFixed(3) + " after 100 ms)", [a1, b1, a2, b2]);
+  // 1 サンプルの山の前にゲインが下がりはじめる（先読み）・はね返し（クリップ）しない
+  var sp1 = new Float32Array(2000); sp1[1000] = 3; for (iL = 0; iL < 2000; iL++) { sp1[iL] += 0.3 * Math.sin(iL / 7); }
+  var rP = limRun({ mode: "lim", look: 0.005 }, [sp1], { ceiling: cL, release: 0.1 }), atPk = rP.L[1000 + rP.D], before = rP.L[1000 + rP.D - 100] / sp1[1000 - 100];
+  ok(Math.abs(atPk) <= cL * (1 + 1e-6) && Math.abs(atPk) > cL * 0.99 && before < 1 && before > cL / 3, "a one-sample 3.0 spike is brought to the ceiling (not clipped), the gain starts going down before it (look-ahead)", [atPk, before]);
+  // メーター: 遅らせずに通し、ピークを知らせる
+  var rM = limRun({ mode: "meter", look: 0.005, report: true }, [quietL], { ceiling: cL, release: 0.1 }), same = true;
+  for (iL = 0; iL < srL; iL++) { if (rM.L[iL] !== quietL[iL]) { same = false; break; } }
+  ok(same && rM.msgs.length >= 9 && Math.abs(rM.msgs[3].pk - 0.5) < 1e-3 && rM.msgs[3].mg === 1, "meter mode: passes the sound unchanged (no delay) and reports the peak every 0.1 s");
+  // --- DAW: 出口のつなぎ（テストの環境には AudioWorklet が無い → リミッターなしで鳴らす・その旨を出す）---
+  var RL = H.makeEl("div"); DL0.reset(); AL.start("daw", RL, {});
+  var pL = DL0.proj.create("demo"); ML.setBpm(pL, 120);
+  function kindsL() { return JSON.parse(JSON.stringify(CL.kinds)); }
+  async function wavL() { var k0 = kindsL(); await new Promise(function (r) { DL0.wav.start(r); }); for (var g = 0; g < 900 && DL0.wav.state().busy; g++) { await eL.wait(10); } var k1 = kindsL(); return { st: DL0.wav.state().state, filter: (k1["off:filter"] || 0) - (k0["off:filter"] || 0), gain: (k1["off:gain"] || 0) - (k0["off:gain"] || 0), note: DL0.wav.state().note || "", lim: DL0.wav.state().stats && DL0.wav.state().stats.lim }; }
+  var w0L = await wavL();
+  DL0.master.set("eq", "on", true); var w1L = await wavL();
+  ok(w0L.st === "done" && w1L.filter === w0L.filter && w1L.gain === w0L.gain, "master EQ on at 0 dB: the WAV graph is the v2.59 one (nothing added)");
+  DL0.master.set("eq", "low", 6); DL0.master.set("eq", "mid", -3); DL0.master.set("eq", "high", 2.5); var w2L = await wavL();
+  ok(w2L.filter === w0L.filter + 3 && w2L.gain === w0L.gain, "master EQ: 3 filters after the master (WAV)");
+  DL0.master.set("lim", "on", true); var w3L = await wavL();
+  ok(w3L.st === "done" && w3L.lim === "none" && w3L.note.indexOf("リミッターを使えなかった") >= 0 && w3L.filter === w0L.filter + 3, "no AudioWorklet: the WAV is made without the limiter and says so (no fake limiter)", w3L.note);
+  DL0.master.set("bypass", "", true); var w4L = await wavL(); ok(w4L.filter === w0L.filter && w4L.gain === w0L.gain && w4L.lim === "", "MASTER FX bypass → v2.59 graph"); DL0.master.set("bypass", "", false);
+  // 再生: DAW 専用の出口（共有のバス・全体の音量を使わない）
+  var UGL = WL.UGMelody, acL = UGL.audioInit(), sharedBus = UGL.audio.bus, sharedMaster = UGL.audio.master;
+  DL0.play(); var PL = DL0.player(), mL = PL && PL.mix.__master;
+  ok(PL && mL && mL.priv && mL.priv.key === "l" && mL.priv.eq.length === 3 && mL.priv.eq[0].gain.value === 6 && mL.priv.eq[1].gain.value === -3 && mL.priv.pm.gain.value === sharedMaster.gain.value && !mL.priv.lim && DL0.state().msg.indexOf("リミッターを使えません") >= 0 && DL0.master.limState() === "fail", "playback with MASTER on: a DAW-only output (copied master gain, own reverb) → EQ; no AudioWorklet → no limiter, message shown", DL0.state().msg);
+  var nTL = CL.targets.length; DL0.master.set("eq", "high", -4); var tgL = CL.targets.slice(nTL);
+  ok(DL0.player() === PL && tgL.some(function (x) { return x.v === -4 && x.tau === 0.01; }), "moving a master EQ value while playing: smooth, no restart");
+  DL0.master.set("bypass", "", true); ok(DL0.player() && DL0.player() !== PL && !DL0.player().mix.__master.priv, "MASTER FX bypass while playing → restarts at the same place on the shared output (v2.59)");
+  DL0.master.set("bypass", "", false); DL0.stop(); ok(!DL0.player(), "stop");
+  // 画面
+  DL0.showMixer(); ok(RL.innerHTML.indexOf('data-mx="masterFx"') >= 0 && /dm-mfx on"/.test(RL.innerHTML), "mixer: 🎚️ MASTER on the master row (lit when live)");
+  ok(DL0.showMaster() && RL.innerHTML.indexOf("MASTER FX") >= 0 && RL.innerHTML.indexOf("ピークリミッター") >= 0 && (RL.innerHTML.match(/data-fxr="/g) || []).length === 6 && (RL.innerHTML.match(/data-fxn="/g) || []).length === 6 && RL.innerHTML.indexOf("Ceiling") >= 0 && RL.innerHTML.indexOf("True Peak") >= 0 && RL.innerHTML.indexOf("dms-gr") >= 0 && RL.innerHTML.indexOf("dms-pk") >= 0 && RL.innerHTML.indexOf("リミッター（AudioWorklet）を使えません") >= 0, "MASTER screen: FX on/bypass, EQ 3 bands, limiter ceiling / input / release with sliders and numbers, reduction, output peak, sample-peak note, no-worklet warning");
+  ok(RL.innerHTML.indexOf('value="100" data-fxn="lim.release"') >= 0 && RL.innerHTML.indexOf('value="-1" data-fxn="lim.ceiling"') >= 0, "release shown in ms (100), ceiling −1 dBFS");
+  DL0.master.set("lim", "on", false); DL0.showMaster(); ok(/class="small dfx-warn">/.test(RL.innerHTML) && RL.innerHTML.indexOf("音割れのおそれ") >= 0, "limiter OFF with EQ boost → clipping warning");
+  DL0.master.set("lim", "on", true); DL0.master.set("lim", "release", 250); DL0.master.set("lim", "ceiling", -2); DL0.master.set("lim", "gain", 3); DL0.master.commit(); DL0.flushSave();
+  var idL = DL0.project().id, mfL = JSON.stringify(DL0.project().master.fx);
+  ok(/"type":"limiter","on":true,"ceiling":-2,"gain":3,"release":0.25/.test(mfL), "values saved in master.fx (release in seconds)", mfL);
+  DL0.reload(); DL0.proj.open(idL); ok(JSON.stringify(DL0.project().master.fx) === mfL, "after a reload the master settings are the same");
+  var exL = await new Promise(function (r) { DL0.pack.exportZip(r); });
+  var eL2 = H.load(), WL2 = eL2.window, DL2 = WL2.UGDaw; WL2.indexedDB = fakeIDB(); fakeDecode(WL2);
+  var RL2 = H.makeEl("div"); DL2.reset(); WL2.UGArcade.start("daw", RL2, {});
+  var rqL = await impZ(DL2, blobAB(exL.blob)); DL2.proj.open(rqL.id);
+  ok(exL.ok && rqL.ok && JSON.stringify(DL2.project().master.fx) === mfL, "ZIP → empty storage: the master settings come back", rqL.why);
+  WL2.UGArcade.stop(); DL2.reset();
+  var xL = DL0.midi.exportNow(); DL0.midi.open(new Uint8Array(xL.bytes), "m.mid"); var rxL = DL0.midi.importNow();
+  ok(xL.ok && rxL.ok && ML.masterLive(DL0.project()).sig === "", "MIDI export / import: the master FX is not carried");
+  ok(SL.ultimateGorillaSaveV2 === rpgL && UGL.audio.bus === sharedBus && UGL.audio.master === sharedMaster, "the RPG save and the shared audio output are untouched (9B-10)");
+  AL.stop(); DL0.reset();
+  var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errL.length === 0, "no Web Audio errors (9B-10)", errL.slice(0, 3));
 };

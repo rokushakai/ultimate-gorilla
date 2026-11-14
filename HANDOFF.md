@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.59** |
+| 現在バージョン | **v2.60** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.60] 🎚️ ゴリラDAW のマスター EQ・ピークリミッター**（§342 Phase 9B-10）: モデルの `FX_LIM`・`fxItem`／`fxClean`／`fxOf`／`fxSet`／`fxReset` に `limiter`・`masterFx`／`masterLive`・`clean` で `master.fx` を整える。`arcade-daw.js` の `LIM_WORKLET`（`ug-daw-limiter`・mode lim／meter）・`limLoad`／`limState`／`limNode`・`masterRtKey`／`masterPriv`（DAW 専用の出口）／`masterPrivOff`／`masterUpdate`／`masterLatency`（録音の補正）・`renderSong` の `build`（ワークレットを待つ・5ms 戻す）・🎚️ MASTER の画面 `renderMaster`・`UGDaw.master`（`src` はテストでワークレットを Node で動かす）
 - **[v2.59] 📈 ゴリラDAW のトラック・オートメーション**（§342 Phase 9B-9）: モデルの `autoClean`（`clean` で `track.auto` を整える）・`autoLane`／`autoActive`／`autoMoves`／`autoValueAt`／`autoAnchors`（テンポの点も）／`autoTickAt`／`autoSet`／`autoDel`／`autoOn`／`autoClear`／`autoNow`・`AUTO_TARGETS`（0〜1 の写し方）。`fxLive` は EQ のオートメーションも見る。`arcade-daw.js` の出口 `av`（音量のオートメーション・再生中はいつも／WAV は ON のトラックだけ）・`autoSeg`／`autoPlan`／`autoBind`／`autoLoopSeg`（AudioParam の予約）・`chainParams`・📈 の画面 `renderAuto`・`UGDaw.auto`／`showAuto`
 - **[v2.58] 🎛️ ゴリラDAW のトラックごとの EQ・コンプレッサー**（§342 Phase 9B-8）: モデルの `fxClean`（`clean` の中で `track.fx` を整える）・`fxOf`／`fxLive`（効くもの ＝ sig）／`fxSet`／`fxReset`／`fxBoost`／`fxAutoMakeup`（ブラウザの自動のメイクアップの式）・`FX_EQ`／`FX_COMP`／`FX_BANDS`。`arcade-daw.js` の `trackIn`（音を入れる口・はじめて使うときに FX を作る）・`fxBuild`（WAV は効くノードだけ／再生中は道のクロスフェード）・`fxBranch`（パン → EQ → コンプ → メイクアップ）・`fxUpdate`・`rtKey`・`fxReduction`・FX の画面 `renderFx`・`UGDaw.fx`／`showFx`
 - **[v2.57] 🎛️ ゴリラシンセ → ゴリラDAW**（§342 Phase 9B-7）: `arcade-synth.js` の `synDawPayload`／`synDawCheck`／`synDawSend`／`synDawHtml`（テイクの patch を送る）。モデルの `inboxClean` のパートの `patch`（2 KB・`UGSynth.patchClean`）・`patchPreset`／`patchInstrument`（新しいトラックの音色 ＝ inline の patch）・`INBOX_FROM` にシンセ。`arcade-daw.js` の `partSound`（受け取りの画面の音色）・試聴は patch・`BACK_GAMES` にシンセ
