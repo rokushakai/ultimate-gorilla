@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.56** |
+| 現在バージョン | **v2.57** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.57] 🎛️ ゴリラシンセ → ゴリラDAW**（§342 Phase 9B-7）: `arcade-synth.js` の `synDawPayload`／`synDawCheck`／`synDawSend`／`synDawHtml`（テイクの patch を送る）。モデルの `inboxClean` のパートの `patch`（2 KB・`UGSynth.patchClean`）・`patchPreset`／`patchInstrument`（新しいトラックの音色 ＝ inline の patch）・`INBOX_FROM` にシンセ。`arcade-daw.js` の `partSound`（受け取りの画面の音色）・試聴は patch・`BACK_GAMES` にシンセ
 - **[v2.56] 🎻🎺 ゴリラストリングス・ゴリラホーン → ゴリラDAW**（§342 Phase 9B-6）: `arcade-strings.js` の `strDawPayload`／`strDawCheck`／`strDawSend`／`strDawHtml`・`arcade-horn.js` の `hrnDaw…`（編成のテイクはパートごと）。モデルの `takePayload` の `o.parts`・`INBOX_FROM` にストリングス・ホーン。`arcade-daw.js` の `BACK_GAMES`・受け取りの画面のはじめのパートの選び方（ウクレレ以外は全部）。テストの偽の IndexedDB は読みとりのあとに完了
 - **[v2.55] 🎸 ゴリラベース・ゴリラギター → ゴリラDAW**（§342 Phase 9B-5）: モデルの共通の `takePayload`／`takeCheck`／`takeSend`・`INBOX_FROM` にベース・ギター・取りこんだトラックの絵。`arcade-bass.js` の `bassDawPayload`／`bassDawCheck`／`bassDawSend`／`bassDawHtml`（`bassSetup` の `data-dawt`）・`arcade-guitar.js` の `gtrDaw…`（同じ作り）。`arcade-daw.js` の `BACK_GAMES` にベース・ギター
 - **[v2.54] 🎹 ゴリラDAW の標準 MIDI ファイル**（§342 Phase 9B-4）: `arcade-daw-model.js` の `midiExport`（曲 → SMF Format 1・PPQ 960・`noteEvents` の鳴る音符・`DRUM_GM` で DAW だけのドラムの番号を GM へ）・`midiParse`（バイト → トラック・音符・テンポ・拍子・数。上限と理由つきで断る）・`midiRead`（→ PPQ 960 のパート・テンポ／拍子の変化・入らないもの）・`midiBox`（→ 9B-2 の `importPlan`／`importApply` に渡す箱・ドラムは GM 35〜81 だけ）・`midiNewProject`・`GM_DRUM_NAMES`。`arcade-daw.js` の「📁 曲」の `midiHtml`（📤／📥）・確認の画面 `renderMidi`（`st.view = "midi"`・`st.mid`）・`midiImport`（新しい曲／いまの曲に新しいトラック・↶）・`UGDaw.midi`

@@ -2689,4 +2689,93 @@ module.exports = async function () {
   WS.UGArcade.stop(); DS.reset();
   var errS = eS.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errS.length === 0, "no Web Audio errors (9B-6)", errS.slice(0, 3));
+  // ================= 9B-7: ゴリラシンセ → ゴリラDAW（§342）=================
+  var eY = H.load(), WY = eY.window, MY = WY.UGDawModel, DY = WY.UGDaw, SYN = WY.UGSynth, SY = eY.store;
+  // --- テイクの形・変換 ---
+  var acid = SYN.preset("acid").patch, mine = SYN.patchClean({ w1: "square", w2: "tri", mix: 0.4, det: 20, cut: 0.5, res: 0.6, a: 0.02, r: 0.5, lrate: 3, ldep: 0.2, lto: "cut", glide: 0.1, mono: true, vol: 0.7 });
+  var yTake = SYN.takeClean({ id: 4, name: "ベースリフ", bpm: 110, meter: 4, pname: "アシッドベース", patch: acid, notes: [[0, 0.5, 36], [0.5, 0.5, 48], [1, 1, 43], [2, 0.25, 36], [2, 0.25, 40], [2, 0.25, 43], [3, 1, 46]] }, 0);
+  var yPay = SYN.dawPayload(yTake);
+  ok(yPay.notes === 7 && yPay.bpm === 110 && yPay.parts.length === 1 && yPay.parts[0].key === "synth" && yPay.parts[0].preset === "acid" && yPay.parts[0].name === "アシッドベース" && JSON.stringify(yPay.parts[0].patch) === JSON.stringify(acid) && yPay.parts[0].patchName === "アシッドベース" &&
+    JSON.stringify(yPay.parts[0].notes) === JSON.stringify([[0, 480, 36, 0.8], [480, 480, 48, 0.8], [960, 960, 43, 0.8], [1920, 240, 36, 0.8], [1920, 240, 40, 0.8], [1920, 240, 43, 0.8], [2880, 960, 46, 0.8]]), "synth take → notes at PPQ 960 (velocity 0.8: not recorded), chord kept, the take's patch carried, preset matched (acid)", yPay.parts[0]);
+  var mTake = SYN.takeClean({ id: 5, name: "じぶん", bpm: 100, meter: 4, pname: "わたしの音", patch: mine, notes: [[0, 2, 60], [2, 2, 64]] }, 0), mPay = SYN.dawPayload(mTake);
+  ok(mPay.parts[0].preset === "lead" && JSON.stringify(mPay.parts[0].patch) === JSON.stringify(mine) && mPay.parts[0].name === "わたしの音", "a custom patch: carried as it is (fallback preset のこぎりリード)");
+  // --- 受け取り箱: patch を調べる ---
+  var yMade = MY.inboxMake("synth", yPay);
+  ok(yMade.ok && JSON.stringify(yMade.box.parts[0].patch) === JSON.stringify(acid) && yMade.box.from === "synth", "inbox keeps the patch (cleaned by the public UGSynth.patchClean)", yMade.why);
+  function yBad(f) { var o = JSON.parse(yMade.json); f(o); return MY.inboxClean(o); }
+  var yClamp = yBad(function (o) { o.parts[0].patch.cut = 5; o.parts[0].patch.w1 = "noise"; o.parts[0].patch.evil = "<script>"; });
+  ok(yClamp.ok && yClamp.box.parts[0].patch.cut === 1 && yClamp.box.parts[0].patch.w1 === "saw" && !yClamp.box.parts[0].patch.hasOwnProperty("evil"), "out-of-range / unknown patch values are cleaned (cut 5 → 1, unknown wave → saw, unknown key dropped)");
+  ok(!yBad(function (o) { o.parts[0].patch = "saw"; }).ok && !yBad(function (o) { o.parts[0].patch.big = new Array(3000).join("x"); }).ok && yBad(function (o) { delete o.parts[0].patch; }).ok && !yBad(function (o) { o.from = "theremin"; }).ok, "a non-object or > 2 KB patch is refused; a box without a patch still reads; an unknown game is refused");
+  SYN.takesSave([yTake, mTake]); var yRaw = SY[SYN.TAKES_KEY];
+  ok(SYN.dawSend(mTake).ok && MY.inboxRead().box.parts[0].patch.mono === true && SY[SYN.TAKES_KEY] === yRaw, "synth dawSend: written and read back; the saved takes are untouched");
+  ok(!SYN.dawCheck(null).ok && !SYN.dawCheck(SYN.takeClean({ id: 9, notes: [] }, 0)).ok, "synth: no take / an empty take → refused");
+  // --- 8 つの楽器の曲 ---
+  var IDBY = fakeIDB(); WY.indexedDB = IDBY; fakeDecode(WY);
+  var RY = H.makeEl("div"); DY.reset(); WY.UGArcade.start("synth", RY, {});
+  ok(RY.innerHTML.indexOf('data-dawt="4"') >= 0 && RY.innerHTML.indexOf("take-4") >= 0, "synth setup: 🎹 DAWへ on each take, buttons under the name");
+  WY.UGArcade.stop(); WY.UGArcade.start("daw", RY, {});
+  DY.proj.create("empty"); var p8 = DY.project(); p8.name = "8 つの楽器"; while (p8.tracks.length) { p8.tracks.pop(); } MY.setBpm(p8, 110); DY.markDirty(); MY.inboxClear();
+  function imp8(send) { send(); DY.inbox.open(); return DY.inbox.importNow(); }
+  var r8 = [];
+  r8.push(imp8(function () { WY.UGUkulele.dawSend(WY.UGUkulele.seqClean({ bpm: 110, rows: [{ type: "chord", name: "Am", len: "w" }, { type: "chord", name: "F", len: "w" }] }), false, "伴奏"); }));
+  r8.push(imp8(function () { WY.UGPiano.dawSend(WY.UGPiano.takeClean({ id: 8, name: "メロ", bpm: 110, meter: 4, prog: 0, notes: [[0, 1, 72], [1, 1, 74], [2, 2, 76]] }, 0)); }));
+  r8.push(imp8(function () { WY.UGDrum.dawSend("take", WY.UGDrum.takeClean({ id: 9, name: "リズム", bpm: 110, notes: [[0, 36, 0.9], [1, 38, 0.8], [2, 36, 0.9], [3, 38, 0.8]] }, 0)); }));
+  r8.push(imp8(function () { WY.UGBass.dawSend(WY.UGBass.takeClean({ id: 5, name: "ベース", bpm: 110, meter: 4, prog: 33, notes: [[0, 2, 33], [2, 2, 41]] }, 0)); }));
+  r8.push(imp8(function () { WY.UGGuitar.dawSend(WY.UGGuitar.takeClean({ id: 2, name: "コード", bpm: 110, meter: 4, voice: "clean", notes: [[0, 2, 57], [0.02, 2, 60], [0.04, 2, 64]] }, 0)); }));
+  r8.push(imp8(function () { WY.UGStrings.dawSend(WY.UGStrings.takeClean({ id: 3, name: "のばし", bpm: 110, meter: 4, inst: "violin", notes: [[0, 4, 69], [4, 4, 65]] }, 0)); }));
+  r8.push(imp8(function () { WY.UGHorn.dawSend(WY.UGHorn.takeClean({ id: 2, name: "合いの手", bpm: 110, meter: 4, inst: "trumpet", notes: [[1, 0.5, 76, 0.9], [1.5, 0.5, 74, 0.7]] }, 0)); }));
+  ok(r8.every(function (r) { return r.ok; }) && DY.project().tracks.length === 7, "7 instruments imported (ukulele, piano, drums, bass, guitar, strings, horn)", r8.map(function (r) { return r.why || "ok"; }));
+  // シンセ: 受け取りの画面 → やめる → ✅ → ↶ → もう一度 → 二重はだめ
+  SYN.dawSend(yTake); var b8 = JSON.stringify(DY.project().tracks); DY.inbox.open();
+  var ib8 = DY.inbox.html();
+  ok(ib8.indexOf("ゴリラシンセ") >= 0 && ib8.indexOf("ベースリフ") >= 0 && ib8.indexOf("ゲームと同じ音色「アシッドベース」") >= 0 && ib8.indexOf("同じ音源・同じ音色のつまみ") >= 0 && ib8.indexOf("ゲームの音そのものではありません") < 0 && ib8.indexOf("BPM 110") >= 0 && ib8.indexOf("1 小節") >= 0 && DY.inbox.ui().parts.synth === true, "📥 screen for the synth: source game, take, the same sound as the game, BPM, length; the part is selected");
+  DY.state().view = "arr"; ok(JSON.stringify(DY.project().tracks) === b8 && MY.inboxRead().box.from === "synth", "cancel: nothing changes, the box stays");
+  var u8 = DY.undoDepth(); DY.inbox.open(); var rY8 = DY.inbox.importNow(), tY = DY.project().tracks[7];
+  ok(rY8.ok && DY.undoDepth() === u8 + 1 && DY.backGame() === "synth" && tY.instrument.ext.preset === "acid" && JSON.stringify(tY.instrument.patch.patch) === JSON.stringify(acid) && tY.ext.icon === "&#x1F39B;&#xFE0F;", "✅ synth: a new track whose sound is the take's patch (acid), one ↶ step, back → ゴリラシンセ", rY8.why);
+  DY.ops.undo(); ok(JSON.stringify(DY.project().tracks) === b8, "↶ removes the synth import exactly");
+  SYN.dawSend(yTake); var yJ = SY[MY.INBOX_KEY]; DY.inbox.open(); rY8 = DY.inbox.importNow();
+  SY[MY.INBOX_KEY] = yJ; var dup8 = DY.inbox.plan();
+  ok(rY8.ok && dup8 && !dup8.ok && /もう取りこんであります/.test(dup8.why), "the same synth box again → refused (no double import)");
+  // じぶんの音色 → 「じぶんの音色」のトラック（9 本目）
+  var rM8 = imp8(function () { SYN.dawSend(mTake); }), T8 = DY.project().tracks, tM = T8[8];
+  ok(rM8.ok && T8.length === 9 && tM.instrument.ext.preset === "" && JSON.stringify(tM.instrument.patch.patch) === JSON.stringify(mine) && tM.instrument.patch.hash === MY.hash(JSON.stringify(mine)) && DY.state().view === "arr", "a custom sound → 「じぶんの音色」 track with the exact patch (inline + hash)");
+  ok(JSON.stringify(T8[7].clips[0].notes) === JSON.stringify(yPay.parts[0].notes) && JSON.stringify(tM.clips[0].notes) === JSON.stringify(mPay.parts[0].notes), "imported synth notes = the takes (timing, length, pitch, velocity)");
+  var pFull8 = MY.emptyProject(0); while (pFull8.tracks.length < 16) { MY.addTrack(pFull8, "t" + pFull8.tracks.length, "lead"); }
+  var plF8 = MY.importPlan(pFull8, MY.inboxMake("synth", yPay).box, { bar: 1 });
+  ok(!plF8.ok && /16 本/.test(plF8.why) && pFull8.tracks.length === 16, "a full song (16 tracks) → refused before adding", plF8.why);
+  // ピアノロール・🎼・🔁・📋・ミキサー・WAV（音色は patch のハッシュで確かめる）
+  DY.openEditor(T8[7].clips[0].id); ok(DY.state().view === "roll", "the synth clip opens in the piano roll");
+  var nY = T8[7].clips[0].notes.length; DY.edit.add(3360, 48); ok(DY.project().tracks[7].clips[0].notes.length === nY + 1, "piano roll: a note added");
+  DY.ops.undo(); DY.state().view = "arr"; T8 = DY.project().tracks; ok(T8[7].clips[0].notes.length === nY && JSON.stringify(T8[7].instrument.patch.patch) === JSON.stringify(acid), "↶ removes it; the sound stays");
+  DY.sections.add({ name: "A", bar: 1, bars: 1 });
+  ok(DY.ops.repeat(T8[7].clips[0].id, 1) === true, "🔁 the synth clip ×1");
+  var cp8 = DY.sections.copy("s1", 5); ok(cp8.ok && cp8.clips.length >= 3, "📋 section A → bar 5", cp8.why);
+  async function wav8() { await new Promise(function (r) { DY.wav.start(r); }); for (var g = 0; g < 900 && DY.wav.state().busy; g++) { await eY.wait(10); } var c = {}, hs = {}; DY.wav.state().log.forEach(function (x) { c[x.track] = (c[x.track] || 0) + 1; if (x.hash) { hs[x.track] = x.hash; } }); return { c: c, h: hs }; }
+  T8 = DY.project().tracks; var w8 = await wav8();
+  ok(DY.wav.state().state === "done" && T8.every(function (t) { return w8.c[t.id] === MY.noteEvents(DY.project(), 0, Infinity).filter(function (e) { return e.track === t.id; }).length && w8.c[t.id] > 0; }) && w8.h[T8[8].id] === MY.hash(JSON.stringify(mine)) && w8.h[T8[7].id] === T8[7].instrument.patch.hash, "WAV: all 9 tracks of the 8 instruments play every note; the synth tracks render with the take's patch (hash)", w8.c);
+  T8[8].solo = true; DY.updateMix(); var w8s = await wav8(); ok(Object.keys(w8s.c).join() === T8[8].id, "solo the custom synth → only it plays");
+  T8[8].solo = false; T8[7].mute = true; DY.updateMix(); var w8m = await wav8(); ok(!w8m.c[T8[7].id] && w8m.c[T8[8].id] > 0, "mute the acid synth → silent");
+  T8[7].mute = false; DY.markDirty(); DY.flushSave();
+  // MIDI → 読みなおし（音色のパラメーターは MIDI に入らない: acid は名前で戻る・じぶんの音色は近い GM → のこぎりリード）
+  function ev8(p) { var o = {}; MY.noteEvents(p, 0, Infinity).forEach(function (e) { var nm = p.tracks[e.ti].name + "#" + e.ti; (o[nm] = o[nm] || []).push([e.tick, e.end - e.tick, e.m, e.v]); }); for (var k in o) { o[k].sort(function (a, b) { return a[0] - b[0] || a[2] - b[2] || a[1] - b[1]; }); } return o; }
+  var o8 = ev8(DY.project()), x8 = DY.midi.exportNow(), pid8 = DY.project().id, dn8 = T8[2].name + "#2";
+  DY.midi.open(new Uint8Array(x8.bytes), "eight.mid"); var rx8 = DY.midi.importNow(), b8b = ev8(DY.project()), bad8 = [];
+  for (var k8 in o8) { var A8 = o8[k8], B8 = b8b[k8] || []; if (A8.length !== B8.length) { bad8.push(k8 + " count"); continue; } var ea8 = [], eb8 = []; A8.forEach(function (n, i) { var am = k8 === dn8 && MY.DRUM_GM.hasOwnProperty(n[2]) ? MY.DRUM_GM[n[2]] : n[2]; if (n[0] !== B8[i][0] || am !== B8[i][2] || Math.abs(n[3] - B8[i][3]) > 0.0045) { bad8.push(k8 + "#" + i); } ea8.push((n[0] + n[1]) + ":" + am); eb8.push((B8[i][0] + B8[i][1]) + ":" + B8[i][2]); }); ea8.sort(); eb8.sort(); if (ea8.join() !== eb8.join()) { bad8.push(k8 + " ends"); } }
+  var pr8 = DY.project().tracks.map(function (t) { return t.instrument.type === "drum" ? "drum" : t.instrument.ext.preset; });
+  ok(x8.ok && rx8.ok && Object.keys(o8).length === 9 && bad8.length === 0 && pr8[7] === "acid" && pr8[8] === "lead", "MIDI export → re-import: 9 tracks, every note start / end / pitch / velocity; acid comes back by name, the custom sound becomes のこぎりリード (patch is not in MIDI)", { bad: bad8.slice(0, 5), presets: pr8 });
+  // 保存・読みなおし・ZIP → 空の保存場所（patch も戻る）・元のゲームへ戻る
+  DY.proj.open(pid8); var song8 = JSON.stringify(DY.project().tracks);
+  DY.reload(); DY.proj.open(pid8);
+  ok(JSON.stringify(DY.project().tracks) === song8 && JSON.stringify(DY.project().tracks[8].instrument.patch.patch) === JSON.stringify(mine), "after a reload: the 8-instrument song and the custom sound are the same");
+  var ex8 = await new Promise(function (r) { DY.pack.exportZip(r); });
+  var eY2 = H.load(), WY2 = eY2.window, DY2 = WY2.UGDaw; WY2.indexedDB = fakeIDB(); fakeDecode(WY2);
+  var RY2 = H.makeEl("div"); DY2.reset(); WY2.UGArcade.start("daw", RY2, {});
+  var rq8 = await impZ(DY2, blobAB(ex8.blob)); DY2.proj.open(rq8.id);
+  ok(ex8.ok && rq8.ok && JSON.stringify(DY2.project().tracks) === song8 && MY.noteCount(DY2.project()) === MY.noteCount(DY.project()), "ZIP → empty storage: every note and both synth sounds come back", rq8.why);
+  WY2.UGArcade.stop(); DY2.reset();
+  ok(DY.goBackGame() === true && RY.innerHTML.indexOf("ゴリラシンセ") >= 0 && RY.innerHTML.indexOf("daw-top") < 0, "back to the source game (synth) from the DAW");
+  ok(SY[SYN.TAKES_KEY] === yRaw, "the saved synth takes are unchanged after everything");
+  WY.UGArcade.stop(); DY.reset();
+  var errY = eY.counters.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(errY.length === 0, "no Web Audio errors (9B-7)", errY.slice(0, 3));
 };
