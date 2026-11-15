@@ -5,6 +5,20 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.67] - 2026-11-15 — 📏 ゴリラDAW の LRA・再生中のラウドネスメーター (§342 Phase 9B-17)
+
+### Added
+- 📊 曲を解析に **LRA（Loudness Range・EBU Tech 3342）**: Short-Term（3 秒・0.1 秒ごと）・ゲート −70 LUFS と −20 LU・10％ と 95％ の差（LU）。Short-Term の 10％／95％ の値・グラフに LRA の帯・説明。WAV の終わりに 1.5 秒の無音があるとして数える（WAV は変えない・もう一度書き出さない）
+- MASTER に **📏 ラウドネスメーター**（はじめは OFF）: 再生中の Momentary（400ms）・Short-Term（3 秒）・Integrated と LRA（測りはじめから）・Sample Peak・状態。DAW のいちばん最後の出口（MASTER の EQ・リミッターのあと）を、出力のない AudioWorklet で横から測る（音・遅れは変わらない）。止まったところから ▶ で新しく、ジャンプ・ループは続けて測る。数字は保存しない
+- モデルに `lraOf`・`loudLive`
+### Changed
+- MASTER の Ceiling の単位を、True Peak のモードでは dBTP、サンプルピークのモードでは dBFS と出す（表示だけ）
+### Notes
+- LRA の検証: Tech 3342 の表 1 の 1〜4 を自作の信号で（公式の試験ファイルは手に入らなかった）→ 10／5／20／15 LU（±0.00）。独立の参照（Python）との差 0.005 LU 以内
+- メーター: Chrome で曲の終わりまで再生した Integrated・LRA が WAV の解析と 0.05 以内・ピークは別の方法で録った音と同じ。再生の音のサンプルピークは WAV より約 1dB 高かった（再生と書き出しのちがい・メーターではない）
+- 負荷: メーターは実時間の約 0.75%（OFF なら 0）。10 回の再生と停止のあと、メーターのノードは残らない
+- Phase 8 の新しいシンセのエンジン・Pitch8・ハイブリッドは使っていない。WAV・リミッター・シンセの発音・DSP・Golden・保存の形・MIDI は変えていない。iPhone の実機では未確認
+
 ## [2.66] - 2026-11-15 — 🎚️ ゴリラDAW の True Peak リミッター (§342 Phase 9B-16)
 
 ### Added

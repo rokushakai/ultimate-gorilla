@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.66** |
+| 現在バージョン | **v2.67** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.67] 📏 ゴリラDAW の LRA・再生中のラウドネスメーター**（§342 Phase 9B-17）: モデルの `luGated`（Integrated のゲートを共通に）・`lraOf`（Tech 3342 の MATLAB の手順）・`loudLive`・`LRA_PAD`（1.5 秒）・`loudMeter().finish()` の `lra`／`lraLow`／`lraHigh`／`lraN`／`lraWhy`。`arcade-daw.js` の `LIM_WORKLET` に処理 U（`LM_NAME` ＝ `ug-daw-loud`・出力なし）・`lm`／`lmAttach`／`lmDetach`／`lmClear`／`lmValues`／`lmHtml`／`lmHead`・`UGDaw.meter`（set／reset／state／values）。`startPlay` の `lmFresh`（止まっていたなら新しく）・`stopPlay`・余韻のタイマー・`switchTo` で片づけ。📊 の LRA の行と帯（`.dlu-lrab`）。True Peak のときの Ceiling の単位 dBTP
 - **[v2.66] 🎚️ ゴリラDAW の True Peak リミッター**（§342 Phase 9B-16）: `LIM_WORKLET` に処理 T（`LIM_NAME_TP` ＝ `ug-daw-limiter-tp`・`LIM_TP_OS` 8・`LIM_TP_HALF` 16・`LIM_TP_BETA` 8。P はそのまま）。`limNode(ac, "tp")`・`limSamples(rate, tp)`（＋2×HT）・`limKey`・`masterRtKey` の `"t"`・WAV の `stats.limMode`・📊 の `r.limMode`。モデルは limiter の `mode`（`"tp"` だけ書く・`fxSet(…,"lim","mode",…)`・↺ で消す）。`UGMelody.forgetCtx(ac)`（チョークの記録 `melodyCyms` から外す）を `renderSong` の終わり・やめたときに呼ぶ。精度の試験は Node（ワークレットのソースを vm で）＋ scipy（16・32 倍・FFT）
 - **[v2.65] 🧹 ゴリラDAW の音声ノードの片づけ**（§342 Phase 9B-15）: `masterPrivOff` は `fx.nodes`（`UGMelody.buildFx` が返す 8 個・ディレイのフィードバックの輪）も外し、リミッターの `port` の `onmessage` を外して 200ms 後に閉じる。`renderSong` の `drainGo`（やめたら出口 `mlast` を外して `resume`・止まるたびに続ける）。`wavCanChunk`（suspend・`wav.noSuspend`・SynthTrack）と `WAV_SLOW_MAX`（60 秒）・`wavPlan` の `chunk`。ノードの計測はテストの QA の中だけ（WeakRef・connect／disconnect を包む）
 - **[v2.64] 🎼 ゴリラDAW の長い曲（3〜5 分）・安定性**（§342 Phase 9B-14）: `arcade-daw.js` の `WAV_MAX_MUSIC`（330）・`WAV_LONG`（150）・`wavPlan` の `memMB`／`long`・`secText`。`renderSong(cb, ro)` は `suspend` で `WAV_STEP_FR`（88,064 フレーム）ごとに止まり、`more`（曲の写しで `WAV_AHEAD` 4 秒先まで予約）・`voFree`（鳴り終わって `WAV_VO_KEEP` 1 秒のシンセの声を出口から外す）・進み具合・やめる・60 秒のウォッチドッグ（`wav.noSuspend`）。SynthTrack（`mx.syn`）・`suspend` が無いときは全部を先に予約。モデルの `audioCutIds`／`fitAudioBox`・⏱ の `tpApi.cut`／`fit`。`arcade-melody.js` の `melodyAudioInit` は `"interrupted"` も resume。iPhone の手順は `IPHONE_QA_DAW.md`（実機では未確認）

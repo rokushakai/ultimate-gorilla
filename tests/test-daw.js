@@ -3179,6 +3179,50 @@ module.exports = async function () {
   ok(exT.ok && rqT.ok && JSON.stringify(DT3.project().master.fx) === mfT && WT3.UGDawModel.masterFx(DT3.project()).lim.mode === "tp", "9B-16: ZIP → empty storage: True Peak mode and ceiling come back", rqT.why);
   WT3.UGArcade.stop(); DT3.reset();
   ML.fxSet(DL0.project().master, "lim", "mode", "sample"); ML.fxSet(DL0.project().master, "lim", "on", false); DL0.markDirty();
+  // ================= 9B-17: LRA・再生中のラウドネスメーター（§342）=================
+  function lraTone(sr, levels, sec) { var n1 = Math.round(sr * sec), n = n1 * levels.length, L = new Float32Array(n), i; for (i = 0; i < n; i++) { L[i] = Math.pow(10, levels[Math.floor(i / n1)] / 20) * Math.sin(2 * Math.PI * 1000 * i / sr); } return L; }
+  function lraRun(sr, L, R) { var lm = ML.loudMeter(sr, { tp: false }), k; for (k = 0; k < L.length; k += 48000) { var m = Math.min(48000, L.length - k); lm.push(L.subarray(k, k + m), (R || L).subarray(k, k + m), m); } return lm.finish(); }
+  var lraCases = [[[-20, -30], 10], [[-20, -15], 5], [[-40, -20], 20], [[-50, -35, -20, -35, -50], 15]], lraOut = lraCases.map(function (c) { var r = lraRun(48000, lraTone(48000, c[0], 20)); return [c[1], r.lra, r.lraLow, r.lraHigh]; });
+  ok(lraOut.every(function (x) { return x[1] !== null && Math.abs(x[1] - x[0]) <= 1; }), "9B-17: Tech 3342 minimum requirements 1–4 (self-made 1 kHz tones, 48 kHz): LRA 10 / 5 / 20 / 15 ± 1 LU", lraOut);
+  ok(lraOut.every(function (x) { return Math.abs(x[1] - x[0]) <= 0.05; }), "9B-17: … and within 0.05 LU of the nominal value", lraOut);
+  var rpt = lraRun(48000, (function () { var a = lraTone(48000, [-20, -30], 20), b = new Float32Array(a.length * 2); b.set(a, 0); b.set(a, a.length); return b; })());
+  ok(Math.abs(rpt.lra - lraOut[0][1]) <= 0.05, "9B-17: repeating test 1 gives the same LRA", [rpt.lra, lraOut[0][1]]);
+  // 参照の手順（MATLAB）: 手で作った Short-Term の列
+  var stT = []; for (var iT = 0; iT < 100; iT++) { stT.push(-30 + iT * 0.1); } stT.push(-80, -75, -60);
+  var lrT = ML.lraOf(stT);
+  // −70 より上: 101 個（−60 をふくむ）。電力平均 −20 LU のゲートで −60 は落ちる → 100 個（−30…−20.1）。P10 ＝ round(99×0.1＋1) ＝ 11 番目 ＝ −29.0・P95 ＝ round(99×0.95＋1) ＝ 95 番目 ＝ −20.6
+  ok(lrT.n === 100 && Math.abs(lrT.low - (-29.0)) < 1e-9 && Math.abs(lrT.high - (-20.6)) < 1e-9 && Math.abs(lrT.lra - 8.4) < 1e-9, "9B-17: lraOf follows the Tech 3342 MATLAB steps (abs gate −70, rel gate −20 LU, round((n−1)p/100+1))", [lrT.n, lrT.low, lrT.high, lrT.lra]);
+  ok(lrT.gate > -60 && lrT.gate < -40, "9B-17: the LRA relative gate is −20 LU (not the −10 LU of Integrated)", lrT.gate);
+  var shortR = lraRun(48000, lraTone(48000, [-20], 2)), silR = lraRun(48000, new Float32Array(48000 * 5));
+  ok(shortR.lra === null && shortR.lraWhy === "short" && silR.lra === null && silR.lraWhy === "silent", "9B-17: under 3 s → — (short); silence → — (silent)");
+  // ファイルの終わりの 1.5 秒の無音: 一定の音で、その分の Short-Term も入る（−70 より大きい間）
+  var cst = lraRun(48000, lraTone(48000, [-23], 30));
+  ok(cst.lra !== null && cst.lra < 0.1 && cst.lraN >= 271 && cst.lraN <= 286, "9B-17: a steady tone → LRA ≈ 0; the 1.5 s of silence after the file adds short-term values (the WAV is not changed)", [cst.lra, cst.lraN]);
+  // 再生中のメーター: ワークレット（同じソース）→ loudLive が、ファイルの解析と同じ数字
+  var lmSb = { sampleRate: 48000, Math: Math, Float32Array: Float32Array, Float64Array: Float64Array, registerProcessor: function (n, c) { if (n === "ug-daw-loud") { lmSb.U = c; } } };
+  VM.runInNewContext("class AudioWorkletProcessor { constructor() { this.port = { onmessage: null, postMessage: function (m) { sent.push(m); } }; } }\nvar sent = [];\n" + DL0.master.src + "\nthis.__s = sent;", lmSb);
+  var lmP = new lmSb.U({ processorOptions: { k: ML.kCoef(48000) } }), lmSig = lraTone(48000, [-20, -30, -14], 8), lmLive = ML.loudLive(), iU;
+  for (iU = 0; iU + 128 <= lmSig.length; iU += 128) { lmP.process([[lmSig.subarray(iU, iU + 128), lmSig.subarray(iU, iU + 128)]]); }
+  lmSb.__s.forEach(function (m) { lmLive.push(m[0], m[1]); });
+  var lmV = lmLive.get(true), lmF = lraRun(48000, lmSig);
+  ok(lmSb.__s.length === Math.floor(lmSig.length / 4800) && Math.abs(lmV.I - lmF.integrated) < 0.01 && Math.abs(lmV.maxPeak - lmF.samplePeak) < 0.01, "9B-17: meter worklet (100 ms energy, K-weighting from kCoef) + loudLive give the same Integrated and peak as the file analysis", [lmSb.__s.length, lmV.I, lmF.integrated, lmV.maxPeak, lmF.samplePeak]);
+  var lastS = lmF.series[lmF.series.length - 1][1];
+  ok(Math.abs(lmV.S - lastS) < 0.01 && lmV.M !== null, "9B-17: the last Short-Term of the meter equals the analysis' last Short-Term (same 3 s window)", [lmV.S, lastS]);
+  lmP.port.onmessage({ data: "stop" }); ok(lmP.process([[new Float32Array(128), new Float32Array(128)]]) === false, "9B-17: \"stop\" ends the meter processor");
+  // DAW: OFF のときは何も作らない・ワークレットが無いときは「測れません」・保存しない
+  var mfp = function () { var q = DL0.project(); return JSON.stringify([q.tracks, q.master, q.tempo]); }, mf0 = mfp(), onA = DL0.meter.state().on;
+  DL0.jumpTo(0); DL0.play(); await eL.wait(200); var stOff = DL0.meter.state(); DL0.stop();
+  ok(onA === false && stOff.on === false && stOff.node === false && stOff.state === "off", "9B-17: the meter is OFF by default and makes no node while playing", stOff);
+  DL0.meter.set(true); DL0.jumpTo(0); DL0.play(); await eL.wait(200); var stOn = DL0.meter.state(); DL0.stop();
+  ok(stOn.on === true && stOn.state === "fail" && stOn.node === false, "9B-17: without AudioWorklet the meter says it cannot measure (no node, sound unchanged)", stOn);
+  DL0.meter.set(false);
+  var mf1 = mfp(), dI = 0; while (dI < mf0.length && mf0[dI] === mf1[dI]) { dI++; } var pj1 = JSON.stringify(DL0.project()); ok(mf1 === mf0 && pj1.indexOf('"lra"') < 0 && pj1.indexOf('"loud') < 0, "9B-17: meter / LRA values are not saved in the song", [mf0.length, mf1.length]);
+  // True Peak のとき Ceiling の単位は dBTP（値・保存は同じ）
+  var pU = DL0.project(); ML.fxSet(pU.master, "lim", "on", true); ML.fxSet(pU.master, "lim", "mode", "tp"); DL0.showMaster(); var hU = RL.innerHTML;
+  ML.fxSet(pU.master, "lim", "mode", "sample"); DL0.showMaster(); var hU2 = RL.innerHTML;
+  ok(/data-fxn="lim\.ceiling"[^>]*>[^<]*<\/?[^>]*>?\s*<span class="dfx-unit">dBTP/.test(hU) || hU.indexOf(">dBTP<") >= 0, "9B-17: True Peak mode shows the ceiling in dBTP");
+  ok(hU2.indexOf(">dBTP<") < 0 && hU2.indexOf(">dBFS<") >= 0, "9B-17: Sample Peak mode shows dBFS");
+  ML.fxSet(pU.master, "lim", "on", false);
   ok(SL.ultimateGorillaSaveV2 === rpgL && UGL.audio.bus === sharedBus && UGL.audio.master === sharedMaster, "the RPG save and the shared audio output are untouched (9B-10)");
   AL.stop(); DL0.reset();
   var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });

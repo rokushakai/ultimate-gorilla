@@ -672,15 +672,59 @@
         for (j = 0; j + 4 <= subs.length; j++) { sum = subs[j] + subs[j + 1] + subs[j + 2] + subs[j + 3]; mE.push(sum / 4); maxM = Math.max(maxM, luL(sum / 4)); }
         for (j = 0; j + 30 <= subs.length; j++) { sum = 0; for (k = j; k < j + 30; k++) { sum += subs[k]; } sE.push(sum / 30); var ls = luL(sum / 30); maxS = Math.max(maxS, ls); if ((j + 30) % 5 === 0) { series.push([Math.round((j + 30) * 10) / 100, isFinite(ls) ? r2(ls) : null]); } }
         // Integrated: 絶対ゲート −70 LUFS → 相対ゲート −10 LU
-        var g1 = [], tot = 0, gate2, tot2 = 0, n2 = 0, integ = null;
-        for (j = 0; j < mE.length; j++) { if (luL(mE[j]) > -70) { g1.push(mE[j]); tot += mE[j]; } }
-        if (g1.length) {
-          gate2 = luL(tot / g1.length) - 10;
-          for (j = 0; j < g1.length; j++) { if (luL(g1[j]) > gate2) { tot2 += g1[j]; n2++; } }
-          integ = n2 ? luL(tot2 / n2) : null;
-        }
+        var gi = luGated(mE), integ = gi.integ, gate2 = gi.gate, n2 = gi.n, g1 = { length: gi.nAbs };
+        // 9B-17: LRA（Tech 3342）: ファイルの終わりに 1.5 秒の無音を足した（と考えた）Short-Term も入れる（WAV は変えない）
+        var stl = [], ps = 0, zs = Math.round(LRA_PAD / 0.1), pn = subs.length + zs;
+        for (j = 0; j < pn; j++) { ps += j < subs.length ? subs[j] : 0; if (j >= 30) { ps -= j - 30 < subs.length ? subs[j - 30] : 0; } if (j >= 29) { stl.push(luL(Math.max(0, ps) / 30)); } }
+        var lr = sE.length ? lraOf(stl) : { lra: null, low: null, high: null, n: 0, nAbs: 0, gate: null, why: "short" };
         var sp = luDb(spk), tp = doTp ? luDb(tpk) : null;
-        return { sr: sr, ch: chn, frames: frames, sec: frames / sr, integrated: r2(integ), relGate: g1.length ? r2(gate2) : null, blocks: mE.length, gated: n2, maxM: mE.length ? (isFinite(maxM) ? r2(maxM) : null) : null, maxS: sE.length ? (isFinite(maxS) ? r2(maxS) : null) : null, samplePeak: r2(sp), truePeak: r2(tp), diff: sp !== null && tp !== null ? r2(tp - sp) : null, series: series, tooShortM: !mE.length, tooShortS: !sE.length, silent: !!mE.length && !g1.length };
+        return { sr: sr, ch: chn, frames: frames, sec: frames / sr, integrated: r2(integ), relGate: g1.length ? r2(gate2) : null, blocks: mE.length, gated: n2, maxM: mE.length ? (isFinite(maxM) ? r2(maxM) : null) : null, maxS: sE.length ? (isFinite(maxS) ? r2(maxS) : null) : null, samplePeak: r2(sp), truePeak: r2(tp), diff: sp !== null && tp !== null ? r2(tp - sp) : null, series: series, tooShortM: !mE.length, tooShortS: !sE.length, silent: !!mE.length && !g1.length,
+          lra: r2(lr.lra), lraLow: r2(lr.low), lraHigh: r2(lr.high), lraN: lr.n, lraGate: r2(lr.gate), lraWhy: lr.why }; // 9B-17
+      }
+    };
+  }
+
+  // §342 9B-17: Integrated のゲート（BS.1770: 絶対 −70 LUFS → 相対 −10 LU）。mE: 400ms のブロックの平均の 2 乗（75% 重ね）
+  function luGated(mE) {
+    var g1 = [], tot = 0, gate2 = null, tot2 = 0, n2 = 0, integ = null, j;
+    for (j = 0; j < mE.length; j++) { if (luL(mE[j]) > -70) { g1.push(mE[j]); tot += mE[j]; } }
+    if (g1.length) {
+      gate2 = luL(tot / g1.length) - 10;
+      for (j = 0; j < g1.length; j++) { if (luL(g1[j]) > gate2) { tot2 += g1[j]; n2++; } }
+      integ = n2 ? luL(tot2 / n2) : null;
+    }
+    return { integ: integ, gate: gate2, n: n2, nAbs: g1.length };
+  }
+  // §342 9B-17: Loudness Range（EBU Tech 3342 v4 の MATLAB の手順そのまま）。stl: Short-Term（3 秒・ゲートなし・10Hz 以上）の LUFS
+  // 絶対ゲート −70 LUFS（>=）→ その値の電力平均 −20 LU（>=・Integrated の −10 LU とはちがう）→ 小さい順に並べて 10・95 パーセンタイル（round((n−1)×p/100＋1) 番目）→ LRA ＝ P95 − P10（LU）
+  var LRA_ABS = -70, LRA_REL = -20, LRA_LO = 10, LRA_HI = 95, LRA_PAD = 1.5;
+  function lraOf(stl) {
+    var a = [], b = [], i, pw = 0;
+    for (i = 0; i < stl.length; i++) { if (stl[i] >= LRA_ABS) { a.push(stl[i]); } }
+    if (!a.length) { return { lra: null, low: null, high: null, n: 0, nAbs: 0, gate: null, why: "silent" }; }
+    for (i = 0; i < a.length; i++) { pw += Math.pow(10, a[i] / 10); }
+    var gate = 10 * Math.log(pw / a.length) / Math.LN10 + LRA_REL;
+    for (i = 0; i < a.length; i++) { if (a[i] >= gate) { b.push(a[i]); } }
+    b.sort(function (x, y) { return x - y; });
+    var n = b.length, lo = b[Math.round((n - 1) * LRA_LO / 100 + 1) - 1], hi = b[Math.round((n - 1) * LRA_HI / 100 + 1) - 1];
+    return { lra: hi - lo, low: lo, high: hi, n: n, nAbs: a.length, gate: gate, why: "" };
+  }
+  // §342 9B-17: 再生中のメーター（100ms ごとの K 特性の 2 乗の平均 e と、その間のサンプルピーク pk を入れる）。値はこの関数の中だけ（曲に保存しない）
+  function loudLive() {
+    var subs = [], stl = [], mE = [], spk = 0, last = 0;
+    function mean(n) { var s0 = 0, k; for (k = subs.length - n; k < subs.length; k++) { s0 += subs[k]; } return s0 / n; }
+    return {
+      push: function (e, pk) {
+        subs.push(e > 0 ? e : 0); last = pk > 0 ? pk : 0; if (last > spk) { spk = last; }
+        if (subs.length >= 4) { mE.push(mean(4)); }
+        if (subs.length >= 30) { stl.push(luL(mean(30))); }
+      },
+      count: function () { return subs.length; },
+      get: function (full) {
+        var n = subs.length, o = { n: n, sec: n / 10, M: n >= 4 ? luL(mean(4)) : null, S: n >= 30 ? luL(mean(30)) : null, peak: luDb(last), maxPeak: luDb(spk) };
+        if (o.M !== null && !isFinite(o.M)) { o.M = -Infinity; } if (o.S !== null && !isFinite(o.S)) { o.S = -Infinity; }
+        if (full) { var g = luGated(mE), l = stl.length ? lraOf(stl) : { lra: null, why: "short" }; o.I = g.integ; o.lra = l.lra; o.lraWhy = l.why; }
+        return o;
       }
     };
   }
@@ -2064,6 +2108,7 @@
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
     FX_EQ: FX_EQ, FX_COMP: FX_COMP, FX_BANDS: FX_BANDS, FX_KNEE: FX_KNEE, fxClean: fxClean, fxOf: fxOf, fxLive: fxLive, fxBoost: fxBoost, fxSet: fxSet, fxReset: fxReset, fxAutoMakeup: fxAutoMakeup, FX_LIM: FX_LIM, masterFx: masterFx, masterLive: masterLive, // 9B-8・9B-10
     kCoef: kCoef, tpTaps: tpTaps, loudMeter: loudMeter, // 9B-13
+    lraOf: lraOf, loudLive: loudLive, LRA_PAD: LRA_PAD, // 9B-17
     audioCutIds: audioCutIds, fitAudioBox: fitAudioBox, // 9B-14
     TEMPO_MAX: TEMPO_MAX, secBetween: secBetween, tempoList: tempoList, tempoSet: tempoSet, tempoDel: tempoDel, delaySecAt: delaySecAt, midiTempoCheck: midiTempoCheck, // 9B-12
     SEND_DIVS: SEND_DIVS, SEND_DIV_ORDER: SEND_DIV_ORDER, SEND_FX: SEND_FX, REV_SEC: REV_SEC, TAIL_MAX: TAIL_MAX, sendClean: sendClean, sendOf: sendOf, sendSet: sendSet, sendFxClean: sendFxClean, sendFxOf: sendFxOf, sendFxSet: sendFxSet, sendFxReset: sendFxReset, sendLive: sendLive, sendKey: sendKey, delaySec: delaySec, sendTail: sendTail, // 9B-11
