@@ -348,6 +348,7 @@
     var def = type === "eq3" ? FX_EQ : (type === "limiter" ? FX_LIM : FX_COMP), o = isObj(src) ? copy(src) : {}, k;
     o.type = type; o.on = isObj(src) ? src.on === true : false;
     for (k in def) { if (def.hasOwnProperty(k)) { o[k] = fxNum(o[k], def[k]); } }
+    if (type === "limiter" && o.mode !== undefined) { if (o.mode === "tp") { o.mode = "tp"; } else { delete o.mode; } } // 9B-16: モード（"tp" ＝ True Peak）。無い・ちがう値 ＝ サンプルピーク（前と同じ・書き足さない）
     return o;
   }
   // 読むとき: eq3・comp は値を範囲に入れる（同じ type の 2 つ目からは捨てる）。知らない type・知らない値は残す。オブジェクトでない項目は捨てる
@@ -368,7 +369,7 @@
   // いまの設定（無ければはじめの値・OFF）
   function fxOf(t) {
     var e = fxItem("eq3", fxFind(t, "eq3")), c = fxItem("comp", fxFind(t, "comp")), l = fxItem("limiter", fxFind(t, "limiter"));
-    return { bypass: !!(t && isObj(t.fx) && t.fx.bypass === true), eq: { on: e.on, low: e.low, mid: e.mid, high: e.high }, comp: { on: c.on, threshold: c.threshold, ratio: c.ratio, attack: c.attack, release: c.release, makeup: c.makeup }, lim: { on: l.on, ceiling: l.ceiling, gain: l.gain, release: l.release } };
+    return { bypass: !!(t && isObj(t.fx) && t.fx.bypass === true), eq: { on: e.on, low: e.low, mid: e.mid, high: e.high }, comp: { on: c.on, threshold: c.threshold, ratio: c.ratio, attack: c.attack, release: c.release, makeup: c.makeup }, lim: { on: l.on, ceiling: l.ceiling, gain: l.gain, release: l.release, mode: l.mode === "tp" ? "tp" : "sample" } }; // 9B-16: mode
   }
   // 音に効くもの: EQ ＝ ON で 0dB でないバンドがある・コンプ ＝ ON。バイパスなら何も効かない（そのときはノードを作らない ＝ v2.57 と同じ音）
   function fxLive(t) {
@@ -401,17 +402,18 @@
     if (!t) { return { ok: false }; }
     if (part === "bypass") { var h0 = fxHost(t); if (v) { h0.bypass = true; } else { delete h0.bypass; } return { ok: true, value: !!v }; }
     var type = part === "eq" ? "eq3" : (part === "comp" ? "comp" : (part === "lim" ? "limiter" : "")), def = type === "eq3" ? FX_EQ : (type === "limiter" ? FX_LIM : FX_COMP);
-    if (!type || (key !== "on" && !def.hasOwnProperty(key))) { return { ok: false }; }
+    if (!type || (key !== "on" && !def.hasOwnProperty(key) && !(type === "limiter" && key === "mode"))) { return { ok: false }; }
     var h = fxHost(t), it = fxFind(t, type);
     if (!it) { it = fxItem(type, null); h.items.push(it); }
     if (key === "on") { it.on = !!v; return { ok: true, value: it.on }; }
+    if (key === "mode") { if (v === "tp") { it.mode = "tp"; } else { delete it.mode; } return { ok: true, value: it.mode === "tp" ? "tp" : "sample" }; } // 9B-16: サンプルピークは書かない（前と同じ形）
     it[key] = fxNum(v, def[key]);
     return { ok: true, value: it[key] };
   }
   // ↺: part ＝ "eq" | "comp"（その項目をはじめの値・ON／OFF はそのまま）／ 無し（eq3・comp の項目と bypass を消す。ほかの項目は残す）
   function fxReset(t, part) {
     if (!t) { return false; }
-    if (part === "eq" || part === "comp" || part === "lim") { var type = part === "eq" ? "eq3" : (part === "lim" ? "limiter" : "comp"), it = fxFind(t, type); if (it) { var on = it.on, d = fxItem(type, null), k; for (k in d) { if (d.hasOwnProperty(k)) { it[k] = d[k]; } } it.on = on; } return true; }
+    if (part === "eq" || part === "comp" || part === "lim") { var type = part === "eq" ? "eq3" : (part === "lim" ? "limiter" : "comp"), it = fxFind(t, type); if (it) { var on = it.on, d = fxItem(type, null), k; for (k in d) { if (d.hasOwnProperty(k)) { it[k] = d[k]; } } it.on = on; if (type === "limiter") { delete it.mode; } } return true; } // 9B-16: ↺ でサンプルピークへ
     var h = fxHost(t);
     h.items = h.items.filter(function (x) { return !(isObj(x) && (x.type === "eq3" || x.type === "comp" || x.type === "limiter")); });
     delete h.bypass;

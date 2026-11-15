@@ -311,6 +311,7 @@
   // 必要なゲイン g＝min(1, Ceiling÷max|L|,|R|) → 先読み＋1 サンプルの最小値 → リリース（上がるときだけゆっくり）→ 先読みの長さの箱型の平均 → 先読みだけ遅らせた音に掛ける。
   // 平均する値は全部そのサンプルに必要なゲイン以下なので、出力のサンプルピークは Ceiling をこえない（True Peak ではない）。mode "meter" は遅らせずに通してピークだけ知らせる
   var LIM_NAME = "ug-daw-limiter", LIM_LOOK = 0.005;
+  var LIM_NAME_TP = "ug-daw-limiter-tp", LIM_TP_HALF = 16, LIM_TP_BETA = 8, LIM_TP_OS = 8; // 9B-16: True Peak のリミッター（8 倍の検出・各相 32 タップの Kaiser 窓 sinc。4 倍だとクリップした波形で +0.008dB こえた）
   var LIM_WORKLET = [
     "class P extends AudioWorkletProcessor {",
     "  static get parameterDescriptors() { return [{ name: 'ceiling', defaultValue: 0.891, minValue: 0.0001, maxValue: 1, automationRate: 'k-rate' }, { name: 'release', defaultValue: 0.1, minValue: 0.001, maxValue: 2, automationRate: 'k-rate' }]; }",
@@ -348,7 +349,64 @@
     "    return true;",
     "  }",
     "}",
-    "registerProcessor('" + LIM_NAME + "', P);"
+    "registerProcessor('" + LIM_NAME + "', P);",
+    // 9B-16: True Peak のリミッター（P はそのまま）。4 倍のオーバーサンプリング（Kaiser 窓の sinc・各相 2×HT タップ）でサンプルの間の値を出し、4 倍の点の山は放物線で補う。
+    // その区間の補間に使う前後 HT サンプル全部に「Ceiling ÷ その区間の True Peak」以下のゲインを求める（前後 HT に広げる）→ P と同じ（先読みの最小値・リリース・箱型の平均）。遅れ ＝ 2×HT ＋ 先読み
+    "class T extends AudioWorkletProcessor {",
+    "  static get parameterDescriptors() { return [{ name: 'ceiling', defaultValue: 0.891, minValue: 0.0001, maxValue: 1, automationRate: 'k-rate' }, { name: 'release', defaultValue: 0.1, minValue: 0.001, maxValue: 2, automationRate: 'k-rate' }]; }",
+    "  constructor(o) {",
+    "    super(); var q = (o && o.processorOptions) || {}, i, p, k;",
+    "    var D = Math.max(1, Math.round((q.look || 0.005) * sampleRate)), HT = " + LIM_TP_HALF + ", N = 2 * HT, L = 2 * HT + D; this.D = D; this.HT = HT; this.N = N; this.L = L;",
+    "    function i0(x) { var s = 1, t = 1, j; for (j = 1; j < 40; j++) { t *= (x / (2 * j)) * (x / (2 * j)); s += t; } return s; }",
+    "    var B = " + LIM_TP_BETA + ", ib = i0(B), OS = " + LIM_TP_OS + "; this.OS = OS; this.tp = []; this.a = new Float64Array(OS + 2);",
+    "    for (p = 1; p < OS; p++) { var t = new Float64Array(N), sum = 0; for (k = 0; k < N; k++) { var x = (k - HT + 1) - p / OS, r = x / HT, w = Math.abs(r) < 1 ? i0(B * Math.sqrt(1 - r * r)) / ib : 0; t[k] = (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x)) * w; sum += t[k]; } for (k = 0; k < N; k++) { t[k] /= sum; } this.tp.push(t); }",
+    "    this.h = [new Float64Array(2 * N), new Float64Array(2 * N)]; this.hp = 0; this.pv = [0, 0];",
+    "    this.W = 2 * HT + 1; this.sv = new Float64Array(this.W + 1); this.si = new Float64Array(this.W + 1); this.sh = 0; this.st = 0; this.m = 0;",
+    "    this.dl = new Float32Array(L); this.dr = new Float32Array(L); this.p = 0; this.H = D + 1; this.Q = D + 2;",
+    "    this.qv = new Float64Array(this.Q); this.qi = new Float64Array(this.Q); this.qh = 0; this.qt = 0; this.n = 0; this.r = 1;",
+    "    this.rb = new Float64Array(D); for (i = 0; i < D; i++) { this.rb[i] = 1; } this.sum = D; this.bp = 0;",
+    "    this.rep = !!q.report; this.cnt = 0; this.pk = 0; this.mg = 1; this.every = Math.round(sampleRate * 0.1); this.alive = true;",
+    "    var s = this; this.port.onmessage = function (e) { if (e.data === 'stop') { s.alive = false; } };",
+    "  }",
+    "  itp(ch) {",
+    "    var b = this.h[ch], N = this.N, HT = this.HT, OS = this.OS, o = this.hp + 1, a = this.a, p, k, t, v, j, mx = 0;",
+    "    a[0] = this.pv[ch]; a[1] = b[o + HT - 1]; a[OS + 1] = b[o + HT];",
+    "    for (p = 0; p < OS - 1; p++) { t = this.tp[p]; v = 0; for (k = 0; k < N; k++) { v += t[k] * b[o + k]; } a[p + 2] = v; }",
+    "    this.pv[ch] = a[OS];",
+    "    for (j = 1; j <= OS; j++) { var sg = a[j] < 0 ? -1 : 1, y0 = a[j] * sg; if (y0 > mx) { mx = y0; } var ym = a[j - 1] * sg, yp = a[j + 1] * sg; if (ym > 0 && yp > 0 && y0 >= ym && y0 >= yp) { var dn = ym - 2 * y0 + yp; if (dn < 0) { var pk = y0 - (ym - yp) * (ym - yp) / (8 * dn); if (pk > mx) { mx = pk; } } } }",
+    "    return mx;",
+    "  }",
+    "  process(inp, out, prm) {",
+    "    if (!this.alive) { return false; }",
+    "    var a = inp[0] || [], o = out[0], L = a[0], R = a[1] || a[0], oL = o[0], oR = o[1] || o[0], Nb = oL.length, i, N = this.N, W = this.W;",
+    "    var c = prm.ceiling[0] * (1 - 1e-6), rc = Math.exp(-1 / (Math.max(0.001, prm.release[0]) * sampleRate)), D = this.D, H = this.H, Q = this.Q, qv = this.qv, qi = this.qi, sv = this.sv, si = this.si, hl = this.h[0], hr = this.h[1];",
+    "    for (i = 0; i < Nb; i++) {",
+    "      var xl = L ? L[i] : 0, xr = R ? R[i] : 0;",
+    "      hl[this.hp] = xl; hl[this.hp + N] = xl; hr[this.hp] = xr; hr[this.hp + N] = xr;",
+    "      var tv = Math.max(this.itp(0), this.itp(1)), m = this.m;",
+    "      this.hp = this.hp + 1 === N ? 0 : this.hp + 1;",
+    "      while (this.st > this.sh && sv[(this.st - 1) % (W + 1)] <= tv) { this.st--; }",
+    "      sv[this.st % (W + 1)] = tv; si[this.st % (W + 1)] = m; this.st++;",
+    "      while (si[this.sh % (W + 1)] <= m - W) { this.sh++; }",
+    "      this.m = m + 1;",
+    "      var tm = sv[this.sh % (W + 1)], g = tm > c ? c / tm : 1, n = this.n;",
+    "      while (this.qt > this.qh && qv[(this.qt - 1) % Q] >= g) { this.qt--; }",
+    "      qv[this.qt % Q] = g; qi[this.qt % Q] = n; this.qt++;",
+    "      while (qi[this.qh % Q] <= n - H) { this.qh++; }",
+    "      var h = qv[this.qh % Q];",
+    "      this.r = h < this.r ? h : h + (this.r - h) * rc;",
+    "      this.sum += this.r - this.rb[this.bp]; this.rb[this.bp] = this.r; this.bp = (this.bp + 1) % D;",
+    "      var gg = this.sum / D; if (gg > 1) { gg = 1; }",
+    "      var yl = this.dl[this.p] * gg, yr = this.dr[this.p] * gg; this.dl[this.p] = xl; this.dr[this.p] = xr; this.p = (this.p + 1) % this.L; this.n = n + 1;",
+    "      oL[i] = yl; if (oR !== oL) { oR[i] = yr; }",
+    "      var ap = Math.max(Math.abs(yl), Math.abs(yr)); if (ap > this.pk) { this.pk = ap; } if (gg < this.mg) { this.mg = gg; }",
+    "    }",
+    "    var s2 = 0; for (i = 0; i < D; i++) { s2 += this.rb[i]; } this.sum = s2;",
+    "    if (this.rep) { this.cnt += Nb; if (this.cnt >= this.every) { this.port.postMessage({ pk: this.pk, mg: this.mg }); this.cnt = 0; this.pk = 0; this.mg = 1; } }",
+    "    return true;",
+    "  }",
+    "}",
+    "registerProcessor('" + LIM_NAME_TP + "', T);"
   ].join("\n");
   // ワークレットを読みこむ（コンテキストごとに 1 回・data: URL → だめなら Blob URL）→ cb(ok)
   function limState(ac) { return ac && ac.__ugLim ? ac.__ugLim.st : ""; }
@@ -371,16 +429,17 @@
   }
   function limNode(ac, mode, report) {
     if (limState(ac) !== "ok") { return null; }
-    try { return new window.AudioWorkletNode(ac, LIM_NAME, { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers", processorOptions: { mode: mode, look: LIM_LOOK, report: !!report } }); } catch (e) { return null; }
+    try { return new window.AudioWorkletNode(ac, mode === "tp" ? LIM_NAME_TP : LIM_NAME, { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers", processorOptions: { mode: mode, look: LIM_LOOK, report: !!report } }); } catch (e) { return null; }
   }
-  function limSamples(rate) { return Math.max(1, Math.round(LIM_LOOK * rate)); }
+  function limSamples(rate, tp) { return Math.max(1, Math.round(LIM_LOOK * rate)) + (tp ? 2 * LIM_TP_HALF : 0); } // 9B-16: True Peak は補間の前後 2×HT サンプルだけ多く遅れる
+  function limKey(k) { return k === "l" || k === "t"; } // 9B-16: リミッターの出口（l ＝ サンプルピーク・t ＝ True Peak）
   function limParams(n, f, now) {
     var c = n.parameters && n.parameters.get ? n.parameters.get("ceiling") : null, r = n.parameters && n.parameters.get ? n.parameters.get("release") : null, cl = dbGain(f.lim.ceiling);
     if (c) { if (now === undefined) { c.value = cl; } else { c.setTargetAtTime(cl, now, 0.01); } }
     if (r) { if (now === undefined) { r.value = f.lim.release; } else { r.setValueAtTime(f.lim.release, now); } }
   }
   // 再生中の出口の形（"" ＝ v2.59 と同じ共有の出口・"e" ＝ EQ（＋メーター）・"l" ＝ EQ ＋ リミッター）
-  function masterRtKey(p) { var f = DM().masterFx(p); return f.bypass ? "" : (f.lim.on ? "l" : (f.eq.on ? "e" : "")); }
+  function masterRtKey(p) { var f = DM().masterFx(p); return f.bypass ? "" : (f.lim.on ? (f.lim.mode === "tp" ? "t" : "l") : (f.eq.on ? "e" : "")); } // 9B-16: t ＝ True Peak（モードを変えたら出口を作りなおす）
   // DAW 専用の出口（再生中）: 全体の音量（共有の値を写す）＋ 共有と同じ残響（送りの量を写す）→ EQ（いつも・OFF は 0dB）→ [入力ゲイン → リミッター] or メーター → スピーカー
   function masterPriv(ac, key) {
     var UG = window.UGMelody, A = UG.audio, M = DM(), f = M.masterFx(st.project), bands = ["low", "mid", "high"], k, last;
@@ -390,8 +449,8 @@
     if (fx.dlySend && A.dlySend) { fx.dlySend.gain.value = A.dlySend.gain.value; }
     var o = { key: key, pm: pm, fx: fx, eq: [], ing: null, lim: null, out: null }; last = pm;
     for (k = 0; k < 3; k++) { var bd = M.FX_BANDS[bands[k]], n = ac.createBiquadFilter(); n.type = bd.type; n.frequency.value = bd.freq; n.Q.value = bd.q; n.gain.value = eqGain(f, bands[k]); last.connect(n); last = n; o.eq.push(n); }
-    o.lim = limNode(ac, key === "l" ? "lim" : "meter", true);
-    if (o.lim && key === "l") { o.ing = ac.createGain(); o.ing.gain.value = dbGain(f.lim.gain); last.connect(o.ing); o.ing.connect(o.lim); limParams(o.lim, f); }
+    o.lim = limNode(ac, key === "t" ? "tp" : (key === "l" ? "lim" : "meter"), true);
+    if (o.lim && limKey(key)) { o.ing = ac.createGain(); o.ing.gain.value = dbGain(f.lim.gain); last.connect(o.ing); o.ing.connect(o.lim); limParams(o.lim, f); }
     else if (o.lim) { last.connect(o.lim); }
     o.out = o.lim || last; o.out.connect(ac.destination);
     if (o.lim) { o.lim.port.onmessage = function (e) { var m = e.data, s = st.mstat; if (!m || !s || s.node !== o.lim) { return; } s.pk = m.pk; s.gr = m.mg; s.max = Math.max(s.max, m.pk); s.minGr = Math.min(s.minGr, m.mg); }; }
@@ -417,11 +476,11 @@
     try {
       for (k = 0; k < pv.eq.length; k++) { pv.eq[k].gain.setTargetAtTime(eqGain(f, bands[k]), now, 0.01); }
       if (pv.ing) { pv.ing.gain.setTargetAtTime(dbGain(f.lim.gain), now, 0.01); }
-      if (pv.lim && pv.key === "l") { limParams(pv.lim, f, now); }
+      if (pv.lim && limKey(pv.key)) { limParams(pv.lim, f, now); }
     } catch (e) {}
   }
   // 再生中の出口の遅れ（秒）: リミッターの先読み（録音の自動の補正に足す）
-  function masterLatency(ac) { return ac && masterRtKey(st.project) === "l" && limState(ac) === "ok" ? limSamples(ac.sampleRate) / ac.sampleRate : 0; }
+  function masterLatency(ac) { var k = masterRtKey(st.project); return ac && limKey(k) && limState(ac) === "ok" ? limSamples(ac.sampleRate, k === "t") / ac.sampleRate : 0; }
   // §341 9A-6: DAW のマスター（ゲイン 2 つ: 共有のバスへ・共有の残響を通さない出口へ）。ゲイン ＝ master.vol ÷ 100
   function masterVol() { var p = st.project, v = p && p.master ? Number(p.master.vol) : 80; return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
   function masterOf() {
@@ -625,7 +684,7 @@
     pump();
     pl.timer = setInterval(pump, PUMP_MS);
     loopHead();
-    if (masterRtKey(p) === "l" && limState(ac) === "fail") { st.msg = "このブラウザではマスターのリミッターを使えません（リミッターなしで鳴らしています）"; } // 9B-10
+    if (limKey(masterRtKey(p)) && limState(ac) === "fail") { st.msg = "このブラウザではマスターのリミッターを使えません（" + (masterRtKey(p) === "t" ? "True Peak の処理もしていません・" : "") + "リミッターなしで鳴らしています）"; } // 9B-10・9B-16
     var miss = audMissing(p, clip);
     if (miss) { st.msg = "素材がない音声のクリップ " + miss + " 個は鳴りません（クリップを選んで「🔗 素材を選びなおす」）"; }
     return true;
@@ -1858,7 +1917,8 @@
       // 9B-10: 全体の音量（＋残響）→ マスター EQ → 入力ゲイン → リミッター → 出口（リミッターがいちばん最後）。効いていなければ v2.59 と同じ（mst → 出口）
       var mlast = mst, mf = mlive.fx, mb = ["low", "mid", "high"], mk;
       if (mlive.eq) { for (mk = 0; mk < 3; mk++) { var mbd = M.FX_BANDS[mb[mk]], mn = off.createBiquadFilter(); mn.type = mbd.type; mn.frequency.value = mbd.freq; mn.Q.value = mbd.q; mn.gain.value = mf.eq[mb[mk]]; mlast.connect(mn); mlast = mn; } }
-      if (mlive.lim && canLim) { var mln = limNode(off, "lim", false); if (mln) { var mig = off.createGain(); mig.gain.value = dbGain(mf.lim.gain); mlast.connect(mig); mig.connect(mln); limParams(mln, mf); mlast = mln; limUsed = true; } }
+      var limTp = mf.lim.mode === "tp"; // 9B-16
+      if (mlive.lim && canLim) { var mln = limNode(off, limTp ? "tp" : "lim", false); if (mln) { var mig = off.createGain(); mig.gain.value = dbGain(mf.lim.gain); mlast.connect(mig); mig.connect(mln); limParams(mln, mf); mlast = mln; limUsed = true; } }
       mlast.connect(off.destination);
       var fx = UG.buildFx ? UG.buildFx(off, mst) : { bus: mst, revSend: null, dlySend: null };
       if (fx.revSend && A.revSend) { fx.revSend.gain.value = A.revSend.gain.value; }
@@ -1890,15 +1950,15 @@
     var done = false;
     function fin(buf) {
       if (done) { return; }
-      done = true; if (typeof stopWd === "function") { stopWd(); } off.oncomplete = null; // 9B-14: 描いた音への参照はこの関数のあいだだけ
+      done = true; if (typeof stopWd === "function") { stopWd(); } off.oncomplete = null; forget(); // 9B-14: 描いた音への参照はこの関数のあいだだけ・9B-16: ドラムのチョークの記録からも外す
       var stt = null;
-      if (limUsed) { var sh = limSamples(WAV_RATE), ci, si; for (ci = 0; ci < buf.numberOfChannels; ci++) { var cd = buf.getChannelData(ci); for (si = 0; si + sh < cd.length; si++) { cd[si] = cd[si + sh]; } for (; si < cd.length; si++) { cd[si] = 0; } } } // 9B-10: 先読みの遅れを戻す（リミッターなしと同じ位置）
+      if (limUsed) { var sh = limSamples(WAV_RATE, limTp), ci, si; for (ci = 0; ci < buf.numberOfChannels; ci++) { var cd = buf.getChannelData(ci); for (si = 0; si + sh < cd.length; si++) { cd[si] = cd[si + sh]; } for (; si < cd.length; si++) { cd[si] = 0; } } } // 9B-10: 先読みの遅れを戻す（リミッターなしと同じ位置）
       if (plan.tailCapped) { var fl = Math.min(buf.length, WAV_RATE), fc, fi; for (fc = 0; fc < buf.numberOfChannels; fc++) { var fd = buf.getChannelData(fc); for (fi = 0; fi < fl; fi++) { fd[buf.length - fl + fi] *= 1 - fi / fl; } } } // 9B-11: 余韻が 10 秒をこえるときは最後の 1 秒を小さく
       try { stt = bufStats(buf); } catch (e5) { cb(null, "描いた音を調べられませんでした"); return; }
       if (stt.rate !== WAV_RATE || stt.ch < 2) { cb(null, "描いた音の形がちがいます（" + stt.rate + "Hz・" + stt.ch + "ch）", stt, plan); return; }
       if (stt.nan > 0) { cb(null, "描いた音がこわれていました（NaN " + stt.nan + " 個）", stt, plan); return; }
       if (stt.peak < 0.0001) { cb(null, "音がありません（全部ミュート・マスター 0 などではありませんか）", stt, plan); return; }
-      stt.lim = mlive.lim ? (limUsed ? "ok" : "none") : ""; // 9B-10
+      stt.lim = mlive.lim ? (limUsed ? "ok" : "none") : ""; stt.limMode = mlive.lim ? (limTp ? "tp" : "sample") : ""; // 9B-10・9B-16: limMode ＝ 設定のモード（使えたかは lim）
       var blob = null;
       try { blob = UG.encodeWav(buf); } catch (e6) { blob = null; }
       if (!blob) { cb(null, "WAV にできませんでした", stt, plan); return; }
@@ -1924,7 +1984,8 @@
     function stopWd() { if (wd) { clearInterval(wd); wd = null; } }
     // 9B-15: やめたあと: 出口を外して（音は描かない）最後まで流して終わらせる。止めたままだと、このコンテキストと描く途中の音（長い曲で 100MB 以上）がずっと残る
     var drained = false;
-    function drainGo() { drained = true; try { mlast.disconnect(); } catch (ed) {} try { off.resume(); } catch (er1) {} }
+    function drainGo() { drained = true; forget(); try { mlast.disconnect(); } catch (ed) {} try { off.resume(); } catch (er1) {} }
+    function forget() { try { if (UG.forgetCtx) { UG.forgetCtx(off); } } catch (ef) {} } // 9B-16: UGMelody のシンバル・キックの記録が、このコンテキストを持ちつづけないように
     if (useSus) {
       for (sk = 1; sk * WAV_STEP_FR < plan.frames; sk++) {
         (function (kk) {
@@ -1942,7 +2003,7 @@
           }, function () {});
         })(sk);
       }
-      wd = setInterval(function () { if (done) { stopWd(); return; } if (Date.now() - lastAct > WAV_SUS_WAIT) { stopWd(); done = true; wav.noSuspend = true; off.oncomplete = null; drained = true; try { mlast.disconnect(); } catch (ew) {} cb(null, "書き出しが途中で止まりました（このブラウザでは途中の進み具合を使えないようです）。もう一度「WAV を書き出す」を押すと、進み具合なしで書き出します（曲は変えていません）"); } }, 1000);
+      wd = setInterval(function () { if (done) { stopWd(); return; } if (Date.now() - lastAct > WAV_SUS_WAIT) { stopWd(); done = true; wav.noSuspend = true; off.oncomplete = null; drained = true; forget(); try { mlast.disconnect(); } catch (ew) {} cb(null, "書き出しが途中で止まりました（このブラウザでは途中の進み具合を使えないようです）。もう一度「WAV を書き出す」を押すと、進み具合なしで書き出します（曲は変えていません）"); } }, 1000);
     }
     if (chunk && !susOk) { var erA = more(Infinity); if (erA) { done = true; stopWd(); off.oncomplete = null; cb(null, "書き出しに失敗しました（" + erA + "）"); return; } } // suspend を予約できなかった: 残りを全部いま予約（これまでと同じ）
     try {
@@ -3726,7 +3787,7 @@
         var pe = st.root && st.root.querySelector ? st.root.querySelector(".dlu-pct") : null; if (pe) { pe.textContent = lu.pct + "%"; }
         if (pos < n) { setTimeout(next, 0); return; }
         var r = meter.finish();
-        r.ms = Date.now() - t0; r.sig = sig; r.lim = wav.stats && wav.stats.lim || ""; r.ceil = wav.limCeil; r.bits = 16;
+        r.ms = Date.now() - t0; r.sig = sig; r.lim = wav.stats && wav.stats.lim || ""; r.limMode = wav.stats && wav.stats.limMode || ""; r.ceil = wav.limCeil; r.bits = 16;
         lu.res = r; lu.busy = false; lu.state = "done"; luRedraw();
       }
       next();
@@ -3771,7 +3832,7 @@
       var warn = [];
       if (stale) { warn.push("解析のあとで曲を変えたので、この数字は古くなっています。もう一度解析してください。"); }
       if (r.lim === "none") { warn.push("この WAV はリミッターを使えずに書き出されました（このブラウザでは AudioWorklet が使えません）。リミッターなしの音を測っています。"); }
-      if (r.ceil !== null && r.ceil !== undefined && r.truePeak !== null && r.truePeak > r.ceil) { warn.push("True Peak（4× 推定）が、リミッターの Ceiling（" + r.ceil + " dBFS）より " + (Math.round((r.truePeak - r.ceil) * 10) / 10).toFixed(1) + " dB 上です（リミッターはサンプルピークだけを抑えるため、サンプルの間のピークは上に出ます）。"); }
+      if (r.ceil !== null && r.ceil !== undefined && r.truePeak !== null && r.truePeak > r.ceil) { warn.push(r.limMode === "tp" && r.lim === "ok" ? "True Peak モードで書き出しましたが、True Peak（4× 推定）が Ceiling（" + r.ceil + " dBTP）より " + (Math.round((r.truePeak - r.ceil) * 100) / 100).toFixed(2) + " dB 上です。" : "True Peak（4× 推定）が、リミッターの Ceiling（" + r.ceil + " dBFS）より " + (Math.round((r.truePeak - r.ceil) * 10) / 10).toFixed(1) + " dB 上です（サンプルピークのモードは、サンプルの間のピークを抑えません。🎚️ MASTER で「True Peak」のモードにすると抑えます）。"); } // 9B-16
       if (r.truePeak !== null && r.truePeak > 0) { warn.push("True Peak（4× 推定）が 0 dBTP をこえています。ほかの形式（MP3 など）に変えたり、ほかの機械で鳴らしたりすると、割れることがあります。"); }
       h += '<div class="dm-row dlu-res">' +
         '<div class="dlu-kv"><span>Integrated（曲全体）</span><b class="dlu-i">' + luFmt(r.integrated, "LUFS", r.tooShortM ? "（400ms 未満）" : (r.silent ? "（無音・−70 LUFS より小さい）" : "")) + '</b></div>' +
@@ -3959,12 +4020,15 @@
       '<div class="dm-row' + (f.eq.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>マスター EQ</b>' + tog(f.eq.on, "eqOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-ms="eqReset" title="3 つとも 0dB に">&#x21BA;</button></div>';
     for (i = 0; i < FX_ROWS.eq.length; i++) { h += fxRowHtml(mp, f, FX_ROWS.eq[i]); }
     h += '</div><div class="dm-row' + (f.lim.on && !f.bypass ? "" : " dfx-off") + '"><div class="dfx-sw"><b>ピークリミッター</b>' + tog(f.lim.on, "limOn", "ON", "OFF") + '<button class="modal-btn dm-reset" data-ms="limReset" title="はじめの値に">&#x21BA;</button></div>';
+    var tpm = f.lim.mode === "tp"; // 9B-16
+    h += '<div class="dms-mode"><span class="small">モード</span><button class="modal-btn dfx-tog' + (tpm ? "" : " on") + '" data-ms="modeSp">Sample Peak</button><button class="modal-btn dfx-tog' + (tpm ? " on" : "") + '" data-ms="modeTp">True Peak</button></div>';
     for (i = 0; i < FX_ROWS.lim.length; i++) { h += fxRowHtml(mp, f, FX_ROWS.lim[i]); }
-    h += '<p class="small dfx-note">ゲインリダクション: <b class="dms-gr">—</b>・出力ピーク: <b class="dms-pk">—</b>（再生中・0.1 秒ごと）・いちばん大きいピーク: <b class="dms-max">—</b></p>' +
-      '<p class="small dfx-note">サンプルピークのリミッター（先読み 5ms・左右いっしょ）。出力のサンプルは Ceiling をこえませんが、サンプルとサンプルの間のピーク（True Peak）は抑えません。Ceiling は −1dBFS くらいの余裕をおすすめします。再生は 5ms 遅れます（WAV はずれません）。</p>' +
-      (ls === "fail" ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; このブラウザではリミッター（AudioWorklet）を使えません。リミッターなしで鳴らし、書き出します。</p>' : '') + '</div>' +
+    h += '<p class="small dfx-note">ゲインリダクション: <b class="dms-gr">—</b>・出力のサンプルピーク: <b class="dms-pk">—</b>（再生中・0.1 秒ごと）・いちばん大きいピーク: <b class="dms-max">—</b></p>' +
+      (tpm ? '<p class="small dfx-note">True Peak のリミッター（サンプルの間を 8 倍で調べる・先読み 5ms・左右いっしょ）。サンプルとサンプルの間のピークも Ceiling（dBTP）に抑えます。測った試験の信号・曲では、4× の解析の True Peak が Ceiling をこえませんでした（理想的な補間で測ると、急に大きくなる音などで +0.01dB ほど上に出ることがあります）。サンプルピークのモードより計算が多く、再生は 5.7ms 遅れます（WAV はずれません）。</p>'
+        : '<p class="small dfx-note">サンプルピークのリミッター（先読み 5ms・左右いっしょ）。出力のサンプルは Ceiling をこえませんが、サンプルとサンプルの間のピーク（True Peak）は抑えません。Ceiling は −1dBFS くらいの余裕をおすすめします（サンプルの間も抑えるなら「True Peak」）。再生は 5ms 遅れます（WAV はずれません）。</p>') +
+      (ls === "fail" ? '<p class="small dfx-warn">&#x26A0;&#xFE0F; このブラウザではリミッター（AudioWorklet）を使えません。リミッターなしで鳴らし、書き出します' + (tpm ? '（True Peak の処理もしていません）' : '') + '。</p>' : '') + '</div>' +
       '<p class="small dfx-warn"' + (boost > 0 && !(f.lim.on && !f.bypass) ? '' : ' hidden') + '>&#x26A0;&#xFE0F; リミッターが OFF のまま音を上げています（＋' + boost + 'dB）。音割れのおそれがあります。リミッターを ON にするか、値を下げてください。</p>' +
-      (wst ? '<p class="small dfx-note">さいごの WAV: ピーク ' + msDb(wst.peak) + ' dBFS' + (wst.clip ? '・0dBFS に届いたサンプル ' + wst.clip + ' 個' : '') + (wst.lim === "ok" ? '・リミッターあり' : (wst.lim === "none" ? '・リミッターを使えませんでした' : '')) + '</p>' : '') +
+      (wst ? '<p class="small dfx-note">さいごの WAV: ピーク ' + msDb(wst.peak) + ' dBFS' + (wst.clip ? '・0dBFS に届いたサンプル ' + wst.clip + ' 個' : '') + (wst.lim === "ok" ? (wst.limMode === "tp" ? '・True Peak のリミッターあり' : '・サンプルピークのリミッターあり') : (wst.lim === "none" ? '・リミッターを使えませんでした' : '')) + (lu.res && !luApi.stale() && lu.res.truePeak !== null ? '・解析した True Peak ' + lu.res.truePeak.toFixed(2) + ' dBTP（Ceiling ' + f.lim.ceiling + '）' : '・True Peak は「📊 曲を解析」で測れます') + '</p>' : '') +
       '<button class="modal-btn daw-small dfx-all dms-lu" data-ms="lufs">&#x1F4CA; 曲を解析（LUFS・True Peak）</button>' +
       '<button class="modal-btn daw-small dfx-all" data-ms="resetAll">&#x21BA; 全部をはじめに戻す</button>' +
       saveNoteHtml() + '<p class="small dsv-note">MASTER の値は ↶ の対象外です。MIDI の書き出しには入りません（JSON・ZIP には入ります）。MASTER FX・リミッターの ON／OFF を再生中に変えると、同じ位置から鳴らしなおします。</p></div>';
@@ -3974,7 +4038,7 @@
     var s = st.mstat, gr = root.querySelector(".dms-gr"), pk = root.querySelector(".dms-pk"), mx = root.querySelector(".dms-max");
     if (!gr || !pk) { return; }
     if (!pl || !s || !s.node) { gr.textContent = "—"; pk.textContent = "—"; if (mx) { mx.textContent = s && s.max ? msDb(s.max) + " dBFS" : "—"; } return; }
-    gr.textContent = s.key === "l" ? msDb(s.gr) + " dB" : "—"; pk.textContent = msDb(s.pk) + " dBFS"; if (mx) { mx.textContent = msDb(s.max) + " dBFS"; }
+    gr.textContent = limKey(s.key) ? msDb(s.gr) + " dB" : "—"; pk.textContent = msDb(s.pk) + " dBFS"; if (mx) { mx.textContent = msDb(s.max) + " dBFS"; }
   }
   function renderMaster(root, ctl) {
     var p = project(), M = DM();
@@ -3991,6 +4055,7 @@
         if (v === "bypass") { msApi.set("bypass", "", !f.bypass); markDirty(); }
         else if (v === "eqOn") { msApi.set("eq", "on", !f.eq.on); markDirty(); }
         else if (v === "limOn") { msApi.set("lim", "on", !f.lim.on); markDirty(); }
+        else if (v === "modeSp" || v === "modeTp") { msApi.set("lim", "mode", v === "modeTp" ? "tp" : "sample"); markDirty(); } // 9B-16
         else if (v === "eqReset") { msApi.reset("eq"); }
         else if (v === "limReset") { msApi.reset("lim"); }
         else if (v === "resetAll") { msApi.reset(); }

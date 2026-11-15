@@ -1893,6 +1893,8 @@
     melodyCyms = keep;
     return n;
   }
+  // §342 9B-16: 終わったコンテキスト（DAW の WAV の書き出し）の記録を捨てる（残すと、そのコンテキストと描いた音がずっとメモリに残る）。音は変えない
+  function melodyForgetCtx(ac) { var n0 = melodyCyms.length; melodyCyms = melodyCyms.filter(function (x) { return x.ac !== ac; }); return n0 - melodyCyms.length; }
   function melodyDrum(ac, m, t, level, dest) {
     // §247 v1.55: フラム（22）＝ 小さい装飾音のすぐあとに本当の音
     if (m === 22) { var fl = level > 0 && level < 1 ? level : 1; melodyDrum(ac, 38, t, fl * 0.4, dest); melodyDrum(ac, 38, t + 0.03, fl, dest); return; }
@@ -2344,7 +2346,7 @@
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
     drumKits: MELODY_DRUM_KITS, setDrumKit: melodySetDrumKit, ukeTypes: MELODY_UKE_TYPES, setUkeType: melodySetUkeType, setKickRate: function (r) { melodySamples.kickRate = r > 0.5 && r <= 1.5 ? r : 1; }, loadSamples: melodyLoadSamples, prefetchSamples: melodyPrefetchSamples, sampleReady: melodySampleReady,
-    midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav, buildFx: melodyBuildFx, // §341 9A-9: DAW の WAV（オフラインにも同じ共有の残響を作る）
+    midiBytes: melodyMidiBytes, renderWav: melodyRenderWav, encodeWav: melodyEncodeWav, exportWav: melodyExportWav, buildFx: melodyBuildFx, forgetCtx: melodyForgetCtx, // §341 9A-9・9B-16: forgetCtx: DAW の WAV（オフラインにも同じ共有の残響を作る）
     loadRecs: melodyLoadRecs, loadPrefs: melodyLoadPrefs, startPlayback: melodyStartPlayback, stopPlayback: melodyStopPlayback,
     midi: melodyMidi, requestMidi: melodyRequestMidi, selectOutput: melodySelectOutput, note: melodyNote,
     layouts: MELODY_LAYOUTS, progressions: MELODY_PROGRESSIONS, chordTypes: MELODY_CHORD_TYPES, grooves: MELODY_GROOVES,

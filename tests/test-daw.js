@@ -3013,7 +3013,7 @@ module.exports = async function () {
   // --- リミッターのワークレットを Node で動かす（同じソース）---
   var VM = require("vm");
   function limRun(opts, chans, prm) {
-    var reg = null, sb = { sampleRate: opts.rate || 44100, Math: Math, Float32Array: Float32Array, Float64Array: Float64Array, registerProcessor: function (n, c) { reg = c; } };
+    var reg = null, sb = { sampleRate: opts.rate || 44100, Math: Math, Float32Array: Float32Array, Float64Array: Float64Array, registerProcessor: function (n, c) { if (n === (opts.proc || "ug-daw-limiter")) { reg = c; } } }; // 9B-16: 名前で選ぶ（True Peak の処理クラスも同じソース）
     VM.runInNewContext("class AudioWorkletProcessor { constructor() { this.port = { onmessage: null, postMessage: function (m) { msgs.push(m); } }; } }\nvar msgs = [];\n" + DL0.master.src + "\nthis.__c = typeof P !== 'undefined' ? P : null; this.__m = msgs;", sb);
     var P = new reg({ processorOptions: opts }), n = chans[0].length, outL = new Float32Array(n), outR = new Float32Array(n), i, k;
     for (i = 0; i < n; i += 128) {
@@ -3023,7 +3023,9 @@ module.exports = async function () {
       P.process([a], [o], pr);
       outL.set(o[0], i); outR.set(o[1], i);
     }
-    return { L: outL, R: outR, D: P.D, msgs: sb.__m };
+    var stopped = null; // 9B-16
+    if (opts.stopAfter) { P.port.onmessage({ data: "stop" }); stopped = P.process([[new Float32Array(128), new Float32Array(128)]], [[new Float32Array(128), new Float32Array(128)]], { ceiling: [prm.ceiling], release: [prm.release] }); }
+    return { L: outL, R: outR, D: P.D, Lt: P.L, stopped: stopped, msgs: sb.__m };
   }
   var srL = 44100, NL = srL * 3, seed = 7; function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
   var sigL = new Float32Array(NL), sigR = new Float32Array(NL);
@@ -3098,6 +3100,85 @@ module.exports = async function () {
   WL2.UGArcade.stop(); DL2.reset();
   var xL = DL0.midi.exportNow(); DL0.midi.open(new Uint8Array(xL.bytes), "m.mid"); var rxL = DL0.midi.importNow();
   ok(xL.ok && rxL.ok && ML.masterLive(DL0.project()).sig === "", "MIDI export / import: the master FX is not carried");
+  // ================= 9B-16: True Peak のリミッター（§342）=================
+  // データ: モードは limiter の項目の mode（"tp" だけ書く。無い・ちがう値 ＝ サンプルピーク ＝ 旧曲のまま）
+  var pT0 = { master: { vol: 80, fx: { items: [{ type: "limiter", on: true, ceiling: -1, gain: 3, release: 0.1 }] } } };
+  var jT0 = JSON.stringify(pT0.master.fx), cT0 = ML.fxClean(pT0.master.fx);
+  ok(JSON.stringify(cT0) === jT0 && ML.masterFx(pT0).lim.mode === "sample" && ML.masterLive(pT0).sig === "l", "9B-16: an old song's limiter (no mode) reads as Sample Peak and is not rewritten by clean", JSON.stringify(cT0));
+  var badT = [["TP", "sample"], [1, "sample"], [null, "sample"], ["sample", "sample"], ["tp", "tp"]].every(function (c) { var o = ML.fxClean({ items: [{ type: "limiter", on: true, mode: c[0] }] }), it = o.items[0]; return ML.fxOf({ fx: o }).lim.mode === c[1] && (c[1] === "tp" ? it.mode === "tp" : !("mode" in it)); });
+  ok(badT, "9B-16: mode is normalised safely (only \"tp\" is kept; anything else → Sample Peak, field removed)");
+  var pT1 = { master: { vol: 80, fx: { items: [] } } };
+  ML.fxSet(pT1.master, "lim", "on", true); var rT1 = ML.fxSet(pT1.master, "lim", "mode", "tp");
+  ok(rT1.ok && rT1.value === "tp" && ML.masterFx(pT1).lim.mode === "tp" && ML.masterLive(pT1).lim, "9B-16: fxSet lim mode tp");
+  ML.fxSet(pT1.master, "lim", "mode", "sample"); var itT1 = pT1.master.fx.items[0];
+  ok(!("mode" in itT1) && ML.masterFx(pT1).lim.mode === "sample", "9B-16: back to Sample Peak removes the field (same data as before v2.66)");
+  ML.fxSet(pT1.master, "lim", "mode", "tp"); ML.fxReset(pT1.master, "lim");
+  ok(!("mode" in pT1.master.fx.items[0]) && pT1.master.fx.items[0].on === true, "9B-16: ↺ of the limiter returns to Sample Peak (ON kept)");
+  // ワークレット（同じソース）: True Peak の処理クラス
+  function tpOf(L, R, sr) { var lm = ML.loudMeter(sr, {}); lm.push(L, R || L, L.length); return lm.finish().truePeak; }
+  // 独立の測り（テストの中だけ）: 16 倍・Kaiser 窓の sinc（片側 64 サンプル）
+  function tp16(x) {
+    var H = 64, OS = 16, B = 10, mx = 0, i, p, k;
+    function i0(v) { var s = 1, t = 1, j; for (j = 1; j < 50; j++) { t *= (v / (2 * j)) * (v / (2 * j)); s += t; } return s; }
+    var ib = i0(B), taps = [];
+    for (p = 0; p < OS; p++) { var t = new Float64Array(2 * H), sm = 0; for (k = 0; k < 2 * H; k++) { var d = (k - H + 1) - p / OS, r = d / H, w = Math.abs(r) < 1 ? i0(B * Math.sqrt(1 - r * r)) / ib : 0; t[k] = (d === 0 ? 1 : Math.sin(Math.PI * d) / (Math.PI * d)) * w; sm += t[k]; } for (k = 0; k < 2 * H; k++) { t[k] /= sm; } taps.push(t); }
+    for (i = H; i < x.length - H; i++) { for (p = 0; p < OS; p++) { var a = 0, tt = taps[p]; for (k = 0; k < 2 * H; k++) { a += tt[k] * x[i - H + 1 + k]; } if (a < 0) { a = -a; } if (a > mx) { mx = a; } } }
+    return 20 * Math.log(mx) / Math.LN10;
+  }
+  function tpSig(sr, kind) {
+    var n = Math.round(sr * 0.5), L = new Float32Array(n), R = new Float32Array(n), i;
+    for (i = 0; i < n; i++) {
+      var t = i / sr, env = Math.min(1, i / (0.01 * sr)) * Math.min(1, (n - i) / (0.01 * sr));
+      if (kind === "fs4") { L[i] = R[i] = env * Math.sin(2 * Math.PI * (sr / 4) * t + Math.PI / 4); }
+      else if (kind === "mix") { L[i] = env * (0.5 * Math.sin(2 * Math.PI * 110 * t) + 0.45 * Math.sin(2 * Math.PI * 1760 * t + 1) + 0.4 * Math.sin(2 * Math.PI * 7040 * t + 2) + 0.35 * Math.sin(2 * Math.PI * 13000 * t + 0.5)); R[i] = env * (0.6 * Math.sin(2 * Math.PI * 165 * t) + 0.5 * Math.sin(2 * Math.PI * 9000 * t + 1)); }
+      else if (kind === "clip") { L[i] = R[i] = env * Math.max(-1, Math.min(1, 4 * Math.sin(2 * Math.PI * 997 * t))); }
+      else { L[i] = R[i] = 0.2 * env * Math.sin(2 * Math.PI * 440 * t); }
+    }
+    return [L, R];
+  }
+  var TPN = "ug-daw-limiter-tp", cTp = Math.pow(10, -1 / 20), tpRes = [];
+  [44100, 48000].forEach(function (sr) {
+    ["fs4", "mix", "clip"].forEach(function (kind) {
+      var s = tpSig(sr, kind), o = limRun({ proc: TPN, rate: sr, look: 0.005 }, s, { ceiling: cTp, release: 0.1 }), lat = o.Lt;
+      var oL = o.L.subarray(lat), oR = o.R.subarray(lat), sp = 0, i; for (i = 0; i < oL.length; i++) { sp = Math.max(sp, Math.abs(oL[i]), Math.abs(oR[i])); }
+      var sPk = limRun({ rate: sr, look: 0.005 }, s, { ceiling: cTp, release: 0.1 }), spL = sPk.L.subarray(sPk.D), spR = sPk.R.subarray(sPk.D);
+      tpRes.push({ sr: sr, kind: kind, lat: lat, inTp: tpOf(s[0], s[1], sr), tp4: tpOf(oL, oR, sr), tp16: Math.max(tp16(oL), tp16(oR)), sp: 20 * Math.log(sp) / Math.LN10, spModeTp: tpOf(spL, spR, sr) });
+    });
+  });
+  ok(tpRes.every(function (r) { return r.lat === 2 * 16 + Math.round(0.005 * r.sr); }), "9B-16: True Peak latency = 2×16 + look-ahead samples (253 @44.1k, 272 @48k)", tpRes.map(function (r) { return r.lat; }));
+  ok(tpRes.every(function (r) { return r.tp4 <= -1 && r.sp <= -1 + 1e-6; }), "9B-16: True Peak mode keeps the v2.63 4× True Peak and the sample peak at or under the −1 dB ceiling (fs/4 at 45°, mixed tones, clipped wave; 44.1k/48k)", tpRes.map(function (r) { return [r.kind, r.sr, r.tp4, +r.sp.toFixed(3)]; }));
+  ok(tpRes.every(function (r) { return r.tp16 <= -1 + 0.002; }), "9B-16: an independent 16× long-sinc measure agrees (≤ ceiling + 0.002 dB)", tpRes.map(function (r) { return [r.kind, r.sr, +r.tp16.toFixed(4)]; }));
+  ok(tpRes.filter(function (r) { return r.kind === "fs4"; }).every(function (r) { return r.inTp > -0.1 && r.spModeTp > -0.1; }), "9B-16: the fs/4 sine (samples 0.707, peak 1.0) passes the Sample Peak limiter untouched (its True Peak stays 0 dB) — the reason for the new mode");
+  // 静かな音: 遅れただけで同じ（ゲイン 1）
+  var qT = tpSig(44100, "quiet"), qO = limRun({ proc: TPN, rate: 44100, look: 0.005 }, qT, { ceiling: cTp, release: 0.1 }), qSame = true, iq;
+  for (iq = 0; iq + qO.Lt < qT[0].length; iq++) { if (qO.L[iq + qO.Lt] !== qT[0][iq]) { qSame = false; break; } }
+  ok(qSame, "9B-16: under the ceiling the output is the input exactly, delayed by 253 samples");
+  // stop
+  var stT = limRun({ proc: TPN, rate: 44100, look: 0.005, stopAfter: true }, qT, { ceiling: cTp, release: 0.1 });
+  ok(stT.stopped === false, "9B-16: \"stop\" ends the True Peak processor (process returns false)");
+  // ハーネスにはワークレットが無い: True Peak モードでも「リミッターを使えなかった」と記録し、True Peak 処理済みとは言わない
+  var pT2 = DL0.project(); ML.fxSet(pT2.master, "lim", "on", true); ML.fxSet(pT2.master, "lim", "mode", "tp"); DL0.markDirty();
+  ok(DL0.master.key() === "t", "9B-16: MASTER output key \"t\" for the True Peak mode (rebuilt when the mode changes)");
+  var wT2 = await new Promise(function (r) { DL0.wav.start(function () { r(DL0.wav.state()); }); });
+  ok(wT2.state === "done" && wT2.stats.lim === "none" && wT2.stats.limMode === "tp", "9B-16: without AudioWorklet the WAV is marked \"limiter not used\" (mode tp recorded, not claimed as processed)", wT2.stats && [wT2.stats.lim, wT2.stats.limMode]);
+  ML.fxSet(pT2.master, "lim", "mode", "sample"); ML.fxSet(pT2.master, "lim", "on", false); DL0.markDirty();
+  // 9B-16: ドラムのシンバル・キックの記録（チョーク用）が、終わった書き出しのコンテキストを持ちつづけない
+  var ofF = new WL.OfflineAudioContext(2, 4410, 44100); UGL.drum(ofF, 49, 0, 0.8, ofF.destination); UGL.drum(ofF, 36, 0.1, 0.8, ofF.destination);
+  ok(typeof UGL.forgetCtx === "function" && UGL.forgetCtx(ofF) >= 1 && UGL.forgetCtx(ofF) === 0, "9B-16: UGMelody.forgetCtx drops the cymbal/kick records of a finished context (they used to keep the offline context and its rendered buffer alive)");
+  var nF0 = CL.offline.length; var wF = await new Promise(function (r) { DL0.wav.start(function () { r(DL0.wav.state()); }); }), ofW = CL.offline[CL.offline.length - 1];
+  ok(wF.state === "done" && CL.offline.length === nF0 + 1 && UGL.forgetCtx(ofW) === 0, "9B-16: after a WAV export nothing in UGMelody still refers to its offline context");
+  // 保存・ZIP: モードと Ceiling が戻る
+  ML.fxSet(pT2.master, "lim", "on", true); ML.fxSet(pT2.master, "lim", "mode", "tp"); ML.fxSet(pT2.master, "lim", "ceiling", -0.3); DL0.markDirty(); DL0.flushSave();
+  var idT = DL0.project().id, mfT = JSON.stringify(DL0.project().master.fx);
+  DL0.reload(); DL0.proj.open(idT);
+  ok(/"mode":"tp"/.test(mfT) && JSON.stringify(DL0.project().master.fx) === mfT && ML.masterFx(DL0.project()).lim.ceiling === -0.3, "9B-16: mode and ceiling saved (JSON) and back after a reload", mfT);
+  var exT = await new Promise(function (r) { DL0.pack.exportZip(r); });
+  var eT3 = H.load(), WT3 = eT3.window, DT3 = WT3.UGDaw; WT3.indexedDB = fakeIDB(); fakeDecode(WT3);
+  var RT3 = H.makeEl("div"); DT3.reset(); WT3.UGArcade.start("daw", RT3, {});
+  var rqT = await impZ(DT3, blobAB(exT.blob)); DT3.proj.open(rqT.id);
+  ok(exT.ok && rqT.ok && JSON.stringify(DT3.project().master.fx) === mfT && WT3.UGDawModel.masterFx(DT3.project()).lim.mode === "tp", "9B-16: ZIP → empty storage: True Peak mode and ceiling come back", rqT.why);
+  WT3.UGArcade.stop(); DT3.reset();
+  ML.fxSet(DL0.project().master, "lim", "mode", "sample"); ML.fxSet(DL0.project().master, "lim", "on", false); DL0.markDirty();
   ok(SL.ultimateGorillaSaveV2 === rpgL && UGL.audio.bus === sharedBus && UGL.audio.master === sharedMaster, "the RPG save and the shared audio output are untouched (9B-10)");
   AL.stop(); DL0.reset();
   var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });
