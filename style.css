@@ -1846,3 +1846,49 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
   .dstu-bot { grid-template-columns: minmax(0, 1fr); }
   .dstu-side { grid-template-columns: minmax(0, 1fr); }
 }
+/* §343 v2.72: 🎄 クリスマス制作（ゴリラDAW・390px の縦画面がいちばん）*/
+.dxm .daw-top b { white-space: nowrap; }
+.dxm-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 6px; margin-bottom: 4px; }
+.dxm-chip { flex: 0 0 auto; min-height: 32px; padding: 4px 10px; font-size: 13px; color: #e0fbfc; background: #15233a; border: 1px solid #3a4a63; border-radius: 16px; cursor: pointer; }
+.dxm-chip.on { background: #2a9d8f; border-color: #2a9d8f; color: #fff; font-weight: bold; }
+.dxm-cats { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
+.dxm-msg { margin: 4px 0; }
+.dxm-list { display: flex; flex-direction: column; gap: 4px; }
+.dxm-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px; background: #1a2a3a; border: 1px solid #2c3e57; border-radius: 8px; }
+.dxm-rn { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.dxm-rn b { font-size: 14px; color: #fff; overflow-wrap: anywhere; }
+.dxm-rn .small { color: #adb5bd; font-size: 11px; overflow-wrap: anywhere; }
+.dxm-rb { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.dxm-b { margin: 0; min-height: 34px; min-width: 34px; padding: 4px 9px; font-size: 13px; }
+.dxm-pv { min-width: 44px; }
+.dxm-pv.on { background: #ef476f; border-color: #ef476f; color: #fff; }
+.dxm-main { background: #2a9d8f; border-color: #2a9d8f; color: #fff; font-weight: bold; }
+.dxm-note, .dxm-foot { color: #adb5bd; margin: 6px 0 0; }
+.dxm-warn { color: #ffd166; margin: 4px 0 8px; }
+.dxm-form { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.dxm-form label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dxm-sel { font-size: 13px; min-height: 34px; padding: 2px 4px; max-width: 100%; background: #0f1a2b; color: #fff; border: 1px solid #3a4a63; border-radius: 6px; }
+.dxm-wide .dxm-sel { flex: 1 1 200px; min-width: 0; }
+.dxm-bpm { display: flex; align-items: center; gap: 6px; }
+.dxm-bpm b { min-width: 34px; text-align: center; }
+.dxm-chords { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.dxm-ch { flex-direction: column; align-items: stretch !important; gap: 1px !important; }
+.dxm-ch small { color: #adb5bd; font-size: 10px; }
+.dxm-ch .dxm-sel { width: 100%; font-size: 12px; padding: 2px 1px; }
+.dxm-opt { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.dxm-opt > span { flex: 0 0 auto; min-width: 72px; color: #adb5bd; }
+.dxm-seed, .dxm-bar, .dxm-tbar { width: 72px; min-height: 32px; font-size: 14px; background: #0f1a2b; color: #fff; border: 1px solid #3a4a63; border-radius: 6px; padding: 2px 4px; }
+.dxm-dest .dxm-sel { flex: 1 1 140px; min-width: 0; }
+.dxm-go { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.dxm-res { padding: 8px; background: #15233a; border: 1px solid #2a9d8f; border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+.dxm-prev { padding: 8px; background: #15233a; border: 1px solid #2c3e57; border-radius: 8px; font-size: 13px; }
+.dxm-tbl { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 12px; table-layout: fixed; }
+.dxm-tbl th, .dxm-tbl td { border-bottom: 1px solid #2c3e57; padding: 3px 2px; text-align: left; overflow-wrap: anywhere; vertical-align: top; }
+.dxm-tbl th { color: #adb5bd; font-weight: normal; }
+.dxm-ana .dxm-wide { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dxm-ana .dm-fader { flex: 1 1 160px; min-width: 0; }
+.dxm-feat { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; }
+.dxm-fr { display: grid; grid-template-columns: 96px minmax(0, 1fr) 30px; align-items: center; gap: 6px; font-size: 12px; }
+.dxm-fr i { display: block; height: 8px; background: linear-gradient(to right, #4cc9f0 var(--w), #22324a var(--w)); border-radius: 4px; }
+.dxm-fr b { text-align: right; }
+.dxm-open { background: #1d4d3a; border-color: #2a9d8f; }

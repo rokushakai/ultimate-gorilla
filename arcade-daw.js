@@ -42,6 +42,7 @@
     var ins = t.instrument || {}, l = presetList(), i;
     if (ins.type === "drum") { return "&#x1F941; ドラム"; }
     if (ins.type === "audio" || t.kind === "audio") { return "&#x1F3B5; オーディオ"; }
+    if (ins.type === "sample") { return XM() ? XM().label(ins) : "&#x1F3BC; " + escHtml((ins.ext && ins.ext.presetName) || "録音の音色"); } // §343
     if (ins.type !== "synth") { return escHtml(ins.type || "?"); }
     var id = ins.ext && ins.ext.preset;
     for (i = 0; i < l.length; i++) { if (l[i][0] === id) { return l[i][1]; } }
@@ -61,6 +62,7 @@
   var LOOK = 0.3, PUMP_MS = 25, START_LEAD = 0.08, TAIL_MS = 4000; // 9B-18: LOOK 0.12 → 0.3 秒（メインスレッドが約 0.27 秒止まっても予約が間に合う。間に合わない音は同じ瞬間にまとめて鳴り、重なってピークが上がる）
   var pl = null, plLog = []; // pl: 再生中の状態。plLog: 予約した音の記録（テスト・確かめ用・最新 400 個）
   function SE() { var e = window.UGSynthEngine; return e && e.API === 1 ? e : null; }
+  function XM() { return window.UGXmas || null; } // §343: 🎄 クリスマス制作（arcade-daw-xmas.js）
   function segTime(p, seg, tick) { var M = DM(); return seg.t0 + M.tickToSec(p, tick) - M.tickToSec(p, seg.tick0); }
   function segTick(p, seg, time) { var M = DM(); return M.secToTick(p, M.tickToSec(p, seg.tick0) + (time - seg.t0)); }
   function segFor(time) { var i, s = pl.segs[0]; for (i = 0; i < pl.segs.length; i++) { if (pl.segs[i].t0 <= time + 1e-9) { s = pl.segs[i]; } } return s; }
@@ -634,8 +636,18 @@
         if (ev.m === 46) {
           var din = dest; try { var cg = pl.ac.createGain(); cg.gain.value = 1; cg.connect(din); dest = cg; mxd.openHat = { g: cg, t: whd, tick: ev.tick }; } catch (ec) { dest = din; }
         }
-        try { if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, dest); okd = true; } } catch (ed) { okd = false; }
+        try { if (XM() && XM().drum(pl.ac, ev.m, whd, ev.v, dest)) { okd = true; } else if (UGd && UGd.drum) { UGd.drum(pl.ac, ev.m, whd, ev.v, dest); okd = true; } } catch (ed) { okd = false; } // §343: 83 Jingle Bell・84 Bell Tree は DAW で
         plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whd, sec: 0, hash: "drum", pass: pl.pass, ok: okd, drum: true, swing: dly, choked: choked });
+        if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
+        continue;
+      }
+      if (t.instrument && t.instrument.type === "sample") { // §343: 録音の音色（UGMelody のサンプル・使えなければ代わりのシンセ）
+        var mxs = mixFor(t), whs = segTime(p, seg, ev.tick), ends = ev.end, vs = null;
+        if (pl.loop && ends > pl.segEnd) { ends = pl.segEnd; }
+        lateMark(whs);
+        try { vs = XM() ? XM().note(pl.ac, t.instrument, ev.m, whs, ev.v, ev.d > 0 ? Math.max(0.05, segTime(p, seg, ends) - whs) : 0.5, trackIn(t, mxs, "main")) : null; } catch (es) { vs = null; }
+        if (vs) { mxs.voices.push(vs); if (mxs.voices.length > 64) { mxs.voices = mxs.voices.filter(function (x) { return !(x.end < pl.ac.currentTime); }); } }
+        plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: whs, sec: 0, hash: "smp" + t.instrument.prog, pass: pl.pass, ok: !!vs, fb: !!(vs && vs.fb) });
         if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
         continue;
       }
@@ -757,6 +769,15 @@
       ensureAssets(p, function () { if (aud.playTok === tok && st.project === p) { aud.playTok = null; startPlay(o2); rerender(); } });
       return true;
     }
+    // §343: 録音の音色（楽器のサンプル）を読みこんでから鳴らす（読めなければ 8 秒で、代わりのシンセの音で鳴らす）
+    if (!opts.noSmp && !opts.rec && XM() && XM().needLoad(p)) {
+      var tokS = aud.playTok = {}, o4 = {}, k4;
+      for (k4 in opts) { if (opts.hasOwnProperty(k4)) { o4[k4] = opts[k4]; } }
+      o4.noSmp = true; o4.noWait = true;
+      st.msg = "楽器の録音を読みこんでいます…（読みこめたら鳴りはじめます）"; dgLog("play", { s: "waitSmp" });
+      XM().load(XM().progsOf(p), function () { if (aud.playTok === tokS && st.project === p) { aud.playTok = null; st.msg = ""; startPlay(o4); rerender(); } }, 8000);
+      return true;
+    }
     // 9B-10: Master FX が効くなら、リミッター（ワークレット）を読みこめてから鳴らす（録音の伴奏は待たない）
     if (!opts.noLim && !opts.rec && masterRtKey(p) && limState(ac) !== "ok" && limState(ac) !== "fail") {
       var tokL = aud.playTok = {}, o3 = {}, k3;
@@ -868,7 +889,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { hostClass(st.root, false); st.backGame = null; inbPrevStop(); if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
+  I.addStopHook(function () { if (XM()) { try { XM().leave(); } catch (ex) {} } hostClass(st.root, false); st.backGame = null; inbPrevStop(); if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -914,6 +935,7 @@
     if (M && p && st.view === "inbox") { renderInbox(root, ctl); return; } // 9B-2
     if (M && p && st.view === "midi") { renderMidi(root, ctl); return; } // 9B-4
     if (M && p && st.view === "comp") { renderComp(root, ctl); return; } // 9A-16
+    if (M && p && st.view === "xmas") { renderXmas(root, ctl); return; } // §343
     if (!M || !p) {
       root.innerHTML = '<div class="melody-setup"><p>DAW のファイル（arcade-daw-model.js）を読みこめませんでした。</p><button class="modal-btn" data-back="1">メニューへ</button></div>';
       bind(root, ctl);
@@ -942,6 +964,7 @@
         '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' + // 9B-12
         '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' + // 9B-2
         '<button class="modal-btn daw-small" data-ar="ref">&#x1F3A7; リファレンス' + (M.refOf(p) ? '<small>1</small>' : '') + '</button>' + // 9B-20
+        (XM() ? '<button class="modal-btn daw-small dxm-open" data-ar="xmas">&#x1F384; クリスマス制作</button>' : '') + // §343
         viewSelHtml() + (vw.narrow ? '<span class="small dstu-narrow">画面がせまいので、モバイルの表示にしています（PC Studio は幅 ' + STU_MIN_PC + 'px から）</span>' : '') + // 9B-21
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       arrGridHtml(p, false);
@@ -988,7 +1011,8 @@
       var t = p.tracks[i], tsel = st.sel && st.sel.kind === "track" && st.sel.id === t.id;
       var opts = "", cur = t.instrument && t.instrument.ext ? t.instrument.ext.preset : "", found = false;
       for (j = 0; j < plist.length; j++) { if (plist[j][0] === cur) { found = true; } opts += '<option value="' + plist[j][0] + '"' + (plist[j][0] === cur ? " selected" : "") + '>' + plist[j][1] + '</option>'; }
-      if (!found) { opts = '<option value="" selected>じぶんの音色</option>' + opts; }
+      if (XM()) { var xs = XM().SOUNDS, xo = ""; for (j = 0; j < xs.length; j++) { if (xs[j][3] === "drum") { continue; } if (xs[j][0] === cur) { found = true; } xo += '<option value="' + xs[j][0] + '"' + (xs[j][0] === cur ? " selected" : "") + '>' + xs[j][2] + '</option>'; } opts += '<optgroup label="クリスマス">' + xo + '</optgroup>'; } // §343
+      if (!found) { opts = '<option value="" selected>' + (t.instrument && t.instrument.type === "sample" ? escHtml((t.instrument.ext && t.instrument.ext.presetName) || "録音の音色") : "じぶんの音色") + '</option>' + opts; }
       h += '<div class="daw-row">' +
         '<div class="daw-head' + (tsel ? " daw-sel" : "") + '" data-track="' + t.id + '" style="height:' + LANE_H + 'px;">' +
           '<div class="daw-tname">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' ' + escHtml(t.name) + '</div>' +
@@ -1064,6 +1088,7 @@
       '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' +
       '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' +
       '<button class="modal-btn daw-small" data-ar="ref">&#x1F3A7; リファレンス' + (M.refOf(p) ? '<small>1</small>' : '') + '</button>' +
+      (XM() ? '<button class="modal-btn daw-small dxm-open" data-ar="xmas">&#x1F384; クリスマス制作</button>' : '') + // §343
       '<span class="small da-hint">クリック ＝ 選ぶ ／ もう一度 ＝ フルの編集 ／ Space ▶⏹ ・ Ctrl+Z 戻す ・ Esc 外す</span></div>';
   }
   // B. 全体図（曲の全部・クリップの箱・🎧 の波形・見えている範囲・プレイヘッド）
@@ -2135,6 +2160,31 @@
     if (w) { w.onclick = function (ev) { var s = M.refSpan(p), rc = w.getBoundingClientRect ? w.getBoundingClientRect() : null; if (!s || !rc || !(rc.width > 0)) { return; } var f = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width)), tk = Math.max(0, Math.round(M.secToTick(p, Math.max(0, s.start + f * s.dur)))); refJump(tk); renderRef(root, ctl); }; }
     drawHead();
   }
+  // §343: 🎄 クリスマス制作（画面と仕組みは arcade-daw-xmas.js。ここは曲・↶・保存・切りかえを渡すだけ）
+  var xmHost = {
+    project: function () { return project(); },
+    snap: function () { return snapTracks(); },
+    restore: function (s) { project().tracks = s; },
+    commit: function (snap, note, tid, cid) { pushUndo(snap); st.anote = note ? String(note) : ""; if (cid) { st.sel = { kind: "clip", id: cid }; } else if (tid) { st.sel = { kind: "track", id: tid }; } st.reveal = true; markDirty(); if (pl) { resync(); } rerender(); return true; },
+    dirty: function () { markDirty(); if (pl) { resync(); } },
+    render: function () { rerender(); },
+    isView: function () { return st.view === "xmas" && !!st.root; },
+    back: function () { st.view = "arr"; rerender(); },
+    edit: function (cid) { if (openEditor(cid)) { rerender(); } },
+    undo: function () { ops.undo(); },
+    playing: function () { return !!pl; },
+    stopSong: function () { stopPlay(false); },
+    selTrack: function () { var s0 = st.sel; if (!s0) { return ""; } if (s0.kind === "track") { return s0.id; } if (s0.kind === "clip") { var f = DM().findClip(project(), s0.id); return f ? f.track.id : ""; } return ""; },
+    newSong: function (np) { np.id = DM().newProjectId(); switchTo(np, "dirty"); saveNow(); st.view = "xmas"; rerender(); },
+    openRef: function () { st.view = "ref"; rerender(); },
+    refBuf: function () { var p0 = project(), s1 = DM().refSpan(p0); if (!s1) { return null; } audKick(p0); var b = aud.buf[s1.asset.id]; return b ? { buf: b, span: s1 } : null; }
+  };
+  function renderXmas(root, ctl) {
+    var X = XM();
+    if (!X) { st.view = "arr"; render(root, ctl); return; }
+    root.innerHTML = X.html(xmHost);
+    X.bind(root, xmHost);
+  }
   // リファレンスの画面から、その位置へ（再生中ならそこから鳴らす・画面は切りかえない）
   function refJump(tick) {
     if (rec.state !== "idle") { st.rfMsg = "録音中は移れません"; return false; }
@@ -2696,7 +2746,8 @@
           wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav"; wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
-          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
+          wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (XM() && XM().missing(p) ? "読みこめなかった楽器の録音（" + XM().missing(p) + " 音色）は、代わりのシンセの音で描きました。" : "") + // §343
+             (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
         }
         dgLog("wav", { s: wav.state, ms: wav.ms, why: wav.state === "done" ? "" : wav.msg, bytes: blob ? blob.size : 0 }); // 9B-21
         if (onDone) { onDone(); }
@@ -2704,7 +2755,8 @@
     }
     function begin() {
       if (job.canceled) { wav.busy = false; wav.job = null; wav.state = "canceled"; wav.msg = "やめました"; if (onDone) { onDone(); } return; }
-      if (hasDrum && UG.loadSamples && UG.DRUM !== undefined) { tm = setTimeout(go, WAV_SAMPLE_WAIT); try { UG.loadSamples([UG.DRUM], go); } catch (e) { go(); } }
+      var smp = XM() ? XM().progsOf(p) : [], progs = (hasDrum && UG.DRUM !== undefined ? [UG.DRUM] : []).concat(smp); // §343: 録音の音色も
+      if (progs.length && UG.loadSamples) { tm = setTimeout(go, WAV_SAMPLE_WAIT); try { UG.loadSamples(progs, go); } catch (e) { go(); } }
       else { go(); }
     }
     ensureAssets(p, begin); // 9A-10: 音声の素材を読みこんでから
@@ -3204,6 +3256,7 @@
   function preview(t, m) {
     if (pl) { return; }
     var UG = window.UGMelody, Y = window.UGSynth, patch = t && t.instrument && t.instrument.patch ? t.instrument.patch.patch : null;
+    if (t && t.instrument && t.instrument.type === "sample") { if (XM()) { XM().hearNote(t.instrument, m); } return; } // §343: 録音の音色
     if (!UG || !UG.audioInit || !Y || !Y.note || !patch) { return; }
     try { var ac = UG.audioInit(); if (ac) { Y.note(patch, m, (UG.audio && UG.audio.bus) || ac.destination, ac.currentTime + 0.01, 0.8, 0.25); } } catch (e) {}
   }
@@ -5402,6 +5455,7 @@
         if ((v = el.getAttribute("data-ar")) === "addAudio") { keepScroll(root); addAudio(); return; } // 9A-10
         if ((v = el.getAttribute("data-ar")) === "backGame") { goBackGame(); return; } // 9B-2
         if ((v = el.getAttribute("data-ar")) === "inbox") { keepScroll(root); stopPlay(false); st.view = "inbox"; st.inbMsg = ""; renderInbox(root, ctl); return; } // 9B-2
+        if ((v = el.getAttribute("data-ar")) === "xmas") { keepScroll(root); st.confirmDel = null; st.chooseAdd = false; st.view = "xmas"; renderXmas(root, ctl); return; } // §343
         if ((v = el.getAttribute("data-ar")) === "sections") { keepScroll(root); st.view = "sec"; st.secUI = null; st.secMsg = ""; renderSec(root, ctl); return; } // 9B-1
         if ((v = el.getAttribute("data-secjump"))) { keepScroll(root); sections.jump(v); return; } // 9B-1
         if ((v = el.getAttribute("data-rp")) && st.repeat) { // 9B-1: 繰り返しの欄
@@ -5459,7 +5513,8 @@
       sels[k].onclick = function (ev) { if (ev.stopPropagation) { ev.stopPropagation(); } };
       sels[k].onchange = function (ev) {
         var el = ev.currentTarget, t = M.findTrack(p, el.getAttribute("data-inst"));
-        if (t && el.value) { t.instrument = M.synthInstrument(el.value); st.sel = { kind: "track", id: t.id }; if (pl) { warm(t); } markDirty(); } // 再生中なら、これから予約する音から新しい音色
+        if (t && el.value) { t.instrument = /^xm-/.test(el.value) && XM() ? XM().instrument(el.value) : M.synthInstrument(el.value); if (t.ext) { if (/^xm-/.test(el.value)) { t.ext.xm = el.value; } else { delete t.ext.xm; } } // §343: クリスマスの音色も
+        st.sel = { kind: "track", id: t.id }; if (pl) { warm(t); } markDirty(); } // 再生中なら、これから予約する音から新しい音色
         redraw();
       };
     }
@@ -5501,6 +5556,7 @@
   });
 
   window.UGDaw = {
+    xmas: { host: xmHost, open: function () { if (!st.root) { return false; } st.view = "xmas"; rerender(); return true; } }, // §343
     state: function () { return st; },
     view: { mode: viewMode, set: function (v) { var r = setViewMode(v); if (st.root) { rerender(); } return r; }, layout: layout, zoom: function (d) { if (d && st.root) { keepScroll(st.root); stZoom(st.root, d > 0 ? 1 : -1); } return ZOOMS[vw.zoom]; }, // 9B-21: 表示（この端末だけ）
       state: function () { return { mode: viewMode(), lay: vw.lay, zoom: ZOOMS[vw.zoom], pxb: pxb, narrow: vw.narrow, host: !!(st.root && typeof st.root.className === "string" && / ?dstu-host/.test(st.root.className)) }; }, key: function (ev) { return st.root ? stKey(ev, st.root, st.ctl) : false; }, KEY: VIEW_KEY, MIN_AUTO: STU_MIN_AUTO, MIN_PC: STU_MIN_PC, ZOOMS: ZOOMS },

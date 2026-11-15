@@ -264,6 +264,10 @@
       if (!isObj(o.patch)) { o.patch = { mode: "inline", patch: null, hash: "" }; }
       if (!isObj(o.ext)) { o.ext = {}; }
     }
+    if (o.type === "sample") { // §343: 楽器の録音（UGMelody のサンプルの番号）。おかしい値だけ整える（知らない項目は残す）
+      o.prog = int(o.prog, 0, 0, 2000); o.loop = !!o.loop; o.att = num(o.att, 0.003, 0.001, 1); o.rel = num(o.rel, 0.3, 0.02, 3); o.gain = num(o.gain, 1, 0, 4);
+      if (!isObj(o.ext)) { o.ext = {}; }
+    }
     return o;
   }
   // §341 9A-4: 知らない項目は消さずに残す（新しい版で足した値・いまの画面で変えられない値を守る）
@@ -1914,9 +1918,10 @@
   var GM_DRUM_NAMES = { 35: "バスドラム", 36: "キック", 37: "サイドスティック", 38: "スネア", 39: "クラップ", 40: "エレキスネア", 41: "フロアタム（低）", 42: "ハイハット（閉）", 43: "フロアタム（高）", 44: "ペダルHH", 45: "タム（低）",
     46: "ハイハット（開）", 47: "タム（中低）", 48: "タム（中高）", 49: "クラッシュ", 50: "タム（高）", 51: "ライド", 52: "チャイナ", 53: "ライドのベル", 54: "タンバリン", 55: "スプラッシュ", 56: "カウベル", 57: "クラッシュ2", 58: "ビブラスラップ",
     59: "ライド2", 60: "ボンゴ（高）", 61: "ボンゴ（低）", 62: "コンガ（ミュート）", 63: "コンガ（高）", 64: "コンガ（低）", 65: "ティンバレス（高）", 66: "ティンバレス（低）", 67: "アゴゴ（高）", 68: "アゴゴ（低）", 69: "カバサ", 70: "マラカス",
-    71: "ホイッスル（短）", 72: "ホイッスル（長）", 73: "ギロ（短）", 74: "ギロ（長）", 75: "クラベス", 76: "ウッドブロック（高）", 77: "ウッドブロック（低）", 78: "クイーカ（ミュート）", 79: "クイーカ（開）", 80: "トライアングル（ミュート）", 81: "トライアングル（開）" };
+    71: "ホイッスル（短）", 72: "ホイッスル（長）", 73: "ギロ（短）", 74: "ギロ（長）", 75: "クラベス", 76: "ウッドブロック（高）", 77: "ウッドブロック（低）", 78: "クイーカ（ミュート）", 79: "クイーカ（開）", 80: "トライアングル（ミュート）", 81: "トライアングル（開）" , 83: "スレイベル（Jingle Bell）", 84: "ベルツリー" };
   // シンセのプリセット → 近い GM の音色（0 から）。読みこみは GM の音色 → プリセット
   var MIDI_PRESET_GM = { lead: 81, chip: 80, pad: 89, spad: 50, brass: 62, bass: 38, acid: 39, pluck: 24, bell: 14, organ: 16, wobble: 87, soft: 79 };
+  function extGm(t) { var g = t && t.instrument && t.instrument.ext ? Number(t.instrument.ext.gm) : NaN; return isFinite(g) && g >= 0 && g <= 127 ? Math.round(g) : 80; } // §343（無ければ いままでの 80）
   function midiGmPreset(g) {
     g = Number(g);
     if (!(g >= 0 && g <= 127)) { return "lead"; }
@@ -1977,7 +1982,7 @@
       if (!drum) {
         preset = t.instrument && t.instrument.ext && typeof t.instrument.ext.preset === "string" ? t.instrument.ext.preset : "";
         if (/^[a-z0-9_-]{1,24}$/.test(preset)) { evs.push([0, 0, midiMeta(0x04, midiUtf8("ugsynth:" + preset))]); }
-        evs.push([0, 1, [0xC0 | ch, MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : 80]]);
+        evs.push([0, 1, [0xC0 | ch, MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : extGm(t)]]); // §343: クリスマスの音色は ext.gm
       }
       evs.push([0, 1, [0xB0 | ch, 7, Math.max(0, Math.min(127, Math.round(num(t.vol, 80, 0, 100) * 1.27)))]]);
       evs.push([0, 1, [0xB0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + num(t.pan, 0, -1, 1) * 63)))]]);

@@ -115,3 +115,25 @@
 - 配布元: [sfzinstruments/karoryfer.swirly-drums](https://github.com/sfzinstruments/karoryfer.swirly-drums)
 - ライセンス: [CC0 1.0（パブリックドメイン）](https://creativecommons.org/publicdomain/zero/1.0/) — クレジットの表記は必要ないが、出どころとして記す
 - 変更点: キック・スネア・ハイハット（クローズ/オープン）・タム3つ・クラッシュ・ライドから1打ずつ選び、乾いた音と部屋の響きの音（wet）を混ぜてモノラル 22050Hz・16bit にし、頭をそろえて短く切ってフェードをつけ、音量をそろえて JavaScript ファイルにまとめた
+
+## 🎄 クリスマス制作（v2.72〜。ゴリラDAW の音色）
+
+クリスマスの音色（§343）は、新しい外部の素材を入れていません。上にある録音と、ゴリラシンセで作った音だけです。DAW で作った曲を配信するとき（TuneCore など）の目安です（法律の助言ではありません。くわしくは各ライセンスの本文を見てください）。
+
+| 音色 | 使っている録音 | ライセンス | 配信の曲での表記 |
+|---|---|---|---|
+| Glockenspiel・Warm Strings・Pizzicato Strings・Christmas Horn・Soft Brass・Church Organ・Orchestral Harp・Warm Piano | VSCO 2 Community Edition（Versilian Studios） | CC0 1.0 | 要らない |
+| Celesta・Vibraphone・Upright Bass 風 | FluidR3_GM（Frank Wen） | CC BY 3.0 | 要る |
+| Jazz Piano | Salamander Grand Piano V3（Alexander Holm） | CC BY 3.0 | 要る |
+| Christmas Electric Piano | GregSullivan E-Pianos（Greg Sullivan） | CC BY 3.0 | 要る |
+| Sleigh Bells・Brush-like Percussion・シンセの音色（Music Box・Soft Chimes・Bright Christmas Bells・8bit Bells・Cinematic Pad・Synth Bells・Sparkling Pluck・Winter Pad・Soft Choir-like Pad・Retro Christmas Lead・Soft Organ） | なし（ゴリラシンセ・DAW の合成） | — | 要らない |
+| ドラムのトラック（83・84 のほか） | いまゲームで選んでいるドラムセット（はじめはロック ＝ DRSKit） | DRSKit は CC BY 4.0・Virtuosity／ビンテージ／ブラシ／ルームは CC0 | DRSKit なら要る |
+
+CC BY の録音を使った曲のクレジットの例（説明欄・ブックレットなど）:
+
+```
+Instrument samples: FluidR3_GM by Frank Wen (CC BY 3.0) / Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0) /
+GregSullivan E-Pianos by Greg Sullivan (CC BY 3.0) / DRSKit by DrumGizmo & DRSDrums (CC BY 4.0)
+```
+
+使った音色のぶんだけ書けばよい。CC0 だけで作りたいときは、上の表の CC0 の音色と、ドラムセットを Virtuosity・ビンテージ・ブラシ・ルームのどれかにする。🎧 リファレンスの音は曲・WAV・MIDI に入らない。

@@ -30,6 +30,17 @@
 
 ## ✅ 実装済み（最新）
 
+### Version 2.72 — 🎄 Gorilla Christmas Production Pack (§343)
+
+- [x] 音色（約 26・シンセのパッチとゲームの録音・`xm-`・録音の楽器の形 `sample`・CC0 を優先・CC BY は表記）
+- [x] ドラム 83 Jingle Bell・84 Bell Tree（DAW だけ）
+- [x] 演奏パターン（約 35・4/4・3/4・6/8・ドラムとコードについていくパターン）
+- [x] MIDI 伴奏ジェネレーター（キー・BPM・コード進行・小節ごとのコード・スタイル・長さ・音域・強さ・密度・シード・作りなおす）
+- [x] テンプレート 5 つ（プレビュー・新しい曲／いまの曲に足す・↶）
+- [x] 🎧 リファレンス解析 Lite（区間・特徴・推薦 5・A／B・注意）
+- [x] 入口「🎄 クリスマス制作」（モバイル・PC Studio）・試聴
+- [x] テスト・QA（代表のクリスマス曲・WAV・MIDI・ZIP）・iPhone の確認手順
+
 ### Version 2.71 — ゴリラDAW の PC Studio (§342 Phase 9B-21)
 
 - One DAW, Multiple Views: 表示（自動・モバイル・PC Studio・端末ごと）・PC Studio（Transport・全体図・アレンジのズーム 25〜200%・ミキサー・選んだクリップの編集の見本・🎧）・Space／Ctrl+Z／Esc・長い音声の QA の診断（10 種類）
