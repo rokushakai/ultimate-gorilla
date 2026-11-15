@@ -57,7 +57,7 @@
   // ---------- 再生（§341 9A-2）----------
   // 時計は AudioContext（UGMelody.audio.ctx の 1 つだけ）。25ms ごとに LOOK 秒先までの音を AudioContext の時刻で予約する（いまのシーケンサーと同じ）
   // 区間 seg = { t0（AudioContext の秒）, tick0 }: 曲の tick → 時刻 = t0 ＋ 秒(tick) − 秒(tick0)。ループで頭に戻る・BPM を変えたら区間を足す
-  var LOOK = 0.12, PUMP_MS = 25, START_LEAD = 0.08, TAIL_MS = 4000;
+  var LOOK = 0.3, PUMP_MS = 25, START_LEAD = 0.08, TAIL_MS = 4000; // 9B-18: LOOK 0.12 → 0.3 秒（メインスレッドが約 0.27 秒止まっても予約が間に合う。間に合わない音は同じ瞬間にまとめて鳴り、重なってピークが上がる）
   var pl = null, plLog = []; // pl: 再生中の状態。plLog: 予約した音の記録（テスト・確かめ用・最新 400 個）
   function SE() { var e = window.UGSynthEngine; return e && e.API === 1 ? e : null; }
   function segTime(p, seg, tick) { var M = DM(); return seg.t0 + M.tickToSec(p, tick) - M.tickToSec(p, seg.tick0); }
@@ -477,7 +477,7 @@
   // ---------- §342 9B-17: 再生中のラウドネスメーター ----------
   // OFF（はじめ）のときはノードを作らない・ワークレットも読まない。ON のときだけ、DAW のいちばん最後の出口（Master FX があれば DAW 専用の出口の最後 ＝ リミッター・EQ のあと、無ければ共有の全体の音量）から横に分けて測る（出力のないノード ＝ 音・遅れは変わらない）
   // 止まっているところから ▶ ＝ 新しく測る。再生中のジャンプ・鳴らしなおし・ループの折り返しは続けて測る（窓には前の音も入る）。⏹・曲の終わり（余韻のあと）＝ 止めて数字を残す。曲を開きなおす ＝ 消す
-  var lm = { on: false, node: null, src: null, live: null, state: "off", upd: 0, full: null, fullAt: -1 };
+  var lm = { on: false, node: null, src: null, live: null, state: "off", upd: 0, full: null, fullAt: -1, late: { n: 0, max: 0 } }; // 9B-18: late ＝ 測っているあいだに遅れた音
   function lmTarget() {
     if (!pl || pl.wav) { return null; }
     var m = pl.mix.__master, A = window.UGMelody && window.UGMelody.audio;
@@ -486,7 +486,7 @@
   }
   function lmAttach(fresh) {
     if (!lm.on || !pl || pl.wav) { return; }
-    if (fresh || !lm.live) { lm.live = DM().loudLive(); lm.full = null; lm.fullAt = -1; lm.upd = 0; }
+    if (fresh || !lm.live) { lm.live = DM().loudLive(); lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; }
     if (lm.node) { return; }
     var ac = pl.ac, ls = limState(ac);
     if (ls === "fail") { lm.state = "fail"; return; }
@@ -509,13 +509,13 @@
     lm.node = null; lm.src = null;
     if (state && (lm.on || state === "off")) { lm.state = state; }
   }
-  function lmClear() { lmDetach(lm.on ? "idle" : "off"); lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; }
+  function lmClear() { lmDetach(lm.on ? "idle" : "off"); lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; }
   // 数字（表示は 10Hz・Integrated と LRA は 1 秒ごとに計算）
   function lmValues() {
     if (!lm.live) { return null; }
     var o = lm.live.get(false);
     if (!lm.full || lm.upd - lm.fullAt >= 10 || lm.state !== "run") { if (lm.fullAt !== lm.upd) { lm.full = lm.live.get(true); lm.fullAt = lm.upd; } }
-    o.I = lm.full ? lm.full.I : null; o.lra = lm.full ? lm.full.lra : null; o.lraWhy = lm.full ? lm.full.lraWhy : "";
+    o.I = lm.full ? lm.full.I : null; o.lra = lm.full ? lm.full.lra : null; o.lraWhy = lm.full ? lm.full.lraWhy : ""; o.late = { n: lm.late.n, max: lm.late.max }; // 9B-18
     return o;
   }
   function masterPrivOff(o) {
@@ -609,6 +609,7 @@
         var dly = M.swingDelay(ev.rel, M.swingOf(t));
         if (ev.tick + dly >= pl.segEnd) { dly = 0; }
         var mxd = mixFor(t), whd = segTime(p, seg, ev.tick + dly), UGd = window.UGMelody, okd = false, dest = trackIn(t, mxd, "main"), choked = null;
+        lateMark(whd); // 9B-18
         // 9A-8: ハイハットの開閉（同じトラックの中だけ）: 開いたハイハットは 1 打ごとのゲインを通す → 閉じたハイハット・次の開いたハイハットでそのゲインを 0 へ
         if ((ev.m === 42 || ev.m === 44 || ev.m === 46) && mxd.openHat && mxd.openHat.t < whd) {
           try { var og = mxd.openHat.g.gain; og.setValueAtTime(1, whd); og.setTargetAtTime(0, whd, 0.015); choked = mxd.openHat.tick; } catch (eo) {}
@@ -627,6 +628,7 @@
       var mx = mixFor(t), when = segTime(p, seg, ev.tick), end = ev.end;
       if (pl.loop && end > pl.segEnd) { end = pl.segEnd; } // ループの終わりで切る（次の回の頭と重ねない）
       var sec = ev.d > 0 ? Math.max(0.05, segTime(p, seg, end) - when) : zeroSec(patch), v = null;
+      lateMark(when); // 9B-18
       try {
         if (mx.syn) { v = mx.syn.note(patch, ev.m, when, ev.v, sec); }
         else if (Y && Y.note) { v = Y.note(patch, ev.m, trackIn(t, mx, "main"), when, ev.v, sec); if (v) { mx.voices.push(v); if (mx.voices.length > 64) { mx.voices = mx.voices.filter(function (x) { return !(x.end < pl.ac.currentTime); }); } } }
@@ -634,6 +636,14 @@
       plLog.push({ track: t.id, tick: ev.tick, m: ev.m, v: ev.v, when: when, sec: sec, hash: t.instrument.patch.hash, pass: pl.pass, ok: !!v });
       if (plLog.length > 400 && !pl.wav) { plLog.shift(); }
     }
+  }
+  // 9B-18: 再生で、予約したときにもう過ぎていた音（メインスレッドが止まっていた）を数える。過ぎた時刻の音はすぐ鳴るので、本来ずれて鳴る音が重なる（ピークが WAV とちがう）。音は変えない・数字も補正しない
+  function lateMark(when) {
+    if (!pl || pl.wav || !pl.late) { return; }
+    var d = pl.ac.currentTime - when;
+    if (!(d > 0)) { return; }
+    pl.late.n++; if (d > pl.late.max) { pl.late.max = d; }
+    if (lm.live && lm.node) { lm.late.n++; if (d > lm.late.max) { lm.late.max = d; } }
   }
   // タイマーから: いまから LOOK 秒先まで予約。区間の終わりに来たら、ループなら頭へ・でなければ終わりの時刻を決める
   function pump() {
@@ -740,7 +750,7 @@
     }
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
     pl = { ac: ac, mix: {}, segs: [{ t0: ac.currentTime + START_LEAD + Math.max(0, Number(opts.delay) || 0), tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
-      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined }, muteClip: opts.muteClip || null, shadow: opts.shadow || null };
+      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined }, muteClip: opts.muteClip || null, shadow: opts.shadow || null, late: { n: 0, max: 0 } }; // 9B-18: late ＝ 遅れた音
     for (i = 0; i < p.tracks.length; i++) { mixFor(p.tracks[i]); warm(p.tracks[i]); }
     // §341 9A-7: ドラムのトラックがあれば生ドラムのサンプルを読みはじめる（終わるまでは作る音）
     for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { try { if (UG.loadSamples && UG.DRUM !== undefined) { UG.loadSamples([UG.DRUM]); } } catch (e5) {} break; } }
@@ -1466,6 +1476,7 @@
     function at(x) { return seg.t0 + (x - base); }
     var endS = Math.min(ev.endSec, M.tickToSec(p, pl.segEnd)), when = at(ev.sec), off = ev.src;
     var rec = { track: t.id, tick: ev.tick, sec: ev.sec, audio: true, asset: ev.asset, clip: ev.clip, when: when, offset: off, dur: 0, pass: pl.pass, ok: false, why: "", env: null };
+    lateMark(when); // 9B-18
     if (!buf) { rec.why = assetState(ev.asset) || "notLoaded"; }
     else {
       var dur = Math.min(buf.duration - off, endS - ev.sec);
@@ -4108,7 +4119,7 @@
   function lmHtml() {
     return '<div class="dm-row dlm' + (lm.on ? "" : " dfx-off") + '"><div class="dfx-sw"><b>&#x1F4CF; ラウドネスメーター</b><button class="modal-btn dfx-tog' + (lm.on ? " on" : "") + '" data-ms="lmOn">' + (lm.on ? "ON" : "OFF") + '</button><button class="modal-btn dm-reset" data-ms="lmReset" title="測った数字を消す">&#x21BA;</button></div>' +
       '<div class="dlm-grid"><div class="dlu-kv"><span>状態</span><b class="dlm-st">—</b></div><div class="dlu-kv"><span>Momentary（400ms）</span><b class="dlm-m">—</b></div><div class="dlu-kv"><span>Short-Term（3 秒）</span><b class="dlm-s">—</b></div>' +
-      '<div class="dlu-kv"><span>Integrated（測りはじめから）</span><b class="dlm-i">—</b></div><div class="dlu-kv"><span>LRA（測りはじめから）</span><b class="dlm-l">—</b></div><div class="dlu-kv"><span>Sample Peak（いま・いちばん大きい）</span><b class="dlm-p">—</b></div></div>' +
+      '<div class="dlu-kv"><span>Integrated（測りはじめから）</span><b class="dlm-i">—</b></div><div class="dlu-kv"><span>LRA（測りはじめから）</span><b class="dlm-l">—</b></div><div class="dlu-kv"><span>Sample Peak（いま・いちばん大きい）</span><b class="dlm-p">—</b></div></div><p class="small dlm-late" style="display:none"></p>' +
       '<p class="small dfx-note">再生中の DAW のいちばん最後の音（トラックの FX・センド・MASTER の EQ・リミッターのあと）を、横に分けて測ります（音・遅れは変わりません）。OFF のときは測るためのノードを作りません。▶ を止まったところから押すと新しく測り、再生中のジャンプ・ループの折り返しは続けて測ります（ループでは同じところを何度も測るので、曲全体の LRA とはちがうことがあります）。Integrated・LRA は測った時間が短いと安定しません（LRA は 60 秒未満では目安）。数字は保存しません。曲全体は「📊 曲を解析」で。</p></div>';
   }
   function lmFmt(v, unit) { return v === null || v === undefined ? "—" : (!isFinite(v) ? "−∞ " + unit : (Math.round(v * 10) / 10).toFixed(1) + " " + unit); }
@@ -4118,6 +4129,8 @@
     var v = lmValues(), stx = { off: "OFF（測っていません）", idle: "▶ で測りはじめます", wait: "準備中…", run: "計測中", stop: "停止中（さいごの数字）", fail: "このブラウザでは測れません（AudioWorklet）" }[lm.state] || "—";
     if (v && (lm.state === "run" || lm.state === "stop")) { stx += "・" + (Math.round(v.sec * 10) / 10).toFixed(1) + " 秒"; }
     e.st.textContent = stx;
+    var lt = root.querySelector(".dlm-late"); // 9B-18: 測っているあいだに遅れた音
+    if (lt) { if (v && v.late && v.late.n > 0) { lt.style.display = ""; lt.textContent = "⚠️ 端末が混んでいて、" + v.late.n + " 個の音が予定より遅れて鳴りました（最大 " + Math.round(v.late.max * 1000) + "ms）。遅れた音は重なって鳴るので、ピークなどが WAV とちがうことがあります（WAV は遅れません）"; } else { lt.style.display = "none"; lt.textContent = ""; } }
     if (!v) { e.m.textContent = "—"; e.s.textContent = "—"; e.i.textContent = "—"; e.l.textContent = "—"; e.p.textContent = "—"; return; }
     e.m.textContent = v.M === null ? "—（0.4 秒たまるまで）" : lmFmt(v.M, "LUFS");
     e.s.textContent = v.S === null ? "—（3 秒たまるまで）" : lmFmt(v.S, "LUFS");
@@ -4886,7 +4899,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0 }; }, values: function () { return lmValues(); }, NAME: LM_NAME }, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0 }; }, values: function () { return lmValues(); }, NAME: LM_NAME }, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）

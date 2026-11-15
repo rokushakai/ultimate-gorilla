@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.67** |
+| 現在バージョン | **v2.68** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.68] 🔍 ゴリラDAW の再生の音と WAV のピークのちがい**（§342 Phase 9B-18）: 原因は再生の予約の遅れ（メインスレッドが止まると、間に合わない音が同じ瞬間にまとめて鳴って重なる）。`arcade-daw.js` の `LOOK` を 0.3 秒に・`lateMark`（予約したときにもう過ぎていた音を `pl.late`・メーターの `lm.late` に数える）・メーターの `.dlm-late` の注意。テスト（`tests/test-daw.js`）のループの 3 か所は、予約の窓の終わりを v2.67 と同じ時刻にした。調べ方は GAME_DESIGN §342 9B-18（48kHz で書き出せるテスト用の写し・メインスレッドをわざと止める・§6 のケース A〜J）
 - **[v2.67] 📏 ゴリラDAW の LRA・再生中のラウドネスメーター**（§342 Phase 9B-17）: モデルの `luGated`（Integrated のゲートを共通に）・`lraOf`（Tech 3342 の MATLAB の手順）・`loudLive`・`LRA_PAD`（1.5 秒）・`loudMeter().finish()` の `lra`／`lraLow`／`lraHigh`／`lraN`／`lraWhy`。`arcade-daw.js` の `LIM_WORKLET` に処理 U（`LM_NAME` ＝ `ug-daw-loud`・出力なし）・`lm`／`lmAttach`／`lmDetach`／`lmClear`／`lmValues`／`lmHtml`／`lmHead`・`UGDaw.meter`（set／reset／state／values）。`startPlay` の `lmFresh`（止まっていたなら新しく）・`stopPlay`・余韻のタイマー・`switchTo` で片づけ。📊 の LRA の行と帯（`.dlu-lrab`）。True Peak のときの Ceiling の単位 dBTP
 - **[v2.66] 🎚️ ゴリラDAW の True Peak リミッター**（§342 Phase 9B-16）: `LIM_WORKLET` に処理 T（`LIM_NAME_TP` ＝ `ug-daw-limiter-tp`・`LIM_TP_OS` 8・`LIM_TP_HALF` 16・`LIM_TP_BETA` 8。P はそのまま）。`limNode(ac, "tp")`・`limSamples(rate, tp)`（＋2×HT）・`limKey`・`masterRtKey` の `"t"`・WAV の `stats.limMode`・📊 の `r.limMode`。モデルは limiter の `mode`（`"tp"` だけ書く・`fxSet(…,"lim","mode",…)`・↺ で消す）。`UGMelody.forgetCtx(ac)`（チョークの記録 `melodyCyms` から外す）を `renderSong` の終わり・やめたときに呼ぶ。精度の試験は Node（ワークレットのソースを vm で）＋ scipy（16・32 倍・FFT）
 - **[v2.65] 🧹 ゴリラDAW の音声ノードの片づけ**（§342 Phase 9B-15）: `masterPrivOff` は `fx.nodes`（`UGMelody.buildFx` が返す 8 個・ディレイのフィードバックの輪）も外し、リミッターの `port` の `onmessage` を外して 200ms 後に閉じる。`renderSong` の `drainGo`（やめたら出口 `mlast` を外して `resume`・止まるたびに続ける）。`wavCanChunk`（suspend・`wav.noSuspend`・SynthTrack）と `WAV_SLOW_MAX`（60 秒）・`wavPlan` の `chunk`。ノードの計測はテストの QA の中だけ（WeakRef・connect／disconnect を包む）

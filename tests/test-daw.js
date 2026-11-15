@@ -970,13 +970,13 @@ module.exports = async function () {
   DA.stop();
   // ループ（1 小節目だけ）: 区切りで重ならない・欠けない
   var pL = DA.project(); pL.practice.loopA = 0; pL.practice.loopB = 4 * PPQ; DA.setLoop(true);
-  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(5.9);
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(5.9 - (DA.LOOK - 0.12)); // 9B-18: 予約の窓の終わりを v2.67（LOOK 0.12）と同じ時刻に
   var lA = LOGA();
   ok(lA.length === 3 && lA.every(function (x, i) { return nearA(x.when, tA0 + 2 * i) && x.offset === 0 && nearA(x.dur, 2) && x.cut && x.pass === i; }), "loop of bar 1: each pass plays 0–2 s of the WAV, cut exactly at the loop end (no overlap, no gap)", lA.map(function (x) { return [(x.when - tA0).toFixed(3), x.dur, x.pass]; }));
   DA.stop(); DA.setLoop(false);
   // ループの途中から（区間の頭に、かかっているクリップを途中から）
   pL.practice.loopA = 4 * PPQ; pL.practice.loopB = 8 * PPQ; DA.setLoop(true);
-  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(3.9);
+  DA.clearLog(); DA.play(); PA = DA.player(); tA0 = PA.segs[0].t0; runA(3.9 - (DA.LOOK - 0.12)); // 9B-18: 同じ
   var lB = LOGA();
   ok(lB.length === 2 && lB.every(function (x, i) { return nearA(x.when, tA0 + 2 * i) && nearA(x.offset, 2) && nearA(x.dur, 0.5); }), "loop of bar 2 (inside the clip): every pass starts at 2 s of the WAV (the rest 0.5 s)", lB);
   DA.stop(); DA.setLoop(false);
@@ -1434,7 +1434,7 @@ module.exports = async function () {
   ok(WL.length === 1 && nearA(WL[0].when, 0.012 + 0.23) && nearA(WL[0].offset, 0.23) && nearA(WL[0].dur, 1.46) && JSON.stringify(WL[0].env) === JSON.stringify(envE), "WAV export uses the same edit: same start (from 0), offset, length and fade points", WL[0]);
   // ループの境目（1 小節 ＝ 2 秒）
   var pE = DE.project(); pE.practice = pE.practice || {}; DE.setLoop(true); pE.practice.loopA = 0; pE.practice.loopB = 4 * PPQ;
-  DE.clearLog(); DE.play(); PE = DE.player(); tE0 = PE.segs[0].t0; runE(4.2);
+  DE.clearLog(); DE.play(); PE = DE.player(); tE0 = PE.segs[0].t0; runE(4.2 - (DE.LOOK - 0.12) - 0.05); // 9B-18: 予約の窓の終わりを 3 回目（4.242 秒）の前に（v2.67 は 25ms の刻みで 2ms の余裕しかなかった）
   var LL = DE.log().filter(function (x) { return x.audio; });
   ok(LL.length === 2 && nearA(LL[1].when - LL[0].when, ME.tickToSec(pE, PE.opts.b) - ME.tickToSec(pE, PE.opts.a)) && nearA(LL[0].offset, LL[1].offset) && LL.every(function (x) { return nearA(x.dur, Math.min(1.46, ME.tickToSec(pE, PE.opts.b) - 0.242)); }), "loop: one start per pass at the same spot, cut at the loop end (no doubles, no gaps)", LL.map(function (x) { return [x.when - tE0, x.offset, x.dur]; }));
   DE.stop(); DE.setLoop(false);
@@ -3223,6 +3223,19 @@ module.exports = async function () {
   ok(/data-fxn="lim\.ceiling"[^>]*>[^<]*<\/?[^>]*>?\s*<span class="dfx-unit">dBTP/.test(hU) || hU.indexOf(">dBTP<") >= 0, "9B-17: True Peak mode shows the ceiling in dBTP");
   ok(hU2.indexOf(">dBTP<") < 0 && hU2.indexOf(">dBFS<") >= 0, "9B-17: Sample Peak mode shows dBFS");
   ML.fxSet(pU.master, "lim", "on", false);
+  // ================= 9B-18: 再生の予約の遅れ（§342）=================
+  ok(DL0.LOOK === 0.3, "9B-18: the realtime look-ahead is 0.3 s (was 0.12; a main-thread stall shorter than about 0.27 s no longer makes notes late)", DL0.LOOK);
+  var p18 = DL0.project(), dr18 = ML.addDrumTrack(p18), nn18 = [], b18; for (b18 = 0; b18 < 128; b18++) { nn18.push([b18 * 240, 60, 42, 0.8]); } dr18.clips = []; ML.newMidiClip(p18, dr18, 0, 3840 * 8, nn18, "hh");
+  DL0.jumpTo(0); DL0.play(); var P18 = DL0.player(), ac18 = P18.ac, t18 = P18.segs[0].t0, g18 = 0;
+  ok(P18.late && P18.late.n === 0 && P18.late.max === 0, "9B-18: a new play starts with no late notes", P18.late);
+  while (ac18.currentTime < t18 + 3 && g18++ < 1000) { ac18.currentTime += 0.025; DL0.pump(); }
+  var n18a = P18.late.n; ac18.currentTime += 0.25; DL0.pump(); var n18b = P18.late.n;
+  ok(n18a === 0 && n18b === 0, "9B-18: pumping every 25 ms → no late notes; a 0.25 s stall is still covered by the look-ahead", [n18a, n18b]);
+  var lg18 = DL0.log().length; ac18.currentTime += 0.6; var now18 = ac18.currentTime; DL0.pump(); var n18c = P18.late.n, mx18 = P18.late.max, lt18 = DL0.log().slice(lg18).filter(function (x) { return x.when < now18; });
+  ok(n18c > 0 && n18c === lt18.length && mx18 > 0.2 && mx18 <= 0.6 - 0.3 + 0.025 + 1e-9, "9B-18: a 0.6 s stall → the notes that were already due are counted (number, largest delay)", [n18c, lt18.length, mx18]);
+  ok(lt18.length > 0 && lt18.every(function (x) { return x.ok; }), "9B-18: late notes are still played at their own time (not moved, not dropped; the counter only reports)");
+  ok(DL0.meter.state().on === false && !DL0.meter.values(), "9B-18: the meter is off here, so nothing is shown for it");
+  DL0.stop(); p18.tracks = p18.tracks.filter(function (t) { return t !== dr18; });
   ok(SL.ultimateGorillaSaveV2 === rpgL && UGL.audio.bus === sharedBus && UGL.audio.master === sharedMaster, "the RPG save and the shared audio output are untouched (9B-10)");
   AL.stop(); DL0.reset();
   var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });
