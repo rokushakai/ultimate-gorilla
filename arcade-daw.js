@@ -9,6 +9,7 @@
   function DM() { return window.UGDawModel; }
 
   var PX_BEAT = 28, HEAD_W = 96, LANE_H = 64, RULER_H = 24;
+  var pxb = PX_BEAT; // 9B-21: アレンジの 1 拍の幅（モバイルは 28px のまま・PC Studio はズームで 7〜56px）
   // セッションのあいだのプロジェクト（9A-4 で ultimateGorillaDawV1 に保存する）
   var st = { project: null, sel: null, scroll: 0, undo: [], anote: "" }; // undo: §341 9A-5 ↶ の列（ピアノロールとアレンジで共通・トラック全部の写し）
 
@@ -52,7 +53,7 @@
     return ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][m % 12] + (Math.floor(m / 12) - 1);
   }
 
-  function tickX(tick) { return Math.round(tick / DM().PPQ * PX_BEAT); }
+  function tickX(tick) { return Math.round(tick / DM().PPQ * pxb); }
 
   // ---------- 再生（§341 9A-2）----------
   // 時計は AudioContext（UGMelody.audio.ctx の 1 つだけ）。25ms ごとに LOOK 秒先までの音を AudioContext の時刻で予約する（いまのシーケンサーと同じ）
@@ -738,9 +739,9 @@
     try { ac = UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { ac = null; }
     if (!ac || !p || !M) {
       st.msg = "音を出す準備ができませんでした。このブラウザでは Web Audio が使えないか、音のファイルを読みこめていません。ページを読みなおして、もう一度 ▶ を押してください。";
-      return false;
+      dgLog("play", { s: "fail", why: "noctx" }); return false;
     }
-    if (!window.UGSynth) { st.msg = "ゴリラシンセ（arcade-synth.js）を読みこめなかったため、鳴らせません。"; return false; }
+    if (!window.UGSynth) { st.msg = "ゴリラシンセ（arcade-synth.js）を読みこめなかったため、鳴らせません。"; dgLog("play", { s: "fail", why: "nosynth" }); return false; }
     var lr = M.loopRange(p), clip = opts.clip || null, loop = opts.loop !== undefined ? !!opts.loop : !!(p.practice && p.practice.loopOn);
     var a = opts.a !== undefined ? opts.a : lr.a, b = opts.b !== undefined ? opts.b : (loop ? lr.b : M.playEndTick(p)); // 9B-20: リファレンスが長ければそこまで（WAV は songEndTick）
     var cue = st.cue !== null && st.cue !== undefined && !clip && (!loop || (st.cue >= a && st.cue < b)) ? st.cue : null; // 9B-1: 小節へ
@@ -752,7 +753,7 @@
       var tok = aud.playTok = {}, o2 = {}, k2;
       for (k2 in opts) { if (opts.hasOwnProperty(k2)) { o2[k2] = opts[k2]; } }
       o2.noWait = true;
-      st.msg = "音声の素材を読みこんでいます…（読みこめたら鳴りはじめます）";
+      st.msg = "音声の素材を読みこんでいます…（読みこめたら鳴りはじめます）"; dgLog("play", { s: "waitAssets" });
       ensureAssets(p, function () { if (aud.playTok === tok && st.project === p) { aud.playTok = null; startPlay(o2); rerender(); } });
       return true;
     }
@@ -761,7 +762,7 @@
       var tokL = aud.playTok = {}, o3 = {}, k3;
       for (k3 in opts) { if (opts.hasOwnProperty(k3)) { o3[k3] = opts[k3]; } }
       o3.noLim = true; o3.noWait = true;
-      st.msg = "マスターのリミッターを準備しています…";
+      st.msg = "マスターのリミッターを準備しています…"; dgLog("play", { s: "waitLim" });
       limLoad(ac, function () { if (aud.playTok === tokL && st.project === p) { aud.playTok = null; st.msg = ""; startPlay(o3); rerender(); } });
       return true;
     }
@@ -782,6 +783,7 @@
     pl.start.on = false; if (pl.start.lead === Infinity) { pl.start.lead = null; }
     pl.timer = setInterval(pump, PUMP_MS);
     loopHead();
+    dgLog("play", { s: "ok", from: from, ctx: ac.state || "", prepMs: pl.start.prepMs }); // 9B-21
     if (limKey(masterRtKey(p)) && limState(ac) === "fail") { st.msg = "このブラウザではマスターのリミッターを使えません（" + (masterRtKey(p) === "t" ? "True Peak の処理もしていません・" : "") + "リミッターなしで鳴らしています）"; } // 9B-10・9B-16
     var miss = audMissing(p, clip);
     if (miss) { st.msg = "素材がない音声のクリップ " + miss + " 個は鳴りません（クリップを選んで「🔗 素材を選びなおす」）"; }
@@ -833,6 +835,7 @@
     if (st.view === "auto" && st.au) { auHead(root, tick); } // 9B-9
     if (st.view === "master") { msHead(root); } // 9B-10
     if (st.view === "ref") { refHead(root); } // 9B-20
+    if (vw.lay === "pc" && st.view === "arr") { stHead(root, tick); } // 9B-21
     if (st.view === "tempo") { var tb = root.querySelector(".dtp-now"); if (tb) { tb.textContent = String(DM().bpmAt(st.project, pl ? tick : Math.max(0, Math.round(st.cue || 0)))); } } // 9B-12
     var gre = st.view === "fx" && st.fxTrack ? root.querySelector(".dfx-gr") : null; if (gre) { var grv = fxReduction(st.fxTrack); gre.textContent = grv === null ? "—" : (Math.round(Math.min(0, grv) * 10) / 10).toFixed(1) + " dB"; } // 9B-8
     var dph = st.steps && st.view === "steps" ? root.querySelector(".ds-ph") : null, df = dph ? DM().findClip(st.project, st.steps.clip) : null;
@@ -865,7 +868,7 @@
   }
   function rerender() { if (!st.root) { return; } var arr = st.root.querySelector ? st.root.querySelector(".daw-arr") : null; if (arr) { st.scroll = arr.scrollLeft || 0; } render(st.root, st.ctl); }
   // メニューへ戻る・ゲームセンターを閉じる: 音とタイマーを全部片づける
-  I.addStopHook(function () { st.backGame = null; inbPrevStop(); if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
+  I.addStopHook(function () { hostClass(st.root, false); st.backGame = null; inbPrevStop(); if (rec.state !== "idle") { st.root = null; recStop("exit"); } rec.open = false; flushSave(); if (typeof wavCancel === "function") { wavCancel(); wavFree(); wav.state = "idle"; } stopPlay(false); clearTail(); audFree(null); aud.pending = null; packFree(); pk.state = "idle"; pk.istate = "idle"; pk.restored = null; st.root = null; st.ctl = null; }); // 9A-4: 待っている保存も書く。9A-10: デコードした音声を捨てる（素材は IndexedDB に残る）
 
   // ---------- 描く ----------
   function clipHtml(p, t, c) {
@@ -893,7 +896,7 @@
   }
 
   function render(root, ctl) {
-    var M = DM(), p = project();
+    var M = DM(), p = project(), lay = syncLayout(root); // 9B-21
     if (M && p && st.view === "roll") { renderRoll(root, ctl); return; }
     if (M && p && st.view === "proj") { renderProj(root, ctl); return; }
     if (M && p && st.view === "mix") { renderMix(root, ctl); return; }
@@ -916,10 +919,9 @@
       bind(root, ctl);
       return;
     }
-    var bars = M.viewBars(p), W = tickX(M.barToTick(p, bars)), m0 = M.meterAt(p, 0), barPx = tickX(M.ticksPerBar(m0)), beatPx = tickX(M.PPQ * 4 / m0.den);
-    var grid = 'background-size:' + barPx + 'px 100%,' + beatPx + 'px 100%;width:' + W + 'px;';
-    var plist = presetList(), i, j, b, loopOn = !!(p.practice && p.practice.loopOn), lr = M.loopRange(p);
-    var h = '<div class="daw">' +
+    var m0 = M.meterAt(p, 0), loopOn = !!(p.practice && p.practice.loopOn), h;
+    if (lay === "pc") { h = studioHtml(p); } else { // 9B-21: PC Studio ＝ アレンジの別の並べ方（同じ st・同じ bind）
+    h = '<div class="daw">' +
       '<div class="daw-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW</b><span class="daw-pname"></span>' +
       '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
       projBarHtml(p) +
@@ -940,8 +942,38 @@
         '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' + // 9B-12
         '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' + // 9B-2
         '<button class="modal-btn daw-small" data-ar="ref">&#x1F3A7; リファレンス' + (M.refOf(p) ? '<small>1</small>' : '') + '</button>' + // 9B-20
+        viewSelHtml() + (vw.narrow ? '<span class="small dstu-narrow">画面がせまいので、モバイルの表示にしています（PC Studio は幅 ' + STU_MIN_PC + 'px から）</span>' : '') + // 9B-21
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
-      '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
+      arrGridHtml(p, false);
+    h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
+      '<div class="da-area">' + panelHtml(p) + '</div>' + // 9A-5: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
+      saveNoteHtml() +
+      '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p>' +
+      '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
+    }
+    audKick(p); // 9A-10: 音声の素材を読みはじめる（終わったら描きなおす）
+    var fo = lay === "pc" && stFocusIn(root); // 9B-21: DAW にフォーカスがあったら、描きなおしたあとも DAW に（Space・Ctrl+Z が続けて効く）
+    root.innerHTML = h;
+    var arr = root.querySelector && root.querySelector(".daw-arr");
+    if (arr && st.scroll) { try { arr.scrollLeft = st.scroll; } catch (e) {} }
+    // 9A-5: 足した・複製した・動かしたクリップが見えるように横へスクロール
+    var fsel = st.reveal && st.sel && st.sel.kind === "clip" ? M.findClip(p, st.sel.id) : null;
+    st.reveal = false;
+    if (arr && fsel && arr.clientWidth) {
+      var cx = tickX(fsel.clip.start), cw = tickX(fsel.clip.start + fsel.clip.len) - cx, vis = arr.clientWidth - HEAD_W;
+      if (cx < arr.scrollLeft || cx + Math.min(cw, vis) > arr.scrollLeft + vis) { try { arr.scrollLeft = Math.max(0, cx - 24); st.scroll = arr.scrollLeft; } catch (e2) {} }
+    }
+    bind(root, ctl);
+    if (fo) { var sf = root.querySelector(".dstu"); if (sf && sf.focus) { try { sf.focus({ preventScroll: true }); } catch (e3) {} } }
+    drawHead();
+  }
+  // アレンジの格子（目盛り・セクションの帯・トラック・クリップ・プレイヘッド）。モバイルと PC Studio で同じ（9B-21: stu ＝ 縦にスクロールするのでプレイヘッドの高さを決める）
+  function arrGridHtml(p, stu) {
+    var M = DM();
+    var bars = M.viewBars(p), W = tickX(M.barToTick(p, bars)), m0 = M.meterAt(p, 0), barPx = tickX(M.ticksPerBar(m0)), beatPx = tickX(M.PPQ * 4 / m0.den);
+    var grid = 'background-size:' + barPx + 'px 100%,' + beatPx + 'px 100%;width:' + W + 'px;';
+    var plist = presetList(), i, j, b, loopOn = !!(p.practice && p.practice.loopOn), lr = M.loopRange(p);
+    var h = '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
     var secL = M.sectionsOf(p), rulerH = secL.length ? RULER_H + 16 : RULER_H; // 9B-1
     h += '<div class="daw-row daw-ruler-row"><div class="daw-corner">トラック</div><div class="daw-ruler daw-grid" style="' + grid + 'height:' + rulerH + 'px;">';
@@ -969,25 +1001,263 @@
       else if (M.isAudio(t)) { h += '<button class="da-add da-addwav" data-addwav="' + t.id + '" style="left:' + (tickX(M.trackEnd(t)) + 3) + 'px;" title="ここに WAV を読みこむ" aria-label="WAV を読みこむ">&#xFF0B;</button>'; } // 9A-10
       h += '</div></div>';
     }
-    h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;"></div></div>';
-    h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
-      '<div class="da-area">' + panelHtml(p) + '</div>' + // 9A-5: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
-      saveNoteHtml() +
-      '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p>' +
-      '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
-    audKick(p); // 9A-10: 音声の素材を読みはじめる（終わったら描きなおす）
-    root.innerHTML = h;
-    var arr = root.querySelector && root.querySelector(".daw-arr");
-    if (arr && st.scroll) { try { arr.scrollLeft = st.scroll; } catch (e) {} }
-    // 9A-5: 足した・複製した・動かしたクリップが見えるように横へスクロール
-    var fsel = st.reveal && st.sel && st.sel.kind === "clip" ? M.findClip(p, st.sel.id) : null;
-    st.reveal = false;
-    if (arr && fsel && arr.clientWidth) {
-      var cx = tickX(fsel.clip.start), cw = tickX(fsel.clip.start + fsel.clip.len) - cx, vis = arr.clientWidth - HEAD_W;
-      if (cx < arr.scrollLeft || cx + Math.min(cw, vis) > arr.scrollLeft + vis) { try { arr.scrollLeft = Math.max(0, cx - 24); st.scroll = arr.scrollLeft; } catch (e2) {} }
+    h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;' + (stu ? 'bottom:auto;height:' + (rulerH + 1 + p.tracks.length * (LANE_H + 1)) + 'px;' : '') + '"></div></div>';
+    return h;
+  }
+
+  // ---------- §342 9B-21: 表示（自動・モバイル・PC Studio）＝ 同じ曲・同じ操作の関数で、見せ方だけ変える ----------
+  // PC Studio は「アレンジ（st.view = "arr"）の別の並べ方」。パネルは 1 回の render で 1 つの HTML にして、同じ bind でつなぐ（root・st.view を取り合わない）
+  // 表示の設定は端末ごと（localStorage）。曲の JSON・ZIP・保存には入れない（切りかえても「保存待ち」にしない）
+  var VIEW_KEY = "ultimateGorillaDawViewV1", STU_MIN_AUTO = 1024, STU_MIN_PC = 700, ZOOMS = [0.25, 0.5, 1, 2];
+  var vw = { mode: null, zoom: 2, lay: "", narrow: false };
+  function viewMode() {
+    if (vw.mode === null) { var v = null; try { v = window.localStorage ? window.localStorage.getItem(VIEW_KEY) : null; } catch (e) { v = null; } vw.mode = v === "mobile" || v === "pc" ? v : "auto"; }
+    return vw.mode;
+  }
+  function setViewMode(v) { v = v === "mobile" || v === "pc" ? v : "auto"; vw.mode = v; try { if (window.localStorage) { window.localStorage.setItem(VIEW_KEY, v); } } catch (e) {} return v; }
+  function winW() { var d = window.document && document.documentElement; return Number(window.innerWidth) || (d && Number(d.clientWidth)) || 0; }
+  // いまの並べ方: "pc" ／ "mobile"（PC Studio を選んでも、せまい画面ではモバイルで見せる＝操作できなくならないように）
+  function layout() { var m = viewMode(), w = winW(); vw.narrow = m === "pc" && w < STU_MIN_PC; return (m === "pc" && !vw.narrow) || (m === "auto" && w >= STU_MIN_AUTO) ? "pc" : "mobile"; }
+  function hostClass(root, on) { if (!root || typeof root.className !== "string") { return; } var c = root.className.replace(/(^|\s)dstu-host(?=\s|$)/g, "").replace(/^\s+|\s+$/g, ""); root.className = on ? (c ? c + " " : "") + "dstu-host" : c; }
+  // 描く前に: 並べ方・1 拍の幅（ズーム）をそろえる。幅が変わったら横のスクロールを同じ拍の位置へ
+  function syncLayout(root) {
+    var lay = layout(), np = lay === "pc" ? Math.round(PX_BEAT * ZOOMS[vw.zoom]) : PX_BEAT;
+    if (np !== pxb) { st.scroll = Math.max(0, Math.round((st.scroll || 0) * np / pxb)); pxb = np; }
+    vw.lay = lay; hostClass(root, lay === "pc");
+    return lay;
+  }
+  function stZoom(root, dir) {
+    var nz = Math.max(0, Math.min(ZOOMS.length - 1, vw.zoom + dir)), arr = root && root.querySelector ? root.querySelector(".daw-arr") : null;
+    if (nz === vw.zoom) { return false; }
+    var vis = arr && arr.clientWidth ? Math.max(0, arr.clientWidth - HEAD_W) : 0, cx = (arr ? arr.scrollLeft || 0 : st.scroll || 0) + vis / 2, np = Math.round(PX_BEAT * ZOOMS[nz]);
+    st.scroll = Math.max(0, Math.round(cx * np / pxb - vis / 2)); vw.zoom = nz; pxb = np; // 真ん中の拍をたもつ
+    if (root) { render(root, st.ctl); }
+    return true;
+  }
+  if (window.addEventListener) { window.addEventListener("resize", function () { if (st.root && st.project && layout() !== vw.lay) { rerender(); } }); } // 1 つだけ（並べ方が変わったときだけ描きなおす）
+  function viewSelHtml() {
+    var m = viewMode(), o = [["auto", "自動"], ["mobile", "モバイル"], ["pc", "PC Studio"]], h = '<label class="daw-vsel" title="表示（この端末だけ・曲には入りません）"><span>&#x1F5A5;&#xFE0F;</span><select data-viewmode="1" aria-label="表示">', i;
+    for (i = 0; i < o.length; i++) { h += '<option value="' + o[i][0] + '"' + (o[i][0] === m ? ' selected' : '') + '>' + o[i][1] + '</option>'; }
+    return h + '</select></label>';
+  }
+  function r1(v) { return Math.round(v * 10) / 10; }
+  // A. Transport
+  function stTransportHtml(p) {
+    var M = DM(), m0 = M.meterAt(p, 0), loopOn = !!(p.practice && p.practice.loopOn), z = Math.round(ZOOMS[vw.zoom] * 100);
+    return '<div class="daw-transport dstu-tp">' +
+      '<button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-act="play" title="再生（Space）">&#x25B6;&#xFE0F;</button>' +
+      '<button class="modal-btn daw-tbtn" data-act="stop" title="停止（頭へ）">&#x23F9;&#xFE0F;</button>' +
+      '<button class="modal-btn daw-tbtn' + (loopOn ? " daw-on" : "") + '" data-act="loop" title="ループ（' + (loopOn ? "ON" : "OFF") + '）">&#x1F501;</button>' +
+      '<span class="daw-pos" title="小節.拍">1.1</span>' +
+      '<span class="daw-bpm dstu-bpm"><button class="modal-btn daw-tbtn" data-act="bpm-">&#x2212;</button><button class="daw-bpm-val" data-act="bpm">BPM <b>' + M.bpmAt(p, 0) + '</b></button><button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
+      '<span class="daw-meter">' + m0.num + '/' + m0.den + '</span>' +
+      '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + ' title="戻す（Ctrl+Z）">&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
+      '<button class="modal-btn daw-small" data-stx="wav" title="WAV の書き出し（📁 曲の画面）">&#x1F4E4; WAV</button>' +
+      '<span class="dstu-zoom" title="横の拡大・縮小"><button class="modal-btn daw-tbtn" data-zoom="-" aria-label="縮小"' + (vw.zoom <= 0 ? ' disabled' : '') + '>&#x2212;</button><b class="dstu-zv">' + z + '%</b><button class="modal-btn daw-tbtn" data-zoom="+" aria-label="拡大"' + (vw.zoom >= ZOOMS.length - 1 ? ' disabled' : '') + '>&#xFF0B;</button></span>' +
+      viewSelHtml() + '</div>';
+  }
+  function stToolsHtml(p) {
+    var M = DM();
+    return '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
+      '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
+      '<button class="modal-btn daw-small" data-ar="sections">&#x1F3BC; 曲の構成</button>' +
+      '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' +
+      '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' +
+      '<button class="modal-btn daw-small" data-ar="ref">&#x1F3A7; リファレンス' + (M.refOf(p) ? '<small>1</small>' : '') + '</button>' +
+      '<span class="small da-hint">クリック ＝ 選ぶ ／ もう一度 ＝ フルの編集 ／ Space ▶⏹ ・ Ctrl+Z 戻す ・ Esc 外す</span></div>';
+  }
+  // B. 全体図（曲の全部・クリップの箱・🎧 の波形・見えている範囲・プレイヘッド）
+  function stTotal(p) { var M = DM(); return M.barToTick(p, M.viewBars(p)); }
+  function stOverviewHtml(p) {
+    var M = DM(), total = stTotal(p), s = M.refSpan(p), n = p.tracks.length, lh = Math.max(3, Math.min(8, Math.floor(40 / Math.max(1, n)))), i, j, h, secL = M.sectionsOf(p);
+    if (!(total > 0)) { return ''; }
+    function pc(t) { return r1(Math.max(0, Math.min(100, t / total * 100))); }
+    h = '<div class="dstu-ov" data-stov="1" title="曲の全体（クリックでそこへスクロール）"><div class="dstu-ovin">';
+    for (i = 0; i < secL.length; i++) { h += '<b class="dstu-ovsec sc-' + escHtml(secL[i].color || "blue") + '" style="left:' + pc(secL[i].tick) + '%;width:' + Math.max(0.3, pc(secL[i].tick + secL[i].len) - pc(secL[i].tick)) + '%;">' + escHtml(secL[i].name) + '</b>'; }
+    if (s && aud.peaks[s.asset.id]) { var a0 = M.secToTick(p, s.start), a1 = M.secToTick(p, s.end); h += '<div class="dstu-ovref" style="left:' + pc(a0) + '%;width:' + Math.max(0.3, pc(a1) - pc(a0)) + '%;" title="🎧 リファレンス">' + refWave(p, s, 400, 18) + '</div>'; }
+    for (i = 0; i < n; i++) {
+      var t = p.tracks[i];
+      h += '<div class="dstu-ovl" style="height:' + lh + 'px;">';
+      for (j = 0; j < t.clips.length; j++) { var c = t.clips[j]; h += '<i class="' + (c.type === "audio" ? "dstu-ova" : "dstu-ovm") + (st.sel && st.sel.kind === "clip" && st.sel.id === c.id ? " on" : "") + '" style="left:' + pc(c.start) + '%;width:' + Math.max(0.2, pc(c.start + c.len) - pc(c.start)) + '%;"></i>'; }
+      h += '</div>';
     }
-    bind(root, ctl);
-    drawHead();
+    return h + '<i class="dstu-ovvp"></i><i class="dstu-ovph" style="left:' + pc(Math.max(0, playTick())) + '%;"></i></div></div>';
+  }
+  function stOvSync(S) {
+    var arr = S.querySelector(".daw-arr"), vp = S.querySelector(".dstu-ovvp"), W = tickX(stTotal(st.project));
+    if (!arr || !vp || !(W > 0)) { return; }
+    var vis = Math.max(0, (arr.clientWidth || 0) - HEAD_W), l = Math.max(0, Math.min(100, (arr.scrollLeft || 0) / W * 100)), w = Math.max(0.5, Math.min(100 - l, vis / W * 100));
+    vp.style.left = r1(l) + "%"; vp.style.width = r1(w) + "%";
+  }
+  // C. ミキサー（モバイルのミキサーと同じ mixer.setVol・setPan・commit。↶ の対象外も同じ）
+  function stMixHtml(p) {
+    var M = DM(), ps = panSupported(), mv = p.master ? Math.round(clampNum(p.master.vol, 0, 100, VOL0)) : VOL0, i, h;
+    h = '<div class="dstu-card dstu-mix"><div class="dstu-ch"><b>&#x1F39A;&#xFE0F; ミキサー</b><button class="modal-btn daw-small" data-ar="mixer" title="ミキサーのフルの画面（センド・オートメーション・↺）">くわしく</button></div>';
+    for (i = 0; i < p.tracks.length; i++) {
+      var t = p.tracks[i], pv = Math.round(clampNum(t.pan, -1, 1, 0) * 100), tv = Math.round(clampNum(t.vol, 0, 100, VOL0)), av = M.autoActive(t, "vol"), ap = M.autoActive(t, "pan"), on = st.sel && st.sel.kind === "track" && st.sel.id === t.id;
+      h += '<div class="dstu-strip' + (on ? " on" : "") + '"><div class="dstu-sn"><span class="dstu-tn" data-track="' + t.id + '">' + ((t.ext && t.ext.icon) || "&#x1F3B5;") + ' ' + escHtml(t.name) + '</span>' +
+          '<span class="daw-ms"><button class="daw-m' + (t.mute ? " on" : "") + '" data-mute="' + t.id + '">M</button><button class="daw-s' + (t.solo ? " on" : "") + '" data-solo="' + t.id + '">S</button></span>' +
+          '<button class="modal-btn dm-fxb' + (M.fxLive(t).sig ? " on" : "") + '" data-stx-fx="' + t.id + '" title="EQ・コンプ">&#x1F39B;&#xFE0F;</button></div>' +
+        '<div class="dstu-scs"><div class="dstu-sc"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + tv + '" data-mxv="' + t.id + '" aria-label="' + escHtml(t.name) + ' の音量"' + (av ? ' disabled' : '') + '><b class="dm-val" data-mxval="' + t.id + '">' + (av ? '&#x1F4C8;' : tv) + '</b></div>' +
+        '<div class="dstu-sc"><span class="dm-lab">パン</span><input type="range" class="dm-fader dm-pan" min="-100" max="100" step="1" value="' + pv + '" data-mxp="' + t.id + '" aria-label="' + escHtml(t.name) + ' の左右"' + (ps && !ap ? '' : ' disabled') + '><b class="dm-val" data-mxpval="' + t.id + '">' + (ap ? '&#x1F4C8;' : panText(pv / 100)) + '</b></div></div></div>';
+    }
+    h += '<div class="dstu-strip dstu-mst"><div class="dstu-sn"><b>MASTER</b><button class="modal-btn dm-fxb dm-mfx' + (M.masterLive(p).sig ? " on" : "") + '" data-stx="master" title="マスター EQ・リミッター・メーター">&#x1F39A;&#xFE0F; MASTER</button><button class="modal-btn dm-fxb dm-sfx' + (M.sendLive(p).rev || M.sendLive(p).dly ? " on" : "") + '" data-stx="sendfx" title="リバーブ・ディレイ（センドの戻り）">&#x1F30A; FX</button></div>' +
+      '<div class="dstu-sc"><span class="dm-lab">音量</span><input type="range" class="dm-fader" min="0" max="100" step="1" value="' + mv + '" data-mxv="master" aria-label="マスター音量"><b class="dm-val" data-mxval="master">' + mv + '</b></div></div>';
+    return h + (ps ? '' : '<p class="small">このブラウザでは左右（パン）を変えられません。</p>') + '<p class="small dstu-mnote">音量・パン・FX は ↶ の対象外です（モバイルのミキサーと同じ）。</p></div>';
+  }
+  // D. 選んだクリップの編集（見本 ＋ フルの編集へ）。MIDI ＝ ピアノロールの見本・音声 ＝ ピークのキャッシュの波形（デコードしなおさない）
+  function stRollHtml(p, c) {
+    var M = DM(), len = Math.max(1, c.len), lo = 127, hi = 0, i, n, W = 1000, H = 140, g = '', d = '', cnt = 0;
+    for (i = 0; i < c.notes.length; i++) { if (c.notes[i][0] < c.len) { lo = Math.min(lo, c.notes[i][2]); hi = Math.max(hi, c.notes[i][2]); } }
+    if (hi < lo) { lo = 60; hi = 72; }
+    if (hi - lo < 12) { lo = Math.max(0, Math.floor((lo + hi) / 2) - 6); hi = Math.min(127, lo + 12); }
+    lo = Math.max(0, lo - 1); hi = Math.min(127, hi + 1);
+    var rh = H / (hi - lo + 1), b0 = M.tickToBar(p, c.start).bar - 1, bt;
+    for (i = lo; i <= hi; i++) { var k = i % 12; if (k === 1 || k === 3 || k === 6 || k === 8 || k === 10) { g += '<rect class="dstu-rk" x="0" y="' + r1((hi - i) * rh) + '" width="' + W + '" height="' + r1(rh) + '"/>'; } }
+    for (i = b0; i < b0 + 600; i++) { bt = M.barToTick(p, i); if (bt > c.start + len) { break; } if (bt >= c.start) { var bx = r1((bt - c.start) / len * W); g += '<line class="dstu-rb" x1="' + bx + '" y1="0" x2="' + bx + '" y2="' + H + '"/>'; } }
+    for (i = 0; i < c.notes.length; i++) {
+      n = c.notes[i];
+      if (n[0] >= c.len) { continue; }
+      cnt++;
+      d += '<rect class="dstu-rn" x="' + r1(n[0] / len * W) + '" y="' + r1((hi - n[2]) * rh + 0.5) + '" width="' + r1(Math.max(1.5, Math.min(n[1], c.len - n[0]) / len * W)) + '" height="' + r1(Math.max(1, rh - 1)) + '"/>';
+    }
+    return '<div class="dstu-ew"><div class="dstu-ekeys"><span>' + noteName(hi) + '</span><span>' + noteName(lo) + '</span></div><svg class="dstu-roll" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' + g + d + '</svg><i class="dstu-eph"></i></div>' +
+      '<p class="small dstu-guide">音符 ' + cnt + ' 個（ここは見るだけ。直すときは上のボタンでフルのピアノロールへ）</p>';
+  }
+  function stWaveSvg(p, c) {
+    var M = DM(), pk = aud.peaks[c.asset], W = 600, H = 110, as = assetState(c.asset);
+    if (M.compOf(p, c)) { return '<p class="small dstu-guide">コンピングのクリップです。テイクごとの波形は「&#x2702;&#xFE0F; 編集」で見られます。</p>'; }
+    if (!pk || !pk.length) { return '<p class="small dstu-guide">' + (as === "loading" || !as ? "&#x23F3; 波形を読みこんでいます…" : escHtml(assetStateText(c.asset))) + '</p>'; }
+    var sp = M.audioSpan(p, c), PR = M.PEAK_RATE, lo = Math.max(0, sp.p0), d = '', x, i, mid = H / 2, len = Math.max(1, c.len);
+    for (x = 0; x < W; x++) {
+      var x0 = M.tickToSec(p, c.start + x / W * len), x1 = M.tickToSec(p, c.start + (x + 1) / W * len);
+      if (x0 >= sp.p1) { break; }
+      if (x1 <= lo) { continue; }
+      var t0 = Math.max(x0, lo) - sp.A + sp.so, t1 = Math.min(x1, sp.p1) - sp.A + sp.so, i0 = Math.floor(t0 * PR), i1 = Math.max(i0 + 1, Math.ceil(t1 * PR)), m = 0;
+      for (i = i0; i < i1 && i < pk.length; i++) { if (pk[i] > m) { m = pk[i]; } }
+      var hh = Math.max(0.5, m / 255 * (H / 2 - 2));
+      d += 'M' + (x + 0.5) + ' ' + r1(mid - hh) + 'V' + r1(mid + hh);
+    }
+    return '<div class="dstu-ew dstu-ewa"><svg class="dstu-wave" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '"/></svg><i class="dstu-eph"></i></div>';
+  }
+  function stEditHtml(p) {
+    var M = DM(), s = st.sel, f = s && s.kind === "clip" ? M.findClip(p, s.id) : null;
+    if (!f) {
+      var t = s && s.kind === "track" ? M.findTrack(p, s.id) : null;
+      return '<div class="dstu-eh"><b>&#x270F;&#xFE0F; 編集</b></div><p class="small dstu-guide">' + (t ? 'トラック「' + escHtml(t.name) + '」を選んでいます。' : '') + 'クリップをクリックすると、ここに音符（ピアノロール）・波形が出ます。もう一度クリック ＝ フルの編集の画面。</p>';
+    }
+    var c = f.clip, a = M.tickToBar(p, c.start), bars = Math.round(c.len / M.barTicks(p) * 100) / 100, au = c.type === "audio", dr = M.isDrum(f.track);
+    var head = '<div class="dstu-eh"><b>' + (au ? "&#x1F3B5;" : (dr ? "&#x1F941;" : "&#x1F3B9;")) + ' ' + escHtml(clipLabel(c)) + '</b><span class="small">' + escHtml(f.track.name) + '・' + a.bar + ' 小節目から ' + bars + ' 小節</span>' +
+      (au ? '<button class="modal-btn daw-small" data-cl="edit">&#x2702;&#xFE0F; 編集（フルの画面）</button>' : '<button class="modal-btn daw-small" data-cl="roll">' + (dr ? "&#x1F941; パターンを直す" : "&#x1F3B9; 音符を直す") + '（フルの画面）</button>') + '</div>';
+    return head + (au ? stWaveSvg(p, c) : stRollHtml(p, c));
+  }
+  // E. 🎧 リファレンス（波形・A／B・音量・ミュート。くわしくは、いまのリファレンスの画面）
+  function stRefHtml(p) {
+    var M = DM(), r = M.refOf(p), s = M.refSpan(p), ab = st.refAB || "both", h = '<div class="dstu-card dstu-ref"><div class="dstu-ch"><b>&#x1F3A7; リファレンス</b><button class="modal-btn daw-small" data-ar="ref">' + (r ? "くわしく" : "置く") + '</button></div>';
+    if (!r) { return h + '<p class="small">くらべるための音声（WAV・MP3・M4A・5 分 30 秒まで）。WAV・MIDI の書き出しには入りません。</p></div>'; }
+    var a = s ? s.asset : M.findAsset(p, r.asset);
+    function abB(v, lab) { return '<button class="modal-btn dfx-tog' + (ab === v ? " on" : "") + '" data-st-ab="' + v + '">' + lab + '</button>'; }
+    return h + '<div class="small dstu-rn">' + escHtml(a ? a.name : r.asset) + (a ? '・' + escHtml(M.secText(a.sec)) : '') + '</div>' +
+      (s ? '<div class="drf-wave dstu-rw" data-st-refwave="1" title="クリックでその位置へ">' + refWave(p, s, 300, 40) + '<div class="drf-head"></div></div>' : '<p class="small">' + (a ? assetStateText(a.id) : '&#x26A0;&#xFE0F; 素材の情報がありません') + '</p>') +
+      '<div class="drf-btns dstu-ab">' + abB("both", "両方") + abB("daw", "DAW だけ") + abB("ref", "&#x1F3A7; だけ") + '</div>' +
+      '<div class="dstu-rg"><button class="modal-btn daw-tbtn" data-st-rg="-" aria-label="リファレンスを小さく">&#x2212;</button><b class="drf-gv">' + (r.gain > 0 ? "+" : "") + r.gain + ' dB</b><button class="modal-btn daw-tbtn" data-st-rg="+" aria-label="リファレンスを大きく">&#xFF0B;</button>' +
+      '<button class="modal-btn dfx-tog' + (r.mute ? " on" : "") + '" data-st-rm="1">ミュート ' + (r.mute ? "ON" : "OFF") + '</button></div></div>';
+  }
+  function studioHtml(p) {
+    return '<div class="daw dstu" tabindex="-1">' +
+      '<div class="daw-top dstu-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW <small class="dstu-badge">PC Studio</small></b><div class="dstu-pbar">' + projBarHtml(p) + '</div>' +
+      '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
+      stTransportHtml(p) + stToolsHtml(p) + inbNoteHtml() + backHtml() +
+      '<div class="dstu-grid"><div class="dstu-mainc">' + stOverviewHtml(p) + arrGridHtml(p, true) +
+        (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
+        '<div class="dstu-bot"><div class="dstu-card dstu-edit">' + stEditHtml(p) + '</div><div class="dstu-ops">' + panelHtml(p) + '</div></div></div>' +
+      '<div class="dstu-side">' + stRefHtml(p) + stMixHtml(p) + '</div></div>' +
+      saveNoteHtml() + '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
+  }
+  // プレイヘッド（全体図・編集の見本・🎧）
+  function stHead(root, tick) {
+    var M = DM(), p = st.project, ov = root.querySelector(".dstu-ovph"), e = root.querySelector(".dstu-eph"), tot = stTotal(p);
+    if (ov && tot > 0) { ov.style.left = r1(Math.max(0, Math.min(100, tick / tot * 100))) + "%"; }
+    if (e) {
+      var f = st.sel && st.sel.kind === "clip" ? M.findClip(p, st.sel.id) : null, rr = f && f.clip.len > 0 ? (tick - f.clip.start) / f.clip.len : -1;
+      e.style.display = pl && rr >= 0 && rr <= 1 ? "block" : "none";
+      if (rr >= 0) { e.style.left = r1(Math.min(1, rr) * 100) + "%"; }
+    }
+    refHead(root);
+  }
+  // PC の操作（DAW の入れ物にフォーカスがあるときだけ。文字の入力・選ぶ欄・スライダーでは何もしない）
+  function stTyping(t) { var tg = t && t.tagName ? String(t.tagName).toLowerCase() : ""; return tg === "input" || tg === "textarea" || tg === "select" || !!(t && t.isContentEditable); }
+  function stIsSpace(ev) { return ev.key === " " || ev.key === "Spacebar" || ev.keyCode === 32; }
+  function stKey(ev, root, ctl) {
+    if (!ev || stTyping(ev.target) || ev.altKey) { return false; }
+    var k = ev.key, mod = ev.ctrlKey || ev.metaKey;
+    if (stIsSpace(ev) && !mod) {
+      keepScroll(root);
+      if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else if (pl) { stopPlay(false); } else { startPlay(); }
+    } else if ((k === "z" || k === "Z" || ev.keyCode === 90) && mod && !ev.shiftKey) {
+      if (ev.preventDefault) { ev.preventDefault(); }
+      keepScroll(root);
+      if (st.undo.length) { ops.undo(); }
+      return true;
+    } else if (k === "Escape" || k === "Esc" || ev.keyCode === 27) {
+      if (st.confirmDel) { st.confirmDel = null; } else if (st.chooseAdd) { st.chooseAdd = false; } else if (st.repeat) { st.repeat = null; } else if (aud.stage) { stageCancel(); } else if (st.sel) { st.sel = null; st.anote = ""; } else { return false; }
+      keepScroll(root);
+    } else { return false; }
+    if (ev.preventDefault) { ev.preventDefault(); }
+    if (st.root === root && st.view === "arr") { render(root, ctl); }
+    return true;
+  }
+  function stFocusIn(root) { var a = window.document && document.activeElement; return !a || a === document.body || (root.contains ? root.contains(a) : false); }
+  function bindStudio(root, ctl) {
+    var S = root.querySelector(".dstu"), M = DM(), p = st.project, k, els;
+    if (!S) { return; }
+    els = S.querySelectorAll("[data-zoom],[data-stx],[data-stx-fx],[data-st-ab],[data-st-rg],[data-st-rm]");
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v, r;
+        if (ev.stopPropagation) { ev.stopPropagation(); }
+        keepScroll(root);
+        if ((v = el.getAttribute("data-zoom"))) { stZoom(root, v === "+" ? 1 : -1); return; }
+        if ((v = el.getAttribute("data-stx-fx"))) { if (M.findTrack(p, v)) { st.view = "fx"; st.fxTrack = v; renderFx(root, ctl); } return; }
+        if ((v = el.getAttribute("data-stx"))) {
+          if (v === "master") { st.view = "master"; renderMaster(root, ctl); }
+          else if (v === "sendfx") { st.view = "sendfx"; renderSendFx(root, ctl); }
+          else if (v === "wav") { if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else if (pl) { stopPlay(false); } st.view = "proj"; sv.note = ""; renderProj(root, ctl); } // 📁 曲 と同じ
+          return;
+        }
+        if ((v = el.getAttribute("data-st-ab"))) { refSetAB(v); render(root, ctl); return; }
+        if ((v = el.getAttribute("data-st-rg"))) { r = M.refOf(p); if (r) { M.refSet(p, "gain", r.gain + (v === "+" ? 1 : -1)); refApply(); markDirty(); } render(root, ctl); return; }
+        if (el.getAttribute("data-st-rm")) { r = M.refOf(p); if (r) { M.refSet(p, "mute", !r.mute); refApply(); markDirty(); } render(root, ctl); }
+      };
+    }
+    var rs = S.querySelectorAll(".dstu-mix input[type=range]");
+    for (k = 0; k < rs.length; k++) {
+      rs[k].oninput = function (ev) {
+        var el = ev.currentTarget, id = el.getAttribute("data-mxv"), pid = el.getAttribute("data-mxp"), lab;
+        if (id === "master") { mixer.setMaster(el.value); lab = S.querySelector('[data-mxval="master"]'); if (lab) { lab.textContent = String(Math.round(el.value)); } return; }
+        if (id) { mixer.setVol(id, el.value); lab = S.querySelector('[data-mxval="' + id + '"]'); if (lab) { lab.textContent = String(Math.round(el.value)); } return; }
+        if (pid) { mixer.setPan(pid, Number(el.value) / 100); lab = S.querySelector('[data-mxpval="' + pid + '"]'); if (lab) { lab.textContent = panText(Number(el.value) / 100); } }
+      };
+      rs[k].onchange = function () { mixer.commit(); };
+    }
+    var arr = S.querySelector(".daw-arr"), ov = S.querySelector("[data-stov]"), rr = S.querySelector(".daw-ruler-row"), rw = S.querySelector("[data-st-refwave]");
+    function wheelX(ev) { // 縦のホイール → 横へ（全体図・目盛りの上だけ。Ctrl＋ホイールの拡大は止めない）
+      if (!arr || ev.ctrlKey || ev.metaKey) { return; }
+      var dy = ev.deltaY || 0, dx = ev.deltaX || 0;
+      if (Math.abs(dy) <= Math.abs(dx)) { return; }
+      arr.scrollLeft = (arr.scrollLeft || 0) + dy * (ev.deltaMode === 1 ? 16 : (ev.deltaMode === 2 ? (arr.clientWidth || 400) : 1)); st.scroll = arr.scrollLeft;
+      if (ev.preventDefault) { ev.preventDefault(); }
+    }
+    if (arr) { arr.onscroll = function () { stOvSync(S); }; }
+    if (ov && arr) {
+      ov.onclick = function (ev) { var rc = ov.getBoundingClientRect ? ov.getBoundingClientRect() : null; if (!rc || !(rc.width > 0)) { return; } var f = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width)), vis = Math.max(0, (arr.clientWidth || 0) - HEAD_W); arr.scrollLeft = Math.max(0, f * tickX(stTotal(p)) - vis / 2); st.scroll = arr.scrollLeft; stOvSync(S); };
+      ov.onwheel = wheelX;
+    }
+    if (rr && arr) { rr.onwheel = wheelX; }
+    if (rw) { rw.onclick = function (ev) { var s = M.refSpan(p), rc = rw.getBoundingClientRect ? rw.getBoundingClientRect() : null; if (!s || !rc || !(rc.width > 0)) { return; } var f = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width)), tk = Math.max(0, Math.round(M.secToTick(p, Math.max(0, s.start + f * s.dur)))); if (refJump(tk)) { st.scroll = Math.max(0, tickX(tk) - 24); } render(root, ctl); }; }
+    S.onkeydown = function (ev) { stKey(ev, root, ctl); };
+    S.onkeyup = function (ev) { if (stIsSpace(ev) && !stTyping(ev.target) && ev.preventDefault) { ev.preventDefault(); } }; // ボタンの上の Space で、ボタンを押したことにしない
+    stOvSync(S);
   }
 
   // §341 9A-5: 選んだクリップ・トラックの操作の欄（小さい画面でも押しやすいボタン）
@@ -1347,8 +1617,8 @@
     return n;
   }
   function loadAsset(id) {
-    aud.st[id] = "loading";
-    function fin(s, why) { aud.st[id] = s; if (why) { aud.err[id] = why; } var w = aud.wait[id] || [], i; aud.wait[id] = []; for (i = 0; i < w.length; i++) { try { w[i](); } catch (e) {} } }
+    aud.st[id] = "loading"; dgLog("asset", { id: id, s: "loading" }); // 9B-21
+    function fin(s, why) { dgLog("asset", { id: id, s: s, why: why || "" }); aud.st[id] = s; if (why) { aud.err[id] = why; } var w = aud.wait[id] || [], i; aud.wait[id] = []; for (i = 0; i < w.length; i++) { try { w[i](); } catch (e) {} } }
     idbGet("meta", id, function (m, w1) {
       if (m === undefined) { fin(aud.dbState === "none" ? "nodb" : "error", w1); return; }
       if (!m) { fin("missing"); return; }
@@ -1540,13 +1810,13 @@
     var M = DM(), pk = aud.peaks[c.asset], a = M.findAsset(p, c.asset);
     if (M.compOf(p, c)) { return compWaveSvg(p, c, w); } // 9A-16
     if (!pk || !pk.length || !a) { return ""; }
-    var key = c.asset + "|" + c.start + "|" + c.len + "|" + (c.srcOffset || 0) + "|" + (c.trimIn || 0) + "|" + (c.trimOut || 0) + "|" + (c.nudge || 0) + "|" + w + "|" + JSON.stringify(p.tempo.points);
+    var key = c.asset + "|" + c.start + "|" + c.len + "|" + (c.srcOffset || 0) + "|" + (c.trimIn || 0) + "|" + (c.trimOut || 0) + "|" + (c.nudge || 0) + "|" + w + "|" + pxb + "|" + JSON.stringify(p.tempo.points);
     if (aud.wave[key]) { return aud.wave[key]; }
     var out = "";
     try {
       var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, sp = M.audioSpan(p, c), PR = M.PEAK_RATE, lo = Math.max(0, sp.p0), d = "", x, i; // 9A-13: トリム・微調整を反映（鳴る所だけ描く）
       for (x = 0; x < w; x += 2) {
-        var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ);
+        var x0 = M.tickToSec(p, c.start + x / pxb * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / pxb * M.PPQ);
         if (x0 >= sp.p1) { break; }
         if (x1 <= lo) { continue; }
         var t0 = Math.max(x0, lo) - sp.A + sp.so, t1 = Math.min(x1, sp.p1) - sp.A + sp.so;
@@ -1563,13 +1833,13 @@
   }
   // 9A-16／9A-17: コンピングのクリップの波形（区間ごとにそのテイクのピーク・テイクの色・切りかえの線）
   function compWaveSvg(p, c, w) {
-    var M = DM(), segs = M.audioSegs(p, c), key = "comp|" + JSON.stringify([c.start, c.len, c.comp, c.takes, c.asset, c.trimIn, c.trimOut, c.nudge, c.fadeIn, c.fadeOut, w, p.tempo.points]);
+    var M = DM(), segs = M.audioSegs(p, c), key = "comp|" + JSON.stringify([c.start, c.len, c.comp, c.takes, c.asset, c.trimIn, c.trimOut, c.nudge, c.fadeIn, c.fadeOut, w, pxb, p.tempo.points]);
     if (aud.wave[key]) { return aud.wave[key]; }
     var top = 14, H = LANE_H - 6 - top - 2, mid = top + H / 2, PR = M.PEAK_RATE, ds = {}, x, i, q, k, ready = true, cp = M.compOf(p, c);
     for (q = 0; q < segs.length; q++) { if (!aud.peaks[segs[q].id]) { ready = false; } }
     if (!ready || !segs.length || !cp) { return ""; }
     for (x = 0; x < w; x += 2) {
-      var x0 = M.tickToSec(p, c.start + x / PX_BEAT * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / PX_BEAT * M.PPQ), xm = (x0 + x1) / 2, sg = null;
+      var x0 = M.tickToSec(p, c.start + x / pxb * M.PPQ), x1 = M.tickToSec(p, c.start + (x + 2) / pxb * M.PPQ), xm = (x0 + x1) / 2, sg = null;
       for (q = 0; q < segs.length; q++) { var s = segs[q]; if (xm >= s.from && xm < s.to && xm >= Math.max(0, s.p0) && xm < s.p1) { sg = s; } }
       if (!sg) { continue; }
       var pk = aud.peaks[sg.id], t0 = sg.tin + (Math.max(x0, Math.max(0, sg.p0)) - sg.p0), t1 = sg.tin + (Math.min(x1, sg.p1) - sg.p0);
@@ -1580,7 +1850,7 @@
     }
     var out = '<svg class="da-wave" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true">';
     for (k in ds) { if (ds.hasOwnProperty(k)) { out += '<path class="' + cpCls(k) + '" d="' + ds[k] + '"/>'; } }
-    for (i = 0; i < cp.Ts.length; i++) { var cx = Math.round((M.secToTick(p, cp.Ts[i]) - c.start) / M.PPQ * PX_BEAT); out += '<line class="da-wave-x" x1="' + cx + '" y1="' + top + '" x2="' + cx + '" y2="' + (top + H) + '"/>'; }
+    for (i = 0; i < cp.Ts.length; i++) { var cx = Math.round((M.secToTick(p, cp.Ts[i]) - c.start) / M.PPQ * pxb); out += '<line class="da-wave-x" x1="' + cx + '" y1="' + top + '" x2="' + cx + '" y2="' + (top + H) + '"/>'; }
     out += '</svg>';
     if (aud.waveN++ > WAVE_CACHE) { aud.wave = {}; aud.waveN = 0; }
     aud.wave[key] = out;
@@ -1630,6 +1900,7 @@
   }
   // デコード（圧縮もふくむ・ブラウザの decodeAudioData だけ）。sr: そのレートの OfflineAudioContext（わからなければ・できなければ再生のレート）。ab は写さない（デコードのあと使えなくなる）。retry: 1 回目がだめなら写しで再生のレートでもう一度
   function decodeAny(ab, sr, ch, cb, retry) {
+    var cb0 = cb, dt0 = perfNow(); cb = function (b, why) { dgLog("decode", { ok: !!b, ms: Math.round(perfNow() - dt0), sec: b ? Math.round(b.duration * 1000) / 1000 : 0, why: why || "" }); cb0(b, why); }; // 9B-21
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, ctx = null, done = false, spare = null, usedOff = false;
     function rt() { var UG = window.UGMelody; try { return UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { return null; } }
     function ok(b) { if (done) { return; } done = true; if (b && b.length > 0) { cb(b, ""); } else { cb(null, "音がありません"); } }
@@ -2406,7 +2677,8 @@
     wavFree();
     var p = project(), plan = wavPlan(p), UG = window.UGMelody, i, hasDrum = false;
     wav.plan = plan; wav.stats = null; wav.note = ""; wav.msg = "";
-    if (!plan.ok) { wav.state = "fail"; wav.msg = plan.why; if (onDone) { onDone(); } return false; }
+    if (!plan.ok) { wav.state = "fail"; wav.msg = plan.why; dgLog("wav", { s: "fail", why: plan.why }); if (onDone) { onDone(); } return false; }
+    dgLog("wav", { s: "start" }); // 9B-21
     for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { hasDrum = true; } }
     wav.busy = true; wav.state = "busy"; wav.sig = "";
     var job = wav.job = { canceled: false, t0: Date.now() }, started = false, tm = null, lim0 = DM().masterLive(p).lim ? DM().masterFx(p).lim.ceiling : null; // 9B-13: 書き出したときの Ceiling
@@ -2426,6 +2698,7 @@
           wav.state = "done";
           wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
         }
+        dgLog("wav", { s: wav.state, ms: wav.ms, why: wav.state === "done" ? "" : wav.msg, bytes: blob ? blob.size : 0 }); // 9B-21
         if (onDone) { onDone(); }
       }, { job: job, onProgress: function (pc) { wav.pct = pc; var r0 = st.root, el = r0 && r0.querySelector ? r0.querySelector(".dp-wpct, .dlu-wpct") : null; if (el) { el.textContent = pc + "%"; } } }); // 9B-14: 進み具合
     }
@@ -2438,6 +2711,9 @@
     return true;
   }
   function wavCancel() { if (wav.job) { wav.job.canceled = true; } }
+  // 9B-21: テスト用の記録（画面に出さない・80 件まで）。QA でどの段階が失敗したかを分ける
+  var dg = [];
+  function dgLog(k, o) { var e = { t: Math.round(perfNow()), k: k }, x; if (o) { for (x in o) { if (o.hasOwnProperty(x)) { e[x] = o[x]; } } } dg.push(e); if (dg.length > 80) { dg.shift(); } }
 
   // ---------- §341 9A-11: プロジェクトパック（ZIP: manifest.json・project.json・audio/ の WAV）----------
   var PACK_FORMAT = "ultimate-gorilla-daw-pack", PACK_VERSION = 2, PACK_MAX_ZIP = 256 * 1024 * 1024, PACK_MAX_JSON = 2 * 1024 * 1024; // 9B-20: 版 2 ＝ 長い・圧縮の素材（それが無い ZIP は版 1 のまま書く）・256MiB まで
@@ -5187,6 +5463,9 @@
         redraw();
       };
     }
+    var vsel = root.querySelector("select[data-viewmode]"); // 9B-21: 表示（この端末だけ・曲は変えない・再生は止めない）
+    if (vsel) { vsel.onclick = function (ev) { if (ev.stopPropagation) { ev.stopPropagation(); } }; vsel.onchange = function () { keepScroll(root); setViewMode(vsel.value); render(root, ctl); }; }
+    bindStudio(root, ctl);
   }
 
   function dawSetup(root, ctl) {
@@ -5223,6 +5502,9 @@
 
   window.UGDaw = {
     state: function () { return st; },
+    view: { mode: viewMode, set: function (v) { var r = setViewMode(v); if (st.root) { rerender(); } return r; }, layout: layout, zoom: function (d) { if (d && st.root) { keepScroll(st.root); stZoom(st.root, d > 0 ? 1 : -1); } return ZOOMS[vw.zoom]; }, // 9B-21: 表示（この端末だけ）
+      state: function () { return { mode: viewMode(), lay: vw.lay, zoom: ZOOMS[vw.zoom], pxb: pxb, narrow: vw.narrow, host: !!(st.root && typeof st.root.className === "string" && / ?dstu-host/.test(st.root.className)) }; }, key: function (ev) { return st.root ? stKey(ev, st.root, st.ctl) : false; }, KEY: VIEW_KEY, MIN_AUTO: STU_MIN_AUTO, MIN_PC: STU_MIN_PC, ZOOMS: ZOOMS },
+    diag: { log: function () { return JSON.parse(JSON.stringify(dg)); }, clear: function () { dg.length = 0; return true; } }, // 9B-21: テスト用
     project: project,
     reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）

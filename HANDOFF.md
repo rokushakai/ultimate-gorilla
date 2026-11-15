@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.70** |
+| 現在バージョン | **v2.71** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.71] 🖥️ ゴリラDAW の PC Studio**（§342 Phase 9B-21）: One DAW, Multiple Views。`arcade-daw.js` の表示（`viewMode`・`setViewMode`・`layout`・`syncLayout`・`hostClass`・localStorage `ultimateGorillaDawViewV1`）・1 拍の幅 `pxb`（`tickX`・`waveSvg`・`compWaveSvg`）・`stZoom`・アレンジの格子 `arrGridHtml(p, stu)`（モバイルと共通）・PC Studio は `st.view = "arr"` の別の並べ方（`studioHtml`・`stTransportHtml`・`stToolsHtml`・`stOverviewHtml`／`stOvSync`・`stMixHtml`・`stEditHtml`（`stRollHtml`・`stWaveSvg`）・`stRefHtml`・`stHead`・`bindStudio`・`stKey`）・root の `dstu-host`（stop hook で外す）・1 つの resize のリスナー・`UGDaw.view`・テスト用の `UGDaw.diag`（`dgLog`）
 - **[v2.70] 🎧 ゴリラDAW の長い音声の読み込み・リファレンス**（§342 Phase 9B-20）: モデルの `probeAudio`／`probeMp4`（中身で形式）・`importBytesWhy`・`importSecWhy`・`isLongInfo`・`pcmBytes`・`shortSec`・`clipMaxTicks`・`assetRoomWhy`（長い素材 2 個・メモリ・合計）・素材の `kind`／`codec`／`long`・`sameAsset`（圧縮はハッシュと大きさ）・曲の `ref`（`refClean`・`setRef`・`refSet`・`clearRef`・`refSpan`・`playEndTick`）。`arcade-daw.js` の `audFileGo`（ふつうの WAV はこれまでどおり `importWav`）・`longImport`・`decodeAny`・`stageCommit`（Blob のまま IndexedDB・`storageRoom`）・`dataAB`／`dataSize`・`playRef`／`refOut`／`refOff`（`pl.mix.__ref`・スピーカーへ直接）・`abDaw`・`renderRef`（`st.view = "ref"`）・`UGDaw.ref`・`UGDaw.rec.room`。ZIP の版 2（`packFile(id, kind)`・`packNew`）
 - **[v2.69] ⏱️ ゴリラDAW の再生のはじまり・リアルタイムの True Peak**（§342 Phase 9B-19）: `startPlay` は出口・FX・メーターを作り終えてから `pl.segs[0].t0` を決める（そのあいだ `autoPlan`・`dlyPlan` は `pl.prep` に積む）・`pl.start`（prepMs・prepCtx・lead）・`perfNow`。メーターの処理 U に True Peak（`processorOptions.tp` ＝ `tpTaps()`・前の 32 サンプルの輪・[エネルギー, ピーク, TP]）・`lm.tp`（はじめ OFF）・`lmSetTp`・`data-ms="lmTp"`・`.dlm-tp`／`.dlm-td`・`UGDaw.meter.setTp`。モデルの `loudLive` に tp・maxTp・tpDiff・`tpReset`
 - **[v2.68] 🔍 ゴリラDAW の再生の音と WAV のピークのちがい**（§342 Phase 9B-18）: 原因は再生の予約の遅れ（メインスレッドが止まると、間に合わない音が同じ瞬間にまとめて鳴って重なる）。`arcade-daw.js` の `LOOK` を 0.3 秒に・`lateMark`（予約したときにもう過ぎていた音を `pl.late`・メーターの `lm.late` に数える）・メーターの `.dlm-late` の注意。テスト（`tests/test-daw.js`）のループの 3 か所は、予約の窓の終わりを v2.67 と同じ時刻にした。調べ方は GAME_DESIGN §342 9B-18（48kHz で書き出せるテスト用の写し・メインスレッドをわざと止める・§6 のケース A〜J）

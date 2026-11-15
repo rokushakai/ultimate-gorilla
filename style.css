@@ -1765,3 +1765,84 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .drf-stage { border: 1px solid #ffd166; border-radius: 10px; padding: 8px; margin: 6px 0; }
 .drf-stage .dlu-kv b { word-break: break-all; text-align: right; }
 .drf input[type="range"] { width: 100%; max-width: 200px; }
+/* §342 9B-21: 表示の切りかえ（モバイル・PC Studio）。PC Studio ＝ 画面いっぱい（#game の 480px の外へ）・アレンジの別の並べ方 */
+.daw-vsel { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; }
+.daw-vsel select { font-size: 12px; min-height: 30px; padding: 2px 4px; background: #0f1a2b; color: #fff; border: 1px solid #3a4a63; border-radius: 6px; }
+.dstu-narrow { color: #ffd166; flex: 1 1 100%; }
+.dstu-host { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 60; overflow: auto; background: #0f1a2b; padding: 10px 14px 24px; box-sizing: border-box; -webkit-overflow-scrolling: touch; }
+.dstu-host > .daw:not(.dstu) { max-width: 760px; margin: 0 auto; }
+.dstu { max-width: 2400px; margin: 0 auto; outline: none; }
+.dstu-top { flex-wrap: wrap; }
+.dstu-badge { font-size: 11px; color: #10202e; background: #4cc9f0; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+.dstu-pbar { flex: 1 1 auto; min-width: 0; }
+.dstu-pbar .dp-bar { margin: 0; }
+.dstu-tp { gap: 6px; padding: 6px 8px; background: #15233a; border: 1px solid #2c3e57; border-radius: 8px; }
+.dstu-tp .daw-bpm { margin-left: 8px; }
+.dstu-zoom { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.dstu-zv { min-width: 44px; text-align: center; font-size: 12px; color: #e0fbfc; font-variant-numeric: tabular-nums; }
+.dstu-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 10px; align-items: start; }
+.dstu-mainc, .dstu-side { min-width: 0; }
+.dstu .daw-arr { max-height: 56vh; overflow-y: auto; }
+.dstu .daw-ruler-row { position: sticky; top: 0; z-index: 3; }
+.dstu .daw-clip:hover { border-color: #ffd166; }
+.dstu .daw-head:hover { background: #22364d; }
+.dstu-ov { position: relative; margin-bottom: 6px; padding: 3px 0; background: #15233a; border: 1px solid #2c3e57; border-radius: 6px; cursor: pointer; padding-left: 96px; }
+.dstu-ovin { position: relative; min-height: 20px; }
+.dstu-ovl { position: relative; margin: 1px 0; }
+.dstu-ovl i { position: absolute; top: 0; bottom: 0; background: #4cc9f0; opacity: 0.75; border-radius: 1px; }
+.dstu-ovl i.dstu-ova { background: #06d6a0; }
+.dstu-ovl i.on { background: #ffd166; opacity: 1; }
+.dstu-ovsec { position: absolute; top: -2px; height: 3px; overflow: hidden; font-size: 0; border-radius: 2px; background: #74b9ff; }
+.dstu-ovref { position: relative; height: 18px; margin-bottom: 1px; opacity: 0.85; }
+.dstu-ovref .drf-svg { display: block; width: 100%; height: 18px; }
+.dstu-ovref .drf-svg path { stroke: #c77dff; }
+.dstu-ovvp { position: absolute; top: -3px; bottom: -3px; border: 1px solid #ffd166; border-radius: 3px; background: rgba(255, 209, 102, 0.1); pointer-events: none; }
+.dstu-ovph { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #ef476f; pointer-events: none; }
+.dstu-bot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 10px; margin-top: 8px; align-items: start; }
+.dstu-ops .daw-info { margin-top: 0; }
+.dstu-card { padding: 8px; background: #1a2a3a; border: 1px solid #2c3e57; border-radius: 8px; margin-bottom: 8px; font-size: 13px; }
+.dstu-ch, .dstu-eh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.dstu-ch b, .dstu-eh b { color: #ffd166; }
+.dstu-ch .daw-small, .dstu-eh .daw-small { margin-left: auto; }
+.dstu-guide { color: #adb5bd; margin: 4px 0; }
+.dstu-ew { position: relative; padding-left: 34px; }
+.dstu-ewa { padding-left: 0; }
+.dstu-ekeys { position: absolute; left: 0; top: 0; bottom: 0; width: 32px; display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: #adb5bd; }
+.dstu-roll, .dstu-wave { display: block; width: 100%; height: 150px; background: #0f1a2b; border-radius: 6px; }
+.dstu-wave { height: 120px; }
+.dstu-rk { fill: rgba(255, 255, 255, 0.05); }
+.dstu-rb { stroke: rgba(255, 255, 255, 0.25); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.dstu-rn { fill: #4cc9f0; }
+.dstu-wave path { stroke: #06d6a0; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.dstu-eph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ef476f; display: none; pointer-events: none; }
+.dstu-ew .dstu-eph { left: 34px; }
+.dstu-strip { padding: 5px 4px; border-bottom: 1px solid #22324a; }
+.dstu-strip.on { background: #22364d; border-radius: 6px; }
+.dstu-sn { display: flex; align-items: center; gap: 6px; }
+.dstu-tn { flex: 1 1 auto; min-width: 0; font-weight: bold; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.dstu-sn .daw-ms { flex: 0 0 64px; }
+.dstu-sn .dm-fxb { margin: 0; padding: 2px 8px; min-height: 30px; min-width: 32px; font-size: 12px; }
+.dstu-mix { max-height: calc(100vh - 230px); overflow-y: auto; }
+.dstu-scs { display: flex; gap: 8px; }
+.dstu-sc { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.dstu-sc .dm-lab { flex: 0 0 auto; font-size: 11px; color: #adb5bd; }
+.dstu-sc .dm-fader { flex: 1 1 auto; min-width: 0; }
+.dstu-sc .dm-val { flex: 0 0 26px; text-align: right; font-size: 12px; }
+.dstu-mst { border-bottom: 0; }
+.dstu-mnote { color: #adb5bd; margin: 4px 0 0; }
+.dstu-rn { color: #e0fbfc; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dstu-rw { cursor: pointer; }
+.dstu-ab .modal-btn { margin: 0; }
+.dstu-rg { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.dstu-rg .drf-gv { min-width: 56px; text-align: center; }
+.dstu-rg .dfx-tog { margin: 0 0 0 auto; }
+.dstu .modal-btn:focus-visible, .dstu select:focus-visible, .dstu input:focus-visible { outline: 2px solid #4cc9f0; outline-offset: 1px; }
+@media (max-width: 1100px) {
+  .dstu-grid { grid-template-columns: minmax(0, 1fr); }
+  .dstu-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .dstu-mix { max-height: none; }
+}
+@media (max-width: 860px) {
+  .dstu-bot { grid-template-columns: minmax(0, 1fr); }
+  .dstu-side { grid-template-columns: minmax(0, 1fr); }
+}

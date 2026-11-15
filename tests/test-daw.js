@@ -3694,4 +3694,93 @@ module.exports = async function () {
   W20.UGArcade.stop(); D20.reset();
   var err20 = C20.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(err20.length === 0, "no Web Audio errors (9B-20)", err20.slice(0, 3));
+  // ================= 9B-21: PC Studio（One DAW, Multiple Views）・QA の診断（§342）=================
+  var e21 = H.load(), W21 = e21.window, D21 = W21.UGDaw, M21 = W21.UGDawModel, S21 = e21.store, C21 = e21.counters, A21 = W21.UGArcade, rpg21 = S21.ultimateGorillaSaveV2;
+  var R21 = H.makeEl("div"); R21.className = "arcade-stage-x";
+  function cnt21(h, re) { return (h.match(re) || []).length; }
+  function k21(key, tag, extra) { var e = { key: key, keyCode: 0, target: { tagName: tag || "DIV" }, prevented: false, preventDefault: function () { e.prevented = true; } }, x; for (x in (extra || {})) { e[x] = extra[x]; } return e; }
+  ok(D21.view.mode() === "auto" && D21.view.KEY === "ultimateGorillaDawViewV1" && D21.view.MIN_AUTO === 1024 && D21.view.MIN_PC === 700 && D21.view.ZOOMS.join() === "0.25,0.5,1,2", "view: auto by default, device key, 1024px auto / 700px PC, zooms 25–200%");
+  W21.innerWidth = 390; A21.start("daw", R21, {});
+  var h390 = R21.innerHTML;
+  ok(D21.view.layout() === "mobile" && h390.indexOf('class="daw dstu"') < 0 && h390.indexOf('class="daw-transport"') >= 0 && h390.indexOf('class="da-area"') >= 0 && h390.indexOf('data-ar="sections"') >= 0, "390px (auto): the mobile arrangement with 🎼 曲の構成 and the panel area");
+  ok(h390.indexOf('select data-viewmode="1"') >= 0 && cnt21(h390, /<option value="(auto|mobile|pc)"/g) === 3 && h390.indexOf('<option value="auto" selected>') >= 0, "the mobile arrangement has one view selector (自動・モバイル・PC Studio)");
+  ok(R21.className === "arcade-stage-x" && D21.view.state().pxb === 28 && !D21.view.state().host, "mobile: no full-screen host class, 28px per beat");
+  W21.innerWidth = 1023; ok(D21.view.layout() === "mobile", "auto: 1023px → mobile");
+  W21.innerWidth = 1024; ok(D21.view.layout() === "pc", "auto: 1024px → PC Studio");
+  // 画面の幅が変わった（resize）→ 描きなおす（曲・保存の状態は変わらない・音のノードを作らない）
+  D21.flushSave(); var proj21 = JSON.stringify(D21.project()), sv21 = D21.saveState().status, keys21 = Object.keys(S21).sort().join("|"), nodes21 = JSON.stringify(C21.nodes);
+  e21.key("resize");
+  var hpc = R21.innerHTML;
+  ok(hpc.indexOf('class="daw dstu" tabindex="-1"') >= 0 && /(^| )dstu-host( |$)/.test(R21.className) && R21.className.indexOf("arcade-stage-x") === 0 && D21.view.state().host, "resize to 1024px (auto): PC Studio in the full-screen host (keeps the root's own class)");
+  ok(["dstu-tp", "dstu-ov", 'class="daw-arr"', "dstu-edit", "dstu-ops", "dstu-mix", "dstu-ref"].every(function (k) { return hpc.indexOf(k) >= 0; }), "PC Studio: transport, overview, arrangement, editor, selection panel, mixer, reference");
+  ok(['data-act="play"', 'data-act="stop"', 'data-act="loop"', 'class="daw-pos"', 'data-act="bpm"', 'data-act="bpm-"', 'data-act="bpm+"', 'class="dsv-slot"', 'data-stx="wav"', 'data-ar="undo"', 'data-zoom="-"', 'data-zoom="+"', 'select data-viewmode="1"'].every(function (k) { return hpc.indexOf(k) >= 0; }), "A. transport: ▶ ⏹ 🔁 position BPM save status 📤 WAV ↶ zoom view");
+  var p21 = D21.project(), nT = p21.tracks.length;
+  ok(cnt21(hpc, /class="dm-fader" min="0" max="100" step="1" value="\d+" data-mxv="t/g) === nT && hpc.indexOf('data-mxv="master"') >= 0 && cnt21(hpc, /data-mxp="/g) === nT && cnt21(hpc, /data-stx-fx="/g) === nT && hpc.indexOf('data-stx="master"') >= 0 && hpc.indexOf('data-stx="sendfx"') >= 0, "C. mixer: volume and pan per track, FX, MASTER volume, 🎚️ MASTER, 🌊 FX");
+  ok(cnt21(hpc, /class="daw-head/g) === nT && cnt21(hpc, /class="daw-transport/g) === 1 && cnt21(hpc, /class="daw-pos"/g) === 1, "one arrangement, one transport, one position (no duplicate panels)");
+  ok(JSON.stringify(D21.project()) === proj21 && D21.saveState().status === sv21 && Object.keys(S21).sort().join("|") === keys21 && JSON.stringify(C21.nodes) === nodes21, "switching the view changes neither the song, the save status, the stored keys, nor makes audio nodes");
+  // ズーム（PC Studio だけ）: 1 拍の幅・クリックの位置
+  var c21 = p21.tracks[0].clips[1];
+  ok(D21.view.zoom(1) === 2 && D21.view.state().pxb === 56 && R21.innerHTML.indexOf('data-clip="' + c21.id + '" style="left:' + Math.round(c21.start / PPQ * 56) + 'px;') >= 0, "zoom 200%: 56px per beat, clips placed with it");
+  ok(D21.view.zoom(-1) === 1 && D21.view.zoom(-1) === 0.5 && D21.view.zoom(-1) === 0.25 && D21.view.zoom(-1) === 0.25 && D21.view.state().pxb === 7 && R21.innerHTML.indexOf('data-zoom="-" aria-label="縮小" disabled') >= 0, "zoom out to 25% (7px per beat), not past it");
+  D21.view.zoom(1); D21.view.zoom(1);
+  ok(D21.view.state().pxb === 28 && JSON.stringify(D21.project()) === proj21, "zoom does not change the song");
+  // D. 選んだクリップ → 編集の見本（ピアノロール）・フルの編集のボタン
+  D21.select("clip", c21.id);
+  var hsel = R21.innerHTML, inN = c21.notes.filter(function (n) { return n[0] < c21.len; }).length;
+  ok(hsel.indexOf('class="dstu-roll"') >= 0 && cnt21(hsel, /class="dstu-rn"/g) === inN && hsel.indexOf('data-cl="roll"') >= 0 && hsel.indexOf('class="dstu-eph"') >= 0, "D. a MIDI clip: piano-roll preview with every note, full-editor button, playhead", [inN, cnt21(hsel, /class="dstu-rn"/g)]);
+  ok(hsel.indexOf('data-cl="dup"') >= 0 && hsel.indexOf('data-cl="del"') >= 0 && hsel.indexOf('data-cl="left"') >= 0, "the same selection operations as mobile (duplicate, move, delete)");
+  // 同じ操作の関数: PC で動かす → モバイルで同じ → ↶（Ctrl+Z）
+  var st21 = c21.start, u21 = D21.undoDepth();
+  D21.ops.move(c21.id, 1);
+  var moved21 = M21.findClip(D21.project(), c21.id).clip.start;
+  W21.innerWidth = 390; e21.key("resize");
+  ok(moved21 === st21 + M21.barTicks(D21.project()) && R21.innerHTML.indexOf('class="daw dstu"') < 0 && R21.innerHTML.indexOf('data-clip="' + c21.id + '" style="left:' + Math.round(moved21 / PPQ * 28) + 'px;') >= 0 && !/dstu-host/.test(R21.className), "a clip moved in PC Studio shows at the same place in the mobile view (host removed)");
+  W21.innerWidth = 1440; e21.key("resize");
+  var ez = k21("z", "DIV", { ctrlKey: true });
+  ok(D21.view.key(ez) === true && ez.prevented && M21.findClip(D21.project(), c21.id).clip.start === st21 && D21.undoDepth() === u21, "Ctrl+Z in PC Studio undoes the move (same undo list)");
+  var em = k21("z", "DIV", { metaKey: true }); D21.ops.move(c21.id, 1);
+  ok(D21.view.key(em) === true && M21.findClip(D21.project(), c21.id).clip.start === st21, "⌘+Z (Mac) also undoes");
+  // Space ▶／⏹・入力中は何もしない・Esc
+  var es1 = k21(" ", "DIV");
+  ok(D21.view.key(es1) === true && es1.prevented && D21.isPlaying(), "Space plays");
+  var pl21 = D21.player(); D21.view.set("mobile"); D21.view.set("pc");
+  ok(D21.isPlaying() && D21.player() === pl21, "switching the view while playing keeps the same playback (no restart)");
+  ok(D21.view.key(k21(" ", "DIV")) === true && !D21.isPlaying(), "Space stops");
+  var ein = k21(" ", "INPUT"), esel = k21(" ", "SELECT"), etx = k21("z", "TEXTAREA", { ctrlKey: true });
+  ok(D21.view.key(ein) === false && D21.view.key(esel) === false && D21.view.key(etx) === false && !ein.prevented && !esel.prevented && !etx.prevented && !D21.isPlaying(), "keys do nothing while typing / choosing (input, select, textarea)");
+  ok(D21.view.key(k21("a", "DIV")) === false && D21.view.key(k21(" ", "DIV", { altKey: true })) === false, "other keys and Alt combinations pass through");
+  D21.select("clip", c21.id); var ee = k21("Escape", "DIV");
+  ok(D21.view.key(ee) === true && ee.prevented && D21.state().sel === null && D21.view.key(k21("Escape", "DIV")) === false, "Esc clears the selection (and passes through when nothing is open)");
+  D21.state().chooseAdd = true; ok(D21.view.key(k21("Escape", "DIV")) === true && D21.state().chooseAdd === false, "Esc closes the add-track panel first");
+  // ミキサー（同じ mixer）: PC の値 ＝ モバイルのミキサーの値
+  var t21 = D21.project().tracks[0];
+  D21.mixer.setVol(t21.id, 55); D21.mixer.commit(); D21.view.set("pc");
+  ok(R21.innerHTML.indexOf('value="55" data-mxv="' + t21.id + '"') >= 0, "PC mixer shows the volume");
+  D21.view.set("mobile"); D21.showMixer();
+  ok(R21.innerHTML.indexOf('value="55" data-mxv="' + t21.id + '"') >= 0, "the mobile mixer shows the same volume (one mixer model)");
+  // せまい画面で PC Studio を選んだ → モバイルで見せて注意（操作できなくならない）
+  D21.state().view = "arr"; W21.innerWidth = 600; D21.view.set("pc");
+  ok(D21.view.mode() === "pc" && D21.view.layout() === "mobile" && D21.view.state().narrow && R21.innerHTML.indexOf("dstu-narrow") >= 0 && R21.innerHTML.indexOf('class="daw dstu"') < 0, "PC Studio chosen on a 600px screen: shown as mobile with a note");
+  W21.innerWidth = 768; e21.key("resize");
+  ok(D21.view.layout() === "pc" && R21.innerHTML.indexOf('class="daw dstu"') >= 0, "PC Studio chosen on 768px: PC Studio");
+  ok(S21[D21.view.KEY] === "pc" && JSON.stringify(D21.project()).indexOf("dstu") < 0 && JSON.stringify(D21.project()).indexOf("viewmode") < 0, "the view is a device setting (localStorage), not in the song");
+  // ほかの画面（フル）は PC でも同じ画面（入れ物の中央）・戻ると PC Studio
+  D21.showMixer();
+  ok(R21.innerHTML.indexOf('class="daw dm"') >= 0 && /dstu-host/.test(R21.className), "full screens (mixer) open as they are inside the PC host");
+  D21.state().view = "arr"; D21.view.set("pc");
+  // 閉じる → 入れ物を外す
+  A21.stop();
+  ok(R21.className === "arcade-stage-x", "closing the DAW removes the full-screen host class");
+  // 診断（テスト用・画面に出さない）
+  D21.diag.clear(); A21.start("daw", R21, {}); D21.play(); D21.stop();
+  var dg21 = D21.diag.log();
+  ok(dg21.some(function (e) { return e.k === "play" && e.s === "ok" && typeof e.t === "number" && e.from === 0; }) && R21.innerHTML.indexOf("diag") < 0, "diag: play start recorded (not shown on screen)", dg21);
+  var us21 = W21.UGSynth; W21.UGSynth = undefined; D21.play(); W21.UGSynth = us21;
+  ok(D21.diag.log().some(function (e) { return e.k === "play" && e.s === "fail" && e.why === "nosynth"; }), "diag: a failed play start is recorded with the reason");
+  for (var q21 = 0; q21 < 90; q21++) { D21.stop(); D21.play(); }
+  ok(D21.diag.log().length === 80 && D21.diag.clear() && D21.diag.log().length === 0, "diag keeps at most 80 entries");
+  D21.stop(); D21.view.set("auto");
+  ok(S21.ultimateGorillaSaveV2 === rpg21, "the RPG save is untouched (9B-21)");
+  A21.stop(); D21.reset();
+  ok(C21.errors.length === 0, "no Web Audio errors (9B-21)", C21.errors.slice(0, 3));
 };
