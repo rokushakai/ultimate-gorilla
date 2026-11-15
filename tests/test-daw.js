@@ -1162,7 +1162,7 @@ module.exports = async function () {
     ["truncated ZIP", zipAB.slice(0, zipAB.byteLength - 30), /終わりの印|こわれ/],
     ["not a ZIP", new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]).buffer, /ZIP ではありません/],
     ["no manifest", zipOf([{ name: "project.json", data: fP }]), /manifest\.json がありません/],
-    ["newer pack", zipOf([{ name: "manifest.json", data: withMan(function (m) { m.packVersion = 2; }) }, { name: "project.json", data: fP }]), /新しい版/],
+    ["newer pack (v3; v2 is the 9B-20 long-audio pack)", zipOf([{ name: "manifest.json", data: withMan(function (m) { m.packVersion = 3; }) }, { name: "project.json", data: fP }]), /新しい版/],
     ["missing WAV", zipOf([{ name: "manifest.json", data: fM }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: fA1 }]), /素材が足りません/],
     ["SHA-256 mismatch", zipOf([{ name: "manifest.json", data: withMan(function (m) { m.assets[1].sha256 = new Array(65).join("0"); }) }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: fA1 }, { name: DP.pack.file(id2), data: fA2 }]), /SHA-256 が一致しません/],
     ["changed WAV", zipOf([{ name: "manifest.json", data: fM }, { name: "project.json", data: fP }, { name: DP.pack.file(id1), data: badA1 }, { name: DP.pack.file(id2), data: fA2 }]), /一致しません/],
@@ -3565,4 +3565,133 @@ module.exports = async function () {
   AL4.stop(); DL4.reset();
   var errL4 = CL4.errors.filter(function (x) { return !/not MP3/.test(x); });
   ok(errL4.length === 0, "no Web Audio errors (9B-14)", errL4.slice(0, 3));
+  // ================= 9B-20: 長い音声（WAV・MP3・M4A）・🎧 リファレンス（§342）=================
+  var e20 = H.load(), W20 = e20.window, D20 = W20.UGDaw, M20 = W20.UGDawModel, S20 = e20.store, C20 = e20.counters, rpg20 = S20.ultimateGorillaSaveV2;
+  var IDB20 = fakeIDB(); W20.indexedDB = IDB20;
+  // まねのデコード: WAV（16bit）は中身のとおり・MP3／M4A のまねは「バイト数 ÷ 2000 秒」の無音（ctx のレート・1ch）・"BAD!" で始まる所があればこわれている
+  function dec20(ab, okCb, ngCb) {
+    var self = this, u = new Uint8Array(ab), info = M20.parseWav(ab), bad = false, i;
+    for (i = 0; i + 3 < Math.min(u.length, 4000); i++) { if (u[i] === 66 && u[i + 1] === 65 && u[i + 2] === 68 && u[i + 3] === 33) { bad = true; break; } }
+    setTimeout(function () {
+      if (bad) { if (ngCb) { ngCb({ name: "EncodingError" }); } return; }
+      if (info.ok) {
+        if (info.bits !== 16) { if (ngCb) { ngCb({ name: "EncodingError" }); } return; }
+        var v = new DataView(ab), chs = [], c, k; for (c = 0; c < info.ch; c++) { chs.push(new Float32Array(info.frames)); }
+        for (k = 0; k < info.frames; k++) { for (c = 0; c < info.ch; c++) { chs[c][k] = v.getInt16(info.dataOffset + (k * info.ch + c) * 2, true) / 32768; } }
+        okCb({ numberOfChannels: info.ch, length: info.frames, sampleRate: info.sr, duration: info.frames / info.sr, getChannelData: function (q) { return chs[q]; } }); return;
+      }
+      var sr = self.sampleRate || 8000, n = Math.round(u.length / 2000 * sr), z = new Float32Array(n);
+      for (k = 0; k < n; k += 97) { z[k] = 0.5; }
+      okCb({ numberOfChannels: 1, length: n, sampleRate: sr, duration: n / sr, getChannelData: function () { return z; } });
+    }, 1);
+    return { catch: function () {} };
+  }
+  W20.OfflineAudioContext.prototype.decodeAudioData = dec20; W20.AudioContext.prototype.decodeAudioData = dec20;
+  function u8_20(list) { var a = new Uint8Array(list.length), i; for (i = 0; i < list.length; i++) { a[i] = list[i]; } return a; }
+  function cat20(parts) { var n = 0, i, o = 0; for (i = 0; i < parts.length; i++) { n += parts[i].length; } var u = new Uint8Array(n); for (i = 0; i < parts.length; i++) { u.set(parts[i], o); o += parts[i].length; } return u; }
+  function str20(s) { var u = new Uint8Array(s.length), i; for (i = 0; i < s.length; i++) { u[i] = s.charCodeAt(i) & 255; } return u; }
+  function be32_20(n) { return u8_20([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]); }
+  function be16_20(n) { return u8_20([(n >>> 8) & 255, n & 255]); }
+  function box_20(t, payload) { return cat20([be32_20(8 + payload.length), str20(t), payload]); }
+  // まねの MP3: ID3 ＋ MPEG-2.5 Layer III 8kHz のフレームの頭（sec 秒ぶんのバイト）
+  function fakeMp3(sec, id3, tag) { var n = Math.round(sec * 2000), u = new Uint8Array(n), i, o = 0; if (id3) { u.set(str20("ID3"), 0); u[3] = 3; o = 10; } for (i = o; i + 4 <= n; i += 72) { u[i] = 0xFF; u[i + 1] = 0xE3; u[i + 2] = 0x88; u[i + 3] = 0xC0; } if (tag) { u.set(str20(tag), 200); } return u.buffer; }
+  // まねの M4A: ftyp ＋ moov/trak/mdia（hdlr soun・mdhd）/minf/stbl/stsd（mp4a・ch・レート）
+  function fakeM4a(sec, sr, ch, drm) {
+    var entry = cat20([be32_20(36 + (drm ? 16 : 0)), str20(drm ? "enca" : "mp4a"), new Uint8Array(6), be16_20(1), new Uint8Array(8), be16_20(ch), be16_20(16), new Uint8Array(4), be32_20(sr * 65536), drm ? box_20("sinf", new Uint8Array(8)) : new Uint8Array(0)]);
+    var stsd = box_20("stsd", cat20([new Uint8Array(4), be32_20(1), entry])), hdlr = box_20("hdlr", cat20([new Uint8Array(8), str20("soun"), new Uint8Array(12), str20("snd"), u8_20([0])])), mdhd = box_20("mdhd", cat20([new Uint8Array(12), be32_20(sr), be32_20(Math.round(sec * sr)), new Uint8Array(4)]));
+    var moov = box_20("moov", box_20("trak", box_20("mdia", cat20([mdhd, hdlr, box_20("minf", box_20("stbl", stsd))]))));
+    var head = cat20([box_20("ftyp", cat20([str20("M4A "), new Uint8Array(4), str20("isomM4A ")])), moov]), n = Math.max(head.length + 16, Math.round(sec * 2000)), u = new Uint8Array(n);
+    u.set(head, 0); u.set(cat20([be32_20(n - head.length), str20("mdat")]), head.length); return u.buffer;
+  }
+  // --- 形式を中身で見る ---
+  var pw = M20.probeAudio(makeWav({ sec: 1, sr: 8000 })), pm = M20.probeAudio(fakeMp3(70, true)), pmRaw = M20.probeAudio(fakeMp3(10, false)), pa = M20.probeAudio(fakeM4a(90, 44100, 2)), pd = M20.probeAudio(fakeM4a(90, 44100, 2, true));
+  ok(pw.ok && pw.kind === "wav" && pm.ok && pm.kind === "mp3" && pm.sr === 8000 && pm.ch === 1 && pmRaw.ok && pmRaw.kind === "mp3" && pa.ok && pa.kind === "m4a" && pa.codec === "aac" && pa.sr === 44100 && pa.ch === 2, "9B-20: probeAudio tells WAV / MP3 (ID3 and bare frames: rate, ch) / M4A (mp4a: AAC, rate, ch) by the content", [pm, pa]);
+  ok(!pd.ok && pd.drm === true && /DRM/.test(pd.why), "9B-20: an encrypted M4A (enca / sinf) is refused as DRM", pd);
+  var pWeb = M20.probeAudio(u8_20([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).buffer), pTxt = M20.probeAudio(str20("hello this is not audio at all").buffer), pFl = M20.probeAudio(cat20([str20("fLaC"), new Uint8Array(40)]).buffer);
+  ok(!pWeb.ok && /WebM/.test(pWeb.why) && !pTxt.ok && /対応していない形式/.test(pTxt.why) && pFl.ok && pFl.tryOnly && M20.probeAudio(str20("OggS........").buffer).tryOnly, "9B-20: WebM and unknown bytes are refused; FLAC / Ogg are 'try if the browser can'", [pWeb.why, pTxt.why]);
+  ok(M20.importBytesWhy({ kind: "wav" }, 121 * 1048576) !== "" && M20.importBytesWhy({ kind: "wav" }, 100 * 1048576) === "" && M20.importBytesWhy({ kind: "mp3" }, 41 * 1048576) !== "" && M20.importSecWhy(331) !== "" && M20.importSecWhy(330.4) === "" && M20.importSecWhy(0) !== "", "9B-20: size limits per kind (WAV 120 MiB, MP3/M4A 40 MiB) and length 5 min 30 s (+0.5 s for encoder padding)");
+  // --- 上限（ふつうの素材の 120 秒・長い素材 2 個・メモリ・合計）---
+  var pR = M20.newProject({ now: 0 }), ra = function (id, sec, extra) { var a = { id: id, name: id, bytes: Math.round(sec * 16000), sr: 8000, ch: 1, bits: 16, frames: sec * 8000, sec: sec, hash: id }; for (var k in extra || {}) { a[k] = extra[k]; } return a; };
+  pR.assets = [ra("a:0000000000000001", 60), ra("a:0000000000000002", 50)];
+  ok(/合計 120 秒/.test(M20.assetRoomWhy(pR, { sec: 11 })) && M20.assetRoomWhy(pR, { sec: 10 }) === "", "9B-20: the 120 s pool for short assets (and recording) is unchanged");
+  ok(M20.assetRoomWhy(pR, { sec: 300, bytes: 4 * 1048576, sr: 44100, ch: 2 }) === "" && M20.isLongInfo({ sec: 61 }) && M20.isLongInfo({ sec: 10, bytes: 11 * 1048576 }) && !M20.isLongInfo({ sec: 59, bytes: 1000 }), "9B-20: a long asset (> 60 s or > 10 MiB) does not use the 120 s pool");
+  pR.assets.push(ra("a:0000000000000003", 200, { long: true }), ra("a:0000000000000004", 200, { long: true }));
+  ok(/1 曲 2 個まで/.test(M20.assetRoomWhy(pR, { sec: 100, bytes: 1000, sr: 8000, ch: 1 })) && M20.assetRoomWhy(pR, { sec: 10, bytes: 1000 }) === "" && M20.shortSec(pR) === 110, "9B-20: at most 2 long assets per song; short ones are still allowed; shortSec ignores long assets");
+  var pR2 = M20.newProject({ now: 0 }); pR2.assets = [ra("a:0000000000000005", 330, { long: true, sr: 96000, ch: 2 })];
+  ok(/メモリが約/.test(M20.assetRoomWhy(pR2, { sec: 330, sr: 96000, ch: 2, bytes: 1000 })) && /ZIP/.test(M20.assetRoomWhy({ assets: [ra("a:0000000000000006", 100, { long: true, bytes: 200 * 1048576 })] }, { sec: 100, bytes: 50 * 1048576, sr: 8000, ch: 1 })), "9B-20: decoded-memory (256 MiB) and file-total (240 MiB, so the ZIP fits) limits");
+  // --- 64 小節をこえる長いクリップ（案 A）---
+  var pC = M20.newProject({ now: 0 }); M20.setBpm(pC, 200); var tC = M20.addAudioTrack(pC).track, aL = ra("a:0000000000000007", 200, { long: true }), aS = ra("a:0000000000000008", 60);
+  pC.assets.push(aL, aS);
+  var cL = M20.addAudioClip(pC, tC, 0, aL, "long"), barsL = cL.len / M20.barTicks(pC), cS = M20.addAudioClip(pC, tC, undefined, aS, "short");
+  ok(cL && barsL === Math.ceil(200 / (60 / 200 * 4)) && barsL > 64 && !M20.audioSpan(pC, cL).boxCut && M20.clipMaxTicks(pC, cL) === 256 * M20.barTicks(pC) && M20.clipMaxTicks(pC, cS) === 64 * M20.barTicks(pC), "9B-20: a 200 s long asset at 200 BPM gets one clip of 167 bars (not cut at 64); short clips keep the 64-bar limit", [barsL]);
+  var pC2 = M20.newProject({ now: 0 }); M20.setBpm(pC2, 300); var tC2 = M20.addAudioTrack(pC2).track; pC2.assets.push(ra("a:0000000000000009", 330, { long: true }));
+  ok(M20.addAudioClip(pC2, tC2, 0, pC2.assets[0], "x") === null && tC2.clips.length === 0, "9B-20: when the whole sound does not fit (330 s at 300 BPM > 256 bars) nothing is placed (no partial clip)");
+  // --- リファレンス（曲の ref）---
+  var pF = M20.newProject({ now: 0 }); pF.assets.push(aL);
+  ok(M20.setRef(pF, aL.id).ok && M20.refOf(pF).gain === 0 && M20.assetUse(pF, aL.id) === 1 && !M20.setRef(pF, "a:00000000000000ff").ok, "9B-20: setRef needs an asset of the song; the reference counts as a use");
+  M20.refSet(pF, "gain", 99); M20.refSet(pF, "offset", -45); M20.refSet(pF, "mute", 1);
+  ok(M20.refOf(pF).gain === 6 && M20.refOf(pF).offset === -30 && M20.refOf(pF).mute === true, "9B-20: gain −24…+6 dB, offset ±30 s, mute");
+  M20.refSet(pF, "offset", 0);
+  var cleaned = M20.clean(JSON.parse(JSON.stringify(pF)));
+  ok(JSON.stringify(cleaned.ref) === JSON.stringify(pF.ref) && M20.clean({ ref: { asset: "x" } }).ref === undefined && M20.clean({}).ref === undefined, "9B-20: the reference survives save/clean; a broken one is dropped; old songs get none");
+  ok(M20.playEndTick(pF) > M20.songEndTick(pF) && M20.tickToSec(pF, M20.playEndTick(pF)) >= 200, "9B-20: playback end = the longer of the song and the reference; songEndTick (WAV) ignores it", [M20.songEndTick(pF), M20.playEndTick(pF)]);
+  // --- DAW: 読みこみ → 確かめる → リファレンス／通常トラック ---
+  var R20 = H.makeEl("div"); D20.reset(); W20.UGArcade.start("daw", R20, {}); D20.proj.create("empty");
+  function ref20(ab, name, tgt) { return new Promise(function (r) { D20.ref.importBlob(new W20.Blob([ab]), name, tgt, r); }); } // 画面と同じ（選んだファイル ＝ Blob）
+  function commit20(w) { return new Promise(function (r) { D20.ref.commit(w, r); }); }
+  var p20 = D20.project(), snap20 = JSON.stringify(p20), room0 = D20.rec.room(48000);
+  var lw = makeWav({ sec: 90, sr: 8000, fn: function (t) { return 0.3 * Math.sin(2 * Math.PI * 220 * t); } }), s1 = await ref20(lw, "long.wav", { ref: true });
+  ok(s1.ok && s1.staged && s1.stage.kind === "wav" && s1.stage.long === true && Math.abs(s1.stage.sec - 90) < 1e-6 && JSON.stringify(D20.project()) === snap20 && !IDB20.writes, "9B-20: a 90 s WAV is decoded and waits for the choice: the song and IndexedDB are not changed yet", s1.stage);
+  ok(R20.innerHTML.indexOf("drf-stage") >= 0 || (D20.ref.show() && R20.innerHTML.indexOf("drf-stage") >= 0), "9B-20: the check card (format, length, memory, track / reference / cancel) is shown");
+  D20.ref.cancel(); ok(!D20.ref.state().stage && JSON.stringify(D20.project()) === snap20, "9B-20: cancel → nothing changes");
+  s1 = await ref20(lw, "long.wav", { ref: true }); var c1 = await commit20("ref"), hL = c1.asset && c1.asset.id;
+  var db20 = IDB20.data[D20.audio.IDB_NAME], row = db20 && db20.stores.blobs.rows[hL];
+  ok(c1.ok && c1.where === "ref" && D20.project().ref.asset === hL && c1.asset.long === true && row && row.data && typeof row.data.byteLength !== "number" && row.data.size === lw.byteLength && db20.stores.meta.rows[hL].long === true, "9B-20: set as reference: the long WAV is stored as the original file (Blob) with long: true; the song gets ref", c1.why);
+  ok(D20.rec.room(48000) === room0 && D20.audio.used(D20.project()).indexOf(hL) >= 0 && D20.ref.state().loaded, "9B-20: recording room unchanged by a long asset; the reference asset is used (loaded, packed)", [room0, D20.rec.room(48000)]);
+  ok(D20.wav.plan().sec < 40 && M20.tickToSec(D20.project(), D20.ref.state().playEnd) >= 90, "9B-20: the WAV export length ignores the reference (playback runs to its end)", [D20.wav.plan().sec]);
+  // 再生: リファレンスの音（別の出口）・A／B・停止で片づく
+  D20.jumpTo(0); D20.play(); var P20 = D20.player(), ac20 = P20.ac, g20 = 0; while (ac20.currentTime < P20.segs[0].t0 + 1 && g20++ < 200) { ac20.currentTime += 0.025; D20.pump(); }
+  var rs = D20.ref.state(), mst = P20.mix.__master;
+  ok(rs.node && rs.srcs === 1 && P20.mix.__ref.g.gain.value > 0, "9B-20: playback starts one reference source on its own output", rs);
+  var nt0 = C20.targets.length; D20.ref.ab("ref"); var stR = D20.ref.state(); D20.ref.ab("daw"); var stD = D20.ref.state(); D20.ref.ab("both"); var stB = D20.ref.state(), busRef = [stR.daw, stR.gain], refG = stB.gain, refG2 = stD.gain, busDaw = stD.daw;
+  ok(stB.ab === "both" && stR.daw === 0 && stR.gain > 0 && refG2 === 0 && busDaw === 1 && Math.abs(refG - 0.25) < 1e-9 && C20.targets.length >= nt0 + 9, "9B-20: A/B: '🎧 only' / 'DAW only' / both switch the two outputs (levels are not normalised)", [busRef, refG, refG2, busDaw]);
+  D20.stop(); await e20.wait(200);
+  ok(!D20.ref.state().node, "9B-20: stop removes the reference output");
+  // WAV の書き出し（まねのオフライン）: リファレンスは予約されない
+  var wl0 = await new Promise(function (r) { D20.wav.start(r); }); for (var gw20 = 0; gw20 < 300 && D20.wav.state().busy; gw20++) { await e20.wait(10); }
+  ok(!(D20.wav.state().log || []).some(function (x) { return x.audio && x.asset === hL; }), "9B-20: the WAV export does not include the reference");
+  // MP3 を通常トラックへ（オーディオトラックが無ければ作る）
+  var nTr = D20.project().tracks.length, s2 = await ref20(fakeMp3(75, true), "song.mp3", { ref: true }), c2 = await commit20("track");
+  var fa = c2.asset;
+  ok(s2.ok && s2.stage.kind === "mp3" && c2.ok && c2.where === "track" && D20.project().tracks.length === nTr + 1 && c2.clip && fa.kind === "mp3" && fa.long === true && Math.abs(fa.sec - 75) < 0.01, "9B-20: an MP3 placed on a normal track (a new audio track is made)", [s2.stage, c2.why]);
+  ok(D20.audio.missing(D20.project()) === 0 && M20.audioSpan(D20.project(), c2.clip).ok && !M20.audioSpan(D20.project(), c2.clip).boxCut, "9B-20: the MP3 clip covers the whole sound");
+  // こわれた MP3・DRM・長すぎ・拡張子とちがう中身
+  var bad = await ref20(fakeMp3(20, true, "BAD!"), "broken.mp3", { ref: true }), drm = await ref20(fakeM4a(30, 44100, 2, true), "drm.m4a", { ref: true }), tooLong = await ref20(fakeMp3(340, true), "long.mp3", { ref: true }), wavAsMp3 = await ref20(makeWav({ sec: 2, sr: 8000 }), "really-wav.mp3", { ref: true });
+  ok(!bad.ok && /読めませんでした/.test(bad.why) && !drm.ok && /DRM/.test(drm.why) && !tooLong.ok && /5 分 30 秒まで/.test(tooLong.why) && wavAsMp3.ok && wavAsMp3.stage.kind === "wav", "9B-20: broken file / DRM / over 5:30 are refused with reasons; a WAV named .mp3 is read as WAV", [bad.why, drm.why, tooLong.why]);
+  D20.ref.cancel();
+  // 長い素材はテイクにできない・2 個まで
+  var tk = await ref20(fakeMp3(80, true), "take.mp3", { take: c2.clip.id });
+  ok(!tk.ok && /テイク/.test(tk.why), "9B-20: long / compressed audio cannot become a take");
+  var s3 = await ref20(fakeMp3(65, true, "third"), "third.mp3", { ref: true }), c3 = await commit20("track");
+  ok(s3.ok && !c3.ok && /2 個まで/.test(c3.why), "9B-20: the third long asset is refused at commit (song unchanged)", c3.why);
+  D20.ref.cancel();
+  // ZIP（版 2）→ 新しい曲として読みなおす
+  var zp = await new Promise(function (r) { D20.pack.exportZip(r); });
+  ok(zp.ok && zp.manifest.packVersion === 2 && zp.manifest.assets.some(function (a) { return /\.mp3$/.test(a.file) && a.kind === "mp3"; }) && zp.manifest.assets.some(function (a) { return a.id === hL && a.long === true && /\.wav$/.test(a.file); }), "9B-20: ZIP: packVersion 2, the MP3 kept as .mp3 (original bytes), the long WAV flagged", zp.why);
+  var zab = await zp.blob.arrayBuffer(), before = IDB20.writes;
+  delete db20.stores.blobs.rows[hL]; delete db20.stores.meta.rows[hL]; delete db20.stores.blobs.rows[fa.id]; delete db20.stores.meta.rows[fa.id]; // 別の端末と同じ（素材が無い）
+  var zi = await new Promise(function (r) { D20.pack.importZip(zab, r); });
+  ok(zi.ok && db20.stores.blobs.rows[hL] && db20.stores.blobs.rows[hL].data.size === lw.byteLength && db20.stores.blobs.rows[fa.id] && IDB20.writes > before, "9B-20: ZIP import restores the long WAV and the MP3 into IndexedDB (as files)", zi.why);
+  var lst = D20.proj.list ? D20.proj.list() : null; D20.proj.open(zi.id);
+  ok(D20.project().ref && D20.project().ref.asset === hL && D20.project().assets.length === 2, "9B-20: the restored song keeps the reference and both assets");
+  var ld = await new Promise(function (r) { D20.audio.ensure(D20.project(), r); });
+  ok(D20.audio.assetState(hL) === "ready" && D20.audio.assetState(fa.id) === "ready", "9B-20: after the restore both decode from the stored files (Blob → ArrayBuffer)", [D20.audio.assetState(hL), D20.audio.assetState(fa.id)]);
+  // 古い版 1 の ZIP（ふつうの WAV だけ）は版 1 のまま書く
+  D20.proj.create("empty"); var tN = await new Promise(function (r) { D20.audio.add(r); }), sw = await new Promise(function (r) { D20.audio.importWav(makeWav({ sec: 2, sr: 8000 }), "s.wav", { track: tN.id }, r); });
+  var zp1 = await new Promise(function (r) { D20.pack.exportZip(r); });
+  ok(sw.ok && zp1.ok && zp1.manifest.packVersion === 1 && /\.wav$/.test(zp1.manifest.assets[0].file) && zp1.manifest.assets[0].kind === undefined && typeof db20.stores.blobs.rows[sw.asset.id].data.byteLength === "number", "9B-20: a song with only short WAVs: stored as before (ArrayBuffer) and packed as version 1 (old versions can read it)");
+  ok(S20.ultimateGorillaSaveV2 === rpg20, "the RPG save is untouched (9B-20)");
+  W20.UGArcade.stop(); D20.reset();
+  var err20 = C20.errors.filter(function (x) { return !/not MP3/.test(x); });
+  ok(err20.length === 0, "no Web Audio errors (9B-20)", err20.slice(0, 3));
 };

@@ -267,7 +267,7 @@
     return o;
   }
   // §341 9A-4: 知らない項目は消さずに残す（新しい版で足した値・いまの画面で変えられない値を守る）
-  var PROJECT_KEYS = ["type", "version", "id", "name", "created", "saved", "ppq", "tempo", "key", "markers", "tracks", "assets", "master", "practice", "legacy", "ext", "readOnly"];
+  var PROJECT_KEYS = ["type", "version", "id", "name", "created", "saved", "ppq", "tempo", "key", "markers", "tracks", "assets", "master", "practice", "legacy", "ext", "readOnly", "ref"];
   var TRACK_KEYS = ["id", "name", "kind", "instrument", "vol", "pan", "mute", "solo", "fx", "clips", "auto", "ext", "sends"];
   function keepUnknown(src, dst, known) {
     var k, v;
@@ -307,6 +307,7 @@
     for (i = 0; i < sa.length && p.assets.length < 64; i++) { var ca = cleanAsset(sa[i]); if (ca && !aseen[ca.id]) { aseen[ca.id] = true; p.assets.push(ca); } }
     if (isObj(src.master)) { p.master = copy(src.master); p.master.vol = num(p.master.vol, 80, 0, 100); p.master.fx = fxClean(p.master.fx); if (p.master.sendFx !== undefined) { p.master.sendFx = sendFxClean(p.master.sendFx); } } // 9B-10: マスターの FX もトラックと同じ整え方・9B-11: センドの戻り
     if (isObj(src.practice)) { p.practice = copy(src.practice); }
+    if (src.ref !== undefined) { var rf0 = refClean(src.ref); if (rf0) { p.ref = rf0; } } // 9B-20: 🎧 リファレンス（無い曲には足さない）
     if (isObj(src.legacy)) { p.legacy = copy(src.legacy); }
     p.ext = isObj(src.ext) ? copy(src.ext) : {};
     // トラック（ID が無い・重なるときは付けなおす）
@@ -746,7 +747,7 @@
     if (!s.boxCut) { return { ok: false, why: "切れていません" }; }
     for (i = 0; i < f.track.clips.length; i++) { var o = f.track.clips[i]; if (o !== c && o.start > c.start && o.start < nx) { nx = o.start; } }
     var endT = secToTick(p, s.full + 0.0005), need = Math.ceil((endT - c.start) / bt - 1e-6) * bt;
-    var len = Math.max(c.len, Math.min(need, CLIP_MAX_BARS * bt, nx - c.start, MAX_BARS * bt - c.start));
+    var len = Math.max(c.len, Math.min(need, clipMaxTicks(p, c), nx - c.start, MAX_BARS * bt - c.start)); // 9B-20: 長い素材は 256 小節まで
     if (len <= c.len) { return { ok: false, why: "次のクリップ・長さの上限があるので、のばせません" }; }
     c.len = len;
     return { ok: true, len: len, still: audioSpan(p, c).boxCut };
@@ -856,7 +857,7 @@
     if (!f) { return { ok: false, why: "クリップが見つかりません" }; }
     var c = f.clip, bt = barTicks(p), nl = c.len + Math.round(bars) * bt, i, hid = 0;
     if (nl < bt) { return { ok: false, why: "1 小節より短くはできません" }; }
-    if (nl > CLIP_MAX_BARS * bt || c.start + nl > MAX_BARS * bt) { return { ok: false, why: "これより長くはできません" }; }
+    if (nl > clipMaxTicks(p, c) || c.start + nl > MAX_BARS * bt) { return { ok: false, why: "これより長くはできません" }; } // 9B-20
     if (overlapClip(f.track, c.start, nl, c)) { return { ok: false, why: "うしろのクリップと重なるので長くできません" }; }
     c.len = nl;
     for (i = 0; c.notes && i < c.notes.length; i++) { if (c.notes[i][0] - (c.offset || 0) >= nl) { hid++; } }
@@ -1016,37 +1017,142 @@
     return "a:" + ("0000000" + (h1 >>> 0).toString(16)).slice(-8) + ("0000000" + ((h2 ^ n) >>> 0).toString(16)).slice(-8);
   }
   function assetRef(info, name, hash) {
-    return { id: hash, name: str(name, "音声", 80), bytes: info.bytes, sr: info.sr, ch: info.ch, bits: info.bits, frames: info.frames, sec: Math.round(info.sec * 1e6) / 1e6, hash: hash, store: "idb", src: "import", license: "", added: Date.now() };
+    var o = { id: hash, name: str(name, "音声", 80), bytes: info.bytes, sr: info.sr, ch: info.ch, bits: info.bits, frames: info.frames, sec: Math.round(info.sec * 1e6) / 1e6, hash: hash, store: "idb", src: "import", license: "", added: Date.now() };
+    if (info.kind && info.kind !== "wav") { o.kind = info.kind; if (info.codec) { o.codec = info.codec; } if (info.srcSr) { o.srcSr = info.srcSr; } } // 9B-20: 圧縮の素材（元のファイルのまま・レート・ch・秒はデコードの結果）
+    if (isLongInfo(info)) { o.long = true; } // 9B-20: 長い素材（120 秒の合計に入れない）
+    return o;
   }
   // 同じ素材か（名前は見ない）
-  function sameAsset(a, b) { return !!(a && b && a.hash === b.hash && a.bytes === b.bytes && a.frames === b.frames && a.sr === b.sr && a.ch === b.ch); }
+  function sameAsset(a, b) { if (a && b && ((a.kind && a.kind !== "wav") || (b.kind && b.kind !== "wav"))) { return a.hash === b.hash && a.bytes === b.bytes; } return !!(a && b && a.hash === b.hash && a.bytes === b.bytes && a.frames === b.frames && a.sr === b.sr && a.ch === b.ch); } // 9B-20: 圧縮の素材はデコードの長さがブラウザでちがうことがあるので、中身（ハッシュ・大きさ）だけ
   function findAsset(p, id) { var i, l = p && isArr(p.assets) ? p.assets : []; for (i = 0; i < l.length; i++) { if (l[i] && l[i].id === id) { return l[i]; } } return null; }
   // その素材を使っているクリップの数
-  function assetUse(p, id) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (clipAssets(p.tracks[i].clips[j]).indexOf(id) >= 0) { n++; } } } return n; } // 9A-14: 使っていないテイクの素材もふくむ
+  function assetUse(p, id) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (clipAssets(p.tracks[i].clips[j]).indexOf(id) >= 0) { n++; } } } if (refOf(p) && refOf(p).asset === id) { n++; } return n; } // 9B-20: リファレンスも使っている // 9A-14: 使っていないテイクの素材もふくむ
   function audioClipCount(p) { var n = 0, i, j; for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { if (p.tracks[i].clips[j].type === "audio") { n++; } } } return n; }
   // 曲に素材を足せるか（新しい素材のとき）→ "" / 理由
   function assetRoomWhy(p, info) {
-    var l = p && isArr(p.assets) ? p.assets : [], sec = 0, i;
-    for (i = 0; i < l.length; i++) { sec += Number(l[i] && l[i].sec) || 0; }
+    var l = p && isArr(p.assets) ? p.assets : [], sec = 0, i, nLong = 0, pcm = 0, bytes = 0;
+    for (i = 0; i < l.length; i++) { if (l[i] && l[i].long) { nLong++; } else { sec += Number(l[i] && l[i].sec) || 0; } pcm += pcmBytes(l[i]); bytes += Number(l[i] && l[i].bytes) || 0; } // 9B-20: 長い素材は 120 秒の合計に入れない
     var tail = "。テイクを外しても端末の素材は消えません（「📁 曲」の「曲から外す」で、この曲の一覧から外せます）。端末の素材は「🎵 素材ライブラリ」で確かめられますが、端末の素材を削除しても、1 曲の上限は増えません"; // §341 9A-15
     if (l.length >= MAX_ASSETS) { return "1 曲の音声の素材は " + MAX_ASSETS + " 個までです（いま " + l.length + " 個・合計 " + Math.round(sec * 10) / 10 + " 秒）" + tail; }
-    if (sec + info.sec > MAX_ASSET_SEC + 0.001) { return "1 曲の音声の素材は合計 " + MAX_ASSET_SEC + " 秒までです（いま " + l.length + " 個・" + Math.round(sec * 10) / 10 + " 秒）" + tail; }
+    if (isLongInfo(info)) { if (nLong >= MAX_LONG) { return "長い音声（60 秒より長い・10MB より大きい）の素材は 1 曲 " + MAX_LONG + " 個までです（いま " + nLong + " 個）。スマホのメモリが足りなくならないように" + tail; } }
+    else if (sec + info.sec > MAX_ASSET_SEC + 0.001) { return "1 曲の音声の素材は合計 " + MAX_ASSET_SEC + " 秒までです（いま " + l.length + " 個・" + Math.round(sec * 10) / 10 + " 秒）" + tail; }
+    if (pcm + pcmBytes(info) > PCM_MAX) { return "この曲の音声をデコードすると、メモリが約 " + Math.round((pcm + pcmBytes(info)) / 1048576) + "MB になり、" + (PCM_MAX / 1048576) + "MB をこえます。ほかの長い素材を外してから読みこんでください"; } // 9B-20
+    if (bytes + (Number(info.bytes) || 0) > SONG_MAX_BYTES) { return "この曲の素材のファイルの合計が " + Math.round((bytes + (Number(info.bytes) || 0)) / 1048576) + "MB になり、" + (SONG_MAX_BYTES / 1048576) + "MB をこえます（ZIP にまとめられなくなります）"; } // 9B-20
     return "";
   }
-  // 音声の秒 → クリップの長さ（start から、いまのテンポで小節に切り上げ・1〜64 小節）
-  function audioClipLen(p, start, sec) {
-    var bt = barTicks(p), endT = secToTick(p, tickToSec(p, start) + sec), bars = Math.ceil((endT - start) / bt - 1e-6);
-    return Math.max(1, Math.min(CLIP_MAX_BARS, bars)) * bt;
+  // ---------- §342 9B-20: 長い音声（WAV・MP3・M4A）・🎧 リファレンス ----------
+  var LONG_MAX_SEC = 330.5, LONG_WAV_BYTES = 120 * 1048576, LONG_Z_BYTES = 40 * 1048576, MAX_LONG = 2, PCM_MAX = 256 * 1048576, SONG_MAX_BYTES = 240 * 1048576, REF_GAIN_MIN = -24, REF_GAIN_MAX = 6, REF_OFF_MAX = 30;
+  // 長い素材（60 秒より長い・10MiB より大きい）。120 秒の合計（録音もふくむ）には入れない
+  function isLongInfo(i) { return !!(i && (i.long === true || Number(i.sec) > WAV_MAX_SEC + 0.0005 || Number(i.bytes) > WAV_MAX_BYTES)); }
+  function pcmBytes(a) { return a ? Math.round((Number(a.sec) || 0) * (Number(a.sr) || 44100) * (Number(a.ch) || 1) * 4) : 0; } // デコードしたあとのメモリ（Float32）の見こみ
+  // ふつうの素材（長くない）の合計の秒（録音の残りの計算）
+  function shortSec(p) { var l = p && isArr(p.assets) ? p.assets : [], s = 0, i; for (i = 0; i < l.length; i++) { if (l[i] && !l[i].long) { s += Number(l[i].sec) || 0; } } return s; }
+  var MP3_SR = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] }, MP3_BR1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], MP3_BR2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+  // 中身の先頭で形式を決める（拡張子は見ない）→ { ok, kind: "wav"|"mp3"|"m4a"|"ogg"|"flac", codec, sr（0 ＝ わからない）, ch, why, drm, tryOnly（ブラウザが読めれば）}
+  function probeAudio(ab) {
+    var len = ab && typeof ab.byteLength === "number" ? ab.byteLength : 0;
+    if (len < 12) { return { ok: false, why: "ファイルが短すぎます（音声ではないか、こわれています）" }; }
+    var v = new DataView(ab), u = new Uint8Array(ab);
+    function tag(o) { return o + 4 <= len ? String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]) : ""; }
+    var t0 = tag(0);
+    if (t0 === "RIFF" && tag(8) === "WAVE") { var w = parseWav(ab); if (!w.ok) { return { ok: false, why: w.why, kind: "wav" }; } w.kind = "wav"; w.codec = w.fmt === 3 ? "float" : "pcm"; return w; }
+    if (t0 === "RF64") { return { ok: false, why: "RF64（4GB をこえる形式）の WAV には対応していません" }; }
+    if (t0 === "fLaC") { var fs = len > 21 ? ((u[18] << 12) | (u[19] << 4) | (u[20] >> 4)) : 0; return { ok: true, kind: "flac", codec: "flac", sr: fs >= 8000 && fs <= 192000 ? fs : 0, ch: len > 21 ? ((u[20] >> 1) & 7) + 1 : 0, bytes: len, tryOnly: true }; }
+    if (t0 === "OggS") { return { ok: true, kind: "ogg", codec: "ogg", sr: 0, ch: 0, bytes: len, tryOnly: true }; }
+    if (u[0] === 0x1A && u[1] === 0x45 && u[2] === 0xDF && u[3] === 0xA3) { return { ok: false, why: "WebM／Matroska の形式には対応していません（WAV・MP3・M4A にしてください）" }; }
+    if (tag(4) === "ftyp") { return probeMp4(u, v, len); }
+    // MP3: ID3v2 をとばして、フレームの同期を探す（ID3 が無いときは次のフレームも続くこと）
+    var o = 0, hasId3 = t0.substring(0, 3) === "ID3" && len > 10;
+    if (hasId3) { o = 10 + ((u[6] & 127) << 21 | (u[7] & 127) << 14 | (u[8] & 127) << 7 | (u[9] & 127)) + ((u[5] & 16) ? 10 : 0); }
+    var lim = Math.min(len - 4, o + 65536), i;
+    for (i = o; i < lim; i++) {
+      if (u[i] !== 0xFF || (u[i + 1] & 0xE0) !== 0xE0) { continue; }
+      var ver = (u[i + 1] >> 3) & 3, lay = (u[i + 1] >> 1) & 3, bri = u[i + 2] >> 4, sri = (u[i + 2] >> 2) & 3;
+      if (ver === 1 || lay !== 1 || bri === 0 || bri === 15 || sri === 3) { continue; } // Layer III だけ
+      var sr = MP3_SR[ver][sri], br = (ver === 3 ? MP3_BR1 : MP3_BR2)[bri] * 1000, fl = Math.floor((ver === 3 ? 144 : 72) * br / sr) + ((u[i + 2] >> 1) & 1), n2 = i + fl;
+      if (!hasId3 && !(n2 + 1 < len && u[n2] === 0xFF && (u[n2 + 1] & 0xE0) === 0xE0)) { continue; }
+      return { ok: true, kind: "mp3", codec: "mp3", sr: sr, ch: (u[i + 3] >> 6) === 3 ? 1 : 2, bytes: len };
+    }
+    return { ok: false, why: "対応していない形式です（WAV・MP3・M4A を読みこめます。拡張子ではなく中身で決めています）" };
   }
+  // MP4／M4A: 箱をたどって、音のトラック（hdlr ＝ soun）の stsd の形式・レート・ch。暗号化（drms・enca・sinf）は DRM として断る
+  function probeMp4(u, v, len) {
+    var res = { codec: "", sr: 0, ch: 0, mts: 0, found: false }, drm = false, guard = 0;
+    function tag(o) { return String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]); }
+    function walk(a, b, soun) {
+      var o = a;
+      while (o + 8 <= b && guard++ < 20000) {
+        var sz = v.getUint32(o), ty = tag(o + 4), hd = 8;
+        if (sz === 1) { if (o + 16 > b) { break; } sz = v.getUint32(o + 8) * 4294967296 + v.getUint32(o + 12); hd = 16; } else if (sz === 0) { sz = b - o; }
+        if (sz < hd) { break; }
+        var body = o + hd, end = Math.min(b, o + sz);
+        if (ty === "sinf" || ty === "drms" || ty === "enca" || ty === "schm") { drm = true; }
+        if (ty === "moov" || ty === "mdia" || ty === "minf" || ty === "stbl") { walk(body, end, soun); }
+        else if (ty === "trak" && !res.found) { walk(body, end, false); }
+        else if (ty === "hdlr" && body + 12 <= end) { if (tag(body + 8) === "soun") { soun = true; } }
+        else if (ty === "mdhd" && body + 24 <= end) { res.mtsCand = u[body] === 1 ? v.getUint32(body + 20) : v.getUint32(body + 12); }
+        else if (ty === "stsd" && soun && !res.found && body + 16 <= end) {
+          var e = body + 8, et = tag(e + 4);
+          res.codec = et; res.found = true; res.mts = res.mtsCand || 0;
+          if (et === "enca" || et === "drms") { drm = true; }
+          if (e + 36 <= end) { res.ch = v.getUint16(e + 24); res.sr = v.getUint32(e + 32) >>> 16; walk(e + 36, Math.min(end, e + v.getUint32(e)), true); }
+        }
+        o = o + sz;
+      }
+    }
+    walk(0, len, false);
+    if (drm) { return { ok: false, drm: true, why: "著作権の保護（DRM）のついたファイルは読みこめません" }; }
+    if (!res.found) { return { ok: false, why: "MP4／M4A の中に音のトラックが見つかりません（動画だけか、こわれているかもしれません）" }; }
+    var sr = res.sr >= 8000 && res.sr <= 192000 ? res.sr : (res.mts >= 8000 && res.mts <= 192000 ? res.mts : 0), aac = res.codec === "mp4a";
+    return { ok: true, kind: "m4a", codec: aac ? "aac" : res.codec, sr: sr, ch: res.ch >= 1 && res.ch <= 8 ? res.ch : 0, bytes: len, tryOnly: !aac };
+  }
+  // 読みこむ前の大きさの上限（形式ごと）→ "" ／ 理由
+  function importBytesWhy(pr, bytes) {
+    var w = pr && pr.kind === "wav";
+    if (w && bytes > LONG_WAV_BYTES) { return "WAV が大きすぎます（" + (Math.round(bytes / 104857.6) / 10) + "MB・" + (LONG_WAV_BYTES / 1048576) + "MB まで）"; }
+    if (!w && bytes > LONG_Z_BYTES) { return "ファイルが大きすぎます（" + (Math.round(bytes / 104857.6) / 10) + "MB・MP3／M4A は " + (LONG_Z_BYTES / 1048576) + "MB まで）"; }
+    return "";
+  }
+  function secText(s) { s = Math.round((Number(s) || 0) * 10) / 10; var m = Math.floor(s / 60), r = Math.round((s - m * 60) * 10) / 10; // 先に 0.1 秒に丸める（299.99998 → 5 分 0 秒）
+    return (m ? m + " 分 " : "") + (Math.round(r * 10) / 10) + " 秒"; }
+  // デコードしたあとの長さの上限 → "" ／ 理由
+  function importSecWhy(sec) { if (!(sec > 0)) { return "音がありません"; } return sec > LONG_MAX_SEC ? "音声が長すぎます（" + secText(sec) + "・5 分 30 秒まで）" : ""; }
+  // 🎧 リファレンス（曲の ref ＝ { asset, gain（dB）, mute, offset（秒）}・トラックではない）
+  function refClean(r) { if (!isObj(r) || typeof r.asset !== "string" || !/^a:[0-9a-f]{16}$/.test(r.asset)) { return null; } var o = copy(r); o.gain = num(r.gain, 0, REF_GAIN_MIN, REF_GAIN_MAX); o.mute = !!r.mute; o.offset = num(r.offset, 0, -REF_OFF_MAX, REF_OFF_MAX); return o; }
+  function refOf(p) { return p && isObj(p.ref) && typeof p.ref.asset === "string" ? p.ref : null; }
+  function setRef(p, id) { if (!p || !findAsset(p, id)) { return { ok: false, why: "素材が曲の中に見つかりません" }; } var o = refOf(p); p.ref = { asset: id, gain: o ? o.gain : 0, mute: false, offset: 0 }; return { ok: true, ref: p.ref }; }
+  function refSet(p, key, v) {
+    var r = refOf(p);
+    if (!r) { return { ok: false, why: "リファレンスがありません" }; }
+    if (key === "gain") { r.gain = Math.round(num(v, r.gain, REF_GAIN_MIN, REF_GAIN_MAX) * 10) / 10; } else if (key === "mute") { r.mute = !!v; } else if (key === "offset") { r.offset = Math.round(num(v, r.offset, -REF_OFF_MAX, REF_OFF_MAX) * 1000) / 1000; } else { return { ok: false, why: "ちがう項目です" }; }
+    return { ok: true, ref: r };
+  }
+  function clearRef(p) { if (p && p.ref !== undefined) { delete p.ref; return true; } return false; }
+  // リファレンスの鳴る範囲（曲の秒）
+  function refSpan(p) { var r = refOf(p), a = r ? findAsset(p, r.asset) : null; if (!a) { return null; } var d = Number(a.sec) || 0; return { asset: a, start: r.offset, end: r.offset + d, dur: d, gain: r.gain, mute: r.mute, offset: r.offset }; }
+  // 再生の終わり（曲とリファレンスの長いほう・小節の終わり）。WAV の書き出しは songEndTick のまま（リファレンスを入れない）
+  function playEndTick(p) {
+    var e = songEndTick(p), s = refSpan(p);
+    if (s && s.end > 0) { var t = Math.min(MAX_BARS * barTicks(p), Math.ceil(secToTick(p, s.end))), rb = barToTick(p, tickToBar(p, Math.max(0, t - 1)).bar); if (rb > e) { e = rb; } }
+    return e;
+  }
+  // 音声の秒 → クリップの長さ（start から、いまのテンポで小節に切り上げ・1〜64 小節）
+  function audioClipLen(p, start, sec, long) {
+    var bt = barTicks(p), endT = secToTick(p, tickToSec(p, start) + sec), bars = Math.ceil((endT - start) / bt - 1e-6);
+    return Math.max(1, Math.min(long ? MAX_BARS : CLIP_MAX_BARS, bars)) * bt; // 9B-20: 長い素材は曲の上限（256 小節）まで
+  }
+  // 9B-20: クリップの長さの上限（長い素材のオーディオのクリップだけ 256 小節・ほかは 64 小節）
+  function clipMaxTicks(p, c) { var a = c && c.type === "audio" ? findAsset(p, c.asset) : null; return (a && a.long ? MAX_BARS : CLIP_MAX_BARS) * barTicks(p); }
   // オーディオのクリップを足す（start を省くとトラックのいちばん後ろ。小節の頭・重なるなら後ろへ）
   function addAudioClip(p, track, start, asset, name) {
     var t = trackOf(p, track), bt = barTicks(p);
     if (!t || !isAudio(t) || !asset) { return null; }
     var s = start === undefined || start === null ? trackEnd(t) : snap(Math.max(0, start), bt, true);
-    var len = audioClipLen(p, s, asset.sec);
+    var len = audioClipLen(p, s, asset.sec, !!asset.long);
     s = freeStart(t, s, len);
-    len = audioClipLen(p, s, asset.sec);
+    len = audioClipLen(p, s, asset.sec, !!asset.long);
     if (s + len > MAX_BARS * bt) { return null; }
+    if (asset.long && tickToSec(p, s + len) + 1e-6 < tickToSec(p, s) + asset.sec) { return null; } // 9B-20: 途中までしか置けないなら置かない
     var c = { id: nextId(p, "c"), type: "audio", asset: asset.id, start: s, len: len, offset: 0, srcOffset: 0, gain: 1, fadeIn: 0, fadeOut: 0, loop: null, ext: { name: str(name, "", 40) || "音声" } };
     t.clips.push(c);
     sortClips(t);
@@ -2097,6 +2203,8 @@
     STEP: STEP, DRUM_KIT: DRUM_KIT, drumInstrument: drumInstrument, isDrum: isDrum, addDrumTrack: addDrumTrack, stepCount: stepCount, findStep: findStep, toggleStep: toggleStep,
     DRUM_V: DRUM_V, SWING_MAX_TICKS: SWING_MAX_TICKS, setStepVel: setStepVel, swingOf: swingOf, swingDelay: swingDelay, PATTERNS: PATTERNS, applyPattern: applyPattern,
     // §341 9A-10: オーディオトラック
+    probeAudio: probeAudio, importBytesWhy: importBytesWhy, importSecWhy: importSecWhy, isLongInfo: isLongInfo, pcmBytes: pcmBytes, clipMaxTicks: clipMaxTicks, shortSec: shortSec, LONG_MAX_SEC: LONG_MAX_SEC, LONG_WAV_BYTES: LONG_WAV_BYTES, LONG_Z_BYTES: LONG_Z_BYTES, MAX_LONG: MAX_LONG, PCM_MAX: PCM_MAX, SONG_MAX_BYTES: SONG_MAX_BYTES, // 9B-20
+    refClean: refClean, refOf: refOf, setRef: setRef, refSet: refSet, clearRef: clearRef, refSpan: refSpan, playEndTick: playEndTick, secText: secText, REF_GAIN_MIN: REF_GAIN_MIN, REF_GAIN_MAX: REF_GAIN_MAX, REF_OFF_MAX: REF_OFF_MAX,
     WAV_MAX_BYTES: WAV_MAX_BYTES, WAV_MAX_SEC: WAV_MAX_SEC, MAX_AUDIO_TRACKS: MAX_AUDIO_TRACKS, MAX_ASSETS: MAX_ASSETS, MAX_ASSET_SEC: MAX_ASSET_SEC, PEAK_RATE: PEAK_RATE,
     audioInstrument: audioInstrument, isAudio: isAudio, audioTrackCount: audioTrackCount, addAudioTrack: addAudioTrack, parseWav: parseWav, wavLimitWhy: wavLimitWhy, hashBytes: hashBytes,
     assetRef: assetRef, sameAsset: sameAsset, findAsset: findAsset, assetUse: assetUse, audioClipCount: audioClipCount, assetRoomWhy: assetRoomWhy, audioClipLen: audioClipLen,

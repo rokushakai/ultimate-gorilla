@@ -565,18 +565,18 @@
     var bus = UG && UG.audio && UG.audio.ctx === ac && UG.audio.bus ? UG.audio.bus : ac.destination;
     var master = UG && UG.audio && UG.audio.ctx === ac && UG.audio.master ? UG.audio.master : null;
     m = { bus: ac.createGain(), dry: master ? ac.createGain() : null, priv: null };
-    m.bus.gain.value = masterVol();
+    m.bus.gain.value = masterVol() * abDaw(); // 9B-20: 「🎧 だけ」なら 0（WAV は 1）
     var mk = !pl.wav && master ? masterRtKey(st.project) : ""; // 9B-10: Master FX が効くときは DAW 専用の出口（共有の残響・全体の音量を写して、そのあと EQ・リミッター → スピーカー）
     if (mk) { try { m.priv = masterPriv(ac, mk); } catch (e0) { m.priv = null; } }
-    if (m.priv) { m.bus.connect(m.priv.fx.bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(m.priv.pm); } }
-    else { m.bus.connect(bus); if (m.dry) { m.dry.gain.value = masterVol(); m.dry.connect(master); } }
+    if (m.priv) { m.bus.connect(m.priv.fx.bus); if (m.dry) { m.dry.gain.value = masterVol() * abDaw(); m.dry.connect(m.priv.pm); } }
+    else { m.bus.connect(bus); if (m.dry) { m.dry.gain.value = masterVol() * abDaw(); m.dry.connect(master); } }
     m.send = sendBuild(ac, m); // 9B-11: DAW 専用のリバーブ・ディレイ（センドが無ければ作らない）
     if (m.send && m.send.dly) { dlyPlan(m.send, true); } // 9B-12: ディレイの時間をテンポの点ごとに予約
     pl.mix.__master = m;
     return m;
   }
   function rampTo(param, v, now) { try { if (now) { param.value = v; } else { param.setTargetAtTime(v, pl.ac.currentTime, 0.01); } } catch (e) { param.value = v; } }
-  function setMasterGain() { if (!pl || !pl.mix.__master) { return; } var m = pl.mix.__master, v = masterVol(); rampTo(m.bus.gain, v, false); if (m.dry) { rampTo(m.dry.gain, v, false); } }
+  function setMasterGain() { if (!pl || !pl.mix.__master) { return; } var m = pl.mix.__master, v = masterVol() * abDaw(); rampTo(m.bus.gain, v, false); if (m.dry) { rampTo(m.dry.gain, v, false); } }
   function setGain(t, mx, now) {
     var on = DM().audible(st.project, t), v = on ? (DM().autoActive(t, "vol") ? 1 : t.vol / 100) : 0, ac = pl.ac, list = [mx.main, mx.dry], i, ap = DM().autoActive(t, "pan"); // 9B-9: 音量のオートメーション中はフェーダーの代わりに av（ミュート・ソロはここで 0）
     for (i = 0; i < list.length; i++) {
@@ -613,6 +613,7 @@
     var fresh = !!seg.fresh && !seg.freshDone && from === seg.tick0, aev = M.audioEvents(pl.shadow || p, from, to, fresh); // 9A-17: 下書きの試聴は影の曲（同じクリップ ID・トラック）
     if (fresh) { seg.freshDone = true; }
     for (i = 0; i < aev.length; i++) { playAudio(p, aev[i], seg); }
+    playRef(p, seg, from, to, fresh); // 9B-20: 🎧 リファレンス（再生だけ）
     for (i = 0; i < evs.length; i++) {
       var ev = evs[i], t = M.findTrack(p, ev.track);
       if (pl.clip) { if (ev.clip !== pl.clip || !t) { continue; } } // 9A-3: クリップだけ鳴らす（直している音を聞けるように M／S は見ない）
@@ -685,7 +686,7 @@
   function disposeMix(mix) {
     var id, i;
     for (id in mix) {
-      if (!mix.hasOwnProperty(id) || id === "__master") { continue; }
+      if (!mix.hasOwnProperty(id) || id === "__master" || id === "__ref") { continue; }
       var mx = mix[id];
       if (mx.syn) { try { mx.syn.dispose(); } catch (e) {} mx.syn = null; }
       for (i = 0; i < mx.voices.length; i++) { try { if (mx.voices[i].kill) { mx.voices[i].kill(0.05); } } catch (e2) {} }
@@ -696,6 +697,7 @@
       (function (m) { var l0 = [m.main, m.dry], k0; for (k0 = 0; k0 < l0.length; k0++) { if (l0[k0]) { try { l0[k0].g.gain.setTargetAtTime(0, l0[k0].g.context ? l0[k0].g.context.currentTime : 0, 0.01); } catch (e5) {} } } })(mx); // 9A-7: 先に予約したドラムの音も残らないように、外す前に 0 へ
       (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} if (l[k].br) { branchOff(l[k].br); l[k].br = null; } if (l[k].inp && l[k].inp !== l[k].g && l[k].inp !== l[k].av) { try { l[k].inp.disconnect(); } catch (e7) {} } if (l[k].av) { try { l[k].av.disconnect(); } catch (e8) {} } if (l[k].tr) { try { l[k].tr.disconnect(); } catch (e9) {} } if (l[k].td) { try { l[k].td.disconnect(); } catch (e10) {} } } } }, 150); })(mx); // 9B-8: FX のノードも・9B-9: オートメーションのゲインも・9B-11: センドも
     }
+    if (mix.__ref) { refOff(mix.__ref); mix.__ref = null; } // 9B-20
     var ms = mix.__master;
     if (ms) { setTimeout(function () { try { ms.bus.disconnect(); if (ms.dry) { ms.dry.disconnect(); } } catch (e4) {} if (ms.priv) { masterPrivOff(ms.priv); ms.priv = null; } if (ms.send) { sendOff(ms.send); ms.send = null; } }, 150); } // 9A-6: DAW のマスターも外す・9B-10: DAW 専用の出口も
   }
@@ -740,7 +742,7 @@
     }
     if (!window.UGSynth) { st.msg = "ゴリラシンセ（arcade-synth.js）を読みこめなかったため、鳴らせません。"; return false; }
     var lr = M.loopRange(p), clip = opts.clip || null, loop = opts.loop !== undefined ? !!opts.loop : !!(p.practice && p.practice.loopOn);
-    var a = opts.a !== undefined ? opts.a : lr.a, b = opts.b !== undefined ? opts.b : (loop ? lr.b : M.songEndTick(p));
+    var a = opts.a !== undefined ? opts.a : lr.a, b = opts.b !== undefined ? opts.b : (loop ? lr.b : M.playEndTick(p)); // 9B-20: リファレンスが長ければそこまで（WAV は songEndTick）
     var cue = st.cue !== null && st.cue !== undefined && !clip && (!loop || (st.cue >= a && st.cue < b)) ? st.cue : null; // 9B-1: 小節へ
     var from = opts.from !== undefined ? opts.from : (cue !== null ? cue : (loop || clip ? a : 0));
     if (from >= b || from < 0) { from = loop ? a : 0; }
@@ -794,7 +796,7 @@
       var lr = M.loopRange(p);
       pl.loop = !!on;
       pl.la = lr.a;
-      pl.segEnd = on ? lr.b : M.songEndTick(p);
+      pl.segEnd = on ? lr.b : M.playEndTick(p);
       pl.opts.loop = !!on; pl.opts.a = lr.a; pl.opts.b = pl.segEnd;
       pl.endAt = 0;
       if (pl.cur > pl.segEnd) { pl.cur = pl.segEnd; }
@@ -817,7 +819,7 @@
   function resync() {
     if (!pl) { return false; }
     var o = pl.opts, t = Math.floor(playTick()), M = DM(), p = st.project;
-    if (!o.fixedB && !o.loop) { o.b = M.songEndTick(p); }
+    if (!o.fixedB && !o.loop) { o.b = M.playEndTick(p); }
     if (t < o.a || t >= o.b) { t = o.loop ? o.a : t; }
     return startPlay({ from: t, a: o.a, b: o.b, loop: o.loop, clip: o.clip });
   }
@@ -830,6 +832,7 @@
     if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
     if (st.view === "auto" && st.au) { auHead(root, tick); } // 9B-9
     if (st.view === "master") { msHead(root); } // 9B-10
+    if (st.view === "ref") { refHead(root); } // 9B-20
     if (st.view === "tempo") { var tb = root.querySelector(".dtp-now"); if (tb) { tb.textContent = String(DM().bpmAt(st.project, pl ? tick : Math.max(0, Math.round(st.cue || 0)))); } } // 9B-12
     var gre = st.view === "fx" && st.fxTrack ? root.querySelector(".dfx-gr") : null; if (gre) { var grv = fxReduction(st.fxTrack); gre.textContent = grv === null ? "—" : (Math.round(Math.min(0, grv) * 10) / 10).toFixed(1) + " dB"; } // 9B-8
     var dph = st.steps && st.view === "steps" ? root.querySelector(".ds-ph") : null, df = dph ? DM().findClip(st.project, st.steps.clip) : null;
@@ -898,6 +901,7 @@
     if (M && p && st.view === "master") { renderMaster(root, ctl); return; } // 9B-10
     if (M && p && st.view === "sendfx") { renderSendFx(root, ctl); return; } // 9B-11
     if (M && p && st.view === "tempo") { renderTempo(root, ctl); return; } // 9B-12
+    if (M && p && st.view === "ref") { renderRef(root, ctl); return; } // 9B-20
     if (M && p && st.view === "lufs") { renderLufs(root, ctl); return; } // 9B-13
     if (M && p && st.view === "auto") { renderAuto(root, ctl); return; } // 9B-9
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
@@ -935,6 +939,7 @@
         '<button class="modal-btn daw-small" data-ar="sections">&#x1F3BC; 曲の構成</button>' + // 9B-1
         '<button class="modal-btn daw-small" data-ar="tempo">&#x23F1;&#xFE0F; テンポ' + (M.tempoList(p).length > 1 ? '<small>' + (M.tempoList(p).length - 1) + '</small>' : '') + '</button>' + // 9B-12
         '<button class="modal-btn daw-small" data-ar="inbox">&#x1F4E5; 取り込み</button>' + // 9B-2
+        '<button class="modal-btn daw-small" data-ar="ref">&#x1F3A7; リファレンス' + (M.refOf(p) ? '<small>1</small>' : '') + '</button>' + // 9B-20
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       '<div class="daw-arr" style="--daw-head:' + HEAD_W + 'px;">';
     // 目盛り（小節の番号・拍の線）
@@ -969,7 +974,7 @@
       '<div class="da-area">' + panelHtml(p) + '</div>' + // 9A-5: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
       saveNoteHtml() +
       '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p>' +
-      '<input type="file" class="da-wavfile" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" style="display:none;"></div>';
+      '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
     audKick(p); // 9A-10: 音声の素材を読みはじめる（終わったら描きなおす）
     root.innerHTML = h;
     var arr = root.querySelector && root.querySelector(".daw-arr");
@@ -987,7 +992,7 @@
 
   // §341 9A-5: 選んだクリップ・トラックの操作の欄（小さい画面でも押しやすいボタン）
   function panelHtml(p) {
-    var M = DM(), s = st.sel, h = st.anote ? '<div class="da-note">' + st.anote + '</div>' : '';
+    var M = DM(), s = st.sel, h = (st.anote ? '<div class="da-note">' + st.anote + '</div>' : '') + stageHtml(); // 9B-20: 読みこんだ音声を確かめる
     if (rec.open) { var rh = recHtml(p); if (rh) { return h + rh; } } // 9A-12: 録音の欄
     if (st.chooseAdd) {
       return h + '<div class="daw-info da-panel"><div>&#xFF0B; どのトラックを足しますか？</div><div class="da-btns da-btns3">' +
@@ -1177,6 +1182,7 @@
     if (!pk.busy) { packFree(); pk.state = "idle"; pk.msg = ""; } pk.istate = "idle"; pk.imsg = ""; // 9A-11
     midiFree(); // 9B-4
     lmClear(); // 9B-17
+    aud.stage = null; st.rfMsg = ""; st.refAB = "both"; // 9B-20
     st.project = p; st.view = "arr"; st.roll = null; st.sel = null; st.cue = null; st.secUI = null; st.repeat = null; st.secMsg = ""; st.scroll = 0; st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null;
     sv.status = status; sv.msg = ""; sv.at = p.saved || 0;
   }
@@ -1249,6 +1255,7 @@
   // ---------- §341 9A-10: オーディオトラック（素材の WAV は IndexedDB・デコードした音はメモリだけ）----------
   // aud.st[素材の ID]: "loading" | "ready" | "missing"（端末に無い）| "error"（読めない）| "nodb"（IndexedDB が使えない）
   var IDB_NAME = "ultimateGorillaDawAudioV1", IDB_VER = 1, FADE_IN = 0.003, FADE_OUT = 0.005, WAVE_CACHE = 200;
+  var AUD_ACCEPT = ".wav,.mp3,.m4a,.aac,.mp4,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/*"; // 9B-20: 形式は中身で決める（拡張子は選びやすくするだけ）
   var aud = { db: null, dbState: "", dbWhy: "", opening: [], st: {}, err: {}, wait: {}, buf: {}, peaks: {}, wave: {}, waveN: 0, busy: false, pending: null, playTok: null, kicked: false };
   function errName(e) { return String((e && (e.name || e.message)) || e || "エラー").substring(0, 60); }
   function storeErr(e) { var n = errName(e); return /quota/i.test(n) ? "端末の空き容量が足りないため、音声を保存できませんでした" : "音声を保存できませんでした（" + n + "）"; }
@@ -1304,7 +1311,7 @@
     idbGet("meta", id, function (m, w1) {
       if (!m) { cb("保存した音声を確かめられませんでした（" + (w1 || "見つかりません") + "）"); return; }
       idbGet("blobs", id, function (b, w2) {
-        var n = b && b.data && typeof b.data.byteLength === "number" ? b.data.byteLength : -1;
+        var n = b && b.data ? dataSize(b.data) : -1; // 9B-20: Blob（長い・圧縮の素材）は大きさだけ（中身をメモリに読まない）
         if (n !== bytes || m.bytes !== bytes || m.hash !== id) { cb("保存した音声を確かめられませんでした（" + (w2 || "大きさがちがいます") + "）"); return; }
         cb("");
       });
@@ -1325,6 +1332,7 @@
   function usedAssets(p) {
     var out = [], seen = {}, i, j;
     for (i = 0; p && i < p.tracks.length; i++) { for (j = 0; j < p.tracks[i].clips.length; j++) { var ca = DM().clipAssets(p.tracks[i].clips[j]), k; for (k = 0; k < ca.length; k++) { if (!seen[ca[k]]) { seen[ca[k]] = true; out.push(ca[k]); } } } } // 9A-14: 使っていないテイクの素材もふくむ（読みこむ・ZIP に入れる）
+    var rf = p ? DM().refOf(p) : null; if (rf && !seen[rf.asset]) { out.push(rf.asset); } // 9B-20: 🎧 リファレンスの素材も（読みこむ・ZIP に入れる）
     return out;
   }
   function audNeedLoad(p) { var l = usedAssets(p), i; for (i = 0; i < l.length; i++) { if (!aud.st[l[i]] || aud.st[l[i]] === "loading") { return true; } } return false; }
@@ -1349,13 +1357,18 @@
         if (b === undefined) { fin("error", w2); return; }
         if (!b || !b.data) { fin("missing"); return; }
         if (aud.st[id] !== "loading") { return; } // 途中で捨てた
-        decodeWav(b.data, m, function (buf, why) {
+        dataAB(b.data, function (bab, wab) { // 9B-20: Blob → ArrayBuffer（写さない）
           if (aud.st[id] !== "loading") { return; }
-          if (!buf) { fin("error", why); return; }
-          aud.buf[id] = buf;
-          if (!aud.peaks[id]) { try { aud.peaks[id] = peaksOf(buf); } catch (e4) {} }
-          fin("ready");
-        }, false);
+          if (!bab) { fin("error", wab); return; }
+          function got(buf, why) {
+            if (aud.st[id] !== "loading") { return; }
+            if (!buf) { fin("error", why); return; }
+            aud.buf[id] = buf;
+            if (!aud.peaks[id]) { try { aud.peaks[id] = peaksOf(buf); } catch (e4) {} }
+            fin("ready");
+          }
+          if (m.kind && m.kind !== "wav") { decodeAny(bab, m.sr, m.ch, function (buf, why) { got(buf, buf ? "" : "このブラウザでは、この形式（" + kindText(m) + "）の音を読めませんでした（" + why + "）"); }, true); } else { decodeWav(bab, m, got, false); }
+        });
       });
     });
   }
@@ -1589,13 +1602,290 @@
       var file = f.files && f.files[0], tgt = aud.pending, M = DM();
       aud.pending = null;
       if (!file || !tgt) { return; }
-      if (file.size > M.WAV_MAX_BYTES) { audNote("⚠️ 読みこめませんでした: " + M.wavLimitWhy(null, file.size) + "（曲は変えていません）"); rerender(); return; }
-      audNote("⏳ 「" + file.name + "」を読みこんでいます…"); rerender();
+      if (file.size > M.LONG_WAV_BYTES) { var bm = "⚠️ 読みこめませんでした: ファイルが大きすぎます（" + mb(file.size) + "・WAV は " + (M.LONG_WAV_BYTES / 1048576) + "MB・MP3／M4A は " + (M.LONG_Z_BYTES / 1048576) + "MB まで）（曲は変えていません）"; audNote(bm); st.rfMsg = bm; rerender(); return; }
+      audNote("⏳ 「" + file.name + "」を読みこんでいます…"); st.rfMsg = "⏳ 「" + file.name + "」を読みこんでいます…"; rerender();
       var rd = new FileReader();
-      rd.onload = function () { importWav(rd.result, file.name, tgt, function (r) { audDone(r, file.name); }); };
+      rd.onload = function () { audFileGo(rd.result, file, file.name, tgt); };
       rd.onerror = function () { audNote("⚠️ ファイルを読めませんでした（曲は変えていません）"); rerender(); };
       rd.readAsArrayBuffer(file);
     };
+  }
+  // 9B-20: ふつうの WAV（10MB・60 秒以内）はいままでどおりすぐ置く。長い・MP3・M4A・リファレンスは、デコードしてから確かめる画面へ
+  function audFileGo(ab, file, name, tgt) {
+    var M = DM(), pr = M.probeAudio(ab), shortWav = pr.ok && pr.kind === "wav" && ab.byteLength <= M.WAV_MAX_BYTES && pr.sec <= M.WAV_MAX_SEC + 0.0005, rl = tgt.relink ? M.findAsset(project(), tgt.relink) : null;
+    if ((shortWav || (pr.kind === "wav" && !pr.ok)) && !tgt.ref && !(rl && (rl.long || (rl.kind && rl.kind !== "wav")))) { importWav(ab, name, tgt, function (r) { audDone(r, name); }); return; }
+    longImport(ab, file, name, tgt, function (r) {
+      if (r.ok && r.staged) { var m = "🎵 「" + name + "」を読みこみました（まだ曲は変えていません）。下で置き場所を選んでください"; audNote(m); st.rfMsg = m; rerender(); return; }
+      stageDone(r);
+    });
+  }
+  // ---------- §342 9B-20: 長い音声（WAV・MP3・M4A）の読みこみ・🎧 リファレンス ----------
+  // 長い素材・圧縮の素材は、選んだファイル（Blob）をそのまま IndexedDB へ（大きな WAV に変えない・JS のメモリに写さない）。ふつうの WAV はいままでどおり ArrayBuffer
+  function dataSize(d) { return d && typeof d.byteLength === "number" ? d.byteLength : (d && typeof d.size === "number" ? d.size : -1); }
+  function dataAB(d, cb) { // Blob → ArrayBuffer（ArrayBuffer ならそのまま）
+    if (d && typeof d.byteLength === "number") { cb(d, ""); return; }
+    if (!d || typeof d.size !== "number") { cb(null, "中身がありません"); return; }
+    try { if (typeof d.arrayBuffer === "function") { d.arrayBuffer().then(function (ab) { cb(ab, ""); }, function (e) { cb(null, errName(e)); }); return; } } catch (e0) {}
+    try { var fr = new FileReader(); fr.onload = function () { cb(fr.result, ""); }; fr.onerror = function () { cb(null, errName(fr.error)); }; fr.readAsArrayBuffer(d); } catch (e1) { cb(null, errName(e1)); }
+  }
+  // デコード（圧縮もふくむ・ブラウザの decodeAudioData だけ）。sr: そのレートの OfflineAudioContext（わからなければ・できなければ再生のレート）。ab は写さない（デコードのあと使えなくなる）。retry: 1 回目がだめなら写しで再生のレートでもう一度
+  function decodeAny(ab, sr, ch, cb, retry) {
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, ctx = null, done = false, spare = null, usedOff = false;
+    function rt() { var UG = window.UGMelody; try { return UG && UG.audioInit ? UG.audioInit() : null; } catch (e) { return null; } }
+    function ok(b) { if (done) { return; } done = true; if (b && b.length > 0) { cb(b, ""); } else { cb(null, "音がありません"); } }
+    function ng(e) { if (done) { return; } if (spare && usedOff) { var s2 = spare, c2 = rt(); spare = null; usedOff = false; if (c2 && c2.decodeAudioData) { go(c2, s2); return; } } done = true; cb(null, errName(e)); }
+    function go(c, data) { try { var pr = c.decodeAudioData(data, ok, ng); if (pr && pr.then) { pr.then(ok, ng); } } catch (e3) { ng(e3); } }
+    try { if (OAC && sr >= 8000 && sr <= 192000) { ctx = new OAC(Math.max(1, Math.min(2, ch || 2)), 1, sr); usedOff = true; } } catch (e) { ctx = null; usedOff = false; }
+    if (!ctx || !ctx.decodeAudioData) { ctx = rt(); usedOff = false; }
+    if (!ctx || !ctx.decodeAudioData) { ng("decodeAudioData がありません"); return; }
+    if (retry && usedOff) { try { spare = ab.slice(0); } catch (e4) { spare = null; } }
+    go(ctx, ab);
+  }
+  // 端末の空き（わかるブラウザだけ）→ cb("" ／ 理由)
+  function storageRoom(bytes, cb) {
+    var n = window.navigator;
+    try {
+      if (n && n.storage && typeof n.storage.estimate === "function") {
+        n.storage.estimate().then(function (e) { var q = Number(e && e.quota) || 0, free = q - (Number(e && e.usage) || 0); if (q > 0 && free < bytes * 1.1 + 5 * 1048576) { cb("端末の空き容量が足りないため、音声を保存できません（必要 約 " + mb(bytes) + "・空き 約 " + mb(Math.max(0, free)) + "）"); } else { cb(""); } }, function () { cb(""); });
+        return;
+      }
+    } catch (e0) {}
+    cb("");
+  }
+  var KIND_TEXT = { wav: "WAV", mp3: "MP3", m4a: "M4A（AAC）", ogg: "Ogg", flac: "FLAC" };
+  function kindText(a) { var k = a && a.kind ? a.kind : "wav"; return (KIND_TEXT[k] || k) + (a && a.codec && k === "m4a" && a.codec !== "aac" ? "（" + a.codec + "）" : ""); }
+  // 読みこみ（長い・圧縮）: 形式を中身で見る → 大きさ → ハッシュ → デコード（写さない）→ 長さ → 確かめる画面（aud.stage）。曲はまだ変えない。relink はそのままつなぎなおす
+  // tgt: { track, start } ／ { ref: true } ／ { relink: 素材の ID }。file ＝ 選んだファイル（Blob）
+  function longImport(ab, file, fileName, tgt, cb) {
+    var M = DM(), p = project();
+    function fail(why) { aud.busy = false; cb({ ok: false, why: why }); }
+    tgt = tgt || {};
+    if (aud.busy) { cb({ ok: false, why: "いま別の音声を読みこんでいます" }); return; }
+    var gw = assetAddWhy(); if (gw) { cb({ ok: false, why: gw }); return; }
+    if (!p || p.readOnly) { cb({ ok: false, why: "この曲は読むだけなので、音声を足せません" }); return; }
+    if (!ab || typeof ab.byteLength !== "number") { cb({ ok: false, why: "ファイルを読めませんでした" }); return; }
+    var pr = M.probeAudio(ab);
+    if (!pr.ok) { cb({ ok: false, why: pr.why }); return; }
+    var bw = M.importBytesWhy(pr, ab.byteLength); if (bw) { cb({ ok: false, why: bw }); return; }
+    if (tgt.take) { cb({ ok: false, why: "テイクには 60 秒以内・10MB 以内の WAV を使ってください（長い音声・MP3・M4A はテイクにできません）" }); return; }
+    var hash = M.hashBytes(new Uint8Array(ab)), bytes = ab.byteLength, want = null;
+    if (tgt.relink) {
+      want = M.findAsset(p, tgt.relink);
+      if (!want) { cb({ ok: false, why: "つなぎなおす素材が曲の中に見つかりません" }); return; }
+      if (want.hash !== hash || want.bytes !== bytes) { cb({ ok: false, why: "選んだファイルは「" + want.name + "」と中身がちがうので、つなぎませんでした（大きさ " + want.bytes + " → " + bytes + " バイト）" }); return; }
+    }
+    var shortWav = pr.kind === "wav" && bytes <= M.WAV_MAX_BYTES && pr.sec <= M.WAV_MAX_SEC + 0.0005, keepAb = shortWav ? ab.slice(0) : null; // ふつうの WAV はいままでどおり ArrayBuffer で保存（10MB まで）
+    aud.busy = true;
+    var t0 = perfNow(), pid = p.id;
+    decodeAny(ab, pr.sr, pr.ch, function (buf, why) {
+      if (!buf) { fail((pr.tryOnly ? "このブラウザでは、この形式（" + kindText(pr) + "）の音を読めませんでした" : "このファイルの音を読めませんでした（こわれているかもしれません）") + "（" + why + "）"); return; }
+      var sw = M.importSecWhy(buf.duration); if (sw) { fail(sw); return; }
+      var info = { kind: pr.kind, codec: pr.codec, srcSr: pr.sr || 0, sr: buf.sampleRate, ch: buf.numberOfChannels, frames: buf.length, sec: buf.duration, bytes: bytes, bits: pr.kind === "wav" ? pr.bits : 32 };
+      info.long = M.isLongInfo(info);
+      var peaks = []; try { peaks = peaksOf(buf); } catch (e) { peaks = []; }
+      var stg = { file: keepAb || file, info: info, buf: buf, peaks: peaks, hash: hash, name: fileName, tgt: tgt, pid: pid, decMs: Math.round(perfNow() - t0), pcm: M.pcmBytes(info) };
+      aud.busy = false;
+      if (tgt.relink) { aud.stage = stg; stageCommit("relink", cb); return; }
+      aud.stage = stg;
+      cb({ ok: true, staged: true, stage: stageInfo() });
+    }, !shortWav && bytes <= M.LONG_Z_BYTES);
+  }
+  function stageInfo() { var s = aud.stage; if (!s) { return null; } var i = s.info; return { name: s.name, kind: i.kind, codec: i.codec, sec: i.sec, sr: i.sr, srcSr: i.srcSr, ch: i.ch, frames: i.frames, bytes: i.bytes, long: i.long, pcmMB: Math.round(s.pcm / 104857.6) / 10, decMs: s.decMs, hash: s.hash, tgt: s.tgt }; }
+  function stageCancel() { aud.stage = null; }
+  // 確かめたあと: where ＝ "track"（通常のトラックへ・無ければオーディオトラックを作る）／ "ref"（🎧 リファレンス）／ "relink"。空き → IndexedDB → 照合 → 曲を変える
+  function stageCommit(where, cb) {
+    var s = aud.stage, M = DM(), p = project();
+    function fail(why) { aud.busy = false; cb({ ok: false, why: why }); }
+    if (!s) { cb({ ok: false, why: "読みこんだ音声がありません（もう一度ファイルを選んでください）" }); return; }
+    if (aud.busy) { cb({ ok: false, why: "いま別の音声を読みこんでいます" }); return; }
+    if (!p || p.id !== s.pid) { aud.stage = null; cb({ ok: false, why: "曲が切りかわったので、やめました" }); return; }
+    var gw = assetAddWhy(); if (gw) { cb({ ok: false, why: gw }); return; }
+    var ref = M.assetRef(s.info, s.name, s.hash), have = M.findAsset(p, s.hash), t = null;
+    if (where !== "relink" && !have) { var room = M.assetRoomWhy(p, ref); if (room) { cb({ ok: false, why: room }); return; } }
+    if (where === "track") {
+      t = s.tgt.track ? M.findTrack(p, s.tgt.track) : null;
+      if (!t) { var i; for (i = 0; i < p.tracks.length; i++) { if (M.isAudio(p.tracks[i])) { t = p.tracks[i]; break; } } }
+      if (!t) { var tc = JSON.parse(JSON.stringify(p)), at = M.addAudioTrack(tc); if (!at.ok) { cb({ ok: false, why: at.why }); return; } }
+    }
+    aud.busy = true;
+    var meta = { id: s.hash, name: ref.name, bytes: ref.bytes, sr: ref.sr, ch: ref.ch, bits: ref.bits, frames: ref.frames, sec: ref.sec, hash: s.hash, peaks: s.peaks, added: ref.added, kind: s.info.kind, codec: s.info.codec, long: !!ref.long };
+    idbGet("meta", s.hash, function (old, w0) {
+      if (old === undefined) { fail(w0 || "音声の保存場所を使えませんでした"); return; }
+      function after() {
+        verifyAsset(s.hash, ref.bytes, function (vw) {
+          if (vw) { fail(vw); return; }
+          aud.buf[s.hash] = s.buf; aud.peaks[s.hash] = s.peaks; aud.st[s.hash] = "ready"; delete aud.err[s.hash]; aud.wave = {}; aud.waveN = 0;
+          if (st.project !== p) { aud.stage = null; fail("とちゅうで曲が切りかわったので、曲は変えていません（音声は端末に保存しました）"); return; }
+          aud.stage = null;
+          if (where === "relink") { aud.busy = false; cb({ ok: true, relinked: true, asset: M.findAsset(p, s.hash), reused: !!old }); return; }
+          var snap = snapTracks(), hadRef = !!M.findAsset(p, s.hash), c = null, made = null;
+          if (!hadRef) { p.assets.push(ref); }
+          if (where === "ref") { M.setRef(p, s.hash); }
+          else {
+            if (!t) { var ar = M.addAudioTrack(p); if (ar.ok) { made = ar.track; t = ar.track; } }
+            c = t ? M.addAudioClip(p, t, s.tgt.track ? s.tgt.start : undefined, M.findAsset(p, s.hash), baseName(s.name)) : null;
+            if (!c) { p.tracks = snap; if (!hadRef) { p.assets.pop(); } fail("ここには全部を置けないので、置きませんでした（曲の長さ・テンポ・ほかのクリップを見なおしてください）。音声は端末に保存しました"); return; }
+            pushUndo(snap); st.sel = { kind: "clip", id: c.id }; st.reveal = true;
+          }
+          aud.busy = false;
+          var saved = saveNow();
+          cb({ ok: true, where: where, clip: c, track: made ? made.id : (t ? t.id : null), asset: M.findAsset(p, s.hash), reused: !!old, saved: saved });
+        });
+      }
+      if (old && old.hash === s.hash && old.bytes === ref.bytes) { after(); return; } // 同じ中身がもう端末にある（書かない）
+      storageRoom(ref.bytes, function (sw) {
+        if (sw) { fail(sw + "（曲は変えていません）"); return; }
+        idbPutAsset(meta, s.file, function (pw) { if (pw) { fail(pw + "（曲は変えていません）"); return; } after(); });
+      });
+    });
+  }
+  // ---------- 🎧 リファレンスの再生（トラック・センド・MASTER FX・リミッター・メーターを通らない・ゲームセンターの全体の音量と同じ大きさでスピーカーへ・WAV には入れない）----------
+  function refGainVal(p) { var s = DM().refSpan(p), A = window.UGMelody && window.UGMelody.audio; if (!s || s.mute || st.refAB === "daw") { return 0; } return (A && A.master ? A.master.gain.value : 0.25) * dbGain(s.gain); }
+  function abDaw() { return pl && !pl.wav && st.refAB === "ref" && DM().refOf(st.project) ? 0 : 1; } // 「🎧 だけ」のとき DAW の音を 0 に（WAV は変えない）
+  function refOut() { var m = pl.mix.__ref; if (m) { return m; } var g = pl.ac.createGain(); g.gain.value = refGainVal(st.project); g.connect(pl.ac.destination); m = { g: g, srcs: [], ac: pl.ac }; pl.mix.__ref = m; return m; }
+  function playRef(p, seg, from, to, fresh) {
+    if (!pl || pl.wav || pl.clip) { return; }
+    var M = DM(), s = M.refSpan(p), buf = s ? aud.buf[s.asset.id] : null;
+    if (!s || !buf) { return; }
+    var fs = M.tickToSec(p, from), ts = M.tickToSec(p, to), es = M.tickToSec(p, pl.segEnd), base = M.tickToSec(p, seg.tick0), at = null, off = 0;
+    if (s.start >= fs && s.start < ts) { at = s.start; } else if (fresh && s.start < fs && s.end > fs) { at = fs; off = fs - s.start; }
+    if (at === null) { return; }
+    var dur = Math.min(Math.min(s.end, es) - at, buf.duration - off);
+    if (!(dur > 0.002)) { return; }
+    var ac = pl.ac, when = seg.t0 + (at - base), o = refOut(), src = ac.createBufferSource(), sg = ac.createGain(), cut = at + dur < s.end - 0.001;
+    lateMark(when);
+    src.buffer = buf; src.connect(sg); sg.connect(o.g);
+    try {
+      if (off > 0) { sg.gain.setValueAtTime(0, when); sg.gain.linearRampToValueAtTime(1, when + Math.min(FADE_IN, dur / 2)); } // 途中から: 3ms で 0 から
+      if (cut) { sg.gain.setValueAtTime(1, when + dur - Math.min(FADE_OUT, dur / 2)); sg.gain.linearRampToValueAtTime(0, when + dur); } // ループの終わりで切る: 5ms で 0 へ
+      src.start(Math.max(0, when), off, dur);
+    } catch (e) { try { sg.disconnect(); } catch (e1) {} return; }
+    o.srcs.push({ src: src, g: sg, end: when + dur });
+    if (o.srcs.length > 8) { o.srcs = o.srcs.filter(function (x) { if (x.end < ac.currentTime - 1) { try { x.g.disconnect(); } catch (e2) {} return false; } return true; }); }
+  }
+  function refOff(m) {
+    if (!m) { return; }
+    var t = m.ac.currentTime, i;
+    try { m.g.gain.cancelScheduledValues(t); m.g.gain.setTargetAtTime(0, t, 0.01); } catch (e) {}
+    for (i = 0; i < m.srcs.length; i++) { try { m.srcs[i].src.stop(t + 0.06); } catch (e1) {} }
+    setTimeout(function () { for (i = 0; i < m.srcs.length; i++) { try { m.srcs[i].src.disconnect(); m.srcs[i].g.disconnect(); } catch (e2) {} } m.srcs = []; try { m.g.disconnect(); } catch (e3) {} }, 150);
+  }
+  // 音量・ミュート・A／B を変えた（再生中なら 10ms でなめらかに）
+  function refApply() {
+    if (!pl || pl.wav) { return; }
+    if (pl.mix.__ref) { rampTo(pl.mix.__ref.g.gain, refGainVal(st.project), false); }
+    setMasterGain();
+  }
+  function refSetAB(v) { st.refAB = v === "daw" || v === "ref" ? v : "both"; refApply(); return st.refAB; }
+  // リファレンスの画面
+  function refWave(p, s, W, H) {
+    var pk = s ? aud.peaks[s.asset.id] : null, n = W, i, d = "", PR = DM().PEAK_RATE;
+    if (!pk || !pk.length) { return ""; }
+    var per = pk.length / n, mid = H / 2;
+    for (i = 0; i < n; i++) { var a = Math.floor(i * per), b = Math.max(a + 1, Math.floor((i + 1) * per)), m = 0, k; for (k = a; k < b && k < pk.length; k++) { if (pk[k] > m) { m = pk[k]; } } var hh = Math.max(0.5, m / 255 * H / 2); d += "M" + (i + 0.5) + " " + (Math.round((mid - hh) * 10) / 10) + "V" + (Math.round((mid + hh) * 10) / 10); }
+    return '<svg class="drf-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '"/></svg>' + (PR ? "" : "");
+  }
+  function stageHtml() {
+    var s = stageInfo(), M = DM();
+    if (!s) { return ""; }
+    var ttl = (s.tgt && s.tgt.ref) ? "🎧 リファレンス" : "通常のトラック";
+    return '<div class="dm-row drf-stage"><b>&#x1F3B5; 読みこんだ音声を確かめてください</b>' +
+      '<div class="dlu-kv"><span>ファイル</span><b>' + escHtml(s.name) + '</b></div>' +
+      '<div class="dlu-kv"><span>形式</span><b>' + escHtml(kindText(s)) + (s.long ? '・長い素材' : '') + '</b></div>' +
+      '<div class="dlu-kv"><span>長さ</span><b>' + escHtml(M.secText(s.sec)) + '</b></div>' +
+      '<div class="dlu-kv"><span>レート・ch</span><b>' + s.sr + 'Hz' + (s.srcSr && s.srcSr !== s.sr ? '（元 ' + s.srcSr + 'Hz）' : '') + '・' + s.ch + 'ch</b></div>' +
+      '<div class="dlu-kv"><span>ファイルの大きさ</span><b>' + mb(s.bytes) + '</b></div>' +
+      '<div class="dlu-kv"><span>デコードしたあとのメモリ</span><b>約 ' + s.pcmMB + ' MB（' + (Math.round(s.decMs / 100) / 10) + ' 秒でデコード）</b></div>' +
+      '<div class="drf-btns"><button class="modal-btn" data-stg="track">&#x2795; 通常トラックへ追加</button><button class="modal-btn" data-stg="ref">&#x1F3A7; リファレンスに設定</button><button class="modal-btn" data-stg="cancel">やめる</button></div>' +
+      '<p class="small">まだ曲は変えていません（選んだほうへ置きます・いまは「' + ttl + '」から選びました）。音声はそのまま保存します（圧縮しなおさない）。リファレンスは WAV の書き出しに入りません。</p></div>';
+  }
+  function refHtml(p) {
+    var M = DM(), s = M.refSpan(p), r = M.refOf(p), h, ab = st.refAB || "both";
+    h = '<div class="daw dm dfx drf">' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-rf="back">&#x2190; アレンジ</button><b>&#x1F3A7; リファレンス</b></div>' +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-rf="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-rf="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span><span class="small drf-sec">0:00.0</span></div>' +
+      (st.rfMsg ? '<p class="small dau-msg">' + escHtml(st.rfMsg) + '</p>' : '') + stageHtml();
+    if (!r) {
+      h += '<div class="dm-row"><p class="small">自分の曲とくらべるための音声（好きな曲・伴奏など）を置けます。WAV・MP3・M4A（AAC）・5 分 30 秒まで。曲の頭から、DAW の再生と同じ時計で鳴ります。</p>' +
+        '<button class="modal-btn" data-rf="pick">&#x1F3B5; 音声を読み込む（WAV・MP3・M4A）</button></div>';
+    } else {
+      var a = s ? s.asset : M.findAsset(p, r.asset), stt = a ? assetState(a.id) : "missing";
+      h += '<div class="dm-row"><div class="dlu-kv"><span>音声</span><b>' + escHtml(a ? a.name : r.asset) + '</b></div>' +
+        (a ? '<div class="dlu-kv"><span>形式・長さ</span><b>' + escHtml(kindText(a)) + '・' + escHtml(M.secText(a.sec)) + '・' + a.sr + 'Hz・' + a.ch + 'ch・' + mb(a.bytes) + '</b></div>' : '') +
+        '<div class="dlu-kv"><span>状態</span><b>' + (a ? assetStateText(a.id) : "&#x26A0;&#xFE0F; 素材の情報がありません") + '</b></div>' +
+        '<div class="drf-wave" data-rf-wave="1">' + refWave(p, s, 300, 64) + '<div class="drf-head"></div></div>' +
+        '<p class="small">波形をタップ ＝ その位置から（曲の秒 ＝ リファレンスの秒 ＋ ずらし）</p></div>' +
+        '<div class="dm-row"><b class="small">聞きくらべ（A／B）</b><div class="drf-btns">' +
+          '<button class="modal-btn dfx-tog' + (ab === "both" ? " on" : "") + '" data-rf-ab="both">両方</button>' +
+          '<button class="modal-btn dfx-tog' + (ab === "daw" ? " on" : "") + '" data-rf-ab="daw">DAW だけ</button>' +
+          '<button class="modal-btn dfx-tog' + (ab === "ref" ? " on" : "") + '" data-rf-ab="ref">&#x1F3A7; だけ</button></div>' +
+          '<p class="small">音量はそろえません（そのままの大きさでくらべます）。A／B は保存しません。</p></div>' +
+        '<div class="dm-row"><div class="dfx-sw"><b>ミュート</b><button class="modal-btn dfx-tog' + (r.mute ? " on" : "") + '" data-rf="mute">' + (r.mute ? "ON" : "OFF") + '</button></div>' +
+          '<div class="dfx-sw"><b>音量</b><input type="range" min="' + M.REF_GAIN_MIN + '" max="' + M.REF_GAIN_MAX + '" step="0.5" value="' + r.gain + '" data-rf-gain="1" aria-label="リファレンスの音量"><span class="small drf-gv">' + (r.gain > 0 ? "+" : "") + r.gain + ' dB</span></div>' +
+          '<div class="dfx-sw"><b>ずらす（秒）</b><input type="number" class="dfx-num" inputmode="decimal" min="' + (-M.REF_OFF_MAX) + '" max="' + M.REF_OFF_MAX + '" step="0.01" value="' + r.offset + '" data-rf-off="1" aria-label="リファレンスをずらす秒"></div></div>' +
+        '<div class="dm-row drf-btns">' + (a && stt !== "ready" && stt !== "loading" && stt !== "" ? '<button class="modal-btn" data-rf="relink">&#x1F517; 素材を選びなおす</button>' : '') +
+          '<button class="modal-btn" data-rf="pick">&#x1F3B5; 別の音声にする</button><button class="modal-btn" data-rf="clear">リファレンスを外す</button></div>';
+    }
+    h += '<p class="small dfx-note">リファレンスは WAV・MIDI の書き出しに入りません（書き出しの曲の長さにも入りません）。トラック・センド・MASTER の EQ・リミッター・📏 メーターを通らず、ゲームセンターの全体の音量と同じ大きさで鳴ります。曲の保存・JSON・ZIP に入ります（音声の中身は ZIP にだけ入ります。JSON には入りません）。外しても端末の素材は消えません。</p>' +
+      '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
+    return h;
+  }
+  function refHead(root) {
+    var e = root.querySelector(".drf-head"), tx = root.querySelector(".drf-sec"), p = st.project, M = DM(), s = M.refSpan(p), tk = playTick(), sec = M.tickToSec(p, Math.max(0, tk));
+    if (tx) { var m = Math.floor(sec / 60), r = sec - m * 60; tx.textContent = m + ":" + (r < 10 ? "0" : "") + (Math.floor(r * 10) / 10).toFixed(1); }
+    if (e && s && s.dur > 0) { var f = Math.max(0, Math.min(1, (sec - s.start) / s.dur)); e.style.left = (f * 100) + "%"; }
+  }
+  function renderRef(root, ctl) {
+    var p = project();
+    root.innerHTML = refHtml(p);
+    if (!root.querySelectorAll) { return; }
+    audKick(p);
+    bindWavFile(root);
+    var els = root.querySelectorAll("button"), k, M = DM();
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var el = ev.currentTarget, v = el.getAttribute("data-rf"), x;
+        st.rfMsg = "";
+        if ((x = el.getAttribute("data-stg"))) { stageAct(x); return; }
+        if ((x = el.getAttribute("data-rf-ab"))) { refSetAB(x); renderRef(root, ctl); return; }
+        if (v === "back") { st.view = "arr"; render(root, ctl); return; }
+        if (v === "play") { startPlay(); renderRef(root, ctl); return; }
+        if (v === "stop") { transportStop(); renderRef(root, ctl); return; }
+        if (v === "pick") { pickWav(root, { ref: true }); return; }
+        if (v === "relink") { var r0 = M.refOf(p); if (r0) { pickWav(root, { relink: r0.asset }); } return; }
+        if (v === "mute") { var r1 = M.refOf(p); if (r1) { M.refSet(p, "mute", !r1.mute); markDirty(); refApply(); } }
+        if (v === "clear") { M.clearRef(p); markDirty(); if (pl) { resync(); } st.rfMsg = "リファレンスを外しました（端末の素材は残っています）"; }
+        renderRef(root, ctl);
+      };
+    }
+    var g = root.querySelector("[data-rf-gain]"), o = root.querySelector("[data-rf-off]"), w = root.querySelector("[data-rf-wave]");
+    if (g) { g.oninput = function () { M.refSet(p, "gain", Number(g.value)); refApply(); var gv = root.querySelector(".drf-gv"); if (gv) { var r2 = M.refOf(p); gv.textContent = (r2.gain > 0 ? "+" : "") + r2.gain + " dB"; } }; g.onchange = function () { markDirty(); }; }
+    if (o) { o.onchange = function () { M.refSet(p, "offset", Number(o.value)); markDirty(); if (pl) { resync(); } renderRef(root, ctl); }; }
+    if (w) { w.onclick = function (ev) { var s = M.refSpan(p), rc = w.getBoundingClientRect ? w.getBoundingClientRect() : null; if (!s || !rc || !(rc.width > 0)) { return; } var f = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width)), tk = Math.max(0, Math.round(M.secToTick(p, Math.max(0, s.start + f * s.dur)))); refJump(tk); renderRef(root, ctl); }; }
+    drawHead();
+  }
+  // リファレンスの画面から、その位置へ（再生中ならそこから鳴らす・画面は切りかえない）
+  function refJump(tick) {
+    if (rec.state !== "idle") { st.rfMsg = "録音中は移れません"; return false; }
+    st.cue = Math.max(0, Math.round(tick));
+    if (pl && !pl.clip) { startPlay({ from: st.cue }); }
+    return true;
+  }
+  // 確かめる画面のボタン
+  function stageAct(v) {
+    if (v === "cancel") { stageCancel(); audNote("読みこみをやめました（曲は変えていません）"); st.rfMsg = "読みこみをやめました（曲は変えていません）"; rerender(); return; }
+    stageCommit(v === "ref" ? "ref" : "track", function (r) { stageDone(r); });
+    rerender();
+  }
+  function stageDone(r) {
+    var msg;
+    if (!r.ok) { msg = "⚠️ " + r.why + (/曲は変えていません|保存しました/.test(r.why) ? "" : "（曲は変えていません）"); }
+    else if (r.relinked) { msg = "🔗 「" + (r.asset ? r.asset.name : "") + "」をつなぎなおしました"; }
+    else if (r.where === "ref") { msg = "🎧 「" + r.asset.name + "」をリファレンスにしました（" + DM().secText(r.asset.sec) + "）" + (r.saved ? "" : "。ただし曲を保存できませんでした"); }
+    else { msg = "🎵 「" + r.asset.name + "」を置きました（" + DM().secText(r.asset.sec) + "）" + (r.saved ? "" : "。ただし曲を保存できませんでした"); }
+    st.rfMsg = msg; audNote(msg);
+    if (r.ok && pl) { resync(); }
+    rerender();
   }
   // 読みこみが終わった（画面のメッセージ・再生中なら鳴らしなおす）
   function audDone(r, name) {
@@ -1646,8 +1936,7 @@
   }
   // 録れる長さ（秒）: 60 秒・WAV の上限・1 曲の素材の合計の残り
   function recRoom(p, sr) {
-    var M = DM(), l = p && p.assets ? p.assets : [], sec = 0, i;
-    for (i = 0; i < l.length; i++) { sec += Number(l[i] && l[i].sec) || 0; }
+    var M = DM(), sec = M.shortSec(p); // 9B-20: 長い素材は録音の合計（120 秒）に入れない（録音の上限は変えない）
     return Math.max(0, Math.min(REC_MAX_SEC, M.WAV_MAX_SEC, (M.WAV_MAX_BYTES - 44) / (2 * (sr || 48000)), M.MAX_ASSET_SEC - sec));
   }
   function recMedia() { try { var n = window.navigator, md = n && n.mediaDevices; return md && md.getUserMedia ? md : null; } catch (e) { return null; } }
@@ -2151,10 +2440,11 @@
   function wavCancel() { if (wav.job) { wav.job.canceled = true; } }
 
   // ---------- §341 9A-11: プロジェクトパック（ZIP: manifest.json・project.json・audio/ の WAV）----------
-  var PACK_FORMAT = "ultimate-gorilla-daw-pack", PACK_VERSION = 1, PACK_MAX_ZIP = 100 * 1024 * 1024, PACK_MAX_JSON = 2 * 1024 * 1024;
+  var PACK_FORMAT = "ultimate-gorilla-daw-pack", PACK_VERSION = 2, PACK_MAX_ZIP = 256 * 1024 * 1024, PACK_MAX_JSON = 2 * 1024 * 1024; // 9B-20: 版 2 ＝ 長い・圧縮の素材（それが無い ZIP は版 1 のまま書く）・256MiB まで
   var pk = { busy: false, state: "idle", msg: "", blob: null, url: "", name: "", size: 0, assets: 0, restored: null, istate: "idle", imsg: "" };
   function ZP() { return window.UGDawZip || null; }
-  function packFile(id) { return "audio/" + String(id).replace(":", "-") + ".wav"; }
+  function packFile(id, kind) { return "audio/" + String(id).replace(":", "-") + "." + (kind && kind !== "wav" ? ({ mp3: "mp3", m4a: "m4a", ogg: "ogg", flac: "flac" }[kind] || "bin") : "wav"); } // 9B-20: 元のファイルのまま
+  function packNew(a) { return !!(a && (a.long || (a.kind && a.kind !== "wav"))); } // 9B-20: 版 2 が要る素材
   function packFree() { if (pk.url) { try { URL.revokeObjectURL(pk.url); } catch (e) {} } pk.url = ""; pk.blob = null; }
   // まとめる素材（クリップが使う素材は必須・曲の一覧にある素材は端末にあれば）と大きさの見こみ
   function packPlan(p) {
@@ -2176,8 +2466,8 @@
       if (i >= plan.list.length) { build(); return; }
       var it = plan.list[i];
       if (!it.ref) { if (it.used) { fail("クリップが使う素材の情報が曲にありません（" + it.id + "）"); return; } next(); return; }
-      idbGet("blobs", it.id, function (b, why) {
-        var data = b && b.data ? new Uint8Array(b.data) : null;
+      idbGet("blobs", it.id, function (b, why) { dataAB(b && b.data, function (dab) { // 9B-20: Blob も
+        var data = dab ? new Uint8Array(dab) : null;
         if (!data || data.length !== it.ref.bytes || M.hashBytes(data) !== it.id) {
           if (it.used) { fail("音声の素材「" + it.ref.name + "」が" + (b === undefined ? "読めません（" + (why || "") + "）" : (data ? "こわれています" : "この端末にありません")) + "。まとめられません（「🔗 素材を選びなおす」でつなぎなおしてください）"); return; }
           next(); return; // 使っていない素材が端末に無いときは入れない
@@ -2185,14 +2475,17 @@
         Z.sha256Async(data, function (sha) {
           if (!/^[0-9a-f]{64}$/.test(sha)) { fail("SHA-256 を計算できませんでした"); return; }
           var r = it.ref;
-          out.push({ data: data, m: { id: it.id, file: packFile(it.id), name: r.name, bytes: data.length, sha256: sha, sr: r.sr, ch: r.ch, bits: r.bits, frames: r.frames, sec: r.sec, used: it.used } });
+          var mm = { id: it.id, file: packFile(it.id, r.kind), name: r.name, bytes: data.length, sha256: sha, sr: r.sr, ch: r.ch, bits: r.bits, frames: r.frames, sec: r.sec, used: it.used };
+          if (packNew(r)) { mm.kind = r.kind || "wav"; if (r.codec) { mm.codec = r.codec; } mm.long = !!r.long; } // 9B-20
+          out.push({ data: data, m: mm, v2: packNew(r) });
           next();
         });
-      });
+      }); });
     }
     function build() {
       var rec = M.toRecord(p, p.saved || Date.now()), files = [], k, man;
-      man = { format: PACK_FORMAT, packVersion: PACK_VERSION, app: "究極ゴリラ ゴリラDAW", created: d.toISOString(), name: p.name, projectId: p.id, project: "project.json", assets: [] };
+      var v2 = false; for (k = 0; k < out.length; k++) { if (out[k].v2) { v2 = true; } }
+      man = { format: PACK_FORMAT, packVersion: v2 ? 2 : 1, app: "究極ゴリラ ゴリラDAW", created: d.toISOString(), name: p.name, projectId: p.id, project: "project.json", assets: [] };
       for (k = 0; k < out.length; k++) { man.assets.push(out[k].m); }
       files.push({ name: "manifest.json", data: Z.utf8(JSON.stringify(man, null, 1)) });
       files.push({ name: "project.json", data: Z.utf8(JSON.stringify(rec, null, 1)) });
@@ -2242,10 +2535,11 @@
     if (mas.length > M.MAX_ASSETS) { cb({ ok: false, why: "素材が多すぎます（" + mas.length + " 個・" + M.MAX_ASSETS + " 個まで）" }); return; }
     for (i = 0; i < mas.length; i++) {
       var a = mas[i];
-      if (!a || typeof a.id !== "string" || !/^a:[0-9a-f]{16}$/.test(a.id) || a.file !== packFile(a.id) || !/^[0-9a-f]{64}$/.test(String(a.sha256))) { cb({ ok: false, why: "manifest の素材の情報がおかしいです（" + (i + 1) + " 個目）" }); return; }
+      if (!a || typeof a.id !== "string" || !/^a:[0-9a-f]{16}$/.test(a.id) || a.file !== packFile(a.id, a.kind) || !/^[0-9a-f]{64}$/.test(String(a.sha256))) { cb({ ok: false, why: "manifest の素材の情報がおかしいです（" + (i + 1) + " 個目）" }); return; }
       if (byId[a.id]) { cb({ ok: false, why: "manifest に同じ素材が 2 回あります" }); return; }
       if (!zr.files[a.file]) { if (need.indexOf(a.id) >= 0) { cb({ ok: false, why: "素材が足りません（「" + String(a.name || a.id) + "」が ZIP に入っていません）。読みこみをやめました" }); return; } continue; }
-      if (!(a.bytes > 0) || a.bytes > M.WAV_MAX_BYTES || zr.files[a.file].usize !== a.bytes) { cb({ ok: false, why: "素材「" + String(a.name || a.id) + "」の大きさがおかしいです" }); return; }
+      var rr0 = M.findAsset(p, a.id), lim0 = rr0 && packNew(rr0) ? (rr0.kind && rr0.kind !== "wav" ? M.LONG_Z_BYTES : M.LONG_WAV_BYTES) : M.WAV_MAX_BYTES; // 9B-20: 長い・圧縮の素材は大きくてよい
+      if (!(a.bytes > 0) || a.bytes > lim0 || zr.files[a.file].usize !== a.bytes) { cb({ ok: false, why: "素材「" + String(a.name || a.id) + "」の大きさがおかしいです" }); return; }
       if (M.findAsset(p, a.id)) { byId[a.id] = a; } // 曲の一覧にある素材だけ使う（ほかは読まない）
     }
     for (i = 0; i < need.length; i++) { if (!byId[need[i]]) { var nr = M.findAsset(p, need[i]); cb({ ok: false, why: "素材が足りません（「" + (nr ? nr.name : need[i]) + "」が ZIP にありません）。読みこみをやめました" }); return; } }
@@ -2261,14 +2555,25 @@
       if (u.length !== a.bytes || M.hashBytes(u) !== a.id) { fail("素材「" + a.name + "」の中身が一致しません（こわれているか、書きかえられています）。読みこみをやめました"); return; }
       Z.sha256Async(u, function (sha) {
         if (sha !== a.sha256) { fail("素材「" + a.name + "」の SHA-256 が一致しません。読みこみをやめました"); return; }
-        var buf = u.buffer.byteLength === u.length ? u.buffer : u.slice(0).buffer, info = M.parseWav(buf);
+        var buf = u.buffer.byteLength === u.length ? u.buffer : u.slice(0).buffer, ref = M.findAsset(p, a.id);
+        if (ref && ref.kind && ref.kind !== "wav") { // 9B-20: 圧縮の素材（中身・大きさは上で確かめた）→ 形式・デコードできるか（写しで）・保存は Blob
+          var prz = M.probeAudio(buf);
+          if (!prz.ok) { fail("素材「" + a.name + "」: " + prz.why); return; }
+          decodeAny(buf.slice(0), ref.sr, ref.ch, function (b2, why2) {
+            if (!b2) { fail("素材「" + a.name + "」: このブラウザでは、この形式（" + kindText(ref) + "）の音を読めませんでした（" + why2 + "）"); return; }
+            var pk2 = []; try { pk2 = peaksOf(b2); } catch (e2) { pk2 = []; }
+            ok.push({ id: a.id, data: typeof Blob === "function" ? new Blob([buf]) : buf, meta: { id: a.id, name: ref.name, bytes: ref.bytes, sr: ref.sr, ch: ref.ch, bits: ref.bits, frames: ref.frames, sec: ref.sec, hash: a.id, peaks: pk2, added: Date.now(), kind: ref.kind, codec: ref.codec, long: !!ref.long } });
+            check();
+          }, false);
+          return;
+        }
+        var info = M.parseWav(buf);
         if (!info.ok) { fail("素材「" + a.name + "」: " + info.why); return; }
-        var ref = M.findAsset(p, a.id);
         if (!M.sameAsset(ref, M.assetRef(info, ref.name, a.id))) { fail("素材「" + a.name + "」が曲の記録（長さ・レート・ch）と合いません。読みこみをやめました"); return; }
         decodeWav(buf, info, function (b, why) {
           if (!b) { fail("素材「" + a.name + "」: " + why); return; }
           var peaks = []; try { peaks = peaksOf(b); } catch (e) { peaks = []; }
-          ok.push({ id: a.id, data: buf, meta: { id: a.id, name: ref.name, bytes: ref.bytes, sr: ref.sr, ch: ref.ch, bits: ref.bits, frames: ref.frames, sec: ref.sec, hash: a.id, peaks: peaks, added: Date.now() } });
+          ok.push({ id: a.id, data: ref.long && typeof Blob === "function" ? new Blob([buf]) : buf, meta: { id: a.id, name: ref.name, bytes: ref.bytes, sr: ref.sr, ch: ref.ch, bits: ref.bits, frames: ref.frames, sec: ref.sec, hash: a.id, peaks: peaks, added: Date.now(), long: !!ref.long } }); // 9B-20: 長い WAV は Blob
           check();
         }, true);
       });
@@ -2407,7 +2712,7 @@
         (use ? '' : '<button class="modal-btn" data-pj-unasset="' + escHtml(a.id) + '">曲から外す</button>') + '</div>';
     }
     return h + '<p class="small dsv-note">クリップを消しても素材は消えません。「曲から外す」も端末の中の WAV は消しません（ほかの曲が使っているかもしれないため）。端末の素材の確認・削除は「&#x1F3B5; 素材ライブラリ」で。</p>' +
-      '<input type="file" class="da-wavfile" accept=".wav,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave" style="display:none;"></div>';
+      '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
   }
   function renderProj(root, ctl) {
     audKick(project());
@@ -4833,8 +5138,9 @@
           else if (v === "go") { ops.repeat(R.clip, R.n, (R.bar - 1) * M.barTicks(p)); return; }
           rerender(); return;
         }
+        if ((v = el.getAttribute("data-stg"))) { stageAct(v); return; } // 9B-20
         if ((v = el.getAttribute("data-addwav"))) { keepScroll(root); st.anote = ""; pickWav(root, { track: v }); return; }
-        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { st.chooseAdd = !st.chooseAdd; st.sel = null; st.confirmDel = null; st.anote = ""; rerender(); } else if (v === "addSynth" || v === "addDrum") { ops.addTrack(v === "addDrum" ? "drum" : "synth"); } else if (v === "addCancel") { st.chooseAdd = false; rerender(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } else if (v === "tempo") { st.confirmDel = null; st.view = "tempo"; renderTempo(root, ctl); } return; }
+        if ((v = el.getAttribute("data-ar"))) { keepScroll(root); if (v === "addTrack") { st.chooseAdd = !st.chooseAdd; st.sel = null; st.confirmDel = null; st.anote = ""; rerender(); } else if (v === "addSynth" || v === "addDrum") { ops.addTrack(v === "addDrum" ? "drum" : "synth"); } else if (v === "addCancel") { st.chooseAdd = false; rerender(); } else if (v === "undo") { ops.undo(); } else if (v === "mixer") { st.confirmDel = null; st.view = "mix"; renderMix(root, ctl); } else if (v === "tempo") { st.confirmDel = null; st.view = "tempo"; renderTempo(root, ctl); } else if (v === "ref") { st.confirmDel = null; st.view = "ref"; renderRef(root, ctl); } return; }
         if ((v = el.getAttribute("data-addclip"))) { keepScroll(root); ops.addClip(v); return; }
         if ((v = el.getAttribute("data-cl")) && st.sel && st.sel.kind === "clip") {
           var cid = st.sel.id, fc = M.findClip(p, cid);
@@ -4924,7 +5230,20 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
-    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0, tp: lm.tp }; }, setTp: function (on) { return lmSetTp(on); }, values: function () { return lmValues(); }, NAME: LM_NAME }, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
+    hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0, tp: lm.tp }; }, setTp: function (on) { return lmSetTp(on); }, values: function () { return lmValues(); }, NAME: LM_NAME },
+    ref: { // 9B-20: 🎧 リファレンス・長い音声の読みこみ（テスト・確かめ用も）
+      state: function () { var p = project(), M = DM(), r = M.refOf(p), s = M.refSpan(p); return { ref: r ? JSON.parse(JSON.stringify(r)) : null, span: s ? { start: s.start, end: s.end, dur: s.dur, kind: s.asset.kind || "wav", long: !!s.asset.long } : null, ab: st.refAB || "both", loaded: !!(s && aud.buf[s.asset.id]), stage: stageInfo(), playEnd: M.playEndTick(p), songEnd: M.songEndTick(p), node: !!(pl && pl.mix.__ref), srcs: pl && pl.mix.__ref ? pl.mix.__ref.srcs.length : 0, gain: refGainVal(p), daw: abDaw() }; },
+      importAb: function (ab, name, tgt, cb) { longImport(ab, ab.slice(0), name, tgt || { ref: true }, cb); },
+      importBlob: function (blob, name, tgt, cb) { dataAB(blob, function (ab, w) { if (!ab) { cb({ ok: false, why: w }); return; } longImport(ab, blob, name, tgt || { ref: true }, cb); }); },
+      fileGo: function (blob, name, tgt) { dataAB(blob, function (ab, w) { if (!ab) { return; } audFileGo(ab, blob, name, tgt || { ref: true }); }); return true; }, // 画面のファイル選びと同じ振り分け（結果は state・メッセージで見る）
+      commit: function (where, cb) { stageCommit(where, function (r) { if (r.ok && pl) { resync(); } if (cb) { cb(r); } }); },
+      cancel: function () { stageCancel(); return true; },
+      set: function (k, v) { var r = DM().refSet(project(), k, v); if (r.ok) { markDirty(); if (k === "offset" && pl) { resync(); } else { refApply(); } } return r; },
+      ab: function (v) { return refSetAB(v); },
+      clear: function () { var ok0 = DM().clearRef(project()); if (ok0) { markDirty(); if (pl) { resync(); } } return ok0; },
+      jump: function (sec) { var p = project(); return refJump(Math.round(DM().secToTick(p, Math.max(0, Number(sec) || 0)))); },
+      show: function () { st.view = "ref"; if (st.root) { renderRef(st.root, st.ctl); } return true; }
+    }, sendFx: sfApi, tempo: tpApi, showTempo: function () { st.view = "tempo"; if (st.root) { renderTempo(st.root, st.ctl); } return true; }, showSendFx: function () { st.view = "sendfx"; if (st.root) { renderSendFx(st.root, st.ctl); } return true; }, showMaster: function () { st.view = "master"; if (st.root) { renderMaster(st.root, st.ctl); } return true; }, auto: auApi, showAuto: function (id, target) { if (!DM().findTrack(project(), id)) { return false; } openAuto(id, "arr"); if (target && DM().AUTO_TARGETS[target]) { st.au.target = target; } if (st.root) { renderAuto(st.root, st.ctl); } return true; }, showFx: function (id) { if (!DM().findTrack(project(), id)) { return false; } st.view = "fx"; st.fxTrack = id; if (st.root) { renderFx(st.root, st.ctl); } return true; }, panText: panText, showMixer: function () { if (st.root) { st.view = "mix"; renderMix(st.root, st.ctl); } }, askDelete: function (id) { st.confirmDel = id; if (st.root) { rerender(); } }, undoDepth: function () { return st.undo.length; }, select: function (kind, id) { st.sel = kind ? { kind: kind, id: id } : null; st.anote = ""; if (st.root) { rerender(); } },
     proj: proj, saveNow: saveNow, markDirty: markDirty, flushSave: flushSave, saveState: function () { return sv; }, readIndex: readIndex, loadProject: loadProject,
     showProj: function () { if (st.root) { st.view = "proj"; renderProj(st.root, st.ctl); } },
     // §341 9A-11: プロジェクトパック（ZIP）
@@ -4941,7 +5260,8 @@
     lib: { lockInit: lockShared, lockState: function () { return lk.state; }, lockDrop: function () { lk.gen++; if (lk.rel) { var r = lk.rel; lk.rel = null; r(); } lk.state = "off"; }, addWhy: assetAddWhy, LOCK: LOCK_NAME, open: function () { libOpen(); if (st.root) { rerender(); } }, load: libLoad, scan: libScan, refs: libRefs, del: libDelete, hear: libHear, busyWhy: libBusyWhy, otherTabs: otherTabs, chanInit: libChanInit, state: function () { return lib; }, html: libHtml, songAssets: songAssets, PING_MS: LIB_PING_MS }, // 9A-15
     comp: { open: function (id) { var ok = openComp(id); if (ok && st.root) { rerender(); } return ok; }, cur: comp.cur, take: comp.take, sel: comp.sel, nudge: comp.nudge, setAt: comp.setAt, add: comp.add, del: comp.del, apply: comp.apply, cancel: comp.cancel, off: comp.off, undo: comp.undo, changed: comp.changed, play: compPlay, html: function () { var f = comp.clip(); return f ? compHtml(project(), f) : ""; }, svg: compWaveSvg, obj: compObj }, // 9A-16／9A-17
     takes: { select: function (cid, id) { return takes.select(cid, id); }, remove: function (cid, id) { return takes.remove(cid, id); }, hear: takeHear, stop: takeHearStop, info: function () { return hearInfo; }, html: function (cid) { var f = DM().findClip(project(), cid); return f ? takesHtml(project(), f.clip) : ""; }, openRec: function (cid) { var ok = recOpenTake(cid); if (ok && st.root) { rerender(); } return ok; } }, // 9A-14
-    rec: { open: recOpen, start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
+    rec: { room: function (sr) { return recRoom(project(), sr); }, open: recOpen, // 9B-20: room ＝ 録れる秒（テスト用）
+       start: recStart, stop: recStop, cancel: recCancel, ui: recUi, state: function () { return rec; }, wav: recWav, chunk: recChunk, manual: recManual, setManual: recSetManual, room: function () { return recRoom(project(), rec.sr || 48000); }, why: function () { var p = project(); return recWhy(p, DM().findTrack(p, rec.track)); }, html: function () { return recHtml(project()); }, KEY: REC_KEY, MAX_SEC: REC_MAX_SEC, WORKLET: REC_WORKLET },
     // §341 9A-10: オーディオトラック（テストからも呼ぶ）
     audio: { importWav: importWav, ensure: ensureAssets, state: function () { return aud; }, add: addAudio, pick: pickWav, waveSvg: waveSvg, used: usedAssets, missing: audMissing, assetState: assetState, IDB_NAME: IDB_NAME, forget: audForget },
     reload: function () { recCancel(""); rec.open = false; rec.msg = ""; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.view = "arr"; st.roll = null; st.sel = null; st.cue = null; st.secUI = null; st.repeat = null; st.secMsg = ""; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; return project(); },
