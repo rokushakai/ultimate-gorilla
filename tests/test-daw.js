@@ -3236,6 +3236,33 @@ module.exports = async function () {
   ok(lt18.length > 0 && lt18.every(function (x) { return x.ok; }), "9B-18: late notes are still played at their own time (not moved, not dropped; the counter only reports)");
   ok(DL0.meter.state().on === false && !DL0.meter.values(), "9B-18: the meter is off here, so nothing is shown for it");
   DL0.stop(); p18.tracks = p18.tracks.filter(function (t) { return t !== dr18; });
+  // ================= 9B-19: 再生のはじまり・リアルタイムの True Peak（§342）=================
+  DL0.jumpTo(0); DL0.play(); var P19 = DL0.player(), st19 = P19.start;
+  ok(st19 && typeof st19.prepMs === "number" && st19.n > 0 && st19.lead !== null && Math.abs(P19.segs[0].t0 - (P19.ac.currentTime + 0.08)) < 1e-9 && st19.on === false && P19.prep === null, "9B-19: the start time (t0) is fixed after the graph is built (now + 80 ms); the first pump's smallest lead and the prep time are recorded", st19);
+  DL0.stop();
+  var q19Sb = { sampleRate: 48000, Math: Math, Float32Array: Float32Array, Float64Array: Float64Array, registerProcessor: function (n, c) { if (n === "ug-daw-loud") { q19Sb.U = c; } } };
+  VM.runInNewContext("class AudioWorkletProcessor { constructor() { this.port = { onmessage: null, postMessage: function (m) { sent.push(m); } }; } }\nvar sent = [];\n" + DL0.master.src + "\nthis.__s = sent;", q19Sb);
+  function q19Meter(L, R, withTp, blk) { q19Sb.__s.length = 0; var P = new q19Sb.U({ processorOptions: { k: ML.kCoef(48000), tp: withTp ? ML.tpTaps() : null } }), live = ML.loudLive(), i, b = blk || 128; for (i = 0; i + b <= L.length; i += b) { P.process([[L.subarray(i, i + b), R.subarray(i, i + b)]]); } q19Sb.__s.forEach(function (m) { live.push(m[0], m[1], m[2]); }); return { v: live.get(false), msgs: q19Sb.__s.slice() }; }
+  function q19File(L, R) { var lm = ML.loudMeter(48000, {}); lm.push(L, R, L.length); return lm.finish(); }
+  function q19Sig(fn, sec) { var n = Math.round(48000 * sec), L = new Float32Array(n), R = new Float32Array(n), i; for (i = 0; i < n; i++) { var v = fn(i / 48000, i); L[i] = v[0]; R[i] = v[1]; } return [L, R]; }
+  var q19Cases = [
+    ["1 kHz sine", function (t) { var v = 0.5 * Math.sin(2 * Math.PI * 1000 * t); return [v, v]; }],
+    ["15 kHz sine", function (t) { var v = 0.7 * Math.sin(2 * Math.PI * 15000 * t + 0.3); return [v, v]; }],
+    ["inter-sample peak (fs/4, 45°)", function (t) { var v = 0.9 * Math.sin(2 * Math.PI * 12000 * t + Math.PI / 4); return [v, v]; }],
+    ["sharp transient (impulses and steps)", function (t, i) { var k = i % 4800; return [k === 2000 ? 0.95 : (k > 3000 && k < 3100 ? 0.6 : 0), k === 2001 ? -0.8 : 0]; }],
+    ["stereo, different peaks", function (t) { return [0.8 * Math.sin(2 * Math.PI * 300 * t), 0.3 * Math.sin(2 * Math.PI * 11000 * t + 1)]; }]
+  ];
+  var q19Out = q19Cases.map(function (c) { var sg = q19Sig(c[1], 1.2), m = q19Meter(sg[0], sg[1], true), f = q19File(sg[0], sg[1]); return [c[0], m.v.maxTp, f.truePeak, m.v.maxPeak, f.samplePeak, m.v.tpDiff]; });
+  ok(q19Out.every(function (x) { return x[1] !== null && Math.abs(x[1] - x[2]) <= 0.01 && Math.abs(x[3] - x[4]) <= 0.01; }), "9B-19: realtime True Peak (worklet source, 4× FIR from tpTaps) = the 📊 analysis' True Peak within 0.01 dB (1 kHz, 15 kHz, inter-sample, transient, stereo)", q19Out);
+  ok(q19Out[2][1] >= 20 * Math.log10(0.9) - 0.01 && q19Out[2][1] <= 20 * Math.log10(0.9) + 0.15 && q19Out[2][5] > 2.9 && q19Out[2][5] < 3.3, "9B-19: inter-sample peak (true −0.92 dBTP): the 4× estimate reads it (the 32-tap filter reads up to about +0.11 dB high here, same as 📊), about +3 dB over the sample peak", q19Out[2]);
+  var sgB = q19Sig(q19Cases[3][1], 1.2), b128 = q19Meter(sgB[0], sgB[1], true, 128).v.maxTp, b32 = q19Meter(sgB[0], sgB[1], true, 32).v.maxTp, b480 = q19Meter(sgB[0], sgB[1], true, 480).v.maxTp;
+  ok(b128 === b32 && b128 === b480, "9B-19: the interpolation state crosses block boundaries (blocks of 32 / 128 / 480 frames give the same True Peak)", [b128, b32, b480]);
+  var sgN = q19Sig(q19Cases[0][1], 0.5), mNo = q19Meter(sgN[0], sgN[1], false);
+  ok(mNo.msgs.every(function (m) { return m.length === 2; }) && mNo.v.maxTp === null && mNo.v.tp === null, "9B-19: without the taps (True Peak OFF) the worklet sends only [energy, peak] and computes no True Peak");
+  ok(q19Meter(sgN[0], sgN[1], true).msgs.every(function (m) { return m.length === 3 && m[2] >= m[1]; }) , "9B-19: with True Peak ON each 100 ms message is [energy, sample peak, True Peak ≥ sample peak] (no PCM is sent)");
+  var lv19 = ML.loudLive(); lv19.push(0.01, 0.5, 0.7); lv19.tpReset(); var g19 = lv19.get(false);
+  ok(g19.maxTp === null && g19.maxPeak !== null, "9B-19: switching True Peak clears only its numbers");
+  ok(DL0.meter.state().tp === false, "9B-19: True Peak is OFF by default");
   ok(SL.ultimateGorillaSaveV2 === rpgL && UGL.audio.bus === sharedBus && UGL.audio.master === sharedMaster, "the RPG save and the shared audio output are untouched (9B-10)");
   AL.stop(); DL0.reset();
   var errL = CL.errors.filter(function (x) { return !/not MP3/.test(x); });

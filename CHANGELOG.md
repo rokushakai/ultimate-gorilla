@@ -5,6 +5,17 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.69] - 2026-11-15 — ⏱️ ゴリラDAW の再生のはじまり・リアルタイムの True Peak (§342 Phase 9B-19)
+
+### Fixed
+- ▶ を押した直後、トラックの出口・FX・MASTER・センド・メーターを作る時間（20〜60ms）の分だけ、最初の音の予約の余裕が減っていた（5〜37ms まで。軽い負荷で最初の 11 個の音が遅れたこともあった）。作り終えてから鳴りはじめを決めるようにした（どの条件でも 72〜80ms・遅れ 0）。▶ から音が出るまでは準備の時間 ＋ 80ms
+### Added
+- MASTER の 📏 ラウドネスメーターに **True Peak**（📊 の解析と同じ 4 倍の補間・推定・はじめは OFF・別に ON／OFF）: いま・いちばん大きい（dBTP）・Sample Peak との差。数字は保存しない
+- `UGDaw.player().start`（準備の時間・最初の予約の余裕）・`UGDaw.meter.setTp`・`UGDawModel.loudLive().tpReset`
+### Notes
+- True Peak: 再生中のメーター ＝ 同じレートの WAV の解析と 0.01dB 以内・Python の 16 倍と ±0.04dB 以内（1kHz・15kHz・サンプルの間のピーク・急な変化・ステレオ・リミッター 2 種・MASTER EQ・センド・8 楽器の曲）。負荷は実時間の約 2%（メーターだけは約 0.5%）
+- WAV・リミッター（ソースが同じ）・シンセの発音・DSP・Golden・保存の形・MIDI は変えていない。WAV は v2.68 と 1 LSB 以内。Phase 8 の新しいシンセのエンジン・Pitch8・ハイブリッドは使っていない。iPhone の実機では未確認
+
 ## [2.68] - 2026-11-15 — 🔍 ゴリラDAW の再生の音と WAV のピークのちがい (§342 Phase 9B-18)
 
 ### Fixed

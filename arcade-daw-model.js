@@ -711,17 +711,19 @@
   }
   // §342 9B-17: 再生中のメーター（100ms ごとの K 特性の 2 乗の平均 e と、その間のサンプルピーク pk を入れる）。値はこの関数の中だけ（曲に保存しない）
   function loudLive() {
-    var subs = [], stl = [], mE = [], spk = 0, last = 0;
+    var subs = [], stl = [], mE = [], spk = 0, last = 0, tpOn = false, tpLast = 0, tpMax = 0; // 9B-19: True Peak（3 つめの値があるときだけ）
     function mean(n) { var s0 = 0, k; for (k = subs.length - n; k < subs.length; k++) { s0 += subs[k]; } return s0 / n; }
     return {
-      push: function (e, pk) {
+      push: function (e, pk, tp) {
         subs.push(e > 0 ? e : 0); last = pk > 0 ? pk : 0; if (last > spk) { spk = last; }
+        if (typeof tp === "number") { tpOn = true; tpLast = tp > 0 ? tp : 0; if (tpLast > tpMax) { tpMax = tpLast; } } // 9B-19
         if (subs.length >= 4) { mE.push(mean(4)); }
         if (subs.length >= 30) { stl.push(luL(mean(30))); }
       },
       count: function () { return subs.length; },
+      tpReset: function () { tpOn = false; tpLast = 0; tpMax = 0; }, // 9B-19: True Peak を ON／OFF したとき
       get: function (full) {
-        var n = subs.length, o = { n: n, sec: n / 10, M: n >= 4 ? luL(mean(4)) : null, S: n >= 30 ? luL(mean(30)) : null, peak: luDb(last), maxPeak: luDb(spk) };
+        var n = subs.length, o = { n: n, sec: n / 10, M: n >= 4 ? luL(mean(4)) : null, S: n >= 30 ? luL(mean(30)) : null, peak: luDb(last), maxPeak: luDb(spk), tp: tpOn ? luDb(tpLast) : null, maxTp: tpOn ? luDb(tpMax) : null, tpDiff: tpOn && tpMax > 0 && spk > 0 ? luDb(tpMax) - luDb(spk) : null }; // 9B-19: tp ＝ いま（100ms）・maxTp ＝ 測りはじめから・tpDiff ＝ 最大の True Peak − 最大のサンプルピーク
         if (o.M !== null && !isFinite(o.M)) { o.M = -Infinity; } if (o.S !== null && !isFinite(o.S)) { o.S = -Infinity; }
         if (full) { var g = luGated(mE), l = stl.length ? lraOf(stl) : { lra: null, why: "short" }; o.I = g.integ; o.lra = l.lra; o.lraWhy = l.why; }
         return o;
