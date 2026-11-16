@@ -232,6 +232,62 @@ module.exports = async function () {
   var more = X.SOUNDS.filter(function (s) { return s[1] === "more"; });
   ok(more.length === 10 && more.every(function (s) { return s[3] === "smp" && !!W.UGMelody.sampleFiles[s[4].prog] && X.LIC[s[5].lic] && s[5].lo < s[5].hi && s[5].f.length === 6; }), "10 new sounds use existing game recordings (with rights, range and profile)");
 
+  // ---------- A4: 部分テンプレート（v2.78）----------
+  ok(X.secTypeOfName("ラストサビ") === "last" && X.secTypeOfName("サビ 2") === "chorus" && X.secTypeOfName("Bメロ") === "B" && X.secTypeOfName("イントロ") === "intro" && X.secTypeOfName("間奏") === "inter" && X.secTypeOfName("Cメロ") === "bridge" && X.secTypeOfName("アウトロ") === "outro" && X.secTypeOfName("Aメロ 2") === "A" && X.secTypeOfName("なにか") === "A", "section names → playing type (サビ → chorus, ラストサビ → last, unknown → A)");
+  var sq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project, sqc = X.songChords(sq), sqPl = X.tplPlan(null, "pop", "new", 1, 1, "full");
+  var chOk = Object.keys(sqc).length === 48;
+  sqPl.rows.forEach(function (r) { r.clips.forEach(function (c) { if (c.r.drum) { return; } var b0 = 0, k; for (k = 0; k < c.sec; k++) { b0 += sqPl.form[k].bars; } c.r.chords.forEach(function (id, i) { if (sqc[b0 + i] !== id) { chOk = false; } }); }); });
+  ok(chOk && sq.ext.xmKey === 2, "a template song stores its chord for every bar (ext.xmChords, 48 bars) and they match the generated parts", Object.keys(sqc).length);
+  var sqj = JSON.parse(JSON.stringify(M.clean(JSON.parse(JSON.stringify(sq)))));
+  ok(JSON.stringify(sqj.ext.xmChords) === JSON.stringify(sq.ext.xmChords), "the song chords survive the JSON save / load (clean)");
+  var bad1 = M.emptyProject(0); bad1.ext.xmChords = { "0": "V/V", "1": "nope", "x": "I", "999": "I" }; bad1.ext.xmKey = 40;
+  ok(JSON.stringify(X.songChords(bad1)) === '{"0":"V/V"}' && X.songKey(bad1).key === null, "unknown chord ids, bad bars and a bad key are ignored");
+  var pa4 = M.emptyProject(0); pa4.ext.xmChords = { "8": "ii" };
+  X.tplApply(pa4, X.tplPlan(pa4, "pop", "add", 9, 1, "std"));
+  ok(X.songChords(pa4)["8"] === "ii" && Object.keys(X.songChords(pa4)).length === 16, "adding a template to a song writes chords only where none were stored");
+  // サビにハープだけ（🎻 のハープ・曲のコードを使う）
+  var secs4 = M.sectionsOf(sq), sab4 = secs4[3], bar4 = M.tickToBar(sq, sab4.tick).bar;
+  var o4 = { tpl: "orch", ti: 2, bar: bar4, bars: 8, type: X.secTypeOfName(sab4.name), chords: {}, dest: "", seed: 1 };
+  var keep = JSON.stringify({ tracks: sq.tracks, markers: sq.markers, tempo: sq.tempo, name: sq.name }), extKeep = JSON.stringify(sq.ext);
+  var pl4 = X.partPlan(sq, o4);
+  ok(pl4.ok && pl4.type === "chorus" && pl4.from.every(function (f) { return f === "song"; }) && pl4.chords.join() === pl4.from.map(function (f, i) { return sqc[bar4 - 1 + i]; }).join() && pl4.audit.ok && JSON.stringify({ tracks: sq.tracks, markers: sq.markers, tempo: sq.tempo, name: sq.name }) === keep, "plan: the chorus section, the song's own chords, mechanical checks OK — and planning changes nothing", pl4.why);
+  var ap4 = X.partApply(sq, pl4), after = JSON.parse(keep);
+  ok(ap4.ok && sq.tracks.length === after.tracks.length + 1 && JSON.stringify(sq.tracks.slice(0, after.tracks.length)) === JSON.stringify(after.tracks) && JSON.stringify(sq.markers) === JSON.stringify(after.markers) && JSON.stringify(sq.tempo) === JSON.stringify(after.tempo), "apply: one new track; every existing track (melody, parts, FX), the section markers and tempo / meter are byte-identical");
+  ok(ap4.clip.start === sab4.tick && ap4.clip.len === sab4.len && ap4.clip.ext.xpart.tpl === "orch" && ap4.track.ext.xm === "xm-harp" && JSON.stringify(sq.ext) === extKeep, "the clip sits exactly on the chorus section; the song chords were already stored (ext unchanged)");
+  // 置くトラック: 重なり・ドラム／ドラムでない
+  var o5 = { tpl: "orch", ti: 2, bar: bar4, bars: 8, type: "chorus", dest: ap4.track.id };
+  ok(!X.partPlan(sq, o5).ok && /もうクリップ/.test(X.partPlan(sq, o5).why), "an existing track with a clip in the range is refused (no overwrite)");
+  o5.bar = 1; o5.bars = 4; var pl5 = X.partPlan(sq, o5);
+  ok(pl5.ok && pl5.dest === ap4.track.id && X.partApply(sq, pl5).ok && ap4.track.clips.length === 2, "the same harp track can get another part in a free place");
+  var drumT = sq.tracks.filter(function (t) { return M.isDrum(t); })[0];
+  ok(!X.partPlan(sq, { tpl: "orch", ti: 2, bar: 1, bars: 4, type: "A", dest: drumT.id }).ok && !X.partPlan(sq, { tpl: "pop", ti: 5, bar: 1, bars: 4, type: "A", dest: sq.tracks[1].id }).ok, "a pitched part cannot go on a drum track, nor drums on a pitched track");
+  // ことわる
+  var pm4 = M.emptyProject(0); pm4.tempo.meters.push({ tick: M.barToTick(pm4, 20), num: 3, den: 4 });
+  ok(/拍子/.test(X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 18, bars: 8, type: "A" }).why) && X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 13, bars: 8, type: "A" }).ok, "a range that crosses a meter change is refused; a range before it is fine");
+  ok(/使えます/.test(X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 22, bars: 4, type: "A" }).why) && X.partPlan(pm4, { tpl: "orch", ti: 0, bar: 22, bars: 4, type: "A" }).ok, "a 4/4-only pattern is refused in a 3/4 part of the song; a 3/4 pattern works there");
+  ok(!X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 1, bars: 0 }).ok && !X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 1, bars: 65 }).ok && /256/.test(X.partPlan(pm4, { tpl: "pop", ti: 0, bar: 250, bars: 8 }).why) && !X.partPlan(pm4, { tpl: "nope", ti: 0, bar: 1, bars: 4 }).ok && !X.partPlan(pm4, { tpl: "pop", ti: 99, bar: 1, bars: 4 }).ok, "lengths outside 1–64, past bar 256, unknown templates / parts are refused");
+  var full4 = M.emptyProject(0); while (full4.tracks.length < 16) { M.newTrack(full4, "x"); }
+  ok(/16/.test(X.partPlan(full4, { tpl: "pop", ti: 0, bar: 1, bars: 4 }).why), "a new track past 16 tracks is refused");
+  // コードを画面で変える → 足すと上書き。ないキー・コードは書く
+  var pe = M.emptyProject(0), oe = { tpl: "jpop", ti: 0, bar: 5, bars: 4, type: "A", prog: "p1", chords: { 6: "V/V" } }, ple = X.partPlan(pe, oe);
+  ok(ple.ok && ple.chords.join() === "I,vi,V/V,V" && ple.from.join() === "prog,prog,edit,prog" && X.songKey(pe).key === null, "a song without chords: the chosen progression, with the bar edited on screen (nothing written yet)", ple.chords);
+  X.partApply(pe, ple);
+  ok(JSON.stringify(X.songChords(pe)) === '{"4":"I","5":"vi","6":"V/V","7":"V"}' && pe.ext.xmKey === 0, "after adding: the song stores those chords and the key");
+  var ple2 = X.partPlan(pe, { tpl: "jpop", ti: 2, bar: 5, bars: 4, type: "A", prog: "p2", chords: { 4: "IV" } });
+  X.partApply(pe, ple2);
+  ok(ple2.chords.join() === "IV,vi,V/V,V" && X.songChords(pe)["4"] === "IV" && X.songChords(pe)["5"] === "vi", "a later part follows the stored chords (the new progression only fills empty bars); an edited bar overwrites");
+  // 41 のコード・オンコードぜんぶ
+  var allC = X.CHORD_LISTS.maj.concat(X.CHORD_LISTS.min), cBad = [];
+  allC.forEach(function (id) { var pp = M.emptyProject(0), ch1 = {}; ch1[0] = id; var r1 = X.partPlan(pp, { tpl: "jpop", ti: 0, bar: 1, bars: 1, type: "A", chords: ch1, kmode: X.CHORD_LISTS.min.indexOf(id) >= 0 ? "min" : "maj" }); if (!r1.ok || r1.chords[0] !== id || !r1.audit.ok) { cBad.push(id); } });
+  ok(cBad.length === 0, "every chord in both lists (incl. slash chords) can drive a part and passes the checks", cBad);
+  // 32 テンプレートの楽器ぜんぶ（その拍子の曲・サビ 8 小節）
+  var allBad = [], nAll = 0;
+  X.TPLS.forEach(function (T) {
+    var pp = M.emptyProject(0); pp.tempo.meters[0].num = T.num; pp.tempo.meters[0].den = T.den;
+    T.tracks.forEach(function (t, j) { nAll++; var r2 = X.partPlan(pp, { tpl: T.id, ti: j, bar: 1, bars: 8, type: "chorus", seed: 2 }); if (!r2.ok || !r2.notes || !r2.audit.ok) { allBad.push(T.id + "/" + j + " " + (r2.why || r2.audit.problems.join("|"))); } });
+  });
+  ok(allBad.length === 0 && nAll > 150, "every instrument of all 32 templates can be added alone (in its meter) and passes the checks", [nAll, allBad.slice(0, 3)]);
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -254,5 +310,19 @@ module.exports = async function () {
   ok((R.innerHTML.match(/data-xkmode="/g) || []).length === 2 && nOpt === X.CHORD_LISTS.min.length && R.innerHTML.indexOf("マイナー</option>") >= 0, "generator tab: メジャー／マイナー chips; the per-bar chord list follows the mode", nOpt);
   g1.mode = "maj"; X.ui.tab = "tpl";
   X.ui.tplPlan = null; X.ui.form = "std";
+  // A4 の画面・↶
+  X.ui.tab = "tpl"; X.ui.tplPlan = null; X.ui.part = null; X.ui.tsel = "orch"; D.xmas.host.render();
+  ok((R.innerHTML.match(/data-xpart="/g) || []).length === X.TPLS[3].tracks.length && R.innerHTML.indexOf("この楽器だけ") >= 0, "detail: one ＋ この楽器だけ button per instrument");
+  var hs = D.xmas.host, pS = D.project(), keepS = JSON.stringify(pS);
+  X.ui.part = X.partInit(hs, "orch", 2); hs.render();
+  ok(R.innerHTML.indexOf("data-xpw") >= 0 && (R.innerHTML.match(/data-xptype="/g) || []).length === 8 && (R.innerHTML.match(/data-xpch="/g) || []).length === X.ui.part.bars && R.innerHTML.indexOf("data-xpdest") >= 0 && R.innerHTML.indexOf('data-xm="partApply"') >= 0 && R.innerHTML.indexOf('data-xpv="q"') >= 0, "part screen: where, 8 playing types, one chord per bar, track, ▶ / ＋ 足す / やめる");
+  ok(JSON.stringify(D.project()) === keepS, "opening the part screen changes nothing");
+  var plU = X.partPlan(pS, X.ui.part), snapU = hs.snapAll(), extU = JSON.stringify(pS.ext), trU = JSON.stringify(pS.tracks);
+  var apU = X.partApply(pS, plU); hs.commit(snapU, "test", apU.track.id, apU.clip.id);
+  ok(apU.ok && D.project().tracks.length === JSON.parse(trU).length + 1 && Object.keys(X.songChords(D.project())).length > 0, "apply through the DAW host (tracks + song chords)");
+  D.ops.undo();
+  ok(JSON.stringify(D.project().tracks) === trU && JSON.stringify(D.project().ext) === extU, "one ↶ removes the track and the stored chords / key (ext) too");
+  var mid4 = M.midiExport(D.project()); ok(mid4.ok, "MIDI export still works after undo");
+  X.ui.part = null; X.ui.tsel = null;
   A.stop();
 };

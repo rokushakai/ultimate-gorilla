@@ -1951,3 +1951,10 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dxm-dname { display: block; font-size: 17px; margin: 2px 0; }
 .dxm-meta th { text-align: left; white-space: nowrap; vertical-align: top; }
 .dxm-meta td { overflow-wrap: anywhere; }
+/* §345 A4 部分テンプレート */
+.dxm-parts { margin: 8px 0; }
+.dxm-ptr { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 0; border-top: 1px solid rgba(128,128,128,0.2); }
+.dxm-ptr > span { min-width: 0; overflow-wrap: anywhere; }
+.dxm-ptr small { display: block; font-size: 11px; opacity: 0.8; }
+.dxm-pch .dxm-ch.song select { border-color: #4caf50; }
+.dxm-pch .dxm-ch.edit select { border-color: #e0b000; }

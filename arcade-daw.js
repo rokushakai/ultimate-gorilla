@@ -2164,6 +2164,7 @@
   var xmHost = {
     project: function () { return project(); },
     snap: function () { return snapTracks(); },
+    snapAll: function () { var p = project(); return { __all: true, tracks: JSON.parse(JSON.stringify(p.tracks)), markers: JSON.parse(JSON.stringify(p.markers || [])), tempo: JSON.parse(JSON.stringify(p.tempo)), ext: JSON.parse(JSON.stringify(p.ext || {})) }; }, // §345 A4: 曲のコード（ext）も ↶ で戻す
     restore: function (s) { project().tracks = s; },
     commit: function (snap, note, tid, cid) { pushUndo(snap); st.anote = note ? String(note) : ""; if (cid) { st.sel = { kind: "clip", id: cid }; } else if (tid) { st.sel = { kind: "track", id: tid }; } st.reveal = true; markDirty(); if (pl) { resync(); } rerender(); return true; },
     dirty: function () { markDirty(); if (pl) { resync(); } },
@@ -3287,7 +3288,7 @@
     },
     undo: function () {
       var u = st.undo; if (!u.length || !st.project) { return false; }
-      var z = u.pop(); if (z && z.__all) { st.project.tracks = z.tracks; st.project.markers = z.markers; if (z.tempo) { st.project.tempo = z.tempo; } } else { st.project.tracks = z; } // 9B-1: セクションの写しも・9B-12: テンポも
+      var z = u.pop(); if (z && z.__all) { st.project.tracks = z.tracks; st.project.markers = z.markers; if (z.tempo) { st.project.tempo = z.tempo; } if (z.ext) { st.project.ext = z.ext; } } else { st.project.tracks = z; } // 9B-1: セクションの写しも・9B-12: テンポも
       if (st.roll) { st.roll.sel = null; } markDirty(); afterEdit(); // 戻したあとの状態を保存
       return true;
     }

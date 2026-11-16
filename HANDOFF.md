@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.77** |
+| 現在バージョン | **v2.78** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.78] 🦍 Arrangement Studio A4・部分テンプレート**（§345）: `partPlan(p, { tpl, ti, bar, bars, type, key, kmode, prog, chords, dest, seed })`・`partApply`・曲のコード `ext.xmChords`（`songChords`／`putChords`・テンプレートの `tplApply` も書く）・`secTypeOfName`。画面は `ui.part`（`partInit`／`partHtml`）。DAW のホストに `snapAll`・↶ は写しの `ext` も戻す。次は A5（フルソングアレンジャー・GAME_DESIGN §345 の計画）
 - **[v2.77] 🦍 Arrangement Studio A3-2・テンプレート 32**（§345）: `TPLS` に 27 を足した（いままでの 5 つの後ろ・順番を変えない）。テンプレートは `kmode`・`mel` を持てる。`PATS` に 14（`strum`〜`brassStabs`・いままでの 39 の後ろ）・`SOUNDS` に 10（カテゴリ `more`・ゲームの録音）。テンプレートを足すときは: メタデータ（genre・moods・tags・aim）・4 構成 × メジャー／マイナーで `audit` が通る・ほかと似すぎない（`tests/test-arranger.js` が全部調べる）。次は A4（部分テンプレート・GAME_DESIGN §345 の計画）
 - **[v2.76] 🦍 Arrangement Studio A3-1・テンプレートブラウザー**（§345）: テンプレートに `genre`・`moods`・`tags`・`rec`・`aim`（音符には使わない）。`GENRES`・`MOODS`・`FAMS`（楽器はトラックから `famsOf`）・`BPMS`・`hayOf`・`tplMatch(T, q, f)`・`tplSearch`・`tplPrefs`／`tplFav`／`tplUsed`（localStorage `ultimateGorillaXmasTplV1`）・`browseHtml`・`detailHtml`・`tplRefresh`（入力では行の表示だけ変える）。ui の `tq`・`tgen`・`tmood`・`tmeter`・`tbpm`・`tfam`・`tsel`。テンプレートを足すときは メタデータも書く（テストが全部を調べる）
 - **[v2.75] 🦍 Arrangement Studio A2・コード・ハーモニー**（§345）: `chordOf` が `bass`（オンコード）・`fifth` を返す（パターンは `ch.fifth`・`bassOf` は `ch.bass`）。`CHORDS` に 30 足す（4 番目＝オンコードのベースの半音・id は `I_3` のように `_`）・`CHORD_LISTS`（maj 28／min 18）・`MINMAP`（メジャーの進行をマイナーに）・`SCALES`・`MODES`。`chordsFor(prog, bars, custom, mode)`・`scaleTone(..., mode)`・ジェネレーターの `mode`（xgen はマイナーのときだけ）・`tplPlan(..., formId, { key, kmode })`・曲の `ext.xmMode`。次は A3（テンプレートを 30 以上・テンプレートブラウザー）
