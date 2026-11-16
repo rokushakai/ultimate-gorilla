@@ -1,7 +1,7 @@
 // 究極ゴリラ 自動テスト: node tests/run.js
 "use strict";
 var H = require("./harness");
-var suites = [require("./test-core"), require("./test-melody"), require("./test-lyrics"), require("./test-table"), require("./test-sports"), require("./test-chords"), require("./test-quiz"), require("./test-piano"), require("./test-drum"), require("./test-bass"), require("./test-guitar"), require("./test-strings"), require("./test-horn"), require("./test-synth"), require("./test-daw"), require("./test-xmas"), require("./test-script"), require("./test-debugcenter")];
+var suites = [require("./test-core"), require("./test-melody"), require("./test-lyrics"), require("./test-table"), require("./test-sports"), require("./test-chords"), require("./test-quiz"), require("./test-piano"), require("./test-drum"), require("./test-bass"), require("./test-guitar"), require("./test-strings"), require("./test-horn"), require("./test-synth"), require("./test-daw"), require("./test-xmas"), require("./test-arranger"), require("./test-script"), require("./test-debugcenter")];
 
 (async function () {
   var t0 = Date.now();

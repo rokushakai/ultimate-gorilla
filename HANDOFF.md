@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.73** |
+| 現在バージョン | **v2.74** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.74] 🦍 Arrangement Studio A1・テンプレートエンジン v2**（§345）: `arcade-daw-xmas.js` に セクションの型 `SECT`（8）・型のはじめの設定 `SECT_DEF`・構成 `FORMS`（std 16／short 32／full 48／long 64）・`formOf`・`partFor`（型ごとの楽器の出入り・テンプレートのトラックの 6 番目で上書き）・`progFor`・`shapeSec`（強さ・アクセント・盛り上がり・最後の和音）・`audit`（機械的な検査）。`tplPlan(p, id, mode, bar, seed, formId)`（formId なし＝標準＝v2.72 と同じ音符）。伴奏ジェネレーターの `nofill`・長さ 1〜64。テスト `tests/test-arranger.js`。次は §345 の A2（コード・ハーモニーの共通化）
 - **[v2.73] 🛠️ デバッグセンター**（§344）: 新しいファイル `debug-center.js`（`window.UGDebugCenter`・`mount`／`reset`／`classify`／`matches`）。`script.js` は `renderSettingsBody()` をラッパーにして、もとの中身は `renderSettingsBodyRaw()`（デバッグのとき `#set-normal`・`#dbg-legacy` で包む）・`openSettingsModal()` で閉じた状態に・ショートカットの `debugCenterApi()`（`openArcadeModal` → `startArcadeGame("daw")` → `UGDaw.xmas.open()`）。新しいデバッグのボタンは、いままでどおり `renderSettingsBodyRaw()` の `if (DEBUG_MODE)` の中に足せば、見出しの文字でカテゴリに入る（合わなければ 📚）。テスト `tests/test-debugcenter.js`
 - **[v2.72] 🎄 Gorilla Christmas Production Pack**（§343）: 新しいファイル `arcade-daw-xmas.js`（`window.UGXmas`・音色 `SOUNDS`・パターン `PATS`・`generate`／`place`／`regen`・テンプレート `TPLS`／`tplPlan`／`tplApply`／`tplNewProject`・解析 `analyze`／`recommend`・録音の 1 音 `note`・83／84 の `drum`・試聴 `pvPlay`・画面 `html`／`bind`）。`arcade-daw.js` は `XM()`・`st.view = "xmas"`（`renderXmas`・`xmHost`）・`schedule` の `sample` と 83／84・`startPlay` の録音待ち（`noSmp`）・`wavExport` の読みこみ・音色の欄。`arcade-daw-model.js` は `cleanInstrument` の `sample`・MIDI の `extGm`・`GM_DRUM_NAMES` の 83／84。テスト `tests/test-xmas.js`
 - **[v2.71] 🖥️ ゴリラDAW の PC Studio**（§342 Phase 9B-21）: One DAW, Multiple Views。`arcade-daw.js` の表示（`viewMode`・`setViewMode`・`layout`・`syncLayout`・`hostClass`・localStorage `ultimateGorillaDawViewV1`）・1 拍の幅 `pxb`（`tickX`・`waveSvg`・`compWaveSvg`）・`stZoom`・アレンジの格子 `arrGridHtml(p, stu)`（モバイルと共通）・PC Studio は `st.view = "arr"` の別の並べ方（`studioHtml`・`stTransportHtml`・`stToolsHtml`・`stOverviewHtml`／`stOvSync`・`stMixHtml`・`stEditHtml`（`stRollHtml`・`stWaveSvg`）・`stRefHtml`・`stHead`・`bindStudio`・`stKey`）・root の `dstu-host`（stop hook で外す）・1 つの resize のリスナー・`UGDaw.view`・テスト用の `UGDaw.diag`（`dgLog`）

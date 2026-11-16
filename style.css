@@ -1922,3 +1922,11 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dbgc-jump { max-width: 100%; min-height: 36px; padding: 6px 10px; border-radius: 16px; border: 1px solid #74c0fc; background: #1b263b; color: #cfe8ff; font-size: 12px; text-align: left; overflow-wrap: anywhere; }
 #dbg-legacy.dbgc-show > p { position: relative; }
 .dbgc-foot { margin-top: 8px; }
+/* §345 テンプレートの構成・鳴る所 */
+.dxm-forms { flex-wrap: wrap; }
+.dxm-formline { margin: 2px 0 6px; overflow-wrap: anywhere; }
+.dxm-sxs { white-space: normal; }
+.dxm-sx { display: inline-block; min-width: 18px; margin: 1px; padding: 1px 2px; border-radius: 4px; text-align: center; font-size: 11px; line-height: 16px; color: #888; background: rgba(128,128,128,0.12); }
+.dxm-sx.on { color: #fff; background: #5a7bd8; }
+.dxm-sx.on.d0 { background: #8aa0d8; }
+.dxm-sx.on.d2 { background: #2f55c8; }

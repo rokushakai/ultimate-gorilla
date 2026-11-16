@@ -70,7 +70,7 @@ module.exports = async function () {
   ok(roots, "the bass plays the chord root on beat 1 of every bar (I–IV–V–I in G)");
   var cu = X.generate({ pat: "stringsLong", key: 0, prog: "p1", bars: 4, dens: 0, vel: 0, seed: 1, custom: { 1: "ii" } }, { num: 4, den: 4 }), bar2 = cu.notes.filter(function (n) { return n[0] === BAR; }).map(function (n) { return n[2] % 12; }).sort();
   ok(JSON.stringify(bar2) === JSON.stringify([0, 2, 5, 9].filter(function (x) { return [2, 5, 9].indexOf(x) >= 0; })), "a per-bar chord change (bar 2 → ii = Dm) is followed", bar2);
-  ok(X.PROGS.map(function (p) { return p[1]; }).join("|") === "I–vi–IV–V|I–V–vi–IV|I–IV–V–I|ii–V–I|I–vi–ii–V", "the 5 progressions");
+  ok(X.PROGS.slice(0, 5).map(function (p) { return p[1]; }).join("|") === "I–vi–IV–V|I–V–vi–IV|I–IV–V–I|ii–V–I|I–vi–ii–V", "the 5 progressions of v2.72 (same order; v2.74 adds more after them)");
 
   // ---------- 曲に置く・作りなおす（↶ は DAW）----------
   var p = M.emptyProject(0), n0 = p.tracks.length;
