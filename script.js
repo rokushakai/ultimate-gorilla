@@ -9941,10 +9941,44 @@
 
   function openSettingsModal() {
     openModal("settings-modal");
+    if (window.UGDebugCenter) { window.UGDebugCenter.reset(); } // §344 v2.73
     renderSettingsBody();
   }
 
+  // §344 v2.73: 🛠️ デバッグセンター（?debug=1）。設定の画面を作ったあとに付ける（いままでのボタン・イベントはそのまま）
   function renderSettingsBody() {
+    renderSettingsBodyRaw();
+    if (!DEBUG_MODE) { return; }
+    if (window.UGDebugCenter && window.UGDebugCenter.mount(document.getElementById("settings-body"), debugCenterApi())) { return; }
+    var lg = document.getElementById("dbg-legacy"), ob = document.getElementById("btn-debug-center"); // debug-center.js が無いときは、いままでどおり全部ならべる
+    if (lg) { lg.className = ""; }
+    if (ob) { ob.style.display = "none"; }
+  }
+  // ショートカット: いまの入口（ゲームセンター → あそぶ）をそのまま使う。開けないときは理由（"" ＝ 開いた）
+  function debugCenterApi() {
+    return {
+      go: function (kind) {
+        var A = window.UGArcade, L, i, has = false;
+        if (state.inBattle) { return "戦闘中は開けません。戦闘が終わってから使ってください"; }
+        if (!A) { return "ゲームセンター（arcade.js）が読みこめていません"; }
+        if (A.isRunning()) { return "ゲームセンターでゲーム中です。ゲームを終えてから使ってください"; }
+        if (kind !== "arcade") {
+          L = A.list();
+          for (i = 0; i < L.length; i++) { if (L[i].id === "daw") { has = true; } }
+          if (!has || !window.UGDaw) { return "ゴリラDAW（arcade-daw.js）が読みこめていません"; }
+          if (kind === "xmas" && !(window.UGXmas && window.UGDaw.xmas && window.UGDaw.xmas.open)) { return "クリスマス制作（arcade-daw-xmas.js）が読みこめていません"; }
+        }
+        closeModal("settings-modal");
+        openArcadeModal();
+        if (kind === "arcade") { return ""; }
+        startArcadeGame("daw");
+        if (kind === "xmas" && !window.UGDaw.xmas.open()) { showToast("🎄 クリスマス制作を開けませんでした（DAW のアレンジの 🎄 から開いてください）"); }
+        return "";
+      }
+    };
+  }
+
+  function renderSettingsBodyRaw() {
     var body = document.getElementById("settings-body");
     var current = state.player.walkSpeed;
     var html = "";
@@ -9969,6 +10003,7 @@
       (seEnabled ? "🔔 SE: ON" : "🔔 SE: OFF") + "</button>";
     html += '<p class="small" style="color:#ff8c8c;margin-top:16px;">⚠️ 危険な操作:</p>';
     html += '<button class="shop-menu-btn" id="btn-new-game" style="border-color:#ff8c8c;color:#ff8c8c;">🔄 ニューゲーム(セーブデータをリセット)</button>';
+    if (DEBUG_MODE) { html = '<button class="shop-menu-btn dbgc-open" id="btn-debug-center">🛠️ デバッグセンター</button><div id="set-normal">' + html + '</div><div id="dbg-legacy" class="dbgc-legacy">'; } // §344 v2.73
     if (DEBUG_MODE) {
       html += '<p class="small" style="color:#ffd166;margin-top:16px;">🛠️ 開発用テスト (debug=1)</p>';
       html += '<button class="shop-menu-btn" id="btn-debug-no-encounter" style="border-color:#55efc4;color:#55efc4;">' +
@@ -10623,6 +10658,7 @@
       html += '<button class="shop-menu-btn" id="btn-debug-v65-reset-scores" style="border-color:#e17055;color:#e17055;">&#x1F9F9; ハイスコアリセット</button>';
       html += '<button class="shop-menu-btn" id="btn-debug-v72-medals-1000" style="border-color:#ffd166;color:#ffd166;">&#x1FA99; メダル+1000枚</button>'; // §153 v0.72
       html += '<button class="shop-menu-btn" id="btn-debug-v72-medals-reset" style="border-color:#e17055;color:#e17055;">&#x1F9F9; メダルを0枚に</button>';
+      html += '</div>'; // §344 v2.73: #dbg-legacy
     }
     body.innerHTML = html;
     body.querySelectorAll("button[data-speed]").forEach(function (btn) {

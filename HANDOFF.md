@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.72** |
+| 現在バージョン | **v2.73** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.73] 🛠️ デバッグセンター**（§344）: 新しいファイル `debug-center.js`（`window.UGDebugCenter`・`mount`／`reset`／`classify`／`matches`）。`script.js` は `renderSettingsBody()` をラッパーにして、もとの中身は `renderSettingsBodyRaw()`（デバッグのとき `#set-normal`・`#dbg-legacy` で包む）・`openSettingsModal()` で閉じた状態に・ショートカットの `debugCenterApi()`（`openArcadeModal` → `startArcadeGame("daw")` → `UGDaw.xmas.open()`）。新しいデバッグのボタンは、いままでどおり `renderSettingsBodyRaw()` の `if (DEBUG_MODE)` の中に足せば、見出しの文字でカテゴリに入る（合わなければ 📚）。テスト `tests/test-debugcenter.js`
 - **[v2.72] 🎄 Gorilla Christmas Production Pack**（§343）: 新しいファイル `arcade-daw-xmas.js`（`window.UGXmas`・音色 `SOUNDS`・パターン `PATS`・`generate`／`place`／`regen`・テンプレート `TPLS`／`tplPlan`／`tplApply`／`tplNewProject`・解析 `analyze`／`recommend`・録音の 1 音 `note`・83／84 の `drum`・試聴 `pvPlay`・画面 `html`／`bind`）。`arcade-daw.js` は `XM()`・`st.view = "xmas"`（`renderXmas`・`xmHost`）・`schedule` の `sample` と 83／84・`startPlay` の録音待ち（`noSmp`）・`wavExport` の読みこみ・音色の欄。`arcade-daw-model.js` は `cleanInstrument` の `sample`・MIDI の `extGm`・`GM_DRUM_NAMES` の 83／84。テスト `tests/test-xmas.js`
 - **[v2.71] 🖥️ ゴリラDAW の PC Studio**（§342 Phase 9B-21）: One DAW, Multiple Views。`arcade-daw.js` の表示（`viewMode`・`setViewMode`・`layout`・`syncLayout`・`hostClass`・localStorage `ultimateGorillaDawViewV1`）・1 拍の幅 `pxb`（`tickX`・`waveSvg`・`compWaveSvg`）・`stZoom`・アレンジの格子 `arrGridHtml(p, stu)`（モバイルと共通）・PC Studio は `st.view = "arr"` の別の並べ方（`studioHtml`・`stTransportHtml`・`stToolsHtml`・`stOverviewHtml`／`stOvSync`・`stMixHtml`・`stEditHtml`（`stRollHtml`・`stWaveSvg`）・`stRefHtml`・`stHead`・`bindStudio`・`stKey`）・root の `dstu-host`（stop hook で外す）・1 つの resize のリスナー・`UGDaw.view`・テスト用の `UGDaw.diag`（`dgLog`）
 - **[v2.70] 🎧 ゴリラDAW の長い音声の読み込み・リファレンス**（§342 Phase 9B-20）: モデルの `probeAudio`／`probeMp4`（中身で形式）・`importBytesWhy`・`importSecWhy`・`isLongInfo`・`pcmBytes`・`shortSec`・`clipMaxTicks`・`assetRoomWhy`（長い素材 2 個・メモリ・合計）・素材の `kind`／`codec`／`long`・`sameAsset`（圧縮はハッシュと大きさ）・曲の `ref`（`refClean`・`setRef`・`refSet`・`clearRef`・`refSpan`・`playEndTick`）。`arcade-daw.js` の `audFileGo`（ふつうの WAV はこれまでどおり `importWav`）・`longImport`・`decodeAny`・`stageCommit`（Blob のまま IndexedDB・`storageRoom`）・`dataAB`／`dataSize`・`playRef`／`refOut`／`refOff`（`pl.mix.__ref`・スピーカーへ直接）・`abDaw`・`renderRef`（`st.view = "ref"`）・`UGDaw.ref`・`UGDaw.rec.room`。ZIP の版 2（`packFile(id, kind)`・`packNew`）
