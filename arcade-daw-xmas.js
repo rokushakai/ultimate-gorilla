@@ -31,14 +31,32 @@
   // ---------- 音楽の理論（メジャーのキー・ダイアトニックのコード）----------
   var KEYS = ["C", "C#", "D", "E♭", "E", "F", "F#", "G", "A♭", "A", "B♭", "B"];
   var SCALE = [0, 2, 4, 5, 7, 9, 11];
+  var SCALES = { maj: SCALE, min: [0, 2, 3, 5, 7, 8, 10] }; // マイナーは自然的短音階（V・V7 は和声的短音階のコードで使う）
+  var MODES = [["maj", "メジャー"], ["min", "マイナー"]];
+  function modeName(m) { return m === "min" ? "マイナー" : "メジャー"; }
   // id: [キーの主音からの半音, 構成音（根音から）, 名前の後ろ]
   var CHORDS = {
     "I": [0, [0, 4, 7], ""], "ii": [2, [0, 3, 7], "m"], "iii": [4, [0, 3, 7], "m"], "IV": [5, [0, 4, 7], ""], "V": [7, [0, 4, 7], ""], "vi": [9, [0, 3, 7], "m"],
-    "V7": [7, [0, 4, 7, 10], "7"], "ii7": [2, [0, 3, 7, 10], "m7"], "Imaj7": [0, [0, 4, 7, 11], "maj7"], "IVmaj7": [5, [0, 4, 7, 11], "maj7"], "vi7": [9, [0, 3, 7, 10], "m7"]
+    "V7": [7, [0, 4, 7, 10], "7"], "ii7": [2, [0, 3, 7, 10], "m7"], "Imaj7": [0, [0, 4, 7, 11], "maj7"], "IVmaj7": [5, [0, 4, 7, 11], "maj7"], "vi7": [9, [0, 3, 7, 10], "m7"],
+    // v2.74 §345 A2: 4 番目 ＝ オンコードのベースの音（根音からの半音）
+    "iii7": [4, [0, 3, 7, 10], "m7"], "Isus4": [0, [0, 5, 7], "sus4"], "Vsus4": [7, [0, 5, 7], "sus4"], "V7sus4": [7, [0, 5, 7, 10], "7sus4"], "Iadd9": [0, [0, 4, 7, 14], "add9"], "IVadd9": [5, [0, 4, 7, 14], "add9"],
+    "V/ii": [9, [0, 4, 7, 10], "7"], "V/iii": [11, [0, 4, 7, 10], "7"], "V/IV": [0, [0, 4, 7, 10], "7"], "V/V": [2, [0, 4, 7, 10], "7"], "V/vi": [4, [0, 4, 7, 10], "7"],
+    "I_3": [0, [0, 4, 7], "", 4], "I_5": [0, [0, 4, 7], "", 7], "IV_1": [5, [0, 4, 7], "", 7], "V_4": [7, [0, 4, 7], "", 10], "ii_1": [2, [0, 3, 7], "m", 10], "vi_5": [9, [0, 3, 7], "m", 7],
+    // マイナーキー（主音からの半音）
+    "i": [0, [0, 3, 7], "m"], "ii°": [2, [0, 3, 6], "dim"], "III": [3, [0, 4, 7], ""], "iv": [5, [0, 3, 7], "m"], "v": [7, [0, 3, 7], "m"], "VI": [8, [0, 4, 7], ""], "VII": [10, [0, 4, 7], ""],
+    "i7": [0, [0, 3, 7, 10], "m7"], "iiø7": [2, [0, 3, 6, 10], "m7♭5"], "iv7": [5, [0, 3, 7, 10], "m7"], "VImaj7": [8, [0, 4, 7, 11], "maj7"], "IIImaj7": [3, [0, 4, 7, 11], "maj7"], "i_3": [0, [0, 3, 7], "m", 3]
   };
+  // キーの種類ごとの「小節ごとのコード」の一覧
+  var CHORD_LISTS = {
+    maj: ["I", "ii", "iii", "IV", "V", "vi", "V7", "ii7", "iii7", "Imaj7", "IVmaj7", "vi7", "Isus4", "Vsus4", "V7sus4", "Iadd9", "IVadd9", "V/ii", "V/iii", "V/IV", "V/V", "V/vi", "I_3", "I_5", "IV_1", "V_4", "ii_1", "vi_5"],
+    min: ["i", "ii°", "III", "iv", "v", "V", "VI", "VII", "i7", "iiø7", "iv7", "V7", "VImaj7", "IIImaj7", "Vsus4", "V7sus4", "V/IV", "i_3"]
+  };
+  // メジャーの進行をマイナーで使うときの読みかえ
+  var MINMAP = { "I": "i", "ii": "ii°", "iii": "III", "IV": "iv", "V": "V", "vi": "VI", "V7": "V7", "ii7": "iiø7", "Imaj7": "i7", "IVmaj7": "iv7", "vi7": "VImaj7", "iii7": "IIImaj7", "I_3": "i_3" };
+  function chordLabel(id) { return String(id).replace("_", "/"); }
   var CHORD_ORDER = ["I", "ii", "iii", "IV", "V", "vi", "V7", "ii7", "Imaj7", "IVmaj7", "vi7"];
   // ジャズの 7th（三和音のときに足す 7 度）
-  var SEVENTH = { "I": 11, "ii": 10, "iii": 10, "IV": 11, "V": 10, "vi": 10 };
+  var SEVENTH = { "I": 11, "ii": 10, "iii": 10, "IV": 11, "V": 10, "vi": 10, "i": 10, "ii°": 10, "III": 11, "iv": 10, "v": 10, "VI": 11, "VII": 10 };
   var PROGS = [
     ["p1", "I–vi–IV–V", ["I", "vi", "IV", "V"]],
     ["p2", "I–V–vi–IV", ["I", "V", "vi", "IV"]],
@@ -46,18 +64,25 @@
     ["p4", "ii–V–I", ["ii7", "V7", "Imaj7", "Imaj7"]],
     ["p5", "I–vi–ii–V", ["I", "vi", "ii", "V"]],
     ["p6", "IV–V–iii–vi", ["IV", "V", "iii", "vi"]],
-    ["p7", "vi–IV–I–V", ["vi", "IV", "I", "V"]]
+    ["p7", "vi–IV–I–V", ["vi", "IV", "I", "V"]],
+    ["p8", "Imaj7–vi7–ii7–V7", ["Imaj7", "vi7", "ii7", "V7"]],
+    ["p9", "IV–V–I/3–vi", ["IV", "V", "I_3", "vi"]],
+    ["m1", "i–VI–III–VII（マイナー）", ["i", "VI", "III", "VII"], "min"],
+    ["m2", "i–iv–V–i（マイナー）", ["i", "iv", "V", "i"], "min"],
+    ["m3", "i–VI–iv–V（マイナー）", ["i", "VI", "iv", "V"], "min"],
+    ["m4", "iiø7–V7–i7（マイナー）", ["iiø7", "V7", "i7", "i7"], "min"]
   ];
   function progById(id) { for (var i = 0; i < PROGS.length; i++) { if (PROGS[i][0] === id) { return PROGS[i]; } } return PROGS[0]; }
   function chordOf(key, id) {
     var c = CHORDS[id] || CHORDS.I, k = ((Math.round(Number(key)) || 0) % 12 + 12) % 12, r = (k + c[0]) % 12, pcs = [], i;
     for (i = 0; i < c[1].length; i++) { pcs.push((r + c[1][i]) % 12); }
-    return { id: CHORDS[id] ? id : "I", root: r, pcs: pcs, ivs: c[1].slice(), name: KEYS[r] + c[2], key: k };
+    var bs = c[3] !== undefined ? (r + c[3]) % 12 : r;
+    return { id: CHORDS[id] ? id : "I", root: r, pcs: pcs, ivs: c[1].slice(), name: KEYS[r] + c[2] + (bs !== r ? "/" + KEYS[bs] : ""), key: k, bass: bs, fifth: (r + (c[1][2] !== undefined ? c[1][2] : 7)) % 12 };
   }
-  // 小節ごとのコード（進行を小節の数だけくり返す）。custom: { 小節（0 から）: コードの id } で上書き
-  function chordsFor(progId, bars, custom) {
-    var pr = progById(progId)[2], out = [], b;
-    for (b = 0; b < bars; b++) { var c = custom && CHORDS[custom[b]] ? custom[b] : pr[b % pr.length]; out.push(c); }
+  // 小節ごとのコード（進行を小節の数だけくり返す）。custom: { 小節（0 から）: コードの id } で上書き。mode "min" ＝ メジャーの進行を読みかえる
+  function chordsFor(progId, bars, custom, mode) {
+    var P = progById(progId), pr = P[2], mp = mode === "min" && P[3] !== "min", out = [], b;
+    for (b = 0; b < bars; b++) { var q = pr[b % pr.length], c = custom && CHORDS[custom[b]] ? custom[b] : (mp && MINMAP[q] ? MINMAP[q] : q); out.push(c); }
     return out;
   }
   function pcIn(pc, lo) { return lo + ((pc - lo) % 12 + 12) % 12; } // lo 以上でいちばん低い pc の音
@@ -74,9 +99,9 @@
     }
     return best;
   }
-  function scaleTone(key, m, dir) { // m から dir（＋1／−1）の方向にいちばん近いキーの音
-    var k = ((key % 12) + 12) % 12, x = m + dir, g = 0;
-    while (g++ < 13) { if (SCALE.indexOf(((x - k) % 12 + 12) % 12) >= 0) { return x; } x += dir; }
+  function scaleTone(key, m, dir, mode) { // m から dir（＋1／−1）の方向にいちばん近いキーの音
+    var k = ((key % 12) + 12) % 12, x = m + dir, g = 0, S = SCALES[mode] || SCALE;
+    while (g++ < 13) { if (S.indexOf(((x - k) % 12 + 12) % 12) >= 0) { return x; } x += dir; }
     return m + dir;
   }
 
@@ -193,7 +218,7 @@
   }
   function crash(c, b, v) { if (b % 8 === 0) { c.add(b * c.bt, 0, 49, c.v(v)); } }
   function ctone(c, b, center, prev) { return voice(c.ch(b).pcs, center + c.rs, prev); }
-  function bassOf(c, b, pc) { return pcIn(pc === undefined ? c.ch(b).root : pc, 31 + c.rs); }
+  function bassOf(c, b, pc) { return pcIn(pc === undefined ? c.ch(b).bass : pc, 31 + c.rs); }
   var PATS = [
     // --- リズム・ベル（ドラムのトラック・ステップの画面で直せる）---
     { id: "sleigh8", cat: "drum", name: "8 分のスレイベル", m: ["4/4"], snd: "xm-sleigh", drum: true, gen: function (c) {
@@ -278,7 +303,7 @@
       for (b = 0; b < c.bars; b++) {
         var t0 = b * c.bt, vc = ctone(c, b, 64, prev), ch = c.ch(b), lo = bassOf(c, b) + 12, i; prev = vc;
         c.add(t0, c.dens === 0 ? c.bt : 1920, lo, c.v(0.6));
-        if (c.dens >= 1) { c.add(t0 + 1920, 1920, pcIn((ch.root + 7) % 12, lo), c.v(0.5)); }
+        if (c.dens >= 1) { c.add(t0 + 1920, 1920, pcIn(ch.fifth, lo), c.v(0.5)); }
         if (c.dens === 0) { for (i = 0; i < vc.length; i++) { c.add(t0, c.bt, vc[i], c.v(0.48)); } continue; }
         for (i = 0; i < vc.length; i++) { c.add(t0, 1900, vc[i], c.v(0.5)); c.add(t0 + 1920, c.dens === 2 ? 940 : 1900, vc[i], c.v(0.45)); }
         if (c.dens === 2) { c.add(t0 + 2880, 480, vc[1], c.v(0.42)); c.add(t0 + 3360, 480, vc[2], c.v(0.46)); }
@@ -295,7 +320,7 @@
     { id: "waltzPiano", cat: "keys", name: "3 拍子の伴奏（ズン・チャッ・チャッ）", m: ["3/4"], snd: "xm-warmpiano", gen: function (c) {
       var prev = null, b;
       for (b = 0; b < c.bars; b++) {
-        var t0 = b * c.bt, ch = c.ch(b), vc = ctone(c, b, 62, prev), lo = bassOf(c, b, b % 2 && c.dens > 0 ? (ch.root + 7) % 12 : ch.root) + 12, i; prev = vc;
+        var t0 = b * c.bt, ch = c.ch(b), vc = ctone(c, b, 62, prev), lo = bassOf(c, b, b % 2 && c.dens > 0 ? ch.fifth : ch.bass) + 12, i; prev = vc;
         c.add(t0, 900, lo, c.v(0.62));
         for (i = 0; i < vc.length; i++) { c.add(t0 + 960, c.dens === 0 ? 1800 : 700, vc[i], c.v(0.45)); if (c.dens > 0) { c.add(t0 + 1920, 700, vc[i], c.v(0.42)); } }
         if (c.dens === 2) { c.add(t0 + 2400, 400, vc[vc.length - 1] + 12 > 84 ? vc[vc.length - 1] : vc[vc.length - 1] + 12, c.v(0.35)); }
@@ -305,7 +330,7 @@
       var prev = null, b, ord = [0, 1, 2, 3, 2, 1];
       for (b = 0; b < c.bars; b++) {
         var t0 = b * c.bt, ch = c.ch(b), vc = ctone(c, b, 62, prev), lo = bassOf(c, b) + 12, tones = [vc[0], vc[1], vc[2], vc[0] + 12], k; prev = vc;
-        c.add(t0, 1400, lo, c.v(0.6)); c.add(t0 + 1440, 1400, pcIn((ch.root + 7) % 12, lo), c.v(0.5));
+        c.add(t0, 1400, lo, c.v(0.6)); c.add(t0 + 1440, 1400, pcIn(ch.fifth, lo), c.v(0.5));
         if (c.dens === 0) { for (k = 0; k < vc.length; k++) { c.add(t0, 1400, vc[k], c.v(0.45)); c.add(t0 + 1440, 1400, vc[k], c.v(0.42)); } continue; }
         for (k = 0; k < 6; k++) { c.add(t0 + k * 480, 560, tones[ord[k]] + (c.dens === 2 && k >= 3 ? 12 : 0), c.v(k % 3 === 0 ? 0.52 : 0.42)); }
       }
@@ -323,7 +348,7 @@
     // --- ベース ---
     { id: "bassRoot5", cat: "bass", name: "ルートと 5 度（ウッドベース風）", m: ["4/4", "3/4", "6/8"], snd: "xm-upbass", gen: function (c) {
       for (var b = 0; b < c.bars; b++) {
-        var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), f = pcIn((ch.root + 7) % 12, r);
+        var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), f = pcIn(ch.fifth, r);
         if (c.dens === 0) { c.add(t0, c.bt - 60, r, c.v(0.7)); continue; }
         if (c.num === 3) { c.add(t0, c.dens === 2 ? 900 : 2700, r, c.v(0.7)); if (c.dens === 2) { c.add(t0 + 1920, 900, f, c.v(0.6)); } continue; }
         if (c.den === 8) { c.add(t0, 1400, r, c.v(0.7)); c.add(t0 + 1440, 1400, f, c.v(0.6)); continue; }
@@ -335,9 +360,9 @@
       var b;
       for (b = 0; b < c.bars; b++) {
         var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), nx = b + 1 < c.bars ? bassOf(c, b + 1) : bassOf(c, 0);
-        if (c.dens === 0) { c.add(t0, 1800, r, c.v(0.72)); c.add(t0 + 1920, 1800, pcIn((ch.root + 7) % 12, r), c.v(0.62)); continue; }
-        var n2 = pcIn(c.r() < 0.5 ? (ch.root + ch.ivs[1]) % 12 : (ch.root + 7) % 12, r), n3 = c.r() < 0.5 ? pcIn((ch.root + 7) % 12, r) : scaleTone(c.key, n2, c.r() < 0.5 ? 1 : -1);
-        var app = c.r() < 0.6 ? nx + (c.r() < 0.5 ? -1 : 1) : scaleTone(c.key, nx, n3 > nx ? 1 : -1);
+        if (c.dens === 0) { c.add(t0, 1800, r, c.v(0.72)); c.add(t0 + 1920, 1800, pcIn(ch.fifth, r), c.v(0.62)); continue; }
+        var n2 = pcIn(c.r() < 0.5 ? (ch.root + ch.ivs[1]) % 12 : ch.fifth, r), n3 = c.r() < 0.5 ? pcIn(ch.fifth, r) : scaleTone(c.key, n2, c.r() < 0.5 ? 1 : -1, c.mode);
+        var app = c.r() < 0.6 ? nx + (c.r() < 0.5 ? -1 : 1) : scaleTone(c.key, nx, n3 > nx ? 1 : -1, c.mode);
         if (Math.abs(app - n3) > 7) { app += app > n3 ? -12 : 12; }
         var ns = [r, n2, n3, app], k;
         for (k = 0; k < 4; k++) { c.add(t0 + k * 960, 880, clamp(ns[k], 28, 55), c.v(k === 0 ? 0.75 : 0.62)); }
@@ -349,7 +374,7 @@
         var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), k, st = c.dens === 0 ? 960 : 480;
         for (k = 0; k < c.bt / st; k++) {
           var m = r;
-          if (c.dens === 2 && k === 7) { m = r + 12; } else if (c.dens === 2 && k === 5) { m = pcIn((ch.root + 7) % 12, r); }
+          if (c.dens === 2 && k === 7) { m = r + 12; } else if (c.dens === 2 && k === 5) { m = pcIn(ch.fifth, r); }
           c.add(t0 + k * st, st - 80, m, c.v(k % 2 === 0 ? 0.72 : 0.58));
         }
       }
@@ -358,12 +383,12 @@
       for (var b = 0; b < c.bars; b++) {
         var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), half = Math.round(c.bt / 2);
         if (c.dens === 0) { c.add(t0, c.bt - 40, r, c.v(0.68)); continue; }
-        c.add(t0, half - 40, r, c.v(0.7)); c.add(t0 + half, half - 40, c.dens === 2 ? pcIn((ch.root + 7) % 12, r) : r, c.v(0.58));
+        c.add(t0, half - 40, r, c.v(0.7)); c.add(t0 + half, half - 40, c.dens === 2 ? pcIn(ch.fifth, r) : r, c.v(0.58));
       }
     } },
     { id: "waltzBass", cat: "bass", name: "3 拍子のベース", m: ["3/4"], snd: "xm-upbass", gen: function (c) {
       for (var b = 0; b < c.bars; b++) {
-        var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), m = c.dens > 0 && b % 2 ? pcIn((ch.root + 7) % 12, r) : r;
+        var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), m = c.dens > 0 && b % 2 ? pcIn(ch.fifth, r) : r;
         c.add(t0, c.dens === 0 ? 2700 : 900, m, c.v(0.72));
         if (c.dens === 2) { c.add(t0 + 1920, 900, pcIn((ch.root + ch.ivs[1]) % 12, r), c.v(0.5)); }
       }
@@ -380,7 +405,7 @@
       for (b = 0; b < c.bars; b++) {
         var t0 = b * c.bt, vc = ctone(c, b, 64, prev), i, sw = b % 2 ? 0.5 : 0.56; prev = vc;
         for (i = 0; i < vc.length; i++) { c.add(t0, c.bt, vc[i], c.v(sw)); }
-        if (c.dens >= 1) { c.add(t0, c.bt, pcIn(c.ch(b).root, 46 + c.rs), c.v(sw - 0.04)); }
+        if (c.dens >= 1) { c.add(t0, c.bt, pcIn(c.ch(b).bass, 46 + c.rs), c.v(sw - 0.04)); }
         if (c.dens === 2) { c.add(t0, c.bt, vc[1] + 12, c.v(sw - 0.08)); }
       }
     } },
@@ -422,7 +447,7 @@
     { id: "hornPad", cat: "str", name: "ホルンのハーモニー", m: ["4/4", "3/4", "6/8"], snd: "xm-horn", gen: function (c) {
       var prev = null, b;
       for (b = 0; b < c.bars; b++) {
-        var t0 = b * c.bt, ch = c.ch(b), pcs = [(ch.root + ch.ivs[1]) % 12, (ch.root + 7) % 12], vc = voice(pcs, 58 + c.rs, prev), i; prev = vc;
+        var t0 = b * c.bt, ch = c.ch(b), pcs = [(ch.root + ch.ivs[1]) % 12, ch.fifth], vc = voice(pcs, 58 + c.rs, prev), i; prev = vc;
         var segs = c.dens === 0 ? [[0, c.bt]] : (c.num === 3 && c.den === 4 ? [[0, 2880]] : [[0, Math.round(c.bt / 2)], [Math.round(c.bt / 2), Math.round(c.bt / 2)]]);
         if (c.dens === 2 && c.num === 4) { segs = [[0, 1920], [1920, 1440], [3360, 480]]; }
         for (var j = 0; j < segs.length; j++) { for (i = 0; i < vc.length; i++) { c.add(t0 + segs[j][0], segs[j][1] - 40, vc[i], c.v(j === 0 ? 0.55 : 0.48)); } }
@@ -431,7 +456,7 @@
     { id: "organHold", cat: "str", name: "オルガンのコード（のばす）", m: ["4/4", "3/4", "6/8"], snd: "xm-church", gen: function (c) {
       var prev = null, b;
       for (b = 0; b < c.bars; b++) {
-        var t0 = b * c.bt, vc = ctone(c, b, 62, prev), lo = pcIn(c.ch(b).root, 43 + c.rs), i; prev = vc;
+        var t0 = b * c.bt, vc = ctone(c, b, 62, prev), lo = pcIn(c.ch(b).bass, 43 + c.rs), i; prev = vc;
         var segs = c.dens === 2 ? [[0, Math.round(c.bt / 2)], [Math.round(c.bt / 2), Math.round(c.bt / 2)]] : [[0, c.bt]];
         for (var j = 0; j < segs.length; j++) { for (i = 0; i < vc.length; i++) { c.add(t0 + segs[j][0], segs[j][1] - 20, vc[i], c.v(0.52)); } if (c.dens >= 1) { c.add(t0 + segs[j][0], segs[j][1] - 20, lo, c.v(0.5)); } }
       }
@@ -458,7 +483,7 @@
     { id: "bellPing", cat: "bell", name: "ベルのアクセント（小節の頭）", m: ["4/4", "3/4", "6/8"], snd: "xm-celesta", gen: function (c) {
       for (var b = 0; b < c.bars; b++) {
         if (c.dens === 0 && b % 2) { continue; }
-        var t0 = b * c.bt, ch = c.ch(b), r = pcIn(ch.root, 79 + c.rs), f = pcIn((ch.root + 7) % 12, r);
+        var t0 = b * c.bt, ch = c.ch(b), r = pcIn(ch.root, 79 + c.rs), f = pcIn(ch.fifth, r);
         c.add(t0, c.bt, r, c.v(0.55)); c.add(t0, c.bt, f, c.v(0.45));
         if (c.dens === 2) { var h = Math.round(c.bt / 2); c.add(t0 + h, h, pcIn((ch.root + ch.ivs[1]) % 12, r), c.v(0.45)); }
       }
@@ -505,6 +530,7 @@
     };
     if (o.vel === undefined) { x.vel = 1; }
     if (o.nofill) { x.nofill = 1; }
+    x.mode = o.mode === "min" ? "min" : "maj";
     if (o.custom && typeof o.custom === "object") { for (var k in o.custom) { if (o.custom.hasOwnProperty(k) && CHORDS[o.custom[k]] && Number(k) >= 0 && Number(k) < 64) { x.custom[Math.round(Number(k))] = o.custom[k]; } } }
     return x;
   }
@@ -512,11 +538,11 @@
   function generate(o, meter) {
     var g = genClean(o), P = pat(g.pat), num = meter && meter.num || 4, den = meter && meter.den || 4;
     if (P.m.indexOf(meterKey(num, den)) < 0) { return { ok: false, why: "「" + P.name + "」は " + P.m.join("・") + " の曲で使えます（この曲は " + num + "/" + den + "）" }; }
-    var bt = Math.round(num * PPQ * 4 / den), chords = chordsFor(g.prog, g.bars, g.custom), r = rng(g.seed * 7919 + 13), notes = [], amt = VEL_AMT[g.vel], rs = 0, i;
+    var bt = Math.round(num * PPQ * 4 / den), chords = chordsFor(g.prog, g.bars, g.custom, g.mode), r = rng(g.seed * 7919 + 13), notes = [], amt = VEL_AMT[g.vel], rs = 0, i;
     for (i = 0; i < RANGES.length; i++) { if (RANGES[i][0] === g.range) { rs = RANGES[i][2]; } }
     var c = {
       bars: g.bars, bt: bt, num: num, den: den, bl: den === 8 && num % 3 === 0 ? 1440 : Math.round(PPQ * 4 / den), nb: den === 8 && num % 3 === 0 ? num / 3 : num,
-      key: g.key, r: r, dens: g.dens, rs: P.drum ? 0 : rs, nofill: !!g.nofill,
+      key: g.key, mode: g.mode, r: r, dens: g.dens, rs: P.drum ? 0 : rs, nofill: !!g.nofill,
       ch: function (b) { return chordOf(g.key, chords[b % chords.length]); },
       v: function (base) { var x = base * (1 + amt * (r() * 2 - 1)); return r3(clamp(x, 0.08, 1)); },
       add: function (t, d, m, v) { t = Math.round(t); if (t < 0 || t >= g.bars * bt) { return; } d = Math.round(d); if (d > 0 && t + d > g.bars * bt) { d = g.bars * bt - t; } notes.push([t, Math.max(P.drum ? 0 : 1, d), clamp(Math.round(m), 0, 127), v]); }
@@ -539,7 +565,7 @@
     for (i = notes.length - 1; i >= 0; i--) { if (best[notes[i][0] + ":" + notes[i][2]] !== i) { notes.splice(i, 1); } }
     return notes;
   }
-  function xgenOf(g) { var o = { v: 1, pat: g.pat, key: g.key, prog: g.prog, bars: g.bars, range: g.range, vel: g.vel, dens: g.dens, seed: g.seed, custom: g.custom }; if (g.nofill) { o.nofill = 1; } return o; }
+  function xgenOf(g) { var o = { v: 1, pat: g.pat, key: g.key, prog: g.prog, bars: g.bars, range: g.range, vel: g.vel, dens: g.dens, seed: g.seed, custom: g.custom }; if (g.nofill) { o.nofill = 1; } if (g.mode === "min") { o.mode = "min"; } return o; }
   // 曲に置く（DAW の ↶ は呼ぶ側）→ { ok, why, track, clip, notes }。dest: { track: id | "" （新しいトラック）, bar（1 から）, sound }
   function place(p, o, dest) {
     var M = DM(), m0 = M.meterAt(p, 0), r = generate(o, m0), t, s, bt = M.barTicks(p), snd = dest && dest.sound;
@@ -676,12 +702,15 @@
     return r;
   }
   // 見本（プレビュー）: mode "new" | "add"・bar（足すときの小節・1 から）・form（構成の id）→ { ok, why, rows, tracks, clips, notes, lic, bars, form }
-  function tplPlan(p, id, mode, bar, seed, formId) {
+  function tplPlan(p, id, mode, bar, seed, formId, opt) {
     var T = tpl(id), M = DM();
     if (!T) { return { ok: false, why: "テンプレートが見つかりません" }; }
     var meter = mode === "new" ? { num: T.num, den: T.den } : M.meterAt(p, 0);
     if (mode !== "new" && (meter.num !== T.num || meter.den !== T.den)) { return { ok: false, why: "この曲は " + meter.num + "/" + meter.den + " です。「" + plain(T.name) + "」は " + T.num + "/" + T.den + " なので、「新しい曲で作る」を使ってください" }; }
     var key = mode === "new" ? T.key : (Number(p.ext && p.ext.xmKey) >= 0 ? Number(p.ext.xmKey) : T.key);
+    var kmode = mode === "new" ? (T.kmode === "min" ? "min" : "maj") : (p.ext && p.ext.xmMode === "min" ? "min" : (p.ext && Number(p.ext.xmKey) >= 0 ? "maj" : (T.kmode === "min" ? "min" : "maj")));
+    if (opt && opt.key !== undefined && opt.key !== null && Number(opt.key) >= 0 && Number(opt.key) <= 11) { key = Math.round(Number(opt.key)); }
+    if (opt && (opt.kmode === "maj" || opt.kmode === "min")) { kmode = opt.kmode; }
     var fid = formById(formId)[0], form = formOf(T, fid), bt = Math.round(meter.num * PPQ * 4 / meter.den);
     var rows = [], lic = {}, nTr = 0, nCl = 0, nN = 0, total = 0, i, s;
     for (s = 0; s < form.length; s++) { total += form[s].bars; }
@@ -690,10 +719,11 @@
       for (s = 0; s < form.length; s++) {
         var sec = form[s], part = partFor(tr, sec.t);
         if (!part) { continue; }
-        var cust = null; if (sec.end) { cust = {}; cust[sec.bars - 1] = "I"; }
+        var cust = null; if (sec.end) { cust = {}; cust[sec.bars - 1] = kmode === "min" ? "i" : "I"; }
         var rg = sec.up && sec.up.indexOf(catOf(part.pat)) >= 0 ? rangeUp(tr[3]) : tr[3];
         var go = { pat: part.pat, key: key, prog: progFor(T, sec.t), bars: sec.bars, range: rg, vel: 1, dens: part.d, seed: (seed || 1) + i * 31 + s * 7 };
         if (cust) { go.custom = cust; }
+        if (kmode === "min") { go.mode = "min"; }
         if (sec.fill === false) { go.nofill = 1; }
         var r = generate(go, meter);
         if (!r.ok) { return r; }
@@ -709,7 +739,7 @@
     var have = mode === "new" ? (T.melody === false ? 0 : 1) : p.tracks.length;
     if (have + nTr > M.MAX_TRACKS) { return { ok: false, why: "トラックは " + M.MAX_TRACKS + " 本までです（いま " + p.tracks.length + " 本・足すのは " + nTr + " 本）" }; }
     var hear = 0; for (s = 0; s < form.length; s++) { if (form[s].t === "chorus" || form[s].t === "last") { hear = s; break; } }
-    return { ok: true, T: T, rows: rows, tracks: nTr, clips: nCl, notes: nN, lic: Object.keys(lic), meter: meter, key: key, bar: mode === "new" ? 1 : Math.max(1, Math.round(Number(bar) || 1)), mode: mode, bars: total, form: form, formId: fid, hear: hear };
+    return { ok: true, T: T, rows: rows, tracks: nTr, clips: nCl, notes: nN, lic: Object.keys(lic), meter: meter, key: key, kmode: kmode, bar: mode === "new" ? 1 : Math.max(1, Math.round(Number(bar) || 1)), mode: mode, bars: total, form: form, formId: fid, hear: hear };
   }
   function secStart(form, k) { var b = 0, j; for (j = 0; j < k; j++) { b += form[j].bars; } return b; }
   // 当てはめる（曲を直す。↶ は呼ぶ側）→ { ok, why, tracks }
@@ -733,7 +763,8 @@
   function tplNewProject(plan) {
     var M = DM(), T = plan.T, form = plan.form, p = M.newProject({ name: plain(T.name).substring(0, 30), bpm: T.bpm }), s;
     p.tempo.meters[0].num = T.num; p.tempo.meters[0].den = T.den;
-    p.ext.xmKey = T.key;
+    p.ext.xmKey = plan.key;
+    if (plan.kmode === "min") { p.ext.xmMode = "min"; }
     var mel = makeTrack(p, T.id === "chip" ? "xm-retrolead" : "xm-musicbox", "メロディ（あなたの）");
     if (mel) { mel.ext.icon = "&#x1F3A4;"; var bt = M.barTicks(p); for (s = 0; s < form.length; s++) { M.newMidiClip(p, mel, secStart(form, s) * bt, form[s].bars * bt, [], form[s].name + "（メロディ）"); } }
     var r = tplApply(p, plan);
@@ -763,7 +794,7 @@
           if (!r.drum && x[0] % bt === 0 && (cat === "keys" || cat === "str" || cat === "bass")) {
             var ch = chordOf(r.set.key, r.chords[b % r.chords.length]);
             var pc = ((x[2] % 12) + 12) % 12, ext = [(ch.root + (ch.ivs[3] !== undefined ? ch.ivs[3] : (SEVENTH[ch.id] || 10))) % 12, (ch.root + 2) % 12];
-            st.chordAll++; if (ch.pcs.indexOf(pc) >= 0 || ext.indexOf(pc) >= 0) { st.chordHits++; }
+            st.chordAll++; if (ch.pcs.indexOf(pc) >= 0 || ext.indexOf(pc) >= 0 || pc === ch.bass) { st.chordHits++; }
           }
         }
         for (var bb in perBar) { if (perBar.hasOwnProperty(bb)) { if (r.drum) { st.maxPerBarDrum = Math.max(st.maxPerBarDrum, perBar[bb]); } else { st.maxPerBar = Math.max(st.maxPerBar, perBar[bb]); } } }
@@ -1102,7 +1133,7 @@
 
   // ---------- 画面（DAW の host から呼ぶ）----------
   var XM_KEY = "ultimateGorillaXmasV1";
-  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
+  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
   function lsGet() { try { var s = window.localStorage.getItem(XM_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function lsPut() { try { window.localStorage.setItem(XM_KEY, JSON.stringify({ g: ui.g })); } catch (e) {} }
   function g0() { if (!ui.g) { var s = lsGet(); ui.g = genClean(s && s.g ? s.g : { seed: 1 }); } return ui.g; }
@@ -1155,15 +1186,17 @@
     return x;
   }
   function genTab(h, m0) {
-    var g = g0(), p = h.project(), M = DM(), P = pat(g.pat), ok = P.m.indexOf(meterKey(m0.num, m0.den)) >= 0, i, list = patsFor(m0.num, m0.den), chs = chordsFor(g.prog, g.bars, g.custom);
+    var g = g0(), p = h.project(), M = DM(), P = pat(g.pat), ok = P.m.indexOf(meterKey(m0.num, m0.den)) >= 0, i, list = patsFor(m0.num, m0.den), chs = chordsFor(g.prog, g.bars, g.custom, g.mode), clist = CHORD_LISTS[g.mode] || CHORD_LISTS.maj;
     if (!ok && list.length) { g.pat = list[0].id; P = list[0]; ok = true; }
     var x = '<div class="dxm-form">' +
-      '<label>キー ' + selHtml('data-xg="key"', KEYS.map(function (k, j) { return [j, k + " メジャー"]; }), g.key) + '</label>' +
+      '<label>キー ' + selHtml('data-xg="key"', KEYS.map(function (k, j) { return [j, k + " " + modeName(g.mode)]; }), g.key) + '</label>' +
+      '<div class="dxm-opt"><span>キーの種類</span>' + MODES.map(function (m) { return chip("data-xkmode", m[0], m[1], g.mode === m[0]); }).join("") + '</div>' +
       '<span class="dxm-bpm">BPM <button class="modal-btn dxm-b" data-xm="bpm-">&#x2212;</button><b>' + M.bpmAt(p, 0) + '</b><button class="modal-btn dxm-b" data-xm="bpm+">&#xFF0B;</button></span>' +
       '<label>コード進行 ' + selHtml('data-xg="prog"', PROGS.map(function (q) { return [q[0], q[1]]; }), g.prog) + '</label>' +
       '<div class="dxm-chords">';
     for (i = 0; i < g.bars; i++) {
-      x += '<label class="dxm-ch"><small>' + (i + 1) + '</small>' + selHtml('data-xch="' + i + '"', CHORD_ORDER.map(function (c) { return [c, chordOf(g.key, c).name + " (" + c + ")"]; }), chs[i]) + '</label>';
+      var cl1 = clist.indexOf(chs[i]) >= 0 ? clist : clist.concat([chs[i]]);
+      x += '<label class="dxm-ch"><small>' + (i + 1) + '</small>' + selHtml('data-xch="' + i + '"', cl1.map(function (c) { return [c, chordOf(g.key, c).name + " (" + chordLabel(c) + ")"]; }), chs[i]) + '</label>';
     }
     x += '</div>' +
       '<label class="dxm-wide">スタイル ' + selHtml('data-xg="pat"', list.map(function (q) { return [q.id, q.name]; }), g.pat) + '</label>' +
@@ -1194,6 +1227,7 @@
     for (i = 0; i < FORMS.length; i++) { x += chip("data-xform", FORMS[i][0], FORMS[i][1] + " " + formBars(FORMS[i][0]) + " 小節", ui.form === FORMS[i][0]); }
     return x + '</div><p class="small dxm-formline">' + formLine(formOf(null, ui.form)) + '</p>';
   }
+  function tplOpt() { return { key: ui.tplKey, kmode: ui.tplKmode }; }
   function formLine(form) { return form.map(function (f) { return esc(f.name) + " " + f.bars; }).join(" → "); }
   function tplTab(h) {
     var x = '<div class="dxm-list">', i, p = h.project(), M = DM();
@@ -1208,7 +1242,7 @@
     }
     var pl0 = ui.tplPlan, T2 = pl0.T;
     x += formChips();
-    x += '<div class="dxm-prev"><b>' + T2.name + '</b>・' + (pl0.mode === "new" ? "&#x1F195; 新しい曲で作る" : "&#xFF0B; いまの曲の " + pl0.bar + " 小節目から足す") + '<br><span class="small">' + pl0.meter.num + '/' + pl0.meter.den + '・' + (pl0.mode === "new" ? "BPM " + T2.bpm + "・" : "BPM " + M.bpmAt(p, 0) + "（いまの曲のまま）・") + KEYS[pl0.key] + ' メジャー・' + pl0.bars + ' 小節・トラック ' + pl0.tracks + ' 本' + (pl0.mode === "new" ? '（＋ 空のメロディのトラック）' : '') + '・クリップ ' + pl0.clips + ' 個・音符 ' + pl0.notes + ' 個</span>' +
+    x += '<div class="dxm-prev"><b>' + T2.name + '</b>・' + (pl0.mode === "new" ? "&#x1F195; 新しい曲で作る" : "&#xFF0B; いまの曲の " + pl0.bar + " 小節目から足す") + '<br><span class="small">' + pl0.meter.num + '/' + pl0.meter.den + '・' + (pl0.mode === "new" ? "BPM " + T2.bpm + "・" : "BPM " + M.bpmAt(p, 0) + "（いまの曲のまま）・") + KEYS[pl0.key] + ' ' + modeName(pl0.kmode) + '・' + pl0.bars + ' 小節・トラック ' + pl0.tracks + ' 本' + (pl0.mode === "new" ? '（＋ 空のメロディのトラック）' : '') + '・クリップ ' + pl0.clips + ' 個・音符 ' + pl0.notes + ' 個</span>' +
       '<table class="dxm-tbl"><tr><th>トラック</th><th>音色・パターン</th><th>鳴る所（密度）</th></tr>';
     for (i = 0; i < pl0.rows.length; i++) {
       var r = pl0.rows[i], cells = [], k, at = {};
@@ -1220,6 +1254,7 @@
       x += '<tr><td>' + esc(r.name) + '</td><td>' + soundName(r.snd) + '<br><small>' + esc(pat(r.pat).name.replace(/（.*$/, "")) + '</small></td><td class="dxm-sxs">' + cells.join("") + '</td></tr>';
     }
     x += '</table><div class="small">' + formLine(pl0.form) + '（' + SECT_ORDER.filter(function (t) { return pl0.form.some(function (f) { return f.t === t; }); }).map(function (t) { return SECT[t][3] + "＝" + SECT[t][0]; }).join("・") + '・明るいほど密度が多い）</div>';
+    x += '<div class="dxm-opt dxm-tkey"><span>キー</span>' + selHtml('data-xtkey', KEYS.map(function (k, j) { return [j, k]; }), pl0.key) + MODES.map(function (m) { return chip("data-xtkmode", m[0], m[1], pl0.kmode === m[0]); }).join("") + '</div>';
     x += '<div class="small">権利: ' + pl0.lic.map(function (l) { return esc(LIC[l]); }).join(" ／ ") + '</div>';
     if (pl0.mode === "add") { x += '<label class="dxm-barl">何小節目から <input type="number" class="dxm-tbar" min="1" max="' + MAXB + '" value="' + pl0.bar + '"></label>'; }
     x += '<div class="dxm-go">' + pvBtn("t", "&#x25B6;&#xFE0F; " + esc(pl0.form[pl0.hear].name) + "を試聴") + '<button class="modal-btn dxm-b dxm-main" data-xm="tplApply">' + (pl0.mode === "new" ? "&#x1F195; 新しい曲で作る" : "&#xFF0B; 足す（↶ で戻せる）") + '</button><button class="modal-btn dxm-b" data-xm="tplCancel">やめる</button></div></div>';
@@ -1341,19 +1376,22 @@
           h.commit(snap2, ui.msg, tt.id); return;
         }
         if ((v = el.getAttribute("data-xuse"))) { g.pat = v; ui.snd = ""; ui.dest = ""; lsPut(); ui.tab = "gen"; ui.msg = ""; pvStop(); re(); return; }
+        if ((v = el.getAttribute("data-xkmode"))) { g.mode = v === "min" ? "min" : "maj"; g.custom = {}; lsPut(); re(); return; }
+        if ((v = el.getAttribute("data-xtkmode"))) { ui.tplKmode = v === "min" ? "min" : "maj"; if (ui.tplPlan) { var plk = tplPlan(p, ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form, tplOpt()); if (plk.ok) { ui.tplPlan = plk; ui.msg = ""; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(plk.why); } } pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xlen"))) { g.bars = Number(v); lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xrange"))) { g.range = v; lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xvel"))) { g.vel = Number(v); lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xdens"))) { g.dens = Number(v); lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xform"))) {
           ui.form = formById(v)[0]; pvStop();
-          if (ui.tplPlan) { var plf = tplPlan(p, ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form); if (plf.ok) { ui.tplPlan = plf; ui.msg = ""; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(plf.why); } }
+          if (ui.tplPlan) { var plf = tplPlan(p, ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form, tplOpt()); if (plf.ok) { ui.tplPlan = plf; ui.msg = ""; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(plf.why); } }
           re(); return;
         }
         if ((v = el.getAttribute("data-xalen"))) { ui.anLen = Number(v); ui.an = null; re(); return; }
         if ((v = el.getAttribute("data-xtpl"))) {
           ui.tplMode = el.getAttribute("data-xmode") === "add" ? "add" : "new"; ui.tpl = v;
           ui.tplBar = ui.tplMode === "add" ? Math.max(1, Math.ceil(M.endTick(p) / M.barTicks(p)) + 1) : 1;
+          ui.tplKey = null; ui.tplKmode = null;
           var pln = tplPlan(p, v, ui.tplMode, ui.tplBar, g.seed, ui.form);
           if (!pln.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(pln.why); ui.tplPlan = null; } else { ui.tplPlan = pln; ui.msg = ""; }
           re(); return;
@@ -1365,13 +1403,13 @@
         if (v === "make") {
           var snap3 = h.snap(), r = place(p, g, { track: ui.dest, bar: ui.bar, sound: ui.snd });
           if (!r.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(r.why); re(); return; }
-          ui.last = { clip: r.clip.id, track: r.track.id, drum: M.isDrum(r.track), note: "「" + esc(r.track.name) + "」の " + ui.bar + " 小節目に「" + esc(pat(g.pat).name) + "」（" + g.bars + " 小節・音符 " + r.notes + " 個・" + KEYS[g.key] + "・シード " + g.seed + "）を作りました" };
+          ui.last = { clip: r.clip.id, track: r.track.id, drum: M.isDrum(r.track), note: "「" + esc(r.track.name) + "」の " + ui.bar + " 小節目に「" + esc(pat(g.pat).name) + "」（" + g.bars + " 小節・音符 " + r.notes + " 個・" + KEYS[g.key] + (g.mode === "min" ? "m" : "") + "・シード " + g.seed + "）を作りました" };
           if (!ui.dest) { ui.dest = ""; }
           ui.msg = ""; h.commit(snap3, ui.last.note, r.track.id, r.clip.id); return;
         }
         if (v === "regen") {
           if (!ui.last) { return; }
-          var snap4 = h.snap(), r2 = regen(p, ui.last.clip, { key: g.key, prog: g.prog, custom: g.custom, range: g.range, vel: g.vel, dens: g.dens, seed: g.seed, pat: g.pat, bars: g.bars });
+          var snap4 = h.snap(), r2 = regen(p, ui.last.clip, { key: g.key, mode: g.mode, prog: g.prog, custom: g.custom, range: g.range, vel: g.vel, dens: g.dens, seed: g.seed, pat: g.pat, bars: g.bars });
           if (!r2.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(r2.why); re(); return; }
           ui.last.note = "同じクリップを作りなおしました（音符 " + r2.notes + " 個・シード " + g.seed + "）";
           h.commit(snap4, ui.last.note, r2.track.id, r2.clip.id); return;
@@ -1388,7 +1426,7 @@
             ui.tplPlan = null; ui.msg = "新しい曲「" + esc(rn.project.name) + "」を作りました（前の曲は保存してあります）。メロディのトラックに、あなたのメロディを書いてください";
             h.newSong(rn.project); return;
           }
-          var pl1 = tplPlan(p, pl0.T.id, "add", pl0.bar, g.seed, pl0.formId);
+          var pl1 = tplPlan(p, pl0.T.id, "add", pl0.bar, g.seed, pl0.formId, { key: pl0.key, kmode: pl0.kmode });
           if (!pl1.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(pl1.why); re(); return; }
           var snap5 = h.snap(), ra = tplApply(p, pl1);
           if (!ra.ok) { h.restore(snap5); ui.msg = "&#x26A0;&#xFE0F; " + esc(ra.why); re(); return; }
@@ -1405,21 +1443,22 @@
       sels[j].onchange = function (ev) {
         var el = ev.currentTarget, g = g0(), v;
         if ((v = el.getAttribute("data-xg"))) { if (v === "key") { g.key = Number(el.value); } else if (v === "prog") { g.prog = el.value; g.custom = {}; } else if (v === "pat") { g.pat = el.value; ui.snd = ""; } lsPut(); re(); return; }
-        if ((v = el.getAttribute("data-xch")) !== null && v !== undefined && v !== "") { var bi = Number(v), base = chordsFor(g.prog, g.bars, {})[bi]; if (el.value === base) { delete g.custom[bi]; } else { g.custom[bi] = el.value; } lsPut(); re(); return; }
+        if ((v = el.getAttribute("data-xch")) !== null && v !== undefined && v !== "") { var bi = Number(v), base = chordsFor(g.prog, g.bars, {}, g.mode)[bi]; if (el.value === base) { delete g.custom[bi]; } else { g.custom[bi] = el.value; } lsPut(); re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xdest")) { ui.dest = el.value; var t = ui.dest ? M.findTrack(h.project(), ui.dest) : null; ui.bar = t ? Math.max(1, Math.round(M.trackEnd(t) / M.barTicks(h.project())) + 1) : 1; re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xsnd")) { ui.snd = el.value; re(); return; }
+        if (el.hasAttribute && el.hasAttribute("data-xtkey")) { ui.tplKey = Math.round(Number(el.value)); if (ui.tplPlan) { var plq = tplPlan(h.project(), ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form, tplOpt()); if (plq.ok) { ui.tplPlan = plq; } } pvStop(); re(); return; }
       };
     }
     var sd = root.querySelector(".dxm-seed"); if (sd) { sd.onchange = function () { var g = g0(), n = Math.round(Number(sd.value)); if (n >= 1 && n <= 99999) { g.seed = n; lsPut(); } re(); }; }
     var br = root.querySelector(".dxm-bar"); if (br) { br.onchange = function () { var n = Math.round(Number(br.value)); if (n >= 1 && n <= MAXB) { ui.bar = n; } re(); }; }
-    var tb = root.querySelector(".dxm-tbar"); if (tb) { tb.onchange = function () { var n = Math.round(Number(tb.value)); if (n >= 1 && n <= MAXB && ui.tplPlan) { var pl2 = tplPlan(h.project(), ui.tplPlan.T.id, "add", n, g0().seed, ui.tplPlan.formId); if (pl2.ok) { ui.tplPlan = pl2; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pl2.why); } } re(); }; }
+    var tb = root.querySelector(".dxm-tbar"); if (tb) { tb.onchange = function () { var n = Math.round(Number(tb.value)); if (n >= 1 && n <= MAXB && ui.tplPlan) { var pl2 = tplPlan(h.project(), ui.tplPlan.T.id, "add", n, g0().seed, ui.tplPlan.formId, tplOpt()); if (pl2.ok) { ui.tplPlan = pl2; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pl2.why); } } re(); }; }
     var as = root.querySelector(".dxm-ast"); if (as) { as.oninput = function () { ui.anStart = Number(as.value) || 0; var l = root.querySelector(".dxm-astv"); if (l) { l.textContent = ui.anStart.toFixed(1) + " 秒"; } }; as.onchange = function () { ui.anStart = Number(as.value) || 0; ui.an = null; re(); }; }
   }
   function leave() { pvStop(); ui.pvState = ""; }
 
   window.UGXmas = {
     VERSION: 1, KEY: XM_KEY,
-    KEYS: KEYS, CHORDS: CHORDS, CHORD_ORDER: CHORD_ORDER, PROGS: PROGS, chordOf: chordOf, chordsFor: chordsFor, voice: voice, rng: rng,
+    KEYS: KEYS, CHORDS: CHORDS, CHORD_ORDER: CHORD_ORDER, PROGS: PROGS, CHORD_LISTS: CHORD_LISTS, MINMAP: MINMAP, SCALES: SCALES, MODES: MODES, scaleTone: scaleTone, chordOf: chordOf, chordsFor: chordsFor, voice: voice, rng: rng,
     SOUNDS: SOUNDS, SKIPPED: SKIPPED, CATS: CATS, LIC: LIC, sound: sound, instrument: instrument, isSample: isSample, label: label, makeTrack: makeTrack, trackFx: trackFx, soundName: soundName,
     PATS: PATS, PCATS: PCATS, pat: pat, patsFor: patsFor, generate: generate, genClean: genClean, place: place, regen: regen, fitRange: fitRange,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,

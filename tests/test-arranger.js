@@ -19,7 +19,7 @@ module.exports = async function () {
   ok(fl.map(function (s) { return s.name; }).join() === "イントロ,Aメロ,Bメロ,サビ,間奏,Aメロ 2,Bメロ 2,ブリッジ,ラストサビ,アウトロ", "a repeated section type is numbered (Aメロ 2)", fl.map(function (s) { return s.name; }));
   ok(fl[9].end === true && fl[9].fill === false && fl[0].fill === false && fl[2].rise[1] > fl[2].rise[0] && fl[8].acc > 1, "type defaults: outro ends on a held chord, intro/outro without fills, B builds up, last chorus accents");
   ok(X.formOf(null, "nope").length === 2, "an unknown form → the standard form");
-  ok(X.PROGS.slice(0, 5).map(function (p) { return p[1]; }).join("|") === "I–vi–IV–V|I–V–vi–IV|I–IV–V–I|ii–V–I|I–vi–ii–V" && X.PROGS.length === 7 && X.PROGS[5][1] === "IV–V–iii–vi" && X.PROGS[6][1] === "vi–IV–I–V", "progressions: the first 5 are unchanged; IV–V–iii–vi and vi–IV–I–V are added");
+  ok(X.PROGS.slice(0, 5).map(function (p) { return p[1]; }).join("|") === "I–vi–IV–V|I–V–vi–IV|I–IV–V–I|ii–V–I|I–vi–ii–V" && X.PROGS.length >= 7 && X.PROGS[5][1] === "IV–V–iii–vi" && X.PROGS[6][1] === "vi–IV–I–V", "progressions: the first 5 are unchanged; IV–V–iii–vi and vi–IV–I–V are added");
 
   // ---------- 互換: 標準の構成は v2.72／v2.73 と同じ音符 ----------
   // v2.73 の arcade-daw-xmas.js で作った指紋（音域に入れる前の音符）。標準の曲（音域に入れたあと）は、バラードだけ重なりを直した分ちがう
@@ -116,6 +116,51 @@ module.exports = async function () {
   var pr2 = M.emptyProject(0), pp2 = X.place(pr2, { pat: "pop8", bars: 4, seed: 2 }, { track: "", bar: 1 });
   ok(pp2.clip.ext.xgen.nofill === undefined && Object.keys(pp2.clip.ext.xgen).join() === "v,pat,key,prog,bars,range,vel,dens,seed,custom", "normal clips store the same xgen fields as v2.72");
 
+  // ---------- A2: コード・ハーモニー（v2.75）----------
+  ok(X.PROGS.slice(0, 7).map(function (q) { return q[0]; }).join() === "p1,p2,p3,p4,p5,p6,p7" && X.PROGS.length === 13 && X.PROGS.filter(function (q) { return q[3] === "min"; }).length === 4, "progressions: the first 7 unchanged, 2 major + 4 minor added (13)");
+  var allIds = X.CHORD_LISTS.maj.concat(X.CHORD_LISTS.min), chBad = [];
+  allIds.forEach(function (id) {
+    var c = X.CHORDS[id], ch = X.chordOf(4, id);
+    if (!c || ch.id !== id || ch.pcs.length !== c[1].length || ch.fifth !== (ch.root + c[1][2]) % 12) { chBad.push(id); }
+    if (c && c[3] === undefined && ch.bass !== ch.root) { chBad.push(id + " bass"); }
+  });
+  ok(chBad.length === 0 && X.CHORD_LISTS.maj.length === 28 && X.CHORD_LISTS.min.length === 18, "every listed chord exists; chordOf gives its fifth and bass (28 major-key and 18 minor-key chords)", chBad);
+  var cC = X.chordOf(0, "I_3"), cB = X.chordOf(9, "ii°"), cG = X.chordOf(0, "V_4"), cS = X.chordOf(0, "V/V"), c9 = X.chordOf(0, "Iadd9"), cs4 = X.chordOf(0, "Vsus4");
+  ok(cC.name === "C/E" && cC.bass === 4 && cC.root === 0 && cG.name === "G/F" && cG.bass === 5 && cS.name === "D7" && c9.pcs.join() === "0,4,7,2" && cs4.pcs.join() === "7,0,2" && cB.name === "Bdim" && cB.fifth === 5, "chord names and tones: C/E (bass E), G/F, V/V = D7, Cadd9, Gsus4, Bdim (fifth F)", [cC.name, cG.name, cS.name, cB.name]);
+  ok(X.chordOf(0, "I").fifth === 7 && X.chordOf(0, "I").bass === 0 && X.chordOf(0, "I").name === "C", "the old chords keep their tones (fifth = perfect fifth, bass = root)");
+  ok(X.chordsFor("p1", 4, {}, "min").join() === "i,VI,iv,V" && X.chordsFor("p4", 4, {}, "min").join() === "iiø7,V7,i7,i7" && X.chordsFor("m1", 4, {}, "min").join() === "i,VI,III,VII" && X.chordsFor("p1", 4, { 1: "vi" }, "min").join() === "i,vi,iv,V" && X.chordsFor("p1", 4, {}).join() === "I,vi,IV,V", "minor: major progressions are read as minor (I–vi–IV–V → i–VI–iv–V); minor progressions and hand-picked chords stay");
+  ok(X.scaleTone(9, 69, 1, "min") === 71 && X.scaleTone(9, 71, 1, "min") === 72 && X.scaleTone(9, 71, 1) === 73 && X.scaleTone(9, 69, -1, "min") === 67, "scale steps: A minor uses B → C (A major B → C#) and A → G");
+  // すべてのコード × 音の高さのあるパターン: 小節の頭はコードの音
+  var gBad = [];
+  X.PATS.filter(function (P) { return !P.drum && P.m.indexOf("4/4") >= 0; }).forEach(function (P) {
+    allIds.forEach(function (id) {
+      var cu = { 0: id, 1: id }, r = X.generate({ pat: P.id, key: 2, prog: "p1", bars: 2, dens: 2, seed: 3, custom: cu, mode: X.CHORD_LISTS.min.indexOf(id) >= 0 ? "min" : "maj" }, { num: 4, den: 4 }), ch = X.chordOf(2, id);
+      var tones = ch.pcs.concat([ch.bass, (ch.root + (ch.ivs[3] !== undefined ? ch.ivs[3] : (X.SEVENTH && X.SEVENTH[id]) || 10)) % 12, (ch.root + 2) % 12, (ch.root + 10) % 12, (ch.root + 11) % 12]);
+      r.notes.forEach(function (n) { if (!(n[2] >= 0 && n[2] <= 127) || !(n[3] > 0)) { gBad.push(P.id + "/" + id + " bad note"); } if (n[0] % 3840 === 0 && P.cat !== "bell" && tones.indexOf(n[2] % 12) < 0) { gBad.push(P.id + "/" + id + " " + n[2]); } });
+    });
+  });
+  ok(gBad.length === 0, "every chord × every pitched 4/4 pattern: valid notes, downbeats on chord tones", gBad.slice(0, 5));
+  var bS = X.generate({ pat: "bassRoot5", key: 0, prog: "p1", bars: 1, dens: 1, seed: 1, custom: { 0: "I_3" } }, { num: 4, den: 4 }), bD = X.generate({ pat: "bassRoot5", key: 9, prog: "m1", bars: 1, dens: 1, seed: 1, custom: { 0: "ii°" }, mode: "min" }, { num: 4, den: 4 });
+  ok(bS.notes[0][2] % 12 === 4 && bD.notes.some(function (n) { return n[2] % 12 === 5; }) && !bD.notes.some(function (n) { return n[2] % 12 === 6; }), "bass: C/E plays E on the downbeat; Bdim's fifth is F (not F#)", [bS.notes.map(function (n) { return n[2]; }), bD.notes.map(function (n) { return n[2]; })]);
+  // テンプレートのマイナー
+  var minBad = [];
+  X.TPLS.forEach(function (T) { X.FORMS.forEach(function (F) {
+    var pl = X.tplPlan(null, T.id, "new", 1, 2, F[0], { key: 9, kmode: "min" });
+    if (!pl.ok || pl.kmode !== "min" || pl.key !== 9) { minBad.push(T.id + "/" + F[0] + " plan"); return; }
+    var a = X.audit(pl); if (!a.ok) { minBad.push(T.id + "/" + F[0] + ": " + a.problems.join(" | ")); }
+  }); });
+  ok(minBad.length === 0, "5 templates × 4 forms in A minor pass the mechanical checks", minBad.slice(0, 3));
+  var pm = X.tplPlan(null, "pop", "new", 1, 1, "full", { key: 9, kmode: "min" }), qm = X.tplNewProject(pm).project, lastS = pm.form.length - 1;
+  var oRow = pm.rows.filter(function (r) { return r.clips.some(function (c) { return c.sec === lastS && !c.r.drum; }); })[0], oCl = oRow.clips.filter(function (c) { return c.sec === lastS; })[0];
+  ok(qm.ext.xmKey === 9 && qm.ext.xmMode === "min" && oCl.r.chords[oCl.r.chords.length - 1] === "i" && oCl.r.set.mode === "min", "minor template song: key A, ext.xmMode = min, the outro ends on i", [qm.ext, oCl.r.chords]);
+  var qM = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project;
+  ok(qM.ext.xmMode === undefined && qM.ext.xmKey === 2, "major template songs do not get xmMode (same as v2.74)");
+  var pAdd = M.emptyProject(0); pAdd.ext.xmKey = 4; pAdd.ext.xmMode = "min";
+  var plAdd = X.tplPlan(pAdd, "pop", "add", 1, 1, "std");
+  ok(plAdd.ok && plAdd.key === 4 && plAdd.kmode === "min" && X.tplPlan(pAdd, "pop", "add", 1, 1, "std", { kmode: "maj", key: 7 }).kmode === "maj", "adding to a minor template song uses its key and mode by default; the preview can change them");
+  var pr3 = M.emptyProject(0), pm3 = X.place(pr3, { pat: "arpPiano", bars: 4, seed: 2, mode: "min", key: 9 }, { track: "", bar: 1 }), pM3 = X.place(pr3, { pat: "arpPiano", bars: 4, seed: 2 }, { track: "", bar: 9 });
+  ok(pm3.clip.ext.xgen.mode === "min" && pM3.clip.ext.xgen.mode === undefined && X.genClean({}).mode === "maj" && X.regen(pr3, pm3.clip.id, { seed: 4 }).set.mode === "min", "generator: xgen.mode is written only for minor; regenerate keeps it");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -125,6 +170,14 @@ module.exports = async function () {
   X.ui.form = "full"; X.ui.tplPlan = X.tplPlan(D.project(), "pop", "new", 1, 1, "full"); D.xmas.host.render();
   ok(R.innerHTML.indexOf("dxm-sx") >= 0 && (R.innerHTML.match(/class="dxm-sx[ "]/g) || []).length === 7 * 8 && R.innerHTML.indexOf("サビを試聴") >= 0 && R.innerHTML.indexOf("48 小節") >= 0, "preview: one cell per section for every track, ▶ サビを試聴, 48 bars");
   ok(JSON.stringify(D.project()) === p0, "choosing a form and previewing do not change the song");
+  ok(R.innerHTML.indexOf('data-xtkey') >= 0 && (R.innerHTML.match(/data-xtkmode="/g) || []).length === 2 && R.innerHTML.indexOf("D メジャー") >= 0, "preview: key select and メジャー／マイナー chips");
+  X.ui.tplPlan = X.tplPlan(D.project(), "pop", "new", 1, 1, "full", { key: 9, kmode: "min" }); D.xmas.host.render();
+  ok(R.innerHTML.indexOf("A マイナー") >= 0, "preview in A minor says so");
+  X.ui.tplPlan = null; X.ui.tab = "gen"; var gg = X.ui.g || {}; D.xmas.host.render();
+  var g1 = X.ui.g; g1.mode = "min"; g1.bars = 4; D.xmas.host.render();
+  var nOpt = (R.innerHTML.match(/<select class="dxm-sel" data-xch="0">([\s\S]*?)<\/select>/) || ["", ""])[1].split("<option").length - 1;
+  ok((R.innerHTML.match(/data-xkmode="/g) || []).length === 2 && nOpt === X.CHORD_LISTS.min.length && R.innerHTML.indexOf("マイナー</option>") >= 0, "generator tab: メジャー／マイナー chips; the per-bar chord list follows the mode", nOpt);
+  g1.mode = "maj"; X.ui.tab = "tpl";
   X.ui.tplPlan = null; X.ui.form = "std";
   A.stop();
 };
