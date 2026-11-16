@@ -612,20 +612,20 @@
   // tracks: [音色, パターン, [A の密度, サビの密度]（null ＝ その所は作らない）, 音域, 名前, { セクションの型: 密度 | [パターン, 密度] | null }（なくてよい・上書き）]
   // prog: { セクションの型: コード進行 }（なくてよい）・sec: { セクションの型: セクションの設定 }（なくてよい）
   var TPLS = [
-    { id: "pop", name: "&#x2728; キラキラ・クリスマスポップ", num: 4, den: 4, bpm: 120, key: 2, progs: ["p2", "p1"], desc: "8 分のピアノ・ベース・弦・ベルのかざり・8 ビートとスレイベル", tracks: [
+    { id: "pop", genre: "xmas", moods: ["bright", "party"], rec: 1, tags: "Christmas pop sparkle bells sleigh クリスマス ポップ キラキラ ベル スレイベル", aim: "8 分のエレピとベースで前へ進み、グロッケンのかざりとスレイベルでクリスマスらしさを足す。サビで弦が広がり、キラキラのシンセが入る", name: "&#x2728; キラキラ・クリスマスポップ", num: 4, den: 4, bpm: 120, key: 2, progs: ["p2", "p1"], desc: "8 分のピアノ・ベース・弦・ベルのかざり・8 ビートとスレイベル", tracks: [
       ["xm-ep", "popPiano8", [0, 1], "mid", "エレピ"], ["bass", "popBass8", [0, 1], "mid", "ベース"], ["xm-strings", "stringsLong", [0, 1], "mid", "ストリングス"],
       ["xm-glock", "bellObb", [0, 1], "mid", "グロッケン"], ["xm-sparkpluck", "synthArp", [null, 0], "mid", "キラキラ"], ["@drum", "pop8", [0, 1], "mid", "ドラム"], ["xm-sleigh", "sleigh8", [0, 1], "mid", "スレイベル"]] },
-    { id: "ballad", name: "&#x1F56F;&#xFE0F; 聖夜のバラード", num: 4, den: 4, bpm: 72, key: 3, progs: ["p1", "p2"], desc: "ゆったりしたピアノ・弦のロングトーン・チェレスタ・声のようなパッド", tracks: [
+    { id: "ballad", genre: "xmas", moods: ["calm", "warm", "sad"], rec: 1, tags: "Christmas ballad silent night piano strings クリスマス バラード 聖夜 しっとり ピアノ 弦", aim: "ゆっくりしたピアノの伴奏と弦のロングトーンで、歌のための余白を大きくとる。サビだけドラムとパッドが入る", name: "&#x1F56F;&#xFE0F; 聖夜のバラード", num: 4, den: 4, bpm: 72, key: 3, progs: ["p1", "p2"], desc: "ゆったりしたピアノ・弦のロングトーン・チェレスタ・声のようなパッド", tracks: [
       ["xm-warmpiano", "balladPiano", [0, 1], "mid", "ピアノ"], ["xm-upbass", "balladBass", [0, 1], "mid", "ベース"], ["xm-strings", "stringsLong", [0, 1], "mid", "ストリングス"],
       ["xm-celesta", "bellPing", [0, 1], "mid", "チェレスタ"], ["xm-choirpad", "padSwell", [null, 1], "mid", "パッド"], ["@drum", "ballad", [null, 1], "mid", "ドラム"], ["xm-sleigh", "sleigh8", [null, 0], "mid", "スレイベル"]] },
-    { id: "jazz", name: "&#x1F3B7; クリスマス・ジャズ", num: 4, den: 4, bpm: 132, key: 5, progs: ["p4", "p5"], prog: { B: "p6", bridge: "p4" }, desc: "ジャズピアノのコンピング・ウォーキングベース・ブラシ風・ビブラフォン（スイング 3:1）", tracks: [
+    { id: "jazz", genre: "xmas", moods: ["cool", "warm"], rec: 1, tags: "Christmas jazz swing piano trio クリスマス ジャズ スイング おしゃれ", aim: "3 度と 7 度のピアノのコンピングとウォーキングベースのジャズトリオ。A はブラシ風・サビはライドのスイング", name: "&#x1F3B7; クリスマス・ジャズ", num: 4, den: 4, bpm: 132, key: 5, progs: ["p4", "p5"], prog: { B: "p6", bridge: "p4" }, desc: "ジャズピアノのコンピング・ウォーキングベース・ブラシ風・ビブラフォン（スイング 3:1）", tracks: [
       ["xm-jazzpiano", "jazzComp", [1, 2], "mid", "ジャズピアノ"], ["xm-upbass", "walking", [1, 1], "mid", "ウッドベース"], ["xm-brush", "brush", [1, null], "mid", "ブラシ", { intro: 0, outro: 0, bridge: 0 }],
       ["xm-brush", "swing", [null, 1], "mid", "スイング"], ["xm-vibes", "bellObb", [0, 1], "low", "ビブラフォン"], ["xm-sleigh", "sleighShuffle", [null, 0], "mid", "スレイベル"]] },
-    { id: "orch", name: "&#x1F3BB; オーケストラ・クリスマス", num: 3, den: 4, bpm: 138, key: 7, progs: ["p3", "p1"], desc: "3 拍子のワルツ。ピチカート・ハープ・弦・ホルン・グロッケン", tracks: [
+    { id: "orch", genre: "xmas", moods: ["grand", "warm"], rec: 1, tags: "Christmas orchestra waltz harp horn クリスマス オーケストラ ワルツ ハープ ホルン", aim: "3 拍子のワルツ。ピチカートの刻みとハープで軽く始め、サビでホルン・グロッケン・スレイベルが入って華やかに", name: "&#x1F3BB; オーケストラ・クリスマス", num: 3, den: 4, bpm: 138, key: 7, progs: ["p3", "p1"], desc: "3 拍子のワルツ。ピチカート・ハープ・弦・ホルン・グロッケン", tracks: [
       ["xm-pizz", "pizz", [1, 1], "mid", "ピチカート"], ["xm-upbass", "waltzBass", [0, 1], "mid", "コントラバス風"], ["xm-harp", "harpArp", [0, null], "mid", "ハープ", { intro: 0, bridge: 0, outro: 0 }],
       ["xm-harp", "harpFlow", [null, 1], "mid", "ハープ（流れ）", { intro: null, bridge: null, outro: null }], ["xm-strings", "stringsLong", [0, 1], "mid", "ストリングス"], ["xm-horn", "hornPad", [null, 1], "mid", "ホルン"],
       ["xm-glock", "bellObb", [null, 1], "mid", "グロッケン"], ["xm-sleigh", "sleighWaltz", [null, 1], "mid", "スレイベル"]] },
-    { id: "chip", name: "&#x1F47E; レトロ 8bit クリスマス", num: 4, den: 4, bpm: 140, key: 0, progs: ["p2", "p1"], desc: "四角い波のアルペジオ・オクターブのベース・8bit のドラム・ベル", tracks: [
+    { id: "chip", genre: "xmas", moods: ["retro", "bright"], rec: 1, tags: "Christmas 8bit chiptune retro game クリスマス レトロ ゲーム ピコピコ", aim: "四角い波の細かいアルペジオとオクターブのベースで、昔のゲーム機のようなクリスマス", name: "&#x1F47E; レトロ 8bit クリスマス", num: 4, den: 4, bpm: 140, key: 0, progs: ["p2", "p1"], desc: "四角い波のアルペジオ・オクターブのベース・8bit のドラム・ベル", tracks: [
       ["xm-8bitbells", "chipArp", [1, 2], "mid", "8bit アルペジオ", { bridge: 0 }], ["chip", "chipBass", [1, 1], "mid", "8bit ベース"], ["xm-brightbells", "bellObb", [null, 1], "mid", "ベル"],
       ["@drum", "chipDrums", [1, 1], "mid", "8bit ドラム"], ["xm-sleigh", "sleigh8", [0, 1], "mid", "スレイベル"]] }
   ];
@@ -819,6 +819,97 @@
     st.chordRate = st.chordAll ? Math.round(st.chordHits / st.chordAll * 1000) / 1000 : 1;
     if (st.chordRate < 0.95) { probs.push("小節の頭のコードの音の割合が低い: " + st.chordRate); }
     return { ok: probs.length === 0, problems: probs, stats: st };
+  }
+
+  // ---------- 🔍 テンプレートブラウザー（§345 A3-1）----------
+  var GENRES = [["xmas", "&#x1F384; Christmas", "christmas xmas クリスマス"], ["pop", "&#x1F3A4; J-POP・POP", "pop jpop j-pop ポップ"], ["jazz", "&#x1F3B7; Jazz・Orchestra", "jazz orchestra ジャズ オーケストラ クラシック"], ["retro", "&#x1F47E; Retro・Electronic", "retro electronic レトロ エレクトロ ゲーム"]];
+  var MOODS = [["bright", "明るい・華やか", "bright sparkle happy 明るい 華やか キラキラ"], ["calm", "静か・おだやか", "calm quiet soft gentle 静か おだやか しっとり"], ["warm", "あたたかい", "warm cozy あたたかい ほっこり"], ["cool", "おしゃれ・クール", "cool stylish おしゃれ クール"], ["party", "ノリ・ダンス", "dance party groove ノリ ダンス"], ["grand", "壮大", "epic grand cinematic 壮大 映画"], ["retro", "レトロ", "retro vintage レトロ なつかしい"], ["sad", "せつない", "sad emotional せつない 泣ける"]];
+  var FAMS = [["piano", "ピアノ・鍵盤", "piano keys organ ピアノ 鍵盤 オルガン"], ["bass", "ベース", "bass ベース"], ["drums", "ドラム・打楽器", "drums percussion ドラム 打楽器 リズム"], ["strings", "弦・ハープ", "strings harp 弦 ストリングス ハープ"], ["bells", "ベル", "bells glockenspiel celesta ベル グロッケン チェレスタ"], ["winds", "管楽器", "brass horn winds flute 管楽器 ブラス ホルン フルート"], ["synth", "シンセ", "synth pad lead シンセ パッド"], ["guitar", "ギター", "guitar ギター"], ["choir", "声・パッド", "choir voice 声 コーラス"]];
+  var BPMS = [["slow", "ゆっくり（〜89）"], ["mid", "ふつう（90〜125）"], ["fast", "速い（126〜）"]];
+  var FAM_OF = { "xm-strings": "strings", "xm-pizz": "strings", "xm-harp": "strings", "xm-glock": "bells", "xm-celesta": "bells", "xm-musicbox": "bells", "xm-chimes": "bells", "xm-brightbells": "bells", "xm-8bitbells": "bells", "xm-synthbells": "bells", "xm-vibes": "bells", "bell": "bells",
+    "xm-horn": "winds", "xm-softbrass": "winds", "brass": "winds", "xm-warmpiano": "piano", "xm-ep": "piano", "xm-jazzpiano": "piano", "xm-church": "piano", "xm-softorgan": "piano", "organ": "piano", "xm-choirpad": "choir" };
+  var TPL_KEY = "ultimateGorillaXmasTplV1";
+  function lbl(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i][1]; } } return ""; }
+  function famsOf(T) {
+    var out = [], i;
+    for (i = 0; i < T.tracks.length; i++) { var cat = catOf(T.tracks[i][1]), f = cat === "drum" ? "drums" : (cat === "bass" ? "bass" : (FAM_OF[T.tracks[i][0]] || "synth")); if (out.indexOf(f) < 0) { out.push(f); } }
+    return out;
+  }
+  function bpmBand(bpm) { return bpm < 90 ? "slow" : (bpm <= 125 ? "mid" : "fast"); }
+  function norm(s) { s = String(s === undefined || s === null ? "" : s); try { if (s.normalize) { s = s.normalize("NFKC"); } } catch (e) {} return s.toLowerCase(); }
+  // 検索のための文字（名前・説明・ねらい・ことば・ジャンル・雰囲気・楽器・拍子・BPM）
+  function hayOf(T) {
+    var x = [plain(T.name), T.desc, T.aim || "", T.tags || "", T.num + "/" + T.den, T.num === 3 || T.den === 8 ? "3拍子 ワルツ waltz" : "", "bpm" + T.bpm, String(T.bpm)], i;
+    for (i = 0; i < GENRES.length; i++) { if (GENRES[i][0] === T.genre) { x.push(plain(GENRES[i][1]), GENRES[i][2]); } }
+    for (i = 0; i < MOODS.length; i++) { if ((T.moods || []).indexOf(MOODS[i][0]) >= 0) { x.push(MOODS[i][1], MOODS[i][2]); } }
+    var fs = famsOf(T); for (i = 0; i < FAMS.length; i++) { if (fs.indexOf(FAMS[i][0]) >= 0) { x.push(FAMS[i][1], FAMS[i][2]); } }
+    for (i = 0; i < T.tracks.length; i++) { x.push(T.tracks[i][4], plain(soundName(T.tracks[i][0]))); }
+    return norm(x.join(" "));
+  }
+  // q（ことば）と f（{ genre, mood, meter, bpm, fam }）に合うか。genre "" ＝ おすすめだけ（ことば・しぼりこみがあるときは全部から）
+  function tplMatch(T, q, f) {
+    f = f || {};
+    var words = norm(q).split(/\s+/).filter(function (w) { return w; }), hay = hayOf(T), i, any = words.length || f.mood || f.meter || f.bpm || f.fam;
+    for (i = 0; i < words.length; i++) { if (hay.indexOf(words[i]) < 0) { return false; } }
+    if (f.genre && f.genre !== "all" && T.genre !== f.genre) { return false; }
+    if (!f.genre && !any && !T.rec) { return false; }
+    if (f.mood && (T.moods || []).indexOf(f.mood) < 0) { return false; }
+    if (f.meter && T.num + "/" + T.den !== f.meter) { return false; }
+    if (f.bpm && bpmBand(T.bpm) !== f.bpm) { return false; }
+    if (f.fam && famsOf(T).indexOf(f.fam) < 0) { return false; }
+    return true;
+  }
+  function tplSearch(q, f) { return TPLS.filter(function (T) { return tplMatch(T, q, f); }); }
+  // お気に入り・最近（端末の設定。曲には入れない。知らない id・こわれた値は無視）
+  function idList(a) { var out = [], i; if (!(a instanceof Array)) { return out; } for (i = 0; i < a.length && out.length < 50; i++) { if (typeof a[i] === "string" && a[i].length < 40 && out.indexOf(a[i]) < 0) { out.push(a[i]); } } return out; }
+  function tplPrefs() { var o = null; try { o = JSON.parse(window.localStorage.getItem(TPL_KEY) || "null"); } catch (e) { o = null; } o = o && typeof o === "object" ? o : {}; return { fav: idList(o.fav), recent: idList(o.recent) }; }
+  function tplPrefsPut(o) { try { window.localStorage.setItem(TPL_KEY, JSON.stringify({ fav: idList(o.fav), recent: idList(o.recent).slice(0, 8) })); } catch (e) {} }
+  function tplFav(id, on) { var o = tplPrefs(), i = o.fav.indexOf(id); if (!tpl(id)) { return o; } if (on === undefined) { on = i < 0; } if (on && i < 0) { o.fav.push(id); } if (!on && i >= 0) { o.fav.splice(i, 1); } tplPrefsPut(o); return tplPrefs(); }
+  function tplUsed(id) { var o = tplPrefs(), i = o.recent.indexOf(id); if (!tpl(id)) { return o; } if (i >= 0) { o.recent.splice(i, 1); } o.recent.unshift(id); tplPrefsPut(o); return tplPrefs(); }
+  function known(ids) { return ids.filter(function (id) { return !!tpl(id); }); }
+  function tFilter() { return { genre: ui.tgen, mood: ui.tmood, meter: ui.tmeter, bpm: ui.tbpm, fam: ui.tfam }; }
+  function licOfT(T) { var l = {}, i; for (i = 0; i < T.tracks.length; i++) { var so = sound(T.tracks[i][0]); if (so) { l[so[5].lic] = 1; } } return Object.keys(l); }
+  function tRow(T, fav) {
+    var on = tplMatch(T, ui.tq, tFilter());
+    return '<div class="dxm-trow' + (on ? "" : " dxm-hide") + '" data-xtrow="' + T.id + '"><button class="dxm-tname" data-xtsel="' + T.id + '"><b>' + T.name + '</b><small>' + plain(lbl(GENRES, T.genre)) + '・' + T.num + '/' + T.den + '・BPM ' + T.bpm + '・' + (T.moods || []).map(function (m) { return lbl(MOODS, m); }).join("・") + '</small></button>' +
+      '<button class="dxm-fav' + (fav ? " on" : "") + '" data-xfav="' + T.id + '" aria-pressed="' + (fav ? "true" : "false") + '" title="お気に入り">' + (fav ? "&#x2B50;" : "&#x2606;") + '</button></div>';
+  }
+  function quick(ids, title) { if (!ids.length) { return ""; } return '<div class="dxm-quick"><span>' + title + '</span>' + ids.map(function (id) { return '<button class="dxm-chip" data-xtsel="' + id + '">' + tpl(id).name + '</button>'; }).join("") + '</div>'; }
+  function browseHtml() {
+    var pf = tplPrefs(), fav = known(pf.fav), rec = known(pf.recent), n = tplSearch(ui.tq, tFilter()).length, i, x = '<div class="dxm-browse">';
+    x += '<div class="dxm-tsearch"><input type="search" class="dxm-tq" value="' + esc(ui.tq) + '" placeholder="さがす（例: ベル・Jazz・静か）" aria-label="テンプレートをさがす"><span class="dxm-tcount" aria-live="polite">' + n + ' 件</span>' + (ui.tq ? '<button class="modal-btn dxm-b" data-xm="tqClear" title="消す">&#x2716;</button>' : '') + '</div>';
+    x += quick(fav, "&#x2B50; お気に入り") + quick(rec.slice(0, 4), "&#x1F558; 最近");
+    x += '<div class="dxm-opt dxm-gen">' + chip("data-xtgen", "", "&#x1F384; おすすめ", ui.tgen === "") + chip("data-xtgen", "all", "すべて", ui.tgen === "all") + GENRES.map(function (g) { return chip("data-xtgen", g[0], g[1], ui.tgen === g[0]); }).join("") + '</div>';
+    x += '<div class="dxm-tfil">' + selHtml('data-xtf="mood" aria-label="雰囲気"', [["", "雰囲気: ぜんぶ"]].concat(MOODS.map(function (m) { return [m[0], m[1]]; })), ui.tmood) +
+      selHtml('data-xtf="meter" aria-label="拍子"', [["", "拍子: ぜんぶ"], ["4/4", "4/4"], ["3/4", "3/4"], ["6/8", "6/8"]], ui.tmeter) +
+      selHtml('data-xtf="bpm" aria-label="BPM"', [["", "BPM: ぜんぶ"]].concat(BPMS), ui.tbpm) +
+      selHtml('data-xtf="fam" aria-label="楽器"', [["", "楽器: ぜんぶ"]].concat(FAMS.map(function (m) { return [m[0], m[1]]; })), ui.tfam) + '</div>';
+    x += '<p class="small dxm-thead">' + (ui.tgen === "" && !ui.tq && !ui.tmood && !ui.tmeter && !ui.tbpm && !ui.tfam ? "&#x1F384; クリスマスのおすすめ（ほかは「すべて」・ジャンル・さがす）" : "見つかったテンプレート") + '</p><div class="dxm-tlist">';
+    for (i = 0; i < TPLS.length; i++) { x += tRow(TPLS[i], pf.fav.indexOf(TPLS[i].id) >= 0); }
+    x += '</div><p class="small dxm-tnone' + (n ? " dxm-hide" : "") + '">見つかりません。ことばを短くするか、しぼりこみを「ぜんぶ」にしてください。</p></div>';
+    return x;
+  }
+  // くわしく（まだ曲は変えない）
+  function detailHtml(h) {
+    var T = tpl(ui.tsel), pf = tplPrefs(), fav = pf.fav.indexOf(T.id) >= 0, form = formOf(T, ui.form), i, x = '<div class="dxm-detail">';
+    x += '<div class="dxm-dtop"><button class="modal-btn dxm-b" data-xm="tselBack">&#x2190; 一覧へ</button><button class="dxm-fav' + (fav ? " on" : "") + '" data-xfav="' + T.id + '" aria-pressed="' + (fav ? "true" : "false") + '">' + (fav ? "&#x2B50; お気に入り" : "&#x2606; お気に入りに") + '</button></div>';
+    x += '<b class="dxm-dname">' + T.name + '</b><p class="small">' + esc(T.aim || T.desc) + '</p>';
+    x += '<table class="dxm-tbl dxm-meta"><tr><th>ジャンル</th><td>' + lbl(GENRES, T.genre) + '</td></tr><tr><th>雰囲気</th><td>' + (T.moods || []).map(function (m) { return lbl(MOODS, m); }).join("・") + '</td></tr>' +
+      '<tr><th>BPM・拍子</th><td>' + T.bpm + '（' + lbl(BPMS, bpmBand(T.bpm)) + '）・' + T.num + '/' + T.den + '</td></tr><tr><th>キー</th><td>' + KEYS[T.key] + ' ' + modeName(T.kmode) + '（プレビューで変えられる）</td></tr>' +
+      '<tr><th>楽器</th><td>' + famsOf(T).map(function (f) { return lbl(FAMS, f); }).join("・") + '<br><small>' + T.tracks.map(function (t) { return esc(t[4]); }).join("・") + '</small></td></tr>' +
+      '<tr><th>権利</th><td><small>' + licOfT(T).map(function (l) { return esc(LIC[l]); }).join(" ／ ") + '</small></td></tr></table>';
+    x += formChips() + '<p class="small">' + form.length + ' セクション・' + formBars(ui.form) + ' 小節（＋ 空のメロディのトラック）</p>';
+    x += '<div class="dxm-go">' + pvBtn("d:" + T.id, "&#x25B6;&#xFE0F; サビを試聴") + '<button class="modal-btn dxm-b dxm-main" data-xtpl="' + T.id + '" data-xmode="new">&#x1F195; 新しい曲で</button><button class="modal-btn dxm-b" data-xtpl="' + T.id + '" data-xmode="add">&#xFF0B; いまの曲に</button></div>';
+    return x + '<p class="small dxm-note">試聴・お気に入りでは曲は変わりません。「新しい曲で」「いまの曲に」は、先に足すものを見せます。</p></div>';
+  }
+  // 一覧の表示だけを変える（入力の途中でフォーカスを失わない）
+  function tplRefresh(root) {
+    if (!root || !root.querySelectorAll) { return 0; }
+    var rows = root.querySelectorAll("[data-xtrow]"), f = tFilter(), n = 0, k;
+    for (k = 0; k < rows.length; k++) { var T = tpl(rows[k].getAttribute("data-xtrow")), on = !!T && tplMatch(T, ui.tq, f); if (on) { n++; } if (rows[k].classList) { rows[k].classList.toggle("dxm-hide", !on); } }
+    var c = root.querySelector(".dxm-tcount"); if (c) { c.textContent = n + " 件"; }
+    var no = root.querySelector(".dxm-tnone"); if (no && no.classList) { no.classList.toggle("dxm-hide", n > 0); }
+    return n;
   }
 
   // ---------- 🎧 リファレンス解析 Lite（FFT の特徴だけ・推薦は目安）----------
@@ -1133,7 +1224,7 @@
 
   // ---------- 画面（DAW の host から呼ぶ）----------
   var XM_KEY = "ultimateGorillaXmasV1";
-  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
+  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
   function lsGet() { try { var s = window.localStorage.getItem(XM_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function lsPut() { try { window.localStorage.setItem(XM_KEY, JSON.stringify({ g: ui.g })); } catch (e) {} }
   function g0() { if (!ui.g) { var s = lsGet(); ui.g = genClean(s && s.g ? s.g : { seed: 1 }); } return ui.g; }
@@ -1231,15 +1322,7 @@
   function formLine(form) { return form.map(function (f) { return esc(f.name) + " " + f.bars; }).join(" → "); }
   function tplTab(h) {
     var x = '<div class="dxm-list">', i, p = h.project(), M = DM();
-    if (!ui.tplPlan) {
-      x += formChips();
-      for (i = 0; i < TPLS.length; i++) {
-        var T = TPLS[i];
-        x += '<div class="dxm-row dxm-tpl"><div class="dxm-rn"><b>' + T.name + '</b><span class="small">' + T.num + '/' + T.den + '・BPM ' + T.bpm + '・' + KEYS[T.key] + ' メジャー・' + formBars(ui.form) + ' 小節・' + T.tracks.length + ' トラック</span><span class="small">' + esc(T.desc) + '</span></div>' +
-          '<div class="dxm-rb"><button class="modal-btn dxm-b" data-xtpl="' + T.id + '" data-xmode="new">&#x1F195; 新しい曲で</button><button class="modal-btn dxm-b" data-xtpl="' + T.id + '" data-xmode="add">&#xFF0B; いまの曲に</button></div></div>';
-      }
-      return x + '</div><p class="small dxm-note">選ぶと、足すトラック・クリップを先に見せます（まだ曲は変わりません）。あなたのメロディ・歌・録音は変えません。</p>';
-    }
+    if (!ui.tplPlan) { return x + (ui.tsel && tpl(ui.tsel) ? detailHtml(h) : browseHtml()) + '</div>'; }
     var pl0 = ui.tplPlan, T2 = pl0.T;
     x += formChips();
     x += '<div class="dxm-prev"><b>' + T2.name + '</b>・' + (pl0.mode === "new" ? "&#x1F195; 新しい曲で作る" : "&#xFF0B; いまの曲の " + pl0.bar + " 小節目から足す") + '<br><span class="small">' + pl0.meter.num + '/' + pl0.meter.den + '・' + (pl0.mode === "new" ? "BPM " + T2.bpm + "・" : "BPM " + M.bpmAt(p, 0) + "（いまの曲のまま）・") + KEYS[pl0.key] + ' ' + modeName(pl0.kmode) + '・' + pl0.bars + ' 小節・トラック ' + pl0.tracks + ' 本' + (pl0.mode === "new" ? '（＋ 空のメロディのトラック）' : '') + '・クリップ ' + pl0.clips + ' 個・音符 ' + pl0.notes + ' 個</span>' +
@@ -1299,8 +1382,8 @@
     if (!r.drum) { fitRange(r.notes, id); }
     return { ok: true, items: notesToItems(r.notes, ins, r.drum, M.bpmAt(p, 0), 2, bt) };
   }
-  function previewTpl(h) {
-    var pl0 = ui.tplPlan, M = DM(), items = [], i, k, bpm = pl0.mode === "new" ? pl0.T.bpm : M.bpmAt(h.project(), 0), bt = Math.round(pl0.meter.num * PPQ * 4 / pl0.meter.den);
+  function previewTpl(h, pl) {
+    var pl0 = pl || ui.tplPlan, M = DM(), items = [], i, k, bpm = pl0.mode === "new" ? pl0.T.bpm : M.bpmAt(h.project(), 0), bt = Math.round(pl0.meter.num * PPQ * 4 / pl0.meter.den);
     for (i = 0; i < pl0.rows.length; i++) {
       var row = pl0.rows[i], ins = row.snd === "@drum" || (sound(row.snd) && sound(row.snd)[3] === "drum") ? null : instrument(row.snd);
       for (k = 0; k < row.clips.length; k++) { if (row.clips[k].sec !== pl0.hear) { continue; } var ns = JSON.parse(JSON.stringify(row.clips[k].r.notes)); if (ins) { fitRange(ns, row.snd); } items = items.concat(notesToItems(ns, ins, !ins, bpm, 4, bt)); }
@@ -1356,6 +1439,7 @@
           else if (v.indexOf("p:") === 0) { var gx = {}, kk; for (kk in g) { if (g.hasOwnProperty(kk)) { gx[kk] = g[kk]; } } gx.pat = v.substring(2); gx.bars = 4; var it0 = genItems(h, gx, pat(gx.pat).snd); if (it0.ok) { pvPlay(it0.items, v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(it0.why); } }
           else if (v === "g") { var it1 = genItems(h, g, ui.snd); if (it1.ok) { pvPlay(it1.items, v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(it1.why); } }
           else if (v === "t") { pvPlay(previewTpl(h), v, pvState); }
+          else if (v.indexOf("d:") === 0) { var pld = tplPlan(null, v.substring(2), "new", 1, g.seed, ui.form); if (pld.ok) { pvPlay(previewTpl(h, pld), v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pld.why); } }
           else if (v === "ra") { playRef(h, pvState); }
           else if (v.indexOf("rb:") === 0) { var a = ui.an, id = v.substring(3), s = sound(id), m = a && a.midi !== null ? a.midi : 60, items; if (s && s[3] === "drum") { items = hearItems(id); } else { var lo = (s && s[5].lo) || 36, hi = (s && s[5].hi) || 96; while (m < lo) { m += 12; } while (m > hi) { m -= 12; } items = [{ at: 0, m: m, v: 0.8, sec: Math.min(2, ui.anLen), ins: instrument(id) }]; } pvPlay(items, v, pvState); }
           re(); return;
@@ -1382,6 +1466,9 @@
         if ((v = el.getAttribute("data-xrange"))) { g.range = v; lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xvel"))) { g.vel = Number(v); lsPut(); re(); return; }
         if ((v = el.getAttribute("data-xdens"))) { g.dens = Number(v); lsPut(); re(); return; }
+        if (el.hasAttribute && el.hasAttribute("data-xtgen")) { ui.tgen = el.getAttribute("data-xtgen") || ""; re(); return; }
+        if ((v = el.getAttribute("data-xtsel"))) { if (tpl(v)) { ui.tsel = v; ui.tplPlan = null; ui.msg = ""; } pvStop(); ui.pvState = ""; re(); return; }
+        if ((v = el.getAttribute("data-xfav"))) { tplFav(v); re(); return; }
         if ((v = el.getAttribute("data-xform"))) {
           ui.form = formById(v)[0]; pvStop();
           if (ui.tplPlan) { var plf = tplPlan(p, ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form, tplOpt()); if (plf.ok) { ui.tplPlan = plf; ui.msg = ""; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(plf.why); } }
@@ -1389,7 +1476,7 @@
         }
         if ((v = el.getAttribute("data-xalen"))) { ui.anLen = Number(v); ui.an = null; re(); return; }
         if ((v = el.getAttribute("data-xtpl"))) {
-          ui.tplMode = el.getAttribute("data-xmode") === "add" ? "add" : "new"; ui.tpl = v;
+          ui.tplMode = el.getAttribute("data-xmode") === "add" ? "add" : "new"; ui.tpl = v; ui.tsel = v; pvStop(); ui.pvState = "";
           ui.tplBar = ui.tplMode === "add" ? Math.max(1, Math.ceil(M.endTick(p) / M.barTicks(p)) + 1) : 1;
           ui.tplKey = null; ui.tplKmode = null;
           var pln = tplPlan(p, v, ui.tplMode, ui.tplBar, g.seed, ui.form);
@@ -1416,6 +1503,8 @@
         }
         if (v === "edit") { if (ui.last) { pvStop(); h.edit(ui.last.clip); } return; }
         if (v === "undo") { h.undo(); return; }
+        if (v === "tselBack") { ui.tsel = null; pvStop(); ui.pvState = ""; re(); return; }
+        if (v === "tqClear") { ui.tq = ""; re(); return; }
         if (v === "tplCancel") { ui.tplPlan = null; pvStop(); re(); return; }
         if (v === "tplApply") {
           var pl0 = ui.tplPlan; if (!pl0) { return; }
@@ -1423,14 +1512,14 @@
           if (pl0.mode === "new") {
             var rn = tplNewProject(pl0);
             if (!rn.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(rn.why); re(); return; }
-            ui.tplPlan = null; ui.msg = "新しい曲「" + esc(rn.project.name) + "」を作りました（前の曲は保存してあります）。メロディのトラックに、あなたのメロディを書いてください";
+            tplUsed(pl0.T.id); ui.tplPlan = null; ui.msg = "新しい曲「" + esc(rn.project.name) + "」を作りました（前の曲は保存してあります）。メロディのトラックに、あなたのメロディを書いてください";
             h.newSong(rn.project); return;
           }
           var pl1 = tplPlan(p, pl0.T.id, "add", pl0.bar, g.seed, pl0.formId, { key: pl0.key, kmode: pl0.kmode });
           if (!pl1.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(pl1.why); re(); return; }
           var snap5 = h.snap(), ra = tplApply(p, pl1);
           if (!ra.ok) { h.restore(snap5); ui.msg = "&#x26A0;&#xFE0F; " + esc(ra.why); re(); return; }
-          ui.tplPlan = null; ui.msg = "「" + plain(pl1.T.name) + "」のトラック " + ra.tracks.length + " 本を " + pl1.bar + " 小節目から足しました（↶ 1 回で全部戻せます）";
+          tplUsed(pl1.T.id); ui.tplPlan = null; ui.msg = "「" + plain(pl1.T.name) + "」のトラック " + ra.tracks.length + " 本を " + pl1.bar + " 小節目から足しました（↶ 1 回で全部戻せます）";
           h.commit(snap5, ui.msg, ra.tracks[0].id); return;
         }
         if (v === "openRef") { pvStop(); h.openRef(); return; }
@@ -1446,9 +1535,11 @@
         if ((v = el.getAttribute("data-xch")) !== null && v !== undefined && v !== "") { var bi = Number(v), base = chordsFor(g.prog, g.bars, {}, g.mode)[bi]; if (el.value === base) { delete g.custom[bi]; } else { g.custom[bi] = el.value; } lsPut(); re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xdest")) { ui.dest = el.value; var t = ui.dest ? M.findTrack(h.project(), ui.dest) : null; ui.bar = t ? Math.max(1, Math.round(M.trackEnd(t) / M.barTicks(h.project())) + 1) : 1; re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xsnd")) { ui.snd = el.value; re(); return; }
+        if ((v = el.getAttribute("data-xtf"))) { if (["mood", "meter", "bpm", "fam"].indexOf(v) >= 0) { ui["t" + v] = el.value || ""; } re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xtkey")) { ui.tplKey = Math.round(Number(el.value)); if (ui.tplPlan) { var plq = tplPlan(h.project(), ui.tplPlan.T.id, ui.tplPlan.mode, ui.tplPlan.bar, g.seed, ui.form, tplOpt()); if (plq.ok) { ui.tplPlan = plq; } } pvStop(); re(); return; }
       };
     }
+    var tqEl = root.querySelector(".dxm-tq"); if (tqEl) { tqEl.oninput = function () { ui.tq = String(tqEl.value || "").substring(0, 60); tplRefresh(root); }; }
     var sd = root.querySelector(".dxm-seed"); if (sd) { sd.onchange = function () { var g = g0(), n = Math.round(Number(sd.value)); if (n >= 1 && n <= 99999) { g.seed = n; lsPut(); } re(); }; }
     var br = root.querySelector(".dxm-bar"); if (br) { br.onchange = function () { var n = Math.round(Number(br.value)); if (n >= 1 && n <= MAXB) { ui.bar = n; } re(); }; }
     var tb = root.querySelector(".dxm-tbar"); if (tb) { tb.onchange = function () { var n = Math.round(Number(tb.value)); if (n >= 1 && n <= MAXB && ui.tplPlan) { var pl2 = tplPlan(h.project(), ui.tplPlan.T.id, "add", n, g0().seed, ui.tplPlan.formId, tplOpt()); if (pl2.ok) { ui.tplPlan = pl2; } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pl2.why); } } re(); }; }
@@ -1462,6 +1553,7 @@
     SOUNDS: SOUNDS, SKIPPED: SKIPPED, CATS: CATS, LIC: LIC, sound: sound, instrument: instrument, isSample: isSample, label: label, makeTrack: makeTrack, trackFx: trackFx, soundName: soundName,
     PATS: PATS, PCATS: PCATS, pat: pat, patsFor: patsFor, generate: generate, genClean: genClean, place: place, regen: regen, fitRange: fitRange,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
+    GENRES: GENRES, MOODS: MOODS, FAMS: FAMS, BPMS: BPMS, TPL_KEY: TPL_KEY, famsOf: famsOf, bpmBand: bpmBand, hayOf: hayOf, tplMatch: tplMatch, tplSearch: tplSearch, tplPrefs: tplPrefs, tplFav: tplFav, tplUsed: tplUsed, tplRefresh: tplRefresh,
     SECT: SECT, SECT_ORDER: SECT_ORDER, SECT_DEF: SECT_DEF, FORMS: FORMS, formOf: formOf, formBars: formBars, partFor: partFor, progFor: progFor, audit: audit,
     fft: fft, analyze: analyze, recommend: recommend, FEAT_NAMES: FEAT_NAMES,
     note: note, drum: drum, progsOf: progsOf, needLoad: needLoad, missing: missing, load: load, loopPoints: loopPoints, sampleOk: sampleOk, stat: stat,

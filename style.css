@@ -1930,3 +1930,24 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .dxm-sx.on { color: #fff; background: #5a7bd8; }
 .dxm-sx.on.d0 { background: #8aa0d8; }
 .dxm-sx.on.d2 { background: #2f55c8; }
+/* §345 A3-1 テンプレートブラウザー */
+.dxm-hide { display: none !important; }
+.dxm-tsearch { display: flex; gap: 6px; align-items: center; margin: 4px 0 6px; }
+.dxm-tsearch .dxm-tq { flex: 1; min-width: 0; min-height: 40px; font-size: 16px; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.5); background: rgba(255,255,255,0.08); color: inherit; }
+.dxm-tcount { font-size: 12px; white-space: nowrap; opacity: 0.85; }
+.dxm-quick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 2px 0 4px; }
+.dxm-quick > span { font-size: 12px; margin-right: 2px; }
+.dxm-gen { flex-wrap: wrap; }
+.dxm-tfil { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 4px 0; }
+.dxm-tfil .dxm-sel { width: 100%; min-width: 0; min-height: 36px; }
+.dxm-thead { margin: 6px 0 2px; }
+.dxm-trow { display: flex; gap: 4px; align-items: stretch; margin: 3px 0; }
+.dxm-tname { flex: 1; min-width: 0; min-height: 44px; text-align: left; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.35); background: rgba(255,255,255,0.06); color: inherit; font: inherit; cursor: pointer; }
+.dxm-tname b { display: block; overflow-wrap: anywhere; }
+.dxm-tname small { display: block; opacity: 0.8; font-size: 11px; overflow-wrap: anywhere; }
+.dxm-fav { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.35); background: transparent; color: inherit; font-size: 18px; cursor: pointer; }
+.dxm-dtop { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.dxm-dtop .dxm-fav { font-size: 13px; padding: 0 10px; }
+.dxm-dname { display: block; font-size: 17px; margin: 2px 0; }
+.dxm-meta th { text-align: left; white-space: nowrap; vertical-align: top; }
+.dxm-meta td { overflow-wrap: anywhere; }

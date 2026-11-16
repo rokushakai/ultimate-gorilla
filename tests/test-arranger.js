@@ -161,11 +161,40 @@ module.exports = async function () {
   var pr3 = M.emptyProject(0), pm3 = X.place(pr3, { pat: "arpPiano", bars: 4, seed: 2, mode: "min", key: 9 }, { track: "", bar: 1 }), pM3 = X.place(pr3, { pat: "arpPiano", bars: 4, seed: 2 }, { track: "", bar: 9 });
   ok(pm3.clip.ext.xgen.mode === "min" && pM3.clip.ext.xgen.mode === undefined && X.genClean({}).mode === "maj" && X.regen(pr3, pm3.clip.id, { seed: 4 }).set.mode === "min", "generator: xgen.mode is written only for minor; regenerate keeps it");
 
+  // ---------- A3-1: テンプレートブラウザー（v2.76）----------
+  var gIds = X.GENRES.map(function (g) { return g[0]; }), mIds = X.MOODS.map(function (m) { return m[0]; });
+  ok(X.TPLS.every(function (T) { return gIds.indexOf(T.genre) >= 0 && T.moods && T.moods.length >= 1 && T.moods.every(function (m) { return mIds.indexOf(m) >= 0; }) && typeof T.tags === "string" && T.tags.length > 5 && typeof T.aim === "string" && T.aim.length > 10; }), "every template has a genre, moods, search words and an arrangement aim");
+  ok(X.famsOf(X.TPLS[0]).join() === "piano,bass,strings,bells,synth,drums" && X.famsOf(X.TPLS[3]).indexOf("winds") >= 0 && X.bpmBand(72) === "slow" && X.bpmBand(120) === "mid" && X.bpmBand(138) === "fast", "instrument families come from the tracks; BPM bands slow / mid / fast", X.famsOf(X.TPLS[0]));
+  function ids(q, f) { return X.tplSearch(q, f).map(function (T) { return T.id; }).join(); }
+  ok(ids("", {}) === X.TPLS.filter(function (T) { return T.rec; }).map(function (T) { return T.id; }).join() && ids("", { genre: "all" }).split(",").length === X.TPLS.length, "no words and no filter → the recommendations; 'all' → every template");
+  ok(ids("ベル", {}).split(",").indexOf("pop") >= 0 && ids("Jazz", {}) .split(",").indexOf("jazz") >= 0 && ids("バラード", {}).split(",").indexOf("ballad") >= 0 && ids("静か", {}).split(",").indexOf("ballad") >= 0 && ids("華やか", {}).split(",").indexOf("pop") >= 0 && ids("christmas", {}).split(",").length >= 5, "search in Japanese and English: ベル / Jazz / バラード / 静か / 華やか / christmas");
+  ok(ids("ＪＡＺＺ", {}) === ids("jazz", {}) && ids("jazz ワルツ", {}) === "" && ids("orchestra ワルツ", {}) === "orch" && ids("zzzz", {}) === "", "full-width = half-width, case-insensitive; every word must match; unknown words → nothing");
+  ok(ids("", { meter: "3/4" }) === "orch" && ids("", { bpm: "slow" }) === "ballad" && ids("", { fam: "winds" }).split(",").indexOf("orch") >= 0 && ids("", { mood: "retro" }).split(",").indexOf("chip") >= 0 && ids("", { genre: "pop" }) === "", "filters: meter, BPM band, instruments, mood, genre");
+  // お気に入り・最近（端末の設定）
+  var LS = W.localStorage;
+  LS.removeItem(X.TPL_KEY);
+  ok(X.tplPrefs().fav.length === 0 && X.tplPrefs().recent.length === 0, "no stored preferences → empty");
+  LS.setItem(X.TPL_KEY, "{broken"); ok(X.tplPrefs().fav.length === 0, "a broken value is ignored");
+  LS.setItem(X.TPL_KEY, JSON.stringify({ fav: ["pop", "gone-id", 5, null, "pop"], recent: "x" }));
+  var pfx = X.tplPrefs(); ok(pfx.fav.join() === "pop,gone-id" && pfx.recent.length === 0, "unknown ids survive in storage without breaking; non-strings and duplicates are dropped", pfx);
+  var pTouch = M.emptyProject(0), pT0 = JSON.stringify(pTouch);
+  X.tplFav("ballad"); X.tplFav("pop", false); X.tplFav("nope");
+  ok(X.tplPrefs().fav.join() === "gone-id,ballad" && JSON.stringify(pTouch) === pT0, "favorites toggle (unknown ids cannot be added) and never touch the song", X.tplPrefs().fav);
+  X.tplUsed("jazz"); X.tplUsed("pop"); X.tplUsed("jazz");
+  ok(X.tplPrefs().recent.join() === "jazz,pop", "recent: newest first, no duplicates");
+  for (var ru = 0; ru < 12; ru++) { X.tplUsed(X.TPLS[ru % X.TPLS.length].id); }
+  ok(X.tplPrefs().recent.length <= 8, "recent keeps at most 8");
+  LS.setItem(X.TPL_KEY, JSON.stringify({ fav: ["gone-id", "chip"], recent: ["old-one", "orch"] }));
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
   X.ui.tab = "tpl"; X.ui.tplPlan = null; X.ui.form = "std"; D.xmas.host.render();
-  ok((R.innerHTML.match(/data-xform="/g) || []).length === 4 && R.innerHTML.indexOf("標準 16 小節") >= 0 && R.innerHTML.indexOf("長い曲 64 小節") >= 0 && R.innerHTML.indexOf("Aメロ 8 → サビ 8") >= 0, "template tab: 4 form chips and the form line", (R.innerHTML.match(/data-xform="/g) || []).length);
+  ok(R.innerHTML.indexOf('class="dxm-tq"') >= 0 && R.innerHTML.indexOf("dxm-tcount") >= 0 && (R.innerHTML.match(/data-xtrow="/g) || []).length === X.TPLS.length && R.innerHTML.indexOf('data-xtgen="all"') >= 0 && (R.innerHTML.match(/data-xtf="/g) || []).length === 4, "template tab = browser: search with count, genre chips, 4 filters, one row per template");
+  ok(R.innerHTML.indexOf("お気に入り") >= 0 && R.innerHTML.indexOf('data-xtsel="chip"') >= 0 && R.innerHTML.indexOf("gone-id") < 0 && R.innerHTML.indexOf("old-one") < 0 && R.innerHTML.indexOf("最近") >= 0, "favorites / recent show known templates only (unknown ids are skipped)");
+  ok((R.innerHTML.match(/class="dxm-trow dxm-hide"/g) || []).length === X.TPLS.filter(function (T) { return !T.rec; }).length, "at first only the recommendations are shown (the rest hidden, not all expanded)");
+  X.ui.tsel = "pop"; D.xmas.host.render();
+  ok((R.innerHTML.match(/data-xform="/g) || []).length === 4 && R.innerHTML.indexOf("標準 16 小節") >= 0 && R.innerHTML.indexOf("長い曲 64 小節") >= 0 && R.innerHTML.indexOf("Aメロ 8 → サビ 8") >= 0 && R.innerHTML.indexOf('data-xpv="d:pop"') >= 0 && R.innerHTML.indexOf('data-xtpl="pop" data-xmode="add"') >= 0 && R.innerHTML.indexOf("ジャンル") >= 0 && R.innerHTML.indexOf("権利") >= 0, "detail: genre, moods, BPM, instruments, rights, 4 form chips with the sections, ▶ preview, new / add");
   var p0 = JSON.stringify(D.project());
   X.ui.form = "full"; X.ui.tplPlan = X.tplPlan(D.project(), "pop", "new", 1, 1, "full"); D.xmas.host.render();
   ok(R.innerHTML.indexOf("dxm-sx") >= 0 && (R.innerHTML.match(/class="dxm-sx[ "]/g) || []).length === 7 * 8 && R.innerHTML.indexOf("サビを試聴") >= 0 && R.innerHTML.indexOf("48 小節") >= 0, "preview: one cell per section for every track, ▶ サビを試聴, 48 bars");
