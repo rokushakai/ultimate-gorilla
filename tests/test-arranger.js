@@ -168,8 +168,9 @@ module.exports = async function () {
   function ids(q, f) { return X.tplSearch(q, f).map(function (T) { return T.id; }).join(); }
   ok(ids("", {}) === X.TPLS.filter(function (T) { return T.rec; }).map(function (T) { return T.id; }).join() && ids("", { genre: "all" }).split(",").length === X.TPLS.length, "no words and no filter → the recommendations; 'all' → every template");
   ok(ids("ベル", {}).split(",").indexOf("pop") >= 0 && ids("Jazz", {}) .split(",").indexOf("jazz") >= 0 && ids("バラード", {}).split(",").indexOf("ballad") >= 0 && ids("静か", {}).split(",").indexOf("ballad") >= 0 && ids("華やか", {}).split(",").indexOf("pop") >= 0 && ids("christmas", {}).split(",").length >= 5, "search in Japanese and English: ベル / Jazz / バラード / 静か / 華やか / christmas");
-  ok(ids("ＪＡＺＺ", {}) === ids("jazz", {}) && ids("jazz ワルツ", {}) === "" && ids("orchestra ワルツ", {}) === "orch" && ids("zzzz", {}) === "", "full-width = half-width, case-insensitive; every word must match; unknown words → nothing");
-  ok(ids("", { meter: "3/4" }) === "orch" && ids("", { bpm: "slow" }) === "ballad" && ids("", { fam: "winds" }).split(",").indexOf("orch") >= 0 && ids("", { mood: "retro" }).split(",").indexOf("chip") >= 0 && ids("", { genre: "pop" }) === "", "filters: meter, BPM band, instruments, mood, genre");
+  ok(ids("ＪＡＺＺ", {}) === ids("jazz", {}) && ids("jazz", {}).split(",").indexOf("jazz") >= 0 && ids("orchestra ワルツ", {}).split(",").indexOf("orch") >= 0 && ids("orchestra ワルツ", {}).split(",").indexOf("ballad") < 0 && ids("zzzz", {}) === "", "full-width = half-width, case-insensitive; every word must match; unknown words → nothing");
+  function allT(f) { return X.tplSearch("", f); }
+  ok(allT({ meter: "3/4" }).length >= 1 && allT({ meter: "3/4" }).every(function (T) { return T.num === 3 && T.den === 4; }) && allT({ meter: "3/4" }).some(function (T) { return T.id === "orch"; }) && allT({ bpm: "slow" }).every(function (T) { return T.bpm < 90; }) && allT({ bpm: "slow" }).some(function (T) { return T.id === "ballad"; }) && allT({ fam: "winds" }).some(function (T) { return T.id === "orch"; }) && allT({ mood: "retro" }).some(function (T) { return T.id === "chip"; }) && allT({ genre: "pop" }).every(function (T) { return T.genre === "pop"; }), "filters: meter, BPM band, instruments, mood, genre");
   // お気に入り・最近（端末の設定）
   var LS = W.localStorage;
   LS.removeItem(X.TPL_KEY);
@@ -185,6 +186,51 @@ module.exports = async function () {
   for (var ru = 0; ru < 12; ru++) { X.tplUsed(X.TPLS[ru % X.TPLS.length].id); }
   ok(X.tplPrefs().recent.length <= 8, "recent keeps at most 8");
   LS.setItem(X.TPL_KEY, JSON.stringify({ fav: ["gone-id", "chip"], recent: ["old-one", "orch"] }));
+
+  // ---------- A3-2: テンプレート 32（v2.77）----------
+  var gc = {}; X.TPLS.forEach(function (T) { gc[T.genre] = (gc[T.genre] || 0) + 1; });
+  var tidSeen = {}, tdup = false; X.TPLS.forEach(function (T) { if (tidSeen[T.id]) { tdup = true; } tidSeen[T.id] = 1; });
+  ok(X.TPLS.length === 32 && !tdup && X.TPLS.slice(0, 5).map(function (T) { return T.id; }).join() === "pop,ballad,jazz,orch,chip" && gc.xmas === 12 && gc.pop === 8 && gc.jazz === 6 && gc.retro === 6, "32 templates: the 5 of v2.72 first (same ids), Christmas 12 / J-POP・POP 8 / Jazz・Orchestra 6 / Retro・Electronic 6", gc);
+  var aims = {}, aimDup = false; X.TPLS.forEach(function (T) { if (aims[T.aim]) { aimDup = true; } aims[T.aim] = 1; });
+  ok(!aimDup && X.TPLS.every(function (T) { return T.tracks.length >= 3 && T.tracks.length <= 8 && T.tracks.every(function (t) { var P = X.pat(t[1]); return P && P.m.indexOf(T.num + "/" + T.den) >= 0 && (t[0] === "@drum" || X.sound(t[0]) || ["bass", "chip", "pluck", "acid", "brass", "pad", "spad", "lead"].indexOf(t[0]) >= 0); }); }), "every template: its own aim, 3–8 tracks, patterns that fit its meter, known sounds");
+  // 似すぎ（音色とパターンの組の重なり 0.6 以上で、拍子・キーの種類・進行のうち 2 つ以上が同じ）を出さない
+  function tk(T) { var o = {}; T.tracks.forEach(function (r) { o["s:" + r[0]] = 1; o["p:" + r[1]] = 1; }); return o; }
+  var simBad = [], simMax = 0;
+  for (var si = 0; si < X.TPLS.length; si++) { for (var sj = si + 1; sj < X.TPLS.length; sj++) {
+    var A1 = X.TPLS[si], B1 = X.TPLS[sj], ta = tk(A1), tb = tk(B1), inter = 0, uni = 0, kk;
+    for (kk in ta) { uni++; if (tb[kk]) { inter++; } } for (kk in tb) { if (!ta[kk]) { uni++; } }
+    var jac = inter / uni, same = (A1.num + "/" + A1.den === B1.num + "/" + B1.den ? 1 : 0) + ((A1.kmode || "maj") === (B1.kmode || "maj") ? 1 : 0) + (A1.progs.join() === B1.progs.join() ? 1 : 0);
+    simMax = Math.max(simMax, jac); if (jac >= 0.6 && same >= 2) { simBad.push(A1.id + "/" + B1.id + " " + jac.toFixed(2)); }
+  } }
+  ok(simBad.length === 0, "no two templates are near-copies (sounds × patterns overlap < 0.6, or a different meter / mode / progression)", [simBad, simMax.toFixed(2)]);
+  // 32 × 4 構成 × メジャー／マイナー
+  var bigBad = [], nPlans = 0, maxClip = 0;
+  X.TPLS.forEach(function (T) { X.FORMS.forEach(function (F) { ["maj", "min"].forEach(function (km) {
+    var pl = X.tplPlan(null, T.id, "new", 1, 3, F[0], { kmode: km }); nPlans++;
+    if (!pl.ok) { bigBad.push(T.id + "/" + F[0] + "/" + km + " " + pl.why); return; }
+    var a = X.audit(pl); if (!a.ok) { bigBad.push(T.id + "/" + F[0] + "/" + km + ": " + a.problems.join(" | ")); }
+    pl.rows.forEach(function (r) { r.clips.forEach(function (c) { maxClip = Math.max(maxClip, c.notes); }); });
+  }); }); });
+  ok(nPlans === 256 && bigBad.length === 0 && maxClip < 4000, "all 32 templates × 4 forms × major / minor pass the mechanical checks (256 plans; every clip < 4000 notes)", [bigBad.slice(0, 3), maxClip]);
+  var newT = X.TPLS.slice(5), mkOk = true;
+  newT.forEach(function (T) { var q = X.tplNewProject(X.tplPlan(null, T.id, "new", 1, 1, "short")).project; if (q.tracks[0].clips.some(function (c) { return c.notes.length; }) || M.sectionsOf(q).length !== 5 || q.tracks.length !== T.tracks.length + 1 || (T.kmode === "min") !== (q.ext.xmMode === "min")) { mkOk = false; } });
+  ok(mkOk, "each new template makes a new song: an empty melody track, 5 sections (short form), its tracks, its default mode");
+  ok(X.tplNewProject(X.tplPlan(null, "bitpop", "new", 1, 1)).project.tracks[0].ext.xm === "xm-retrolead" && X.tplNewProject(X.tplPlan(null, "jpop", "new", 1, 1)).project.tracks[0].ext.xm === "xm-musicbox", "a template can choose the melody track's sound (8bit → retro lead)");
+  // 新しいパターン（v2.77）: 3 つの密度・使える拍子で、重なりなし
+  var np = X.PATS.slice(39), npBad = [];
+  np.forEach(function (P) { P.m.forEach(function (mk) { [0, 1, 2].forEach(function (d) {
+    var mt = mk.split("/"), r = X.generate({ pat: P.id, key: 7, prog: "p8", bars: 4, dens: d, seed: 5 }, { num: Number(mt[0]), den: Number(mt[1]) });
+    if (!r.ok || !r.notes.length) { npBad.push(P.id + " " + mk + " " + d + " empty"); return; }
+    if (!P.drum) { var byP = r.notes.slice().sort(function (a, c) { return a[2] - c[2] || a[0] - c[0]; }); for (var q = 1; q < byP.length; q++) { if (byP[q][2] === byP[q - 1][2] && byP[q][0] < byP[q - 1][0] + byP[q - 1][1]) { npBad.push(P.id + " " + mk + " " + d + " overlap"); break; } } }
+    if (r.notes.some(function (n) { return n[0] < 0 || n[0] >= r.len || n[2] < 0 || n[2] > 127 || !(n[3] > 0 && n[3] <= 1); })) { npBad.push(P.id + " " + mk + " " + d + " range"); }
+  }); }); });
+  ok(np.length === 14 && npBad.length === 0, "14 new patterns: notes in every meter they offer and every density, inside the clip, no same-pitch overlaps", npBad.slice(0, 4));
+  var wk = X.generate({ pat: "walking", key: 0, prog: "p8", bars: 16, dens: 2, seed: 9 }, { num: 4, den: 4 }), wkO = 0, wbp = wk.notes.slice().sort(function (a, c) { return a[2] - c[2] || a[0] - c[0]; });
+  for (var wq = 1; wq < wbp.length; wq++) { if (wbp[wq][2] === wbp[wq - 1][2] && wbp[wq][0] < wbp[wq - 1][0] + wbp[wq - 1][1]) { wkO++; } }
+  ok(wkO === 0, "walking bass at density 'many' no longer overlaps its own pickup note (fixed in v2.77)", wkO);
+  // 新しい音色（ゲームの録音だけ）
+  var more = X.SOUNDS.filter(function (s) { return s[1] === "more"; });
+  ok(more.length === 10 && more.every(function (s) { return s[3] === "smp" && !!W.UGMelody.sampleFiles[s[4].prog] && X.LIC[s[5].lic] && s[5].lo < s[5].hi && s[5].f.length === 6; }), "10 new sounds use existing game recordings (with rights, range and profile)");
 
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});

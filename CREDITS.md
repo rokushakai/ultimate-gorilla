@@ -122,8 +122,9 @@
 
 | 音色 | 使っている録音 | ライセンス | 配信の曲での表記 |
 |---|---|---|---|
-| Glockenspiel・Warm Strings・Pizzicato Strings・Christmas Horn・Soft Brass・Church Organ・Orchestral Harp・Warm Piano | VSCO 2 Community Edition（Versilian Studios） | CC0 1.0 | 要らない |
+| Glockenspiel・Warm Strings・Pizzicato Strings・Christmas Horn・Soft Brass・Church Organ・Orchestral Harp・Warm Piano・Marimba・Flute・Clarinet・Cello（v2.77 の 🎸 More） | VSCO 2 Community Edition（Versilian Studios） | CC0 1.0 | 要らない |
 | Celesta・Vibraphone・Upright Bass 風 | FluidR3_GM（Frank Wen） | CC BY 3.0 | 要る |
+| Nylon Guitar・Steel Guitar・Clean Electric Guitar・Finger Bass・Synth Bass・Choir Aahs（v2.77 の 🎸 More） | FluidR3_GM（Frank Wen） | CC BY 3.0 | 要る |
 | Jazz Piano | Salamander Grand Piano V3（Alexander Holm） | CC BY 3.0 | 要る |
 | Christmas Electric Piano | GregSullivan E-Pianos（Greg Sullivan） | CC BY 3.0 | 要る |
 | Sleigh Bells・Brush-like Percussion・シンセの音色（Music Box・Soft Chimes・Bright Christmas Bells・8bit Bells・Cinematic Pad・Synth Bells・Sparkling Pluck・Winter Pad・Soft Choir-like Pad・Retro Christmas Lead・Soft Organ） | なし（ゴリラシンセ・DAW の合成） | — | 要らない |
