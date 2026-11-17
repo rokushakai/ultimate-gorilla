@@ -525,6 +525,40 @@ module.exports = async function () {
   var b44 = X.meterProject(np3, X.meterPlan(np3, { num: 4, den: 4 })).project;
   ok(M.meterAt(b44, 0).num === 4 && M.sectionsOf(b44).length === 8 && b44.tracks.some(function (t) { return t.clips.some(function (c) { return c.ext.xgen && c.ext.xgen.pat === "popPiano8"; }); }), "3/4 → 4/4 back: waltz parts become 4/4 patterns again");
 
+  // ---------- A10-1: 条件からのおすすめ（v2.86）----------
+  var sr1 = X.styleRank({ meter: "3/4", moods: ["calm"], bpm: 100 }, 8), sr2 = X.styleRank({ meter: "3/4", moods: ["calm"], bpm: 100 }, 8);
+  ok(sr1.length === 8 && JSON.stringify(sr1.map(function (r) { return r.T.id + r.score; })) === JSON.stringify(sr2.map(function (r) { return r.T.id + r.score; })) && sr1.slice(0, 3).every(function (r) { return r.T.num === 3 && r.T.den === 4; }), "3/4・静か・BPM 100: 8 results, the same every time, the top 3 are in 3/4", sr1.slice(0, 3).map(function (r) { return r.T.id; }));
+  ok(sr1[0].why.length >= 2 && sr1[0].why.some(function (w) { return /3\/4 の曲/.test(w); }) && sr1[0].why.some(function (w) { return /テンポが近い/.test(w); }), "the top result explains why (3/4 の曲・テンポが近い …)", sr1[0].why);
+  var vo = X.styleRank({ vocal: true }, 6), avgD = X.TPLS.reduce(function (a, T) { return a + X.tplPlan(null, T.id, "new", 1, 1, "std").notes / 16; }, 0) / X.TPLS.length;
+  ok(vo.every(function (r) { return X.tplPlan(null, r.T.id, "new", 1, 1, "std").notes / 16 < avgD; }) && vo.some(function (r) { return r.why.indexOf("楽器が少なく歌の余白が多い") >= 0; }), "歌を中心に: the top picks have fewer notes per bar than average, with the reason", vo.map(function (r) { return r.T.id; }));
+  var jz = X.styleRank({ genre: "jazz", moods: ["cool"], bpm: 140 }, 3), mn = X.styleRank({ kmode: "min", moods: ["party"], genre: "retro", bpm: 126 }, 5);
+  ok(jz[0].T.id === "jtrio" && mn.every(function (r) { return r.T.genre === "retro"; }) && X.styleRank({}, 8).length === 8, "jazz / cool / 140 → ジャズトリオ first; retro + party + minor → retro templates; no conditions still gives 8", [jz[0].T.id, mn.map(function (r) { return r.T.id; })]);
+  var mpj = X.matchProject("xuke", { key: 9, kmode: "min", bpm: 92 });
+  ok(mpj.ok && mpj.project.ext.xmKey === 9 && mpj.project.ext.xmMode === "min" && M.bpmAt(mpj.project, 0) === 92, "この伴奏で: a new song with the chosen key, mode and tempo");
+
+  // ---------- A10-2: 演奏の解析（v2.86・合成した音で）----------
+  var asr = 22050;
+  function aTone(len, evs) { var d = new Float32Array(Math.round(len * asr)); evs.forEach(function (e) { var a0 = Math.round(e[0] * asr), n = Math.round(0.25 * asr), k; for (k = 0; k < n && a0 + k < d.length; k++) { var t = k / asr, env = Math.exp(-t * 12) * e[2]; e[1].forEach(function (f) { d[a0 + k] += env * 0.3 * (Math.sin(2 * Math.PI * f * t) + 0.4 * Math.sin(4 * Math.PI * f * t)); }); } }); return d; }
+  function aHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function aProg(root, minor) { var I = minor ? [0, 3, 7] : [0, 4, 7], IV = minor ? [5, 8, 12] : [5, 9, 12], V = [7, 11, 14]; return [I, IV, V, I].map(function (c) { return c.map(function (x) { return aHz(root + x); }); }); }
+  var aP = aProg(60, false), aev = [], ab, abt = 0.6; for (ab = 0; ab < 36; ab++) { aev.push([ab * abt, aP[Math.floor(ab / 3) % 4], ab % 3 === 0 ? 1 : 0.45]); }
+  var an1 = X.styleAnalyze([aTone(22, aev)], asr);
+  ok(an1.ok && Math.abs(an1.bpm.v - 100) <= 2 && an1.meter.v === "3/4" && an1.key.v === 0 && an1.key.mode === "maj" && an1.swing.v === 0, "3/4・C major・BPM 100 (synthetic): tempo, meter, key and straight feel", [an1.bpm.v, an1.meter.v, an1.key.name, an1.swing.v]);
+  aP = aProg(57, true); aev = []; abt = 0.5; for (ab = 0; ab < 40; ab++) { var ac2 = aP[Math.floor(ab / 4) % 4]; aev.push([ab * abt, ac2, ab % 4 === 0 ? 1 : 0.6]); aev.push([ab * abt + abt * 2 / 3, ac2, 0.45]); }
+  var an2 = X.styleAnalyze([aTone(21, aev)], asr);
+  ok(an2.ok && Math.abs(an2.bpm.v - 120) <= 2 && an2.meter.v === "4/4" && an2.key.v === 9 && an2.key.mode === "min" && an2.swing.v >= 60, "4/4・A minor・swing・BPM 120 (synthetic): swing is found", [an2.bpm.v, an2.meter.v, an2.key.name, an2.swing.v]);
+  aP = aProg(55, false); aev = []; for (ab = 0; ab < 40; ab++) { var ac3 = aP[Math.floor(ab / 4) % 4]; aev.push([ab * abt, ac3, ab % 4 === 0 ? 1 : 0.6]); aev.push([ab * abt + abt / 2, ac3, 0.45]); }
+  var an3 = X.styleAnalyze([aTone(21, aev)], asr);
+  ok(an3.ok && Math.abs(an3.bpm.v - 120) <= 2 && an3.meter.v === "4/4" && an3.key.v === 7 && an3.key.mode === "maj" && an3.swing.v === 0, "4/4・G major・straight 8ths (synthetic): no swing", [an3.bpm.v, an3.key.name, an3.swing.v]);
+  var anS = X.styleAnalyze([new Float32Array(asr * 5)], asr), anT = X.styleAnalyze([aTone(2, [[0, [440], 1]])], asr);
+  ok(!anS.ok && /無音/.test(anS.why) && !anT.ok && /3 秒/.test(anT.why), "silence and sounds shorter than 3 s are refused with a reason", [anS.why, anT.why]);
+  var ac0 = X.analysisToCond(an1, { bpm: 0, meter: "", genre: "", moods: [], fam: "", bright: "", kmode: "", vocal: false, key: -1 }), ac1 = X.analysisToCond(an2, { bpm: 0, meter: "", genre: "", moods: [], fam: "", bright: "", kmode: "", vocal: false, key: -1 });
+  ok(ac0.bpm === 100 && ac0.meter === "3/4" && ac0.key === 0 && ac0.kmode === "maj" && ac1.key === 9 && ac1.kmode === "min" && ac1.moods.indexOf("cool") >= 0, "analysis → conditions (tempo, meter, key; swing adds クール)", [ac0, ac1]);
+  var lowA = JSON.parse(JSON.stringify(an1)); lowA.meter.conf = 0.1; lowA.key.conf = 0.1; lowA.bpm.conf = 0.1;
+  var ac4 = X.analysisToCond(lowA, { bpm: 0, meter: "", genre: "", moods: [], fam: "", bright: "", kmode: "", vocal: false, key: -1 });
+  ok(ac4.bpm === 0 && ac4.meter === "" && ac4.key === -1, "low-confidence guesses are not put into the conditions");
+  ok(X.analysisToCond({ ok: false, why: "x" }, { bpm: 7, moods: [] }).bpm === 7 && X.styleRank(ac0, 8).slice(0, 3).every(function (r) { return r.T.num === 3; }), "a failed analysis changes nothing; analysed 3/4 conditions rank 3/4 templates first");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -609,5 +643,15 @@ module.exports = async function () {
   var keepM = JSON.stringify(D.project());
   ok((R.innerHTML.match(/data-xmeter="/g) || []).length === 4 && (R.innerHTML.match(/data-xmmel="/g) || []).length === 2 && R.innerHTML.indexOf('data-xm="mNew"') >= 0 && R.innerHTML.indexOf("3 拍子の伴奏") >= 0 && JSON.stringify(D.project()) === keepM, "groove tab: meter chips, melody choice, the pattern map and 新しい曲を作る — nothing changed yet");
   X.ui.gmeter = ""; X.ui.tab = "tpl";
+  // A10-1 の画面
+  var hs10 = D.xmas.host, keep10 = JSON.stringify(D.project()); X.ui.tab = "match"; X.ui.mcond = { bpm: 96, meter: "3/4", genre: "", moods: ["warm"], fam: "", bright: "", kmode: "", vocal: false, key: -1 }; hs10.render();
+  ok(R.innerHTML.indexOf("dxm-mbpm") >= 0 && (R.innerHTML.match(/data-xmc="mood:/g) || []).length === 8 && (R.innerHTML.match(/data-xmnew="/g) || []).length === 8 && (R.innerHTML.match(/class="dxm-mrow"/g) || []).length === 8 && R.innerHTML.indexOf("3/4 の曲") >= 0 && JSON.stringify(D.project()) === keep10, "🎤 おすすめ tab: conditions, 8 picks with reasons, ▶ / この伴奏で / くわしく — nothing changed");
+  // A10-2 の画面（解析の結果・🎧 がないとき・曲は変えない）
+  var keep11 = JSON.stringify(D.project()); X.ui.tab = "match"; X.ui.mcond = null; X.ui.mres = an1; hs10.render();
+  ok(R.innerHTML.indexOf('data-xm="mRec"') >= 0 && R.innerHTML.indexOf("dxm-mfile") >= 0 && R.innerHTML.indexOf('data-xm="mRef"') >= 0 && R.innerHTML.indexOf("解析の結果") >= 0 && R.innerHTML.indexOf("保存も送信もしません") >= 0 && JSON.stringify(D.project()) === keep11, "🎤 おすすめ: record / file / 🎧 buttons, the analysis result, the privacy note — nothing changed");
+  X.ui.mres = { ok: false, why: "マイクを使う許可がありませんでした" }; hs10.render();
+  ok(R.innerHTML.indexOf("dxm-warn") >= 0 && R.innerHTML.indexOf("許可がありませんでした") >= 0, "a refused microphone shows the reason");
+  X.ui.mres = null; X.micStop();
+  X.ui.mcond = null; X.ui.tab = "tpl";
   A.stop();
 };
