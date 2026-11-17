@@ -1478,6 +1478,7 @@
       snd = (t.ext && t.ext.xm) || (t.instrument && t.instrument.ext && t.instrument.ext.preset) || snd;
     } else if (p.tracks.length >= M.MAX_TRACKS) { return { ok: false, why: "トラックは " + M.MAX_TRACKS + " 本までです（いまのトラックを選んで置いてください）" }; }
     if (!r.drum) { fitRange(r.notes, snd); }
+    var sgv = songGroove(p); if (sgv > 0 && m0.den === 4) { applyGroove(r.notes, r.drum, sgv); } // A9-1: 曲のグルーヴ
     if (r.notes.length > 4000) { return { ok: false, why: "音符が 4000 をこえます（範囲を短くしてください）" }; }
     var mini = { form: [{ name: SECT[type][0], bars: bars }], meter: m0, bars: bars, rows: [{ snd: snd, clips: [{ sec: 0, r: { notes: r.notes, len: r.len, drum: r.drum, pat: r.pat, set: r.set, chords: r.chords } }] }] };
     var au = audit(mini); au.problems = au.problems.filter(function (q) { return q.indexOf("少なすぎる") !== 0; }); au.ok = au.problems.length === 0; // 1 つの楽器だけなので「少なすぎる」は問題にしない
@@ -1489,7 +1490,7 @@
     if (!t) { return { ok: false, why: "トラックを足せませんでした" }; }
     if (pl.dest && M.overlapClip(t, pl.start, pl.len)) { return { ok: false, why: "同じ所にクリップがあります" }; }
     var c = M.newMidiClip(p, t, pl.start, pl.len, JSON.parse(JSON.stringify(pl.r.notes)), (plain(pl.T.name) + "・" + pl.name).substring(0, 40));
-    c.ext.xgen = xgenOf(pl.r.set); stampClip(c, { t: pl.type });
+    c.ext.xgen = xgenOf(pl.r.set); stampClip(c, { t: pl.type, gv: pl.meter.den === 4 && songGroove(p) > 0 ? songGroove(p) : undefined });
     c.ext.xpart = { tpl: pl.T.id, ti: pl.ti, type: pl.type };
     t.clips.sort(function (a, b) { return a.start - b.start; });
     var mp = {}, ov = {};
@@ -1584,6 +1585,7 @@
     if (o.end) { sec.end = true; } // A6: テンプレートのアウトロと同じ終わり方
     if (!o.flat) { shapeSec(r, sec, DM().ticksPerBar(o.meter)); } // A6: 型のない伴奏（🎹 伴奏の ＋ 作る）は形をつけない
     if (!r.drum) { fitRange(r.notes, o.snd); }
+    if (o.gv > 0 && o.meter.den === 4) { applyGroove(r.notes, r.drum, o.gv); } // A9-1: グルーヴ（0・なしなら何もしない）
     return r;
   }
   // 差しかえの見本: o = { clip, src: "pat" | "tpl", pat, tpl, ti, dens, sv, seed } → { ok, why, state, before, notes, ... }
@@ -1605,10 +1607,10 @@
     if (!!P.drum !== M.isDrum(t)) { return { ok: false, why: P.drum ? "リズムのパターンは、ドラムのトラックにだけ使えます" : "音の高さのあるパターンは、ドラムでないトラックにだけ使えます" }; }
     if (P.m.indexOf(meterKey(sp.meter.num, sp.meter.den)) < 0) { return { ok: false, why: "「" + P.name + "」は " + P.m.join("・") + " の曲で使えます（この所は " + sp.meter.num + "/" + sp.meter.den + "）" }; }
     var sv = Number(o.sv) > 0 ? Number(o.sv) : (Number(x.sv) > 0 ? Number(x.sv) : 1), seed = Math.round(Number(o.seed)) || x.seed || 1;
-    var r = genPart({ pat: pt, dens: dens, range: range, key: sp.key, kmode: sp.kmode, chords: sp.chords, bars: sp.bars, meter: sp.meter, type: sp.type, seed: seed, snd: trackSnd(t), sv: sv, nofill: x.nofill, end: endOf(c) });
+    var r = genPart({ pat: pt, dens: dens, range: range, key: sp.key, kmode: sp.kmode, chords: sp.chords, bars: sp.bars, meter: sp.meter, type: sp.type, seed: seed, snd: trackSnd(t), sv: sv, nofill: x.nofill, end: endOf(c), gv: Number(x.gv) || 0 });
     if (!r.ok) { return r; }
     if (r.notes.length > 4000) { return { ok: false, why: "音符が 4000 をこえます" }; }
-    return { ok: true, clip: c, track: t, state: clipState(c), before: c.notes, notes: r.notes, r: r, end: endOf(c), pat: pt, dens: dens, sv: sv, seed: seed, type: sp.type, spot: sp, T2: T2, same: JSON.stringify(M.cleanNotes(r.notes)) === JSON.stringify(c.notes) };
+    return { ok: true, clip: c, track: t, state: clipState(c), before: c.notes, notes: r.notes, r: r, end: endOf(c), gv: Number(x.gv) || 0, pat: pt, dens: dens, sv: sv, seed: seed, type: sp.type, spot: sp, T2: T2, same: JSON.stringify(M.cleanNotes(r.notes)) === JSON.stringify(c.notes) };
   }
   // 差しかえ（how: "replace" 上書き ／ "newtrack" 別のトラック）。force: 手で直した・確かめられないクリップも上書きする（ユーザーが選んだとき）
   function swapApply(p, pl, how, force) {
@@ -1617,14 +1619,14 @@
       var t = makeTrack(p, trackSnd(pl.track) || (pl.r.drum ? "@drum" : "xm-warmpiano"), (pl.track.name + "（差しかえ）").substring(0, 30));
       if (!t) { return { ok: false, why: "トラックは " + M.MAX_TRACKS + " 本までです" }; }
       var nc = M.newMidiClip(p, t, c.start, c.len, JSON.parse(JSON.stringify(pl.notes)), c.ext.name || "");
-      nc.ext.xgen = xgenOf(pl.r.set); stampClip(nc, { t: pl.type, sv: pl.sv !== 1 ? pl.sv : undefined, end: pl.end ? 1 : 0 });
+      nc.ext.xgen = xgenOf(pl.r.set); stampClip(nc, { t: pl.type, sv: pl.sv !== 1 ? pl.sv : undefined, end: pl.end ? 1 : 0, gv: pl.gv || undefined });
       return { ok: true, track: t, clip: nc, how: how };
     }
     if (pl.state !== "gen" && !force) { return { ok: false, why: "このクリップは" + STATE_LBL[pl.state] + "ので、上書きするか、別のトラックに作るかを選んでください" }; }
     c.notes = M.cleanNotes(JSON.parse(JSON.stringify(pl.notes)));
     var keepName = c.ext.name, xp = c.ext.xpart;
     c.ext.xgen = xgenOf(pl.r.set); if (xp) { c.ext.xpart = xp; } c.ext.name = keepName;
-    stampClip(c, { t: pl.type, sv: pl.sv !== 1 ? pl.sv : undefined, end: pl.end ? 1 : 0 });
+    stampClip(c, { t: pl.type, sv: pl.sv !== 1 ? pl.sv : undefined, end: pl.end ? 1 : 0, gv: pl.gv || undefined });
     return { ok: true, track: pl.track, clip: c, how: "replace" };
   }
   // セクションの中の伴奏のクリップ（トラックの順）
@@ -1732,10 +1734,10 @@
   function songBars(p) { var M = DM(), e = M.songEndTick(p), n = e > 0 ? M.tickToBar(p, e - 1).bar : 0, sc = songChords(p), k; for (k in sc) { if (sc.hasOwnProperty(k)) { n = Math.max(n, Number(k) + 1); } } return Math.min(MAXB, Math.max(n, 8)); }
   function clipBars(p, c) { var M = DM(); return [M.tickToBar(p, c.start).bar - 1, M.tickToBar(p, c.start + Math.max(1, c.len) - 1).bar - 1]; }
   // 同じ設定で、クリップ全体を作りなおす（cmap ＝ 新しい曲のコード）
-  function regenClip(p, t, c, cmap) {
+  function regenClip(p, t, c, cmap, gvOver) {
     var x = c.ext.xgen, sp = clipSpot(p, c, cmap);
     if (!sp.ok) { return sp; }
-    var r = genPart({ pat: x.pat, dens: x.dens, range: x.range || "mid", key: sp.key, kmode: sp.kmode, chords: sp.chords, bars: sp.bars, meter: sp.meter, type: sp.type, seed: x.seed, snd: trackSnd(t), sv: Number(x.sv) > 0 ? Number(x.sv) : 1, nofill: x.nofill, end: endOf(c), flat: !x.t });
+    var r = genPart({ pat: x.pat, dens: x.dens, range: x.range || "mid", key: sp.key, kmode: sp.kmode, chords: sp.chords, bars: sp.bars, meter: sp.meter, type: sp.type, seed: x.seed, snd: trackSnd(t), sv: Number(x.sv) > 0 ? Number(x.sv) : 1, nofill: x.nofill, end: endOf(c), flat: !x.t, gv: gvOver !== undefined ? gvOver : Number(x.gv) || 0 });
     if (!r.ok) { return r; }
     if (r.notes.length > 4000) { return { ok: false, why: "音符が 4000 をこえます" }; }
     return { ok: true, notes: r.notes, r: r, spot: sp };
@@ -1842,6 +1844,103 @@
       var ns = [], q; for (q = 0; q < it.notes.length; q++) { var a = it.clip.start + it.notes[q][0]; if (a >= base && a < end) { ns.push([a - base, it.notes[q][1], it.notes[q][2], it.notes[q][3]]); } }
       var drum = M.isDrum(it.track), ins = drum ? null : instrument(trackSnd(it.track));
       out = out.concat(notesToItems(ns, ins, drum, M.bpmAt(p, base), 4, tpb));
+    });
+    return out;
+  }
+
+  // ---------- §345 A9-1 Gorilla Groove Track（テンポ・グルーヴ）----------
+  var GROOVES = [["straight", "ストレート", 0], ["light", "軽いスイング", 40], ["strong", "強いスイング", 75], ["shuffle", "シャッフル（3 連）", 100]];
+  function swingTicks(amt) { return Math.round(160 * clamp(Number(amt) || 0, 0, 100) / 100); } // 8 分の裏を何 tick 後ろへ（100 ＝ 160 ＝ 3 連の位置 640）
+  // 音符にグルーヴをつける（拍は 4 分音符の 960 tick・x/4 の拍子だけ）。ドラムは 16 分の格子から出さない
+  function applyGroove(notes, drum, amt) {
+    var a = clamp(Number(amt) || 0, 0, 100), i;
+    if (!(a > 0)) { return notes; }
+    var dt = drum ? (a >= 60 ? 240 : 0) : swingTicks(a);
+    if (!dt) { return notes; }
+    for (i = 0; i < notes.length; i++) { var x = notes[i]; if (x[0] % 960 === 480) { x[0] += dt; if (!drum) { x[1] = Math.max(1, x[1] - dt); } } }
+    notes.sort(function (p1, p2) { return p1[0] - p2[0] || p1[2] - p2[2]; });
+    var seen = {}, out = [];
+    for (i = 0; i < notes.length; i++) { var k = notes[i][0] + ":" + notes[i][2]; if (!seen[k]) { seen[k] = 1; out.push(notes[i]); } }
+    notes.length = 0; for (i = 0; i < out.length; i++) { notes.push(out[i]); }
+    if (!drum) { trimOverlaps(notes); }
+    return notes;
+  }
+  function songGroove(p) { var v = p && p.ext ? Number(p.ext.xmGroove) : 0; return v > 0 && v <= 100 ? Math.round(v) : 0; }
+  function grooveName(amt) { var i, best = GROOVES[0]; for (i = 0; i < GROOVES.length; i++) { if (Math.abs(GROOVES[i][2] - amt) < Math.abs(best[2] - amt)) { best = GROOVES[i]; } } return amt > 0 ? best[1].replace(/（.*$/, "") + "（" + amt + "）" : "ストレート"; }
+  function songSecs(p) { var M = DM(); return M.tickToSec(p, M.songEndTick(p)); }
+  // 見本: o = { bpm（新しいはじめの BPM・なければ変えない）, amt（グルーヴの量・なければ変えない） }
+  function groovePlan(p, o) {
+    var M = DM(), pts = M.tempoList(p), b0 = pts[0].bpm, nb = o && o.bpm !== undefined && o.bpm !== null && o.bpm !== "" ? Math.round(Number(o.bpm)) : b0, cur = songGroove(p), amt = o && o.amt !== undefined && o.amt !== null && o.amt !== "" ? clamp(Math.round(Number(o.amt)), 0, 100) : cur, items = [], i, j, warn = [];
+    if (!(nb >= 20 && nb <= 400)) { return { ok: false, why: "BPM は 20〜400 です" }; }
+    var ratio = nb / b0, newPts = pts.map(function (x, k) { return { tick: x.tick, bpm: k === 0 ? nb : clamp(Math.round(x.bpm * ratio), 20, 400) }; });
+    var tempoChange = nb !== b0, grooveChange = amt !== cur;
+    if (!tempoChange && !grooveChange) { return { ok: false, why: "テンポもグルーヴも、いまと同じです", bpm: nb, amt: amt }; }
+    var hasAudio = p.tracks.some(function (t) { return M.isAudio(t) || t.clips.some(function (c) { return c.type === "audio"; }); });
+    if (tempoChange && hasAudio) { warn.push("録音（オーディオ）は のびちぢみしません。はじまりの小節は同じですが、音の長さは秒のままなので、テンポとずれます"); }
+    if (grooveChange) {
+      for (i = 0; i < p.tracks.length; i++) {
+        var t = p.tracks[i];
+        for (j = 0; j < t.clips.length; j++) {
+          var c = t.clips[j];
+          if (c.type === "audio" || M.isAudio(t)) { items.push({ track: t, clip: c, act: "none", why: "録音（変えない）" }); continue; }
+          if (!c.ext || !c.ext.xgen || !c.ext.xgen.pat) { if (c.notes && c.notes.length) { items.push({ track: t, clip: c, act: "none", why: "伴奏で作ったものでない（自分のメロディ・手で書いた）" }); } continue; }
+          var st0 = clipState(c), m0 = M.meterAt(p, c.start);
+          if (m0.den !== 4) { items.push({ track: t, clip: c, act: "none", why: m0.num + "/" + m0.den + " はもともと 3 つずつのノリなので変えない" }); continue; }
+          if (st0 !== "gen") { items.push({ track: t, clip: c, act: "keep", why: STATE_LBL[st0], state: st0 }); continue; }
+          var rg = regenClip(p, t, c, null, amt);
+          if (!rg.ok) { items.push({ track: t, clip: c, act: "none", why: rg.why }); continue; }
+          items.push({ track: t, clip: c, act: "regen", notes: rg.notes, state: st0, drum: M.isDrum(t) });
+        }
+      }
+      if (amt > 0 && amt < 60 && items.some(function (z) { return z.drum && z.act === "regen"; })) { warn.push("ドラムは 16 分の格子の上のまま（軽いスイングではまっすぐ・60 以上で 3:1）"); }
+    }
+    var after = tempoChange ? M.tickToSec({ tempo: { points: newPts, meters: p.tempo.meters }, tracks: p.tracks }, M.songEndTick(p)) : songSecs(p);
+    return { ok: true, bpm: nb, bpm0: b0, amt: amt, amt0: cur, points: newPts, tempoChange: tempoChange, grooveChange: grooveChange, items: items, n: items.filter(function (z) { return z.act === "regen"; }).length, warn: warn, secs0: songSecs(p), secs1: after };
+  }
+  function grooveApply(p, pl) {
+    var M = DM(), n = 0, i;
+    if (pl.tempoChange) { p.tempo.points = JSON.parse(JSON.stringify(pl.points)); }
+    if (pl.grooveChange) {
+      if (!p.ext || typeof p.ext !== "object") { p.ext = {}; }
+      if (pl.amt > 0) { p.ext.xmGroove = pl.amt; } else { delete p.ext.xmGroove; }
+      for (i = 0; i < pl.items.length; i++) { var it = pl.items[i]; if (it.act !== "regen") { continue; } var e0 = endOf(it.clip); it.clip.notes = M.cleanNotes(JSON.parse(JSON.stringify(it.notes))); stampClip(it.clip, { gv: pl.amt, end: e0 ? 1 : 0 }); n++; }
+    }
+    return { ok: true, n: n };
+  }
+  function grooveOpt(p) { return { bpm: ui.gbpm, amt: ui.gamt }; }
+  function grooveTab(h) {
+    var p = h.project(), M = DM(), b0 = M.tempoList(p)[0].bpm, nb = ui.gbpm !== null && ui.gbpm !== undefined ? ui.gbpm : b0, cur = songGroove(p), amt = ui.gamt !== null && ui.gamt !== undefined ? ui.gamt : cur, pl = groovePlan(p, grooveOpt(p)), x = '<div class="dxm-groove">';
+    x += '<p class="small">テンポとノリ（グルーヴ）を変えます。作ったままの伴奏だけを、同じ弾き方のまま作りなおします。自分のメロディ・録音・手で直したクリップは変えません。</p>';
+    x += '<div class="dxm-opt"><span>テンポ</span><button class="modal-btn dxm-b" data-xm="gBpm-5">&#x2212;5</button><button class="modal-btn dxm-b" data-xm="gBpm-1">&#x2212;1</button><input type="number" class="dxm-gbpm" min="20" max="400" value="' + nb + '" aria-label="BPM"><button class="modal-btn dxm-b" data-xm="gBpm+1">&#xFF0B;1</button><button class="modal-btn dxm-b" data-xm="gBpm+5">&#xFF0B;5</button></div>';
+    x += '<p class="small">いま BPM ' + b0 + '・' + mmss(songSecs(p)) + (nb !== b0 ? ' → BPM ' + nb + '・' + (pl.ok ? mmss(pl.secs1) : '') : '') + '</p>';
+    x += '<div class="dxm-opt dxm-forms"><span>グルーヴ</span>' + GROOVES.map(function (g) { return chip("data-xgv", g[2], g[1], amt === g[2]); }).join("") + '</div>';
+    x += '<div class="dxm-opt"><span>量 ' + amt + '</span><input type="range" class="dm-fader dxm-gamt" min="0" max="100" step="5" value="' + amt + '" aria-label="スイングの量"></div>';
+    x += '<p class="small">いま: ' + grooveName(cur) + '</p>';
+    if (pl.ok) {
+      var rg = pl.items.filter(function (z) { return z.act === "regen"; }), kp = pl.items.filter(function (z) { return z.act === "keep"; }), no = pl.items.filter(function (z) { return z.act === "none"; });
+      x += '<div class="dxm-prev"><b>' + (pl.tempoChange ? 'テンポ ' + pl.bpm0 + ' → ' + pl.bpm : '') + (pl.tempoChange && pl.grooveChange ? '・' : '') + (pl.grooveChange ? 'グルーヴ ' + grooveName(pl.amt0) + ' → ' + grooveName(pl.amt) : '') + '</b>';
+      if (pl.grooveChange) { x += '<ul class="small dxm-alist"><li>作りなおす: ' + (rg.length ? rg.length + ' クリップ（' + uniqNames(rg) + '）' : 'なし') + '</li>' + (kp.length ? '<li>手で直した・確かめられない（変えない）: ' + uniqNames(kp) + '</li>' : '') + (no.length ? '<li>変えない: ' + no.map(function (z) { return esc(z.track.name) + "（" + esc(z.why) + "）"; }).filter(function (v, k, a) { return a.indexOf(v) === k; }).join("・") + '</li>' : '') + '</ul>'; }
+      x += pl.warn.map(function (w) { return '<p class="small dxm-warn">&#x26A0;&#xFE0F; ' + esc(w) + '</p>'; }).join("");
+      x += '<div class="dxm-go">' + pvBtn("go", "&#x25B6;&#xFE0F; いま") + pvBtn("gn", "&#x25B6;&#xFE0F; 変えた後") + '<button class="modal-btn dxm-b dxm-main" data-xm="gApply">&#x1F941; 変える（↶ で戻せる）</button><button class="modal-btn dxm-b" data-xm="gCancel">やめる</button></div></div>';
+    } else { x += '<p class="small">' + esc(pl.why) + '</p>'; }
+    return x + '</div>';
+  }
+  function uniqNames(list) { var o = []; list.forEach(function (z) { var n = z.track.name; if (o.indexOf(n) < 0) { o.push(n); } }); return o.map(esc).join("・"); }
+  // 試聴: はじめのサビ（なければ 1 小節目）から 4 小節。after ＝ 変えた後
+  function grooveItems(h, after) {
+    var p = h.project(), M = DM(), pl = after ? groovePlan(p, grooveOpt(p)) : null, secs = M.sectionsOf(p), base = 0, i, out = [];
+    for (i = 0; i < secs.length; i++) { if (/サビ/.test(secs[i].name)) { base = secs[i].tick; break; } }
+    var m0 = M.meterAt(p, base), tpb = M.ticksPerBar(m0), end = base + 4 * tpb, bpm = after && pl && pl.ok ? Math.round(M.bpmAt(p, base) * pl.bpm / pl.bpm0) : M.bpmAt(p, base);
+    p.tracks.forEach(function (t) {
+      if (M.isAudio(t) || t.mute) { return; }
+      t.clips.forEach(function (c) {
+        if (c.type === "audio" || !c.notes) { return; }
+        var ns = c.notes; if (pl && pl.ok) { pl.items.forEach(function (z) { if (z.clip === c && z.act === "regen") { ns = z.notes; } }); }
+        var list = [], q; for (q = 0; q < ns.length; q++) { var a = c.start + ns[q][0]; if (a >= base && a < end) { list.push([a - base, ns[q][1], ns[q][2], ns[q][3]]); } }
+        if (!list.length) { return; }
+        var drum = M.isDrum(t), ins = drum ? null : (t.instrument && t.instrument.type === "sample" ? t.instrument : instrument(trackSnd(t)) || t.instrument);
+        out = out.concat(notesToItems(list, ins, drum, bpm, 4, tpb));
+      });
     });
     return out;
   }
@@ -2158,7 +2257,7 @@
 
   // ---------- 画面（DAW の host から呼ぶ）----------
   var XM_KEY = "ultimateGorillaXmasV1";
-  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
+  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", gbpm: null, gamt: null, an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
   function lsGet() { try { var s = window.localStorage.getItem(XM_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function lsPut() { try { window.localStorage.setItem(XM_KEY, JSON.stringify({ g: ui.g })); } catch (e) {} }
   function g0() { if (!ui.g) { var s = lsGet(); ui.g = genClean(s && s.g ? s.g : { seed: 1 }); } return ui.g; }
@@ -2172,7 +2271,7 @@
     var p = h.project(), M = DM(), m0 = M.meterAt(p, 0), x = '<div class="daw dxm">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-xm="back">&#x2190; もどる</button><b>&#x1F384; クリスマス制作</b><span class="daw-pname">' + esc(p.name) + '・' + m0.num + '/' + m0.den + '・BPM ' + M.bpmAt(p, 0) + '</span></div>' +
       '<div class="dxm-tabs" role="tablist">' + chip("data-xtab", "sound", "&#x1F514; 音色", ui.tab === "sound") + chip("data-xtab", "pat", "&#x1F3BC; パターン", ui.tab === "pat") + chip("data-xtab", "gen", "&#x1F3B9; 伴奏", ui.tab === "gen") +
-        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
+        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "groove", "&#x1F941; グルーヴ", ui.tab === "groove") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
       (ui.msg ? '<div class="daw-msg dxm-msg">' + ui.msg + '</div>' : '');
     if (ui.tab === "sound") { x += soundTab(h); }
     else if (ui.tab === "pat") { x += patTab(h, m0); }
@@ -2180,6 +2279,7 @@
     else if (ui.tab === "tpl") { x += tplTab(h); }
     else if (ui.tab === "arr") { x += arrTab(h); }
     else if (ui.tab === "chord") { x += chordTab(h); }
+    else if (ui.tab === "groove") { x += grooveTab(h); }
     else { x += anaTab(h); }
     x += '<p class="small dxm-foot">&#x1F4DD; ここで作る伴奏・音色は、一般的なコード進行・リズム・音作りから作ったものです（有名な曲のメロディ・フレーズは入っていません）。録音の音色の権利は、音色の下に書いてあります（CC BY はクレジットの表記が要ります）。</p></div>';
     return x;
@@ -2388,6 +2488,7 @@
           else if (v === "q" && ui.part) { pvPlay(partItems(h), v, pvState); }
           else if ((v === "ao" || v === "an") && ui.aclip) { var fa = M.findClip(p, ui.aclip), pa = v === "an" ? swapPlan(p, swapOpt()) : null; if (fa && (v === "ao" || pa.ok)) { pvPlay(clipItems(h, fa.track, v === "an" ? pa.notes : fa.clip.notes, fa.clip.start), v, pvState); } }
           else if (v === "c") { pvPlay(chordItems(h), v, pvState); }
+          else if (v === "go" || v === "gn") { pvPlay(grooveItems(h, v === "gn"), v, pvState); }
           else if (v === "so" || v === "sn") { pvPlay(secItems(h, v === "sn"), v, pvState); }
           else if (v.indexOf("d:") === 0) { var pld = tplPlan(null, v.substring(2), "new", 1, g.seed, ui.form); if (pld.ok) { pvPlay(previewTpl(h, pld), v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pld.why); } }
           else if (v === "ra") { playRef(h, pvState); }
@@ -2424,6 +2525,7 @@
           if (ui.csel && ui.csel.a === ui.csel.b && !ui.csel.k && ui.csel.a !== cb2) { ui.csel = { a: Math.min(ui.csel.a, cb2), b: Math.max(ui.csel.a, cb2) }; } else { ui.csel = { a: cb2, b: cb2 }; } // 1 回目＝はじまり・2 回目＝範囲（コードを入れたあとは新しく選ぶ）
           ui.cpick = ""; pvStop(); re(); return;
         }
+        if ((v = el.getAttribute("data-xgv")) !== null && v !== undefined && v !== "") { ui.gamt = clamp(Math.round(Number(v)) || 0, 0, 100); pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xckm"))) { ui.ckm = v === "min" ? "min" : "maj"; re(); return; }
         if ((v = el.getAttribute("data-xchow"))) { ui.chow = v === "newtrack" ? "newtrack" : "keep"; pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xasec"))) { ui.asec = v; ui.aclip = null; ui.aopt = null; pvStop(); ui.pvState = ""; re(); return; }
@@ -2487,6 +2589,16 @@
             if (nv && nv !== cur2[bi2]) { ui.cedit[bi2] = nv; } else { delete ui.cedit[bi2]; }
           }
           ui.csel.k = 1; pvStop(); re(); return;
+        }
+        if (v && v.indexOf("gBpm") === 0) { var gb0 = M.tempoList(p)[0].bpm; ui.gbpm = clamp((ui.gbpm !== null && ui.gbpm !== undefined ? ui.gbpm : gb0) + Number(v.substring(4)), 20, 400); pvStop(); re(); return; }
+        if (v === "gCancel") { ui.gbpm = null; ui.gamt = null; pvStop(); ui.pvState = ""; re(); return; }
+        if (v === "gApply") {
+          pvStop();
+          var gpl = groovePlan(p, grooveOpt(p));
+          if (!gpl.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(gpl.why); re(); return; }
+          var gsn = h.snapAll ? h.snapAll() : h.snap(), gra = grooveApply(p, gpl);
+          ui.msg = (gpl.tempoChange ? "テンポを " + gpl.bpm0 + " → " + gpl.bpm + " に" : "") + (gpl.tempoChange && gpl.grooveChange ? "・" : "") + (gpl.grooveChange ? "グルーヴを " + grooveName(gpl.amt) + " にして伴奏 " + gra.n + " つを作りなおし" : "") + "ました（↶ 1 回で戻せます）";
+          ui.gbpm = null; ui.gamt = null; h.commit(gsn, ui.msg); return;
         }
         if (v === "cCancel") { ui.cedit = {}; ui.csel = null; pvStop(); ui.pvState = ""; re(); return; }
         if (v === "cApply") {
@@ -2576,6 +2688,9 @@
     var pbE = root.querySelector(".dxm-pbar"), pnE = root.querySelector(".dxm-pbars");
     if (pbE) { pbE.onchange = function () { var n = Math.round(Number(pbE.value)); if (ui.part && n >= 1 && n <= MAXB) { ui.part.bar = n; } pvStop(); re(); }; }
     if (pnE) { pnE.onchange = function () { var n = Math.round(Number(pnE.value)); if (ui.part && n >= 1 && n <= 64) { ui.part.bars = n; } pvStop(); re(); }; }
+    var gbE = root.querySelector(".dxm-gbpm"), gaE = root.querySelector(".dxm-gamt");
+    if (gbE) { gbE.onchange = function () { var n = Math.round(Number(gbE.value)); if (n >= 20 && n <= 400) { ui.gbpm = n; } pvStop(); re(); }; }
+    if (gaE) { gaE.onchange = function () { ui.gamt = clamp(Math.round(Number(gaE.value)) || 0, 0, 100); pvStop(); re(); }; }
     var tqEl = root.querySelector(".dxm-tq"); if (tqEl) { tqEl.oninput = function () { ui.tq = String(tqEl.value || "").substring(0, 60); tplRefresh(root); }; }
     var sd = root.querySelector(".dxm-seed"); if (sd) { sd.onchange = function () { var g = g0(), n = Math.round(Number(sd.value)); if (n >= 1 && n <= 99999) { g.seed = n; lsPut(); } re(); }; }
     var br = root.querySelector(".dxm-bar"); if (br) { br.onchange = function () { var n = Math.round(Number(br.value)); if (n >= 1 && n <= MAXB) { ui.bar = n; } re(); }; }
@@ -2592,6 +2707,7 @@
     planSecs: planSecs, mmss: mmss, timeNote: timeNote, WAV_LIMIT: WAV_LIMIT,
     trimOverlaps: trimOverlaps,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
+    GROOVES: GROOVES, swingTicks: swingTicks, applyGroove: applyGroove, songGroove: songGroove, groovePlan: groovePlan, grooveApply: grooveApply, grooveTab: grooveTab,
     endOf: endOf, chordName: chordName, songBars: songBars, regenClip: regenClip, chordPlan: chordPlan, chordApply: chordApply, deriveChords: deriveChords, chordOpen: chordOpen, chordTab: chordTab,
     notesHash: notesHash, stampClip: stampClip, clipState: clipState, clipSpot: clipSpot, genPart: genPart, swapPlan: swapPlan, swapApply: swapApply, secClips: secClips, sectionSwapPlan: sectionSwapPlan, sectionSwapApply: sectionSwapApply, famOfTrack: famOfTrack, arrTab: arrTab, STATE_LBL: STATE_LBL,
     secTypeOfName: secTypeOfName, songKey: songKey, songChords: songChords, putChords: putChords, planChords: planChords, partPlan: partPlan, partApply: partApply, partInit: partInit, partHtml: partHtml,

@@ -461,6 +461,38 @@ module.exports = async function () {
   c9.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!c.ext.xgen || M.isDrum(t)) { return; } var r9 = X.regenClip(c9, t, c, cm9); if (!r9.ok || JSON.stringify(M.cleanNotes(r9.notes)) !== JSON.stringify(c.notes)) { id9++; } }); });
   ok(id9 === 0 && X.chordPlan(c9, { 120: "V/V" }, "keep").ok && M.meterAt(c9, 0).num === 6, "a 6/8 template (☘️ Celtic, 128 bars) regenerates exactly and follows chord edits at bar 121");
 
+  // ---------- A9-1: テンポとグルーヴ（v2.84）----------
+  ok(X.GROOVES.map(function (g) { return g[0] + ":" + g[2]; }).join() === "straight:0,light:40,strong:75,shuffle:100" && X.swingTicks(100) === 160 && X.swingTicks(40) === 64, "4 grooves (straight 0 / light 40 / strong 75 / shuffle 100 = triplet); amount → delay of the 8th offbeat");
+  var gn = [[0, 400, 60, 0.5], [480, 400, 64, 0.5]], gn0 = JSON.stringify(gn); X.applyGroove(gn, false, 0);
+  ok(JSON.stringify(gn) === gn0 && JSON.stringify(X.applyGroove([[0, 400, 60, 0.5], [480, 400, 64, 0.5]], false, 100)) === JSON.stringify([[0, 400, 60, 0.5], [640, 240, 64, 0.5]]) && JSON.stringify(X.applyGroove([[0, 0, 42, 0.5], [480, 0, 42, 0.5]], true, 40)) === JSON.stringify([[0, 0, 42, 0.5], [480, 0, 42, 0.5]]) && JSON.stringify(X.applyGroove([[0, 0, 42, 0.5], [480, 0, 42, 0.5]], true, 75)) === JSON.stringify([[0, 0, 42, 0.5], [720, 0, 42, 0.5]]), "groove: 0 changes nothing; pitched offbeats move later (and shorten); drums stay on the 16th grid (straight below 60, 3:1 = 720 from 60)");
+  var gq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project; gq.tracks[0].clips[3].notes = [[0, 480, 72, 0.8]];
+  var gKeep = JSON.stringify(gq), gp = X.groovePlan(gq, { amt: 100 });
+  ok(gp.ok && gp.grooveChange && !gp.tempoChange && gp.n >= 40 && gp.items.some(function (z) { return /メロディ/.test(z.why || ""); }) && JSON.stringify(gq) === gKeep, "groove plan (shuffle): regenerates the generated clips, lists my melody as unchanged, changes nothing yet", gp.n);
+  var gOff = { p: 0, d: 0, off: 0 };
+  gp.items.forEach(function (z) { if (z.act !== "regen") { return; } z.notes.forEach(function (n) { var r = n[0] % 960; if (z.drum) { if (r === 720) { gOff.d++; } if (n[0] % 240) { gOff.off++; } } else if (r === 640) { gOff.p++; } }); });
+  ok(gOff.p > 100 && gOff.d > 50 && gOff.off === 0, "shuffle: pitched offbeats at the triplet position, drum offbeats at 3:1, no drum note off the 16th grid", gOff);
+  var gMel = JSON.stringify(gq.tracks[0]); X.grooveApply(gq, gp);
+  ok(gq.ext.xmGroove === 100 && JSON.stringify(gq.tracks[0]) === gMel && gp.items.filter(function (z) { return z.act === "regen"; }).every(function (z) { return z.clip.ext.xgen.gv === 100 && X.clipState(z.clip) === "gen"; }), "apply: the song remembers the groove; my melody is untouched; the clips stay 作ったまま with xgen.gv");
+  var gcm = X.songChords(gq), gId = 0;
+  gq.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!c.ext.xgen) { return; } var r = X.regenClip(gq, t, c, gcm); if (!r.ok || JSON.stringify(M.cleanNotes(r.notes)) !== JSON.stringify(c.notes)) { gId++; } }); });
+  var gcp = X.chordPlan(gq, { 16: "V/V" }, "keep"), gsw = X.swapPlan(gq, { clip: gq.tracks[1].clips[4].id, dens: 2 }), gpp = X.partPlan(gq, { tpl: "orch", ti: 2, bar: 17, bars: 8, type: "chorus" });
+  ok(gId === 0 && gcp.ok && gcp.items.filter(function (z) { return z.act === "regen" && !M.isDrum(z.track); }).every(function (z) { return z.notes.every(function (n) { return n[0] % 960 !== 480; }); }) && gsw.ok && gsw.notes.every(function (n) { return n[0] % 960 !== 480; }) && gpp.ok && gpp.r.notes.every(function (n) { return n[0] % 960 !== 480; }), "the groove survives regeneration, Chord Track, swaps and partial templates (no straight 8th offbeats come back)");
+  var ed9 = gq.tracks[2].clips[2]; ed9.notes[0][3] = 0.21; var ed9N = JSON.stringify(ed9.notes), gp2 = X.groovePlan(gq, { amt: 0 });
+  ok(gp2.items.some(function (z) { return z.clip === ed9 && z.act === "keep"; }), "a hand-edited clip is kept (not re-grooved)");
+  X.grooveApply(gq, gp2);
+  ok(JSON.stringify(ed9.notes) === ed9N && gq.ext.xmGroove === undefined, "back to straight: the edited clip stays, the song groove is cleared");
+  var tq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; tq.tempo.points.push({ tick: 8 * 3840, bpm: 140 });
+  var tNotes = JSON.stringify(tq.tracks), tpl9 = X.groovePlan(tq, { bpm: 60 });
+  ok(tpl9.ok && tpl9.tempoChange && tpl9.points[0].bpm === 60 && tpl9.points[1].bpm === 70 && tpl9.points[1].tick === 8 * 3840 && Math.round(tpl9.secs1) > Math.round(tpl9.secs0 * 1.9), "tempo: the whole tempo map scales (120 → 60 and 140 → 70 at bar 9); the length doubles", tpl9.points);
+  X.grooveApply(tq, tpl9);
+  ok(JSON.stringify(tq.tracks) === tNotes && M.bpmAt(tq, 0) === 60 && M.bpmAt(tq, 8 * 3840) === 70, "after a tempo change the MIDI notes keep their bar positions");
+  var aq9 = M.emptyProject(0); M.newTrack(aq9, "audio", { type: "audio" }); var aTr = aq9.tracks[aq9.tracks.length - 1]; aTr.kind = "audio";
+  var ap9 = X.groovePlan(aq9, { bpm: 90 });
+  ok(ap9.ok && (ap9.warn.some(function (w) { return /のびちぢみしません/.test(w); }) || !M.isAudio(aTr)), "a song with a recording warns that audio is not time-stretched");
+  ok(!X.groovePlan(gq, {}).ok && !X.groovePlan(gq, { bpm: 10 }).ok, "no change / a BPM outside 20–400 is refused");
+  var w9 = X.tplNewProject(X.tplPlan(null, "xlullaby", "new", 1, 1, "std")).project, wp9 = X.groovePlan(w9, { amt: 100 });
+  ok(wp9.ok && wp9.n === 0 && wp9.items.every(function (z) { return /3 つずつ/.test(z.why); }), "6/8 clips are left as they are (already in threes)");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -528,5 +560,17 @@ module.exports = async function () {
   D.ops.undo();
   ok(JSON.stringify(D.project().tracks) === trC && JSON.stringify(D.project().ext) === exC, "one ↶ restores the clips and the song chords");
   X.ui.cedit = {}; X.ui.csel = null; X.ui.tab = "tpl";
+  // A9-1 の画面
+  var hg = D.xmas.host, qg = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; hg.newSong(qg); X.ui.tab = "groove"; X.ui.gbpm = null; X.ui.gamt = null; hg.render();
+  var keepG = JSON.stringify(D.project());
+  ok(R.innerHTML.indexOf('class="dxm-gbpm"') >= 0 && (R.innerHTML.match(/data-xgv="/g) || []).length === 4 && R.innerHTML.indexOf("dxm-gamt") >= 0, "🥁 グルーヴ tab: BPM field with ± buttons, 4 grooves and the amount slider");
+  X.ui.gamt = 75; X.ui.gbpm = 100; hg.render();
+  ok(R.innerHTML.indexOf('data-xm="gApply"') >= 0 && R.innerHTML.indexOf('data-xpv="gn"') >= 0 && R.innerHTML.indexOf("テンポ 120 → 100") >= 0 && JSON.stringify(D.project()) === keepG, "with a change: the plan, ▶ before / after and apply — nothing changed yet");
+  var pG = D.project(), snG = hg.snapAll(), trG = JSON.stringify(pG.tracks), tG = JSON.stringify(pG.tempo), eG = JSON.stringify(pG.ext);
+  X.grooveApply(pG, X.groovePlan(pG, { bpm: 100, amt: 75 })); hg.commit(snG, "groove");
+  ok(M.bpmAt(D.project(), 0) === 100 && D.project().ext.xmGroove === 75, "apply through the DAW host");
+  D.ops.undo();
+  ok(JSON.stringify(D.project().tracks) === trG && JSON.stringify(D.project().tempo) === tG && JSON.stringify(D.project().ext) === eG, "one ↶ restores tempo, groove and the clips");
+  X.ui.gbpm = null; X.ui.gamt = null; X.ui.tab = "tpl";
   A.stop();
 };
