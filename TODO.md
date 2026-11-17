@@ -30,10 +30,11 @@
 
 ## ✅ 実装済み（最新）
 
-### Version 2.87〜 — 🦍 A11: My Templates と Cubasis の改善 (§345)
+### Version 2.87–2.88 — 🦍 A11: My Templates と Cubasis の改善 (§345)
 
 - [x] A11-1（v2.87）: My Templates（保存・一覧・試聴・新しい曲で・JSON の書き出し／読みこみ・安全な読みこみ）
-- [ ] A11-2: Cubasis の改善（Format 1・PPQ 960 のまま・ドラム 83／84 の読みもどし・ステム WAV の検討）
+- [x] A11-2（v2.88）: Cubasis の改善（Format 1・PPQ 960 のまま・ドラム 83／84 の読みもどし・ステム WAV の検討＝設計だけ）
+- [ ] ステム WAV（トラックごとの WAV）の実装（GAME_DESIGN §345 A11-2 の案・ユーザーの確認のあと）
 
 ### Version 2.86 — 🦍 A10: Gorilla Style Match (§345)
 

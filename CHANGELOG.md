@@ -5,6 +5,13 @@
 未実装の予定は [TODO.md](TODO.md)、仕様の詳細は [GAME_DESIGN.md](GAME_DESIGN.md) を参照。
 
 
+## [2.88] - 2026-11-18 — 🦍 A11-2: Cubasis の改善 (§345)
+
+### Fixed
+- **ドラム 83／84 の読みもどし**: 🎄 のスレイベル（83 Jingle Bell）・ベルツリー（84 Bell Tree）が、書き出した MIDI を DAW に読みもどすと消えていた。いまは残る（DAW がもともと鳴らせる音）。82 など鳴らせない番号は、いままでどおり入れずに数を出す
+### Notes
+- MIDI の書き出し（Format 1・PPQ 960）は変えていない。トラックごとの WAV（ステム）は設計だけ（GAME_DESIGN §345）。Cubasis 3 の実機は未確認
+
 ## [2.87] - 2026-11-18 — 🦍 A11-1: My Templates (§345)
 
 ### Added

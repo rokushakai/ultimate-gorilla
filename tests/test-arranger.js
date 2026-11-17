@@ -594,6 +594,22 @@ module.exports = async function () {
   ok(X.myList().length === 0 && W.localStorage.getItem(X.MY_KEY) === "{broken", "a broken store reads as empty and is not overwritten by reading");
   try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
 
+  // ---------- A11-2: Cubasis の改善（v2.88）・ドラム 83／84 の読みもどし ----------
+  function drAbs(ts) { var o = []; ts.forEach(function (t) { t.clips.forEach(function (c) { c.notes.forEach(function (x) { o.push((c.start + x[0]) + ":" + x[2] + ":" + x[3]); }); }); }); return o.sort(); }
+  var rtBad = [], rt83 = 0, rtN = 0;
+  X.TPLS.forEach(function (T) {
+    var pr = X.tplNewProject(X.tplPlan(null, T.id, "new", 1, 1, "std")).project, drs = pr.tracks.filter(function (t) { return M.isDrum(t); });
+    if (!drs.length) { return; }
+    var ex = M.midiExport(pr), rd = M.midiRead(ex.bytes, T.id + ".mid"), mb = M.midiBox(rd, {}, "rt"), back = [];
+    mb.box.parts.forEach(function (x) { if (x.preset === "drum") { x.notes.forEach(function (n) { back.push(n[0] + ":" + n[2] + ":" + n[3]); }); } });
+    back.sort(); var orig = drAbs(drs);
+    rt83 += orig.filter(function (z) { return /:8[34]:/.test(z); }).length; rtN++;
+    if (!(rd.ok && rd.format === 1 && rd.division === 960 && mb.drops.length === 0 && JSON.stringify(orig.map(function (z) { return z.split(":").slice(0, 2).join(":"); })) === JSON.stringify(back.map(function (z) { return z.split(":").slice(0, 2).join(":"); })))) { rtBad.push(T.id); }
+  });
+  ok(rtBad.length === 0 && rt83 > 0 && rtN >= 40, "MIDI export → import back into the DAW: every drum note of every template returns at the same tick with the same number, incl. 83 Jingle Bell (" + rt83 + " notes in " + rtN + " templates); Format 1, PPQ 960, nothing dropped", rtBad);
+  var dn84 = M.midiDrumNotes([[0, 100, 84, 0.5], [10, 0, 83, 0.6], [20, 0, 82, 0.4], [30, 0, 81, 0.5], [40, 0, 85, 0.5], [50, 0, 34, 0.5]]);
+  ok(JSON.stringify(dn84.notes) === JSON.stringify([[0, 0, 84, 0.5], [10, 0, 83, 0.6], [30, 0, 81, 0.5]]) && JSON.stringify(dn84.drop) === JSON.stringify({ 34: 1, 82: 1, 85: 1 }), "83 / 84 are kept (length 0); 82, 85 and 34 (no sound in the DAW) are still left out and counted", dn84);
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");

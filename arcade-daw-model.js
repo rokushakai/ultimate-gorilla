@@ -1913,6 +1913,7 @@
   // ---------- §342 9B-4: 標準 MIDI ファイル（SMF）の読み込み・書き出し（画面を持たない・バイトの配列）----------
   var MIDI_MAX_BYTES = 1048576, MIDI_MAX_EVENTS = 200000, MIDI_MAX_NOTES = 20000, MIDI_MAX_MS = 3000, MIDI_MAX_TRKS = 64, MIDI_MAX_TICK = 2147483647;
   var MIDI_DRUM_LO = 35, MIDI_DRUM_HI = 81, MIDI_DRUM_LEN = PPQ / 8, MIDI_DRUM_CH = 9;
+  var MIDI_DRUM_EXTRA = { 83: 1, 84: 1 }; // §345 A11-2: 35〜81 の外でも読みこむ番号（DAW が鳴らせる Jingle Bell・Bell Tree）
   // DAW だけのドラムの番号 → GM の番号（ゴリラウクレレ・メロディくずしの書き出しと同じ表。0 ＝ 書かない）
   var DRUM_GM = { 21: 44, 23: 46, 24: 40, 22: 38, 26: 0, 25: 0 };
   var GM_DRUM_NAMES = { 35: "バスドラム", 36: "キック", 37: "サイドスティック", 38: "スネア", 39: "クラップ", 40: "エレキスネア", 41: "フロアタム（低）", 42: "ハイハット（閉）", 43: "フロアタム（高）", 44: "ペダルHH", 45: "タム（低）",
@@ -2166,10 +2167,10 @@
     return { ok: true, file: str(String(fileName || ""), "", 80), name: base, format: r.format, division: div, trks: r.trks.length, notes: total, bpm: bpm, meter: { num: mnum, den: mden }, len: len, bars: bars,
       sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, tempoChanges: tempoChanges, meterChanges: meterChanges, parts: parts, skipped: skipped, notices: notices };
   }
-  // ドラムのパートの音符（GM の 35〜81 はそのまま・ほかは入れない・長さ 0）→ { notes, drop: { 番号: 数 } }
+  // ドラムのパートの音符（GM の 35〜81 と 83・84（§345 A11-2: DAW が鳴らせるスレイベル・ベルツリー）はそのまま・ほかは入れない・長さ 0）→ { notes, drop: { 番号: 数 } }
   function midiDrumNotes(notes) {
     var o = [], drop = {}, i;
-    for (i = 0; i < notes.length; i++) { var m = notes[i][2]; if (m < MIDI_DRUM_LO || m > MIDI_DRUM_HI) { drop[m] = (drop[m] || 0) + 1; continue; } o.push([notes[i][0], 0, m, notes[i][3]]); }
+    for (i = 0; i < notes.length; i++) { var m = notes[i][2]; if ((m < MIDI_DRUM_LO || m > MIDI_DRUM_HI) && !MIDI_DRUM_EXTRA[m]) { drop[m] = (drop[m] || 0) + 1; continue; } o.push([notes[i][0], 0, m, notes[i][3]]); }
     return { notes: o, drop: drop };
   }
   // 確認の画面の選び方 → importPlan に渡す箱（受け取り箱と同じ形・保存はしない）。kinds: { パートの key: "drum" ／ "synth" }
@@ -2217,7 +2218,7 @@
     SECTION_NAMES: SECTION_NAMES, SECTION_COLORS: SECTION_COLORS, MAX_SECTIONS: MAX_SECTIONS, MAX_CLIPS_PER_TRACK: MAX_CLIPS_PER_TRACK, REPEAT_MAX: REPEAT_MAX, sectionsOf: sectionsOf, findSection: findSection, addSection: addSection, updateSection: updateSection, deleteSection: deleteSection, sectionRange: sectionRange,
     repeatPlan: repeatPlan, repeatClip: repeatClip, clipsInSection: clipsInSection, sectionCopyPlan: sectionCopyPlan, copySection: copySection,
     DRUM_NAMES: DRUM_NAMES, DRUM_SILENT: DRUM_SILENT, drumName: drumName, // 9B-3
-    MIDI_MAX_BYTES: MIDI_MAX_BYTES, MIDI_MAX_EVENTS: MIDI_MAX_EVENTS, MIDI_MAX_NOTES: MIDI_MAX_NOTES, MIDI_MAX_MS: MIDI_MAX_MS, MIDI_DRUM_LO: MIDI_DRUM_LO, MIDI_DRUM_HI: MIDI_DRUM_HI, DRUM_GM: DRUM_GM, GM_DRUM_NAMES: GM_DRUM_NAMES, MIDI_PRESET_GM: MIDI_PRESET_GM, // 9B-4
+    MIDI_MAX_BYTES: MIDI_MAX_BYTES, MIDI_MAX_EVENTS: MIDI_MAX_EVENTS, MIDI_MAX_NOTES: MIDI_MAX_NOTES, MIDI_MAX_MS: MIDI_MAX_MS, MIDI_DRUM_LO: MIDI_DRUM_LO, MIDI_DRUM_HI: MIDI_DRUM_HI, MIDI_DRUM_EXTRA: MIDI_DRUM_EXTRA, DRUM_GM: DRUM_GM, GM_DRUM_NAMES: GM_DRUM_NAMES, MIDI_PRESET_GM: MIDI_PRESET_GM, // 9B-4
     midiExport: midiExport, midiParse: midiParse, midiRead: midiRead, midiBox: midiBox, midiDrumNotes: midiDrumNotes, midiNewProject: midiNewProject, midiGmPreset: midiGmPreset,
     takePayload: takePayload, takeCheck: takeCheck, takeSend: takeSend, // 9B-5
     patchPreset: patchPreset, patchInstrument: patchInstrument, INBOX_PATCH_MAX: INBOX_PATCH_MAX, // 9B-7
