@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.82** |
+| 現在バージョン | **v2.83** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.83] 🦍 A8-2・テンプレート 64**（§345）: `TPLS` に 16（48 の後ろ）・`PATS` に 8（`reggaeSkank`〜`neoSoul`・63 の後ろ）。v2.82 で足した 16 の音符は `FP282`（96 の指紋）で守る。次は A9（Groove Track・GAME_DESIGN §345 の計画）
 - **[v2.82] 🦍 A8-1・テンプレート 48**（§345）: `TPLS` に 16（32 の後ろ）・`PATS` に 10（`ukeStrum`〜`pianoBlock`・53 の後ろ）・`SOUNDS` に 7（`more`）・`LIC.fs`（freesound の CC0）。いままでの 32 の音符は `FP280`（旧 4 構成）と `FP281L`（96／128）で守る。次は A8-2（＋16 → 64）
 - **[v2.81] 🦍 A7・96・128 小節**（§345）: `FORMS` に `long96`・`full128`（3 つ目の要素 ＝ セクションの設定 `dd`）・`SECT` に `solo`・`drop`（`partFor(tr, t, T)` の決まり）・`trimOverlaps`・`planSecs`／`timeNote`（推定の時間・WAV の上限 330 秒）。いまの 4 構成の音符は `tests/test-arranger.js` の `FP280`（128 の指紋）で守る。次は A8（テンプレート 64 以上）
 - **[v2.80] 🦍 A6・Gorilla Chord Track**（§345）: `regenClip(p, t, c, cmap)`・`chordPlan(p, edits, "keep"|"newtrack")`／`chordApply`・`deriveChords`・`chordOpen(bar)`（アレンジの `data-chordbar` から）・🎼 コード のタブ（`ui.tab = "chord"`・`ui.csel`・`ui.cedit`）。`xgen.end`（テンプレートのアウトロ）。アレンジ画面のコードの行は `arcade-daw.js` の描画（`chordH`）。次は A7（96・128 小節）

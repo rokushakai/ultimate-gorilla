@@ -27,7 +27,7 @@ module.exports = async function () {
   ok(iDr.type === "drum", "Sleigh Bells is a drum instrument");
 
   // ---------- パターン ----------
-  ok(X.PATS.length === 63 && X.PATS[38].id === "padSwell" && X.PATS[39].id === "strum" && X.PATS[53].id === "ukeStrum", "63 performance patterns (39 of v2.72 in the same order + 14 of v2.77 + 10 of v2.82)", X.PATS.length);
+  ok(X.PATS.length === 71 && X.PATS[38].id === "padSwell" && X.PATS[39].id === "strum" && X.PATS[53].id === "ukeStrum" && X.PATS[63].id === "reggaeSkank", "71 performance patterns (39 of v2.72 in the same order + 14 of v2.77 + 10 of v2.82 + 8 of v2.83)", X.PATS.length);
   var pids = {}, pdup = false; X.PATS.forEach(function (P) { if (pids[P.id]) { pdup = true; } pids[P.id] = 1; });
   ok(!pdup && X.PATS.every(function (P) { return P.m.length && P.name && (P.drum || X.sound(P.snd) || P.snd === "bass" || P.snd === "chip" || P.snd === "pluck"); }), "unique pattern ids, each with meters and a default sound");
   var meters = [[4, 4], [3, 4], [6, 8]], bad = [], dupN = 0, count = 0;
