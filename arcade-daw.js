@@ -1006,6 +1006,13 @@
     for (b = 0; b < bars; b++) { h += '<span class="daw-barno" style="left:' + tickX(M.barToTick(p, b)) + 'px;">' + (b + 1) + '</span>'; }
     var tps = M.tempoList(p); for (b = 1; b < tps.length; b++) { h += '<span class="daw-tmk" style="left:' + tickX(tps[b].tick) + 'px;" title="BPM ' + tps[b].bpm + '">&#x2669;' + tps[b].bpm + '</span>'; } // 9B-12: テンポの変更点
     h += '</div></div>';
+    // §345 A6: 曲のコードの行（曲にコードがあるときだけ・タップで 🎼 コード へ）
+    var chm = XM() && XM().songChords ? XM().songChords(p) : {}, chordH = Object.keys(chm).length ? 23 : 0;
+    if (chordH) {
+      h += '<div class="daw-row daw-chord-row"><div class="daw-corner">&#x1F3BC; コード</div><div class="daw-ruler daw-grid daw-chords" style="' + grid + 'height:22px;">';
+      for (b = 0; b < bars; b++) { if (!chm[b]) { continue; } var cx0 = tickX(M.barToTick(p, b)), cw0 = Math.max(8, tickX(M.barToTick(p, b + 1)) - cx0 - 1); h += '<button class="daw-chd" data-chordbar="' + b + '" style="left:' + cx0 + 'px;width:' + cw0 + 'px;" title="' + (b + 1) + ' 小節目のコード（タップで変える）">' + escHtml(XM().chordName(p, chm[b])) + '</button>'; }
+      h += '</div></div>';
+    }
     // トラック
     for (i = 0; i < p.tracks.length; i++) {
       var t = p.tracks[i], tsel = st.sel && st.sel.kind === "track" && st.sel.id === t.id;
@@ -1025,7 +1032,7 @@
       else if (M.isAudio(t)) { h += '<button class="da-add da-addwav" data-addwav="' + t.id + '" style="left:' + (tickX(M.trackEnd(t)) + 3) + 'px;" title="ここに WAV を読みこむ" aria-label="WAV を読みこむ">&#xFF0B;</button>'; } // 9A-10
       h += '</div></div>';
     }
-    h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;' + (stu ? 'bottom:auto;height:' + (rulerH + 1 + p.tracks.length * (LANE_H + 1)) + 'px;' : '') + '"></div></div>';
+    h += '<div class="daw-playhead" style="left:' + (HEAD_W + tickX(playTick())) + 'px;' + (stu ? 'bottom:auto;height:' + (rulerH + 1 + chordH + p.tracks.length * (LANE_H + 1)) + 'px;' : '') + '"></div></div>';
     return h;
   }
 
@@ -5459,6 +5466,7 @@
         if ((v = el.getAttribute("data-ar")) === "xmas") { keepScroll(root); st.confirmDel = null; st.chooseAdd = false; st.view = "xmas"; renderXmas(root, ctl); return; } // §343
         if ((v = el.getAttribute("data-ar")) === "sections") { keepScroll(root); st.view = "sec"; st.secUI = null; st.secMsg = ""; renderSec(root, ctl); return; } // 9B-1
         if ((v = el.getAttribute("data-secjump"))) { keepScroll(root); sections.jump(v); return; } // 9B-1
+        if ((v = el.getAttribute("data-chordbar")) !== null && v !== undefined && v !== "" && XM() && XM().chordOpen) { keepScroll(root); st.confirmDel = null; st.chooseAdd = false; XM().chordOpen(Number(v)); st.view = "xmas"; renderXmas(root, ctl); return; } // §345 A6
         if ((v = el.getAttribute("data-rp")) && st.repeat) { // 9B-1: 繰り返しの欄
           var R = st.repeat, fr = M.findClip(p, R.clip);
           keepScroll(root);

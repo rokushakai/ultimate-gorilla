@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.79** |
+| 現在バージョン | **v2.80** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.80] 🦍 A6・Gorilla Chord Track**（§345）: `regenClip(p, t, c, cmap)`・`chordPlan(p, edits, "keep"|"newtrack")`／`chordApply`・`deriveChords`・`chordOpen(bar)`（アレンジの `data-chordbar` から）・🎼 コード のタブ（`ui.tab = "chord"`・`ui.csel`・`ui.cedit`）。`xgen.end`（テンプレートのアウトロ）。アレンジ画面のコードの行は `arcade-daw.js` の描画（`chordH`）。次は A7（96・128 小節）
 - **[v2.79] 🦍 Arrangement Studio A5・フルソングアレンジャー**（§345）: 伴奏のクリップの `ext.xgen.h`（音符の指紋・`clipState` で gen／edited／unknown／none）・`xgen.t`（型）・`xgen.sv`（強さ）。`swapPlan`／`swapApply(p, plan, "replace"|"newtrack", force)`・`sectionSwapPlan`・`genPart`（A6 でも使う）・`clipSpot`。🔁 差しかえ のタブ（`ui.tab = "arr"`・`ui.asec`・`ui.aclip`・`ui.aopt`）。伴奏を作る新しい所を足したら必ず `stampClip` を呼ぶ。次は A6 Chord Track（GAME_DESIGN §345 の計画）
 - **[v2.78] 🦍 Arrangement Studio A4・部分テンプレート**（§345）: `partPlan(p, { tpl, ti, bar, bars, type, key, kmode, prog, chords, dest, seed })`・`partApply`・曲のコード `ext.xmChords`（`songChords`／`putChords`・テンプレートの `tplApply` も書く）・`secTypeOfName`。画面は `ui.part`（`partInit`／`partHtml`）。DAW のホストに `snapAll`・↶ は写しの `ext` も戻す。次は A5（フルソングアレンジャー・GAME_DESIGN §345 の計画）
 - **[v2.77] 🦍 Arrangement Studio A3-2・テンプレート 32**（§345）: `TPLS` に 27 を足した（いままでの 5 つの後ろ・順番を変えない）。テンプレートは `kmode`・`mel` を持てる。`PATS` に 14（`strum`〜`brassStabs`・いままでの 39 の後ろ）・`SOUNDS` に 10（カテゴリ `more`・ゲームの録音）。テンプレートを足すときは: メタデータ（genre・moods・tags・aim）・4 構成 × メジャー／マイナーで `audit` が通る・ほかと似すぎない（`tests/test-arranger.js` が全部調べる）。次は A4（部分テンプレート・GAME_DESIGN §345 の計画）

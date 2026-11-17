@@ -338,6 +338,47 @@ module.exports = async function () {
   ok(ssa.n === ssp.n && JSON.stringify(l2[0].clip.notes) === e0 && JSON.stringify(aq2.tracks.map(function (t) { return t.clips.filter(function (c) { return !(c.start >= s2.tick && c.start < s2.tick + s2.len); }); })) === keep2, "apply: only the swappable clips in that section change; other sections are byte-identical");
   ok(X.tplSearch("", { fam: "guitar" }).some(function (T) { return T.id === "xacoustic"; }) && X.famsOf(X.TPLS.filter(function (T) { return T.id === "citypop"; })[0]).indexOf("guitar") >= 0, "the v2.77 sounds are in the instrument map (guitar filter works; it was empty in v2.77)");
 
+  // ---------- A6: Gorilla Chord Track（v2.80）----------
+  var idBad = [], idN = 0;
+  X.TPLS.forEach(function (T) { ["std", "full"].forEach(function (fm) {
+    var q6 = X.tplNewProject(X.tplPlan(null, T.id, "new", 1, 2, fm, { kmode: T.id.length % 2 ? "min" : "maj" })).project, cm6 = X.songChords(q6);
+    q6.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!c.ext.xgen || M.isDrum(t)) { return; } idN++; var r6 = X.regenClip(q6, t, c, cm6); if (!r6.ok || JSON.stringify(M.cleanNotes(r6.notes)) !== JSON.stringify(c.notes)) { idBad.push(T.id + "/" + fm + "/" + t.name); } }); });
+  }); });
+  ok(idBad.length === 0 && idN > 800, "regenerating with the same chords gives exactly the same notes for every template clip (incl. outro endings)", [idN, idBad.slice(0, 3)]);
+  var cq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project, ccm = X.songChords(cq), BT = 3840;
+  cq.tracks[0].clips[3].notes = [[0, 480, 72, 0.8]];
+  var keepC = JSON.stringify({ m: cq.markers, t: cq.tempo, mel: cq.tracks[0] });
+  var cp1 = X.chordPlan(cq, { 18: "V/V" }, "keep");
+  var regen1 = cp1.items.filter(function (z) { return z.act === "regen"; }), none1 = cp1.items.filter(function (z) { return z.act === "none"; });
+  ok(cp1.ok && cp1.changed.join() === "18" && regen1.length >= 4 && none1.some(function (z) { return /ドラム/.test(z.why); }) && none1.some(function (z) { return /メロディ/.test(z.why); }), "plan: changing bar 19 regenerates the accompaniment clips there; drums and my melody are listed as unchanged", cp1.items.map(function (z) { return z.track.name + ":" + z.act; }));
+  var prefOk = true;
+  regen1.forEach(function (z) { var b0 = Math.round(z.clip.start / BT), cut = (18 - b0) * BT; var a = z.clip.notes.filter(function (n) { return n[0] < cut; }), b = M.cleanNotes(z.notes).filter(function (n) { return n[0] < cut; }); if (JSON.stringify(a) !== JSON.stringify(b)) { prefOk = false; } });
+  ok(prefOk, "bars before the changed bar keep exactly the same notes");
+  ok(JSON.stringify(X.songChords(cq)) === JSON.stringify(ccm), "planning changes nothing (song chords unchanged)");
+  var otherT = JSON.stringify(cq.tracks.map(function (t) { return t.clips.filter(function (c) { var b0 = Math.round(c.start / BT), b1 = b0 + Math.round(c.len / BT) - 1; return !(18 >= b0 && 18 <= b1); }); }));
+  var ca1 = X.chordApply(cq, cp1);
+  ok(ca1.ok && ca1.n === regen1.length && X.songChords(cq)["18"] === "V/V" && JSON.stringify(cq.tracks.map(function (t) { return t.clips.filter(function (c) { var b0 = Math.round(c.start / BT), b1 = b0 + Math.round(c.len / BT) - 1; return !(18 >= b0 && 18 <= b1); }); })) === otherT && JSON.stringify({ m: cq.markers, t: cq.tempo, mel: cq.tracks[0] }) === keepC, "apply: the chord is stored; only the clips over bar 19 change; sections, tempo and my melody stay");
+  var e7 = X.chordOf(2, "V/V"), followOk = true;
+  regen1.forEach(function (z) { if (X.pat(z.clip.ext.xgen.pat).cat === "bell") { return; } var b0 = Math.round(z.clip.start / BT); z.clip.notes.filter(function (n) { return n[0] === (18 - b0) * BT; }).forEach(function (n) { if (e7.pcs.indexOf(n[2] % 12) < 0 && n[2] % 12 !== e7.bass) { followOk = false; } }); });
+  ok(followOk && regen1.every(function (z) { return X.clipState(z.clip) === "gen"; }), "the regenerated parts play E7 (V/V in D) on bar 19's downbeat and stay 作ったまま", e7.name);
+  // オンコード: ベースの音
+  var sq6 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project, bsT = sq6.tracks.filter(function (t) { return t.name === "ベース"; })[0];
+  X.chordApply(sq6, X.chordPlan(sq6, { 2: "I_3" }, "keep"));
+  var bdn = bsT.clips[0].notes.filter(function (n) { return n[0] === 2 * BT; });
+  ok(bdn.length && bdn[0][2] % 12 === X.chordOf(2, "I_3").bass, "slash chord D/F#: the bass plays F# on that downbeat", bdn.map(function (n) { return n[2]; }));
+  // 手で直した: 元のまま／別のトラック
+  var hq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project, hp = hq.tracks[1].clips[0]; hp.notes[0][3] = 0.2; var hpN = JSON.stringify(hp.notes);
+  var hk = X.chordPlan(hq, { 1: "ii" }, "keep"), hkI = hk.items.filter(function (z) { return z.clip === hp; })[0];
+  X.chordApply(hq, hk);
+  ok(hkI.act === "keep" && JSON.stringify(hp.notes) === hpN, "a hand-edited clip is kept as it is (元のまま)");
+  var hq2 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project, hp2 = hq2.tracks[1].clips[0]; hp2.notes[0][3] = 0.2; var hpN2 = JSON.stringify(hp2.notes), nTr6 = hq2.tracks.length;
+  X.chordApply(hq2, X.chordPlan(hq2, { 1: "ii" }, "newtrack"));
+  ok(JSON.stringify(hp2.notes) === hpN2 && hq2.tracks.length === nTr6 + 1 && /新しいコード/.test(hq2.tracks[nTr6].name), "or 別のトラックに作る: a new track with the new chords; the edited clip untouched");
+  // 伴奏から読みとる（コードのない古い曲）
+  var lq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project, lcm = X.songChords(lq); delete lq.ext.xmChords;
+  ok(JSON.stringify(X.deriveChords(lq)) === JSON.stringify(lcm), "deriving chords from the accompaniment of an old song gives the same chord map");
+  ok(X.chordName(cq, "V/V") === "E7" && X.chordName(cq, "I_3") === "D/F#" && X.songBars(cq) === 48, "chord names follow the song key (D): V/V = E7, I/3 = D/F#");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -389,5 +430,21 @@ module.exports = async function () {
   D.ops.undo();
   ok(JSON.stringify(D.project().tracks) === trA && JSON.stringify(D.project().ext) === exA, "one ↶ restores the swapped clip exactly");
   X.ui.aclip = null; X.ui.aopt = null; X.ui.tab = "tpl";
+  // A6 の画面: アレンジのコードの行・🎼 コード のタブ・↶
+  var hc = D.xmas.host, qc = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project; hc.newSong(qc); hc.back();
+  ok((R.innerHTML.match(/data-chordbar="/g) || []).length === 48 && R.innerHTML.indexOf("daw-chord-row") >= 0 && R.innerHTML.indexOf(">D<") >= 0, "arrangement: a 🎼 コード row with the 48 bar chords (names in the song key)", (R.innerHTML.match(/data-chordbar="/g) || []).length);
+  var q0 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; delete q0.ext.xmChords; hc.newSong(q0); hc.back();
+  ok(R.innerHTML.indexOf("daw-chord-row") < 0, "a song without chords has no chord row (the arrangement looks as before)");
+  hc.newSong(qc); X.chordOpen(16); hc.render();
+  var pC = D.project(), keepC2 = JSON.stringify(pC);
+  ok(X.ui.tab === "chord" && (R.innerHTML.match(/data-xcbar="/g) || []).length === 48 && R.innerHTML.indexOf('data-xcpick') >= 0 && R.innerHTML.indexOf('data-xm="cFill"') >= 0, "🎼 コード tab: 48 bar buttons grouped by section, the chord picker and 進行で埋める");
+  X.ui.cedit = { 16: "IV", 17: "V" }; hc.render();
+  ok(R.innerHTML.indexOf('data-xm="cApply"') >= 0 && R.innerHTML.indexOf("作りなおす（作ったまま）") >= 0 && R.innerHTML.indexOf('data-xpv="c"') >= 0 && JSON.stringify(D.project()) === keepC2, "with edits: the impact list, ▶ 試聴, apply — and still nothing changed in the song");
+  var cplU = X.chordPlan(pC, X.ui.cedit, "keep"), snC = hc.snapAll(), trC = JSON.stringify(pC.tracks), exC = JSON.stringify(pC.ext);
+  X.chordApply(pC, cplU); hc.commit(snC, "chords");
+  ok(X.songChords(D.project())["16"] === "IV" && JSON.stringify(D.project().tracks) !== trC, "apply through the DAW host");
+  D.ops.undo();
+  ok(JSON.stringify(D.project().tracks) === trC && JSON.stringify(D.project().ext) === exC, "one ↶ restores the clips and the song chords");
+  X.ui.cedit = {}; X.ui.csel = null; X.ui.tab = "tpl";
   A.stop();
 };
