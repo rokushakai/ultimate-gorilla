@@ -11,9 +11,9 @@ module.exports = async function () {
   function sha(s) { return crypto.createHash("sha256").update(s).digest("hex").slice(0, 16); }
 
   // ---------- 型・構成 ----------
-  ok(X.SECT_ORDER.join() === "intro,A,B,chorus,inter,bridge,last,outro" && X.SECT_ORDER.every(function (t) { return X.SECT[t] && M.SECTION_COLORS.indexOf(X.SECT[t][1]) >= 0; }), "8 section types (intro … outro), each with a DAW section color");
+  ok(X.SECT_ORDER.join() === "intro,A,B,chorus,inter,solo,bridge,drop,last,outro" && X.SECT_ORDER.every(function (t) { return X.SECT[t] && M.SECTION_COLORS.indexOf(X.SECT[t][1]) >= 0; }), "10 section types (8 of v2.74 + ソロ・落ちサビ of v2.81), each with a DAW section color");
   ok(X.SECT.A[2] === 0.92 && X.SECT.chorus[2] === 1.12 && X.SECT.last[2] > X.SECT.chorus[2] && X.SECT.intro[2] < X.SECT.A[2], "section strength: A 0.92 / chorus 1.12 (as v2.72), last chorus stronger, intro softer");
-  ok(X.FORMS.map(function (f) { return f[0] + ":" + X.formBars(f[0]); }).join() === "std:16,short:32,full:48,long:64", "4 forms: standard 16, short 32, full 48, long 64 bars");
+  ok(X.FORMS.slice(0, 4).map(function (f) { return f[0] + ":" + X.formBars(f[0]); }).join() === "std:16,short:32,full:48,long:64", "4 forms: standard 16, short 32, full 48, long 64 bars");
   ok(X.FORMS.every(function (f) { return f[2].every(function (s) { return s[1] % 4 === 0 && X.SECT[s[0]]; }); }), "every form section is a multiple of 4 bars (the 4-bar progressions line up)");
   var fl = X.formOf(null, "long");
   ok(fl.map(function (s) { return s.name; }).join() === "イントロ,Aメロ,Bメロ,サビ,間奏,Aメロ 2,Bメロ 2,ブリッジ,ラストサビ,アウトロ", "a repeated section type is numbered (Aメロ 2)", fl.map(function (s) { return s.name; }));
@@ -205,7 +205,7 @@ module.exports = async function () {
   ok(simBad.length === 0, "no two templates are near-copies (sounds × patterns overlap < 0.6, or a different meter / mode / progression)", [simBad, simMax.toFixed(2)]);
   // 32 × 4 構成 × メジャー／マイナー
   var bigBad = [], nPlans = 0, maxClip = 0;
-  X.TPLS.forEach(function (T) { X.FORMS.forEach(function (F) { ["maj", "min"].forEach(function (km) {
+  X.TPLS.forEach(function (T) { X.FORMS.slice(0, 4).forEach(function (F) { ["maj", "min"].forEach(function (km) {
     var pl = X.tplPlan(null, T.id, "new", 1, 3, F[0], { kmode: km }); nPlans++;
     if (!pl.ok) { bigBad.push(T.id + "/" + F[0] + "/" + km + " " + pl.why); return; }
     var a = X.audit(pl); if (!a.ok) { bigBad.push(T.id + "/" + F[0] + "/" + km + ": " + a.problems.join(" | ")); }
@@ -379,6 +379,45 @@ module.exports = async function () {
   ok(JSON.stringify(X.deriveChords(lq)) === JSON.stringify(lcm), "deriving chords from the accompaniment of an old song gives the same chord map");
   ok(X.chordName(cq, "V/V") === "E7" && X.chordName(cq, "I_3") === "D/F#" && X.songBars(cq) === 48, "chord names follow the song key (D): V/V = E7, I/3 = D/F#");
 
+  // ---------- A7: 96・128 小節（v2.81）----------
+  // v2.80 の 32 テンプレート × 4 構成の指紋（クリップの位置・長さ・音符・シード 1）: いまの 4 構成は変えない
+  var FP280 = {"pop/std":"90b201f272cd","pop/short":"63468ad5db60","pop/full":"91393c6cc0b6","pop/long":"8729495f1c1f","ballad/std":"91d6fd5675af","ballad/short":"d136472d3955","ballad/full":"7c5e2f84bb99","ballad/long":"4db09ce8641b","jazz/std":"a4a1a6e54a0b","jazz/short":"0df9e6f4e4d2","jazz/full":"64330e0ab2cb","jazz/long":"aa2fac6996ea","orch/std":"7bcf703d991b","orch/short":"23cff7ab927f","orch/full":"37f5adc73229","orch/long":"cf9781c4093e","chip/std":"1e8864e71539","chip/short":"127d2ac009f7","chip/full":"6c8544264619","chip/long":"1e138daa473f","xacoustic/std":"6527ac82834b","xacoustic/short":"83d83da539d4","xacoustic/full":"4e234bddf172","xacoustic/long":"1687930a827c","xswing/std":"6cde92077f0a","xswing/short":"57c7b7f2bd4f","xswing/full":"fcb767e61105","xswing/long":"c57e71afdaf7","xwaltz/std":"25d4956ff286","xwaltz/short":"18d66f5b576f","xwaltz/full":"fe136d7d1b43","xwaltz/long":"271b49ef1514","xgospel/std":"c5d8045fbdff","xgospel/short":"a45767c15784","xgospel/full":"846b017630c5","xgospel/long":"d23d40226a37","xcinema/std":"5fcefa12cb8b","xcinema/short":"2df8d329674f","xcinema/full":"9044a2c390b8","xcinema/long":"c4668842501b","xlullaby/std":"4fa54a6b4ca3","xlullaby/short":"8efdd754a522","xlullaby/full":"66bdf6cf92a2","xlullaby/long":"4174998c24b3","xdance/std":"04e4367f3c34","xdance/short":"9a9e26e19d52","xdance/full":"ad79276698fe","xdance/long":"3172397e53e7","jpop/std":"85ec96cb4c30","jpop/short":"e81c32f10f4a","jpop/full":"bd817f795647","jpop/long":"c46c2447d183","pianopop/std":"cd2d99cd3559","pianopop/short":"f864c3c44944","pianopop/full":"e47322de71a1","pianopop/long":"40b877c9142f","acoupop/std":"f2a98aa5d4bb","acoupop/short":"347879d29df3","acoupop/full":"396f6dc3bd8e","acoupop/long":"6701a007b88a","citypop/std":"52cbe4c5f36c","citypop/short":"30ab29a4db60","citypop/full":"02faa791b3cc","citypop/long":"7455f072a49f","electropop/std":"2fa9a288778b","electropop/short":"72d388cf61b8","electropop/full":"02f59be2736f","electropop/long":"6d674f2c4d59","ssw/std":"31889b695d37","ssw/short":"46f583f10806","ssw/full":"d7ccbcd02645","ssw/long":"315f5e7898f8","midballad/std":"d98d8d9608bd","midballad/short":"f97af9054b5c","midballad/full":"831a86de48e3","midballad/long":"6482afefc140","uptempo/std":"6b3056f26a6e","uptempo/short":"b9d7eb435a85","uptempo/full":"86283e469582","uptempo/long":"44e5ee01eb16","jtrio/std":"d2ae256bacb7","jtrio/short":"0d9511c257da","jtrio/full":"a1182a0378b8","jtrio/long":"4f448f7af8cc","slowjazz/std":"2b6c1e71d237","slowjazz/short":"9b4807ec918c","slowjazz/full":"df8c78ef1ef3","slowjazz/long":"c0419a3813f3","jwaltz/std":"c09104d8a6a0","jwaltz/short":"93ecedb31109","jwaltz/full":"86727c2504ad","jwaltz/long":"74c71c4b0453","orchballad/std":"f70eac931076","orchballad/short":"f80e7c1175e2","orchballad/full":"1dd80764b194","orchballad/long":"b310007a737b","film/std":"08bd139f9e14","film/short":"8ada53228d39","film/full":"ef74b2eaa241","film/long":"955ac23172be","chamber/std":"3dde6313bc57","chamber/short":"2c6eb4d4968d","chamber/full":"393c9944365a","chamber/long":"c071575222ce","bitpop/std":"b31ecc87c1fc","bitpop/short":"b59d75b428c1","bitpop/full":"7c2d7358011d","bitpop/long":"a4c1dd53cf6f","bit16/std":"02b6c7864d99","bit16/short":"091a62fa22cc","bit16/full":"695431ef3c7b","bit16/long":"3ba7e0ddee27","synthwave/std":"b632aee761d7","synthwave/short":"fb157d20d01b","synthwave/full":"b9d678e7d128","synthwave/long":"18cd5b5cdcf6","edmpop/std":"fb44e461f20d","edmpop/short":"74f9a1ac5700","edmpop/full":"47d4f110c9bb","edmpop/long":"2ff8ec28e80e","ambient/std":"2c7b762f8a90","ambient/short":"d91efa0ddacd","ambient/full":"99ac151bca03","ambient/long":"80b65b7e6413","retroballad/std":"e9c70f70660a","retroballad/short":"c0b5628d4fd1","retroballad/full":"41015451e283","retroballad/long":"a766b64572ae"};
+  var fp7Bad = [];
+  Object.keys(FP280).forEach(function (k) { var a7 = k.split("/"), q7 = X.tplNewProject(X.tplPlan(null, a7[0], "new", 1, 1, a7[1])).project; if (sha(JSON.stringify(q7.tracks.map(function (t) { return t.clips.map(function (c) { return [c.start, c.len, c.notes]; }); }))).slice(0, 12) !== FP280[k]) { fp7Bad.push(k); } });
+  ok(Object.keys(FP280).length === 128 && fp7Bad.length === 0, "the 4 old forms of all 32 templates give exactly the v2.80 notes (128 fingerprints)", fp7Bad.slice(0, 4));
+  ok(X.FORMS.length === 6 && X.FORMS.slice(0, 4).map(function (f) { return f[0] + ":" + X.formBars(f[0]); }).join() === "std:16,short:32,full:48,long:64" && X.formBars("long96") === 96 && X.formBars("full128") === 128 && X.FORMS.slice(0, 4).every(function (f) { return f[2].every(function (s) { return !s[2]; }); }), "6 forms: the 4 old ones unchanged (no extra options), ロング 96 and フルロング 128");
+  var f128 = X.formOf(null, "full128");
+  ok(f128.length === 13 && f128.map(function (s) { return s.t; }).join() === "intro,A,B,chorus,inter,A,B,chorus,bridge,solo,drop,last,outro" && f128[5].dd === 1 && f128[7].dd === 1 && !f128[1].dd && f128.every(function (s) { return s.bars <= 16; }) && f128[10].name === "落ちサビ" && f128[9].name === "ソロ", "128 bars: 13 sections incl. ソロ and 落ちサビ; the 2nd verse / chorus get one more density step; no section longer than 16 bars", f128.map(function (s) { return s.name + s.bars; }));
+  ok(X.secTypeOfName("落ちサビ") === "drop" && X.secTypeOfName("ソロ") === "solo" && X.secTypeOfName("ギターソロ") === "solo" && X.secTypeOfName("間奏") === "inter" && X.secTypeOfName("ラストサビ") === "last", "section names: 落ちサビ → drop, ソロ → solo (間奏 / ラストサビ as before)");
+  var l7Bad = [], maxCN = 0, maxCB = 0, maxTr = 0;
+  X.TPLS.forEach(function (T) { ["long96", "full128"].forEach(function (fm) { ["maj", "min"].forEach(function (km) {
+    var pl7 = X.tplPlan(null, T.id, "new", 1, 4, fm, { kmode: km });
+    if (!pl7.ok) { l7Bad.push(T.id + "/" + fm + " " + pl7.why); return; }
+    var a7 = X.audit(pl7); if (!a7.ok) { l7Bad.push(T.id + "/" + fm + "/" + km + ": " + a7.problems.join("|")); }
+    maxTr = Math.max(maxTr, pl7.tracks + 1);
+    pl7.rows.forEach(function (r) { r.clips.forEach(function (c) { maxCN = Math.max(maxCN, c.notes); maxCB = Math.max(maxCB, c.r.len / M.ticksPerBar(pl7.meter)); }); });
+  }); }); });
+  ok(l7Bad.length === 0 && maxCN < 4000 && maxCB <= 16 && maxTr <= 16, "all 32 templates × 96 / 128 bars × major / minor pass the checks; every clip ≤ 16 bars and < 4000 notes; ≤ 16 tracks", [l7Bad.slice(0, 3), maxCN, maxCB, maxTr]);
+  var q7 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full128")).project, s7 = M.sectionsOf(q7), cm7 = X.songChords(q7);
+  ok(s7.length === 13 && M.tickToBar(q7, s7[12].tick).bar === 121 && s7[12].len === 8 * 3840 && Object.keys(cm7).length === 128 && M.endTick(q7) === 128 * 3840, "a 128-bar song: 13 section markers in place (アウトロ at bar 121), chords for all 128 bars, nothing past bar 128");
+  var drop7 = X.tplPlan(null, "pop", "new", 1, 1, "full128").rows.filter(function (r) { return r.clips.some(function (c) { return c.sec === 10; }); }).map(function (r) { return X.pat(r.pat).cat; });
+  var bitDrop = X.tplPlan(null, "bitpop", "new", 1, 1, "long96").rows.filter(function (r) { return r.clips.some(function (c) { return c.sec === 9; }); }).length;
+  ok(drop7.length >= 1 && drop7.every(function (c) { return c === "keys" || c === "str"; }) && bitDrop >= 1, "落ちサビ keeps only piano / strings (no drums, bass, bells); a bells-only template keeps its bells there", [drop7, bitDrop]);
+  var pl7b = X.tplPlan(null, "pop", "new", 1, 1, "full128"), ep7 = pl7b.rows[0], a1 = ep7.clips.filter(function (c) { return c.sec === 1; })[0], a2 = ep7.clips.filter(function (c) { return c.sec === 5; })[0];
+  ok(a2.r.set.dens === Math.min(2, a1.r.set.dens + 1) && JSON.stringify(a1.r.notes.slice(0, 20)) !== JSON.stringify(a2.r.notes.slice(0, 20)), "the 2nd verse is not a copy (one density step up, its own seed)");
+  var id7 = 0;
+  q7.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!c.ext.xgen || M.isDrum(t)) { return; } var r7 = X.regenClip(q7, t, c, cm7); if (!r7.ok || JSON.stringify(M.cleanNotes(r7.notes)) !== JSON.stringify(c.notes)) { id7++; } }); });
+  var cp7 = X.chordPlan(q7, { 110: "V/V", 111: "IVmaj7" }, "keep"), rg7 = cp7.items.filter(function (z) { return z.act === "regen"; });
+  ok(id7 === 0 && cp7.ok && rg7.length >= 1 && rg7.every(function (z) { return z.clip.start === 104 * 3840; }), "Chord Track at bars 111–112 (落ちサビ): regenerates only the clips of that section; same chords reproduce every 128-bar clip", [id7, rg7.map(function (z) { return z.track.name; })]);
+  X.chordApply(q7, cp7);
+  var pp7 = X.partPlan(q7, { tpl: "orch", ti: 2, bar: 113, bars: 8, type: "last" }), sw7 = X.swapPlan(q7, { clip: q7.tracks[1].clips.filter(function (c) { return c.start === 112 * 3840; })[0].id, pat: "arpPiano" });
+  ok(X.songChords(q7)["110"] === "V/V" && pp7.ok && pp7.from.every(function (f) { return f === "song"; }) && sw7.ok && sw7.state === "gen", "after the chord change: a partial harp at bars 113–120 and a swap at bar 113 still work with the song chords");
+  var pq7 = X.tplPlan(null, "pop", "new", 1, 1, "full128"), lq7 = X.tplPlan(null, "xlullaby", "new", 1, 1, "full128");
+  ok(X.mmss(X.planSecs(pq7)) === "4:16" && !/WAV/.test(X.timeNote(X.planSecs(pq7))) && X.planSecs(lq7) > 330 && /WAV は 5 分 30 秒まで/.test(X.timeNote(X.planSecs(lq7))), "estimated time: ✨ 128 bars at BPM 120 = 4:16; the 6/8 lullaby at BPM 58 is longer than 5:30 → a WAV note (MIDI / ZIP still fine)", [X.mmss(X.planSecs(lq7))]);
+  var tn = [[0, 960, 60, 0.5], [480, 960, 60, 0.5], [0, 480, 64, 0.5]]; X.trimOverlaps(tn);
+  var tk = [[0, 480, 60, 0.5], [480, 480, 60, 0.5]], tk0 = JSON.stringify(tk); X.trimOverlaps(tk);
+  ok(tn[0][1] === 480 && tn[1][1] === 960 && JSON.stringify(tk) === tk0, "overlap trimming shortens only notes that overlap the next same pitch (no change otherwise)");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -387,7 +426,7 @@ module.exports = async function () {
   ok(R.innerHTML.indexOf("お気に入り") >= 0 && R.innerHTML.indexOf('data-xtsel="chip"') >= 0 && R.innerHTML.indexOf("gone-id") < 0 && R.innerHTML.indexOf("old-one") < 0 && R.innerHTML.indexOf("最近") >= 0, "favorites / recent show known templates only (unknown ids are skipped)");
   ok((R.innerHTML.match(/class="dxm-trow dxm-hide"/g) || []).length === X.TPLS.filter(function (T) { return !T.rec; }).length, "at first only the recommendations are shown (the rest hidden, not all expanded)");
   X.ui.tsel = "pop"; D.xmas.host.render();
-  ok((R.innerHTML.match(/data-xform="/g) || []).length === 4 && R.innerHTML.indexOf("標準 16 小節") >= 0 && R.innerHTML.indexOf("長い曲 64 小節") >= 0 && R.innerHTML.indexOf("Aメロ 8 → サビ 8") >= 0 && R.innerHTML.indexOf('data-xpv="d:pop"') >= 0 && R.innerHTML.indexOf('data-xtpl="pop" data-xmode="add"') >= 0 && R.innerHTML.indexOf("ジャンル") >= 0 && R.innerHTML.indexOf("権利") >= 0, "detail: genre, moods, BPM, instruments, rights, 4 form chips with the sections, ▶ preview, new / add");
+  ok((R.innerHTML.match(/data-xform="/g) || []).length === 6 && R.innerHTML.indexOf("フルロング 128 小節") >= 0 && R.innerHTML.indexOf("BPM 120 で約 0:32") >= 0 && R.innerHTML.indexOf("標準 16 小節") >= 0 && R.innerHTML.indexOf("長い曲 64 小節") >= 0 && R.innerHTML.indexOf("Aメロ 8 → サビ 8") >= 0 && R.innerHTML.indexOf('data-xpv="d:pop"') >= 0 && R.innerHTML.indexOf('data-xtpl="pop" data-xmode="add"') >= 0 && R.innerHTML.indexOf("ジャンル") >= 0 && R.innerHTML.indexOf("権利") >= 0, "detail: genre, moods, BPM, instruments, rights, 4 form chips with the sections, ▶ preview, new / add");
   var p0 = JSON.stringify(D.project());
   X.ui.form = "full"; X.ui.tplPlan = X.tplPlan(D.project(), "pop", "new", 1, 1, "full"); D.xmas.host.render();
   ok(R.innerHTML.indexOf("dxm-sx") >= 0 && (R.innerHTML.match(/class="dxm-sx[ "]/g) || []).length === 7 * 8 && R.innerHTML.indexOf("サビを試聴") >= 0 && R.innerHTML.indexOf("48 小節") >= 0, "preview: one cell per section for every track, ▶ サビを試聴, 48 bars");
@@ -406,7 +445,7 @@ module.exports = async function () {
   ok((R.innerHTML.match(/data-xpart="/g) || []).length === X.TPLS[3].tracks.length && R.innerHTML.indexOf("この楽器だけ") >= 0, "detail: one ＋ この楽器だけ button per instrument");
   var hs = D.xmas.host, pS = D.project(), keepS = JSON.stringify(pS);
   X.ui.part = X.partInit(hs, "orch", 2); hs.render();
-  ok(R.innerHTML.indexOf("data-xpw") >= 0 && (R.innerHTML.match(/data-xptype="/g) || []).length === 8 && (R.innerHTML.match(/data-xpch="/g) || []).length === X.ui.part.bars && R.innerHTML.indexOf("data-xpdest") >= 0 && R.innerHTML.indexOf('data-xm="partApply"') >= 0 && R.innerHTML.indexOf('data-xpv="q"') >= 0, "part screen: where, 8 playing types, one chord per bar, track, ▶ / ＋ 足す / やめる");
+  ok(R.innerHTML.indexOf("data-xpw") >= 0 && (R.innerHTML.match(/data-xptype="/g) || []).length === X.SECT_ORDER.length && (R.innerHTML.match(/data-xpch="/g) || []).length === X.ui.part.bars && R.innerHTML.indexOf("data-xpdest") >= 0 && R.innerHTML.indexOf('data-xm="partApply"') >= 0 && R.innerHTML.indexOf('data-xpv="q"') >= 0, "part screen: where, 8 playing types, one chord per bar, track, ▶ / ＋ 足す / やめる");
   ok(JSON.stringify(D.project()) === keepS, "opening the part screen changes nothing");
   var plU = X.partPlan(pS, X.ui.part), snapU = hs.snapAll(), extU = JSON.stringify(pS.ext), trU = JSON.stringify(pS.tracks);
   var apU = X.partApply(pS, plU); hs.commit(snapU, "test", apU.track.id, apU.clip.id);
