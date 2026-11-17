@@ -190,7 +190,7 @@ module.exports = async function () {
   // ---------- A3-2: テンプレート 32（v2.77）----------
   var gc = {}; X.TPLS.forEach(function (T) { gc[T.genre] = (gc[T.genre] || 0) + 1; });
   var tidSeen = {}, tdup = false; X.TPLS.forEach(function (T) { if (tidSeen[T.id]) { tdup = true; } tidSeen[T.id] = 1; });
-  ok(X.TPLS.length === 32 && !tdup && X.TPLS.slice(0, 5).map(function (T) { return T.id; }).join() === "pop,ballad,jazz,orch,chip" && gc.xmas === 12 && gc.pop === 8 && gc.jazz === 6 && gc.retro === 6, "32 templates: the 5 of v2.72 first (same ids), Christmas 12 / J-POP・POP 8 / Jazz・Orchestra 6 / Retro・Electronic 6", gc);
+  ok(X.TPLS.length >= 32 && !tdup && X.TPLS.slice(0, 5).map(function (T) { return T.id; }).join() === "pop,ballad,jazz,orch,chip" && X.TPLS.slice(0, 32).filter(function (T) { return T.genre === "xmas"; }).length === 12, "the 5 of v2.72 first (same ids); the 32 of v2.77 keep their place", gc);
   var aims = {}, aimDup = false; X.TPLS.forEach(function (T) { if (aims[T.aim]) { aimDup = true; } aims[T.aim] = 1; });
   ok(!aimDup && X.TPLS.every(function (T) { return T.tracks.length >= 3 && T.tracks.length <= 8 && T.tracks.every(function (t) { var P = X.pat(t[1]); return P && P.m.indexOf(T.num + "/" + T.den) >= 0 && (t[0] === "@drum" || X.sound(t[0]) || ["bass", "chip", "pluck", "acid", "brass", "pad", "spad", "lead"].indexOf(t[0]) >= 0); }); }), "every template: its own aim, 3–8 tracks, patterns that fit its meter, known sounds");
   // 似すぎ（音色とパターンの組の重なり 0.6 以上で、拍子・キーの種類・進行のうち 2 つ以上が同じ）を出さない
@@ -211,13 +211,13 @@ module.exports = async function () {
     var a = X.audit(pl); if (!a.ok) { bigBad.push(T.id + "/" + F[0] + "/" + km + ": " + a.problems.join(" | ")); }
     pl.rows.forEach(function (r) { r.clips.forEach(function (c) { maxClip = Math.max(maxClip, c.notes); }); });
   }); }); });
-  ok(nPlans === 256 && bigBad.length === 0 && maxClip < 4000, "all 32 templates × 4 forms × major / minor pass the mechanical checks (256 plans; every clip < 4000 notes)", [bigBad.slice(0, 3), maxClip]);
+  ok(nPlans === X.TPLS.length * 8 && bigBad.length === 0 && maxClip < 4000, "all templates × 4 forms × major / minor pass the mechanical checks (every clip < 4000 notes)", [bigBad.slice(0, 3), maxClip]);
   var newT = X.TPLS.slice(5), mkOk = true;
   newT.forEach(function (T) { var q = X.tplNewProject(X.tplPlan(null, T.id, "new", 1, 1, "short")).project; if (q.tracks[0].clips.some(function (c) { return c.notes.length; }) || M.sectionsOf(q).length !== 5 || q.tracks.length !== T.tracks.length + 1 || (T.kmode === "min") !== (q.ext.xmMode === "min")) { mkOk = false; } });
   ok(mkOk, "each new template makes a new song: an empty melody track, 5 sections (short form), its tracks, its default mode");
   ok(X.tplNewProject(X.tplPlan(null, "bitpop", "new", 1, 1)).project.tracks[0].ext.xm === "xm-retrolead" && X.tplNewProject(X.tplPlan(null, "jpop", "new", 1, 1)).project.tracks[0].ext.xm === "xm-musicbox", "a template can choose the melody track's sound (8bit → retro lead)");
   // 新しいパターン（v2.77）: 3 つの密度・使える拍子で、重なりなし
-  var np = X.PATS.slice(39), npBad = [];
+  var np = X.PATS.slice(39, 53), npBad = [];
   np.forEach(function (P) { P.m.forEach(function (mk) { [0, 1, 2].forEach(function (d) {
     var mt = mk.split("/"), r = X.generate({ pat: P.id, key: 7, prog: "p8", bars: 4, dens: d, seed: 5 }, { num: Number(mt[0]), den: Number(mt[1]) });
     if (!r.ok || !r.notes.length) { npBad.push(P.id + " " + mk + " " + d + " empty"); return; }
@@ -229,7 +229,7 @@ module.exports = async function () {
   for (var wq = 1; wq < wbp.length; wq++) { if (wbp[wq][2] === wbp[wq - 1][2] && wbp[wq][0] < wbp[wq - 1][0] + wbp[wq - 1][1]) { wkO++; } }
   ok(wkO === 0, "walking bass at density 'many' no longer overlaps its own pickup note (fixed in v2.77)", wkO);
   // 新しい音色（ゲームの録音だけ）
-  var more = X.SOUNDS.filter(function (s) { return s[1] === "more"; });
+  var more = X.SOUNDS.slice(26, 36);
   ok(more.length === 10 && more.every(function (s) { return s[3] === "smp" && !!W.UGMelody.sampleFiles[s[4].prog] && X.LIC[s[5].lic] && s[5].lo < s[5].hi && s[5].f.length === 6; }), "10 new sounds use existing game recordings (with rights, range and profile)");
 
   // ---------- A4: 部分テンプレート（v2.78）----------
@@ -417,6 +417,29 @@ module.exports = async function () {
   var tn = [[0, 960, 60, 0.5], [480, 960, 60, 0.5], [0, 480, 64, 0.5]]; X.trimOverlaps(tn);
   var tk = [[0, 480, 60, 0.5], [480, 480, 60, 0.5]], tk0 = JSON.stringify(tk); X.trimOverlaps(tk);
   ok(tn[0][1] === 480 && tn[1][1] === 960 && JSON.stringify(tk) === tk0, "overlap trimming shortens only notes that overlap the next same pitch (no change otherwise)");
+
+  // ---------- A8-1: テンプレート 48（v2.82）----------
+  var FP281L = {"pop/long96":"b70659361802","pop/full128":"4b525bb489eb","ballad/long96":"be50545c5291","ballad/full128":"b64d9e8aa435","jazz/long96":"a9300c85422b","jazz/full128":"517f8f81a543","orch/long96":"439b067b4c6a","orch/full128":"1a33638a57c9","chip/long96":"3a2337050e8b","chip/full128":"3b8c421b1f6d","xacoustic/long96":"03695b700700","xacoustic/full128":"aeb76b2c1b64","xswing/long96":"ab79132c1d00","xswing/full128":"38232b88f2ea","xwaltz/long96":"14ffe54f7661","xwaltz/full128":"260fb27956fa","xgospel/long96":"519e9ddf3be9","xgospel/full128":"f82aa725be79","xcinema/long96":"6ed4cd20e00e","xcinema/full128":"df1d423de369","xlullaby/long96":"a5cda0b1f3b4","xlullaby/full128":"cfdc94be0f32","xdance/long96":"43c9daac235c","xdance/full128":"ab817f924467","jpop/long96":"2e192b930981","jpop/full128":"c29dc0b3ba5b","pianopop/long96":"b8d1a35aa1d0","pianopop/full128":"7f01a64ea94a","acoupop/long96":"cfd12d64bbda","acoupop/full128":"23dd4f4e369a","citypop/long96":"c2f55e8d6018","citypop/full128":"928b4eea549d","electropop/long96":"7b5c2ecf7b3a","electropop/full128":"e20c1dd66780","ssw/long96":"383ae8b21b77","ssw/full128":"de300704a297","midballad/long96":"171581c89ef7","midballad/full128":"19efc6eb235d","uptempo/long96":"ec6007dff0e0","uptempo/full128":"d8f90f961d3e","jtrio/long96":"84e9d6490f85","jtrio/full128":"f40a6b98086a","slowjazz/long96":"7396a9489538","slowjazz/full128":"9513735f46ce","jwaltz/long96":"22a0fe8f8ece","jwaltz/full128":"d4a695174920","orchballad/long96":"cc36c3a2d73d","orchballad/full128":"a1aefe405893","film/long96":"a7f5ac64abe5","film/full128":"2916f8929965","chamber/long96":"558622b09843","chamber/full128":"8ed99e632bc0","bitpop/long96":"aa55329945b9","bitpop/full128":"a3be82a9344e","bit16/long96":"d00e78c8ee68","bit16/full128":"b56c797c8048","synthwave/long96":"7efb2c5eca8b","synthwave/full128":"cfed3007ee82","edmpop/long96":"af1b9680c112","edmpop/full128":"3d0da3cbb097","ambient/long96":"9390fd71d36d","ambient/full128":"4884b1624a67","retroballad/long96":"e8e5da8b8253","retroballad/full128":"390fce5eccb1"};
+  var fp8Bad = [];
+  Object.keys(FP281L).forEach(function (k) { var a8 = k.split("/"), q8 = X.tplNewProject(X.tplPlan(null, a8[0], "new", 1, 1, a8[1])).project; if (sha(JSON.stringify(q8.tracks.map(function (t) { return t.clips.map(function (c) { return [c.start, c.len, c.notes]; }); }))).slice(0, 12) !== FP281L[k]) { fp8Bad.push(k); } });
+  ok(Object.keys(FP281L).length === 64 && fp8Bad.length === 0, "the 32 templates of v2.81 give exactly the v2.81 notes in 96 / 128 bars too (64 fingerprints)", fp8Bad.slice(0, 4));
+  var g8 = {}; X.TPLS.forEach(function (T) { g8[T.genre] = (g8[T.genre] || 0) + 1; });
+  ok(X.TPLS.length === 48 && X.TPLS.slice(32).map(function (T) { return T.id; }).join() === "xuke,xbossa,xchurch,xfolk,xboogie,xmusicbox,ukepop,ukeballad,folk,pianoballad,gospel,kawaii,bossa,bigband,house,rpgtown" && g8.xmas === 18 && g8.pop === 14 && g8.jazz === 8 && g8.retro === 8, "48 templates: 16 added after the 32 (Christmas 18 / POP 14 / Jazz 8 / Retro 8)", g8);
+  var np8 = X.PATS.slice(53), np8Bad = [];
+  np8.forEach(function (P) { P.m.forEach(function (mk) { [0, 1, 2].forEach(function (d) {
+    var mt = mk.split("/"), r8 = X.generate({ pat: P.id, key: 9, prog: "p9", bars: 4, dens: d, seed: 6 }, { num: Number(mt[0]), den: Number(mt[1]) });
+    if (!r8.ok || !r8.notes.length) { np8Bad.push(P.id + " " + mk + " " + d + " empty"); return; }
+    if (!P.drum) { var bp = r8.notes.slice().sort(function (a, c) { return a[2] - c[2] || a[0] - c[0]; }); for (var q = 1; q < bp.length; q++) { if (bp[q][2] === bp[q - 1][2] && bp[q][0] < bp[q - 1][0] + bp[q - 1][1]) { np8Bad.push(P.id + " " + mk + " " + d + " overlap"); break; } } }
+    if (r8.notes.some(function (n) { return n[0] < 0 || n[0] >= r8.len || n[2] < 0 || n[2] > 127 || !(n[3] > 0 && n[3] <= 1); })) { np8Bad.push(P.id + " " + mk + " " + d + " range"); }
+  }); }); });
+  ok(np8.length === 10 && np8Bad.length === 0, "10 new patterns (ukulele strum, Travis picking, bossa guitar / bass / drums, shuffle, offbeat bass, pumping pad, bell peal, piano block chords): every meter and density, no overlaps", np8Bad.slice(0, 4));
+  var s8 = X.SOUNDS.slice(36);
+  ok(s8.length === 7 && s8.every(function (s) { return s[3] === "smp" && !!W.UGMelody.sampleFiles[s[4].prog] && X.LIC[s[5].lic]; }) && X.sound("xm-uke")[5].lic === "fs" && /CC0/.test(X.LIC.fs), "7 new sounds from existing game recordings (ukulele CC0 from freesound, jazz guitar, xylophone, oboe, trumpet, violin, tremolo strings)");
+  ok(X.tplSearch("ウクレレ", {}).length >= 3 && X.tplSearch("bossa", {}).length === 2 && X.tplSearch("", { fam: "guitar" }).some(function (T) { return T.id === "xuke"; }), "the browser finds the new ones (ウクレレ, bossa, guitar filter)");
+  var u8 = X.tplNewProject(X.tplPlan(null, "xuke", "new", 1, 1, "full128")).project, cm8 = X.songChords(u8), id8 = 0;
+  u8.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!c.ext.xgen || M.isDrum(t)) { return; } var r8 = X.regenClip(u8, t, c, cm8); if (!r8.ok || JSON.stringify(M.cleanNotes(r8.notes)) !== JSON.stringify(c.notes)) { id8++; } }); });
+  var cp8 = X.chordPlan(u8, { 100: "V/V" }, "keep"), pp8 = X.partPlan(u8, { tpl: "bossa", ti: 0, bar: 105, bars: 8, type: "drop" });
+  ok(id8 === 0 && cp8.ok && cp8.n >= 1 && pp8.ok && pp8.audit.ok, "a new template (🪕 ukulele, 128 bars) works with Chord Track (bar 101), regeneration and a partial template", [id8, cp8.n, pp8.why]);
 
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});

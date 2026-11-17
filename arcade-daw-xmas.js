@@ -115,7 +115,8 @@
     fluid: "CC BY 3.0（FluidR3_GM・Frank Wen）・クレジットの表記が要る",
     sal: "CC BY 3.0（Salamander Grand Piano・Alexander Holm）・クレジットの表記が要る",
     gs: "CC BY 3.0（GregSullivan E-Pianos）・クレジットの表記が要る",
-    own: "ゴリラシンセで作った音（権利の表記は要らない）"
+    own: "ゴリラシンセで作った音（権利の表記は要らない）",
+    fs: "CC0（freesound・Sadiquecat のウクレレ）・表記なしで商用に使える"
   };
   var SOUNDS = [
     ["xm-sleigh", "bells", "&#x1F6F7; Sleigh Bells（スレイベル）", "drum", { pat: "sleigh8" }, { gm: 83, f: [0.95, 0, 0.4, 0.85, 0.9, 0.7], lic: "own", how: "ドラム（83 Jingle Bell を合成）" }],
@@ -154,7 +155,15 @@
     ["xm-cello", "more", "&#x1F3BB; Cello（チェロ）", "smp", { prog: 42, loop: true, att: 0.07, rel: 0.35, gain: 0.8 }, { gm: 42, rev: 0.25, lo: 36, hi: 76, f: [0.3, 0.45, 0.65, 0.08, 0.25, 0.1], lic: "cc0", fb: "pad" }],
     ["xm-fingerbass", "more", "&#x1F3B8; Finger Bass（フィンガーベース）", "smp", { prog: 33, rel: 0.15, gain: 0.5 }, { gm: 33, lo: 28, hi: 55, f: [0.2, 0.9, 0.45, 0.05, 0.65, 0.45], lic: "fluid", fb: "bass" }],
     ["xm-synbass", "more", "&#x1F50A; Synth Bass（シンセベース）", "smp", { prog: 38, rel: 0.12, gain: 0.9 }, { gm: 38, lo: 28, hi: 55, f: [0.35, 0.9, 0.7, 0.05, 0.7, 0.4], lic: "fluid", fb: "bass" }],
-    ["xm-choir", "more", "&#x1F3B5; Choir Aahs（コーラス）", "smp", { prog: 52, loop: true, att: 0.15, rel: 0.5, gain: 1.05 }, { gm: 52, rev: 0.35, lo: 48, hi: 79, f: [0.4, 0.2, 0.55, 0.15, 0.15, 0.05], lic: "fluid", fb: "xm-choirpad" }]
+    ["xm-choir", "more", "&#x1F3B5; Choir Aahs（コーラス）", "smp", { prog: 52, loop: true, att: 0.15, rel: 0.5, gain: 1.05 }, { gm: 52, rev: 0.35, lo: 48, hi: 79, f: [0.4, 0.2, 0.55, 0.15, 0.15, 0.05], lic: "fluid", fb: "xm-choirpad" }],
+    // v2.82 §345 A8-1: 🎸 More（ゲームにある録音だけ）
+    ["xm-uke", "more", "&#x1FA95; Ukulele（ウクレレ）", "smp", { prog: 140, rel: 0.35, gain: 1.4 }, { gm: 24, rev: 0.15, lo: 60, hi: 86, f: [0.65, 0.05, 0.45, 0.08, 0.85, 0.55], lic: "fs", fb: "pluck" }],
+    ["xm-jazzgtr", "more", "&#x1F3B8; Jazz Guitar（ジャズギター）", "smp", { prog: 26, rel: 0.3, gain: 0.9 }, { gm: 26, rev: 0.15, lo: 40, hi: 84, f: [0.35, 0.3, 0.45, 0.04, 0.7, 0.5], lic: "fluid", fb: "pluck" }],
+    ["xm-xylo", "more", "&#x1F3B5; Xylophone（木琴）", "smp", { prog: 13, rel: 0.25, gain: 2.0 }, { gm: 13, rev: 0.2, lo: 65, hi: 96, f: [0.8, 0, 0.2, 0.08, 0.95, 0.85], lic: "cc0", fb: "bell" }],
+    ["xm-oboe", "more", "&#x1F3B6; Oboe（オーボエ）", "smp", { prog: 68, loop: true, att: 0.04, rel: 0.25, gain: 0.7 }, { gm: 68, rev: 0.2, lo: 58, hi: 91, f: [0.6, 0.05, 0.7, 0.05, 0.3, 0.1], lic: "cc0", fb: "soft" }],
+    ["xm-trumpet", "more", "&#x1F3BA; Trumpet（トランペット）", "smp", { prog: 56, loop: true, att: 0.03, rel: 0.2, gain: 0.75 }, { gm: 56, rev: 0.2, lo: 54, hi: 82, f: [0.7, 0.1, 0.75, 0.05, 0.5, 0.1], lic: "cc0", fb: "brass" }],
+    ["xm-violin", "more", "&#x1F3BB; Violin（バイオリン）", "smp", { prog: 40, loop: true, att: 0.06, rel: 0.3, gain: 0.8 }, { gm: 40, rev: 0.25, lo: 55, hi: 96, f: [0.6, 0.05, 0.7, 0.08, 0.3, 0.1], lic: "cc0", fb: "xm-strings" }],
+    ["xm-tremstr", "more", "&#x1F3BB; Tremolo Strings（トレモロの弦）", "smp", { prog: 44, loop: true, att: 0.05, rel: 0.4, gain: 0.75 }, { gm: 44, rev: 0.3, lo: 40, hi: 88, f: [0.5, 0.25, 0.7, 0.25, 0.4, 0.1], lic: "cc0", fb: "xm-strings" }]
   ];
   // 見送った音色（いまのエンジンでは十分な音にならない）
   var SKIPPED = [["Tubular Bells", "いまのシンセは倍音を整数倍でしか作れず、チューブラーベルの金属の響きにならない。グロッケンの録音を下げると不自然になる"]];
@@ -664,6 +673,103 @@
         else { hits = c.dens === 2 ? [[960, 200], [1440, 260], [2400, 200], [2880, 500]] : [[1440, 260], [2880, 500]]; }
         for (j = 0; j < hits.length; j++) { for (i = 0; i < vc.length; i++) { c.add(t0 + hits[j][0], hits[j][1], vc[i], c.v(j === hits.length - 1 ? 0.58 : 0.5)); } }
       }
+    } },
+    // --- v2.82 §345 A8-1（一般的な奏法の形・ここで作る）---
+    { id: "ukeStrum", cat: "keys", name: "ウクレレのストローク（ダウン・ダウンアップ・アップダウンアップ）", m: ["4/4", "3/4"], snd: "xm-uke", gen: function (c) {
+      var E = 480, b, i, k, n = Math.round(c.bt / E);
+      var H = c.num === 3 ? [[0, 1], [2, 1], [3, 0], [4, 1], [5, 0]] : [[0, 1], [2, 1], [3, 0], [5, 0], [6, 1], [7, 0]], H0 = c.num === 3 ? [[0, 1], [2, 1], [4, 1]] : [[0, 1], [2, 1], [4, 1], [6, 1]], H2 = [];
+      for (i = 0; i < n; i++) { H2.push([i, i % 2 === 0 ? 1 : 0]); }
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, ch = c.ch(b), st = [], o, seen = {};
+        for (o = 64 + c.rs; o <= 76 + c.rs && st.length < 4; o++) { var pc = ((o % 12) + 12) % 12; if (ch.pcs.indexOf(pc) >= 0 && !seen[pc]) { seen[pc] = 1; st.push(o); } }
+        if (st.length < 3) { for (o = 60 + c.rs; o <= 79 + c.rs && st.length < 4; o++) { if (ch.pcs.indexOf(((o % 12) + 12) % 12) >= 0 && st.indexOf(o) < 0) { st.push(o); } } st.sort(function (x, y) { return x - y; }); }
+        var hits = c.dens === 0 ? H0 : (c.dens === 2 ? H2 : H);
+        for (i = 0; i < hits.length; i++) {
+          var nx = i + 1 < hits.length ? hits[i + 1][0] : n, gap = (nx - hits[i][0]) * E - 40, down = hits[i][1] === 1, us = down ? st.slice() : st.slice().reverse();
+          for (k = 0; k < us.length; k++) { c.add(t0 + hits[i][0] * E + k * 10, Math.max(60, gap - k * 10), us[k], c.v((down ? 0.5 : 0.38) - k * 0.01)); }
+        }
+      }
+    } },
+    { id: "travis", cat: "keys", name: "トラヴィス奏法（親指が根音と 5 度を交互に）", m: ["4/4", "3/4"], snd: "xm-steel", gen: function (c) {
+      var prev = null, b, E = 480, k;
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, ch = c.ch(b), vc = ctone(c, b, 64, prev), r0 = bassOf(c, b) + 12, f5 = pcIn(ch.fifth, r0 - 2); prev = vc;
+        var th = c.num === 3 ? [r0, f5, r0] : [r0, f5, r0, f5], tp = c.num === 3 ? [vc[1], vc[2], vc[0]] : [vc[1], vc[2], vc[0], vc[2]];
+        for (k = 0; k < th.length; k++) {
+          c.add(t0 + k * 960, 900, th[k], c.v(k === 0 ? 0.55 : 0.46));
+          if (c.dens > 0 || k % 2 === 1) { c.add(t0 + k * 960 + E, 440, tp[k], c.v(0.42)); }
+          if (c.dens === 2 && k % 2 === 0) { c.add(t0 + k * 960, 440, vc[2] + 12 > 84 ? vc[2] : vc[2] + 12, c.v(0.36)); }
+        }
+      }
+    } },
+    { id: "bossaComp", cat: "keys", name: "ボサノヴァのギター（シンコペーションの和音・低音は 1・3 拍）", m: ["4/4"], snd: "xm-nylon", gen: function (c) {
+      var prev = null, b, j, i;
+      var S = c.dens === 0 ? [0, 6, 10] : (c.dens === 2 ? [0, 3, 6, 8, 10, 13] : [0, 3, 6, 10, 13]);
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, ch = c.ch(b), vc = ctone(c, b, 62, prev), lo = bassOf(c, b) + 12, f5 = pcIn(ch.fifth, lo - 5); prev = vc;
+        c.add(t0, 900, lo, c.v(0.52)); c.add(t0 + 1920, 900, b % 2 ? lo : f5, c.v(0.46));
+        for (j = 0; j < S.length; j++) { for (i = 0; i < vc.length; i++) { c.add(t0 + S[j] * STEP, 200, vc[i], c.v(0.4)); } }
+      }
+    } },
+    { id: "bossaBass", cat: "bass", name: "ボサノヴァのベース（根音と 5 度・前のめり）", m: ["4/4"], snd: "xm-upbass", gen: function (c) {
+      for (var b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, ch = c.ch(b), r = bassOf(c, b), f = pcIn(ch.fifth, r - 7 < 28 ? r : r - 7);
+        c.add(t0, 1400, r, c.v(0.72)); c.add(t0 + 1440, 440, f, c.v(0.5)); c.add(t0 + 1920, c.dens === 0 ? 1800 : 1400, f, c.v(0.62));
+        if (c.dens >= 1) { c.add(t0 + 3360, 440, r, c.v(0.5)); }
+      }
+    } },
+    { id: "bossaDrums", cat: "drum", name: "ボサノヴァのリズム（リムのクラーベ・シェイカー）", m: ["4/4"], snd: "@drum", drum: true, gen: function (c) {
+      for (var b = 0; b < c.bars; b++) {
+        var rows = [[36, [0, 6, 8, 14], 0.5], [37, b % 2 === 0 ? [0, 6, 12] : [4, 10], 0.55]];
+        if (c.dens >= 1) { rows.push([70, all16(16), 0.32, 0.22]); }
+        if (c.dens === 2) { rows.push([42, every(16, 4, 2), 0.3]); }
+        drumRows(c, rows, b);
+      }
+    } },
+    { id: "shuffleDrum", cat: "drum", name: "シャッフルのドラム（3:1 のハイハット・2・4 拍のスネア）", m: ["4/4"], snd: "@drum", drum: true, gen: function (c) {
+      var b, k;
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt;
+        for (k = 0; k < 4; k++) {
+          c.add(t0 + k * 960, 0, 42, c.v(0.5)); if (c.dens >= 1) { c.add(t0 + k * 960 + 720, 0, 42, c.v(0.34)); }
+          if (k === 0 || k === 2 || (c.dens === 2 && k === 3)) { c.add(t0 + k * 960 + (k === 3 ? 720 : 0), 0, 36, c.v(0.85)); }
+          if (k === 1 || k === 3) { c.add(t0 + k * 960, 0, 38, c.v(0.8)); }
+        }
+        crash(c, b, 0.55);
+        if (!c.nofill && c.dens >= 1 && b % 4 === 3) { c.add(t0 + 3 * 960 + 480, 0, 38, c.v(0.45)); c.add(t0 + 3 * 960 + 720, 0, 38, c.v(0.6)); }
+      }
+    } },
+    { id: "offbeatBass", cat: "bass", name: "裏打ちのベース（ハウス・EDM）", m: ["4/4"], snd: "xm-synbass", gen: function (c) {
+      for (var b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, r = bassOf(c, b), k;
+        for (k = 0; k < 4; k++) { c.add(t0 + k * 960 + 480, 420, r, c.v(0.68)); if (c.dens === 2) { c.add(t0 + k * 960 + 720, 200, r + 12, c.v(0.42)); } }
+        if (c.dens === 0) { c.add(t0, 400, r, c.v(0.55)); }
+      }
+    } },
+    { id: "pumpPad", cat: "str", name: "ふくらむパッド（拍ごとに強弱）", m: ["4/4", "3/4"], snd: "xm-winterpad", gen: function (c) {
+      var prev = null, b, k, i;
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, vc = ctone(c, b, 64, prev); prev = vc;
+        var st = c.dens === 2 ? 480 : 960, n = Math.round(c.bt / st);
+        for (k = 0; k < n; k++) { for (i = 0; i < vc.length; i++) { c.add(t0 + k * st + 120, st - 160, vc[i], c.v(0.34 + (c.dens === 0 ? 0.04 : 0.02) * (k % 2))); } }
+      }
+    } },
+    { id: "bellPeal", cat: "bell", name: "鐘の連打（スケールを下る・教会の鐘）", m: ["4/4", "3/4", "6/8"], snd: "xm-chimes", gen: function (c) {
+      var b, k;
+      for (b = 0; b < c.bars; b++) {
+        if (c.dens === 0 && b % 2 === 1) { continue; }
+        var t0 = b * c.bt, ch = c.ch(b), top = pcIn(ch.root, 72 + c.rs), st = c.dens === 2 ? c.bl / 2 : c.bl, n = Math.round(c.bt / st), m = top;
+        for (k = 0; k < n; k++) { c.add(t0 + k * st, Math.min(st * 2, c.bt - k * st) - 10, m, c.v(k === 0 ? 0.55 : 0.42)); m = scaleTone(c.key, m, -1, c.mode); if (m < top - 9) { m = top; } }
+      }
+    } },
+    { id: "pianoBlock", cat: "keys", name: "ピアノの和音（4 分の刻み・左手はオクターブ）", m: ["4/4", "3/4"], snd: "xm-warmpiano", gen: function (c) {
+      var prev = null, b, k, i;
+      for (b = 0; b < c.bars; b++) {
+        var t0 = b * c.bt, vc = ctone(c, b, 66, prev), lo = bassOf(c, b) + 12; prev = vc;
+        c.add(t0, c.bt - 40, lo - 12 >= 28 ? lo - 12 : lo, c.v(0.5)); c.add(t0, c.bt - 40, lo, c.v(0.45));
+        var st = c.dens === 0 ? c.bt : (c.dens === 2 ? 480 : 960), n = Math.round(c.bt / st);
+        for (k = 0; k < n; k++) { for (i = 0; i < vc.length; i++) { c.add(t0 + k * st, st - 30, vc[i], c.v(k === 0 ? 0.5 : 0.4)); } }
+      }
     } }
   ];
   function pat(id) { for (var i = 0; i < PATS.length; i++) { if (PATS[i].id === id) { return PATS[i]; } } return null; }
@@ -871,7 +977,40 @@
       ["xm-winterpad", "padSwell", [0, 1], "mid", "パッド"], ["xm-cinepad", "stringsLong", [0, 0], "low", "低いパッド"], ["xm-chimes", "bellPing", [0, 0], "mid", "チャイム"], ["xm-harp", "harpFlow", [null, 0], "mid", "ハープ"]] },
     { id: "retroballad", genre: "retro", moods: ["retro", "sad"], tags: "retro ballad 80s electric piano バラード レトロ エレピ 80年代", aim: "エレピのバラード伴奏とシンセのパッド、シンセのベース。オンコードの進行でゆっくり下る。サビでチャイム", name: "&#x1F4FC; レトロバラード", num: 4, den: 4, bpm: 74, key: 10, progs: ["p9", "p8"], desc: "エレピ・シンセパッド・シンセベース・ドラム・チャイム", tracks: [
       ["xm-ep", "balladPiano", [0, 1], "mid", "エレピ"], ["spad", "stringsLong", [0, 1], "mid", "パッド"], ["bass", "balladBass", [0, 1], "mid", "ベース"],
-      ["@drum", "ballad", [0, 1], "mid", "ドラム"], ["xm-chimes", "bellPing", [null, 0], "mid", "チャイム"]] }
+      ["@drum", "ballad", [0, 1], "mid", "ドラム"], ["xm-chimes", "bellPing", [null, 0], "mid", "チャイム"]] },
+    // ===== v2.82 §345 A8-1 =====
+    { id: "xuke", genre: "xmas", moods: ["warm", "bright"], rec: 1, tags: "Christmas ukulele strum クリスマス ウクレレ 弾き語り", aim: "ウクレレのストローク（ダウン・ダウンアップ・アップダウンアップ）が主役の軽いクリスマス。ウッドベースとスレイベル、サビでグロッケンが入る。弾き語りの伴奏に近い", name: "&#x1FA95; ウクレレ・クリスマス", num: 4, den: 4, bpm: 108, key: 0, progs: ["p1", "p2"], desc: "ウクレレのストローク・ウッドベース・スレイベル・グロッケン", tracks: [
+      ["xm-uke", "ukeStrum", [0, 1], "mid", "ウクレレ"], ["xm-upbass", "bassRoot5", [0, 1], "mid", "ベース"], ["xm-sleigh", "sleigh8", [0, 1], "mid", "スレイベル"], ["xm-glock", "bellObb", [null, 0], "mid", "グロッケン"]] },
+    { id: "xbossa", genre: "xmas", moods: ["cool", "warm"], rec: 1, tags: "Christmas bossa nova guitar クリスマス ボサノヴァ おしゃれ", aim: "ナイロンギターのシンコペーションの和音とボサノヴァのベース、リムのクラーベ。サビでフルートの対旋律。Imaj7–vi7–ii7–V7 の回る進行", name: "&#x1F379; ボサノヴァ・クリスマス", num: 4, den: 4, bpm: 128, key: 5, progs: ["p8", "p4"], desc: "ボサノヴァのギター・ベース・リズム・フルート・ビブラフォン", tracks: [
+      ["xm-nylon", "bossaComp", [1, 1], "mid", "ギター"], ["xm-upbass", "bossaBass", [1, 1], "mid", "ベース"], ["@drum", "bossaDrums", [1, 2], "mid", "リズム"], ["xm-flute", "counterLine", [null, 0], "high", "フルート"], ["xm-vibes", "bellObb", [0, 0], "low", "ビブラフォン"]] },
+    { id: "xchurch", genre: "xmas", moods: ["grand", "calm"], rec: 1, tags: "Christmas church bells organ choir クリスマス 教会 鐘 オルガン 聖歌", aim: "3 拍子。教会のオルガンののばす和音に、スケールを下る鐘の連打。サビでコーラスが重なる。トレモロの弦で厚みを出す", name: "&#x1F514; 鐘とオルガンのクリスマス", num: 3, den: 4, bpm: 96, key: 7, progs: ["p3", "p1"], desc: "3/4・オルガン・鐘の連打・コーラス・トレモロの弦・ベース", tracks: [
+      ["xm-church", "organHold", [0, 1], "mid", "オルガン"], ["xm-chimes", "bellPeal", [0, 1], "mid", "鐘"], ["xm-choir", "padSwell", [null, 1], "mid", "コーラス"], ["xm-tremstr", "stringsLong", [0, 1], "low", "トレモロの弦"], ["xm-upbass", "waltzBass", [0, 0], "mid", "ベース"]] },
+    { id: "xfolk", genre: "xmas", moods: ["warm", "calm"], rec: 1, tags: "Christmas folk travis picking fiddle クリスマス フォーク バイオリン", aim: "スチールギターのトラヴィス奏法（親指が根音と 5 度を交互に）とブラシ。サビでバイオリンの対旋律とスレイベル。素朴な弾き語り向け", name: "&#x1F9E3; フォーク・クリスマス", num: 4, den: 4, bpm: 100, key: 2, progs: ["p1", "p2"], desc: "トラヴィス奏法・バイオリン・ベース・ブラシ・スレイベル", tracks: [
+      ["xm-steel", "travis", [1, 1], "mid", "ギター"], ["xm-violin", "counterLine", [null, 0], "high", "バイオリン"], ["xm-upbass", "bassRoot5", [0, 1], "mid", "ベース"], ["xm-brush", "brush", [0, 1], "mid", "ブラシ"], ["xm-sleigh", "sleigh8", [null, 0], "mid", "スレイベル"]] },
+    { id: "xboogie", genre: "xmas", moods: ["party", "bright"], rec: 1, tags: "Christmas boogie shuffle swing クリスマス ブギ シャッフル ロックンロール", aim: "3 連のハイハットのシャッフルとウォーキングベースで跳ねる。ピアノの和音の刻み、サビでブラスのキメとスレイベルのシャッフル", name: "&#x1F385; ブギ・クリスマス", num: 4, den: 4, bpm: 140, key: 7, progs: ["p3", "p5"], desc: "シャッフルのドラム・ウォーキングベース・ピアノの刻み・ブラス・スレイベル", tracks: [
+      ["xm-warmpiano", "pianoBlock", [1, 2], "mid", "ピアノ"], ["xm-upbass", "walking", [1, 1], "mid", "ベース"], ["@drum", "shuffleDrum", [1, 2], "mid", "ドラム"], ["xm-softbrass", "brassStabs", [null, 1], "mid", "ブラス"], ["xm-sleigh", "sleighShuffle", [null, 1], "mid", "スレイベル"]] },
+    { id: "xmusicbox", genre: "xmas", moods: ["calm", "bright"], rec: 1, tags: "Christmas music box waltz pizzicato クリスマス オルゴール ワルツ ピチカート", aim: "3 拍子のオルゴールの分散和音とピチカート。サビでチェレスタの鐘の連打と弦が入る。🌙 子守歌（6/8）より軽く、🎻 オーケストラのワルツより小さな音", name: "&#x1F381; オルゴールのワルツ", num: 3, den: 4, bpm: 100, key: 3, progs: ["p1", "p3"], desc: "3/4・オルゴール・ピチカート・チェレスタ・弦", tracks: [
+      ["xm-musicbox", "lullabyArp", [1, 2], "mid", "オルゴール"], ["xm-pizz", "pizz", [0, 1], "mid", "ピチカート"], ["xm-celesta", "bellPeal", [null, 0], "mid", "チェレスタ"], ["xm-strings", "stringsLong", [null, 0], "mid", "ストリングス"]] },
+    { id: "ukepop", genre: "pop", moods: ["bright", "party"], tags: "ukulele pop happy ウクレレ ポップ 明るい", aim: "ウクレレの 8 分のストロークとフィンガーベース・8 ビート。サビで木琴のかざり。明るく弾む", name: "&#x1F33A; ウクレレ・ポップ", num: 4, den: 4, bpm: 120, key: 7, progs: ["p2", "p6"], desc: "ウクレレのストローク・ベース・ドラム・木琴", tracks: [
+      ["xm-uke", "ukeStrum", [1, 2], "mid", "ウクレレ"], ["xm-fingerbass", "popBass8", [0, 1], "mid", "ベース"], ["@drum", "pop8", [0, 1], "mid", "ドラム"], ["xm-xylo", "bellObb", [null, 0], "mid", "木琴"]] },
+    { id: "ukeballad", genre: "pop", moods: ["calm", "sad"], tags: "ukulele ballad slow ウクレレ バラード 弾き語り しっとり", aim: "ウクレレの 4 分の刻みだけで歌を支える。サビでチェロの対旋律とベース・チャイム。オンコードで下るコード", name: "&#x1F319; ウクレレ・バラード", num: 4, den: 4, bpm: 72, key: 5, progs: ["p9", "p6"], desc: "ウクレレ（4 分）・チェロ・ベース・チャイム", tracks: [
+      ["xm-uke", "ukeStrum", [0, 0], "mid", "ウクレレ"], ["xm-cello", "counterLine", [null, 0], "low", "チェロ"], ["xm-upbass", "balladBass", [null, 0], "mid", "ベース"], ["xm-chimes", "bellPing", [null, 0], "mid", "チャイム"]] },
+    { id: "folk", genre: "pop", moods: ["warm", "calm"], tags: "folk travis picking fiddle tambourine フォーク トラヴィス バイオリン", aim: "トラヴィス奏法のギターが休まず刻み、バイオリンの対旋律が歌の合間をつなぐ。サビでタンバリン", name: "&#x1F33E; フォーク", num: 4, den: 4, bpm: 104, key: 7, progs: ["p3", "p1"], desc: "トラヴィス奏法・バイオリン・ベース・タンバリン", tracks: [
+      ["xm-steel", "travis", [1, 2], "mid", "ギター"], ["xm-violin", "counterLine", [0, 1], "high", "バイオリン"], ["xm-upbass", "bassRoot5", [0, 1], "mid", "ベース"], ["@drum", "tamb16", [null, 0], "mid", "タンバリン"]] },
+    { id: "pianoballad", genre: "pop", moods: ["sad", "calm"], tags: "piano ballad block chords strings ピアノ バラード 弾き語り", aim: "ピアノの 4 分の和音（左手はオクターブ）が中心。チェロの対旋律と、サビで弦のロングトーン・ハーフタイムのドラム。🕯️ 聖夜のバラードより重く、ベルを使わない", name: "&#x1F3B9; ピアノバラード", num: 4, den: 4, bpm: 66, key: 4, progs: ["p9", "p6"], desc: "ピアノの和音・チェロ・弦・ベース・ドラム", tracks: [
+      ["xm-warmpiano", "pianoBlock", [0, 1], "mid", "ピアノ"], ["xm-cello", "counterLine", [0, 1], "low", "チェロ"], ["xm-strings", "stringsLong", [null, 1], "mid", "ストリングス"], ["xm-upbass", "balladBass", [0, 1], "mid", "ベース"], ["@drum", "halfTime", [null, 0], "mid", "ドラム"]] },
+    { id: "gospel", genre: "pop", moods: ["warm", "party"], tags: "gospel shuffle organ choir ゴスペル シャッフル オルガン", aim: "シャッフルのドラムとウォーキングのベース、オルガンの裏打ちとピアノの刻み。コーラスが全体を包む。⛪ ゴスペル風クリスマス（バラード）より速く跳ねる", name: "&#x1F64C; ゴスペル・シャッフル", num: 4, den: 4, bpm: 108, key: 8, progs: ["p9", "p3"], desc: "オルガン・コーラス・ピアノ・ウォーキングベース・シャッフル", tracks: [
+      ["xm-softorgan", "organChop", [1, 2], "mid", "オルガン"], ["xm-choir", "padSwell", [0, 1], "mid", "コーラス"], ["xm-warmpiano", "pianoBlock", [0, 1], "mid", "ピアノ"], ["xm-fingerbass", "walking", [1, 1], "mid", "ベース"], ["@drum", "shuffleDrum", [1, 2], "mid", "ドラム"]] },
+    { id: "kawaii", genre: "pop", moods: ["bright", "party"], tags: "kawaii J-POP xylophone glockenspiel かわいい カワイイ アイドル 木琴", aim: "木琴とグロッケンの細かいかざりが主役の明るい J-POP。エレピの 8 分・シンコペーションのベース・8 ビート", name: "&#x1F36C; カワイイ J-POP", num: 4, den: 4, bpm: 144, key: 5, progs: ["p2", "p6"], desc: "木琴・グロッケン・エレピ・ベース・ドラム", tracks: [
+      ["xm-xylo", "bellObb", [1, 2], "mid", "木琴"], ["xm-glock", "synthArp", [null, 1], "mid", "グロッケン"], ["xm-ep", "popPiano8", [0, 1], "mid", "エレピ"], ["xm-fingerbass", "syncBass", [0, 1], "mid", "ベース"], ["@drum", "pop8", [1, 2], "mid", "ドラム"]] },
+    { id: "bossa", genre: "jazz", moods: ["cool", "sad"], tags: "bossa nova minor guitar flute ボサノヴァ マイナー ギター", aim: "マイナーのボサノヴァ。ジャズギターの和音とフィンガーベース、クラーベ。サビでオーボエの対旋律。🍹 ボサノヴァ・クリスマス（ナイロンギター・フルート・ビブラフォン）より影のある響き", name: "&#x1F378; ボサノヴァ", num: 4, den: 4, bpm: 132, key: 2, kmode: "min", progs: ["m4", "m3"], desc: "マイナー・ジャズギター・ベース・リズム・オーボエ", tracks: [
+      ["xm-jazzgtr", "bossaComp", [1, 2], "mid", "ジャズギター"], ["xm-fingerbass", "bossaBass", [1, 1], "mid", "ベース"], ["@drum", "bossaDrums", [1, 1], "mid", "リズム"], ["xm-oboe", "counterLine", [null, 0], "mid", "オーボエ"]] },
+    { id: "bigband", genre: "jazz", moods: ["party", "cool"], tags: "big band swing trumpet brass ビッグバンド スイング トランペット", aim: "トランペットのキメとブラスのハーモニーが主役。ピアノは 4 分の和音、ウォーキングベース・ライドのスイング。ii–V–I の進行。サビでキメが増える（🎺 クリスマス・スイングはピアノのコンピング・ギター・スレイベル）", name: "&#x1F3BA; ビッグバンド・スイング", num: 4, den: 4, bpm: 176, key: 10, progs: ["p4", "p8"], desc: "トランペット・ブラス・ピアノ・ベース・ドラム", tracks: [
+      ["xm-trumpet", "brassStabs", [1, 2], "mid", "トランペット"], ["xm-softbrass", "hornPad", [0, 1], "mid", "ブラス"], ["xm-jazzpiano", "pianoBlock", [0, 1], "mid", "ピアノ"], ["xm-upbass", "walking", [1, 2], "mid", "ベース"], ["xm-brush", "swing", [1, 2], "mid", "ドラム"]] },
+    { id: "house", genre: "retro", moods: ["party", "cool"], tags: "house dance offbeat bass four on the floor ハウス ダンス クラブ", aim: "マイナーの 4 つ打ちに、裏打ちのシンセベースと拍ごとにふくらむパッド。サビでプラックのスタブとベル", name: "&#x1F3E0; ハウス", num: 4, den: 4, bpm: 124, key: 9, kmode: "min", progs: ["m3", "m1"], desc: "マイナー・裏打ちのベース・ふくらむパッド・4 つ打ち・スタブ", tracks: [
+      ["xm-synbass", "offbeatBass", [1, 2], "mid", "ベース"], ["xm-winterpad", "pumpPad", [1, 1], "mid", "パッド"], ["pluck", "danceStab", [null, 1], "mid", "スタブ"], ["@drum", "fourFloor", [1, 2], "mid", "ドラム"], ["xm-synthbells", "bellObb", [null, 0], "mid", "ベル"]] },
+    { id: "rpgtown", genre: "retro", moods: ["retro", "warm"], tags: "RPG town game music 16bit 3/4 ゲーム 町 RPG", aim: "3 拍子の昔の RPG の町の曲のような編成。マリンバのかざり・ピチカート・フルートの対旋律・ワルツのベース", name: "&#x1F3D8;&#xFE0F; RPG の町", num: 3, den: 4, bpm: 120, key: 0, progs: ["p3", "p1"], desc: "3/4・マリンバ・ピチカート・フルート・オーボエ・ベース", tracks: [
+      ["xm-marimba", "bellObb", [1, 1], "low", "マリンバ"], ["xm-pizz", "pizz", [1, 1], "mid", "ピチカート"], ["xm-flute", "counterLine", [0, 1], "high", "フルート"], ["xm-oboe", "bellPing", [null, 0], "low", "オーボエ"], ["xm-upbass", "waltzBass", [0, 1], "mid", "ベース"]] }
   ];
   // セクションの型: [名前, 色（DAW のセクションの色）, 強さの倍率, 短い名前]
   var SECT = {
@@ -1084,7 +1223,8 @@
   var BPMS = [["slow", "ゆっくり（〜89）"], ["mid", "ふつう（90〜125）"], ["fast", "速い（126〜）"]];
   var FAM_OF = { "xm-strings": "strings", "xm-pizz": "strings", "xm-harp": "strings", "xm-glock": "bells", "xm-celesta": "bells", "xm-musicbox": "bells", "xm-chimes": "bells", "xm-brightbells": "bells", "xm-8bitbells": "bells", "xm-synthbells": "bells", "xm-vibes": "bells", "bell": "bells",
     "xm-horn": "winds", "xm-softbrass": "winds", "brass": "winds", "xm-warmpiano": "piano", "xm-ep": "piano", "xm-jazzpiano": "piano", "xm-church": "piano", "xm-softorgan": "piano", "organ": "piano", "xm-choirpad": "choir",
-    "xm-nylon": "guitar", "xm-steel": "guitar", "xm-cleangtr": "guitar", "xm-marimba": "bells", "xm-flute": "winds", "xm-clarinet": "winds", "xm-cello": "strings", "xm-choir": "choir", "xm-cinepad": "synth" }; // v2.79: v2.77 の音色の種類（ギターなどが シンセ になっていた）
+    "xm-nylon": "guitar", "xm-steel": "guitar", "xm-cleangtr": "guitar", "xm-marimba": "bells", "xm-flute": "winds", "xm-clarinet": "winds", "xm-cello": "strings", "xm-choir": "choir", "xm-cinepad": "synth",
+    "xm-uke": "guitar", "xm-jazzgtr": "guitar", "xm-xylo": "bells", "xm-oboe": "winds", "xm-trumpet": "winds", "xm-violin": "strings", "xm-tremstr": "strings" }; // v2.82 // v2.79: v2.77 の音色の種類（ギターなどが シンセ になっていた）
   var TPL_KEY = "ultimateGorillaXmasTplV1";
   function lbl(list, id) { for (var i = 0; i < list.length; i++) { if (list[i][0] === id) { return list[i][1]; } } return ""; }
   function famsOf(T) {

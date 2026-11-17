@@ -12,9 +12,9 @@ module.exports = async function () {
   // ---------- 音色 ----------
   var ids = {}, dupId = false, cats = {}, kinds = { syn: 0, smp: 0, drum: 0 }, lic = {};
   X.SOUNDS.forEach(function (s) { if (ids[s[0]]) { dupId = true; } ids[s[0]] = 1; cats[s[1]] = (cats[s[1]] || 0) + 1; kinds[s[3]]++; lic[s[5].lic] = (lic[s[5].lic] || 0) + 1; });
-  ok(X.SOUNDS.length === 36 && !dupId && X.SOUNDS.every(function (s) { return /^xm-[a-z0-9]+$/.test(s[0]); }), "36 sounds (26 of v2.72 + 10 'More' of v2.77), unique ids that all start with xm-", [X.SOUNDS.length]);
-  ok(cats.bells === 7 && cats.orch === 7 && cats.pop === 7 && cats.jazz === 5 && cats.more === 10, "categories (bells 7 / orchestra 7 / pop 7 / jazz 5 — as v2.72 — and More 10)", cats);
-  ok(kinds.syn === 11 && kinds.smp === 23 && kinds.drum === 2 && X.SOUNDS.slice(0, 26).every(function (s) { return s[1] !== "more"; }), "11 synth patches, 23 instrument recordings (13 + 10 new), 2 percussion; the first 26 are the v2.72 sounds", kinds);
+  ok(X.SOUNDS.length === 43 && !dupId && X.SOUNDS.every(function (s) { return /^xm-[a-z0-9]+$/.test(s[0]); }), "43 sounds (26 of v2.72 + 10 More of v2.77 + 7 More of v2.82), unique ids that all start with xm-", [X.SOUNDS.length]);
+  ok(cats.bells === 7 && cats.orch === 7 && cats.pop === 7 && cats.jazz === 5 && cats.more === 17, "categories (bells 7 / orchestra 7 / pop 7 / jazz 5 — as v2.72 — and More 17)", cats);
+  ok(kinds.syn === 11 && kinds.smp === 30 && kinds.drum === 2 && X.SOUNDS.slice(0, 26).every(function (s) { return s[1] !== "more"; }), "11 synth patches, 30 instrument recordings (13 + 10 + 7 new), 2 percussion; the first 26 are the v2.72 sounds", kinds);
   ok(X.SOUNDS.every(function (s) { return X.LIC[s[5].lic]; }) && lic.cc0 >= 8, "every sound states its rights; CC0 recordings are preferred", lic);
   ok(X.SOUNDS.filter(function (s) { return s[3] === "smp"; }).every(function (s) { return !!UG.sampleFiles[s[4].prog]; }), "every recording uses an existing game sample file (no new external samples)");
   ok(X.SOUNDS.filter(function (s) { return s[3] === "syn"; }).every(function (s) { var c = S.patchClean(s[4]); return JSON.stringify(S.patchClean(c)) === JSON.stringify(c) && c.vol > 0; }), "every synth sound is a valid ゴリラシンセ patch (the same parameters)");
@@ -27,7 +27,7 @@ module.exports = async function () {
   ok(iDr.type === "drum", "Sleigh Bells is a drum instrument");
 
   // ---------- パターン ----------
-  ok(X.PATS.length === 53 && X.PATS[38].id === "padSwell" && X.PATS[39].id === "strum", "53 performance patterns (39 of v2.72 in the same order + 14 of v2.77)", X.PATS.length);
+  ok(X.PATS.length === 63 && X.PATS[38].id === "padSwell" && X.PATS[39].id === "strum" && X.PATS[53].id === "ukeStrum", "63 performance patterns (39 of v2.72 in the same order + 14 of v2.77 + 10 of v2.82)", X.PATS.length);
   var pids = {}, pdup = false; X.PATS.forEach(function (P) { if (pids[P.id]) { pdup = true; } pids[P.id] = 1; });
   ok(!pdup && X.PATS.every(function (P) { return P.m.length && P.name && (P.drum || X.sound(P.snd) || P.snd === "bass" || P.snd === "chip" || P.snd === "pluck"); }), "unique pattern ids, each with meters and a default sound");
   var meters = [[4, 4], [3, 4], [6, 8]], bad = [], dupN = 0, count = 0;
