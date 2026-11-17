@@ -493,6 +493,38 @@ module.exports = async function () {
   var w9 = X.tplNewProject(X.tplPlan(null, "xlullaby", "new", 1, 1, "std")).project, wp9 = X.groovePlan(w9, { amt: 100 });
   ok(wp9.ok && wp9.n === 0 && wp9.items.every(function (z) { return /3 つずつ/.test(z.why); }), "6/8 clips are left as they are (already in threes)");
 
+  // ---------- A9-2: 拍子の変換（v2.85）----------
+  ok(X.METERS.map(function (m) { return m[0] + "/" + m[1]; }).join() === "4/4,3/4,6/8,12/8" && X.patFor("popPiano8", "3/4") === "waltzPiano" && X.patFor("pop8", "6/8") === "drums68" && X.patFor("sleigh8", "3/4") === "sleighWaltz" && X.patFor("arpPiano", "3/4") === "arpPiano" && X.patFor("popPiano8", "12/8") === "sixEightPiano", "meter targets 4/4 / 3/4 / 6/8 / 12/8; patterns that fit stay, others map to the same kind (12/8 uses 6/8 patterns)");
+  var mq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project; mq.tracks[0].clips[1].notes = [[0, 480, 72, 0.8], [3000, 700, 74, 0.7], [3840, 480, 76, 0.7]];
+  var mqKeep = JSON.stringify(mq), mBad = [];
+  ["3/4", "6/8", "12/8"].forEach(function (mk) {
+    var mm = mk.split("/"), pl = X.meterPlan(mq, { num: mm[0], den: mm[1], melody: true });
+    if (!pl.ok) { mBad.push(mk + " " + pl.why); return; }
+    var np = X.meterProject(mq, pl).project, secs = M.sectionsOf(np), osecs = M.sectionsOf(mq), tpb = M.ticksPerBar(M.meterAt(np, 0));
+    if (M.meterAt(np, 0).num !== Number(mm[0]) || M.meterAt(np, 0).den !== Number(mm[1])) { mBad.push(mk + " meter"); }
+    if (secs.length !== osecs.length || secs.some(function (s, i) { return M.tickToBar(np, s.tick).bar !== M.tickToBar(mq, osecs[i].tick).bar || s.len !== Math.round(osecs[i].len / 3840) * tpb || s.name !== osecs[i].name; })) { mBad.push(mk + " sections"); }
+    if (JSON.stringify(X.songChords(np)) !== JSON.stringify(X.songChords(mq))) { mBad.push(mk + " chords"); }
+    np.tracks.forEach(function (t) { t.clips.forEach(function (c) {
+      c.notes.forEach(function (n) { if (n[0] < 0 || n[0] >= c.len || (!M.isDrum(t) && n[0] + n[1] > c.len)) { mBad.push(mk + " out " + t.name); } if (M.isDrum(t) && n[0] % 240) { mBad.push(mk + " drum grid"); } });
+      if (!M.isDrum(t)) { var bp = c.notes.slice().sort(function (a, b) { return a[2] - b[2] || a[0] - b[0]; }); for (var q = 1; q < bp.length; q++) { if (bp[q][2] === bp[q - 1][2] && bp[q][0] < bp[q - 1][0] + bp[q - 1][1]) { mBad.push(mk + " overlap " + t.name); break; } } }
+      if (c.ext.xgen && !M.isDrum(t) && X.pat(c.ext.xgen.pat).cat !== "bell") { var b0 = M.tickToBar(np, c.start).bar - 1, k; for (k = 0; k < c.len / tpb; k++) { var ch = X.chordOf(2, X.songChords(np)[b0 + k]); c.notes.filter(function (n) { return n[0] === k * tpb; }).forEach(function (n) { if (ch.pcs.indexOf(n[2] % 12) < 0 && n[2] % 12 !== ch.bass && n[2] % 12 !== (ch.root + 10) % 12 && n[2] % 12 !== (ch.root + 11) % 12 && n[2] % 12 !== (ch.root + 2) % 12) { mBad.push(mk + " chord " + t.name); } }); } }
+    }); });
+    if (mk === "3/4" && pl.dropped !== 1) { mBad.push("dropped " + pl.dropped); }
+  });
+  ok(mBad.length === 0 && JSON.stringify(mq) === mqKeep, "✨ full song → 3/4 / 6/8 / 12/8: a new song with the same sections, chords and bar positions; notes inside clips, no overlaps, drums on the grid, chord tones on downbeats; the original song unchanged", mBad.slice(0, 4));
+  var np3 = X.meterProject(mq, X.meterPlan(mq, { num: 3, den: 4 })).project;
+  ok(np3.tracks[0].clips.every(function (c) { return c.notes.length === 0; }) && np3.tracks.some(function (t) { return t.clips.some(function (c) { return c.ext.xgen && c.ext.xgen.pat === "waltzPiano"; }); }), "melody 入れない (default): the melody track comes empty; piano becomes the waltz accompaniment");
+  var all9 = [], n9 = 0;
+  X.TPLS.forEach(function (T) { var q9 = X.tplNewProject(X.tplPlan(null, T.id, "new", 1, 1, "std")).project; X.METERS.forEach(function (m) { var mk = m[0] + "/" + m[1]; if (mk === T.num + "/" + T.den) { return; } var pl9 = X.meterPlan(q9, { num: m[0], den: m[1] }); n9++; if (!pl9.ok) { all9.push(T.id + "→" + mk + " " + pl9.why); return; } if (!X.meterProject(q9, pl9).project) { all9.push(T.id + "→" + mk); } }); });
+  ok(all9.length === 0 && n9 >= 180, "all 64 templates convert to the 3 other meters", [n9, all9.slice(0, 3)]);
+  var aud = M.emptyProject(0); aud.tempo.meters.push({ tick: 4 * 3840, num: 3, den: 4 });
+  ok(!X.meterPlan(aud, { num: 6, den: 8 }).ok && /途中で拍子/.test(X.meterPlan(aud, { num: 6, den: 8 }).why) && !X.meterPlan(mq, { num: 4, den: 4 }).ok && !X.meterPlan(mq, { num: 5, den: 4 }).ok, "a song with a meter change, the same meter, or 5/4 is refused with a reason");
+  var gq9 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; X.grooveApply(gq9, X.groovePlan(gq9, { amt: 100 }));
+  var g34 = X.meterProject(gq9, X.meterPlan(gq9, { num: 3, den: 4 })).project, g68 = X.meterProject(gq9, X.meterPlan(gq9, { num: 6, den: 8 })).project;
+  ok(g34.ext.xmGroove === 100 && g68.ext.xmGroove === undefined, "the groove carries over to 3/4 (x/4) but not to 6/8 (already in threes)");
+  var b44 = X.meterProject(np3, X.meterPlan(np3, { num: 4, den: 4 })).project;
+  ok(M.meterAt(b44, 0).num === 4 && M.sectionsOf(b44).length === 8 && b44.tracks.some(function (t) { return t.clips.some(function (c) { return c.ext.xgen && c.ext.xgen.pat === "popPiano8"; }); }), "3/4 → 4/4 back: waltz parts become 4/4 patterns again");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -572,5 +604,10 @@ module.exports = async function () {
   D.ops.undo();
   ok(JSON.stringify(D.project().tracks) === trG && JSON.stringify(D.project().tempo) === tG && JSON.stringify(D.project().ext) === eG, "one ↶ restores tempo, groove and the clips");
   X.ui.gbpm = null; X.ui.gamt = null; X.ui.tab = "tpl";
+  // A9-2 の画面
+  var hm = D.xmas.host, qm = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; hm.newSong(qm); X.ui.tab = "groove"; X.ui.gmeter = "3/4"; X.ui.gmel = false; hm.render();
+  var keepM = JSON.stringify(D.project());
+  ok((R.innerHTML.match(/data-xmeter="/g) || []).length === 4 && (R.innerHTML.match(/data-xmmel="/g) || []).length === 2 && R.innerHTML.indexOf('data-xm="mNew"') >= 0 && R.innerHTML.indexOf("3 拍子の伴奏") >= 0 && JSON.stringify(D.project()) === keepM, "groove tab: meter chips, melody choice, the pattern map and 新しい曲を作る — nothing changed yet");
+  X.ui.gmeter = ""; X.ui.tab = "tpl";
   A.stop();
 };
