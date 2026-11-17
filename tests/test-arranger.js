@@ -559,6 +559,41 @@ module.exports = async function () {
   ok(ac4.bpm === 0 && ac4.meter === "" && ac4.key === -1, "low-confidence guesses are not put into the conditions");
   ok(X.analysisToCond({ ok: false, why: "x" }, { bpm: 7, moods: [] }).bpm === 7 && X.styleRank(ac0, 8).slice(0, 3).every(function (r) { return r.T.num === 3; }), "a failed analysis changes nothing; analysed 3/4 conditions rank 3/4 templates first");
 
+  // ---------- A11-1: マイテンプレート（v2.87）----------
+  try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
+  var myP = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project;
+  myP.tracks[0].clips[1].notes = [[0, 480, 72, 0.8]];
+  var myKeep = JSON.stringify(myP), myC = X.myCapture(myP, null, "わたしの <b>ポップ</b>");
+  ok(myC.ok && myC.item.meta.tracks === myP.tracks.length - 1 && myC.item.proj.tracks.every(function (t) { return !/^メロディ/.test(t.name); }) && JSON.stringify(myP) === myKeep && myC.item.meta.num === 4 && myC.item.meta.bpm === 120 && myC.item.meta.key === 2, "save: the accompaniment tracks without my melody; meter, tempo and key kept; the song unchanged", myC.item && myC.item.meta);
+  ok(X.mySave(myC.item).ok && X.myList().length === 1 && X.myList()[0].meta.name === "わたしの <b>ポップ</b>", "the template is stored on this device (localStorage) and listed");
+  var myIt = X.myList()[0], myR = X.myProject(myIt, null);
+  ok(myR.ok && myR.project.tracks.length === myP.tracks.length && /^メロディ/.test(myR.project.tracks[0].name) && M.noteCount(myR.project.tracks[0] ? { tracks: [myR.project.tracks[0]] } : null) === 0 && myR.project.tracks.slice(1).every(function (t, i) { return JSON.stringify(t.clips.map(function (c) { return c.notes; })) === JSON.stringify(myP.tracks[i + 1].clips.map(function (c) { return c.notes; })) && t.name === myP.tracks[i + 1].name; }) && M.sectionsOf(myR.project).length === M.sectionsOf(myP).length && JSON.stringify(myR.project.ext.xmChords) === JSON.stringify(myP.ext.xmChords), "新しい曲で: the same accompaniment notes, sections and song chords, plus an empty melody track");
+  var myG = X.myProject(myIt, 7), tG = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std", { key: 7 })).project;
+  ok(myG.ok && myG.project.ext.xmKey === 7 && myG.project.tracks.slice(1).every(function (t, i) { return JSON.stringify(t.clips.map(function (c) { return c.notes; })) === JSON.stringify(tG.tracks[i + 1].clips.map(function (c) { return c.notes; })); }), "another key (G): untouched generated parts are made again in G — the same notes as the template made in G");
+  var myE = JSON.parse(JSON.stringify(myP)); myE.tracks[1].clips[0].notes[0][2] += 1;
+  var myEi = X.myCapture(myE, null, "edited"), myEg = X.myProject(myEi.item, 4), dr0 = myE.tracks.filter(function (t) { return M.isDrum(t); })[0], dr1 = myEg.project.tracks.filter(function (t) { return M.isDrum(t); })[0];
+  ok(myEg.ok && myEg.project.tracks[1].clips[0].notes[0][2] === myE.tracks[1].clips[0].notes[0][2] + 2 && JSON.stringify(dr1.clips.map(function (c) { return c.notes; })) === JSON.stringify(dr0.clips.map(function (c) { return c.notes; })), "a hand-edited clip is moved by semitones (D → E: +2); drums do not move");
+  var myAud = JSON.parse(JSON.stringify(myP)); myAud.tracks.push({ id: "tAud", name: "録音", kind: "audio", instrument: { type: "audio" }, clips: [{ id: "cA", type: "audio", start: 0, len: 3840, asset: "a1" }] }); myAud.assets = [{ id: "a1", name: "rec.wav" }];
+  var myAc = X.myCapture(myAud, ["tAud"], "x"), myAc2 = X.myCapture(myAud, null, "x");
+  ok(!myAc.ok && myAc2.ok && myAc2.item.proj.tracks.every(function (t) { return t.kind === "midi"; }) && myAc2.item.proj.assets.length === 0, "recordings (audio tracks, assets) are never put in a template", myAc.why);
+  var myX = X.myExport(X.myList()), myI = X.myImport(myX);
+  ok(myI.ok && myI.items.length === 1 && JSON.stringify(myI.items[0].proj.tracks.map(function (t) { return t.clips.map(function (c) { return c.notes; }); })) === JSON.stringify(myIt.proj.tracks.map(function (t) { return t.clips.map(function (c) { return c.notes; }); })) && myI.items[0].meta.name === myIt.meta.name && myI.items[0].id !== myIt.id, "export → import: the same notes and name, a new id");
+  var bads = [X.myImport(""), X.myImport("{oops"), X.myImport("[]"), X.myImport(JSON.stringify({ kind: "ug-mytpl", v: 9, items: [] })), X.myImport(JSON.stringify({ kind: "ug-mytpl", v: 1, items: [5, null, { proj: { tracks: [] } }] })), X.myImport(new Array(3000002).join("x"))];
+  ok(bads.every(function (r) { return !r.ok && r.why; }), "broken files are refused with a reason (empty, not JSON, wrong kind, unknown version, no usable template, too large)", bads.map(function (r) { return r.why; }));
+  var big = JSON.parse(myX); big.items[0].proj.tracks[1].clips[0].notes = []; for (var bi = 0; bi < 5000; bi++) { big.items[0].proj.tracks[1].clips[0].notes.push([bi, 10, 60, 0.5]); }
+  big.items.push({ name: "<img src=x onerror=alert(1)>", proj: JSON.parse(myX).items[0].proj });
+  var myB = X.myImport(JSON.stringify(big));
+  ok(myB.ok && myB.items.length >= 1 && myB.items.every(function (it) { return it.proj.tracks.every(function (t) { return t.clips.every(function (c) { return c.notes.length <= 4000; }); }); }), "notes over 4000 in a clip are cut or refused when reading", [myB.items && myB.items.length, myB.bad]);
+  var myA = X.myAdd(myB.items);
+  ok(myA.ok && X.myList().length === 1 + myA.added && X.myTab({ project: function () { return myP; } }).indexOf("<img src=x") < 0, "imported templates are added; names are shown as text (no HTML)");
+  var many = []; for (bi = 0; bi < 25; bi++) { many.push(myC.item); }
+  var myF = X.myAdd(many);
+  ok(myF.ok && X.myList().length === 20 && myF.skipped > 0 && !X.mySave(myC.item).ok, "20 templates at most (the rest are skipped with a count)", myF);
+  ok(X.myDel(X.myList()[0].id).ok && X.myList().length === 19 && !X.myDel("nope").ok, "delete one");
+  try { W.localStorage.setItem(X.MY_KEY, "{broken"); } catch (e) {}
+  ok(X.myList().length === 0 && W.localStorage.getItem(X.MY_KEY) === "{broken", "a broken store reads as empty and is not overwritten by reading");
+  try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -652,6 +687,13 @@ module.exports = async function () {
   X.ui.mres = { ok: false, why: "マイクを使う許可がありませんでした" }; hs10.render();
   ok(R.innerHTML.indexOf("dxm-warn") >= 0 && R.innerHTML.indexOf("許可がありませんでした") >= 0, "a refused microphone shows the reason");
   X.ui.mres = null; X.micStop();
+  // A11-1 の画面
+  try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
+  var keep12 = JSON.stringify(D.project()); X.ui.tab = "my"; hs10.render();
+  ok(R.innerHTML.indexOf("dxm-myname") >= 0 && R.innerHTML.indexOf('data-xm="mySave"') >= 0 && R.innerHTML.indexOf("dxm-myfile") >= 0 && R.innerHTML.indexOf("マイテンプレート 0 / 20") >= 0 && JSON.stringify(D.project()) === keep12, "🗂️ マイ tab: name, tracks to include, save and import — nothing changed yet");
+  var mc0 = X.myCapture(D.project(), null, "画面のテスト"); if (mc0.ok) { X.mySave(mc0.item); } hs10.render();
+  ok(!mc0.ok || ((R.innerHTML.match(/data-xmynew="/g) || []).length === 1 && R.innerHTML.indexOf("data-xmykey") >= 0 && R.innerHTML.indexOf('data-xm="myExpAll"') >= 0 && JSON.stringify(D.project()) === keep12), "a saved template is listed with ▶ / 新しい曲で / 書き出す / 消す and the key choice", mc0.why);
+  try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
   X.ui.mcond = null; X.ui.tab = "tpl";
   A.stop();
 };

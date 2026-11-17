@@ -2190,6 +2190,158 @@
     (done || micDone || function () {})({ ok: true, an: styleAnalyze([all], sr) });
   }
 
+  // ---------- §345 A11-1 My Templates（自分のテンプレート・この端末の中）----------
+  var MY_KEY = "ultimateGorillaMyTplV1", MY_MAX = 20, MY_ONE = 400000, MY_ALL = 2000000, MY_IMPORT = 3000000;
+  function isMelTrack(t) { return !!(t && ((t.ext && t.ext.icon === "&#x1F3A4;") || /^メロディ/.test(t.name || ""))); }
+  // 曲 → テンプレートの中身（曲は変えない）。sel: 入れるトラックの ID（null ＝ メロディ以外の MIDI のトラックすべて）
+  function myCleanProj(src) {
+    var M = DM(), q = M.clean(src), keep = {}, k;
+    q.tracks = q.tracks.filter(function (t) { return t.kind === "midi" && !M.isAudio(t); });
+    q.assets = []; delete q.ref; delete q.legacy;
+    for (k in q.ext) { if (q.ext.hasOwnProperty(k) && /^xm(Chords|Key|Mode|Groove)$/.test(k)) { keep[k] = q.ext[k]; } }
+    q.ext = keep;
+    q.tracks.forEach(function (t) { t.clips = t.clips.filter(function (c) { return c.type === "midi"; }); t.mute = false; t.solo = false; });
+    q.practice = { loopOn: false, loopA: 0, loopB: M.barToTick(q, 4) };
+    q.id = "mytpl"; q.saved = 0;
+    return q;
+  }
+  function myMeta(q, name) {
+    var M = DM(), m0 = M.meterAt(q, 0), sk = songKey(q), n = 0;
+    q.tracks.forEach(function (t) { t.clips.forEach(function (c) { n += c.notes.length; }); });
+    return { name: String(name || "").replace(/[\u0000-\u001f]/g, "").substring(0, 40) || "マイテンプレート", num: m0.num, den: m0.den, bpm: M.bpmAt(q, 0), key: sk.key, kmode: sk.kmode, tracks: q.tracks.length, notes: n, bars: Math.round(M.songEndTick(q) / M.ticksPerBar(m0)) };
+  }
+  function myCheck(q) {
+    var M = DM(), i, j;
+    if (!q.tracks.length) { return "入れる MIDI のトラックがありません"; }
+    if (q.tracks.length > M.MAX_TRACKS) { return "トラックは " + M.MAX_TRACKS + " 本までです"; }
+    for (i = 0; i < q.tracks.length; i++) { for (j = 0; j < q.tracks[i].clips.length; j++) { if (q.tracks[i].clips[j].notes.length > 4000) { return "音符が 4000 をこえるクリップがあります"; } } }
+    if (M.songEndTick(q) > M.barToTick(q, MAXB)) { return MAXB + " 小節をこえます"; }
+    var n = 0; q.tracks.forEach(function (t) { t.clips.forEach(function (c) { n += c.notes.length; }); });
+    if (!n) { return "音符がありません"; }
+    return "";
+  }
+  function myCapture(p, sel, name) {
+    var M = DM(), src = JSON.parse(JSON.stringify(p));
+    src.tracks = src.tracks.filter(function (t) { return sel ? sel.indexOf(t.id) >= 0 : (!isMelTrack(t) && t.kind === "midi" && !M.isAudio(t)); });
+    var q = myCleanProj(src), why = myCheck(q);
+    if (why) { return { ok: false, why: why }; }
+    var it = { id: "m" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36), created: Date.now(), meta: myMeta(q, name || plain(p.name)), proj: q };
+    if (JSON.stringify(it).length > MY_ONE) { return { ok: false, why: "大きすぎます（" + MY_ONE + " 文字まで）。トラックをへらしてください" }; }
+    return { ok: true, item: it };
+  }
+  // 置き場所（こわれていたら空・読めないものは捨てない＝書きかえない）
+  function myList() { var o = null; try { o = JSON.parse(window.localStorage.getItem(MY_KEY) || "null"); } catch (e) { o = null; } return o && o.v === 1 && Object.prototype.toString.call(o.items) === "[object Array]" ? o.items.filter(function (x) { return x && typeof x.id === "string" && x.proj && x.meta; }) : []; }
+  function myPut(items) {
+    var s = JSON.stringify({ v: 1, items: items });
+    if (s.length > MY_ALL) { return { ok: false, why: "ぜんぶで " + MY_ALL + " 文字までです（古いものを消すか、書き出してから消してください）" }; }
+    try { window.localStorage.setItem(MY_KEY, s); } catch (e) { return { ok: false, why: "この端末に保存できませんでした（容量がいっぱいかもしれません）" }; }
+    return { ok: true };
+  }
+  function mySave(item) {
+    var l = myList();
+    if (l.length >= MY_MAX) { return { ok: false, why: "マイテンプレートは " + MY_MAX + " 個までです" }; }
+    l.unshift(item);
+    return myPut(l);
+  }
+  function myDel(id) { var l = myList(), n = l.length; l = l.filter(function (x) { return x.id !== id; }); return n === l.length ? { ok: false, why: "見つかりません" } : myPut(l); }
+  function myGet(id) { var l = myList(), i; for (i = 0; i < l.length; i++) { if (l[i].id === id) { return l[i]; } } return null; }
+  // 新しい曲（key: 0〜11 でキーを変える・それ以外 ＝ 元のキー）
+  function myProject(item, key) {
+    var M = DM(), q = myCleanProj(item.proj), why = myCheck(q), s;
+    if (why) { return { ok: false, why: why }; }
+    q.name = plain(item.meta.name).substring(0, 40) || "マイテンプレート"; q.created = Date.now();
+    var sk = songKey(q), k0 = sk.key === null ? 0 : sk.key, nk = Number(key);
+    if (key !== undefined && key !== null && key !== "" && nk >= 0 && nk <= 11 && Math.round(nk) !== k0) {
+      var d = ((Math.round(nk) - k0) % 12 + 12) % 12; if (d > 5) { d -= 12; }
+      q.ext.xmKey = Math.round(nk);
+      q.tracks.forEach(function (t) {
+        if (M.isDrum(t)) { return; }
+        t.clips.forEach(function (c) {
+          if (clipState(c) === "gen") {
+            var xg = c.ext.xgen, k1 = xg.key, ok1 = Number(k1) >= 0 ? Number(k1) : k0;
+            xg.key = ((ok1 + d) % 12 + 12) % 12;
+            var rg = regenClip(q, t, c); if (rg.ok) { c.notes = M.cleanNotes(rg.notes); stampClip(c, {}); return; }
+            xg.key = k1;
+          }
+          c.notes = M.cleanNotes(c.notes.map(function (n) { return [n[0], n[1], clamp(n[2] + d, 0, 127), n[3]]; }));
+        });
+      });
+    }
+    if (!q.tracks.some(isMelTrack) && q.tracks.length < M.MAX_TRACKS) {
+      var mel = makeTrack(q, "xm-musicbox", "メロディ（あなたの）"), secs = M.sectionsOf(q);
+      if (mel) {
+        mel.ext.icon = "&#x1F3A4;"; q.tracks.unshift(q.tracks.pop());
+        if (secs.length) { for (s = 0; s < secs.length; s++) { M.newMidiClip(q, mel, secs[s].tick, secs[s].len, [], secs[s].name + "（メロディ）"); } }
+        else { M.newMidiClip(q, mel, 0, M.songEndTick(q), [], "メロディ"); }
+      }
+    }
+    return { ok: true, project: q };
+  }
+  // 試聴（サビがあればそこから 4 小節）
+  function myItems(item) {
+    var M = DM(), q = item.proj, secs = M.sectionsOf(q), st = 0, i, out = [];
+    for (i = 0; i < secs.length; i++) { if (/サビ|chorus/i.test(secs[i].name)) { st = secs[i].tick; break; } }
+    var m0 = M.meterAt(q, st), end = st + 4 * M.ticksPerBar(m0), bpm = M.bpmAt(q, st), sp = 60 / bpm / PPQ;
+    q.tracks.forEach(function (t) {
+      var drum = M.isDrum(t), ins = drum ? null : instrument(trackSnd(t));
+      t.clips.forEach(function (c) { c.notes.forEach(function (n) { var at = c.start + n[0]; if (at >= st && at < end && n[0] < c.len) { out.push({ at: (at - st) * sp, m: n[2], v: n[3], sec: drum ? 0 : Math.max(0.05, Math.min(n[1], end - at) * sp), ins: ins, drum: drum }); } }); });
+    });
+    return out;
+  }
+  // 書き出し・読みこみ（JSON）
+  function myExport(items) { return JSON.stringify({ kind: "ug-mytpl", v: 1, app: "Ultimate Gorilla DAW", items: items.map(function (x) { return { name: x.meta.name, created: x.created, proj: x.proj }; }) }); }
+  function myImport(text) {
+    if (typeof text !== "string" || !text.length) { return { ok: false, why: "ファイルが空です" }; }
+    if (text.length > MY_IMPORT) { return { ok: false, why: "ファイルが大きすぎます（" + MY_IMPORT + " 文字まで）" }; }
+    var o = null; try { o = JSON.parse(text); } catch (e) { return { ok: false, why: "JSON として読めませんでした" }; }
+    if (!o || typeof o !== "object" || o.kind !== "ug-mytpl") { return { ok: false, why: "ゴリラ DAW のマイテンプレートのファイルではありません" }; }
+    if (o.v !== 1) { return { ok: false, why: "知らない版のファイルです（v" + String(o.v).substring(0, 8) + "）" }; }
+    if (Object.prototype.toString.call(o.items) !== "[object Array]") { return { ok: false, why: "中身がありません" }; }
+    var out = [], bad = 0, i;
+    for (i = 0; i < o.items.length && i < 100; i++) {
+      var x = o.items[i];
+      if (!x || typeof x !== "object" || !x.proj || typeof x.proj !== "object") { bad++; continue; }
+      var q = myCleanProj(x.proj); if (myCheck(q)) { bad++; continue; }
+      var it = { id: "m" + Date.now().toString(36) + i.toString(36) + Math.floor(Math.random() * 46656).toString(36), created: Number(x.created) > 0 ? Number(x.created) : Date.now(), meta: myMeta(q, typeof x.name === "string" ? x.name : ""), proj: q };
+      if (JSON.stringify(it).length > MY_ONE) { bad++; continue; }
+      out.push(it);
+    }
+    if (!out.length) { return { ok: false, why: "読みこめるテンプレートがありませんでした" + (bad ? "（形のおかしいもの " + bad + " 個）" : "") }; }
+    return { ok: true, items: out, bad: bad };
+  }
+  function myAdd(items) {
+    var l = myList(), room = Math.max(0, MY_MAX - l.length), add = items.slice(0, room), r;
+    var seen = {}; l.forEach(function (x) { seen[x.id] = 1; });
+    add = add.map(function (x, j) { if (!seen[x.id]) { seen[x.id] = 1; return x; } var y = JSON.parse(JSON.stringify(x)); y.id = "m" + Date.now().toString(36) + j.toString(36) + Math.floor(Math.random() * 46656).toString(36); seen[y.id] = 1; return y; }); // ID が重なったら付けなおす
+    if (!add.length) { return { ok: false, why: "マイテンプレートは " + MY_MAX + " 個までです（いま " + l.length + " 個）" }; }
+    r = myPut(add.concat(l));
+    return r.ok ? { ok: true, added: add.length, skipped: items.length - add.length } : r;
+  }
+  function myTab(h) {
+    var p = h.project(), M = DM(), x = '<div class="dxm-my">', l = myList(), i;
+    if (!ui.mysel) { ui.mysel = p.tracks.filter(function (t) { return t.kind === "midi" && !M.isAudio(t) && !isMelTrack(t); }).map(function (t) { return t.id; }); }
+    x += '<p class="small">いまの曲の伴奏を、自分のテンプレートとしてこの端末に保存します（' + MY_MAX + ' 個まで）。録音のトラックは入れません。</p>';
+    x += '<div class="dxm-opt"><span>名前</span><input type="text" class="dxm-myname" maxlength="40" value="' + esc(ui.myname || plain(p.name)) + '" aria-label="テンプレートの名前"></div>';
+    x += '<div class="dxm-opt dxm-forms"><span>入れるトラック</span>' + p.tracks.map(function (t) { if (t.kind !== "midi" || M.isAudio(t)) { return '<span class="small dxm-off">' + esc(t.name) + '（録音・入れない）</span>'; } return chip("data-xmyt", t.id, esc(t.name), ui.mysel.indexOf(t.id) >= 0); }).join("") + '</div>';
+    x += '<div class="dxm-go"><button class="modal-btn dxm-b dxm-main" data-xm="mySave">&#x1F4BE; マイテンプレートに保存</button></div>';
+    x += '<p class="small dxm-thead">マイテンプレート ' + l.length + ' / ' + MY_MAX + '</p>';
+    for (i = 0; i < l.length; i++) {
+      var it = l[i], m = it.meta;
+      x += '<div class="dxm-mrow"><div class="dxm-rn"><b>' + esc(m.name) + '</b><span class="small">' + m.num + '/' + m.den + '・BPM ' + m.bpm + '・' + (m.key === null ? "" : KEYS[m.key] + (m.kmode === "min" ? "m" : "") + '・') + m.tracks + ' トラック・' + m.bars + ' 小節</span></div>' +
+        '<div class="dxm-rb">' + pvBtn("my:" + it.id, "&#x25B6;&#xFE0F;") + '<button class="modal-btn dxm-b" data-xmynew="' + esc(it.id) + '">&#x1F195; 新しい曲で</button><button class="modal-btn dxm-b" data-xmyexp="' + esc(it.id) + '">書き出す</button><button class="modal-btn dxm-b' + (ui.mydel === it.id ? ' dxm-warn' : '') + '" data-xmydel="' + esc(it.id) + '">' + (ui.mydel === it.id ? 'もう一度押すと消えます' : '消す') + '</button></div></div>';
+    }
+    if (l.length) { x += '<div class="dxm-opt dxm-forms"><span>新しい曲のキー</span>' + selHtml('data-xmykey aria-label="新しい曲のキー"', [["", "元のキー"]].concat(KEYS.map(function (k, j) { return [j, k]; })), ui.mykey === undefined || ui.mykey === null ? "" : ui.mykey) + '</div>'; }
+    x += '<div class="dxm-go">' + (l.length ? '<button class="modal-btn dxm-b" data-xm="myExpAll">&#x1F4E4; ぜんぶ書き出す</button>' : '') + '<label class="modal-btn dxm-b dxm-file">&#x1F4E5; 読みこむ（JSON）<input type="file" accept=".json,application/json" class="dxm-myfile"></label></div>';
+    if (ui.myUrl) { x += '<p><a class="modal-btn dxm-b" href="' + ui.myUrl + '" download="' + esc(ui.myFile || "gorilla-my-templates.json") + '">&#x2B07;&#xFE0F; ' + esc(ui.myFile || "gorilla-my-templates.json") + ' を保存</a></p>'; }
+    return x + '</div>';
+  }
+  function myLink(items, file) {
+    try { if (ui.myUrl) { URL.revokeObjectURL(ui.myUrl); } } catch (e) {}
+    ui.myUrl = ""; ui.myFile = file;
+    try { ui.myUrl = URL.createObjectURL(new Blob([myExport(items)], { type: "application/json" })); } catch (e2) { ui.myUrl = ""; return false; }
+    return true;
+  }
+
   // ---------- 🎧 リファレンス解析 Lite（FFT の特徴だけ・推薦は目安）----------
   function fft(re, im) { // その場で（長さは 2 の累乗）
     var n = re.length, i, j = 0, k, len;
@@ -2502,7 +2654,7 @@
 
   // ---------- 画面（DAW の host から呼ぶ）----------
   var XM_KEY = "ultimateGorillaXmasV1";
-  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", gbpm: null, gamt: null, gmeter: "", gmel: false, mcond: null, manal: "", mres: null, an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
+  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", gbpm: null, gamt: null, gmeter: "", gmel: false, mcond: null, manal: "", mres: null, mysel: null, myselP: "", myname: "", mydel: "", mykey: null, myUrl: "", myFile: "", an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
   function lsGet() { try { var s = window.localStorage.getItem(XM_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function lsPut() { try { window.localStorage.setItem(XM_KEY, JSON.stringify({ g: ui.g })); } catch (e) {} }
   function g0() { if (!ui.g) { var s = lsGet(); ui.g = genClean(s && s.g ? s.g : { seed: 1 }); } return ui.g; }
@@ -2516,7 +2668,7 @@
     var p = h.project(), M = DM(), m0 = M.meterAt(p, 0), x = '<div class="daw dxm">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-xm="back">&#x2190; もどる</button><b>&#x1F384; クリスマス制作</b><span class="daw-pname">' + esc(p.name) + '・' + m0.num + '/' + m0.den + '・BPM ' + M.bpmAt(p, 0) + '</span></div>' +
       '<div class="dxm-tabs" role="tablist">' + chip("data-xtab", "sound", "&#x1F514; 音色", ui.tab === "sound") + chip("data-xtab", "pat", "&#x1F3BC; パターン", ui.tab === "pat") + chip("data-xtab", "gen", "&#x1F3B9; 伴奏", ui.tab === "gen") +
-        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "groove", "&#x1F941; グルーヴ", ui.tab === "groove") + chip("data-xtab", "match", "&#x1F3A4; おすすめ", ui.tab === "match") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
+        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "groove", "&#x1F941; グルーヴ", ui.tab === "groove") + chip("data-xtab", "match", "&#x1F3A4; おすすめ", ui.tab === "match") + chip("data-xtab", "my", "&#x1F5C2;&#xFE0F; マイ", ui.tab === "my") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
       (ui.msg ? '<div class="daw-msg dxm-msg">' + ui.msg + '</div>' : '');
     if (ui.tab === "sound") { x += soundTab(h); }
     else if (ui.tab === "pat") { x += patTab(h, m0); }
@@ -2526,6 +2678,7 @@
     else if (ui.tab === "chord") { x += chordTab(h); }
     else if (ui.tab === "groove") { x += grooveTab(h); }
     else if (ui.tab === "match") { x += matchTab(h); }
+    else if (ui.tab === "my") { if (ui.myselP !== h.project().id) { ui.mysel = null; ui.myname = ""; ui.myselP = h.project().id; } x += myTab(h); }
     else { x += anaTab(h); }
     x += '<p class="small dxm-foot">&#x1F4DD; ここで作る伴奏・音色は、一般的なコード進行・リズム・音作りから作ったものです（有名な曲のメロディ・フレーズは入っていません）。録音の音色の権利は、音色の下に書いてあります（CC BY はクレジットの表記が要ります）。</p></div>';
     return x;
@@ -2738,6 +2891,7 @@
           else if (v === "so" || v === "sn") { pvPlay(secItems(h, v === "sn"), v, pvState); }
           else if (v.indexOf("d:") === 0) { var pld = tplPlan(null, v.substring(2), "new", 1, g.seed, ui.form); if (pld.ok) { pvPlay(previewTpl(h, pld), v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pld.why); } }
           else if (v === "ra") { playRef(h, pvState); }
+          else if (v.indexOf("my:") === 0) { var myi = myGet(v.substring(3)); if (myi) { pvPlay(myItems(myi), v, pvState); } }
           else if (v.indexOf("rb:") === 0) { var a = ui.an, id = v.substring(3), s = sound(id), m = a && a.midi !== null ? a.midi : 60, items; if (s && s[3] === "drum") { items = hearItems(id); } else { var lo = (s && s[5].lo) || 36, hi = (s && s[5].hi) || 96; while (m < lo) { m += 12; } while (m > hi) { m -= 12; } items = [{ at: 0, m: m, v: 0.8, sec: Math.min(2, ui.anLen), ins: instrument(id) }]; } pvPlay(items, v, pvState); }
           re(); return;
         }
@@ -2774,6 +2928,18 @@
         if ((v = el.getAttribute("data-xgv")) !== null && v !== undefined && v !== "") { ui.gamt = clamp(Math.round(Number(v)) || 0, 0, 100); pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xmeter"))) { ui.gmeter = /^(4\/4|3\/4|6\/8|12\/8)$/.test(v) ? v : ""; re(); return; }
         if ((v = el.getAttribute("data-xmmel")) !== null && v !== undefined && v !== "") { ui.gmel = v === "1"; re(); return; }
+        if ((v = el.getAttribute("data-xmyt"))) { var ms0 = ui.mysel || [], mi0 = ms0.indexOf(v); if (mi0 >= 0) { ms0.splice(mi0, 1); } else if (M.findTrack(p, v)) { ms0.push(v); } ui.mysel = ms0; re(); return; }
+        if ((v = el.getAttribute("data-xmynew"))) {
+          pvStop(); var mit = myGet(v); if (!mit) { ui.msg = "&#x26A0;&#xFE0F; 見つかりません"; re(); return; }
+          var mr2 = myProject(mit, ui.mykey);
+          if (!mr2.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(mr2.why); re(); return; }
+          ui.msg = "「" + esc(mit.meta.name) + "」で新しい曲を作りました（前の曲は保存してあります）"; h.newSong(mr2.project); return;
+        }
+        if ((v = el.getAttribute("data-xmyexp"))) { var mie = myGet(v); ui.msg = mie && myLink([mie], "gorilla-my-template.json") ? "下のボタンで「" + esc(mie.meta.name) + "」を JSON で保存できます" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
+        if ((v = el.getAttribute("data-xmydel"))) {
+          if (ui.mydel !== v) { ui.mydel = v; re(); return; }
+          var dr = myDel(v); ui.mydel = ""; pvStop(); ui.msg = dr.ok ? "マイテンプレートを 1 つ消しました" : "&#x26A0;&#xFE0F; " + esc(dr.why); re(); return;
+        }
         if ((v = el.getAttribute("data-xmc"))) {
           var mc = matchCond(), kv = v.split(":"), key0 = kv[0], val = kv.slice(1).join(":");
           if (key0 === "mood") { var mi = mc.moods.indexOf(val); if (mi >= 0) { mc.moods.splice(mi, 1); } else if (MOODS.some(function (m) { return m[0] === val; })) { mc.moods.push(val); } }
@@ -2885,6 +3051,12 @@
           if (songKey(p).key === null) { var fx0 = null; p.tracks.forEach(function (t) { t.clips.forEach(function (c) { if (!fx0 && c.ext && c.ext.xgen && c.ext.xgen.pat) { fx0 = c.ext.xgen; } }); }); if (fx0) { p.ext.xmKey = fx0.key || 0; if (fx0.mode === "min") { p.ext.xmMode = "min"; } } }
           ui.msg = "伴奏から " + Object.keys(dm).length + " 小節のコードを読みとりました（↶ で戻せます）"; h.commit(dsn, ui.msg); return;
         }
+        if (v === "mySave") {
+          var nmE = root.querySelector(".dxm-myname"), cap = myCapture(p, ui.mysel, nmE ? nmE.value : "");
+          if (!cap.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(cap.why); re(); return; }
+          var sv = mySave(cap.item); ui.msg = sv.ok ? "「" + esc(cap.item.meta.name) + "」をマイテンプレートに保存しました（" + cap.item.meta.tracks + " トラック）" : "&#x26A0;&#xFE0F; " + esc(sv.why); re(); return;
+        }
+        if (v === "myExpAll") { var la = myList(); ui.msg = la.length && myLink(la, "gorilla-my-templates.json") ? "下のボタンで JSON を保存できます（" + la.length + " 個）" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
         if (v === "mRec") { pvStop(); micDone = function (r) { if (r.an) { ui.mres = r.an; analysisToCond(r.an); } else if (!r.ok) { ui.mres = { ok: false, why: r.why }; } if (h.isView()) { re(); } }; micStart(function (r) { if (!r.ok) { ui.mres = { ok: false, why: r.why }; } else if (r.an) { micDone(r); return; } if (h.isView()) { re(); } }); return; }
         if (v === "mStop") { micFinish(null); return; }
         if (v === "mRef") { var rb0 = refItems(h); if (!rb0) { ui.mres = { ok: false, why: "🎧 のリファレンスがありません（DAW の 🎧 で読みこんでください）" }; re(); return; } var bf = rb0.buf, chs0 = []; for (var ci = 0; ci < Math.min(2, bf.numberOfChannels); ci++) { chs0.push(bf.getChannelData(ci)); } ui.mres = styleAnalyze(chs0, bf.sampleRate); analysisToCond(ui.mres); re(); return; }
@@ -2940,6 +3112,7 @@
         if ((v = el.getAttribute("data-xch")) !== null && v !== undefined && v !== "") { var bi = Number(v), base = chordsFor(g.prog, g.bars, {}, g.mode)[bi]; if (el.value === base) { delete g.custom[bi]; } else { g.custom[bi] = el.value; } lsPut(); re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xdest")) { ui.dest = el.value; var t = ui.dest ? M.findTrack(h.project(), ui.dest) : null; ui.bar = t ? Math.max(1, Math.round(M.trackEnd(t) / M.barTicks(h.project())) + 1) : 1; re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xsnd")) { ui.snd = el.value; re(); return; }
+        if (el.hasAttribute && el.hasAttribute("data-xmykey")) { ui.mykey = el.value === "" ? null : Math.round(Number(el.value)); re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xmkey")) { matchCond().key = Math.round(Number(el.value)); re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xcpick")) { ui.cpick = el.value; re(); return; }
         if (el.hasAttribute && el.hasAttribute("data-xcprog")) { ui.cprog = progById(el.value)[0]; re(); return; }
@@ -2964,6 +3137,9 @@
     var gbE = root.querySelector(".dxm-gbpm"), gaE = root.querySelector(".dxm-gamt");
     if (gbE) { gbE.onchange = function () { var n = Math.round(Number(gbE.value)); if (n >= 20 && n <= 400) { ui.gbpm = n; } pvStop(); re(); }; }
     if (gaE) { gaE.onchange = function () { ui.gamt = clamp(Math.round(Number(gaE.value)) || 0, 0, 100); pvStop(); re(); }; }
+    var mnE = root.querySelector(".dxm-myname"); if (mnE) { mnE.onchange = function () { ui.myname = String(mnE.value).substring(0, 40); }; }
+    var myF = root.querySelector(".dxm-myfile");
+    if (myF) { myF.onchange = function () { var f = myF.files && myF.files[0]; if (!f) { return; } if (f.size > MY_IMPORT * 4) { ui.msg = "&#x26A0;&#xFE0F; ファイルが大きすぎます"; re(); return; } var rd = new FileReader(); rd.onload = function () { var ir = myImport(String(rd.result || "")), ar = ir.ok ? myAdd(ir.items) : ir; ui.msg = ar.ok ? ar.added + " 個のマイテンプレートを読みこみました" + (ar.skipped ? "（" + ar.skipped + " 個は 20 個をこえるので入れていません）" : "") + (ir.bad ? "（形のおかしいもの " + ir.bad + " 個は入れていません）" : "") : "&#x26A0;&#xFE0F; " + esc(ar.why); re(); }; rd.onerror = function () { ui.msg = "&#x26A0;&#xFE0F; ファイルを読めませんでした"; re(); }; rd.readAsText(f); }; }
     var mfE = root.querySelector(".dxm-mfile");
     if (mfE) { mfE.onchange = function () { var f = mfE.files && mfE.files[0]; if (!f) { return; } var ac = UGM() && UGM().audioInit ? UGM().audioInit() : null; if (!ac || !f.arrayBuffer) { ui.mres = { ok: false, why: "このブラウザーでは読めません" }; re(); return; } f.arrayBuffer().then(function (ab) { return new Promise(function (res, rej) { ac.decodeAudioData(ab, res, rej); }); }).then(function (bf) { var cs = [], q; for (q = 0; q < Math.min(2, bf.numberOfChannels); q++) { cs.push(bf.getChannelData(q)); } ui.mres = styleAnalyze(cs, bf.sampleRate); analysisToCond(ui.mres); re(); }, function () { ui.mres = { ok: false, why: "この音声ファイルは読めませんでした（WAV・MP3・M4A）" }; re(); }); }; }
     var mbE = root.querySelector(".dxm-mbpm"); if (mbE) { mbE.onchange = function () { var n = Math.round(Number(mbE.value)); matchCond().bpm = n >= 20 && n <= 400 ? n : 0; pvStop(); re(); }; }
@@ -2983,6 +3159,7 @@
     planSecs: planSecs, mmss: mmss, timeNote: timeNote, WAV_LIMIT: WAV_LIMIT,
     trimOverlaps: trimOverlaps,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
+    myCapture: myCapture, myList: myList, mySave: mySave, myDel: myDel, myGet: myGet, myProject: myProject, myItems: myItems, myExport: myExport, myImport: myImport, myAdd: myAdd, myTab: myTab, MY_KEY: MY_KEY,
     styleAnalyze: styleAnalyze, analysisToCond: analysisToCond, micStop: micStop, KPROF: KPROF,
     styleScore: styleScore, styleRank: styleRank, matchProject: matchProject, matchTab: matchTab,
     METERS: METERS, patFor: patFor, meterPlan: meterPlan, meterProject: meterProject,

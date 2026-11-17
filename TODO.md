@@ -30,9 +30,9 @@
 
 ## ✅ 実装済み（最新）
 
-### 次 — 🦍 A11: My Templates と Cubasis の改善 (§345・計画)
+### Version 2.87〜 — 🦍 A11: My Templates と Cubasis の改善 (§345)
 
-- [ ] A11-1: My Templates（保存・一覧・試聴・新しい曲で・JSON の書き出し／読みこみ・安全な読みこみ）
+- [x] A11-1（v2.87）: My Templates（保存・一覧・試聴・新しい曲で・JSON の書き出し／読みこみ・安全な読みこみ）
 - [ ] A11-2: Cubasis の改善（Format 1・PPQ 960 のまま・ドラム 83／84 の読みもどし・ステム WAV の検討）
 
 ### Version 2.86 — 🦍 A10: Gorilla Style Match (§345)
