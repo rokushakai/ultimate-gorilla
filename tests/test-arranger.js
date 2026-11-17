@@ -114,7 +114,7 @@ module.exports = async function () {
   var pr = M.emptyProject(0), pp = X.place(pr, { pat: "pop8", bars: 4, seed: 2, nofill: 1 }, { track: "", bar: 1 });
   ok(pp.ok && pp.clip.ext.xgen.nofill === 1 && X.regen(pr, pp.clip.id, { seed: 9 }).ok && pp.clip.ext.xgen.nofill === 1 && pp.clip.ext.xgen.seed === 9, "a clip made without fills keeps it when regenerated");
   var pr2 = M.emptyProject(0), pp2 = X.place(pr2, { pat: "pop8", bars: 4, seed: 2 }, { track: "", bar: 1 });
-  ok(pp2.clip.ext.xgen.nofill === undefined && Object.keys(pp2.clip.ext.xgen).join() === "v,pat,key,prog,bars,range,vel,dens,seed,custom", "normal clips store the same xgen fields as v2.72");
+  ok(pp2.clip.ext.xgen.nofill === undefined && Object.keys(pp2.clip.ext.xgen).join() === "v,pat,key,prog,bars,range,vel,dens,seed,custom,h", "normal clips store the xgen fields of v2.72 + the notes fingerprint h (v2.79)");
 
   // ---------- A2: コード・ハーモニー（v2.75）----------
   ok(X.PROGS.slice(0, 7).map(function (q) { return q[0]; }).join() === "p1,p2,p3,p4,p5,p6,p7" && X.PROGS.length === 13 && X.PROGS.filter(function (q) { return q[3] === "min"; }).length === 4, "progressions: the first 7 unchanged, 2 major + 4 minor added (13)");
@@ -288,6 +288,56 @@ module.exports = async function () {
   });
   ok(allBad.length === 0 && nAll > 150, "every instrument of all 32 templates can be added alone (in its meter) and passes the checks", [nAll, allBad.slice(0, 3)]);
 
+  // ---------- A5: フルソングアレンジャー（v2.79）----------
+  var aq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project, allGen = true, hasT = true;
+  aq.tracks.slice(1).forEach(function (t) { t.clips.forEach(function (c) { if (X.clipState(c) !== "gen") { allGen = false; } if (!X.SECT[c.ext.xgen.t]) { hasT = false; } }); });
+  ok(allGen && hasT && X.clipState(aq.tracks[0].clips[0]) === "none", "template clips carry a notes fingerprint (xgen.h) and their playing type (xgen.t) → 作ったまま; the empty melody clip is not an accompaniment", [allGen, hasT]);
+  var aqJ = JSON.parse(JSON.stringify(M.clean(JSON.parse(JSON.stringify(aq))))), stJ = {};
+  aqJ.tracks.forEach(function (t) { t.clips.forEach(function (c) { var s1 = X.clipState(c); stJ[s1] = (stJ[s1] || 0) + 1; }); });
+  ok(!stJ.edited && !stJ.unknown && stJ.gen > 40, "the fingerprints survive a JSON save / load (still 作ったまま)", stJ);
+  var lg = JSON.parse(JSON.stringify(aq.tracks[1].clips[0])); delete lg.ext.xgen.h;
+  var ed = JSON.parse(JSON.stringify(aq.tracks[1].clips[0])); ed.notes[0][3] = 0.2;
+  ok(X.clipState(lg) === "unknown" && X.clipState(ed) === "edited" && X.clipState({ ext: {} }) === "none", "no fingerprint (made before v2.79) → 確かめられない; changed notes → 手で直した; no xgen → none");
+  var gp = M.emptyProject(0), gpr = X.place(gp, { pat: "arpPiano", bars: 4, seed: 2 }, { track: "", bar: 1 });
+  ok(X.clipState(gpr.clip) === "gen" && X.regen(gp, gpr.clip.id, { seed: 5 }).ok && X.clipState(gpr.clip) === "gen" && gpr.clip.ext.xgen.seed === 5, "generator clips and regenerated clips are 作ったまま too");
+  // セクションの一覧（伴奏のクリップだけ）
+  var asec = M.sectionsOf(aq)[3], al = X.secClips(aq, asec);
+  aq.tracks[0].clips[3].notes = [[0, 480, 72, 0.8]];
+  ok(al.length === 7 && al.every(function (x) { return x.track !== aq.tracks[0]; }) && X.secClips(aq, asec).length === 7, "the chorus lists its 7 accompaniment clips; my melody clip (even with notes) is never listed", al.length);
+  // 1 つのクリップ: パターン
+  var ep = al[0], before = JSON.stringify(aq.tracks.filter(function (t) { return t !== ep.track; })), trk0 = JSON.parse(JSON.stringify(ep.track)), extA = JSON.stringify(aq.ext);
+  var sp1 = X.swapPlan(aq, { clip: ep.clip.id, src: "pat", pat: "arpPiano" });
+  ok(sp1.ok && sp1.state === "gen" && sp1.type === "chorus" && sp1.spot.chords.every(function (c, i) { return c === X.songChords(aq)[sp1.spot.b0 + i]; }), "plan: the chorus, the song's chords, 作ったまま");
+  ok(JSON.stringify(aq.tracks.filter(function (t) { return t !== ep.track; })) === before && JSON.stringify(ep.track) === JSON.stringify(trk0), "planning changes nothing");
+  var sa1 = X.swapApply(aq, sp1, "replace");
+  var trk1 = ep.track, others1 = JSON.stringify(aq.tracks.filter(function (t) { return t !== ep.track; }));
+  ok(sa1.ok && others1 === before && JSON.stringify(trk1.instrument) === JSON.stringify(trk0.instrument) && JSON.stringify(trk1.fx) === JSON.stringify(trk0.fx) && trk1.vol === trk0.vol && trk1.pan === trk0.pan && JSON.stringify(trk1.sends) === JSON.stringify(trk0.sends) && JSON.stringify(aq.ext) === extA, "replace: only that clip's notes change — every other track, the instrument, FX, volume, pan, sends and the song chords stay the same");
+  ok(ep.clip.start === trk0.clips.filter(function (c) { return c.id === ep.clip.id; })[0].start && ep.clip.len === trk0.clips.filter(function (c) { return c.id === ep.clip.id; })[0].len && ep.clip.ext.name === trk0.clips.filter(function (c) { return c.id === ep.clip.id; })[0].ext.name && ep.clip.ext.xgen.pat === "arpPiano" && X.clipState(ep.clip) === "gen", "the clip keeps its place, length and name; it is 作ったまま with the new pattern");
+  // 手で直した → 上書きしない・選べば上書き・別のトラック
+  ep.clip.notes[0][3] = 0.15; var edN = JSON.stringify(ep.clip.notes);
+  var sp2 = X.swapPlan(aq, { clip: ep.clip.id, src: "pat", pat: "popPiano8" });
+  ok(sp2.ok && sp2.state === "edited" && !X.swapApply(aq, sp2, "replace").ok && JSON.stringify(ep.clip.notes) === edN, "a hand-edited clip is not overwritten unless chosen (the notes stay)");
+  var nT5 = aq.tracks.length, sn2 = X.swapApply(aq, sp2, "newtrack");
+  ok(sn2.ok && aq.tracks.length === nT5 + 1 && JSON.stringify(ep.clip.notes) === edN && sn2.clip.start === ep.clip.start && sn2.track.ext.xm === ep.track.ext.xm && X.clipState(sn2.clip) === "gen", "別のトラックに作る: a new track with the same sound at the same place; the edited clip untouched");
+  ok(X.swapApply(aq, X.swapPlan(aq, { clip: ep.clip.id, src: "pat", pat: "popPiano8" }), "replace", true).ok && ep.clip.ext.xgen.pat === "popPiano8" && X.clipState(ep.clip) === "gen", "上書きする (force) replaces the edited clip");
+  // ほかのテンプレートの同じ楽器・密度・強さ・シード
+  var bs = al[1], sp3 = X.swapPlan(aq, { clip: bs.clip.id, src: "tpl", tpl: "citypop", ti: 2 });
+  ok(sp3.ok && sp3.pat === "syncBass" && sp3.T2.id === "citypop", "another template's same instrument (city pop bass → syncopated bass)");
+  var pd0 = X.swapPlan(aq, { clip: bs.clip.id, dens: 0 }), pd2 = X.swapPlan(aq, { clip: bs.clip.id, dens: 2 }), pw = X.swapPlan(aq, { clip: bs.clip.id, sv: 0.85 }), ps = X.swapPlan(aq, { clip: bs.clip.id, sv: 1.15 });
+  function avgv(n) { var t = 0; n.forEach(function (x) { t += x[3]; }); return t / n.length; }
+  ok(pd0.notes.length < pd2.notes.length && avgv(ps.notes) > avgv(pw.notes) * 1.2 && JSON.stringify(X.swapPlan(aq, { clip: al[3].clip.id, seed: 77 }).notes) !== JSON.stringify(X.swapPlan(aq, { clip: al[3].clip.id, seed: 78 }).notes), "density changes the note count, strength scales the velocity, seed changes the variation");
+  ok(!X.swapPlan(aq, { clip: al[5].clip.id, src: "pat", pat: "arpPiano" }).ok && !X.swapPlan(aq, { clip: al[0].clip.id, src: "pat", pat: "pop8" }).ok && !X.swapPlan(aq, { clip: aq.tracks[0].clips[0].id }).ok, "a pitched pattern on a drum track, drums on a pitched track and a non-accompaniment clip are refused");
+  var mq = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project; mq.tempo.meters.push({ tick: M.barToTick(mq, 3), num: 3, den: 4 });
+  ok(/拍子/.test(X.swapPlan(mq, { clip: mq.tracks[1].clips[0].id }).why), "a clip that crosses a meter change is refused");
+  // セクションをまとめて
+  var aq2 = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project, s2 = M.sectionsOf(aq2)[1], l2 = X.secClips(aq2, s2);
+  l2[0].clip.notes[0][3] = 0.2;
+  var keep2 = JSON.stringify(aq2.tracks.map(function (t) { return t.clips.filter(function (c) { return !(c.start >= s2.tick && c.start < s2.tick + s2.len); }); })), ssp = X.sectionSwapPlan(aq2, s2.id, "citypop", 1);
+  ok(ssp.ok && ssp.items.filter(function (x) { return x.skip === X.STATE_LBL.edited; }).length === 1 && ssp.n >= 2, "whole section from 🌃 city pop: matching instruments only; the hand-edited clip is skipped", ssp.items.map(function (x) { return x.skip || x.plan.pat; }));
+  var e0 = JSON.stringify(l2[0].clip.notes), ssa = X.sectionSwapApply(aq2, ssp);
+  ok(ssa.n === ssp.n && JSON.stringify(l2[0].clip.notes) === e0 && JSON.stringify(aq2.tracks.map(function (t) { return t.clips.filter(function (c) { return !(c.start >= s2.tick && c.start < s2.tick + s2.len); }); })) === keep2, "apply: only the swappable clips in that section change; other sections are byte-identical");
+  ok(X.tplSearch("", { fam: "guitar" }).some(function (T) { return T.id === "xacoustic"; }) && X.famsOf(X.TPLS.filter(function (T) { return T.id === "citypop"; })[0]).indexOf("guitar") >= 0, "the v2.77 sounds are in the instrument map (guitar filter works; it was empty in v2.77)");
+
   // ---------- 画面 ----------
   var R = H.makeEl("div"); A.start("daw", R, {});
   ok(D.xmas.open(), "the Christmas screen opens");
@@ -324,5 +374,20 @@ module.exports = async function () {
   ok(JSON.stringify(D.project().tracks) === trU && JSON.stringify(D.project().ext) === extU, "one ↶ removes the track and the stored chords / key (ext) too");
   var mid4 = M.midiExport(D.project()); ok(mid4.ok, "MIDI export still works after undo");
   X.ui.part = null; X.ui.tsel = null;
+  // A5 の画面・↶
+  var pA = D.project(); X.ui.tab = "arr"; X.ui.asec = null; X.ui.aclip = null; D.xmas.host.render();
+  ok(R.innerHTML.indexOf('data-xtab="arr"') >= 0, "the Christmas screen has the 🔁 差しかえ tab");
+  var hsA = D.xmas.host, qA = X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "full")).project; hsA.newSong(qA); pA = D.project(); X.ui.tab = "arr"; hsA.render();
+  var keepA = JSON.stringify(pA);
+  ok((R.innerHTML.match(/data-xasec="/g) || []).length === 8 && (R.innerHTML.match(/data-xaclip="/g) || []).length === 5 && R.innerHTML.indexOf("作ったまま") >= 0 && R.innerHTML.indexOf('data-xatpl') >= 0, "arrange tab: 8 section chips, the 5 clips of the intro (no drums / bass there) with their state, the whole-section template select", (R.innerHTML.match(/data-xaclip="/g) || []).length);
+  var firstClip = (R.innerHTML.match(/data-xaclip="([^"]+)"/) || [])[1]; X.ui.aclip = firstClip; X.ui.aopt = {}; hsA.render();
+  ok(R.innerHTML.indexOf('data-xasrc="tpl"') >= 0 && R.innerHTML.indexOf('data-xapat') >= 0 && (R.innerHTML.match(/data-xadens="/g) || []).length === 3 && (R.innerHTML.match(/data-xasv="/g) || []).length === 3 && R.innerHTML.indexOf('data-xpv="an"') >= 0 && R.innerHTML.indexOf('data-xm="aApply"') >= 0 && R.innerHTML.indexOf('data-xm="aNew"') >= 0, "swap screen: pattern / other template, density, strength, ▶ before / after, 差しかえる, 別のトラックに作る");
+  ok(JSON.stringify(D.project()) === keepA, "the arrange tab and the swap screen change nothing by themselves");
+  var spA = X.swapPlan(pA, { clip: firstClip, src: "pat", pat: "arpPiano" }), snA = hsA.snapAll(), trA = JSON.stringify(pA.tracks), exA = JSON.stringify(pA.ext);
+  X.swapApply(pA, spA, "replace"); hsA.commit(snA, "swap", spA.track.id, firstClip);
+  ok(JSON.stringify(D.project().tracks) !== trA, "swap applied through the DAW host");
+  D.ops.undo();
+  ok(JSON.stringify(D.project().tracks) === trA && JSON.stringify(D.project().ext) === exA, "one ↶ restores the swapped clip exactly");
+  X.ui.aclip = null; X.ui.aopt = null; X.ui.tab = "tpl";
   A.stop();
 };
