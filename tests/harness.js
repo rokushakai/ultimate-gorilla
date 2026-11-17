@@ -179,7 +179,7 @@ function load(opts) {
   vm.runInContext("Math", ctx).random = makeRandom(SEED + (++loadCount) * 7919);
   // opts.patch(src, file): テストだけで中身をのぞくための置換（本体のファイルは変更しない）
   (opts.files || ["arcade.js", "arcade-melody.js", "arcade-lyrics.js", "arcade-table.js", "arcade-sports.js", "arcade-chords.js", "arcade-ukulele.js", "arcade-quiz.js", "arcade-piano.js", "arcade-drum.js", "arcade-bass.js", "arcade-guitar.js", "arcade-strings.js", "arcade-horn.js", "arcade-synth.js", "arcade-daw-zip.js", "arcade-daw-model.js", "arcade-daw.js", "arcade-daw-xmas.js"]).forEach(function (f) {
-    var src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    var src = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/\r\n/g, "\n"); // CRLF で取り出した作業ツリーでも、テストの置換（改行をふくむ）が当たるように（本体のファイルは変えない・JS の意味は同じ）
     if (opts.patch) { src = opts.patch(src, f); }
     vm.runInContext(src, ctx, { filename: f });
   });

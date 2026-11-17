@@ -703,6 +703,19 @@ module.exports = async function () {
   X.ui.mres = { ok: false, why: "マイクを使う許可がありませんでした" }; hs10.render();
   ok(R.innerHTML.indexOf("dxm-warn") >= 0 && R.innerHTML.indexOf("許可がありませんでした") >= 0, "a refused microphone shows the reason");
   X.ui.mres = null; X.micStop();
+  // A12: トラック別 WAV（ステム）の計画・曲の写し・画面（描くのは Chrome の QA）
+  D.xmas.host.newSong(X.tplNewProject(X.tplPlan(null, "pop", "new", 1, 1, "std")).project);
+  var sp0 = D.project(); sp0.tracks[2].mute = true; sp0.tracks[3].solo = true; sp0.tracks[1].sends = { rev: 0.5, dly: 0.3 }; sp0.master.fx = { items: [{ type: "limiter", on: true, ceiling: -1, gain: 3 }] };
+  var spKeep = JSON.stringify(sp0), spl = D.stem.plan(), spw = D.wav.plan();
+  ok(spl.ok && spl.count === sp0.tracks.length - 1 && spl.list.length === sp0.tracks.length && !spl.list[0].has && spl.list.slice(1).every(function (x) { return x.has; }) && spl.total === spl.bytes * spl.count && spl.frames === Math.ceil(spl.sec * 44100) && spl.tail === 3 && spl.music === spw.music && JSON.stringify(D.project()) === spKeep, "stem plan: one file per track with sound (the empty melody track is skipped), all the same length (song + 3 s), sizes known before rendering — the song unchanged", [spl.count, spl.sec, spl.total]);
+  var sq = D.stem.project(sp0, sp0.tracks[2].id);
+  ok(sq.tracks.every(function (t, i) { return t.solo === false && t.mute === (i !== 2) && t.sends.rev === 0 && t.sends.dly === 0; }) && sq.master.fx.items.length === 0 && sq.master.vol === sp0.master.vol && M.songEndTick(sq) === M.songEndTick(sp0) && JSON.stringify(sq.tracks[2].clips) === JSON.stringify(sp0.tracks[2].clips) && JSON.stringify(sq.tracks[2].fx) === JSON.stringify(sp0.tracks[2].fx) && sq.tracks[2].vol === sp0.tracks[2].vol && sq.tracks[2].pan === sp0.tracks[2].pan && JSON.stringify(D.project()) === spKeep, "stem copy: only that track sounds (even if it was muted; solo cleared), no sends, no master FX, same master volume and song end; the track's notes, FX, volume and pan untouched; the song unchanged");
+  ok(spl.list.map(function (x) { return x.file; }).every(function (f, i) { return f.indexOf("_" + (i < 9 ? "0" : "") + (i + 1) + "_") > 0 && /\.wav$/.test(f); }) && spl.zipOk, "file names 曲名_01_トラック名.wav …; ZIP allowed on a PC (under 256 MB)", spl.list.map(function (x) { return x.file; }).slice(0, 3));
+  var ua0 = W.navigator.userAgent; W.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
+  var spi = D.stem.plan(); W.navigator.userAgent = ua0;
+  ok(spi.ok && !spi.zipOk && /iPhone/.test(spi.zipWhy), "iPhone: no ZIP of all stems — save one at a time", spi.zipWhy);
+  X.ui.tab = "tpl"; var sh = D.stem.html();
+  ok((sh.match(/data-pj="stem:/g) || []).length === spl.count && sh.indexOf("音なし") >= 0 && sh.indexOf('data-pj="stemAll"') >= 0 && sh.indexOf("0dB") >= 0 && sh.indexOf("マスターの FX と共有のリバーブ") >= 0, "the stem section: a button per track, 音なし, ZIP (PC), and the note about volume / pan already applied");
   // A11-1 の画面
   try { W.localStorage.removeItem(X.MY_KEY); } catch (e) {}
   var keep12 = JSON.stringify(D.project()); X.ui.tab = "my"; hs10.render();
