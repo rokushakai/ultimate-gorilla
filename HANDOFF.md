@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.91** |
+| 現在バージョン | **v2.92** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.92] 🦍 A15・書き出しの再現性**（§345）: `UGMelody.decodeRate()`（44100）・`UGMelody.seedRand(seed)`・`wav.diag`（fp・prof）。テストは `node tools/test-diag.js` でも回せる（異常終了の場所が残る）。WAV の比べは「同じ端末なら fp・端末をまたぐと prof ±1」。次は A16（iPhone 向けの保存）
 - **[v2.91] 🦍 A14・Style Match の精度**（§345）: `styleAnalyze` は `bpm.cands`・`meter.cands`・`key.cands`・`sig`（beat・tonal・flat・sharp・spread）を返す。`analysisToCond` は信頼度 0.6／0.55 以上だけ。`data-xmcand` の候補のボタン。検証の音は `tests/style-corpus.js`（合成）・測り方は `tests/test-style.js`。実演奏の検証は未確認（使ってよい録音が要る）
 - **[v2.90] 🦍 A13・制作の流れの検証**（§345）: `tests/test-workflow.js`（`check(p, mel)` の点検・9 段階 ＋ 別のキー ＋ 復元のあとのグルーヴ）。新しい機能をつなぐときは、ここに 1 段階足して点検 0 を守る。次は A14（Style Match の精度）
 - **[v2.89] 🦍 A12・トラック別 WAV（ステム）**（§345）: `UGDaw.stem`（`plan`・`one(tid, cb)`・`all(cb)`・`project`・`html`）。`renderSong(cb, { proj, noSend })`。テストは CRLF の作業ツリーでもそのまま通る（`tests/harness.js`）。Segmentation fault の記録と調べ方は GAME_DESIGN §345「開発環境の記録」。次は A13（制作の流れの検証）

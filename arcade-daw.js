@@ -2675,6 +2675,7 @@
       if (stt.rate !== WAV_RATE || stt.ch < 2) { cb(null, "描いた音の形がちがいます（" + stt.rate + "Hz・" + stt.ch + "ch）", stt, plan); return; }
       if (stt.nan > 0) { cb(null, "描いた音がこわれていました（NaN " + stt.nan + " 個）", stt, plan); return; }
       if (stt.peak < 0.0001) { cb(null, "音がありません（全部ミュート・マスター 0 などではありませんか）", stt, plan); return; }
+      stt.fp = pcmPrint(buf); stt.prof = pcmProfile(buf); // §345 A15: 指紋（まったく同じ音か）と 1 秒ごとの音量（端末どうしは少しの幅でくらべる）
       stt.lim = mlive.lim ? (limUsed ? "ok" : "none") : ""; stt.limMode = mlive.lim ? (limTp ? "tp" : "sample") : ""; // 9B-10・9B-16: limMode ＝ 設定のモード（使えたかは lim）
       var blob = null;
       try { blob = UG.encodeWav(buf); } catch (e6) { blob = null; }
@@ -2729,6 +2730,24 @@
     } catch (e4) { if (!done) { done = true; cb(null, "描けませんでした"); } }
     }
   }
+  // §345 A15: 描いた音の指紋（16bit にしたときの値を、64 サンプルおきに FNV-1a）・同じ曲・同じ設定で同じ値なら、同じ WAV
+  function pcmPrint(buf) {
+    var h = 0x811c9dc5, c, i, chs = Math.min(2, buf.numberOfChannels);
+    for (c = 0; c < chs; c++) { var d = buf.getChannelData(c); for (i = 0; i < d.length; i += 64) { var v = Math.max(-32768, Math.min(32767, Math.round(d[i] * 32767))) & 0xffff; h ^= v & 0xff; h = (h * 16777619) >>> 0; h ^= v >>> 8; h = (h * 16777619) >>> 0; } }
+    return ("0000000" + h.toString(16)).slice(-8);
+  }
+  // §345 A15: 1 秒ごとの音量（16bit の値の RMS・小数 1 けた）。1 LSB のちがいでは変わらないので、端末・ページをまたいでくらべられる（幅 ±1 で）
+  function pcmProfile(buf) {
+    var sr = buf.sampleRate, n = buf.length, out = [], b, c, i, chs = Math.min(2, buf.numberOfChannels);
+    for (b = 0; b * sr < n; b++) { var q = 0, k = 0; for (c = 0; c < chs; c++) { var d = buf.getChannelData(c); for (i = b * sr; i < Math.min(n, (b + 1) * sr); i += 4) { var v = d[i] * 32767; q += v * v; k++; } } out.push(Math.round(Math.sqrt(q / Math.max(1, k)) * 10) / 10); }
+    return out;
+  }
+  // §345 A15: 書き出しの記録（?debug=1 で見る・あとで「なぜ音がちがうか」を調べるため）
+  function wavDiag(p, stt, ms, samplesOk) {
+    var UG = window.UGMelody, A = UG && UG.audio, X0 = XM();
+    return { fp: stt ? stt.fp : "", prof: stt ? stt.prof : [], frames: stt ? stt.frames : 0, ms: ms, live: A && A.ctx ? A.ctx.sampleRate : 0, dec: UG && UG.decodeRate ? UG.decodeRate() : 0, drum: samplesOk, missing: X0 && X0.missing ? X0.missing(p) : 0, chunk: wavCanChunk(), at: new Date().toISOString() };
+  }
+  function isDbg() { try { return /[?&]debug=1/.test(window.location.search); } catch (e) { return false; } }
   // 書き出す（再生を止めてから・一度に 1 つ・データは変えない）
   function wavExport(onDone) {
     if (wav.busy) { return false; }
@@ -2752,13 +2771,13 @@
         if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
         else if (!blob) { wav.state = "fail"; wav.msg = why || "書き出せませんでした"; }
         else {
-          wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav"; wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
+          wav.diag = wavDiag(p, stt, Date.now() - job.t0, samplesOk); wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav"; wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
           wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (XM() && XM().missing(p) ? "読みこめなかった楽器の録音（" + XM().missing(p) + " 音色）は、代わりのシンセの音で描きました。" : "") + // §343
              (stt && stt.clip ? "音が大きすぎて割れているところがあります（" + stt.clip + " サンプル）。マスター音量を下げてください。" + (fxBoosted(p) ? "🎛️ FX で上げた値（EQ の＋・Makeup）も下げてください。" : "") : "") + (stt && stt.lim === "none" ? "このブラウザではマスターのリミッターを使えなかったので、リミッターなしで書き出しました。" : "");
         }
-        dgLog("wav", { s: wav.state, ms: wav.ms, why: wav.state === "done" ? "" : wav.msg, bytes: blob ? blob.size : 0 }); // 9B-21
+        dgLog("wav", { s: wav.state, ms: wav.ms, why: wav.state === "done" ? "" : wav.msg, bytes: blob ? blob.size : 0, fp: stt ? stt.fp : "", live: wav.diag ? wav.diag.live : 0 }); // 9B-21・§345 A15
         if (onDone) { onDone(); }
       }, { job: job, onProgress: function (pc) { wav.pct = pc; var r0 = st.root, el = r0 && r0.querySelector ? r0.querySelector(".dp-wpct, .dlu-wpct") : null; if (el) { el.textContent = pc + "%"; } } }); // 9B-14: 進み具合
     }
@@ -3120,7 +3139,7 @@
     else {
       if (wav.state === "done" && wav.blob) {
         var w = wav.stats;
-        h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
+        h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + (isDbg() && wav.diag ? '<br><span class="small dp-diag">診断: 指紋 ' + escHtml(wav.diag.fp) + '・再生 ' + wav.diag.live + 'Hz・録音の展開 ' + wav.diag.dec + 'Hz・ドラムの録音 ' + (wav.diag.drum ? "あり" : "なし") + '・' + wav.diag.ms + 'ms</span>' : '') + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
           '<div class="dp-btns"><button class="modal-btn" data-pj="wavSave">&#x1F4BE; ファイルに保存（共有）</button>' + (wav.url ? '<a class="modal-btn dp-dl" href="' + wav.url + '" download="' + escHtml(wav.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
       } else if (wav.state === "fail" || wav.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(wav.msg) + '</div>'; }
       h += pln.ok ? '<button class="modal-btn dp-wavgo" data-pj="wav">&#x1F3B5; WAV を書き出す</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div>';

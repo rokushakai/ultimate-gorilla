@@ -154,7 +154,8 @@
       try {
         var len = melodyAudio.ctx.sampleRate || 44100;
         var buf = melodyAudio.ctx.createBuffer(1, len, len), data = buf.getChannelData(0);
-        for (var i = 0; i < len; i++) { data[i] = Math.random() * 2 - 1; }
+        var nr = melodySeedRand(0x9e3779b9); // §345 A15: 決まった乱数（ページを開くたびに変わらない）
+        for (var i = 0; i < len; i++) { data[i] = nr() * 2 - 1; }
         melodyAudio.noise = buf;
       } catch (e3) { melodyAudio.noise = null; }
     }
@@ -524,12 +525,18 @@
       for (var i = 0; i < MELODY_VOICES.length; i++) { melodyMidiSend([0xB0 | MELODY_VOICES[i].ch, 91, MELODY_REV_CC[rev]]); }
     }
   }
+  // §345 A15: シードつきの乱数（mulberry32）。同じシードなら同じ並び
+  function melodySeedRand(seed) {
+    var a = seed >>> 0;
+    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul ? Math.imul(t ^ (t >>> 15), t | 1) : ((t ^ (t >>> 15)) * (t | 1)) >>> 0; t ^= t + (Math.imul ? Math.imul(t ^ (t >>> 7), t | 61) : ((t ^ (t >>> 7)) * (t | 61)) >>> 0); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  // リバーブの響き（2 秒あまりの減っていくノイズ）。§345 A15: 決まった乱数で作る（書き出すたびに響きが変わらない・音の性質は前と同じ）
   function melodyMakeImpulse(ac, seconds) {
     var rate = ac.sampleRate || 44100, len = Math.floor(rate * seconds);
     var buf = ac.createBuffer(2, len, rate);
     for (var ch = 0; ch < 2; ch++) {
-      var d = buf.getChannelData(ch);
-      for (var i = 0; i < len; i++) { d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+      var d = buf.getChannelData(ch), r = melodySeedRand(0x51a5e + ch * 7919);
+      for (var i = 0; i < len; i++) { d[i] = (r() * 2 - 1) * Math.pow(1 - i / len, 3); }
     }
     return buf;
   }
@@ -628,8 +635,19 @@
     }
     return out;
   }
+  // §345 A15: 楽器の録音は 44.1kHz で展開する（再生の AudioContext が 48kHz などでも同じデータ → WAV がどの端末でも同じ・WAV の 44.1kHz に変換しなおさない）
+  var melodyDecCtx = null, melodyDecTried = false;
+  function melodyDecodeCtx() {
+    if (melodyDecCtx || melodyDecTried) { return melodyDecCtx; }
+    melodyDecTried = true; // 作るのは 1 回だけ
+    var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    try { melodyDecCtx = OAC ? new OAC(1, 1, 44100) : null; } catch (e) { melodyDecCtx = null; }
+    if (melodyDecCtx && typeof melodyDecCtx.decodeAudioData !== "function") { melodyDecCtx = null; } // 展開できない古いブラウザでは、いままでどおり再生のコンテキストで
+    return melodyDecCtx;
+  }
+  melodyDecodeCtx(); // 読みこんだときに 1 回だけ作る（1 フレームだけの小さなもの・音の準備や書き出しの途中で作らない）
   function melodyDecodeBank(name) {
-    var ac = melodyAudio.ctx, bank = window.UGMelodySamples.banks[name];
+    var ac = melodyAudio.ctx, bank = window.UGMelodySamples.banks[name], dac = melodyDecodeCtx() || ac;
     if (!ac || !bank) { melodySampleFinish(name, false); return; }
     melodySamples.state[name] = "decoding";
     var keys = Object.keys(bank.notes), left = keys.length, bufs = {}, hold = Math.max(MELODY_SAMPLE_HOLD[bank.prog % 1000] || 1, MELODY_SAMPLE_TRIM[bank.prog % 1000] || 0) + MELODY_SAMPLE_FADE + 0.05;
@@ -639,9 +657,9 @@
       function ok(buf) { try { bufs[k] = melodyTrimBuffer(ac, buf, hold); } catch (e) { note(e); } done(); }
       function ng(e) { note(e); done(); }
       try {
-        var pr = ac.decodeAudioData(ab, ok, ng);
+        var pr = dac.decodeAudioData(dac !== ac && ab.slice ? ab.slice(0) : ab, ok, function (e) { if (dac !== ac) { try { var p2 = ac.decodeAudioData(ab, ok, ng); if (p2 && p2.catch) { p2.catch(function () {}); } return; } catch (e4) {} } ng(e); }); // 44.1kHz で展開できないときは、いままでどおり再生の AudioContext で
         if (pr && pr.catch) { pr.catch(function () {}); }
-      } catch (e2) { done(); }
+      } catch (e2) { if (dac !== ac) { try { var p3 = ac.decodeAudioData(ab, ok, ng); if (p3 && p3.catch) { p3.catch(function () {}); } return; } catch (e5) {} } done(); }
     }
     function done() {
       left--;
@@ -2341,7 +2359,7 @@
   window.UGMelody = {
     buildLayout: melodyBuildLayout, scale: melodyScale, scales: MELODY_SCALES, posDegree: melodyPosDegree, degreeToMidi: melodyDegreeToMidi,
     chordMidis: melodyChordMidis, chordName: melodyChordName, recipe: melodyRecipe, patches: MELODY_PATCHES, recipes: MELODY_RECIPES,
-    synth: melodySynth, voiceStop: melodyVoiceStop, voiceBend: melodyVoiceBend, bassHit: melodyBassHit, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
+    synth: melodySynth, voiceStop: melodyVoiceStop, voiceBend: melodyVoiceBend, bassHit: melodyBassHit, drum: melodyDrum, drumSynth: GM_DRUM_SYNTH, decodeRate: function () { var c = melodyDecodeCtx(); return c ? c.sampleRate : (melodyAudio.ctx ? melodyAudio.ctx.sampleRate : 0); }, seedRand: melodySeedRand, audio: melodyAudio, audioInit: melodyAudioInit, setFx: melodySetFx,
     samples: melodySamples, sampleFiles: MELODY_SAMPLE_FILES, sampleAttack: MELODY_SAMPLE_ATTACK, drumMap: MELODY_DRUM_MAP, setDrumSamples: function (on) { melodySamples.drumOff = !on; },
     latency: melodyLatency, setLatency: melodySetLatency, latencyFrom: melodyLatencyFrom, latencyUi: melodyLatencyUi, LAT_KEY: MELODY_LAT_KEY,
     gmDrum: melodyGmDrum, cymChoke: melodyCymChoke, hatCloses: MELODY_HAT_CLOSES, hatStyle: melodyHatStyle, setHatClose: function (s) { melodyHatClose = MELODY_HAT_CLOSES.indexOf(s) >= 0 ? s : "auto"; }, hatClose: function () { return melodyHatClose; },
