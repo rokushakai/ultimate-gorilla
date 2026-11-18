@@ -13,6 +13,12 @@ module.exports = async function () {
     (src.match(/^ {2}function [A-Za-z0-9_$]+\(/mg) || []).forEach(function (m) { if (seen[m]) { dup.push(f + ": " + m); } seen[m] = 1; });
   });
   ok(dup.length === 0, "no top-level function is declared twice in the DAW / melody files (a second one would silently replace the first)", dup);
+  // 0b. 行の途中に「// §345 …」と書いて、同じ行のあとのコードを消していないか（あとの処理が動かなくなる）
+  var cut = [];
+  ["arcade-melody.js", "arcade-daw.js", "arcade-daw-model.js", "arcade-daw-xmas.js"].forEach(function (f) {
+    fs.readFileSync(path.join(H.ROOT, f), "utf8").split(/\r?\n/).forEach(function (line, i) { var k = line.indexOf("// §345"); if (k >= 0 && /[;{}]\s*(if|var|return|render|markDirty|st\.|re\(\)|redraw|startPlay|stopPlay|tp[A-Z]|ui\.)/.test(line.substring(k))) { cut.push(f + ":" + (i + 1)); } });
+  });
+  ok(cut.length === 0, "no '// §345 …' comment in the middle of a line hides the code after it", cut);
   // 1. 名前
   var env = H.load({ share: true }), W = env.window, D = W.UGDaw, A = W.UGArcade, M = W.UGDawModel, X = W.UGXmas, R = H.makeEl("div");
   A.start("daw", R, {});

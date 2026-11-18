@@ -2008,3 +2008,13 @@ canvas.uke-mark { display: block; width: 100%; height: 346px; border-radius: 8px
 .daw-ced-go { min-height: 40px; }
 .daw-ced-pv { margin: 4px 0; line-height: 1.5; }
 .daw-chd.on { outline: 2px solid #8fb6f0; }
+/* §345 A21 セクションとループ */
+.daw-secbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+.daw-secname { flex: 1 1 8em; min-width: 0; min-height: 36px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daw-loopinfo { min-height: 36px; white-space: nowrap; }
+.daw-loopinfo.daw-on { border-color: #e0b84a; }
+.daw-seclist { max-height: 40vh; overflow-y: auto; }
+.daw-secrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.25); }
+.daw-secrow.on .daw-secnm { font-weight: bold; color: #8fd18f; }
+.daw-secnm { flex: 1 1 8em; min-width: 0; }
+.daw-lpa, .daw-lpb { width: 4.5em; min-height: 36px; font-size: 16px; }

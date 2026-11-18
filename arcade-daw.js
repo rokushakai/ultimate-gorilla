@@ -873,6 +873,78 @@
       '<button class="' + cls + '" data-act="f4" title="4 小節進む（Shift＋.）" aria-label="4 小節進む">&#x23E9;</button>' +
       '<button class="' + cls + '" data-act="stop" title="停止（頭へ）" aria-label="停止">&#x23F9;&#xFE0F;</button>';
   }
+  // ---------- §345 A21: セクションの前／次・一覧・ループ（範囲・セクション・小節）----------
+  // セクションは曲のマーカー（M.sectionsOf）から毎回とる（並び・長さが変わっても合う）
+  function secNow(p) { var L = DM().sectionsOf(p), t = tpNow(), i, cur = -1; for (i = 0; i < L.length; i++) { if (L[i].tick <= t) { cur = i; } } return { list: L, i: cur, t: t }; }
+  // 次 ／ 前（前は: セクションの途中なら、まずそのセクションの頭へ）
+  function secStep(dir) {
+    var p = project(), s = secNow(p), L = s.list, to = null;
+    if (!L.length || rec.state !== "idle") { return false; }
+    if (dir > 0) { to = s.i + 1 < L.length ? L[s.i + 1].tick : null; }
+    else { var mid = s.i >= 0 && s.t > L[s.i].tick + (pl ? DM().PPQ : 0); to = mid ? L[s.i].tick : (s.i > 0 ? L[s.i - 1].tick : 0); }
+    if (to === null) { st.anote = "最後のセクションです"; return false; }
+    return tpGo(to);
+  }
+  // ループの範囲を決める（tick・小節の頭にそろえる・曲の中だけ）→ ON にする。再生中で、いまの位置が範囲の外なら範囲の頭から
+  function loopSet(a, b, label) {
+    var p = project(), M = DM(); if (!p || rec.state !== "idle") { return false; }
+    var end = M.songEndTick(p), lastBar = M.tickToBar(p, Math.max(0, end - 1)).bar, ba = M.tickToBar(p, Math.max(0, Math.min(a, end))).bar - 1, bb;
+    if (a >= end) { st.anote = "曲は " + lastBar + " 小節までです（ループのはじまりが曲の外）"; return false; }
+    bb = Math.min(lastBar, Math.max(ba + 1, M.tickToBar(p, Math.max(0, Math.min(end, b) - 1)).bar));
+    a = M.barToTick(p, ba); b = Math.min(end, M.barToTick(p, bb));
+    if (!(b > a)) { st.anote = "ループの範囲がおかしいです"; return false; }
+    p.practice = p.practice || {}; p.practice.loopA = a; p.practice.loopB = b;
+    setLoop(true); markDirty();
+    st.anote = "&#x1F501; " + (label ? escHtml(label) + "（" : "") + (ba + 1) + "〜" + bb + " 小節" + (label ? "）" : "") + "をくり返します";
+    if (pl && !pl.clip) { var t = Math.floor(playTick()); if (t < a || t >= b) { startPlay({ from: a }); } }
+    else { st.cue = a; st.pos = a; }
+    dgLog("loop", { a: a, b: b });
+    return true;
+  }
+  function loopSecs(i0, i1) { var p = project(), L = DM().sectionsOf(p); if (!L[i0] || !L[i1]) { return false; } var lo = Math.min(i0, i1), hi = Math.max(i0, i1); return loopSet(L[lo].tick, L[hi].tick + L[hi].len, lo === hi ? L[lo].name : L[lo].name + "〜" + L[hi].name); }
+  function loopBars(b1, b2) { var p = project(), M = DM(); return loopSet(M.barToTick(p, Math.max(0, Math.round(b1) - 1)), M.barToTick(p, Math.max(Math.round(b1), Math.round(b2))), ""); }
+  function loopText(p) { var M = DM(), lr = M.loopRange(p), on = !!(p.practice && p.practice.loopOn); return (on ? "&#x1F501; " : "&#x1F501;&#xFE0F; OFF ") + (M.tickToBar(p, lr.a).bar) + "〜" + M.tickToBar(p, Math.max(lr.a, lr.b - 1)).bar; }
+  // セクションのバー（再生のボタンの下）
+  function secBarHtml(p) {
+    var s = secNow(p), L = s.list, cur = s.i >= 0 ? L[s.i] : null;
+    var h = '<div class="daw-secbar">';
+    h += '<button class="modal-btn daw-tbtn" data-act="secPrev" aria-label="前のセクション" title="前のセクション"' + (L.length ? '' : ' disabled') + '>&#x23EE;&#xFE0F;</button>';
+    h += '<button class="modal-btn daw-secname" data-act="secList" aria-label="セクションの一覧">' + (cur ? escHtml(cur.name) : (L.length ? "（はじまり）" : "セクションなし")) + ' &#x25BE;</button>';
+    h += '<button class="modal-btn daw-tbtn" data-act="secNext" aria-label="次のセクション" title="次のセクション"' + (L.length ? '' : ' disabled') + '>&#x23ED;&#xFE0F;</button>';
+    h += '<button class="modal-btn daw-loopinfo' + (p.practice && p.practice.loopOn ? ' daw-on' : '') + '" data-act="secList" aria-label="ループの範囲">' + loopText(p) + '</button>';
+    return h + '</div>';
+  }
+  // セクションの一覧（下のパネル）: ▶ ここから・🔁 ループ・〜までループ・小節の範囲
+  function secSheetHtml(p) {
+    if (!st.secSheet) { return ""; }
+    var M = DM(), L = M.sectionsOf(p), s = secNow(p), ss = st.secSheet, lr = M.loopRange(p), h = '<div class="daw-ced daw-secsheet" role="dialog" aria-label="セクションとループ"><div class="daw-ced-top"><b>セクションとループ</b><button class="modal-btn daw-small" data-act="secClose" aria-label="閉じる">&#x2715;</button></div>', i;
+    if (ss.from !== undefined && ss.from !== null) { h += '<div class="small">「' + escHtml(L[ss.from] ? L[ss.from].name : "") + '」から、どこまでをループしますか？（終わりのセクションの 🔁 を押す）</div>'; }
+    h += '<div class="daw-seclist">';
+    for (i = 0; i < L.length; i++) {
+      var a = M.tickToBar(p, L[i].tick).bar, b = M.tickToBar(p, L[i].tick + L[i].len - 1).bar;
+      h += '<div class="daw-secrow' + (i === s.i ? ' on' : '') + '"><span class="daw-secnm">' + escHtml(L[i].name) + ' <small>' + a + '〜' + b + '</small></span>' +
+        '<button class="modal-btn daw-small" data-act="secGo:' + i + '">&#x25B6;&#xFE0F; ここから</button>' +
+        '<button class="modal-btn daw-small" data-act="secLoop:' + i + '">&#x1F501; ' + (ss.from !== undefined && ss.from !== null ? 'ここまで' : 'ループ') + '</button>' +
+        (ss.from === undefined || ss.from === null ? '<button class="modal-btn daw-small" data-act="secFrom:' + i + '">〜</button>' : '') + '</div>';
+    }
+    if (!L.length) { h += '<p class="small">セクション（マーカー）がありません。「🎼 曲の構成」で作れます。</p>'; }
+    h += '</div><div class="daw-ced-row small">小節の範囲 <input type="number" class="daw-lpa" min="1" value="' + M.tickToBar(p, lr.a).bar + '" aria-label="ループのはじまりの小節"> 〜 <input type="number" class="daw-lpb" min="1" value="' + M.tickToBar(p, Math.max(lr.a, lr.b - 1)).bar + '" aria-label="ループの終わりの小節"> <button class="modal-btn daw-small" data-act="loopBars">&#x1F501; この範囲</button>' +
+      '<button class="modal-btn daw-small' + (p.practice && p.practice.loopOn ? ' daw-on' : '') + '" data-act="loop">' + (p.practice && p.practice.loopOn ? 'ループ OFF にする' : 'ループ ON') + '</button></div>';
+    return h + '</div>';
+  }
+  // ボタン（data-act）→ true
+  function secAct(v, root, ctl) {
+    var p = project(), M = DM(), m;
+    if (v === "secPrev" || v === "secNext") { secStep(v === "secNext" ? 1 : -1); tpReveal(root); return true; }
+    if (v === "secList") { st.secSheet = st.secSheet ? null : {}; st.ced = null; return true; }
+    if (v === "secClose") { st.secSheet = null; return true; }
+    if ((m = /^secGo:(\d+)$/.exec(v))) { var L = M.sectionsOf(p); if (L[+m[1]]) { tpGo(L[+m[1]].tick); if (!pl && rec.state === "idle") { resumePlay(); } } st.secSheet = null; tpReveal(root); return true; }
+    if ((m = /^secFrom:(\d+)$/.exec(v))) { st.secSheet = { from: +m[1] }; return true; }
+    if ((m = /^secLoop:(\d+)$/.exec(v))) { var f0 = st.secSheet && st.secSheet.from !== undefined && st.secSheet.from !== null ? st.secSheet.from : +m[1]; loopSecs(f0, +m[1]); st.secSheet = null; tpReveal(root); return true; }
+    if (v === "loopBars") { var ia = root.querySelector(".daw-lpa"), ib = root.querySelector(".daw-lpb"); loopBars(Number(ia && ia.value), Number(ib && ib.value)); st.secSheet = null; return true; }
+    if ((m = /^loopBar:(\d+)$/.exec(v))) { loopBars(+m[1] + 1, +m[1] + 1); if (!pl && rec.state === "idle") { resumePlay(); } return true; }
+    return false;
+  }
   // 🔁: 再生中でも切りかえる（ON: ループの終わりで頭へ・OFF: 曲の終わりで止まる）
   function setLoop(on) {
     var p = project(), M = DM();
@@ -1017,7 +1089,7 @@
         '<button class="daw-bpm-val" data-act="bpm">BPM <b>' + M.bpmAt(p, 0) + '</b></button>' +
         '<button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
         '<span class="daw-meter">' + m0.num + '/' + m0.den + '</span>' +
-      '</div>' +
+      '</div>' + secBarHtml(p) + // §345 A21
       '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
         '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
         '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
@@ -1030,7 +1102,7 @@
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       arrGridHtml(p, false);
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
-      '<div class="da-area">' + panelHtml(p) + '</div>' + cedHtml(p) + // 9A-5・§345 A19: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
+      '<div class="da-area">' + panelHtml(p) + '</div>' + cedHtml(p) + secSheetHtml(p) + // 9A-5・§345 A19・A21: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
       saveNoteHtml() +
       '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p>' +
       '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
@@ -1259,12 +1331,12 @@
     return '<div class="daw dstu" tabindex="-1">' +
       '<div class="daw-top dstu-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW <small class="dstu-badge">PC Studio</small></b><div class="dstu-pbar">' + projBarHtml(p) + '</div>' +
       '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
-      stTransportHtml(p) + stToolsHtml(p) + inbNoteHtml() + backHtml() +
+      stTransportHtml(p) + secBarHtml(p) + stToolsHtml(p) + inbNoteHtml() + backHtml() +
       '<div class="dstu-grid"><div class="dstu-mainc">' + stOverviewHtml(p) + arrGridHtml(p, true) +
         (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
         '<div class="dstu-bot"><div class="dstu-card dstu-edit">' + stEditHtml(p) + '</div><div class="dstu-ops">' + panelHtml(p) + '</div></div></div>' +
       '<div class="dstu-side">' + stRefHtml(p) + stMixHtml(p) + '</div></div>' +
-      cedHtml(p) + saveNoteHtml() + '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
+      cedHtml(p) + secSheetHtml(p) + saveNoteHtml() + '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
   }
   // プレイヘッド（全体図・編集の見本・🎧）
   function stHead(root, tick) {
@@ -3488,7 +3560,7 @@
   function snapTracks() { return JSON.parse(JSON.stringify(project().tracks)); }
   // ---------- §345 A19: その場でコードを変える（アレンジの画面のコードをタップ → 下に小さな編集パネル）----------
   // st.ced ＝ { bar, id（選んだコード）, how（"keep"｜"newtrack"）, text, err, q（見本） }。曲は「確定」まで変えない
-  function cedOpen(bar) { st.ced = { bar: Math.max(0, Math.round(Number(bar)) || 0), id: "", how: "keep", text: "", err: "", q: null }; st.confirmDel = null; st.chooseAdd = false; }
+  function cedOpen(bar) { st.secSheet = null; st.ced = { bar: Math.max(0, Math.round(Number(bar)) || 0), id: "", how: "keep", text: "", err: "", q: null }; st.confirmDel = null; st.chooseAdd = false; }
   function cedPick(p, id) { var X0 = XM(); st.ced.id = id; st.ced.err = ""; st.ced.q = X0 && X0.chordQuickPlan ? X0.chordQuickPlan(p, st.ced.bar, id, st.ced.how) : null; }
   function cedHtml(p) {
     var c = st.ced, X0 = XM(); if (!c || !X0 || !X0.chordCands) { return ""; }
@@ -3526,7 +3598,7 @@
       var q = X0.chordQuickPlan(p, c.bar, c.id, c.how); if (!q.ok) { c.q = q; render(root, ctl); return true; } // 確定のときに作りなおす（見本のあとに曲が変わっていても安全）
       var from = (X0.songChords(p) || {})[c.bar], fromN = from ? X0.chordName(p, from) : "（なし）", snap = xmHost.snapAll(), r2 = X0.chordQuickApply(p, q), toN = X0.chordName(p, c.id);
       var note = (c.bar + 1) + " 小節目のコードを " + fromN + " → " + toN + " にしました。" + (q.regen.length ? "伴奏 " + q.regen.length + " つが追従" : "追従した伴奏はありません") + (q.keep.length ? "・手で直した " + q.keep.join("・") + " は元のまま（追従していません）" : "") + (q.newtrack.length ? "・手で直した " + q.newtrack.join("・") + " は新しいトラックに作りました" : "") + "（↶ 1 回で戻せます）";
-      st.ced = null; st.lastChord = { bar: c.bar }; pushUndo(snap); st.anote = escHtml(note); markDirty(); if (pl) { resync(); } render(root, ctl);
+      st.ced = null; st.lastChord = { bar: c.bar }; pushUndo(snap); st.anote = escHtml(note) + ' <button class="modal-btn daw-small" data-act="loopBar:' + c.bar + '">&#x1F501; ' + (c.bar + 1) + ' 小節目をくり返し聴く</button>'; /* §345 A21 */ markDirty(); if (pl) { resync(); } render(root, ctl);
       dgLog("chord", { bar: c.bar, id: c.id, n: r2.n });
       return true;
     }
@@ -5827,6 +5899,7 @@
             if (v === "stop") { recStop("btn"); } else { st.msg = "録音中は ▶・ループ・BPM を変えられません（⏹ か「■ 停止して置く」で止めてから）"; }
             redraw(); return;
           }
+          if (secAct(v, root, ctl)) { redraw(); return; } // §345 A21: セクションとループ
           if (v === "play") { togglePlay(); redraw(); return; } // §345 A20: 再生中は ⏸（位置を覚える）
           if (v === "stop") { st.cue = null; st.paused = false; stopPlay(false); redraw(); return; }
           if (v === "b1" || v === "b4" || v === "f1" || v === "f4") { keepScroll(root); nudgeBars((v.charAt(0) === "b" ? -1 : 1) * Number(v.charAt(1))); tpReveal(root); redraw(); return; }
@@ -6002,7 +6075,7 @@
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,
     // §341 9A-2: 再生（テストからも呼ぶ）
-    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, transport: { pause: pausePlay, resume: resumePlay, toggle: togglePlay, nudge: nudgeBars, go: tpGo, tapX: tpTapX, now: tpNow, pos: posText, paused: function () { return !!st.paused; }, buttons: tpButtons } /* §345 A20 */, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
+    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, sections2: { step: secStep, loopSet: loopSet, loopSecs: loopSecs, loopBars: loopBars, act: function (v) { var r = st.root ? secAct(v, st.root, st.ctl) : false; if (r) { rerender(); } return r; }, now: function () { var s0 = secNow(project()); return s0.i >= 0 ? s0.list[s0.i] : null; }, bar: function () { return secBarHtml(project()); }, sheet: function () { return secSheetHtml(project()); } } /* §345 A21 */, transport: { pause: pausePlay, resume: resumePlay, toggle: togglePlay, nudge: nudgeBars, go: tpGo, tapX: tpTapX, now: tpNow, pos: posText, paused: function () { return !!st.paused; }, buttons: tpButtons } /* §345 A20 */, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
     isPlaying: function () { return !!pl; }, player: function () { return pl; }, playTick: playTick, log: function () { return plLog; }, clearLog: function () { plLog = []; },
     tailPending: function () { return !!tailTimer; }
   };
