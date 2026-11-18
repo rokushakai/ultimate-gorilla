@@ -2893,7 +2893,7 @@
     return true;
   }
   // ぜんぶ（PC だけ・256MB まで）→ ZIP（README.txt つき・無圧縮）
-  function stemAll(onDone) {
+  function stemAll(onDone, opt) { // §345 A17: opt ＝ { kind: ZIP の名前の中身, extra: [{ name, data }] }（Cubasis に渡すときは MIDI とシートも）
     if (stm.busy || wav.busy) { return false; }
     var p = project(), pln = stemPlan(p), Z = ZP();
     if (!pln.ok || !pln.zipOk || !Z) { stm.state = "fail"; stm.msg = !pln.ok ? pln.why : (pln.zipWhy || "ZIP の道具を読みこめませんでした"); if (onDone) { onDone(); } return false; }
@@ -2913,8 +2913,9 @@
       if (job.canceled) { end(false, "やめました"); return; }
       if (k >= ids.length) {
         files.unshift({ name: "README.txt", data: Z.utf8(stemReadme(p, pln, info)) });
+        if (opt && opt.extra) { for (var xe = opt.extra.length - 1; xe >= 0; xe--) { files.unshift(opt.extra[xe]); } }
         var z; try { z = Z.zipBuild(files, d); stm.zip = new Blob(z.parts, { type: "application/zip" }); } catch (e) { end(false, "ZIP を作れませんでした（メモリが足りないかもしれません）"); return; }
-        stm.zipName = outName(p.name, "stems", "zip", stemStamp(p)); try { stm.zipUrl = URL.createObjectURL(stm.zip); } catch (e2) { stm.zipUrl = ""; }
+        stm.zipName = outName(p.name, opt && opt.kind ? opt.kind : "stems", "zip", stemStamp(p)); try { stm.zipUrl = URL.createObjectURL(stm.zip); } catch (e2) { stm.zipUrl = ""; }
         end(true, ""); return;
       }
       stm.cur = ids[k].id; stm.all.i = k + 1; stm.pct = 0;
@@ -2926,6 +2927,70 @@
     }
     next();
     return true;
+  }
+  // ---------- §345 A17: Cubasis に渡す（MIDI・ステム・受け渡しシート）----------
+  // 受け渡しシートの中身（曲は変えない）: テンポ・拍子・キー・長さ・セクション・コード・トラックの対応・読みこみの手順
+  function handoffInfo(p) {
+    var M = DM(), X0 = XM(), end = M.songEndTick(p), mx0 = M.midiExport(p), sp = stemPlan(p), i;
+    var sk = X0 && X0.songKey ? X0.songKey(p) : { key: null, kmode: "maj" }, KN = ["C", "C#", "D", "E♭", "E", "F", "F#", "G", "A♭", "A", "B♭", "B"];
+    var o = { name: p.name, bars: M.tickToBar(p, Math.max(0, end - 1)).bar, sec: Math.round(M.tickToSec(p, end) * 100) / 100, ppq: 960, format: 1,
+      key: sk.key === null ? "" : KN[sk.key] + (sk.kmode === "min" ? " マイナー" : " メジャー"),
+      tempos: M.tempoList(p).map(function (t) { return { bar: M.tickToBar(p, t.tick).bar, beat: M.tickToBar(p, t.tick).beat, bpm: t.bpm }; }),
+      meters: (p.tempo.meters || []).map(function (m) { return { bar: M.tickToBar(p, m.tick).bar, sig: m.num + "/" + m.den }; }),
+      sections: M.sectionsOf(p).map(function (s) { return { name: s.name, bar: M.tickToBar(p, s.tick).bar, bars: M.tickToBar(p, Math.max(s.tick, s.tick + s.len - 1)).bar - M.tickToBar(p, s.tick).bar + 1, sec: Math.round(M.tickToSec(p, s.tick) * 100) / 100 }; }),
+      chords: [], tracks: [], stemSec: sp.sec, stemFrames: sp.frames };
+    if (X0 && X0.songChords && X0.chordOf) { var sc = X0.songChords(p), ks = Object.keys(sc).map(Number).sort(function (a, b) { return a - b; }), last = ""; for (i = 0; i < ks.length; i++) { var nm = X0.chordOf(sk.key === null ? 0 : sk.key, sc[ks[i]]).name; if (nm !== last) { o.chords.push({ bar: ks[i] + 1, name: nm }); last = nm; } } }
+    var mt = mx0.ok ? mx0.info.tracks : [], st0 = stemStamp(p);
+    for (i = 0; i < p.tracks.length; i++) {
+      var t = p.tracks[i], m = null, k; for (k = 0; k < mt.length; k++) { if (mt[k].id === t.id) { m = mt[k]; m.n = k + 2; } }
+      o.tracks.push({ n: i + 1, name: t.name, midi: m ? { track: m.n, ch: m.ch, drum: !!m.drum, notes: m.notes } : null, stem: stemHas(t) ? stemName(p, i, t) : "", audio: M.isAudio(t), vol: t.vol, pan: t.pan, mute: !!t.mute });
+    }
+    return o;
+  }
+  function handoffText(p) {
+    var o = handoffInfo(p), L = [], i;
+    L.push("ゴリラDAW → Cubasis 3 受け渡しシート");
+    L.push("曲: " + o.name);
+    L.push("長さ: " + o.bars + " 小節・" + o.sec + " 秒（ステムは余韻を入れて " + Math.round(o.stemSec * 100) / 100 + " 秒・" + o.stemFrames + " フレーム）");
+    L.push("テンポ: " + o.tempos.map(function (t) { return (t.bar === 1 && t.beat === 1 ? "" : t.bar + " 小節目から ") + "BPM " + t.bpm; }).join(" → "));
+    L.push("拍子: " + o.meters.map(function (m) { return (m.bar === 1 ? "" : m.bar + " 小節目から ") + m.sig; }).join(" → "));
+    if (o.key) { L.push("キー: " + o.key); }
+    L.push("MIDI: Format " + o.format + "・PPQ " + o.ppq + "（1 本目はテンポ・拍子・セクションのマーカー）");
+    L.push(""); L.push("■ セクション（小節・時刻）");
+    for (i = 0; i < o.sections.length; i++) { var s = o.sections[i]; L.push("  " + s.bar + " 小節目〜（" + s.bars + " 小節・" + s.sec + " 秒）" + s.name); }
+    if (!o.sections.length) { L.push("  （セクションなし）"); }
+    L.push(""); L.push("■ コード（変わる小節）");
+    if (o.chords.length) { var row = []; for (i = 0; i < o.chords.length; i++) { row.push(o.chords[i].bar + ": " + o.chords[i].name); if (row.length === 8) { L.push("  " + row.join("  ")); row = []; } } if (row.length) { L.push("  " + row.join("  ")); } } else { L.push("  （曲のコードなし）"); }
+    L.push(""); L.push("■ トラック（MIDI のトラック・チャンネル ／ ステムのファイル）");
+    for (i = 0; i < o.tracks.length; i++) { var t = o.tracks[i]; L.push("  " + t.n + ". " + t.name + (t.audio ? "（録音）" : "") + (t.mute ? "（ミュート中）" : "") + " — " + (t.midi ? "MIDI " + t.midi.track + " 本目・" + (t.midi.drum ? "10ch（GM ドラム）" : t.midi.ch + "ch") + "・" + t.midi.notes + " 音" : "MIDI なし") + " ／ " + (t.stem || "ステムなし（音なし）")); }
+    L.push(""); L.push("■ Cubasis 3 での組み立て（目安・Cubasis 3 の実機では確かめていません。メニューの名前は版によってちがうことがあります）");
+    L.push("  1. 新しいプロジェクトを作り、テンポ BPM " + (o.tempos[0] ? o.tempos[0].bpm : "") + "・拍子 " + (o.meters[0] ? o.meters[0].sig : "") + " にする");
+    L.push("  2. MIDI ファイル（.mid）を読みこむ（ファイル アプリ → Cubasis のメディアのブラウザーからインポート）。トラックに音色（HALion など）を割り当てる。ドラムは 10ch の GM ドラム");
+    L.push("  3. ステム（.wav）をすべて 1 小節目の頭（0 の位置）に置く。どれも同じ長さなので、そろう");
+    L.push("  4. ステムには、トラックの音量・パン・FX がもう入っている → Cubasis のフェーダーは 0dB・パンは中央のまま（もう一度かけると二重になる）");
+    L.push("  5. マスターの FX・リミッター・共有のリバーブとディレイはステムに入っていない → Cubasis でかける");
+    L.push("  6. MIDI とステムの両方を使うときは、同じパートの音が重ならないように、どちらかをミュートする");
+    return L.join("\r\n") + "\r\n";
+  }
+  var ho = { saved: {}, msg: "" };
+  function hoKey(p) { return p.id + ":" + stemStamp(p); }
+  function hoMark(p, what, r) { var k = hoKey(p); if (!ho.saved[k]) { ho.saved = {}; ho.saved[k] = {}; } ho.saved[k][what] = r; }
+  function hoGot(p, what) { var s = ho.saved[hoKey(p)]; return s ? s[what] : ""; }
+  function hoMarkHtml(r) { return r === "shared" || r === "download" ? ' <span class="dp-hok">&#x2705; 保存</span>' : (r === "canceled" ? ' <span class="small">（やめた）</span>' : (r === "fail" ? ' <span class="small uke-daw-warn">できなかった</span>' : "")); }
+  function handoffHtml(p) {
+    var o = handoffInfo(p), sp = stemPlan(p), mx1 = DM().midiExport(p), h = '<div class="dp-wav dp-handoff"><div class="dp-h">&#x1F39B;&#xFE0F; Cubasis に渡す</div>', i;
+    h += '<div class="small">MIDI（Format 1・PPQ 960）・トラック別 WAV（0 秒から同じ長さ）・受け渡しシート（テンポ・拍子・キー・セクション・コード・トラックの対応・組み立ての手順）。iPhone では 1 つずつ保存します（Cubasis 3 の実機では確かめていません）。</div>';
+    h += '<div class="small">' + o.bars + ' 小節・BPM ' + (o.tempos[0] ? o.tempos[0].bpm : "") + (o.tempos.length > 1 ? '（変化 ' + (o.tempos.length - 1) + '）' : '') + '・' + (o.meters[0] ? o.meters[0].sig : "") + (o.key ? '・' + escHtml(o.key) : '') + '・セクション ' + o.sections.length + '・コード ' + o.chords.length + '</div>';
+    h += '<ol class="dp-hlist">';
+    h += '<li><button class="modal-btn" data-pj="hoSheet">&#x1F4C4; 受け渡しシート（.txt）を保存</button>' + hoMarkHtml(hoGot(p, "sheet")) + '</li>';
+    h += '<li>' + (mx1.ok ? '<button class="modal-btn" data-pj="hoMidi">&#x1F3B9; MIDI（約 ' + Math.ceil(mx1.bytes.length / 1024) + ' KB）を保存</button>' + hoMarkHtml(hoGot(p, "midi")) : '<span class="small">MIDI: ' + escHtml(mx1.why) + '</span>') + '</li>';
+    var ns = 0, nd = 0; for (i = 0; i < sp.list.length; i++) { if (sp.list[i].has) { ns++; if (hoGot(p, "stem:" + sp.list[i].id) === "shared" || hoGot(p, "stem:" + sp.list[i].id) === "download") { nd++; } } }
+    h += '<li>ステム ' + ns + ' 本（1 本 約 ' + mb(sp.bytes) + '）: 下の「🎚️ トラック別 WAV」で 1 本ずつ書き出して保存' + (ns ? '・保存 ' + nd + ' / ' + ns : '') + (sp.ok ? '' : '<br><span class="small uke-daw-warn">' + escHtml(sp.why) + '</span>') + '</li>';
+    h += '</ol>';
+    if (sp.ok && sp.zipOk && mx1.ok && sp.total <= STEM_ZIP_MAX) { h += '<button class="modal-btn" data-pj="hoAll"' + (stm.busy ? ' disabled' : '') + '>&#x1F4E6; ぜんぶを ZIP で（PC 向け・MIDI ＋ シート ＋ ステム ' + ns + ' 本・約 ' + mb(sp.total) + '）</button>'; }
+    else if (sp.ios) { h += '<p class="small">iPhone・iPad では、まとめた ZIP は作りません（メモリを守るため）。上の順に 1 つずつ保存してください。</p>'; }
+    if (ho.msg) { h += '<div class="small">' + ho.msg + '</div>'; }
+    return h + '</div>';
   }
   function stemReadme(p, pln, info) {
     return "Gorilla DAW stems / トラック別 WAV\r\n曲: " + p.name + "\r\n" +
@@ -3206,7 +3271,7 @@
       '</div>' +
       (sv.note ? '<div class="daw-info">' + escHtml(sv.note) + '</div>' : '') +
       saveNoteHtml() +
-      wavHtml(p) + stemHtml(p) +
+      handoffHtml(p) + wavHtml(p) + stemHtml(p) +
       midiHtml(p) + // 9B-4
       packHtml(p) +
       assetsHtml(p) +
@@ -3271,7 +3336,10 @@
         if (v.indexOf("stem:") === 0) { stemOne(v.substring(5), function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; } // §345 A12
         if (v === "stemAll") { stemAll(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
         if (v === "stemCancel") { stemCancel(); renderProj(root, ctl); return; }
-        if (v === "stemSave" && stm.blob) { stm.saved = ""; daSave(stm.blob, stm.name, function (r) { stm.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
+        if (v === "stemSave" && stm.blob) { stm.saved = ""; var stid = stm.tid; daSave(stm.blob, stm.name, function (r) { stm.saved = r; hoMark(project(), "stem:" + stid, r); if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
+        if (v === "hoSheet") { var hp = project(); daSave(new Blob([handoffText(hp)], { type: "text/plain" }), outName(hp.name, "cubasis", "txt", stemStamp(hp)), function (r) { hoMark(hp, "sheet", r); if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; } // §345 A17
+        if (v === "hoMidi") { var hp2 = project(), mr = DM().midiExport(hp2); if (!mr.ok) { ho.msg = escHtml(mr.why); renderProj(root, ctl); return; } daSave(new Blob([new Uint8Array(mr.bytes)], { type: "audio/midi" }), outName(hp2.name, "", "mid", stemStamp(hp2)), function (r) { hoMark(hp2, "midi", r); if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
+        if (v === "hoAll") { var hp3 = project(), mr3 = DM().midiExport(hp3), Z3 = ZP(); if (!mr3.ok || !Z3) { ho.msg = "&#x26A0;&#xFE0F; " + escHtml(mr3.why || "ZIP の道具がありません"); renderProj(root, ctl); return; } var st3 = stemStamp(hp3); stemAll(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }, { kind: "cubasis", extra: [{ name: fileBase(hp3.name) + "_cubasis_" + st3 + ".txt", data: Z3.utf8(handoffText(hp3)) }, { name: fileBase(hp3.name) + "_" + st3 + ".mid", data: new Uint8Array(mr3.bytes) }] }); renderProj(root, ctl); return; }
         if (v === "stemZipSave" && stm.zip) { stm.saved = ""; daSave(stm.zip, stm.zipName, function (r) { stm.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
         // §341 9A-11: ZIP
         if (v === "pack") { packStart(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
@@ -5770,6 +5838,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     saveFile: daSave, outName: outName, SAVE_NOTE: SAVE_NOTE, // §345 A16: 保存の窓口（🎄 のマイテンプレートからも）
+    handoff: { info: function () { return handoffInfo(project()); }, text: function () { return handoffText(project()); }, html: function () { return handoffHtml(project()); }, state: function () { return ho; } }, // §345 A17
     stem: { plan: function () { return stemPlan(project()); }, one: stemOne, all: stemAll, cancel: stemCancel, state: function () { return stm; }, project: stemProject, html: function () { return stemHtml(project()); } }, // §345 A12
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
     hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0, tp: lm.tp }; }, setTp: function (on) { return lmSetTp(on); }, values: function () { return lmValues(); }, NAME: LM_NAME },

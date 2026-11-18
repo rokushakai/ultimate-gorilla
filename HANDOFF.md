@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.93** |
+| 現在バージョン | **v2.94** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.94] 🦍 A17・Cubasis に渡す**（§345）: `UGDaw.handoff`（`info`・`text`・`html`）・`stemAll(cb, { kind, extra })`（ZIP にほかのファイルも）。シートの MIDI のトラックの番号は `midiExport().info.tracks` の順 ＋ 1（1 本目はテンポ）。次は A18（Style Match の使いやすさ）
 - **[v2.93] 🦍 A16・iPhone 向けの保存**（§345）: `UGDaw.outName(base, 中身, 拡張子, 日時)`・`UGDaw.saveFile(blob, name, cb)`（結果 shared／canceled／download／fail）・`UGDaw.SAVE_NOTE`。新しい保存はこの 2 つを使う。`tests/test-export.js` は同じ名前の関数が 2 つないかも見る。次は A17（Cubasis 向けのパッケージ）
 - **[v2.92] 🦍 A15・書き出しの再現性**（§345）: `UGMelody.decodeRate()`（44100）・`UGMelody.seedRand(seed)`・`wav.diag`（fp・prof）。テストは `node tools/test-diag.js` でも回せる（異常終了の場所が残る）。WAV の比べは「同じ端末なら fp・端末をまたぐと prof ±1」。次は A16（iPhone 向けの保存）
 - **[v2.91] 🦍 A14・Style Match の精度**（§345）: `styleAnalyze` は `bpm.cands`・`meter.cands`・`key.cands`・`sig`（beat・tonal・flat・sharp・spread）を返す。`analysisToCond` は信頼度 0.6／0.55 以上だけ。`data-xmcand` の候補のボタン。検証の音は `tests/style-corpus.js`（合成）・測り方は `tests/test-style.js`。実演奏の検証は未確認（使ってよい録音が要る）
