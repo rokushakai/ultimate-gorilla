@@ -2576,6 +2576,43 @@
   var WAV_RATE = 44100, WAV_MAX_MUSIC = 330, WAV_TAIL = 3, WAV_SAMPLE_WAIT = 8000, WAV_LONG = 150, WAV_STEP_FR = 688 * 128, WAV_AHEAD = 4, WAV_VO_KEEP = 1, WAV_SUS_WAIT = 60000, WAV_SLOW_MAX = 60; // 9B-14: 5 分 30 秒まで（2 分 30 秒からは注意）・9B-15: 区切って予約できないブラウザは 60 秒まで（v2.63 と同じ）
   var wav = { busy: false, job: null, blob: null, url: "", name: "", stats: null, plan: null, msg: "", note: "", state: "idle", log: [], ms: 0 };
   function fileBase(name) { return String(name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw"; }
+  // ---------- §345 A16: 書き出すファイルの名前と保存（iPhone を先に考える）----------
+  // 名前: 「曲名_[中身_]YYYYMMDD-HHMM.拡張子」（ミックスの WAV・MIDI・ZIP は中身なし・ステムは 01_トラック名・ステムの ZIP は stems）。この画面を開いているあいだに同じ名前を作ったら「-2」「-3」…（同じ名前のファイルで上書きしない）
+  var outUsed = {};
+  function outName(base, kind, ext, st0) {
+    var b = fileBase(base) + (kind ? "_" + kind : "") + "_" + (st0 || stamp()), n = b + "." + ext, k = 2;
+    while (outUsed[n]) { n = b + "-" + k + "." + ext; k++; }
+    outUsed[n] = 1;
+    return n;
+  }
+  // 保存の結果 → 案内（曲と録音はどの場合もそのまま）
+  var SAVE_NOTE = {
+    shared: "共有シートを開きました。「\"ファイル\"に保存」を選ぶと ファイル アプリに入ります",
+    canceled: "保存をやめました（データはそのままです）。もう一度「ファイルに保存」を押せます",
+    download: "ダウンロードしました（iPhone では ファイル アプリの「ダウンロード」）",
+    fail: "保存できませんでした。下の「ダウンロード」を押すか、ほかのタブを閉じてからもう一度ためしてください（曲はそのままです）"
+  };
+  // blob を保存する → done(結果)。共有シート（iPhone）→ だめならダウンロード。共有シートを閉じた・失敗した、を分けて返す
+  function daSave(blob, name, done) {
+    var nav = window.navigator || {}, fin = function (r) { dgLog("save", { r: r, name: name, bytes: blob && blob.size }); if (done) { done(r); } };
+    if (!blob) { fin("fail"); return "fail"; }
+    try {
+      if (window.File && nav.share && nav.canShare) {
+        var file = new window.File([blob], name, { type: blob.type || "application/octet-stream" });
+        if (nav.canShare({ files: [file] })) {
+          var sp = nav.share({ files: [file], title: name });
+          if (sp && sp.then) { sp.then(function () { fin("shared"); }, function (e) { fin(e && e.name === "AbortError" ? "canceled" : (dlBlob(blob, name) ? "download" : "fail")); }); }
+          else { fin("shared"); }
+          return "share";
+        }
+      }
+    } catch (e) {}
+    var r = dlBlob(blob, name) ? "download" : "fail"; fin(r); return r;
+  }
+  function dlBlob(blob, name) {
+    try { var url = URL.createObjectURL(blob), a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) {} }, 3000); return true; } catch (e2) { return false; }
+  }
+  function fileSaveNote(r) { return r && SAVE_NOTE[r] ? '<div class="small dp-snote' + (r === "fail" ? " dp-sfail" : "") + '">' + (r === "fail" ? "&#x26A0;&#xFE0F; " : (r === "canceled" ? "" : "&#x2705; ")) + escHtml(SAVE_NOTE[r]) + '</div>' : ""; }
   function stamp() { var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()); }
   // 書き出す範囲と大きさの見こみ（曲の頭から曲の終わり ＋ 余韻。ループは使わない）
   function wavPlan(p) {
@@ -2593,7 +2630,7 @@
     return !!(OAC && OAC.prototype && typeof OAC.prototype.suspend === "function") && !wav.noSuspend && !(Y && Y.track);
   }
   function secText(s) { s = Math.max(0, Math.round(s)); var mm = Math.floor(s / 60), ss = s - mm * 60; return mm + ":" + (ss < 10 ? "0" : "") + ss; } // 9B-14: 分:秒
-  function wavFree() { if (wav.url) { try { URL.revokeObjectURL(wav.url); } catch (e) {} } wav.url = ""; wav.blob = null; }
+  function wavFree() { wav.saved = ""; if (wav.url) { try { URL.revokeObjectURL(wav.url); } catch (e) {} } wav.url = ""; wav.blob = null; }
   // 描いた音の検査（左右のピーク・RMS・NaN・0dBFS に届いたサンプル）
   function bufStats(buf) {
     var out = { ch: buf.numberOfChannels, rate: buf.sampleRate, frames: buf.length, sec: buf.length / buf.sampleRate, peak: 0, nan: 0, clip: 0, L: null, R: null }, c, i;
@@ -2771,7 +2808,7 @@
         if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
         else if (!blob) { wav.state = "fail"; wav.msg = why || "書き出せませんでした"; }
         else {
-          wav.diag = wavDiag(p, stt, Date.now() - job.t0, samplesOk); wav.blob = blob; wav.name = fileBase(p.name) + "_" + stamp() + ".wav"; wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
+          wav.diag = wavDiag(p, stt, Date.now() - job.t0, samplesOk); wav.blob = blob; wav.name = outName(p.name, "", "wav"); wav.sig = luSig(p); wav.limCeil = lim0; // 9B-13: 書き出した曲のしるし（音の準備のあとで取る）
           try { wav.url = URL.createObjectURL(blob); } catch (e) { wav.url = ""; }
           wav.state = "done";
           wav.note = (samplesOk ? "" : "生ドラムのサンプルを読みこめなかったので、作るドラムの音で描きました。") + (XM() && XM().missing(p) ? "読みこめなかった楽器の録音（" + XM().missing(p) + " 音色）は、代わりのシンセの音で描きました。" : "") + // §343
@@ -2804,7 +2841,9 @@
     q.master.fx = { items: [] };
     return q;
   }
-  function stemName(p, idx, t) { var z = idx + 1; return fileBase(p.name) + "_" + (z < 10 ? "0" : "") + z + "_" + fileBase(t.name).substring(0, 24) + ".wav"; }
+  var stemSet = { key: "", st: "" };
+  function stemStamp(p) { var k = p.id + ":" + DM().hash(JSON.stringify([p.tracks, p.tempo, p.master])); if (stemSet.key !== k) { stemSet.key = k; stemSet.st = stamp(); } return stemSet.st; } // §345 A16: 同じ曲の同じ版のステムは同じ日時（ひと組とわかる）
+  function stemName(p, idx, t, fresh) { var z = idx + 1, part = (z < 10 ? "0" : "") + z + "_" + fileBase(t.name).substring(0, 24); return fresh ? outName(p.name, part, "wav", stemStamp(p)) : fileBase(p.name) + "_" + part + "_" + stemStamp(p) + ".wav"; }
   // 書き出す前の見こみ（どれも同じ長さ・同じ大きさ）
   function stemPlan(p) {
     var M = DM(), base = wavPlan(stemProject(p, null)), list = [], n = 0, i;
@@ -2815,7 +2854,7 @@
     if (r.ok && !n) { r.ok = false; r.why = "音のあるトラックがありません"; }
     return r;
   }
-  function stemFree() { if (stm.url) { try { URL.revokeObjectURL(stm.url); } catch (e) {} } stm.url = ""; stm.blob = null; stm.stats = null; stm.name = ""; stm.tid = ""; }
+  function stemFree() { stm.saved = ""; if (stm.url) { try { URL.revokeObjectURL(stm.url); } catch (e) {} } stm.url = ""; stm.blob = null; stm.stats = null; stm.name = ""; stm.tid = ""; }
   function stemZipFree() { if (stm.zipUrl) { try { URL.revokeObjectURL(stm.zipUrl); } catch (e) {} } stm.zipUrl = ""; stm.zip = null; stm.zipName = ""; }
   // 1 本描く → cb({ ok, why, blob, stats, name })。WAV の書き出しと同時には動かさない
   function stemRender(p, tid, job, cb) {
@@ -2828,7 +2867,7 @@
     function go() {
       if (started) { return; } started = true; if (tm) { clearTimeout(tm); }
       if (job.canceled) { cb({ ok: false, why: "やめました" }); return; }
-      renderSong(function (blob, why, stt) { cb(blob ? { ok: true, blob: blob, stats: stt, name: stemName(p, idx, t) } : { ok: false, why: why || "書き出せませんでした" }); },
+      renderSong(function (blob, why, stt) { cb(blob ? { ok: true, blob: blob, stats: stt, name: stemName(p, idx, t, true) } : { ok: false, why: why || "書き出せませんでした" }); },
         { job: job, proj: q, noSend: true, onProgress: function (pc) { stm.pct = pc; var r0 = st.root, el = r0 && r0.querySelector ? r0.querySelector(".dp-spct") : null; if (el) { el.textContent = pc + "%"; } } });
     }
     ensureAssets(p, function () {
@@ -2875,7 +2914,7 @@
       if (k >= ids.length) {
         files.unshift({ name: "README.txt", data: Z.utf8(stemReadme(p, pln, info)) });
         var z; try { z = Z.zipBuild(files, d); stm.zip = new Blob(z.parts, { type: "application/zip" }); } catch (e) { end(false, "ZIP を作れませんでした（メモリが足りないかもしれません）"); return; }
-        stm.zipName = fileBase(p.name) + "_stems_" + stamp() + ".zip"; try { stm.zipUrl = URL.createObjectURL(stm.zip); } catch (e2) { stm.zipUrl = ""; }
+        stm.zipName = outName(p.name, "stems", "zip", stemStamp(p)); try { stm.zipUrl = URL.createObjectURL(stm.zip); } catch (e2) { stm.zipUrl = ""; }
         end(true, ""); return;
       }
       stm.cur = ids[k].id; stm.all.i = k + 1; stm.pct = 0;
@@ -2903,14 +2942,15 @@
     if (!pln.ok) { return h + '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div></div>'; }
     if (stm.state === "busy") { h += '<div class="daw-info">&#x23F3; 書き出し中' + (stm.all ? '（' + stm.all.i + ' / ' + stm.all.n + '）' : '') + '… <b class="dp-spct">' + (stm.pct ? stm.pct + '%' : '') + '</b></div><button class="modal-btn" data-pj="stemCancel">やめる</button>'; }
     else if (stm.state === "fail" || stm.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(stm.msg) + '</div>'; }
-    if (stm.state === "done" && stm.blob) { var w = stm.stats; h += '<div class="daw-info">&#x2705; ' + escHtml(stm.name) + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(stm.blob.size) + '・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span></div><div class="dp-btns"><button class="modal-btn" data-pj="stemSave">&#x1F4BE; ファイルに保存（共有）</button>' + (stm.url ? '<a class="modal-btn dp-dl" href="' + stm.url + '" download="' + escHtml(stm.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div><p class="small">次のトラックを書き出すと、このステムは消えます（メモリに 1 本だけ）。先に保存してください。</p>'; }
-    if (stm.state === "zip" && stm.zip) { h += '<div class="daw-info">&#x2705; ' + escHtml(stm.zipName) + '（' + mb(stm.zip.size) + '）</div><div class="dp-btns"><button class="modal-btn" data-pj="stemZipSave">&#x1F4BE; ファイルに保存（共有）</button>' + (stm.zipUrl ? '<a class="modal-btn dp-dl" href="' + stm.zipUrl + '" download="' + escHtml(stm.zipName) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>'; }
+    if (stm.state === "done" && stm.blob) { var w = stm.stats; h += '<div class="daw-info">&#x2705; ' + escHtml(stm.name) + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(stm.blob.size) + '・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span></div><div class="dp-btns"><button class="modal-btn" data-pj="stemSave">&#x1F4BE; ファイルに保存（共有）</button>' + (stm.url ? '<a class="modal-btn dp-dl" href="' + stm.url + '" download="' + escHtml(stm.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(stm.saved) + '<p class="small">次のトラックを書き出すと、このステムは消えます（メモリに 1 本だけ）。先に保存してください。</p>'; }
+    if (stm.state === "zip" && stm.zip) { h += '<div class="daw-info">&#x2705; ' + escHtml(stm.zipName) + '（' + mb(stm.zip.size) + '）</div><div class="dp-btns"><button class="modal-btn" data-pj="stemZipSave">&#x1F4BE; ファイルに保存（共有）</button>' + (stm.zipUrl ? '<a class="modal-btn dp-dl" href="' + stm.zipUrl + '" download="' + escHtml(stm.zipName) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(stm.saved) + ''; }
     h += '<div class="dp-stems">';
     for (i = 0; i < pln.list.length; i++) {
       var x = pln.list[i];
       h += '<div class="dp-srow"><span class="dp-sname">' + (i + 1) + '. ' + escHtml(x.name) + (x.mutedNow ? '<span class="small">（いまミュート）</span>' : '') + '</span>' + (x.has ? '<button class="modal-btn dp-sgo" data-pj="stem:' + escHtml(x.id) + '"' + (stm.busy ? ' disabled' : '') + '>&#x1F3B5; 書き出す</button>' : '<span class="small">音なし</span>') + '</div>';
     }
     h += '</div>';
+    if (pln.ios && pln.bytes > 100 * 1024 * 1024) { h += '<p class="small uke-daw-warn">&#x26A0;&#xFE0F; 1 本が ' + mb(pln.bytes) + ' あります。iPhone ではメモリが足りずに失敗することがあります（ほかのタブ・アプリを閉じてから、1 本ずつ）。曲はそのままです。</p>'; }
     if (pln.zipOk) { h += '<button class="modal-btn" data-pj="stemAll"' + (stm.busy ? ' disabled' : '') + '>&#x1F4E6; ぜんぶを ZIP で（PC 向け・約 ' + mb(pln.total) + '）</button>'; }
     else if (pln.zipWhy) { h += '<p class="small">' + escHtml(pln.zipWhy) + '</p>'; }
     return h + '</div>';
@@ -2925,7 +2965,7 @@
   function ZP() { return window.UGDawZip || null; }
   function packFile(id, kind) { return "audio/" + String(id).replace(":", "-") + "." + (kind && kind !== "wav" ? ({ mp3: "mp3", m4a: "m4a", ogg: "ogg", flac: "flac" }[kind] || "bin") : "wav"); } // 9B-20: 元のファイルのまま
   function packNew(a) { return !!(a && (a.long || (a.kind && a.kind !== "wav"))); } // 9B-20: 版 2 が要る素材
-  function packFree() { if (pk.url) { try { URL.revokeObjectURL(pk.url); } catch (e) {} } pk.url = ""; pk.blob = null; }
+  function packFree() { pk.saved = ""; if (pk.url) { try { URL.revokeObjectURL(pk.url); } catch (e) {} } pk.url = ""; pk.blob = null; }
   // まとめる素材（クリップが使う素材は必須・曲の一覧にある素材は端末にあれば）と大きさの見こみ
   function packPlan(p) {
     var M = DM(), used = usedAssets(p), l = p.assets || [], i, bytes = 0, list = [], seen = {};
@@ -2941,8 +2981,11 @@
     if (!Z) { cb({ ok: false, why: "ZIP の道具（arcade-daw-zip.js）を読みこめませんでした" }); return; }
     pk.busy = true;
     var plan = packPlan(p), out = [], i = -1, d = new Date();
+    pk.cancel = false; pk.prog = "";
     function next() {
       i++;
+      if (pk.cancel) { fail("やめました（ZIP は作っていません。曲と録音はそのままです）"); return; } // §345 A16
+      pk.prog = plan.list.length ? Math.min(i + 1, plan.list.length) + " / " + plan.list.length : ""; var r0 = st.root, pe = r0 && r0.querySelector ? r0.querySelector(".dp-ppct") : null; if (pe) { pe.textContent = pk.prog ? "音声 " + pk.prog : ""; }
       if (i >= plan.list.length) { build(); return; }
       var it = plan.list[i];
       if (!it.ref) { if (it.used) { fail("クリップが使う素材の情報が曲にありません（" + it.id + "）"); return; } next(); return; }
@@ -2973,7 +3016,7 @@
       var z, blob;
       try { z = Z.zipBuild(files, d); blob = new Blob(z.parts, { type: "application/zip" }); } catch (e) { fail("ZIP を作れませんでした（" + errName(e) + "・メモリが足りないかもしれません）"); return; }
       pk.busy = false;
-      cb({ ok: true, blob: blob, name: fileBase(p.name) + "_" + stamp() + ".zip", size: z.size, assets: out.length, manifest: man });
+      cb({ ok: true, blob: blob, name: outName(p.name, "", "zip"), size: z.size, assets: out.length, manifest: man });
     }
     if (!plan.list.length) { build(); return; }
     next();
@@ -3117,10 +3160,10 @@
     var pl0 = packPlan(p), h = '<div class="dp-wav dp-pack"><div class="dp-h">&#x1F4E6; まとめて保存（ZIP）・復元</div>' +
       '<div class="small dp-kinds"><b>JSON</b> ＝ 曲の編集データだけ（音声は入らない）<br><b>ZIP</b> ＝ 曲と、使っている音声の素材のまるごとの控え（ほかの端末へ移すとき）<br><b>WAV</b> ＝ できあがった音（聞く・送る）</div>' +
       '<div class="small">「' + escHtml(p.name) + '」・音声の素材 ' + pl0.list.length + ' 個・約 ' + mb(pl0.bytes) + '</div>';
-    if (pk.state === "busy") { h += '<div class="daw-info">&#x23F3; ZIP を作っています…</div>'; }
+    if (pk.state === "busy") { h += '<div class="daw-info">&#x23F3; ZIP を作っています… <b class="dp-ppct">' + (pk.prog ? "音声 " + pk.prog : "") + '</b></div><button class="modal-btn" data-pj="packCancel">やめる</button>'; }
     else if (pk.state === "done" && pk.blob) {
       h += '<div class="daw-info">&#x2705; できました: ' + escHtml(pk.name) + '<br><span class="small">' + mb(pk.size) + '・音声 ' + pk.assets + ' 個</span></div>' +
-        '<div class="dp-btns"><button class="modal-btn" data-pj="packSave">&#x1F4BE; ファイルに保存（共有）</button>' + (pk.url ? '<a class="modal-btn dp-dl" href="' + pk.url + '" download="' + escHtml(pk.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+        '<div class="dp-btns"><button class="modal-btn" data-pj="packSave">&#x1F4BE; ファイルに保存（共有）</button>' + (pk.url ? '<a class="modal-btn dp-dl" href="' + pk.url + '" download="' + escHtml(pk.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(pk.saved) + '';
     } else if (pk.state === "fail") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pk.msg) + '</div>'; }
     h += '<button class="modal-btn dp-wavgo" data-pj="pack"' + (pk.busy ? ' disabled' : '') + '>&#x1F4E6; プロジェクトをまとめて保存（ZIP）</button>' +
       '<button class="modal-btn dp-wavgo" data-pj="unpack"' + (pk.busy ? ' disabled' : '') + '>&#x1F4C2; プロジェクトZIPを読みこむ</button>' +
@@ -3140,7 +3183,7 @@
       if (wav.state === "done" && wav.blob) {
         var w = wav.stats;
         h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + (isDbg() && wav.diag ? '<br><span class="small dp-diag">診断: 指紋 ' + escHtml(wav.diag.fp) + '・再生 ' + wav.diag.live + 'Hz・録音の展開 ' + wav.diag.dec + 'Hz・ドラムの録音 ' + (wav.diag.drum ? "あり" : "なし") + '・' + wav.diag.ms + 'ms</span>' : '') + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
-          '<div class="dp-btns"><button class="modal-btn" data-pj="wavSave">&#x1F4BE; ファイルに保存（共有）</button>' + (wav.url ? '<a class="modal-btn dp-dl" href="' + wav.url + '" download="' + escHtml(wav.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+          '<div class="dp-btns"><button class="modal-btn" data-pj="wavSave">&#x1F4BE; ファイルに保存（共有）</button>' + (wav.url ? '<a class="modal-btn dp-dl" href="' + wav.url + '" download="' + escHtml(wav.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(wav.saved) + '';
       } else if (wav.state === "fail" || wav.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(wav.msg) + '</div>'; }
       h += pln.ok ? '<button class="modal-btn dp-wavgo" data-pj="wav">&#x1F3B5; WAV を書き出す</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div>';
     }
@@ -3210,7 +3253,7 @@
         if (v === "back") { back(); return; }
         // §342 9B-4: MIDI
         if (v === "midiOut") { midiExportNow(); renderProj(root, ctl); return; }
-        if (v === "midiSave" && mx.blob) { var hm = "fail"; try { hm = I.saveBlob(mx.blob, mx.name); } catch (em) { hm = "fail"; } mx.note = hm === "fail" ? "保存できませんでした。「ダウンロード」を使ってください" : (hm === "share" ? "共有シートから「ファイルに保存」を選んでください" : ""); renderProj(root, ctl); return; }
+        if (v === "midiSave" && mx.blob) { mx.saved = ""; daSave(mx.blob, mx.name, function (r) { mx.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; } // §345 A16
         if (v === "midiIn") { var mf = root.querySelector(".dp-midifile"); if (mf) { mf.value = ""; mf.click(); } return; }
         if (v === "lib") { libOpen(); renderLib(root, ctl); return; } // 9A-15
         if (v === "save") { sv.note = saveNow() ? "保存しました" : ""; renderProj(root, ctl); return; }
@@ -3224,16 +3267,17 @@
         if (v === "import" && file) { file.value = ""; file.click(); return; }
         if (v === "wav") { wavExport(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
         if (v === "wavCancel") { wavCancel(); renderProj(root, ctl); return; }
+        if (v === "packCancel") { pk.cancel = true; renderProj(root, ctl); return; } // §345 A16
         if (v.indexOf("stem:") === 0) { stemOne(v.substring(5), function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; } // §345 A12
         if (v === "stemAll") { stemAll(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
         if (v === "stemCancel") { stemCancel(); renderProj(root, ctl); return; }
-        if (v === "stemSave" && stm.blob) { var hs0 = "fail"; try { hs0 = I.saveBlob(stm.blob, stm.name); } catch (es0) { hs0 = "fail"; } if (hs0 === "fail") { stm.msg = "保存できませんでした。「ダウンロード」を使ってください"; } renderProj(root, ctl); return; }
-        if (v === "stemZipSave" && stm.zip) { var hs1 = "fail"; try { hs1 = I.saveBlob(stm.zip, stm.zipName); } catch (es1) { hs1 = "fail"; } if (hs1 === "fail") { stm.msg = "保存できませんでした。「ダウンロード」を使ってください"; } renderProj(root, ctl); return; }
+        if (v === "stemSave" && stm.blob) { stm.saved = ""; daSave(stm.blob, stm.name, function (r) { stm.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
+        if (v === "stemZipSave" && stm.zip) { stm.saved = ""; daSave(stm.zip, stm.zipName, function (r) { stm.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
         // §341 9A-11: ZIP
         if (v === "pack") { packStart(function () { if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); renderProj(root, ctl); return; }
-        if (v === "packSave" && pk.blob) { var hz = "fail"; try { hz = I.saveBlob(pk.blob, pk.name); } catch (ez) { hz = "fail"; } if (hz === "fail") { pk.state = "fail"; pk.msg = "保存できませんでした。「ダウンロード」を使ってください"; } renderProj(root, ctl); return; }
+        if (v === "packSave" && pk.blob) { pk.saved = ""; daSave(pk.blob, pk.name, function (r) { pk.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
         if (v === "unpack") { var zf = root.querySelector(".dp-zipfile"); if (zf && !pk.busy) { zf.value = ""; zf.click(); } return; }
-        if (v === "wavSave" && wav.blob) { var how = "fail"; try { how = I.saveBlob(wav.blob, wav.name); } catch (e) { how = "fail"; } if (how === "fail") { wav.note = "保存できませんでした。「ダウンロード」を使ってください。"; } renderProj(root, ctl); }
+        if (v === "wavSave" && wav.blob) { wav.saved = ""; daSave(wav.blob, wav.name, function (r) { wav.saved = r; if (st.view === "proj" && st.root === root) { renderProj(root, ctl); } }); return; }
       };
     }
     var mfile = root.querySelector(".dp-midifile"); // §342 9B-4
@@ -5367,7 +5411,7 @@
   // ---------- §342 9B-4: 標準 MIDI ファイル（.mid）の書き出し・読み込み ----------
   var mx = { state: "idle", blob: null, url: "", name: "", info: null, msg: "", note: "", bytes: 0 }; // 📤 書き出し
   // st.mid（📥 確認の画面）: { info（midiRead の結果）, id, kinds: { key: "drum" ／ "synth" }, parts: { key: true }, dest: "new" ／ "cur", bar, tempoOk, busy, msg }
-  function midiFree() { if (mx.url) { try { URL.revokeObjectURL(mx.url); } catch (e) {} } mx.url = ""; mx.blob = null; mx.state = "idle"; mx.msg = ""; mx.note = ""; mx.info = null; mx.bytes = 0; }
+  function midiFree() { mx.saved = ""; if (mx.url) { try { URL.revokeObjectURL(mx.url); } catch (e) {} } mx.url = ""; mx.blob = null; mx.state = "idle"; mx.msg = ""; mx.note = ""; mx.info = null; mx.bytes = 0; }
   function midiFileName(p) {
     var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; };
     var base = String(p.name || "gorilla-daw").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "").substring(0, 40) || "gorilla-daw";
@@ -5379,7 +5423,7 @@
     if (!r.ok) { mx.state = "fail"; mx.msg = r.why; return r; }
     try { blob = new Blob([new Uint8Array(r.bytes)], { type: "audio/midi" }); } catch (e) { blob = null; }
     if (!blob) { mx.state = "fail"; mx.msg = "ファイルを作れませんでした"; return { ok: false, why: mx.msg }; }
-    mx.state = "done"; mx.blob = blob; mx.name = midiFileName(p); mx.info = r.info; mx.bytes = r.bytes.length;
+    mx.state = "done"; mx.blob = blob; mx.name = outName(p.name, "", "mid"); mx.info = r.info; mx.bytes = r.bytes.length;
     try { mx.url = URL.createObjectURL(blob); } catch (e2) { mx.url = ""; }
     return { ok: true, name: mx.name, bytes: r.bytes, info: r.info };
   }
@@ -5402,9 +5446,9 @@
     }
     if (mx.state === "done" && mx.blob) {
       h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(mx.name) + '<br><span class="small">' + mx.bytes + ' バイト・トラック ' + mx.info.tracks.length + ' 本・音符 ' + mx.info.notes + ' 個</span>' + (mx.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(mx.note) + '</span>' : '') + '</div>' +
-        '<div class="dp-btns"><button class="modal-btn" data-pj="midiSave">&#x1F4BE; ファイルに保存（共有）</button>' + (mx.url ? '<a class="modal-btn dp-dl" href="' + mx.url + '" download="' + escHtml(mx.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>';
+        '<div class="dp-btns"><button class="modal-btn" data-pj="midiSave">&#x1F4BE; ファイルに保存（共有）</button>' + (mx.url ? '<a class="modal-btn dp-dl" href="' + mx.url + '" download="' + escHtml(mx.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(mx.saved) + '';
     } else if (mx.state === "fail") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(mx.msg) + '</div>'; }
-    h += x.ok ? '<button class="modal-btn dp-wavgo" data-pj="midiOut">&#x1F4E4; MIDI書き出し</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(x.why) + '</div>';
+    h += x.ok ? '<button class="modal-btn dp-wavgo" data-pj="midiOut">&#x1F4E4; MIDI書き出し（約 ' + (x.bytes.length < 1024 ? x.bytes.length + ' バイト' : Math.ceil(x.bytes.length / 1024) + ' KB') + '）</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(x.why) + '</div>';
     h += '<button class="modal-btn dp-wavgo" data-pj="midiIn">&#x1F4E5; MIDIファイルを読み込む</button>' +
       '<input type="file" class="dp-midifile" accept=".mid,.midi,.smf,audio/midi,audio/x-midi,audio/mid" style="display:none;">';
     if (st.midErr) { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.midErr) + '</div>'; }
@@ -5725,6 +5769,7 @@
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
+    saveFile: daSave, outName: outName, SAVE_NOTE: SAVE_NOTE, // §345 A16: 保存の窓口（🎄 のマイテンプレートからも）
     stem: { plan: function () { return stemPlan(project()); }, one: stemOne, all: stemAll, cancel: stemCancel, state: function () { return stm; }, project: stemProject, html: function () { return stemHtml(project()); } }, // §345 A12
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
     hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0, tp: lm.tp }; }, setTp: function (on) { return lmSetTp(on); }, values: function () { return lmValues(); }, NAME: LM_NAME },

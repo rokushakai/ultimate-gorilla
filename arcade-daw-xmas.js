@@ -2414,13 +2414,19 @@
     }
     if (l.length) { x += '<div class="dxm-opt dxm-forms"><span>新しい曲のキー</span>' + selHtml('data-xmykey aria-label="新しい曲のキー"', [["", "元のキー"]].concat(KEYS.map(function (k, j) { return [j, k]; })), ui.mykey === undefined || ui.mykey === null ? "" : ui.mykey) + '</div>'; }
     x += '<div class="dxm-go">' + (l.length ? '<button class="modal-btn dxm-b" data-xm="myExpAll">&#x1F4E4; ぜんぶ書き出す</button>' : '') + '<label class="modal-btn dxm-b dxm-file">&#x1F4E5; 読みこむ（JSON）<input type="file" accept=".json,application/json" class="dxm-myfile"></label></div>';
-    if (ui.myUrl) { x += '<p><a class="modal-btn dxm-b" href="' + ui.myUrl + '" download="' + esc(ui.myFile || "gorilla-my-templates.json") + '">&#x2B07;&#xFE0F; ' + esc(ui.myFile || "gorilla-my-templates.json") + ' を保存</a></p>'; }
+    if (ui.myUrl) { // §345 A16: 名前・大きさ・ファイルに保存（共有）・ダウンロード・結果の案内
+      var Dw = window.UGDaw, sn = ui.mySaved && Dw && Dw.SAVE_NOTE ? Dw.SAVE_NOTE[ui.mySaved] : "";
+      x += '<div class="dxm-prev small"><b>' + esc(ui.myFile) + '</b>（' + (ui.myBytes < 1024 ? ui.myBytes + ' バイト' : Math.ceil(ui.myBytes / 1024) + ' KB') + '）<div class="dxm-go">' + (Dw && Dw.saveFile ? '<button class="modal-btn dxm-b" data-xm="mySaveFile">&#x1F4BE; ファイルに保存（共有）</button>' : '') + '<a class="modal-btn dxm-b" href="' + ui.myUrl + '" download="' + esc(ui.myFile) + '">&#x2B07;&#xFE0F; ダウンロード</a></div>' + (sn ? '<div class="' + (ui.mySaved === "fail" ? "dxm-warn" : "") + '">' + esc(sn) + '</div>' : '') + '</div>';
+    }
     return x + '</div>';
   }
-  function myLink(items, file) {
+  // §345 A16: 名前は「マイテンプレート_名前（ぜんぶ）_日時.json」（DAW の書き出しと同じ形・同じ名前を作らない）
+  function myLink(items, label) {
     try { if (ui.myUrl) { URL.revokeObjectURL(ui.myUrl); } } catch (e) {}
-    ui.myUrl = ""; ui.myFile = file;
-    try { ui.myUrl = URL.createObjectURL(new Blob([myExport(items)], { type: "application/json" })); } catch (e2) { ui.myUrl = ""; return false; }
+    var Dw = window.UGDaw, txt = myExport(items);
+    ui.myUrl = ""; ui.mySaved = ""; ui.myBytes = txt.length;
+    ui.myFile = Dw && Dw.outName ? Dw.outName("マイテンプレート", plain(label).substring(0, 24), "json") : "gorilla-my-template.json";
+    try { ui.myBlob = new Blob([txt], { type: "application/json" }); ui.myUrl = URL.createObjectURL(ui.myBlob); } catch (e2) { ui.myUrl = ""; ui.myBlob = null; return false; }
     return true;
   }
 
@@ -3017,7 +3023,7 @@
           if (!mr2.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(mr2.why); re(); return; }
           ui.msg = "「" + esc(mit.meta.name) + "」で新しい曲を作りました（前の曲は保存してあります）"; h.newSong(mr2.project); return;
         }
-        if ((v = el.getAttribute("data-xmyexp"))) { var mie = myGet(v); ui.msg = mie && myLink([mie], "gorilla-my-template.json") ? "下のボタンで「" + esc(mie.meta.name) + "」を JSON で保存できます" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
+        if ((v = el.getAttribute("data-xmyexp"))) { var mie = myGet(v); ui.msg = mie && myLink([mie], mie.meta.name) ? "下のボタンで「" + esc(mie.meta.name) + "」を JSON で保存できます" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
         if ((v = el.getAttribute("data-xmydel"))) {
           if (ui.mydel !== v) { ui.mydel = v; re(); return; }
           var dr = myDel(v); ui.mydel = ""; pvStop(); ui.msg = dr.ok ? "マイテンプレートを 1 つ消しました" : "&#x26A0;&#xFE0F; " + esc(dr.why); re(); return;
@@ -3145,7 +3151,8 @@
           if (!cap.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(cap.why); re(); return; }
           var sv = mySave(cap.item); ui.msg = sv.ok ? "「" + esc(cap.item.meta.name) + "」をマイテンプレートに保存しました（" + cap.item.meta.tracks + " トラック）" : "&#x26A0;&#xFE0F; " + esc(sv.why); re(); return;
         }
-        if (v === "myExpAll") { var la = myList(); ui.msg = la.length && myLink(la, "gorilla-my-templates.json") ? "下のボタンで JSON を保存できます（" + la.length + " 個）" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
+        if (v === "mySaveFile" && ui.myBlob && window.UGDaw && window.UGDaw.saveFile) { ui.mySaved = ""; window.UGDaw.saveFile(ui.myBlob, ui.myFile, function (r) { ui.mySaved = r; if (h.isView()) { re(); } }); return; }
+        if (v === "myExpAll") { var la = myList(); ui.msg = la.length && myLink(la, "ぜんぶ" + la.length) ? "下のボタンで JSON を保存できます（" + la.length + " 個）" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
         if (v === "mRec") { pvStop(); micDone = function (r) { if (r.an) { ui.mres = r.an; analysisToCond(r.an); } else if (!r.ok) { ui.mres = { ok: false, why: r.why }; } if (h.isView()) { re(); } }; micStart(function (r) { if (!r.ok) { ui.mres = { ok: false, why: r.why }; } else if (r.an) { micDone(r); return; } if (h.isView()) { re(); } }); return; }
         if (v === "mStop") { micFinish(null); return; }
         if (v === "mRef") { var rb0 = refItems(h); if (!rb0) { ui.mres = { ok: false, why: "🎧 のリファレンスがありません（DAW の 🎧 で読みこんでください）" }; re(); return; } var bf = rb0.buf, chs0 = []; for (var ci = 0; ci < Math.min(2, bf.numberOfChannels); ci++) { chs0.push(bf.getChannelData(ci)); } ui.mres = styleAnalyze(chs0, bf.sampleRate); analysisToCond(ui.mres); re(); return; }
