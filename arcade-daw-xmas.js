@@ -2065,6 +2065,7 @@
   function matchTab(h) {
     var c = matchCond(), x = '<div class="dxm-match">', i;
     x += '<p class="small">曲の様子を選ぶと、合いそうなテンプレートを理由つきで選びます（試聴してから作れます。いまの曲は変えません）。</p>';
+    if (micS.on) { x += '<p class="small dxm-rec">&#x1F534; 録音中 <b class="dxm-mtime">' + Math.floor(micS.n / (micS.sr || 44100)) + ' / 15 秒</b>（ウクレレや歌を 10 秒ほど。音は端末の中だけで解析し、送信も保存もしません）</p>'; } // §345 A18
     x += '<div class="dxm-go">' + (micS.on ? '<button class="modal-btn dxm-b dxm-main" data-xm="mStop">&#x23F9;&#xFE0F; 止めて解析</button>' : '<button class="modal-btn dxm-b" data-xm="mRec">&#x23FA;&#xFE0F; 演奏を聴かせる（15 秒まで）</button>') + '<label class="modal-btn dxm-b dxm-file">&#x1F4C1; 音声ファイル<input type="file" accept="audio/*" class="dxm-mfile"></label><button class="modal-btn dxm-b" data-xm="mRef">&#x1F3A7; リファレンスから</button></div><p class="small">録音は端末の中だけで解析し、保存も送信もしません。</p>';
     x += analysisHtml(ui.mres);
     x += '<div class="dxm-opt"><span>テンポ</span><input type="number" class="dxm-mbpm" min="0" max="400" value="' + (c.bpm || "") + '" placeholder="BPM（空 ＝ どれでも）" aria-label="BPM"></div>';
@@ -2146,14 +2147,18 @@
     for (f0 = 0; f0 < fs.length; f0++) { var bb = beat * fs[f0]; if (bb < 40 || bb > 220) { continue; } var sc = acAt(6000 / bb) * pref(bb) / Math.max(1e-9, best); var qv = Math.round(bb * unit); if (qv >= 30 && qv <= 300 && !cl.some(function (z) { return Math.abs(z.v / qv - 1) < 0.03; })) { cl.push({ v: qv, s: r3(clamp(sc, 0, 1)) }); } }
     cl.sort(function (u, v) { return v.s - u.s; });
     var bpmV = cl.length ? cl[0].v : Math.round(beat * unit), bpmAmb = cl.length > 1 && cl[1].s >= 0.85;
+    // §345 A18: 拍の真ん中（倍のテンポの拍）にも、拍の頭に近い強さの音がある → 倍のテンポもありうる（速いストロークを半分と取りやすい）。候補に倍を入れて、迷いにする
+    if (!compound && s2 >= 0.6 * am && beat * 2 <= 220) { var dv = Math.round(beat * 2); if (!cl.some(function (z) { return Math.abs(z.v / dv - 1) < 0.03; })) { cl.splice(1, 0, { v: dv, s: 0.9 }); } else { cl.forEach(function (z) { if (Math.abs(z.v / dv - 1) < 0.03) { z.s = Math.max(z.s, 0.9); } }); cl.sort(function (u, v) { return v.s - u.s; }); } bpmAmb = true; }
     var bpmConf = beatSig * sharpF * timeF * (bpmAmb ? 0.5 : 1);
     // ---- 拍子（拍の頭の強さの周期）と候補 ----
     function racc(L3) { var s3 = 0, c3 = 0, q3; for (q3 = 0; q3 + L3 < acc.length; q3++) { s3 += (acc[q3] - am) * (acc[q3 + L3] - am); c3++; } return c3 ? s3 / c3 : 0; }
     var a2 = racc(2), a3 = racc(3), a4 = racc(4), mc = [], meter, meterConf;
     if (compound) {
       var g2 = Math.max(0, a2), g4 = Math.max(0, a4);
-      mc = [{ v: "6/8", s: 1 }, { v: "12/8", s: r3(g2 > 0 ? clamp(g4 / g2, 0, 1) : 0.5) }, { v: "3/4", s: 0.3 }];
-      meter = "6/8"; meterConf = beatSig * sharpF * timeF * clamp(Math.min(t1, t2) / Math.max(1e-9, s2 * 3), 0.3, 1) * (mc[1].s > 0.85 ? 0.5 : 1);
+      // §345 A18: 6/8 は 2 拍ごと（lag 2 も 4 も強い）・12/8 は 4 拍ごと（lag 2 は弱い・lag 4 が強い）
+      var is12 = g4 > 0 && a2 <= 0.3 * g4;
+      mc = is12 ? [{ v: "12/8", s: 1 }, { v: "6/8", s: r3(clamp(g2 / Math.max(1e-9, g4), 0, 1)) }, { v: "3/4", s: 0.3 }] : [{ v: "6/8", s: 1 }, { v: "12/8", s: r3(g2 > 0 ? clamp(g4 / g2, 0, 1) : 0.5) }, { v: "3/4", s: 0.3 }];
+      meter = is12 ? "12/8" : "6/8"; meterConf = beatSig * sharpF * timeF * clamp(Math.min(t1, t2) / Math.max(1e-9, s2 * 3), 0.3, 1) * (mc[1].s > 0.85 ? 0.5 : 1);
     } else {
       var p3 = Math.max(0, a3), p4 = Math.max(0, a4), tot3 = p3 + p4;
       meter = a3 > a4 ? "3/4" : "4/4"; meterConf = beatSig * sharpF * timeF * (tot3 > 0 ? 1 - Math.min(p3, p4) / Math.max(p3, p4, 1e-9) : 0);
@@ -2168,10 +2173,12 @@
       }
       mc = [{ v: meter, s: 1 }, { v: meter === "4/4" ? "3/4" : (meter === "6/8" ? "3/4" : "4/4"), s: r3(tot3 > 0 ? Math.min(p3, p4) / Math.max(p3, p4, 1e-9) : 1) }];
       if (meter !== "6/8") { mc.push({ v: "6/8", s: s68 }); } else { mc.push({ v: "4/4", s: 0.2 }); }
+      if (s68 >= 0.8 || (t2 > 1.4 * s2 && t1 < 0.5 * t2 && t2 > 0.12 * am)) { mc.push({ v: "12/8", s: 0.6 }); } // §345 A18: はねる 4/4 と 12/8 は近い・3 つに分ける傾向のとき
     }
     mc.sort(function (u, v) { return v.s - u.s; });
+    if (bpmAmb) { meterConf = Math.min(meterConf, 0.5); } // §345 A18: テンポ（拍の長さ）で迷うときは、拍子も決めない（拍子は拍の長さで変わる）
     // ---- スイング（2/3 だけ強い ＝ はねる。3 つとも ＝ 6/8 の刻みでスイングではない）----
-    var swRatio = s2 > 0 ? t2 / s2 : (t2 > 0 ? 3 : 1), swing = !compound && t2 > 0.12 * am && swRatio > 1.4 && t1 < 0.3 * t2 ? (swRatio > 2.2 ? 100 : 60) : 0;
+    var swRatio = s2 > 0 ? t2 / s2 : (t2 > 0 ? 3 : 1), swing = !compound && t2 > 0.12 * am && swRatio > 1.4 && t1 < 0.5 * t2 ? (swRatio > 2.2 ? 100 : 60) : 0;
     var swingConf = compound ? 0 : beatSig * sharpF * timeF * clamp(Math.abs(Math.log(Math.max(0.01, swRatio))) / 1.2, 0, 1);
     // ---- 調: 倍音を基音にまとめた音の高さ（ウクレレ・歌の倍音で属調に引っぱられないように）・前半と後半でそろうか ----
     var N = 4096, re = new Float64Array(N), im = new Float64Array(N), mag = new Float64Array(N / 2), segs = [[], [], []], frames = 0, cen = 0, tot = 0, flatS = 0, st;
@@ -2235,11 +2242,14 @@
       if (!list || !list.length) { return ""; }
       return '<div class="dxm-cand"><span>' + lbl + '（信頼度 ' + confWord(conf) + '）</span>' + list.map(function (z) { return chip("data-xmcand", fmt(z)[0], fmt(z)[1], fmt(z)[0] === cur); }).join("") + '</div>';
     }
+    if (an.bpm.conf < 0.6 && an.meter.conf < 0.6 && an.key.conf < 0.55) { x += '<div>どれも自信が低いので、条件には入れていません。合いそうな候補を押してください。</div>'; } // §345 A18
     x += row("テンポの候補", an.bpm.cands && an.bpm.cands.length ? an.bpm.cands : [{ v: an.bpm.v }], an.bpm.conf, "bpm:" + c.bpm, function (z) { return ["bpm:" + z.v, "BPM " + z.v]; });
+    if (c.bpm > 0) { var hb = Math.round(c.bpm / 2), db = Math.round(c.bpm * 2); x += '<div class="dxm-cand"><span>いまの BPM ' + c.bpm + ' を</span>' + (hb >= 30 ? chip("data-xmcand", "bpm:" + hb, "&#xBD; 半分（" + hb + "）", false) : "") + (db <= 300 ? chip("data-xmcand", "bpm:" + db, "×2 倍（" + db + "）", false) : "") + '</div>'; }
     x += row("拍子の候補", an.meter.cands && an.meter.cands.length ? an.meter.cands : [{ v: an.meter.v }], an.meter.conf, "meter:" + c.meter, function (z) { return ["meter:" + z.v, z.v]; });
     x += row("調の候補", an.key.cands && an.key.cands.length ? an.key.cands : [{ v: an.key.v, mode: an.key.mode, name: an.key.name }], an.key.conf, "key:" + c.key + ":" + c.kmode, function (z) { return ["key:" + z.v + ":" + z.mode, esc(z.name)]; });
     x += '<div>' + (an.swing.v ? 'スイングの傾き（' + confWord(an.swing.conf) + '）' : 'ストレート寄り（' + confWord(an.swing.conf) + '）') + '・' + (an.bright.v === "bright" ? "明るい音" : "落ち着いた音") + '（' + confWord(an.bright.conf) + '）・強弱 ' + (an.dyn > 0.8 ? "大きい" : (an.dyn > 0.4 ? "ふつう" : "小さい")) + '</div>';
-    x += '<div class="small">半分・倍のテンポ、3/4 と 6/8 は取りちがえやすいので、ちがうときは候補を押してください。合成の音で確かめた方法で、実際の演奏での当たり方は確かめていません。</div>';
+    if (an.swing.v) { x += '<div class="small">はねるリズム（スイング）です。12/8 の曲として探すなら、拍子の候補の 12/8 を押してください。</div>'; }
+    x += '<div class="small">半分・倍のテンポ、3/4 と 6/8、スイングと 12/8 は取りちがえやすいので、ちがうときは候補を押してください。合成の音で確かめた方法で、実際の演奏での当たり方は確かめていません。</div>';
     return x + '</div>';
   }
   // マイク（端末の中だけ・保存しない）
@@ -2258,7 +2268,7 @@
     nav.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
       micS.st = st; micS.buf = []; micS.n = 0; micS.sr = ac.sampleRate; micS.on = true;
       micS.src = ac.createMediaStreamSource(st); micS.sp = ac.createScriptProcessor(4096, 1, 1);
-      micS.sp.onaudioprocess = function (ev) { if (!micS.on) { return; } var d = ev.inputBuffer.getChannelData(0); micS.buf.push(new Float32Array(d)); micS.n += d.length; if (micS.n >= micS.sr * 15) { micFinish(done); } };
+      micS.sp.onaudioprocess = function (ev) { if (!micS.on) { return; } var d = ev.inputBuffer.getChannelData(0); micS.buf.push(new Float32Array(d)); micS.n += d.length; try { var te = document.querySelector(".dxm-mtime"); if (te) { te.textContent = Math.floor(micS.n / micS.sr) + " / 15 秒"; } } catch (eT) {} if (micS.n >= micS.sr * 15) { micFinish(done); } };
       micS.src.connect(micS.sp); micS.sp.connect(ac.destination);
       micS.timer = setTimeout(function () { micFinish(done); }, 15500);
       done({ ok: true, recording: true });

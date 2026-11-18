@@ -48,7 +48,7 @@
 - [x] A15（v2.92）: 書き出しの再現性（楽器の録音を 44.1kHz で展開・リバーブとノイズをシードつきの乱数で・書き出しの診断・tools/test-diag.js）
 - [x] A16（v2.93）: iPhone 向けの保存（名前・重複・進み具合・やめる・大きさ・失敗の案内）・iPhone の実機は未確認
 - [x] A17（v2.94）: Cubasis 向けのパッケージ（MIDI・ステム・テンポ・拍子・コード・セクション・手順）・Cubasis 3 の実機は未確認
-- [ ] A18（v2.95）: Style Match の使いやすさ（半分／倍・3/4 と 6/8・スイングと 12/8・鼻歌）
+- [x] A18（v2.95）: Style Match の使いやすさ（半分／倍・3/4 と 6/8・スイングと 12/8・鼻歌）・実演奏は未確認
 - [x] 開発環境: CRLF の作業ツリーでのテストの失敗（tests/harness.js で直した・v2.89）・Segmentation fault の記録（GAME_DESIGN §345）
 
 ### Version 2.86 — 🦍 A10: Gorilla Style Match (§345)

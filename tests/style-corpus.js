@@ -16,13 +16,13 @@ function pluck(d, at, freq, amp, r, len) {
   }
 }
 // 声（のこぎり波 → 母音のフォルマント 3 つ・ビブラート）。notes: [[秒, 長さ, MIDI]]。hum: 鼻歌（こもった音）
-function voice(d, notes, amp, r, hum) {
+function voice(d, notes, amp, r, hum, wob) {
   var fm = hum ? [[250, 60], [2200, 150], [2900, 200]] : [[700, 90], [1150, 110], [2700, 160]], ph = 0, i, k;
   var st = fm.map(function () { return [0, 0]; });
   for (k = 0; k < notes.length; k++) {
     var a0 = Math.round(notes[k][0] * SR), n = Math.round(notes[k][1] * SR), f0 = hz(notes[k][2]);
     for (i = 0; i < n && a0 + i < d.length; i++) {
-      var t = i / SR, vib = 1 + 0.012 * Math.sin(2 * Math.PI * 5.5 * t) * Math.min(1, t * 3), env = Math.min(1, t * 12) * Math.min(1, (n - i) / (SR * 0.06));
+      var t = i / SR, cents = wob ? (wob * Math.sin(2 * Math.PI * 0.7 * t + k) + (t < 0.12 ? -wob * (1 - t / 0.12) : 0)) : 0, vib = (1 + (wob ? 0.02 : 0.012) * Math.sin(2 * Math.PI * 5.5 * t) * Math.min(1, t * 3)) * Math.pow(2, cents / 1200), env = Math.min(1, t * 12) * Math.min(1, (n - i) / (SR * 0.06));
       ph += 2 * Math.PI * f0 * vib / SR; if (ph > Math.PI) { ph -= 2 * Math.PI; }
       var src = (ph / Math.PI) * (hum ? 0.4 : 1) + (hum ? Math.sin(ph) * 0.8 : 0) + (r() * 2 - 1) * 0.02, out = 0, q;
       for (q = 0; q < fm.length; q++) { // 2 次の共振（バンドパス）
@@ -54,7 +54,7 @@ function make(o) {
     }
     return d;
   }
-  var bpm = o.bpm, compound = o.meter === "6/8", perBar = o.meter === "3/4" ? 3 : (compound ? 2 : 4), beatSec = 60 / bpm; // 6/8 は付点 4 分を 1 拍（1 小節 2 拍・1 拍を 3 つに分ける）
+  var bpm = o.bpm, compound = o.meter === "6/8" || o.meter === "12/8", perBar = o.meter === "3/4" ? 3 : (o.meter === "6/8" ? 2 : 4), beatSec = 60 / bpm; // 6/8 は付点 4 分を 1 拍（1 小節 2 拍・1 拍を 3 つに分ける）
   var root = o.root || 0, prog = o.prog || ["C", "G", "Am", "F"], t = 0, beat = 0, mel = [], scale = o.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
   while (t < sec) {
     var bar = Math.floor(beat / perBar), pos = beat % perBar, chord = prog[bar % prog.length], v = voicing(root, chord), jit = function () { return (r() * 2 - 1) * (o.jitter || 0); };
@@ -78,7 +78,7 @@ function make(o) {
     }
     t += spb; beat++;
   }
-  if (o.kind === "vocal" || o.kind === "hum") { voice(d, mel, o.kind === "hum" ? 0.05 : 0.04, r, o.kind === "hum"); }
+  if (o.kind === "vocal" || o.kind === "hum") { voice(d, mel, o.kind === "hum" ? 0.05 : 0.04, r, o.kind === "hum", o.wobble || 0); }
   return d;
 }
 // 検証の一覧（正解つき）。meter の正解: 3/4・4/4・6/8。key: 主音（0〜11）と maj／min
@@ -97,6 +97,13 @@ function corpus() {
   L.push({ id: "hum-70-34", kind: "hum", bpm: 70, meter: "3/4", root: 0, prog: ["C", "F", "G", "C"], key: [0, "maj"], seed: 64 });
   L.push({ id: "loose-100", kind: "strum", bpm: 100, meter: "4/4", root: 0, prog: ["C", "G", "Am", "F"], key: [0, "maj"], jitter: 0.03, drift: 0.06, seed: 65 });
   L.push({ id: "loose-84-34", kind: "strum", bpm: 84, meter: "3/4", root: 0, prog: ["C", "F", "G", "C"], key: [0, "maj"], jitter: 0.035, drift: 0.07, seed: 66 });
+  // §345 A18: 12/8・スイング・速いストローク・音程のゆれる鼻歌と歌
+  L.push({ id: "strum128-60", kind: "strum", bpm: 60, meter: "12/8", root: 0, prog: ["C", "Am", "F", "G"], key: [0, "maj"], seed: 71 });
+  L.push({ id: "arp128-70", kind: "arp", bpm: 70, meter: "12/8", root: 7, prog: ["C", "F", "G", "C"], key: [7, "maj"], seed: 72 });
+  L.push({ id: "swing-96", kind: "strum", bpm: 96, meter: "4/4", root: 5, prog: ["C", "Am", "Dm", "G"], key: [5, "maj"], swing: 1, seed: 73 });
+  L.push({ id: "strum44-160", kind: "strum", bpm: 160, meter: "4/4", root: 0, prog: ["C", "G", "Am", "F"], key: [0, "maj"], seed: 74 });
+  L.push({ id: "hum-wobble-80", kind: "hum", bpm: 80, meter: "4/4", root: 2, prog: ["C", "G", "Am", "F"], key: [2, "maj"], wobble: 40, seed: 75 });
+  L.push({ id: "vocal-wobble-100", kind: "vocal", bpm: 100, meter: "4/4", root: 7, prog: ["C", "F", "G", "C"], key: [7, "maj"], wobble: 35, seed: 76 });
   L.push({ id: "silence", kind: "silence", none: true });
   L.push({ id: "noise", kind: "noise", none: true, seed: 67 });
   L.push({ id: "pink", kind: "pink", none: true, seed: 68 });

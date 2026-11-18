@@ -10,7 +10,7 @@ module.exports = async function () {
   function cond0() { return { bpm: 0, meter: "", genre: "", moods: [], fam: "", bright: "", kmode: "", vocal: false, key: -1 }; }
   var res = C.corpus().map(function (o) { var a = X.styleAnalyze([C.make(o)], C.SR); return { o: o, a: a, c: X.analysisToCond(a, cond0()) }; });
   var music = res.filter(function (r) { return !r.o.none; }), none = res.filter(function (r) { return r.o.none; });
-  function exB(o) { return o.meter === "6/8" ? o.bpm * 1.5 : o.bpm; }
+  function exB(o) { return o.meter === "6/8" || o.meter === "12/8" ? o.bpm * 1.5 : o.bpm; } // 6/8・12/8 は付点 4 分の速さ → 4 分音符の BPM
   function tol(o) { return o.drift ? 0.07 : 0.04; }
   function bpmOk(o, v) { return Math.abs(v / exB(o) - 1) < tol(o); }
   // 1. まちがった値を条件に入れない（確かなものだけ入れる）
@@ -50,6 +50,20 @@ module.exports = async function () {
   var w48 = r48.filter(function (r) { var o = r.o, c = r.c; return (c.bpm && !bpmOk(o, c.bpm)) || (c.meter && c.meter !== o.meter) || (c.key >= 0 && !(c.key === o.key[0] && c.kmode === o.key[1])); });
   var k48 = r48.filter(function (r) { return r.a.key.v === r.o.key[0] && r.a.key.mode === r.o.key[1]; }).length;
   ok(w48.length === 0 && k48 >= 22, "the same sounds at 48 kHz (as Chrome decodes files): nothing wrong is put in, key right in " + k48 + " of " + music.length, w48.map(function (r) { return r.o.id; }));
+  // 13. §345 A18: 12/8・速いストローク・スイングと 12/8・音程のゆれる鼻歌と歌
+  function one(id) { return res.filter(function (r) { return r.o.id === id; })[0]; }
+  var s128 = one("strum128-60"), f160 = one("strum44-160"), sw96 = one("swing-96"), hw = one("hum-wobble-80"), vw = one("vocal-wobble-100");
+  ok(s128.a.meter.v === "12/8" && bpmOk(s128.o, s128.a.bpm.v) && s128.a.swing.v === 0, "12/8 strumming → 12/8 (not 6/8), BPM 90 in quarter notes", [s128.a.meter.v, s128.a.meter.cands, s128.a.bpm.v]);
+  ok(f160.a.bpm.cands.some(function (z) { return z.v === 160; }) && (f160.a.bpm.v === 160 || (f160.a.bpm.conf < 0.6 && f160.c.bpm === 0)) && f160.a.meter.conf <= 0.5, "fast strumming at 160: 160 is a candidate; when 80 is on top it is not put in, and the meter waits for the tempo", [f160.a.bpm.v, f160.a.bpm.conf, f160.a.bpm.cands]);
+  ok(sw96.a.swing.v >= 60 && sw96.a.meter.cands.some(function (z) { return z.v === "12/8"; }), "a swing at 96: swing, and 12/8 is offered as a candidate (a shuffle can be written in 12/8)", [sw96.a.swing, sw96.a.meter.cands]);
+  ok(hw.c.bpm === 0 && hw.c.meter === "" && (hw.c.key === -1 || hw.c.key === hw.o.key[0]) && hw.a.bpm.conf < 0.3, "humming with a wobbly pitch: no tempo / meter put in, the key only if right", [hw.a.bpm.conf, hw.a.key.name, hw.a.key.conf]);
+  ok(vw.a.key.v === vw.o.key[0] && vw.a.key.mode === vw.o.key[1], "voice with a wobbly pitch over the ukulele: the key is still right", [vw.a.key.name, vw.a.key.conf]);
+  X.ui.mcond = cond0(); X.ui.mcond.bpm = 120;
+  var hx2 = X.analysisHtml(sw96.a), hx3 = X.analysisHtml(one("hum-90").a);
+  ok(hx2.indexOf('data-xmcand="bpm:60"') >= 0 && hx2.indexOf('data-xmcand="bpm:240"') >= 0 && /はねるリズム/.test(hx2) && /12\/8/.test(hx2) && /どれも自信が低い/.test(hx3), "the result shows ½ / ×2 for the chosen BPM, a swing / 12/8 note, and 'nothing is sure' for unclear humming");
+  X.ui.mcond = null;
+  var sw48 = r48.filter(function (r) { return r.o.swing; });
+  ok(sw48.length >= 2 && sw48.every(function (r) { return r.a.swing.v >= 60 || r.a.bpm.conf < 0.6; }) && r48.filter(function (r) { return r.o.id === "swing-96"; })[0].a.swing.v >= 60, "swing is still found at 48 kHz (the swing at 96; the swing at 112 is either found or its tempo is unsure)", sw48.map(function (r) { return [r.o.id, r.a.swing.v, r.a.bpm.v]; }));
   // 11. 候補のボタン
   var hx = X.analysisHtml(res.filter(function (r) { return r.o.id === "swing-112"; })[0].a);
   ok((hx.match(/data-xmcand="bpm:/g) || []).length >= 2 && hx.indexOf('data-xmcand="bpm:112"') >= 0 && (hx.match(/data-xmcand="meter:/g) || []).length >= 2 && (hx.match(/data-xmcand="key:/g) || []).length === 3 && hx.indexOf("実際の演奏での当たり方は確かめていません") >= 0, "the result shows candidate buttons (tempo incl. 112 for a swing at 112 found as 56, meter, 3 keys) and says it was checked only with synthetic sound");
