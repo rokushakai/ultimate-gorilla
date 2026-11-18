@@ -1783,6 +1783,41 @@
     }
     return { ok: true, n: n };
   }
+  // ---------- §345 A19: その場でコードを変える（アレンジの画面から）----------
+  // コード名（絶対: Dm7・D/F#・B♭maj7 など）→ 曲のキーでのコードの id。合うものが無いときは理由を返す（近いコードに勝手に変えない）
+  var NOTE_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  function notePc(s) { var m = /^([A-Ga-g])([#♯b♭]?)$/.exec(String(s || "")); if (!m) { return null; } var pc = NOTE_PC[m[1].toUpperCase()]; if (m[2] === "#" || m[2] === "♯") { pc++; } if (m[2] === "b" || m[2] === "♭") { pc--; } return (pc + 12) % 12; }
+  var QUAL = { "": "", "M": "", "maj": "", "m": "m", "min": "m", "-": "m", "7": "7", "dom7": "7", "m7": "m7", "min7": "m7", "-7": "m7", "maj7": "maj7", "M7": "maj7", "Δ": "maj7", "Δ7": "maj7", "△": "maj7", "△7": "maj7", "sus4": "sus4", "sus": "sus4", "7sus4": "7sus4", "7sus": "7sus4", "add9": "add9", "dim": "dim", "°": "dim", "o": "dim", "m7b5": "m7♭5", "m7-5": "m7♭5", "ø": "m7♭5", "ø7": "m7♭5", "m7♭5": "m7♭5" };
+  function chordParse(p, text) {
+    var kk = chordKeyOf(p), raw = String(text || "").replace(/\s+/g, "").replace(/（|）/g, ""), mm = /^([A-Ga-g][#♯b♭]?)([^/]*)(?:\/([A-Ga-g][#♯b♭]?))?$/.exec(raw);
+    if (!raw) { return { ok: false, why: "コード名を入れてください（例: Dm7・D/F#・Bm・G7）" }; }
+    if (!mm) { return { ok: false, why: "「" + raw + "」はコード名として読めません（例: Dm7・D/F#・Bm・G7）" }; }
+    var root = notePc(mm[1]), q0 = mm[2].replace(/♭/g, "b"), qual = QUAL.hasOwnProperty(q0) ? QUAL[q0] : (QUAL.hasOwnProperty(q0.toLowerCase()) && q0.length > 1 ? QUAL[q0.toLowerCase()] : null);
+    if (qual === null) { return { ok: false, why: "「" + mm[2] + "」の種類のコードは、伴奏の作り方にありません（使える種類: 長三和音・m・7・m7・maj7・sus4・7sus4・add9・dim・m7♭5 とオンコード）。ほかのコードに勝手には変えません" }; }
+    var bass = mm[3] ? notePc(mm[3]) : null, bOff = bass === null || bass === root ? null : (bass - root + 12) % 12, iv = (root - kk.key + 12) % 12, hits = [], id;
+    for (id in CHORDS) { if (CHORDS.hasOwnProperty(id)) { var c = CHORDS[id]; if (c[0] === iv && c[2] === qual && (c[3] === undefined ? bOff === null : c[3] === bOff)) { hits.push(id); } } }
+    if (!hits.length) { return { ok: false, why: "「" + raw + "」は、この曲のキー（" + KEYS[kk.key] + (kk.kmode === "min" ? " マイナー" : " メジャー") + "）の伴奏の作り方にないコードです。下の候補から選ぶか、ちがう書き方をためしてください（ほかのコードに勝手には変えません）" }; }
+    var list = CHORD_LISTS[kk.kmode] || CHORD_LISTS.maj, best = hits.filter(function (h0) { return list.indexOf(h0) >= 0; })[0] || hits[0];
+    return { ok: true, id: best, name: chordOf(kk.key, best).name, label: chordLabel(best) };
+  }
+  // 候補（キーの種類の一覧の順・名前つき）
+  function chordCands(p) { var kk = chordKeyOf(p), list = CHORD_LISTS[kk.kmode] || CHORD_LISTS.maj; return list.map(function (id) { return { id: id, name: chordOf(kk.key, id).name, label: chordLabel(id) }; }); }
+  // 1 小節を変える見本（曲は変えない）→ { ok, why, plan, regen: [トラック名], same: [...], keep: [...], none: [{ name, why }], edited }
+  function chordQuickPlan(p, bar, id, how) {
+    var ed = {}; ed[bar] = id;
+    var pl = chordPlan(p, ed, how === "newtrack" ? "newtrack" : "keep");
+    if (!pl.ok) { return pl; }
+    var o = { ok: true, plan: pl, regen: [], same: [], keep: [], newtrack: [], none: [], edited: 0 };
+    pl.items.forEach(function (it) {
+      var nm = it.track.name;
+      if (it.act === "regen") { (it.same ? o.same : o.regen).push(nm); }
+      else if (it.act === "keep") { o.keep.push(nm); o.edited++; }
+      else if (it.act === "newtrack") { o.newtrack.push(nm); o.edited++; }
+      else { o.none.push({ name: nm, why: it.why }); }
+    });
+    return o;
+  }
+  function chordQuickApply(p, q) { var kk = chordKeyOf(p); return chordApply(p, q.plan, kk.key, kk.kmode); }
   // 伴奏から読みとる（作ったときの進行・コードのない曲のため）
   function deriveChords(p) {
     var M = DM(), out = {}, i, j, q;
@@ -3270,7 +3305,7 @@
     styleScore: styleScore, styleRank: styleRank, matchProject: matchProject, matchTab: matchTab,
     METERS: METERS, patFor: patFor, meterPlan: meterPlan, meterProject: meterProject,
     GROOVES: GROOVES, swingTicks: swingTicks, applyGroove: applyGroove, songGroove: songGroove, groovePlan: groovePlan, grooveApply: grooveApply, grooveTab: grooveTab,
-    endOf: endOf, chordName: chordName, songBars: songBars, regenClip: regenClip, chordPlan: chordPlan, chordApply: chordApply, deriveChords: deriveChords, chordOpen: chordOpen, chordTab: chordTab,
+    endOf: endOf, chordName: chordName, songBars: songBars, regenClip: regenClip, chordPlan: chordPlan, chordApply: chordApply, chordParse: chordParse, chordCands: chordCands, chordQuickPlan: chordQuickPlan, chordQuickApply: chordQuickApply, chordName: chordName, CHORDS: CHORDS, deriveChords: deriveChords, chordOpen: chordOpen, chordTab: chordTab,
     notesHash: notesHash, stampClip: stampClip, clipState: clipState, clipSpot: clipSpot, genPart: genPart, swapPlan: swapPlan, swapApply: swapApply, secClips: secClips, sectionSwapPlan: sectionSwapPlan, sectionSwapApply: sectionSwapApply, famOfTrack: famOfTrack, arrTab: arrTab, STATE_LBL: STATE_LBL,
     secTypeOfName: secTypeOfName, songKey: songKey, songChords: songChords, putChords: putChords, planChords: planChords, partPlan: partPlan, partApply: partApply, partInit: partInit, partHtml: partHtml,
     GENRES: GENRES, MOODS: MOODS, FAMS: FAMS, BPMS: BPMS, TPL_KEY: TPL_KEY, famsOf: famsOf, bpmBand: bpmBand, hayOf: hayOf, tplMatch: tplMatch, tplSearch: tplSearch, tplPrefs: tplPrefs, tplFav: tplFav, tplUsed: tplUsed, tplRefresh: tplRefresh,

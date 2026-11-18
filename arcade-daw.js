@@ -969,7 +969,7 @@
         '<span class="small da-hint">クリップをタップ ＝ 選ぶ ／ もう一度 ＝ 音符</span></div>' + inbNoteHtml() + backHtml() +
       arrGridHtml(p, false);
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
-      '<div class="da-area">' + panelHtml(p) + '</div>' + // 9A-5: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
+      '<div class="da-area">' + panelHtml(p) + '</div>' + cedHtml(p) + // 9A-5・§345 A19: 選んでも高さが変わらない（画面がずれてタップが別のクリップに当たらないように）
       saveNoteHtml() +
       '<p class="small daw-note">クリップをタップ ＝ 選ぶ（下に操作）／ もう一度タップ ＝ ピアノロールで音符を直す。</p>' +
       '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
@@ -986,7 +986,7 @@
       var cx = tickX(fsel.clip.start), cw = tickX(fsel.clip.start + fsel.clip.len) - cx, vis = arr.clientWidth - HEAD_W;
       if (cx < arr.scrollLeft || cx + Math.min(cw, vis) > arr.scrollLeft + vis) { try { arr.scrollLeft = Math.max(0, cx - 24); st.scroll = arr.scrollLeft; } catch (e2) {} }
     }
-    bind(root, ctl);
+    bind(root, ctl); cedBind(root, ctl);
     if (fo) { var sf = root.querySelector(".dstu"); if (sf && sf.focus) { try { sf.focus({ preventScroll: true }); } catch (e3) {} } }
     drawHead();
   }
@@ -1010,7 +1010,7 @@
     var chm = XM() && XM().songChords ? XM().songChords(p) : {}, chordH = Object.keys(chm).length ? 23 : 0;
     if (chordH) {
       h += '<div class="daw-row daw-chord-row"><div class="daw-corner">&#x1F3BC; コード</div><div class="daw-ruler daw-grid daw-chords" style="' + grid + 'height:22px;">';
-      for (b = 0; b < bars; b++) { if (!chm[b]) { continue; } var cx0 = tickX(M.barToTick(p, b)), cw0 = Math.max(8, tickX(M.barToTick(p, b + 1)) - cx0 - 1); h += '<button class="daw-chd" data-chordbar="' + b + '" style="left:' + cx0 + 'px;width:' + cw0 + 'px;" title="' + (b + 1) + ' 小節目のコード（タップで変える）">' + escHtml(XM().chordName(p, chm[b])) + '</button>'; }
+      for (b = 0; b < bars; b++) { if (!chm[b]) { continue; } var cx0 = tickX(M.barToTick(p, b)), cw0 = Math.max(8, tickX(M.barToTick(p, b + 1)) - cx0 - 1); h += '<button class="daw-chd' + (st.ced && st.ced.bar === b ? ' on' : '') + '" data-chordbar="' + b + '" style="left:' + cx0 + 'px;width:' + cw0 + 'px;" title="' + (b + 1) + ' 小節目のコード（タップで変える）">' + escHtml(XM().chordName(p, chm[b])) + '</button>'; }
       h += '</div></div>';
     }
     // トラック
@@ -1204,7 +1204,7 @@
         (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') +
         '<div class="dstu-bot"><div class="dstu-card dstu-edit">' + stEditHtml(p) + '</div><div class="dstu-ops">' + panelHtml(p) + '</div></div></div>' +
       '<div class="dstu-side">' + stRefHtml(p) + stMixHtml(p) + '</div></div>' +
-      saveNoteHtml() + '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
+      cedHtml(p) + saveNoteHtml() + '<input type="file" class="da-wavfile" accept="' + AUD_ACCEPT + '" style="display:none;"></div>';
   }
   // プレイヘッド（全体図・編集の見本・🎧）
   function stHead(root, tick) {
@@ -3422,6 +3422,61 @@
   function closeRoll() { if (pl && pl.clip) { stopPlay(false); } st.view = "arr"; st.roll = null; }
   // §341 9A-5: ↶ はトラック全部の写し（音符もふくむ）を覚える。ピアノロールとアレンジで同じ列
   function snapTracks() { return JSON.parse(JSON.stringify(project().tracks)); }
+  // ---------- §345 A19: その場でコードを変える（アレンジの画面のコードをタップ → 下に小さな編集パネル）----------
+  // st.ced ＝ { bar, id（選んだコード）, how（"keep"｜"newtrack"）, text, err, q（見本） }。曲は「確定」まで変えない
+  function cedOpen(bar) { st.ced = { bar: Math.max(0, Math.round(Number(bar)) || 0), id: "", how: "keep", text: "", err: "", q: null }; st.confirmDel = null; st.chooseAdd = false; }
+  function cedPick(p, id) { var X0 = XM(); st.ced.id = id; st.ced.err = ""; st.ced.q = X0 && X0.chordQuickPlan ? X0.chordQuickPlan(p, st.ced.bar, id, st.ced.how) : null; }
+  function cedHtml(p) {
+    var c = st.ced, X0 = XM(); if (!c || !X0 || !X0.chordCands) { return ""; }
+    var cur = (X0.songChords(p) || {})[c.bar], curName = cur ? X0.chordName(p, cur) : "（なし）", cands = X0.chordCands(p), q = c.q, h, i;
+    h = '<div class="daw-ced" role="dialog" aria-label="' + (c.bar + 1) + ' 小節目のコード"><div class="daw-ced-top"><b>' + (c.bar + 1) + ' 小節目のコード</b> <span class="daw-ced-cur">' + escHtml(curName) + (c.id ? ' → <b>' + escHtml(X0.chordName(p, c.id)) + '</b>' : '') + '</span><button class="modal-btn daw-small" data-ced="close" aria-label="閉じる">&#x2715;</button></div>';
+    h += '<div class="daw-ced-chips">';
+    for (i = 0; i < cands.length; i++) { h += '<button class="daw-ced-c' + (cands[i].id === c.id ? ' on' : '') + (cands[i].id === cur ? ' cur' : '') + '" data-ced="pick:' + escHtml(cands[i].id) + '">' + escHtml(cands[i].name) + '</button>'; }
+    h += '</div><div class="daw-ced-row"><input type="text" class="daw-ced-in" value="' + escHtml(c.text) + '" placeholder="直接入力（例 Dm7・D/F#）" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="コード名"><button class="modal-btn daw-small" data-ced="text">決める</button></div>';
+    h += '<div class="daw-ced-st small">' + (c.err ? '&#x26A0;&#xFE0F; ' + escHtml(c.err) : '') + '</div>';
+    if (c.id && q) {
+      if (!q.ok) { h += '<div class="small">' + escHtml(q.why) + '</div>'; }
+      else {
+        h += '<div class="daw-ced-pv small">';
+        h += q.regen.length ? '&#x2705; 伴奏が追従: ' + escHtml(q.regen.join("・")) + '（' + q.regen.length + '）' : '伴奏で追従するものはありません';
+        if (q.same.length) { h += '<br>音が変わらない: ' + escHtml(q.same.join("・")); }
+        if (q.edited) { h += '<br>&#x270F;&#xFE0F; 手で直したクリップ: ' + escHtml(q.keep.concat(q.newtrack).join("・")) + ' <span class="daw-ced-how">' + '<button class="daw-ced-c' + (c.how === "keep" ? " on" : "") + '" data-ced="how:keep">元のまま</button><button class="daw-ced-c' + (c.how === "newtrack" ? " on" : "") + '" data-ced="how:newtrack">新しいトラックに作る</button></span>'; }
+        if (q.none.length) { h += '<br>追従しない: ' + escHtml(q.none.map(function (z) { return z.name + "（" + z.why + "）"; }).join("・")); }
+        h += '</div>';
+      }
+    }
+    h += '<div class="daw-ced-row">' + (c.id && q && q.ok ? '<button class="modal-btn daw-ced-go" data-ced="apply">&#x2705; 確定</button>' : '') + '<button class="modal-btn daw-small" data-ced="full">くわしい画面</button><button class="modal-btn daw-small" data-ced="close">やめる</button></div>';
+    return h + '</div>';
+  }
+  // パネルのボタン → true（処理した）
+  function cedClick(v, root, ctl) {
+    var p = project(), X0 = XM(), c = st.ced;
+    if (!c || !X0) { return false; }
+    if (v === "close") { st.ced = null; render(root, ctl); return true; }
+    if (v === "full") { var b0 = c.bar; st.ced = null; if (X0.chordOpen) { X0.chordOpen(b0); st.view = "xmas"; renderXmas(root, ctl); } return true; }
+    if (v.indexOf("pick:") === 0) { c.text = ""; cedPick(p, v.substring(5)); render(root, ctl); return true; }
+    if (v.indexOf("how:") === 0) { c.how = v.substring(4) === "newtrack" ? "newtrack" : "keep"; if (c.id) { cedPick(p, c.id); } render(root, ctl); return true; }
+    if (v === "text") { var inp = root.querySelector(".daw-ced-in"), r = X0.chordParse(p, inp ? inp.value : c.text); c.text = inp ? inp.value : c.text; if (r.ok) { cedPick(p, r.id); } else { c.err = r.why; c.id = ""; c.q = null; } render(root, ctl); return true; }
+    if (v === "apply") {
+      if (!c.id || !c.q || !c.q.ok) { return true; }
+      var q = X0.chordQuickPlan(p, c.bar, c.id, c.how); if (!q.ok) { c.q = q; render(root, ctl); return true; } // 確定のときに作りなおす（見本のあとに曲が変わっていても安全）
+      var from = (X0.songChords(p) || {})[c.bar], fromN = from ? X0.chordName(p, from) : "（なし）", snap = xmHost.snapAll(), r2 = X0.chordQuickApply(p, q), toN = X0.chordName(p, c.id);
+      var note = (c.bar + 1) + " 小節目のコードを " + fromN + " → " + toN + " にしました。" + (q.regen.length ? "伴奏 " + q.regen.length + " つが追従" : "追従した伴奏はありません") + (q.keep.length ? "・手で直した " + q.keep.join("・") + " は元のまま（追従していません）" : "") + (q.newtrack.length ? "・手で直した " + q.newtrack.join("・") + " は新しいトラックに作りました" : "") + "（↶ 1 回で戻せます）";
+      st.ced = null; st.lastChord = { bar: c.bar }; pushUndo(snap); st.anote = escHtml(note); markDirty(); if (pl) { resync(); } render(root, ctl);
+      dgLog("chord", { bar: c.bar, id: c.id, n: r2.n });
+      return true;
+    }
+    return false;
+  }
+  // 入力欄: 打つたびに読みとりだけ見せる（描きなおさない＝キーボードを閉じない）・Enter で決める。iPhone のキーボードでパネルが隠れないように、見えている高さに合わせる
+  function cedBind(root, ctl) {
+    var inp = root.querySelector && root.querySelector(".daw-ced-in"), box = root.querySelector && root.querySelector(".daw-ced"), X0 = XM();
+    if (!inp || !X0) { return; }
+    inp.oninput = function () { var r = X0.chordParse(project(), inp.value), s0 = root.querySelector(".daw-ced-st"); st.ced.text = inp.value; if (s0) { s0.textContent = !inp.value ? "" : (r.ok ? "→ " + r.name + "（「決める」か Enter）" : r.why); } };
+    inp.onkeydown = function (ev) { if (ev && (ev.key === "Enter" || ev.keyCode === 13)) { if (ev.preventDefault) { ev.preventDefault(); } cedClick("text", root, ctl); } if (ev && ev.stopPropagation) { ev.stopPropagation(); } };
+    var vv = window.visualViewport;
+    if (box && vv && vv.addEventListener) { var fit = function () { if (!document.body.contains(box)) { vv.removeEventListener("resize", fit); return; } var gap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)); box.style.bottom = (8 + gap) + "px"; }; vv.addEventListener("resize", fit); fit(); }
+  }
   function pushUndo(snap) { var u = st.undo; u.push(snap); if (u.length > UNDO_MAX) { u.shift(); } }
   // 直したあと: 再生中なら同じ位置から鳴らしなおす（古い予約の音を消す）・描きなおす
   function afterEdit() { if (pl) { resync(); } rerender(); }
@@ -5727,7 +5782,8 @@
         if ((v = el.getAttribute("data-ar")) === "xmas") { keepScroll(root); st.confirmDel = null; st.chooseAdd = false; st.view = "xmas"; renderXmas(root, ctl); return; } // §343
         if ((v = el.getAttribute("data-ar")) === "sections") { keepScroll(root); st.view = "sec"; st.secUI = null; st.secMsg = ""; renderSec(root, ctl); return; } // 9B-1
         if ((v = el.getAttribute("data-secjump"))) { keepScroll(root); sections.jump(v); return; } // 9B-1
-        if ((v = el.getAttribute("data-chordbar")) !== null && v !== undefined && v !== "" && XM() && XM().chordOpen) { keepScroll(root); st.confirmDel = null; st.chooseAdd = false; XM().chordOpen(Number(v)); st.view = "xmas"; renderXmas(root, ctl); return; } // §345 A6
+        if ((v = el.getAttribute("data-chordbar")) !== null && v !== undefined && v !== "" && XM() && XM().chordOpen) { keepScroll(root); if (XM().chordCands) { cedOpen(Number(v)); render(root, ctl); return; } st.confirmDel = null; st.chooseAdd = false; XM().chordOpen(Number(v)); st.view = "xmas"; renderXmas(root, ctl); return; } // §345 A6・A19: その場で編集（くわしい画面はパネルから）
+        if ((v = el.getAttribute("data-ced"))) { keepScroll(root); if (cedClick(v, root, ctl)) { return; } } // §345 A19
         if ((v = el.getAttribute("data-rp")) && st.repeat) { // 9B-1: 繰り返しの欄
           var R = st.repeat, fr = M.findClip(p, R.clip);
           keepScroll(root);
@@ -5838,6 +5894,7 @@
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     saveFile: daSave, outName: outName, SAVE_NOTE: SAVE_NOTE, // §345 A16: 保存の窓口（🎄 のマイテンプレートからも）
+    ced: { open: function (b) { cedOpen(b); rerender(); }, click: function (v) { return st.root ? cedClick(v, st.root, st.ctl) : false; }, state: function () { return st.ced; }, html: function () { return cedHtml(project()); } }, // §345 A19
     handoff: { info: function () { return handoffInfo(project()); }, text: function () { return handoffText(project()); }, html: function () { return handoffHtml(project()); }, state: function () { return ho; } }, // §345 A17
     stem: { plan: function () { return stemPlan(project()); }, one: stemOne, all: stemAll, cancel: stemCancel, state: function () { return stm; }, project: stemProject, html: function () { return stemHtml(project()); } }, // §345 A12
     wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
