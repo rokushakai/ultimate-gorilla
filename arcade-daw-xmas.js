@@ -1737,7 +1737,10 @@
   function regenClip(p, t, c, cmap, gvOver) {
     var x = c.ext.xgen, sp = clipSpot(p, c, cmap);
     if (!sp.ok) { return sp; }
-    var r = genPart({ pat: x.pat, dens: x.dens, range: x.range || "mid", key: sp.key, kmode: sp.kmode, chords: sp.chords, bars: sp.bars, meter: sp.meter, type: sp.type, seed: x.seed, snd: trackSnd(t), sv: Number(x.sv) > 0 ? Number(x.sv) : 1, nofill: x.nofill, end: endOf(c), flat: !x.t, gv: gvOver !== undefined ? gvOver : Number(x.gv) || 0 });
+    // §345 A22: 12/8 の曲の伴奏は、6/8 の作りで小節を 2 倍にして作る（A9-2 の meterPlan と同じ）→ 作りなおしも同じ作り（コードを変えないときは同じ音符）
+    var chs12 = sp.chords, bars12 = sp.bars, met12 = sp.meter;
+    if (met12 && met12.num === 12 && met12.den === 8) { chs12 = []; sp.chords.forEach(function (c0) { chs12.push(c0, c0); }); bars12 = sp.bars * 2; met12 = { num: 6, den: 8 }; }
+    var r = genPart({ pat: x.pat, dens: x.dens, range: x.range || "mid", key: sp.key, kmode: sp.kmode, chords: chs12, bars: bars12, meter: met12, type: sp.type, seed: x.seed, snd: trackSnd(t), sv: Number(x.sv) > 0 ? Number(x.sv) : 1, nofill: x.nofill, end: endOf(c), flat: !x.t, gv: gvOver !== undefined ? gvOver : Number(x.gv) || 0 });
     if (!r.ok) { return r; }
     if (r.notes.length > 4000) { return { ok: false, why: "音符が 4000 をこえます" }; }
     return { ok: true, notes: r.notes, r: r, spot: sp };

@@ -862,6 +862,14 @@
     if (!rl) { return; }
     rl.onclick = function (ev) { var rc = rl.getBoundingClientRect ? rl.getBoundingClientRect() : null; if (!rc) { return; } var arr = root.querySelector(".daw-arr"); if (arr) { st.scroll = arr.scrollLeft || 0; } if (tpTapX(ev.clientX - rc.left)) { render(root, ctl); } };
   }
+  // §345 A22: 再生位置を追いかけて横にスクロール（モバイルははじめ ON・PC ははじめ OFF・ボタンで切りかえ）
+  function tpFollow() { return st.follow === undefined || st.follow === null ? vw.lay !== "pc" : !!st.follow; }
+  function tpFollowTick(root, tick) {
+    if (!pl || pl.clip || !tpFollow() || !root || !root.querySelector || st.view !== "arr") { return; }
+    var arr = root.querySelector(".daw-arr"); if (!arr || !arr.clientWidth) { return; }
+    var x = tickX(tick), vis = Math.max(40, arr.clientWidth - HEAD_W), sl = arr.scrollLeft || 0;
+    if (x < sl || x > sl + vis * 0.85) { try { arr.scrollLeft = Math.max(0, x - Math.round(vis * 0.15)); st.scroll = arr.scrollLeft; } catch (e) {} }
+  }
   function posText() { var p = project(), M = DM(), b = M.tickToBar(p, tpNow()); return b.bar + "." + b.beat; }
   // ボタン（モバイル・PC Studio で同じ）
   function tpButtons(big) {
@@ -912,6 +920,7 @@
     h += '<button class="modal-btn daw-secname" data-act="secList" aria-label="セクションの一覧">' + (cur ? escHtml(cur.name) : (L.length ? "（はじまり）" : "セクションなし")) + ' &#x25BE;</button>';
     h += '<button class="modal-btn daw-tbtn" data-act="secNext" aria-label="次のセクション" title="次のセクション"' + (L.length ? '' : ' disabled') + '>&#x23ED;&#xFE0F;</button>';
     h += '<button class="modal-btn daw-loopinfo' + (p.practice && p.practice.loopOn ? ' daw-on' : '') + '" data-act="secList" aria-label="ループの範囲">' + loopText(p) + '</button>';
+    h += '<button class="modal-btn daw-tbtn' + (tpFollow() ? ' daw-on' : '') + '" data-act="follow" aria-label="再生位置を追いかける" title="再生位置を追いかける（' + (tpFollow() ? "ON" : "OFF") + '）">&#x1F441;&#xFE0F;</button>'; // §345 A22
     return h + '</div>';
   }
   // セクションの一覧（下のパネル）: ▶ ここから・🔁 ループ・〜までループ・小節の範囲
@@ -987,7 +996,8 @@
     if (!root || !root.querySelector) { return; }
     var el = root.querySelector(".daw-playhead"), pos = root.querySelector(".daw-pos"), tick = playTick(), x = tickX(tick);
     if (el) { el.style.left = (HEAD_W + x) + "px"; }
-    if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = b.bar + "." + b.beat; }
+    if (pos) { var b = DM().tickToBar(st.project, tick); pos.textContent = (st.paused && !pl ? "⏸ " : "") + b.bar + "." + b.beat; }
+    tpFollowTick(root, tick); // §345 A22
     if (st.view === "auto" && st.au) { auHead(root, tick); } // 9B-9
     if (st.view === "master") { msHead(root); } // 9B-10
     if (st.view === "ref") { refHead(root); } // 9B-20
@@ -1082,14 +1092,14 @@
       '<div class="daw-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW</b><span class="daw-pname"></span>' +
       '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
       projBarHtml(p) +
-      '<div class="daw-transport">' + tpButtons(false) + // §345 A20
+      '<div class="daw-tpwrap"><div class="daw-transport">' + tpButtons(false) + // §345 A20・A22: 包み（上に残る）
         '<button class="modal-btn daw-tbtn' + (loopOn ? " daw-on" : "") + '" data-act="loop" title="ループ（' + (loopOn ? "ON" : "OFF") + '）">&#x1F501;</button>' +
-        '<span class="daw-pos" title="小節.拍">1.1</span>' +
+        '<button class="daw-pos" data-act="goBar" title="小節.拍（タップで小節へ）" aria-label="いまの位置（タップで小節へ移る）">1.1</button>' + // §345 A22
         '<span class="daw-bpm"><button class="modal-btn daw-tbtn" data-act="bpm-">&#x2212;</button>' +
         '<button class="daw-bpm-val" data-act="bpm">BPM <b>' + M.bpmAt(p, 0) + '</b></button>' +
         '<button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
         '<span class="daw-meter">' + m0.num + '/' + m0.den + '</span>' +
-      '</div>' + secBarHtml(p) + // §345 A21
+      '</div>' + secBarHtml(p) + '</div>' + // §345 A21・A22
       '<div class="da-tools"><button class="modal-btn daw-small" data-ar="addTrack">&#xFF0B; トラック</button>' +
         '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
         '<button class="modal-btn daw-small" data-ar="mixer">&#x1F39A;&#xFE0F; ミキサー</button>' +
@@ -1211,7 +1221,7 @@
     return '<div class="daw-transport dstu-tp">' +
       tpButtons(false) + // §345 A20
       '<button class="modal-btn daw-tbtn' + (loopOn ? " daw-on" : "") + '" data-act="loop" title="ループ（' + (loopOn ? "ON" : "OFF") + '）">&#x1F501;</button>' +
-      '<span class="daw-pos" title="小節.拍">1.1</span>' +
+      '<button class="daw-pos" data-act="goBar" title="小節.拍（タップで小節へ）" aria-label="いまの位置（タップで小節へ移る）">1.1</button>' + // §345 A22
       '<span class="daw-bpm dstu-bpm"><button class="modal-btn daw-tbtn" data-act="bpm-">&#x2212;</button><button class="daw-bpm-val" data-act="bpm">BPM <b>' + M.bpmAt(p, 0) + '</b></button><button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
       '<span class="daw-meter">' + m0.num + '/' + m0.den + '</span>' +
       '<button class="modal-btn daw-small" data-ar="undo"' + (st.undo.length ? '' : ' disabled') + ' title="戻す（Ctrl+Z）">&#x21B6; 戻す<small>' + (st.undo.length || '') + '</small></button>' +
@@ -1358,6 +1368,10 @@
     if (stIsSpace(ev) && !mod) {
       keepScroll(root);
       if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else { togglePlay(); } // §345 A20: Space ＝ 一時停止／続きから
+    } else if (!mod && (k === "[" || k === "]" || ev.keyCode === 219 || ev.keyCode === 221)) { // §345 A22: [ ] ＝ 前／次のセクション
+      if (ev.preventDefault) { ev.preventDefault(); }
+      keepScroll(root); secStep(k === "[" || ev.keyCode === 219 ? -1 : 1); tpReveal(root); render(root, ctl);
+      return true;
     } else if (!mod && (k === "," || k === "." || k === "<" || k === ">" || ev.keyCode === 188 || ev.keyCode === 190)) { // §345 A20: , . ＝ 1 小節・Shift で 4 小節
       if (ev.preventDefault) { ev.preventDefault(); }
       keepScroll(root); nudgeBars((k === "," || k === "<" || ev.keyCode === 188 ? -1 : 1) * (ev.shiftKey ? 4 : 1)); tpReveal(root); render(root, ctl);
@@ -5900,6 +5914,8 @@
             redraw(); return;
           }
           if (secAct(v, root, ctl)) { redraw(); return; } // §345 A21: セクションとループ
+          if (v === "follow") { st.follow = !tpFollow(); redraw(); return; } // §345 A22
+          if (v === "goBar") { var nb0 = window.prompt ? window.prompt("何小節目へ？（1〜" + M.tickToBar(p, Math.max(0, M.playEndTick(p) - 1)).bar + "）", String(M.tickToBar(p, tpNow()).bar)) : null; if (nb0 !== null && nb0 !== undefined && isFinite(Number(nb0)) && String(nb0).replace(/\s/g, "") !== "") { tpGo(M.barToTick(p, Math.max(0, Math.round(Number(nb0)) - 1))); tpReveal(root); } redraw(); return; }
           if (v === "play") { togglePlay(); redraw(); return; } // §345 A20: 再生中は ⏸（位置を覚える）
           if (v === "stop") { st.cue = null; st.paused = false; stopPlay(false); redraw(); return; }
           if (v === "b1" || v === "b4" || v === "f1" || v === "f4") { keepScroll(root); nudgeBars((v.charAt(0) === "b" ? -1 : 1) * Number(v.charAt(1))); tpReveal(root); redraw(); return; }
@@ -6075,7 +6091,7 @@
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,
     // §341 9A-2: 再生（テストからも呼ぶ）
-    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, sections2: { step: secStep, loopSet: loopSet, loopSecs: loopSecs, loopBars: loopBars, act: function (v) { var r = st.root ? secAct(v, st.root, st.ctl) : false; if (r) { rerender(); } return r; }, now: function () { var s0 = secNow(project()); return s0.i >= 0 ? s0.list[s0.i] : null; }, bar: function () { return secBarHtml(project()); }, sheet: function () { return secSheetHtml(project()); } } /* §345 A21 */, transport: { pause: pausePlay, resume: resumePlay, toggle: togglePlay, nudge: nudgeBars, go: tpGo, tapX: tpTapX, now: tpNow, pos: posText, paused: function () { return !!st.paused; }, buttons: tpButtons } /* §345 A20 */, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
+    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, follow: function (v) { if (v !== undefined) { st.follow = !!v; } return tpFollow(); } /* §345 A22 */, sections2: { step: secStep, loopSet: loopSet, loopSecs: loopSecs, loopBars: loopBars, act: function (v) { var r = st.root ? secAct(v, st.root, st.ctl) : false; if (r) { rerender(); } return r; }, now: function () { var s0 = secNow(project()); return s0.i >= 0 ? s0.list[s0.i] : null; }, bar: function () { return secBarHtml(project()); }, sheet: function () { return secSheetHtml(project()); } } /* §345 A21 */, transport: { pause: pausePlay, resume: resumePlay, toggle: togglePlay, nudge: nudgeBars, go: tpGo, tapX: tpTapX, now: tpNow, pos: posText, paused: function () { return !!st.paused; }, buttons: tpButtons } /* §345 A20 */, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
     isPlaying: function () { return !!pl; }, player: function () { return pl; }, playTick: playTick, log: function () { return plLog; }, clearLog: function () { plLog = []; },
     tailPending: function () { return !!tailTimer; }
   };
