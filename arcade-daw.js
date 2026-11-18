@@ -3766,10 +3766,94 @@
       return true;
     }
   };
+  // ---------- §345 A23: メロディの補助（コード・スケール・ルート・音域・小節）とステップ入力（ピアノロール）----------
+  var SCALE = { maj: [0, 2, 4, 5, 7, 9, 11], min: [0, 2, 3, 5, 7, 8, 10] };
+  var MEL_RANGE = [60, 81]; // 歌のメロディの目安（C4〜A5）
+  function isMelT(t) { return !!(t && ((t.ext && t.ext.icon === "&#x1F3A4;") || /^メロディ/.test(t.name || ""))); }
+  // 補助の材料（曲は変えない）: キー・スケール・小節ごとのコード（x・幅・名前・構成音・ルート）・音域
+  function rollAssist(p, f) {
+    var M = DM(), X0 = XM(), c = f.clip, o = c.offset || 0, PPQ = M.PPQ, sk = X0 && X0.songKey ? X0.songKey(p) : { key: null, kmode: "maj" }, sc = X0 && X0.songChords ? X0.songChords(p) : {};
+    var key = sk.key === null ? null : sk.key, scale = key === null ? [] : SCALE[sk.kmode === "min" ? "min" : "maj"].map(function (x) { return (x + key) % 12; });
+    var a = { key: key, kmode: sk.kmode, scale: scale, bars: [], range: isMelT(f.track) ? MEL_RANGE : null };
+    var t0 = c.start, t1 = c.start + c.len, b = M.tickToBar(p, t0).bar - 1;
+    while (M.barToTick(p, b) < t1) {
+      var bs = Math.max(t0, M.barToTick(p, b)), be = Math.min(t1, M.barToTick(p, b + 1)), id = sc[b], ch = id && key !== null && X0.chordOf ? X0.chordOf(key, id) : null;
+      a.bars.push({ bar: b, x: Math.round((bs - c.start) / PPQ * RB), w: Math.max(1, Math.round((be - bs) / PPQ * RB)), t: bs - c.start + o, te: be - c.start + o, name: ch ? ch.name : "", pcs: ch ? ch.pcs : [], root: ch ? ch.root : null });
+      b++;
+      if (a.bars.length > 300) { break; }
+    }
+    return a;
+  }
+  // 音符（クリップの中の tick）の種類: "ct"（その小節のコードの音）・"sc"（スケールの音）・"out"（それ以外・使ってよい）
+  function noteKind(a, n) {
+    var pc = ((n[2] % 12) + 12) % 12, i, bar = null;
+    for (i = 0; i < a.bars.length; i++) { if (n[0] >= a.bars[i].t && n[0] < a.bars[i].te) { bar = a.bars[i]; } }
+    if (bar && bar.pcs.indexOf(pc) >= 0) { return pc === bar.root ? "rt" : "ct"; }
+    if (a.scale.indexOf(pc) >= 0) { return "sc"; }
+    return a.key === null ? "" : "out";
+  }
+  function rollAssistOn() { return st.rollAssist === undefined || st.rollAssist === null ? true : !!st.rollAssist; }
+  // 格子の上の補助（スケールの行・コードの音の帯・ルート）
+  function assistGridHtml(a) {
+    var h = "", m, i, k;
+    if (a.key !== null) { for (m = HI; m >= LO; m--) { if (a.scale.indexOf(m % 12) >= 0) { h += '<i class="pr-sc" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;"></i>'; } } }
+    for (i = 0; i < a.bars.length; i++) {
+      var B = a.bars[i]; if (!B.pcs.length) { continue; }
+      for (m = HI; m >= LO; m--) { k = m % 12; if (B.pcs.indexOf(k) >= 0) { h += '<i class="' + (k === B.root ? 'pr-cr' : 'pr-ct') + '" style="left:' + B.x + 'px;width:' + B.w + 'px;top:' + (HI - m) * RH + 'px;height:' + RH + 'px;"></i>'; } }
+    }
+    if (a.range) { h += '<i class="pr-rg" style="top:' + (HI - a.range[1]) * RH + 'px;height:' + (a.range[1] - a.range[0] + 1) * RH + 'px;"></i>'; }
+    return h;
+  }
+  // 上の行（小節の番号・コード名）。縦にスクロールしても見える
+  function assistBarHtml(a, W) {
+    var h = '<div class="pr-cbar"><span class="pr-cbk" style="width:' + KEYW + 'px;">' + (a.key === null ? "" : escHtml(["C", "C#", "D", "E♭", "E", "F", "F#", "G", "A♭", "A", "B♭", "B"][a.key] + (a.kmode === "min" ? "m" : ""))) + '</span>', i;
+    for (i = 0; i < a.bars.length; i++) { var B = a.bars[i]; h += '<span class="pr-cb" style="left:' + (KEYW + B.x) + 'px;width:' + B.w + 'px;"><b>' + (B.bar + 1) + '</b> ' + escHtml(B.name) + '</span>'; }
+    return h + '</div>';
+  }
+  // ---- ステップ入力: 長さ・高さを選ぶ → 入力位置に音符 → 位置が進む ----
+  var STEP_LENS = [[240, "1/16"], [480, "1/8"], [720, "付点1/8"], [960, "1/4"], [1440, "付点1/4"], [1920, "1/2"], [3840, "全"]];
+  function stepOn() { return !!(st.roll && st.roll.step); }
+  function stepStart(f) { var c = f.clip, last = 0, i; for (i = 0; i < c.notes.length; i++) { last = Math.max(last, c.notes[i][0] + Math.max(0, c.notes[i][1])); } st.roll.step = { pos: Math.max(c.offset || 0, Math.min(last, (c.offset || 0) + c.len - 1)), len: 480, oct: isMelT(f.track) ? 5 : 4, last: null }; }
+  function stepHtml(p, f, a) {
+    var s = st.roll.step, M = DM(), c = f.clip, PPQ = M.PPQ, b = M.tickToBar(p, c.start + s.pos - (c.offset || 0)), i, bar = null, NN = ["C", "C#", "D", "E♭", "E", "F", "F#", "G", "A♭", "A", "B♭", "B"];
+    if (a) { for (i = 0; i < a.bars.length; i++) { if (s.pos >= a.bars[i].t && s.pos < a.bars[i].te) { bar = a.bars[i]; } } }
+    var h = '<div class="pr-step"><div class="pr-srow"><b>&#x270D;&#xFE0F; ステップ入力</b> <span class="pr-spos">' + b.bar + '.' + b.beat + (b.sub ? '.' + b.sub : '') + (bar && bar.name ? '・' + escHtml(bar.name) : '') + '</span>' +
+      '<button class="modal-btn daw-tbtn" data-roll="sback" aria-label="入力位置を戻す">&#x25C0;&#xFE0E;</button><button class="modal-btn daw-tbtn" data-roll="srest" aria-label="休符（位置を進める）">休符</button><button class="modal-btn daw-tbtn" data-roll="sundo" aria-label="入れた音を取り消す"' + (s.last ? '' : ' disabled') + '>取消</button></div>';
+    h += '<div class="pr-srow">' + STEP_LENS.map(function (L) { return '<button class="daw-ced-c' + (L[0] === s.len ? ' on' : '') + '" data-roll="slen:' + L[0] + '">' + L[1] + '</button>'; }).join("") + '</div>';
+    h += '<div class="pr-srow pr-skeys"><button class="modal-btn daw-tbtn" data-roll="soct:-1" aria-label="オクターブ下">&#x25BC;</button>';
+    for (i = 0; i < 12; i++) {
+      var m = (s.oct + 1) * 12 + i, k = bar && bar.pcs.indexOf(i) >= 0 ? (i === bar.root ? " pr-skr" : " pr-skc") : (a && a.scale.indexOf(i) >= 0 ? " pr-sks" : " pr-sko");
+      h += '<button class="pr-sk' + (BLACK.indexOf(i) >= 0 ? ' pr-skb' : '') + k + '" data-roll="sk:' + m + '" aria-label="' + noteName(m) + '">' + NN[i] + '<small>' + (s.oct) + '</small></button>';
+    }
+    h += '<button class="modal-btn daw-tbtn" data-roll="soct:1" aria-label="オクターブ上">&#x25B2;</button></div>';
+    return h + '<p class="small">音を押すと、入力位置に ' + escHtml(STEP_LENS.filter(function (L) { return L[0] === s.len; })[0][1]) + ' の音符が入り、位置が進みます（緑 ＝ コードの音・こい緑 ＝ ルート・うす ＝ スケールの音・灰 ＝ それ以外（使ってもよい））。↶ でも 1 音ずつ戻せます。</p></div>';
+  }
+  // ステップ入力のボタン → true
+  function stepAct(v, f) {
+    var s = st.roll && st.roll.step, c = f.clip, M = DM(), m;
+    if (v === "step") { if (s) { st.roll.step = null; } else { stepStart(f); } return true; }
+    if (!s) { return false; }
+    var o = c.offset || 0, end = o + c.len;
+    if ((m = /^slen:(\d+)$/.exec(v))) { s.len = Number(m[1]); return true; }
+    if ((m = /^soct:(-?\d)$/.exec(v))) { s.oct = Math.max(1, Math.min(7, s.oct + Number(m[1]))); return true; }
+    if (v === "srest") { s.pos = Math.min(end - 1, s.pos + s.len); return true; }
+    if (v === "sback") { s.pos = Math.max(o, s.pos - s.len); return true; }
+    if (v === "sundo") { if (s.last && c.notes.indexOf(s.last) >= 0) { var snap0 = snapTracks(); M.noteDelete(c, s.last); pushUndo(snap0); s.pos = s.last[0]; s.last = null; st.roll.sel = null; markDirty(); } return true; }
+    if ((m = /^sk:(\d+)$/.exec(v))) {
+      if (s.pos >= end) { st.msg = "クリップの終わりです（クリップをのばすか、◀ で位置を戻してください）"; return true; }
+      var snap = snapTracks(), n = M.noteAdd(c, s.pos, Number(m[1]), Math.min(s.len, end - s.pos), 0.8);
+      if (!n) { st.msg = "これ以上 音符を足せません"; return true; }
+      pushUndo(snap); st.roll.sel = n; s.last = n; preview(f.track, n[2]); markDirty(); st.msg = "";
+      s.pos = Math.min(end, n[0] + Math.max(1, n[1]));
+      if (s.pos >= end) { st.msg = "クリップの終わりまで入れました"; }
+      return true;
+    }
+    return false;
+  }
   function rollHtml(p, f) {
     var M = DM(), c = f.clip, t = f.track, r = st.roll, o = c.offset || 0, PPQ = M.PPQ, i, m;
     var W = Math.round(c.len / PPQ * RB), H = (HI - LO + 1) * RH, m0 = M.meterAt(p, c.start), barPx = Math.round(M.ticksPerBar(m0) / PPQ * RB), snapPx = Math.max(4, Math.round(r.snap / PPQ * RB));
-    var playing = !!(pl && pl.clip === c.id), sopt = "";
+    var playing = !!(pl && pl.clip === c.id), sopt = "", asOn = rollAssistOn(), as = asOn || stepOn() ? rollAssist(p, f) : null; // §345 A23
     for (i = 0; i < SNAPS.length; i++) { sopt += '<option value="' + SNAPS[i][0] + '"' + (SNAPS[i][0] === r.snap ? " selected" : "") + '>' + SNAPS[i][1] + '</option>'; }
     var h = '<div class="daw pr">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-roll="back">&#x2190; もどる</button><b>&#x270F;&#xFE0F; ' + escHtml((c.ext && c.ext.name) || "クリップ") + '</b>' +
@@ -3782,23 +3866,29 @@
         '<button class="modal-btn daw-tbtn" data-roll="del" title="選んだ音符を消す"' + (r.sel ? '' : ' disabled') + '>&#x1F5D1;&#xFE0F;</button>' +
         '<label class="pr-snap">グリッド <select data-roll-snap="1" aria-label="グリッド">' + sopt + '</select></label>' +
         '<span class="pr-oct"><button class="modal-btn daw-tbtn" data-roll="up" title="1 オクターブ上へ">&#x25B2;</button><button class="modal-btn daw-tbtn" data-roll="down" title="1 オクターブ下へ">&#x25BC;</button></span>' +
+        '<button class="modal-btn daw-tbtn' + (asOn ? ' daw-on' : '') + '" data-roll="assist" title="コード・スケールの補助（' + (asOn ? 'ON' : 'OFF') + '）" aria-label="コードとスケールの補助">&#x1F3BC;</button>' + // §345 A23
+        '<button class="modal-btn daw-tbtn' + (stepOn() ? ' daw-on' : '') + '" data-roll="step" title="ステップ入力" aria-label="ステップ入力">&#x270D;&#xFE0F;</button>' +
       '</div>' +
-      '<div class="pr-wrap"><div class="pr-inner" style="width:' + (KEYW + W) + 'px;height:' + H + 'px;">' +
+      '<div class="pr-wrap"><div class="pr-inner" style="width:' + (KEYW + W) + 'px;height:' + H + 'px;">' + (asOn && as ? assistBarHtml(as, W) : '') +
       '<div class="pr-keys" style="width:' + KEYW + 'px;height:' + H + 'px;">';
     for (m = HI; m >= LO; m--) {
       var bk = BLACK.indexOf(m % 12) >= 0;
-      h += '<div class="pr-key' + (bk ? " pr-black" : "") + (m % 12 === 0 ? " pr-c" : "") + '" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;line-height:' + RH + 'px;">' + noteName(m) + '</div>';
+      h += '<div class="pr-key' + (bk ? " pr-black" : "") + (m % 12 === 0 ? " pr-c" : "") + (asOn && as && as.range && (m < as.range[0] || m > as.range[1]) ? " pr-oor" : "") + '" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;line-height:' + RH + 'px;">' + noteName(m) + '</div>';
     }
     h += '</div><div class="pr-grid" style="width:' + W + 'px;height:' + H + 'px;background-size:' + barPx + 'px 100%,' + RB + 'px 100%,' + snapPx + 'px 100%,100% ' + RH + 'px;">';
     for (m = HI; m >= LO; m--) { if (BLACK.indexOf(m % 12) >= 0) { h += '<i class="pr-rowb" style="top:' + (HI - m) * RH + 'px;height:' + RH + 'px;"></i>'; } }
+    if (asOn && as) { h += assistGridHtml(as); } // §345 A23
     for (i = 0; i < c.notes.length; i++) {
       var n = c.notes[i];
       if (n[2] < LO || n[2] > HI) { continue; }
       var x = Math.round((n[0] - o) / PPQ * RB), w = Math.max(16, Math.round((n[1] > 0 ? n[1] : 240) / PPQ * RB) - 1), sel = n === r.sel;
-      h += '<div class="pr-note' + (sel ? " pr-sel" : "") + (n[1] > 0 ? "" : " pr-zero") + '" data-n="' + i + '" style="left:' + x + 'px;top:' + ((HI - n[2]) * RH + 2) + 'px;width:' + w + 'px;height:' + (RH - 4) + 'px;">' +
+      var nk = asOn && as ? noteKind(as, n) : "";
+      h += '<div class="pr-note' + (sel ? " pr-sel" : "") + (n[1] > 0 ? "" : " pr-zero") + (nk ? " pr-k-" + nk : "") + '" data-n="' + i + '" style="left:' + x + 'px;top:' + ((HI - n[2]) * RH + 2) + 'px;width:' + w + 'px;height:' + (RH - 4) + 'px;">' +
         (sel ? '<i class="pr-handle" data-h="' + i + '"></i>' : '') + '</div>';
     }
     h += '<div class="pr-playhead" style="display:none;"></div></div></div></div>';
+    if (stepOn()) { h += stepHtml(p, f, as); } // §345 A23
+    if (asOn && as) { h += '<p class="small pr-legend"><i class="pr-lg pr-lg-rt"></i>ルート <i class="pr-lg pr-lg-ct"></i>コードの音 <i class="pr-lg pr-lg-sc"></i>スケールの音 <i class="pr-lg pr-lg-out"></i>それ以外（半音・経過音も使ってよい）' + (as.range ? '・点線の中 ＝ 歌の目安の音域' : '') + (as.key === null ? '・曲のキーがないのでスケールは出していません' : '') + '</p>'; }
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') + '<div class="daw-info">' + rollInfo(p, f) + '</div>' +
       '<p class="small pr-help">空いた所をタップ ＝ 音符を足す ／ 音符をドラッグ ＝ 高さと位置 ／ 選んだ音符の右はしをドラッグ ＝ 長さ ／ 選んで &#x1F5D1;&#xFE0F; ＝ 消す ／ &#x21B6; ＝ 戻す ／ 空いた所をスワイプ ＝ スクロール</p></div>';
     return h;
@@ -3846,6 +3936,8 @@
         if (v === "stop") { transportStop(); rerender(); return; }
         if (v === "undo") { edit.undo(); return; }
         if (v === "del") { edit.del(); return; }
+        if (v === "assist") { st.rollAssist = !rollAssistOn(); rerender(); return; } // §345 A23
+        if (v && stepAct(v, f)) { rerender(); return; }
         if (v === "up" || v === "down") { if (wrap) { wrap.scrollTop += (v === "up" ? -12 : 12) * RH; keep(); } }
       };
     }
@@ -6045,6 +6137,7 @@
     reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
+    roll2: { assist: function () { var f = rollClip(); return f ? rollAssist(project(), f) : null; }, kind: function (n) { var f = rollClip(); return f ? noteKind(rollAssist(project(), f), n) : ""; }, act: function (v) { var f = rollClip(); var r0 = f ? stepAct(v, f) : false; if (r0 && st.root) { rerender(); } return r0; }, assistOn: function (v) { if (v !== undefined) { st.rollAssist = !!v; if (st.root) { rerender(); } } return rollAssistOn(); }, state: function () { return st.roll; }, html: function () { var f = rollClip(); return f ? rollHtml(project(), f) : ""; } }, // §345 A23
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
     saveFile: daSave, outName: outName, SAVE_NOTE: SAVE_NOTE, // §345 A16: 保存の窓口（🎄 のマイテンプレートからも）
