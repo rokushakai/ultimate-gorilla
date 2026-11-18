@@ -2101,64 +2101,146 @@
   var KPROF = { maj: [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88], min: [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17] }; // Krumhansl の調の形（一般に知られた値）
   function corr(a, b) { var n = a.length, ma = 0, mb = 0, i, sab = 0, saa = 0, sbb = 0; for (i = 0; i < n; i++) { ma += a[i]; mb += b[i]; } ma /= n; mb /= n; for (i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) * (a[i] - ma); sbb += (b[i] - mb) * (b[i] - mb); } return saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : 0; }
   function confWord(c) { return c >= 0.6 ? "高い" : (c >= 0.3 ? "ふつう" : "低い"); }
-  // chans: Float32Array の配列・sr → { ok, sec, bpm, meter, swing, key, bright, dyn }（どれも { v, conf }）
+  // §345 A14: 推定は「候補」と信頼度で返す（不確かなときは候補を並べて、人が選ぶ）
+  // 返す値: { ok, sec, bpm: { v（4 分音符の BPM）, beat（拍の速さ）, conf, cands: [{ v, s }] }, meter: { v, conf, cands }, swing, key: { v, mode, conf, name, cands: [{ v, mode, s, name }] }, bright, dyn, sig: { beat（拍のはっきりさ 0〜1）, tonal（音の高さのはっきりさ 0〜1）, flat（スペクトルの平たさ） } }
   function styleAnalyze(chans, sr) {
     var n = Math.min(chans[0].length, Math.round(sr * 30)), x = new Float32Array(n), i, k, c;
     for (c = 0; c < chans.length; c++) { for (i = 0; i < n; i++) { x[i] += chans[c][i] / chans.length; } }
+    if (sr > 23000) { // どのサンプリング周波数でも同じ答えになるように、22.05kHz にそろえる（箱形の平均で高い音を落としてから間引く）
+      var r0 = sr / 22050, m2 = Math.floor(n / r0), y = new Float32Array(m2), hw = Math.max(1, Math.round(r0 / 2)), j0;
+      for (j0 = 0; j0 < m2; j0++) { var cpos = Math.round(j0 * r0), sa = 0, ca = 0, z0; for (z0 = cpos - hw; z0 <= cpos + hw; z0++) { if (z0 >= 0 && z0 < n) { sa += x[z0]; ca++; } } y[j0] = ca ? sa / ca : 0; }
+      x = y; n = m2; sr = 22050;
+    }
     if (n < sr * 3) { return { ok: false, why: "3 秒より長い音が必要です" }; }
     var hop = Math.round(sr / 100), nf = Math.floor(n / hop), env = new Float32Array(nf), on = new Float32Array(nf), pk = 0, sumE = 0;
     for (k = 0; k < nf; k++) { var e = 0; for (i = k * hop; i < (k + 1) * hop; i++) { e += x[i] * x[i]; } env[k] = Math.sqrt(e / hop); sumE += env[k]; if (env[k] > pk) { pk = env[k]; } }
     if (pk < 1e-4) { return { ok: false, why: "音が小さすぎます（無音）" }; }
-    for (k = 1; k < nf; k++) { var d = env[k] - env[k - 1]; on[k] = d > 0 ? d / pk : 0; } // 立ち上がり ＝ 音量が増えた分（強い拍ほど大きい）
-    // テンポ（自己相関・10ms ごと）
-    var lagMin = Math.round(6000 / 200), lagMax = Math.round(6000 / 50), ac = [], best = 0, bl = 0, mean = 0;
-    for (var L = lagMin; L <= lagMax; L++) { var s = 0; for (k = 0; k + L < nf; k++) { s += on[k] * on[k + L]; } s /= (nf - L); ac[L] = s; mean += s; var pref = 1 - Math.abs(Math.log(6000 / L / 105)) * 0.35; if (s * pref > best) { best = s * pref; bl = L; } }
+    for (k = 1; k < nf; k++) { var d = env[k] - env[k - 1]; on[k] = d > 0 ? d / pk : 0; }
+    // ---- テンポ（自己相関）と候補（半分・倍・3:2）----
+    var lagMin = 25, lagMax = 135, ac = [], mean = 0, best = 0, bl = 0, L;
+    for (L = lagMin; L <= lagMax; L++) { var s = 0; for (k = 0; k + L < nf; k++) { s += on[k] * on[k + L]; } s /= (nf - L); ac[L] = s; mean += s; }
     mean /= (lagMax - lagMin + 1);
-    var bpm = bl ? 6000 / bl : 0; while (bpm && bpm < 60) { bpm *= 2; } while (bpm > 190) { bpm /= 2; }
-    var bpmConf = bl ? clamp((ac[bl] / Math.max(1e-9, mean) - 1.2) / 3, 0, 1) : 0;
-    // 拍の位置（くし形で合わせる）→ 拍ごとの強さの並び
-    var beatL = 6000 / Math.max(1, bpm), ph = 0, bestP = -1, q, b;
+    function pref(bpm0) { return 1 - Math.abs(Math.log(bpm0 / 105)) * 0.35; }
+    function acAt(lag) { var l0 = Math.round(lag); if (l0 < lagMin || l0 > lagMax) { return 0; } return Math.max(ac[l0] || 0, ac[l0 - 1] || 0, ac[l0 + 1] || 0); }
+    for (L = lagMin; L <= lagMax; L++) { if (ac[L] * pref(6000 / L) > best) { best = ac[L] * pref(6000 / L); bl = L; } }
+    var beat = bl ? 6000 / bl : 0;
+    var period = bl ? ac[bl] / Math.max(1e-9, mean) : 0, beatSig = clamp((period - 1.25) / 2.5, 0, 1);
+    // ---- 拍の位置と、拍の中の分け方（2 つ／3 つ）----
+    var beatL = 6000 / Math.max(1, beat), ph = 0, bestP = -1, q, b;
     for (q = 0; q < Math.round(beatL); q++) { var sp = 0; for (b = q; b < nf; b += beatL) { var bi = Math.round(b); sp += Math.max(on[bi] || 0, on[bi - 1] || 0, on[bi + 1] || 0); } if (sp > bestP) { bestP = sp; ph = q; } }
-    var acc = []; for (b = ph; b < nf; b += beatL) { var bj = Math.round(b); acc.push(Math.max(on[bj] || 0, on[bj - 1] || 0, on[bj + 1] || 0)); }
+    function onAt(t) { var t0 = Math.round(t); return Math.max(on[t0] || 0, on[t0 - 1] || 0, on[t0 + 1] || 0); }
+    var acc = [], s2 = 0, t1 = 0, t2 = 0, nb = 0;
+    for (b = ph; b + beatL < nf; b += beatL) { acc.push(onAt(b)); s2 += onAt(b + beatL / 2); t1 += onAt(b + beatL / 3); t2 += onAt(b + beatL * 2 / 3); nb++; }
     var am = 0; for (q = 0; q < acc.length; q++) { am += acc[q]; } am /= Math.max(1, acc.length);
+    s2 /= Math.max(1, nb); t1 /= Math.max(1, nb); t2 /= Math.max(1, nb);
+    var tmin = Math.min(t1, t2), compound = beatSig > 0.2 && tmin > 0.12 * am && tmin > 2.5 * s2 && tmin > 0.3 * Math.max(t1, t2); // 拍を 3 つに分ける刻み（1/3 と 2/3 の両方に音・1/2 にはほとんど無い）
+    // 鋭さ（立ち上がりのいちばん強いところの平均）: 鼻歌・ゆっくり始まる音は小さい → テンポ・拍子の信頼度を下げる
+    var srt = Array.prototype.slice.call(on).sort(function (u, v) { return v - u; }), nt = Math.max(1, Math.round(nf * 0.03)), sharp = 0; for (q = 0; q < nt; q++) { sharp += srt[q]; } sharp /= nt;
+    var sharpF = clamp((sharp - 0.08) / 0.1, 0.25, 1);
+    // 拍ごとのずれ（予想した拍の時刻と、近くのいちばん強い立ち上がりのちがい）: 不規則な演奏ほど大きい → 信頼度を下げる
+    var offs = 0, no = 0, wn = Math.max(2, Math.round(beatL / 4));
+    for (b = ph; b + beatL < nf; b += beatL) { var c0 = Math.round(b), bk = c0, bv = -1, z; for (z = c0 - wn; z <= c0 + wn; z++) { if ((on[z] || 0) > bv) { bv = on[z] || 0; bk = z; } } if (bv > 0.2 * am) { offs += Math.abs(bk - c0); no++; } }
+    var spread = no ? offs / no / beatL : 1, timeF = clamp(1 - Math.max(0, spread - 0.03) * 8, 0.4, 1); // 10ms の刻みの分（約 3%）は数えない
+    // ---- テンポの候補（4 分音符の BPM で）----
+    var unit = compound ? 1.5 : 1, cl = [], f0, fs = compound ? [1, 2, 0.5, 2 / 3] : [1, 0.5, 2, 1.5, 2 / 3];
+    for (f0 = 0; f0 < fs.length; f0++) { var bb = beat * fs[f0]; if (bb < 40 || bb > 220) { continue; } var sc = acAt(6000 / bb) * pref(bb) / Math.max(1e-9, best); var qv = Math.round(bb * unit); if (qv >= 30 && qv <= 300 && !cl.some(function (z) { return Math.abs(z.v / qv - 1) < 0.03; })) { cl.push({ v: qv, s: r3(clamp(sc, 0, 1)) }); } }
+    cl.sort(function (u, v) { return v.s - u.s; });
+    var bpmV = cl.length ? cl[0].v : Math.round(beat * unit), bpmAmb = cl.length > 1 && cl[1].s >= 0.85;
+    var bpmConf = beatSig * sharpF * timeF * (bpmAmb ? 0.5 : 1);
+    // ---- 拍子（拍の頭の強さの周期）と候補 ----
     function racc(L3) { var s3 = 0, c3 = 0, q3; for (q3 = 0; q3 + L3 < acc.length; q3++) { s3 += (acc[q3] - am) * (acc[q3 + L3] - am); c3++; } return c3 ? s3 / c3 : 0; }
-    var a3 = racc(3), a4 = racc(4), meter = a3 > a4 ? "3/4" : "4/4", meterConf = clamp(Math.abs(a3 - a4) / Math.max(1e-9, Math.abs(a3) + Math.abs(a4)), 0, 1);
-    // スイング（拍の 1/2 と 2/3 の位置の立ち上がり）
-    var half = 0, trip = 0;
-    for (b = ph; b + beatL < nf; b += beatL) { var hb = Math.round(b + beatL / 2), tb = Math.round(b + beatL * 2 / 3); half += Math.max(on[hb] || 0, on[hb - 1] || 0, on[hb + 1] || 0); trip += Math.max(on[tb] || 0, on[tb - 1] || 0, on[tb + 1] || 0); }
-    var swRatio = half > 0 ? trip / half : (trip > 0 ? 3 : 1), swing = trip > 0.02 * acc.length && swRatio > 1.4 ? (swRatio > 2.2 ? 100 : 60) : 0, swingConf = clamp(Math.abs(Math.log(Math.max(0.01, swRatio))) / 1.2, 0, 1) * (half + trip > 0.02 * acc.length ? 1 : 0.3);
-    // 調（FFT 4096 の音の高さの集まり・80〜2000Hz）
-    var N = 4096, re = new Float64Array(N), im = new Float64Array(N), chroma = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], frames = 0, cen = 0, tot = 0;
-    for (var st = 0; st + N <= n && frames < 60; st += Math.max(N, Math.floor((n - N) / 60))) {
+    var a2 = racc(2), a3 = racc(3), a4 = racc(4), mc = [], meter, meterConf;
+    if (compound) {
+      var g2 = Math.max(0, a2), g4 = Math.max(0, a4);
+      mc = [{ v: "6/8", s: 1 }, { v: "12/8", s: r3(g2 > 0 ? clamp(g4 / g2, 0, 1) : 0.5) }, { v: "3/4", s: 0.3 }];
+      meter = "6/8"; meterConf = beatSig * sharpF * timeF * clamp(Math.min(t1, t2) / Math.max(1e-9, s2 * 3), 0.3, 1) * (mc[1].s > 0.85 ? 0.5 : 1);
+    } else {
+      var p3 = Math.max(0, a3), p4 = Math.max(0, a4), tot3 = p3 + p4;
+      meter = a3 > a4 ? "3/4" : "4/4"; meterConf = beatSig * sharpF * timeF * (tot3 > 0 ? 1 - Math.min(p3, p4) / Math.max(p3, p4, 1e-9) : 0);
+      var s68 = r3(clamp(Math.min(t1, t2) / Math.max(1e-9, s2 * 1.4), 0, 1) * 0.6);
+      if (meter === "3/4") { // 3/4 と 6/8: 8 分音符 6 つのうち、3/4 は 1・3・5 番目、6/8 は 1・4 番目が強い
+        var bo = 0, bs = -1, o3, e = [0, 0, 0, 0, 0, 0], nbar = 0, u;
+        for (o3 = 0; o3 < 3; o3++) { var so = 0; for (u = o3; u < acc.length; u += 3) { so += acc[u]; } if (so > bs) { bs = so; bo = o3; } }
+        for (b = ph + bo * beatL; b + 3 * beatL < nf; b += 3 * beatL) { for (u = 0; u < 6; u++) { e[u] += onAt(b + u * beatL / 2); } nbar++; }
+        var e24 = Math.max(e[2], e[4], 1e-9);
+        if (nbar >= 3 && e[3] > 1.15 * Math.max(e[1], e[2], e[4], e[5])) { meter = "6/8"; meterConf *= 0.7; s68 = 1; }
+        else if (nbar >= 3 && e[3] >= 0.8 * e24) { meterConf *= 0.5; s68 = Math.max(s68, 0.8); }
+      }
+      mc = [{ v: meter, s: 1 }, { v: meter === "4/4" ? "3/4" : (meter === "6/8" ? "3/4" : "4/4"), s: r3(tot3 > 0 ? Math.min(p3, p4) / Math.max(p3, p4, 1e-9) : 1) }];
+      if (meter !== "6/8") { mc.push({ v: "6/8", s: s68 }); } else { mc.push({ v: "4/4", s: 0.2 }); }
+    }
+    mc.sort(function (u, v) { return v.s - u.s; });
+    // ---- スイング（2/3 だけ強い ＝ はねる。3 つとも ＝ 6/8 の刻みでスイングではない）----
+    var swRatio = s2 > 0 ? t2 / s2 : (t2 > 0 ? 3 : 1), swing = !compound && t2 > 0.12 * am && swRatio > 1.4 && t1 < 0.3 * t2 ? (swRatio > 2.2 ? 100 : 60) : 0;
+    var swingConf = compound ? 0 : beatSig * sharpF * timeF * clamp(Math.abs(Math.log(Math.max(0.01, swRatio))) / 1.2, 0, 1);
+    // ---- 調: 倍音を基音にまとめた音の高さ（ウクレレ・歌の倍音で属調に引っぱられないように）・前半と後半でそろうか ----
+    var N = 4096, re = new Float64Array(N), im = new Float64Array(N), mag = new Float64Array(N / 2), segs = [[], [], []], frames = 0, cen = 0, tot = 0, flatS = 0, st;
+    var FR = 48, step = Math.max(N / 2, Math.floor((n - N) / FR));
+    for (st = 0; st + N <= n && frames < FR; st += step) {
       for (i = 0; i < N; i++) { var w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)); re[i] = x[st + i] * w; im[i] = 0; }
       fft(re, im); frames++;
-      for (k = 1; k < N / 2; k++) { var f = k * sr / N, pw = re[k] * re[k] + im[k] * im[k], mg = Math.sqrt(pw); cen += f * mg; tot += mg; if (f < 100 || f > 2000) { continue; } mg = pw; var pc = ((Math.round(12 * Math.log(f / 440) / Math.LN2) + 9) % 12 + 12) % 12; chroma[pc] += mg; }
+      var lg = 0, ar = 0, cnt = 0;
+      for (k = 1; k < N / 2; k++) { var f = k * sr / N, mg = Math.sqrt(re[k] * re[k] + im[k] * im[k]); mag[k] = mg; cen += f * mg; tot += mg; if (f >= 100 && f <= 4000) { lg += Math.log(mg + 1e-12); ar += mg; cnt++; } }
+      if (cnt && ar > 0) { flatS += Math.exp(lg / cnt) / (ar / cnt); }
+      var ch = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], m0;
+      for (m0 = 45; m0 <= 88; m0++) { // 音の高さ m0 の強さ ＝ 基音と倍音（1〜5）の強さの和（上ほど小さく）・倍音の位置にある音から引く
+        var sal = 0, h, f1 = 440 * Math.pow(2, (m0 - 69) / 12);
+        for (h = 1; h <= 5; h++) { var kb = Math.round(f1 * h * N / sr); if (kb >= N / 2 - 1) { break; } sal += Math.pow(0.8, h - 1) * Math.max(mag[kb], mag[kb - 1], mag[kb + 1]); }
+        var sub = 0, kb2 = Math.round(f1 / 2 * N / sr), kb3 = Math.round(f1 / 3 * N / sr); // 自分が下の音の倍音（2 倍・3 倍）なら、その分は数えない
+        if (kb2 > 2) { sub = Math.max(sub, 0.6 * Math.max(mag[kb2], mag[kb2 - 1], mag[kb2 + 1])); } if (kb3 > 2) { sub = Math.max(sub, 0.5 * Math.max(mag[kb3], mag[kb3 - 1], mag[kb3 + 1])); }
+        var sv = Math.max(0, sal - sub * 1.5); ch[(m0 % 12)] += sv * sv;
+      }
+      var tf = 0; for (k = 0; k < 12; k++) { tf += ch[k]; }
+      if (tf > 0) { for (k = 0; k < 12; k++) { ch[k] /= tf; } segs[Math.min(2, Math.floor(st / (n / 3)))].push(ch); } // 1 フレームずつ同じ重さ（大きい音のところだけで決めない）
     }
-    var bestK = { s: -2 }, second = -2, kk, mode;
-    for (kk = 0; kk < 12; kk++) { for (mode in KPROF) { var rot = []; for (i = 0; i < 12; i++) { rot.push(KPROF[mode][(i - kk + 12) % 12]); } var cc = corr(chroma, rot); if (cc > bestK.s) { second = bestK.s; bestK = { s: cc, key: kk, mode: mode }; } else if (cc > second) { second = cc; } } }
-    var keyConf = clamp((bestK.s - second) * 6 + (bestK.s - 0.5), 0, 1);
-    // 明るさ・強弱
-    var centroid = tot ? cen / tot : 0, bright = centroid > 1800 ? "bright" : "calm", brightConf = clamp(Math.abs(Math.log(Math.max(1, centroid) / 1800)) / 0.8, 0, 1);
+    function sumCh(list) { var o = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], a, j; for (a = 0; a < list.length; a++) { for (j = 0; j < 12; j++) { o[j] += list[a][j]; } } return o; }
+    function keyRank(chr) { var out = [], kk, mode, j; for (kk = 0; kk < 12; kk++) { for (mode in KPROF) { var rot = []; for (j = 0; j < 12; j++) { rot.push(KPROF[mode][(j - kk + 12) % 12]); } out.push({ v: kk, mode: mode, s: corr(chr, rot) }); } } out.sort(function (u, v) { return v.s - u.s; }); return out; }
+    var chroma = sumCh(segs[0].concat(segs[1], segs[2])), kr = keyRank(chroma), mx = 0, strong = 0;
+    for (k = 0; k < 12; k++) { mx = Math.max(mx, chroma[k]); } for (k = 0; k < 12; k++) { if (chroma[k] > mx * 0.3) { strong++; } }
+    var flat = frames ? flatS / frames : 1, tonal = clamp((0.5 - flat) / 0.4, 0, 1) * (strong >= 3 && strong <= 9 ? 1 : 0.2);
+    var agree = 0, used = 0; for (k = 0; k < 3; k++) { if (segs[k].length >= 3) { used++; var ks = keyRank(sumCh(segs[k]))[0]; if (ks.v === kr[0].v && ks.mode === kr[0].mode) { agree++; } } }
+    var stab = used ? agree / used : 0, margin = kr[0].s - kr[1].s;
+    var keyConf = clamp(tonal * (0.35 + margin * 5) * (0.4 + 0.6 * stab) * clamp((kr[0].s - 0.4) * 3, 0, 1), 0, 1);
+    var kc = []; for (k = 0; k < kr.length && kc.length < 3; k++) { kc.push({ v: kr[k].v, mode: kr[k].mode, s: r3(clamp(kr[k].s / Math.max(1e-9, kr[0].s), 0, 1)), name: KEYS[kr[k].v] + (kr[k].mode === "min" ? " マイナー" : " メジャー") }); }
+    // ---- 明るさ・強弱 ----
+    var centroid = tot ? cen / tot : 0, bright = centroid > 1800 ? "bright" : "calm", brightConf = clamp(Math.abs(Math.log(Math.max(1, centroid) / 1800)) / 0.8, 0, 1) * (tonal > 0.2 ? 1 : 0.3);
     var meanE = sumE / nf, varE = 0; for (k = 0; k < nf; k++) { varE += (env[k] - meanE) * (env[k] - meanE); } var dyn = Math.sqrt(varE / nf) / Math.max(1e-9, meanE);
-    return { ok: true, sec: Math.round(n / sr * 10) / 10, bpm: { v: Math.round(bpm), conf: r3(bpmConf) }, meter: { v: meter, conf: r3(meterConf), a3: r3(a3), a4: r3(a4) }, swing: { v: swing, conf: r3(swingConf), ratio: r3(swRatio) }, key: { v: bestK.key, mode: bestK.mode, conf: r3(keyConf), name: KEYS[bestK.key] + (bestK.mode === "min" ? " マイナー" : " メジャー") }, bright: { v: bright, conf: r3(brightConf), centroid: Math.round(centroid) }, dyn: r3(dyn) };
+    return { ok: true, sec: Math.round(n / sr * 10) / 10,
+      bpm: { v: bpmV, beat: Math.round(beat), conf: r3(bpmConf), cands: cl.slice(0, 3) },
+      meter: { v: meter, conf: r3(clamp(meterConf, 0, 1)), cands: mc, a2: r3(a2), a3: r3(a3), a4: r3(a4), sub: { half: r3(s2), t1: r3(t1), t2: r3(t2) } },
+      swing: { v: swing, conf: r3(swingConf), ratio: r3(swRatio) },
+      key: { v: kr[0].v, mode: kr[0].mode, conf: r3(keyConf), name: kc[0].name, cands: kc, stab: r3(stab) },
+      bright: { v: bright, conf: r3(brightConf), centroid: Math.round(centroid) }, dyn: r3(dyn),
+      sig: { beat: r3(beatSig), tonal: r3(tonal), flat: r3(flat), sharp: r3(sharp), spread: r3(spread) } };
   }
   // 解析 → おすすめの条件（信頼度が低いものは入れない・あとで手で直せる）
   function analysisToCond(an, c) {
     c = c || matchCond();
     if (!an || !an.ok) { return c; }
-    if (an.bpm.conf >= 0.2 && an.bpm.v) { c.bpm = an.bpm.v; }
-    if (an.meter.conf >= 0.3) { c.meter = an.meter.v; }
-    if (an.key.conf >= 0.3) { c.key = an.key.v; c.kmode = an.key.mode; }
-    if (an.bright.conf >= 0.3) { c.bright = an.bright.v; }
-    if (an.swing.v >= 60 && an.swing.conf >= 0.4 && c.moods.indexOf("cool") < 0) { c.moods.push("cool"); }
+    // §345 A14: 確かなものだけ入れる（迷うものは候補のボタンで選ぶ）
+    if (an.bpm.conf >= 0.6 && an.bpm.v) { c.bpm = an.bpm.v; }
+    if (an.meter.conf >= 0.6) { c.meter = an.meter.v; }
+    if (an.key.conf >= 0.55) { c.key = an.key.v; c.kmode = an.key.mode; }
+    if (an.bright.conf >= 0.4) { c.bright = an.bright.v; }
+    if (an.swing.v >= 60 && an.swing.conf >= 0.6 && c.moods.indexOf("cool") < 0) { c.moods.push("cool"); }
     return c;
   }
   function analysisHtml(an) {
     if (!an) { return ""; }
     if (!an.ok) { return '<p class="small dxm-warn">&#x26A0;&#xFE0F; ' + esc(an.why) + '</p>'; }
-    return '<div class="dxm-prev small"><b>解析の結果（' + an.sec + ' 秒・目安です。下の条件で直せます）</b><br>' +
-      'テンポ BPM ' + an.bpm.v + '（信頼度 ' + confWord(an.bpm.conf) + '）・拍子 ' + an.meter.v + ' の候補（' + confWord(an.meter.conf) + '）・' + (an.swing.v ? 'スイングの傾き（' + confWord(an.swing.conf) + '）' : 'ストレート寄り（' + confWord(an.swing.conf) + '）') + '<br>' +
-      '調の候補 ' + an.key.name + '（' + confWord(an.key.conf) + '）・' + (an.bright.v === "bright" ? "明るい音" : "落ち着いた音") + '（' + confWord(an.bright.conf) + '）・強弱 ' + (an.dyn > 0.8 ? "大きい" : (an.dyn > 0.4 ? "ふつう" : "小さい")) + '</div>';
+    var c = matchCond(), x = '<div class="dxm-prev small"><b>解析の結果（' + an.sec + ' 秒・目安です。下の条件で直せます）</b>';
+    if (an.sig && an.sig.beat < 0.2 && an.sig.tonal < 0.2) { x += '<br>&#x26A0;&#xFE0F; 拍も音の高さもはっきりしません（ノイズ・小さな音かもしれません）。条件には入れていません'; }
+    // §345 A14: 候補のボタン（信頼度が低いものは条件に入れない・押すと入る）
+    function row(lbl, list, conf, cur, fmt) {
+      if (!list || !list.length) { return ""; }
+      return '<div class="dxm-cand"><span>' + lbl + '（信頼度 ' + confWord(conf) + '）</span>' + list.map(function (z) { return chip("data-xmcand", fmt(z)[0], fmt(z)[1], fmt(z)[0] === cur); }).join("") + '</div>';
+    }
+    x += row("テンポの候補", an.bpm.cands && an.bpm.cands.length ? an.bpm.cands : [{ v: an.bpm.v }], an.bpm.conf, "bpm:" + c.bpm, function (z) { return ["bpm:" + z.v, "BPM " + z.v]; });
+    x += row("拍子の候補", an.meter.cands && an.meter.cands.length ? an.meter.cands : [{ v: an.meter.v }], an.meter.conf, "meter:" + c.meter, function (z) { return ["meter:" + z.v, z.v]; });
+    x += row("調の候補", an.key.cands && an.key.cands.length ? an.key.cands : [{ v: an.key.v, mode: an.key.mode, name: an.key.name }], an.key.conf, "key:" + c.key + ":" + c.kmode, function (z) { return ["key:" + z.v + ":" + z.mode, esc(z.name)]; });
+    x += '<div>' + (an.swing.v ? 'スイングの傾き（' + confWord(an.swing.conf) + '）' : 'ストレート寄り（' + confWord(an.swing.conf) + '）') + '・' + (an.bright.v === "bright" ? "明るい音" : "落ち着いた音") + '（' + confWord(an.bright.conf) + '）・強弱 ' + (an.dyn > 0.8 ? "大きい" : (an.dyn > 0.4 ? "ふつう" : "小さい")) + '</div>';
+    x += '<div class="small">半分・倍のテンポ、3/4 と 6/8 は取りちがえやすいので、ちがうときは候補を押してください。合成の音で確かめた方法で、実際の演奏での当たり方は確かめていません。</div>';
+    return x + '</div>';
   }
   // マイク（端末の中だけ・保存しない）
   var micS = { st: null, sp: null, src: null, buf: [], n: 0, sr: 44100, on: false, timer: null };
@@ -2940,6 +3022,13 @@
           if (ui.mydel !== v) { ui.mydel = v; re(); return; }
           var dr = myDel(v); ui.mydel = ""; pvStop(); ui.msg = dr.ok ? "マイテンプレートを 1 つ消しました" : "&#x26A0;&#xFE0F; " + esc(dr.why); re(); return;
         }
+        if ((v = el.getAttribute("data-xmcand"))) { // §345 A14: 解析の候補を条件に
+          var mc2 = matchCond(), cv = v.split(":");
+          if (cv[0] === "bpm" && Number(cv[1]) >= 20 && Number(cv[1]) <= 400) { mc2.bpm = Math.round(Number(cv[1])); }
+          else if (cv[0] === "meter" && ["4/4", "3/4", "6/8", "12/8"].indexOf(cv[1]) >= 0) { mc2.meter = cv[1]; }
+          else if (cv[0] === "key" && Number(cv[1]) >= 0 && Number(cv[1]) <= 11 && (cv[2] === "maj" || cv[2] === "min")) { mc2.key = Math.round(Number(cv[1])); mc2.kmode = cv[2]; }
+          pvStop(); re(); return;
+        }
         if ((v = el.getAttribute("data-xmc"))) {
           var mc = matchCond(), kv = v.split(":"), key0 = kv[0], val = kv.slice(1).join(":");
           if (key0 === "mood") { var mi = mc.moods.indexOf(val); if (mi >= 0) { mc.moods.splice(mi, 1); } else if (MOODS.some(function (m) { return m[0] === val; })) { mc.moods.push(val); } }
@@ -3160,7 +3249,7 @@
     trimOverlaps: trimOverlaps,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
     myCapture: myCapture, myList: myList, mySave: mySave, myDel: myDel, myGet: myGet, myProject: myProject, myItems: myItems, myExport: myExport, myImport: myImport, myAdd: myAdd, myTab: myTab, MY_KEY: MY_KEY,
-    styleAnalyze: styleAnalyze, analysisToCond: analysisToCond, micStop: micStop, KPROF: KPROF,
+    styleAnalyze: styleAnalyze, analysisToCond: analysisToCond, analysisHtml: analysisHtml, micStop: micStop, KPROF: KPROF,
     styleScore: styleScore, styleRank: styleRank, matchProject: matchProject, matchTab: matchTab,
     METERS: METERS, patFor: patFor, meterPlan: meterPlan, meterProject: meterProject,
     GROOVES: GROOVES, swingTicks: swingTicks, applyGroove: applyGroove, songGroove: songGroove, groovePlan: groovePlan, grooveApply: grooveApply, grooveTab: grooveTab,
