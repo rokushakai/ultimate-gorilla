@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.89** |
+| 現在バージョン | **v2.90** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.90] 🦍 A13・制作の流れの検証**（§345）: `tests/test-workflow.js`（`check(p, mel)` の点検・9 段階 ＋ 別のキー ＋ 復元のあとのグルーヴ）。新しい機能をつなぐときは、ここに 1 段階足して点検 0 を守る。次は A14（Style Match の精度）
 - **[v2.89] 🦍 A12・トラック別 WAV（ステム）**（§345）: `UGDaw.stem`（`plan`・`one(tid, cb)`・`all(cb)`・`project`・`html`）。`renderSong(cb, { proj, noSend })`。テストは CRLF の作業ツリーでもそのまま通る（`tests/harness.js`）。Segmentation fault の記録と調べ方は GAME_DESIGN §345「開発環境の記録」。次は A13（制作の流れの検証）
 - **[v2.88] 🦍 A11-2・Cubasis の改善**（§345）: `MIDI_DRUM_EXTRA`（83・84）・`midiDrumNotes` で読みもどしても消えない。§345 の A1〜A11 は一通り終わり。残りは耳・iPhone・Cubasis の実機の確認と、ステム WAV（設計だけ・ユーザーの確認待ち）
 - **[v2.87] 🦍 A11-1・My Templates**（§345）: `myCapture`・`mySave`／`myList`／`myDel`（localStorage `ultimateGorillaMyTplV1`・20 個まで）・`myProject(item, key)`・`myExport`／`myImport`／`myAdd`（JSON `{ kind: "ug-mytpl", v: 1 }`）・`myTab`（🗂️ マイ）。次は A11-2（Cubasis の改善）
