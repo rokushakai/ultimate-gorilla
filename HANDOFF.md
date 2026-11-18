@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v2.96** |
+| 現在バージョン | **v2.97** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v2.97] 🦍 A20・トランスポート**（§345）: `pausePlay`／`resumePlay`／`togglePlay`・`nudgeBars(n)`・`tpGo(tick)`・`tpTapX(x)`・`tpButtons`・`st.paused`（`UGDaw.transport`）。**外から呼ぶ一覧の行に「//」を書かない**（行の残りが消える）。次は A21（セクションとループ）
 - **[v2.96] 🦍 A19・その場でコードを変える**（§345）: DAW 側 `st.ced`・`cedOpen`／`cedHtml`／`cedClick`／`cedBind`（`UGDaw.ced` でテストから）。🎄 側 `chordParse(p, 名前)`・`chordCands`・`chordQuickPlan(p, 小節, id, how)`・`chordQuickApply`。次は A20（トランスポート）
 - **[v2.95] 🦍 A18・Style Match の使いやすさ**（§345）: 12/8・倍のテンポの候補・テンポで迷うと拍子も 0.5 まで・スイングと 12/8・½／×2 のボタン（`data-xmcand="bpm:N"`）・録音中の秒（`.dxm-mtime`）。§345 A15〜A18 はここまで。残りは実機（iPhone・Cubasis 3）と本物の演奏での確認
 - **[v2.94] 🦍 A17・Cubasis に渡す**（§345）: `UGDaw.handoff`（`info`・`text`・`html`）・`stemAll(cb, { kind, extra })`（ZIP にほかのファイルも）。シートの MIDI のトラックの番号は `midiExport().info.tracks` の順 ＋ 1（1 本目はテンポ）。次は A18（Style Match の使いやすさ）

@@ -810,6 +810,69 @@
     if (miss) { st.msg = "素材がない音声のクリップ " + miss + " 個は鳴りません（クリップを選んで「🔗 素材を選びなおす」）"; }
     return true;
   }
+  // ---------- §345 A20: トランスポート（一時停止・再開・小節の移動・タイムラインで移動）----------
+  // ⏸: いまの位置（tick）を覚えて止める（予約した音・タイマー・出口を片づける。音量を 0 にするだけではない）→ ▶ でその位置から。⏹ は前と同じ（頭へ・覚えた位置も消す）
+  // 位置は tick（小節・拍）で覚えるので、止めているあいだにテンポ・音符を変えても、同じ音楽の位置から鳴りはじめる。録音中はどれも使えない（伴奏の時計を変えない）
+  function pausePlay() {
+    if (!pl || rec.state !== "idle") { return false; }
+    if (pl.clip) { stopPlay(true); return true; } // クリップだけの再生は、ふつうの停止と同じ
+    var t = Math.max(0, Math.floor(playTick()));
+    stopPlay(true);
+    st.cue = t; st.pos = t; st.paused = true;
+    drawHead(); dgLog("pause", { at: t });
+    return true;
+  }
+  function resumePlay() { if (pl || rec.state !== "idle") { return false; } st.paused = false; return startPlay(); }
+  function togglePlay() { if (pl && !pl.clip) { return pausePlay(); } return resumePlay(); }
+  // いまの位置（再生中は鳴っているところ・止まっていれば ▶ のはじまり）
+  function tpNow() { return pl && !pl.clip ? Math.max(0, Math.floor(playTick())) : Math.max(0, Math.round(st.cue || 0)); }
+  // n 小節うごく（戻るときは、小節の途中なら その小節の頭へ。拍子が変わる曲でも小節で数える）
+  function nudgeBars(n) {
+    var p = project(), M = DM(); if (!p || rec.state !== "idle") { return false; }
+    var t = tpNow(), b = M.tickToBar(p, t), bar0 = b.bar - 1, last = Math.max(0, M.tickToBar(p, Math.max(0, M.playEndTick(p) - 1)).bar - 1);
+    var mid = t > M.barToTick(p, bar0) + (pl ? DM().PPQ / 2 : 0); // 再生中は小節の頭から少しあとなら「その小節の頭」を 1 つめに数える
+    var to = n < 0 && mid ? bar0 + n + 1 : bar0 + n;
+    to = Math.max(0, Math.min(last, to));
+    return tpGo(M.barToTick(p, to));
+  }
+  // ある位置へ（再生中なら古い予約を消して、そこから鳴らす・止まっていれば ▶ のはじまりに）
+  function tpGo(tick) {
+    var p = project(), M = DM(); if (!p) { return false; }
+    tick = Math.max(0, Math.min(Math.round(Number(tick) || 0), Math.max(0, M.playEndTick(p) - 1)));
+    if (rec.state !== "idle") { st.anote = "録音中は移れません"; return false; }
+    var lr = M.loopRange(p), loopOn = !!(p.practice && p.practice.loopOn);
+    if (loopOn && (tick < lr.a || tick >= lr.b) && pl && !pl.clip) { st.anote = "&#x1F501; ループの外なので、ループの頭から鳴らします（ループを切ると、どこからでも）"; tick = lr.a; }
+    st.cue = tick; st.pos = tick;
+    if (pl && !pl.clip) { startPlay({ from: tick }); } else { drawHead(); }
+    dgLog("go", { to: tick, playing: !!pl });
+    return true;
+  }
+  // 目盛りのタップ → いちばん近い拍の頭
+  function tpTapX(x) { var p = project(), M = DM(), tk = Math.max(0, x) / pxb * M.PPQ, bt = M.ticksPerBar(M.meterAt(p, tk)) / Math.max(1, M.meterAt(p, tk).num); return tpGo(Math.round(tk / bt) * bt); }
+  // 動いた先が見えるように横へスクロール（描きなおす前に st.scroll へ）
+  function tpReveal(root) {
+    var arr = root && root.querySelector ? root.querySelector(".daw-arr") : null; if (!arr || !arr.clientWidth) { return; }
+    var x = tickX(tpNow()), vis = Math.max(40, arr.clientWidth - HEAD_W), sl = arr.scrollLeft || 0;
+    if (x < sl || x > sl + vis - 24) { try { arr.scrollLeft = Math.max(0, x - Math.round(vis / 3)); } catch (e) {} }
+    st.scroll = arr.scrollLeft || 0;
+  }
+  // 目盛り（小節の番号の行）をタップ → その拍へ（モバイル・PC Studio）
+  function tpBind(root, ctl) {
+    var rl = root && root.querySelector ? root.querySelector(".daw-ruler-row .daw-ruler") : null;
+    if (!rl) { return; }
+    rl.onclick = function (ev) { var rc = rl.getBoundingClientRect ? rl.getBoundingClientRect() : null; if (!rc) { return; } var arr = root.querySelector(".daw-arr"); if (arr) { st.scroll = arr.scrollLeft || 0; } if (tpTapX(ev.clientX - rc.left)) { render(root, ctl); } };
+  }
+  function posText() { var p = project(), M = DM(), b = M.tickToBar(p, tpNow()); return b.bar + "." + b.beat; }
+  // ボタン（モバイル・PC Studio で同じ）
+  function tpButtons(big) {
+    var cls = "modal-btn daw-tbtn" + (big ? " daw-tbig" : ""), playing = pl && !pl.clip;
+    return '<button class="' + cls + '" data-act="b4" title="4 小節戻る（Shift＋,）" aria-label="4 小節戻る">&#x23EA;</button>' +
+      '<button class="' + cls + '" data-act="b1" title="1 小節戻る（,）" aria-label="1 小節戻る">&#x25C0;&#xFE0E;</button>' +
+      '<button class="' + cls + (playing ? " daw-on" : "") + '" data-act="play" title="' + (playing ? "一時停止（Space）" : (st.paused ? "続きから再生（Space）" : "再生（Space）")) + '" aria-label="' + (playing ? "一時停止" : "再生") + '">' + (playing ? "&#x23F8;&#xFE0F;" : "&#x25B6;&#xFE0F;") + '</button>' +
+      '<button class="' + cls + '" data-act="f1" title="1 小節進む（.）" aria-label="1 小節進む">&#x25B6;&#xFE0E;</button>' +
+      '<button class="' + cls + '" data-act="f4" title="4 小節進む（Shift＋.）" aria-label="4 小節進む">&#x23E9;</button>' +
+      '<button class="' + cls + '" data-act="stop" title="停止（頭へ）" aria-label="停止">&#x23F9;&#xFE0F;</button>';
+  }
   // 🔁: 再生中でも切りかえる（ON: ループの終わりで頭へ・OFF: 曲の終わりで止まる）
   function setLoop(on) {
     var p = project(), M = DM();
@@ -947,9 +1010,7 @@
       '<div class="daw-top"><b>&#x1F39A;&#xFE0F; ゴリラDAW</b><span class="daw-pname"></span>' +
       '<button class="modal-btn daw-small" data-back="1">&#x1F579;&#xFE0F; メニューへ</button></div>' +
       projBarHtml(p) +
-      '<div class="daw-transport">' +
-        '<button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-act="play" title="再生">&#x25B6;&#xFE0F;</button>' +
-        '<button class="modal-btn daw-tbtn" data-act="stop" title="停止（頭へ）">&#x23F9;&#xFE0F;</button>' +
+      '<div class="daw-transport">' + tpButtons(false) + // §345 A20
         '<button class="modal-btn daw-tbtn' + (loopOn ? " daw-on" : "") + '" data-act="loop" title="ループ（' + (loopOn ? "ON" : "OFF") + '）">&#x1F501;</button>' +
         '<span class="daw-pos" title="小節.拍">1.1</span>' +
         '<span class="daw-bpm"><button class="modal-btn daw-tbtn" data-act="bpm-">&#x2212;</button>' +
@@ -986,7 +1047,7 @@
       var cx = tickX(fsel.clip.start), cw = tickX(fsel.clip.start + fsel.clip.len) - cx, vis = arr.clientWidth - HEAD_W;
       if (cx < arr.scrollLeft || cx + Math.min(cw, vis) > arr.scrollLeft + vis) { try { arr.scrollLeft = Math.max(0, cx - 24); st.scroll = arr.scrollLeft; } catch (e2) {} }
     }
-    bind(root, ctl); cedBind(root, ctl);
+    bind(root, ctl); cedBind(root, ctl); tpBind(root, ctl);
     if (fo) { var sf = root.querySelector(".dstu"); if (sf && sf.focus) { try { sf.focus({ preventScroll: true }); } catch (e3) {} } }
     drawHead();
   }
@@ -1076,8 +1137,7 @@
   function stTransportHtml(p) {
     var M = DM(), m0 = M.meterAt(p, 0), loopOn = !!(p.practice && p.practice.loopOn), z = Math.round(ZOOMS[vw.zoom] * 100);
     return '<div class="daw-transport dstu-tp">' +
-      '<button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-act="play" title="再生（Space）">&#x25B6;&#xFE0F;</button>' +
-      '<button class="modal-btn daw-tbtn" data-act="stop" title="停止（頭へ）">&#x23F9;&#xFE0F;</button>' +
+      tpButtons(false) + // §345 A20
       '<button class="modal-btn daw-tbtn' + (loopOn ? " daw-on" : "") + '" data-act="loop" title="ループ（' + (loopOn ? "ON" : "OFF") + '）">&#x1F501;</button>' +
       '<span class="daw-pos" title="小節.拍">1.1</span>' +
       '<span class="daw-bpm dstu-bpm"><button class="modal-btn daw-tbtn" data-act="bpm-">&#x2212;</button><button class="daw-bpm-val" data-act="bpm">BPM <b>' + M.bpmAt(p, 0) + '</b></button><button class="modal-btn daw-tbtn" data-act="bpm+">&#xFF0B;</button></span>' +
@@ -1225,7 +1285,11 @@
     var k = ev.key, mod = ev.ctrlKey || ev.metaKey;
     if (stIsSpace(ev) && !mod) {
       keepScroll(root);
-      if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else if (pl) { stopPlay(false); } else { startPlay(); }
+      if (rec.state === "rec" || rec.state === "ask") { recStop("btn"); } else { togglePlay(); } // §345 A20: Space ＝ 一時停止／続きから
+    } else if (!mod && (k === "," || k === "." || k === "<" || k === ">" || ev.keyCode === 188 || ev.keyCode === 190)) { // §345 A20: , . ＝ 1 小節・Shift で 4 小節
+      if (ev.preventDefault) { ev.preventDefault(); }
+      keepScroll(root); nudgeBars((k === "," || k === "<" || ev.keyCode === 188 ? -1 : 1) * (ev.shiftKey ? 4 : 1)); tpReveal(root); render(root, ctl);
+      return true;
     } else if ((k === "z" || k === "Z" || ev.keyCode === 90) && mod && !ev.shiftKey) {
       if (ev.preventDefault) { ev.preventDefault(); }
       keepScroll(root);
@@ -5763,8 +5827,9 @@
             if (v === "stop") { recStop("btn"); } else { st.msg = "録音中は ▶・ループ・BPM を変えられません（⏹ か「■ 停止して置く」で止めてから）"; }
             redraw(); return;
           }
-          if (v === "play") { startPlay(); redraw(); return; }
-          if (v === "stop") { st.cue = null; stopPlay(false); redraw(); return; }
+          if (v === "play") { togglePlay(); redraw(); return; } // §345 A20: 再生中は ⏸（位置を覚える）
+          if (v === "stop") { st.cue = null; st.paused = false; stopPlay(false); redraw(); return; }
+          if (v === "b1" || v === "b4" || v === "f1" || v === "f4") { keepScroll(root); nudgeBars((v.charAt(0) === "b" ? -1 : 1) * Number(v.charAt(1))); tpReveal(root); redraw(); return; }
           if (v === "loop") { setLoop(!(p.practice && p.practice.loopOn)); markDirty(); redraw(); return; }
           if (v === "bpm-" || v === "bpm+") { changeBpm(M.bpmAt(p, 0) + (v === "bpm+" ? 1 : -1)); markDirty(); redraw(); return; }
           if (v === "bpm" && window.prompt) {
@@ -5937,7 +6002,7 @@
     presetList: presetList,
     PX_BEAT: PX_BEAT, LOOK: LOOK,
     // §341 9A-2: 再生（テストからも呼ぶ）
-    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
+    play: startPlay, stop: function () { stopPlay(false); }, pump: pump, transport: { pause: pausePlay, resume: resumePlay, toggle: togglePlay, nudge: nudgeBars, go: tpGo, tapX: tpTapX, now: tpNow, pos: posText, paused: function () { return !!st.paused; }, buttons: tpButtons } /* §345 A20 */, setLoop: setLoop, setBpm: changeBpm, updateMix: updateMix,
     isPlaying: function () { return !!pl; }, player: function () { return pl; }, playTick: playTick, log: function () { return plLog; }, clearLog: function () { plLog = []; },
     tailPending: function () { return !!tailTimer; }
   };
