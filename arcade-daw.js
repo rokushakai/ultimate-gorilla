@@ -3850,6 +3850,134 @@
     }
     return false;
   }
+  // ---------- §345 A24: フレーズの道具（範囲を選んで コピー・貼り付け・複製・移調・オクターブ・拍で移動・長さ・強さ）----------
+  // 選んだ音符 ＝ st.roll.ms（いま開いているクリップの音符の参照）。クリップボード ＝ st.clip2 ＝ { notes: [[曲の位置からの差 tick, 長さ, 高さ, 強さ]], span, bar0（はじまりの小節）, meter, from（トラック名） }
+  function phrMs(c) { var r = st.roll; if (!r.ms) { r.ms = []; } r.ms = r.ms.filter(function (n) { return c.notes.indexOf(n) >= 0; }); return r.ms; }
+  function absT(c, n) { return c.start + n[0] - (c.offset || 0); }
+  // 選ぶ: 全部 ／ 小節 a〜b（クリップの中・曲の小節の番号）／ タップで 1 音ずつ
+  function phrSelBars(p, c, a, b) { var M = DM(), t0 = M.barToTick(p, Math.max(0, a - 1)), t1 = M.barToTick(p, Math.max(a, b)); st.roll.ms = c.notes.filter(function (n) { var t = absT(c, n); return t >= t0 && t < t1; }); return st.roll.ms.length; }
+  // コピー（曲は変えない）: はじまり ＝ 選んだいちばん前の音の小節の頭
+  function phrCopy(p, c, t) {
+    var M = DM(), ms = phrMs(c); if (!ms.length) { return { ok: false, why: "音符を選んでください" }; }
+    var first = Math.min.apply(null, ms.map(function (n) { return absT(c, n); })), b0 = M.tickToBar(p, first).bar - 1, base = M.barToTick(p, b0), end = 0;
+    var notes = ms.map(function (n) { var rel = absT(c, n) - base; end = Math.max(end, rel + Math.max(1, n[1])); return [rel, n[1], n[2], n[3]]; }).sort(function (x, y) { return x[0] - y[0] || x[2] - y[2]; });
+    var span = Math.max(M.barToTick(p, M.tickToBar(p, base + end - 1).bar) - base, M.ticksPerBar(M.meterAt(p, base)));
+    st.clip2 = { notes: notes, span: span, bar0: b0, meter: M.meterAt(p, base), from: t ? t.name : "", n: notes.length };
+    return { ok: true, n: notes.length, bars: Math.round(span / M.ticksPerBar(M.meterAt(p, base)) * 100) / 100 };
+  }
+  // 貼り付け（曲の位置 at へ・そのトラックの、その位置にある MIDI のクリップに入れる。クリップをまたいでもよい）
+  // mode: "mix"（重ねる）｜"replace"（その範囲の音を消してから）。→ { ok, added, dropped（クリップがない・終わりをこえる）, trimmed（同じ高さの重なりを切った）, meterWarn }
+  function phrPaste(p, t, at, cb, mode) {
+    var M = DM(); cb = cb || st.clip2;
+    if (!cb || !cb.notes.length) { return { ok: false, why: "コピーした音符がありません" }; }
+    if (!t || M.isAudio(t) || t.kind !== "midi") { return { ok: false, why: "MIDI のトラックに貼り付けてください" }; }
+    var end = at + cb.span, clips = t.clips.filter(function (c) { return c.type === "midi" && c.start < end && c.start + c.len > at; });
+    if (!clips.length) { return { ok: false, why: "その場所に、このトラックのクリップがありません" }; }
+    var mw = false, b, m0 = cb.meter, bars = M.tickToBar(p, Math.max(at, end - 1)).bar - M.tickToBar(p, at).bar + 1;
+    for (b = 0; b < bars; b++) { var mm = M.meterAt(p, M.barToTick(p, M.tickToBar(p, at).bar - 1 + b)); if (mm.num !== m0.num || mm.den !== m0.den) { mw = true; } }
+    var r = { ok: true, added: 0, dropped: 0, trimmed: 0, removed: 0, meterWarn: mw, clips: clips.length };
+    if (mode === "replace") { clips.forEach(function (c) { var before = c.notes.length; c.notes = c.notes.filter(function (n) { var x = absT(c, n); return x < at || x >= end; }); r.removed += before - c.notes.length; }); }
+    var added = [];
+    cb.notes.forEach(function (n) {
+      var x = at + n[0], c = null, i;
+      for (i = 0; i < clips.length; i++) { if (x >= clips[i].start && x < clips[i].start + clips[i].len) { c = clips[i]; } }
+      if (!c) { r.dropped++; return; }
+      var lt = x - c.start + (c.offset || 0), d = n[1] > 0 ? Math.min(n[1], (c.offset || 0) + c.len - lt) : n[1];
+      if (c.notes.length >= 4000) { r.dropped++; return; }
+      var nn = [lt, d, n[2], n[3]]; c.notes.push(nn); added.push({ c: c, n: nn }); r.added++;
+    });
+    clips.forEach(function (c) { r.trimmed += fixOverlaps(c); c.notes.sort(function (x, y) { return x[0] - y[0] || x[2] - y[2]; }); });
+    r.notes = added;
+    return r;
+  }
+  // 同じ高さの重なり: 前の音を、次の音の頭で切る（同じ位置の同じ高さは 1 つに）→ 切った数
+  function fixOverlaps(c) {
+    var by = {}, cut = 0, i, k;
+    c.notes.forEach(function (n) { (by[n[2]] = by[n[2]] || []).push(n); });
+    for (k in by) { if (!by.hasOwnProperty(k)) { continue; } var L = by[k].sort(function (x, y) { return x[0] - y[0]; }); for (i = 1; i < L.length; i++) { var a = L[i - 1], b2 = L[i]; if (a[1] > 0 && a[0] + a[1] > b2[0]) { if (a[0] === b2[0]) { a[1] = -1; } else { a[1] = b2[0] - a[0]; } cut++; } } }
+    var before = c.notes.length; c.notes = c.notes.filter(function (n) { return n[1] !== -1; }); return cut + 0 * (before - c.notes.length);
+  }
+  // 移調: 半音（semis）／ スケールに沿って（deg 度・選んだときだけ）
+  function phrTranspose(p, c, semis, deg) {
+    var ms = phrMs(c), X0 = XM(), sk = X0 && X0.songKey ? X0.songKey(p) : { key: null };
+    if (!ms.length) { return { ok: false, why: "音符を選んでください" }; }
+    if (deg) {
+      if (sk.key === null) { return { ok: false, why: "曲のキーがないので、スケールに沿った移調はできません（半音で動かしてください）" }; }
+      var sc = (sk.kmode === "min" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11]).map(function (x) { return (x + sk.key) % 12; });
+      var out = ms.map(function (n) { var m = n[2], steps = Math.abs(deg), dir = deg > 0 ? 1 : -1, g = 0; while (steps > 0 && g++ < 48) { m += dir; if (sc.indexOf(((m % 12) + 12) % 12) >= 0) { steps--; } } return m; });
+      if (out.some(function (m) { return m < 0 || m > 127; })) { return { ok: false, why: "音域の外に出る音があります" }; }
+      ms.forEach(function (n, i) { n[2] = out[i]; });
+    } else {
+      if (ms.some(function (n) { return n[2] + semis < 0 || n[2] + semis > 127; })) { return { ok: false, why: "音域の外（0〜127）に出る音があります" }; }
+      ms.forEach(function (n) { n[2] += semis; });
+    }
+    var tr = fixOverlaps(c);
+    return { ok: true, n: ms.length, trimmed: tr };
+  }
+  // 拍で移動（クリップの外に出る音があれば動かさない）
+  function phrMove(c, dt) {
+    var ms = phrMs(c), o = c.offset || 0; if (!ms.length) { return { ok: false, why: "音符を選んでください" }; }
+    var bad = ms.filter(function (n) { return n[0] + dt < o || n[0] + dt + Math.max(0, n[1]) > o + c.len; }).length;
+    if (bad) { return { ok: false, why: "クリップの外に出る音が " + bad + " 個あるので、動かしません（クリップをのばすか、貼り付けを使ってください）" }; }
+    ms.forEach(function (n) { n[0] += dt; });
+    var tr = fixOverlaps(c); c.notes.sort(function (x, y) { return x[0] - y[0] || x[2] - y[2]; });
+    return { ok: true, n: ms.length, trimmed: tr };
+  }
+  function phrLen(c, d) { var ms = phrMs(c), o = c.offset || 0; if (!ms.length) { return { ok: false, why: "音符を選んでください" }; } ms.forEach(function (n) { n[1] = Math.max(1, Math.min(d, o + c.len - n[0])); }); var tr = fixOverlaps(c); return { ok: true, n: ms.length, trimmed: tr }; }
+  function phrVel(c, v, add) { var ms = phrMs(c); if (!ms.length) { return { ok: false, why: "音符を選んでください" }; } ms.forEach(function (n) { n[3] = Math.round(Math.max(0.05, Math.min(1, add ? n[3] + v : v)) * 1000) / 1000; }); return { ok: true, n: ms.length }; }
+  // パネル
+  function phrHtml(p, f) {
+    var c = f.clip, ms = phrMs(c), M = DM(), r = st.roll, cb = st.clip2, L = M.sectionsOf(p), i;
+    var b0 = M.tickToBar(p, c.start).bar, b1 = M.tickToBar(p, c.start + c.len - 1).bar;
+    var h = '<div class="pr-step pr-phr"><div class="pr-srow"><b>&#x2702;&#xFE0F; フレーズ</b> <span class="small">選んだ音 <b>' + ms.length + '</b> 個</span>' +
+      '<button class="daw-ced-c" data-roll="pall">全部</button><button class="daw-ced-c' + (r.pick ? ' on' : '') + '" data-roll="ppick">タップで選ぶ</button><button class="daw-ced-c" data-roll="pnone">選ばない</button></div>';
+    h += '<div class="pr-srow small">小節 <input type="number" class="pr-pa" min="' + b0 + '" max="' + b1 + '" value="' + (r.pa || b0) + '" aria-label="はじまりの小節"> 〜 <input type="number" class="pr-pb" min="' + b0 + '" max="' + b1 + '" value="' + (r.pb || b1) + '" aria-label="終わりの小節"> <button class="daw-ced-c" data-roll="pbars">この小節を選ぶ</button></div>';
+    h += '<div class="pr-srow"><button class="daw-ced-c" data-roll="pcopy"' + (ms.length ? '' : ' disabled') + '>&#x1F4CB; コピー</button><button class="daw-ced-c" data-roll="pdup"' + (ms.length ? '' : ' disabled') + '>&#x2795; 後ろに複製</button>' +
+      (cb ? '<span class="small">コピー中: ' + cb.n + ' 音（' + escHtml(cb.from) + '・' + (cb.bar0 + 1) + ' 小節目から）</span>' : '') + '</div>';
+    if (cb) {
+      h += '<div class="pr-srow small">貼り付け先 <select class="pr-pto" aria-label="貼り付け先">';
+      for (i = 0; i < L.length; i++) { h += '<option value="s' + i + '">' + escHtml(L[i].name) + '（' + M.tickToBar(p, L[i].tick).bar + ' 小節目）</option>'; }
+      h += '<option value="bar">小節の番号で →</option></select> <input type="number" class="pr-pbar" min="1" value="' + (r.pbar || b0) + '" aria-label="貼り付ける小節"> <select class="pr-pmode" aria-label="重なり"><option value="replace">その範囲を置きかえる</option><option value="mix">重ねる</option></select> <button class="daw-ced-c" data-roll="ppaste">貼り付け</button></div>';
+    }
+    h += '<div class="pr-srow"><span class="small">移調</span><button class="daw-ced-c" data-roll="pt:-1">−1</button><button class="daw-ced-c" data-roll="pt:1">＋1</button><button class="daw-ced-c" data-roll="pt:-12">−8va</button><button class="daw-ced-c" data-roll="pt:12">＋8va</button><button class="daw-ced-c" data-roll="pd:-1" title="スケールに沿って 1 度下">スケール▼</button><button class="daw-ced-c" data-roll="pd:1" title="スケールに沿って 1 度上">スケール▲</button></div>';
+    h += '<div class="pr-srow"><span class="small">移動</span><button class="daw-ced-c" data-roll="pm:-960">−1拍</button><button class="daw-ced-c" data-roll="pm:960">＋1拍</button><button class="daw-ced-c" data-roll="pm:-240">−1/16</button><button class="daw-ced-c" data-roll="pm:240">＋1/16</button></div>';
+    h += '<div class="pr-srow"><span class="small">長さ</span>' + STEP_LENS.map(function (L2) { return '<button class="daw-ced-c" data-roll="pl:' + L2[0] + '">' + L2[1] + '</button>'; }).join("") + '</div>';
+    h += '<div class="pr-srow"><span class="small">強さ</span><button class="daw-ced-c" data-roll="pv:0.5">弱</button><button class="daw-ced-c" data-roll="pv:0.75">中</button><button class="daw-ced-c" data-roll="pv:1">強</button><button class="daw-ced-c" data-roll="pva:-0.1">−</button><button class="daw-ced-c" data-roll="pva:0.1">＋</button></div>';
+    return h + (r.pmsg ? '<p class="small">' + r.pmsg + '</p>' : '') + '<p class="small">どれも ↶ で戻せます。スケール▲▼ は、曲のキーのスケールの音だけを数えて動かします（選んだときだけ）。</p></div>';
+  }
+  // ボタン → true
+  function phrAct(v, f, root) {
+    var r = st.roll, c = f.clip, p = project(), M = DM(), m, res = null, snap;
+    function did(x, msg) { if (x.ok) { pushUndo(snap); markDirty(); r.pmsg = msg; } else { r.pmsg = "&#x26A0;&#xFE0F; " + escHtml(x.why); } }
+    if (v === "phr") { r.phr = !r.phr; r.pmsg = ""; return true; }
+    if (!r.phr) { return false; }
+    if (v === "pall") { r.ms = c.notes.slice(); r.pmsg = ""; return true; }
+    if (v === "pnone") { r.ms = []; r.pick = false; return true; }
+    if (v === "ppick") { r.pick = !r.pick; return true; }
+    if (v === "pbars") { var ia = root.querySelector(".pr-pa"), ib = root.querySelector(".pr-pb"); r.pa = Math.round(Number(ia && ia.value)) || 1; r.pb = Math.round(Number(ib && ib.value)) || r.pa; r.pmsg = phrSelBars(p, c, r.pa, r.pb) + " 音を選びました（" + r.pa + "〜" + r.pb + " 小節）"; return true; }
+    if (v === "pcopy") { res = phrCopy(p, c, f.track); r.pmsg = res.ok ? res.n + " 音をコピーしました（" + res.bars + " 小節）。貼り付け先を選んでください" : "&#x26A0;&#xFE0F; " + escHtml(res.why); return true; }
+    if (v === "pdup" || v === "ppaste") {
+      if (v === "pdup") { res = phrCopy(p, c, f.track); if (!res.ok) { r.pmsg = "&#x26A0;&#xFE0F; " + escHtml(res.why); return true; } }
+      var at, sel = root.querySelector(".pr-pto"), mode = (root.querySelector(".pr-pmode") || {}).value || "replace", L = M.sectionsOf(p);
+      if (v === "pdup") { at = M.barToTick(p, st.clip2.bar0) + st.clip2.span; mode = "replace"; }
+      else if (sel && /^s\d+$/.test(sel.value) && L[Number(sel.value.substring(1))]) { at = L[Number(sel.value.substring(1))].tick; }
+      else { var ib2 = root.querySelector(".pr-pbar"); r.pbar = Math.max(1, Math.round(Number(ib2 && ib2.value)) || 1); at = M.barToTick(p, r.pbar - 1); }
+      snap = xmHost.snapAll ? xmHost.snapAll() : snapTracks();
+      res = phrPaste(p, f.track, at, st.clip2, mode);
+      if (res.ok && !res.added) { res = { ok: false, why: "入れられる音がありませんでした（その場所にクリップがない・終わりをこえる）" }; }
+      if (res.ok) { r.ms = (res.notes || []).filter(function (x) { return x.c === c; }).map(function (x) { return x.n; }); } // 貼り付けた音を選んでおく（最後の数音だけ変えやすく）
+      did(res, res.ok ? res.added + " 音を " + M.tickToBar(p, at).bar + " 小節目から" + (v === "pdup" ? "複製" : "貼り付け") + "ました" + (res.removed ? "（置きかえた音 " + res.removed + "）" : "") + (res.dropped ? "・クリップの外の " + res.dropped + " 音は入れていません" : "") + (res.trimmed ? "・同じ高さの重なり " + res.trimmed + " か所を切りました" : "") + (res.meterWarn ? "・&#x26A0;&#xFE0F; 拍子がちがう小節にかかります（位置は tick のまま）" : "") + "（元の音符はそのまま・↶ で戻せます）" : "");
+      return true;
+    }
+    snap = snapTracks();
+    if ((m = /^pt:(-?\d+)$/.exec(v))) { res = phrTranspose(p, c, Number(m[1]), 0); did(res, res.ok ? res.n + " 音を " + (Number(m[1]) > 0 ? "＋" : "") + m[1] + " 半音" : ""); return true; }
+    if ((m = /^pd:(-?\d+)$/.exec(v))) { res = phrTranspose(p, c, 0, Number(m[1])); did(res, res.ok ? res.n + " 音をスケールに沿って " + (Number(m[1]) > 0 ? "上" : "下") + "へ 1 度" : ""); return true; }
+    if ((m = /^pm:(-?\d+)$/.exec(v))) { res = phrMove(c, Number(m[1])); did(res, res.ok ? res.n + " 音を動かしました" : ""); return true; }
+    if ((m = /^pl:(\d+)$/.exec(v))) { res = phrLen(c, Number(m[1])); did(res, res.ok ? res.n + " 音の長さをそろえました" : ""); return true; }
+    if ((m = /^pv:([\d.]+)$/.exec(v))) { res = phrVel(c, Number(m[1]), false); did(res, res.ok ? res.n + " 音の強さをそろえました" : ""); return true; }
+    if ((m = /^pva:(-?[\d.]+)$/.exec(v))) { res = phrVel(c, Number(m[1]), true); did(res, res.ok ? res.n + " 音の強さを変えました" : ""); return true; }
+    return false;
+  }
   function rollHtml(p, f) {
     var M = DM(), c = f.clip, t = f.track, r = st.roll, o = c.offset || 0, PPQ = M.PPQ, i, m;
     var W = Math.round(c.len / PPQ * RB), H = (HI - LO + 1) * RH, m0 = M.meterAt(p, c.start), barPx = Math.round(M.ticksPerBar(m0) / PPQ * RB), snapPx = Math.max(4, Math.round(r.snap / PPQ * RB));
@@ -3868,6 +3996,7 @@
         '<span class="pr-oct"><button class="modal-btn daw-tbtn" data-roll="up" title="1 オクターブ上へ">&#x25B2;</button><button class="modal-btn daw-tbtn" data-roll="down" title="1 オクターブ下へ">&#x25BC;</button></span>' +
         '<button class="modal-btn daw-tbtn' + (asOn ? ' daw-on' : '') + '" data-roll="assist" title="コード・スケールの補助（' + (asOn ? 'ON' : 'OFF') + '）" aria-label="コードとスケールの補助">&#x1F3BC;</button>' + // §345 A23
         '<button class="modal-btn daw-tbtn' + (stepOn() ? ' daw-on' : '') + '" data-roll="step" title="ステップ入力" aria-label="ステップ入力">&#x270D;&#xFE0F;</button>' +
+        '<button class="modal-btn daw-tbtn' + (r.phr ? ' daw-on' : '') + '" data-roll="phr" title="フレーズ（範囲・コピー・移調など）" aria-label="フレーズの道具">&#x2702;&#xFE0F;</button>' + // §345 A24
       '</div>' +
       '<div class="pr-wrap"><div class="pr-inner" style="width:' + (KEYW + W) + 'px;height:' + H + 'px;">' + (asOn && as ? assistBarHtml(as, W) : '') +
       '<div class="pr-keys" style="width:' + KEYW + 'px;height:' + H + 'px;">';
@@ -3882,12 +4011,13 @@
       var n = c.notes[i];
       if (n[2] < LO || n[2] > HI) { continue; }
       var x = Math.round((n[0] - o) / PPQ * RB), w = Math.max(16, Math.round((n[1] > 0 ? n[1] : 240) / PPQ * RB) - 1), sel = n === r.sel;
-      var nk = asOn && as ? noteKind(as, n) : "";
-      h += '<div class="pr-note' + (sel ? " pr-sel" : "") + (n[1] > 0 ? "" : " pr-zero") + (nk ? " pr-k-" + nk : "") + '" data-n="' + i + '" style="left:' + x + 'px;top:' + ((HI - n[2]) * RH + 2) + 'px;width:' + w + 'px;height:' + (RH - 4) + 'px;">' +
+      var nk = asOn && as ? noteKind(as, n) : "", inMs = r.ms && r.ms.indexOf(n) >= 0;
+      h += '<div class="pr-note' + (sel ? " pr-sel" : "") + (inMs ? " pr-ms" : "") + (n[1] > 0 ? "" : " pr-zero") + (nk ? " pr-k-" + nk : "") + '" data-n="' + i + '" style="left:' + x + 'px;top:' + ((HI - n[2]) * RH + 2) + 'px;width:' + w + 'px;height:' + (RH - 4) + 'px;">' +
         (sel ? '<i class="pr-handle" data-h="' + i + '"></i>' : '') + '</div>';
     }
     h += '<div class="pr-playhead" style="display:none;"></div></div></div></div>';
     if (stepOn()) { h += stepHtml(p, f, as); } // §345 A23
+    if (r.phr) { h += phrHtml(p, f); } // §345 A24
     if (asOn && as) { h += '<p class="small pr-legend"><i class="pr-lg pr-lg-rt"></i>ルート <i class="pr-lg pr-lg-ct"></i>コードの音 <i class="pr-lg pr-lg-sc"></i>スケールの音 <i class="pr-lg pr-lg-out"></i>それ以外（半音・経過音も使ってよい）' + (as.range ? '・点線の中 ＝ 歌の目安の音域' : '') + (as.key === null ? '・曲のキーがないのでスケールは出していません' : '') + '</p>'; }
     h += (st.msg ? '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(st.msg) + '</div>' : '') + '<div class="daw-info">' + rollInfo(p, f) + '</div>' +
       '<p class="small pr-help">空いた所をタップ ＝ 音符を足す ／ 音符をドラッグ ＝ 高さと位置 ／ 選んだ音符の右はしをドラッグ ＝ 長さ ／ 選んで &#x1F5D1;&#xFE0F; ＝ 消す ／ &#x21B6; ＝ 戻す ／ 空いた所をスワイプ ＝ スクロール</p></div>';
@@ -3937,6 +4067,7 @@
         if (v === "undo") { edit.undo(); return; }
         if (v === "del") { edit.del(); return; }
         if (v === "assist") { st.rollAssist = !rollAssistOn(); rerender(); return; } // §345 A23
+        if (v && phrAct(v, f, root)) { rerender(); return; } // §345 A24
         if (v && stepAct(v, f)) { rerender(); return; }
         if (v === "up" || v === "down") { if (wrap) { wrap.scrollTop += (v === "up" ? -12 : 12) * RH; keep(); } }
       };
@@ -3955,6 +4086,7 @@
       if (nEl) {
         var n = c.notes[Number(nEl.getAttribute("data-n"))];
         if (!n) { return; }
+        if (r.phr && r.pick) { var mi = phrMs(c).indexOf(n); if (mi >= 0) { r.ms.splice(mi, 1); } else { r.ms.push(n); } rerender(); if (e.preventDefault) { e.preventDefault(); } return; } // §345 A24: タップで選ぶ
         if (r.sel !== n) { var prev = grid.querySelector(".pr-sel"); if (prev) { prev.className = prev.className.replace(" pr-sel", ""); } nEl.className += " pr-sel"; r.sel = n; }
         drag = { kind: hEl !== null ? "len" : "move", n: n, el: nEl, x0: e.clientX, y0: e.clientY, t0: n[0], m0: n[2], d0: n[1] > 0 ? n[1] : 240, snap: snapTracks(), moved: false, nt: n[0], nm: n[2], nd: n[1] };
         try { grid.setPointerCapture(e.pointerId); } catch (e2) {}
@@ -6137,6 +6269,7 @@
     reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
+    phrase: { copy: function () { var f = rollClip(); return f ? phrCopy(project(), f.clip, f.track) : null; }, paste: function (t, at, mode) { return phrPaste(project(), t, at, st.clip2, mode); }, sel: function (a) { if (a === "all") { var f = rollClip(); st.roll.ms = f ? f.clip.notes.slice() : []; } else if (a && a.length !== undefined) { st.roll.ms = a; } return st.roll ? phrMs(rollClip().clip) : []; }, act: function (v) { var f = rollClip(); if (!f || !st.root) { return false; } var r0 = phrAct(v, f, st.root); if (r0) { rerender(); } return r0; }, clip: function () { return st.clip2; }, fix: fixOverlaps, bars: function (a, b) { var f = rollClip(); return f ? phrSelBars(project(), f.clip, a, b) : 0; } }, // §345 A24
     roll2: { assist: function () { var f = rollClip(); return f ? rollAssist(project(), f) : null; }, kind: function (n) { var f = rollClip(); return f ? noteKind(rollAssist(project(), f), n) : ""; }, act: function (v) { var f = rollClip(); var r0 = f ? stepAct(v, f) : false; if (r0 && st.root) { rerender(); } return r0; }, assistOn: function (v) { if (v !== undefined) { st.rollAssist = !!v; if (st.root) { rerender(); } } return rollAssistOn(); }, state: function () { return st.roll; }, html: function () { var f = rollClip(); return f ? rollHtml(project(), f) : ""; } }, // §345 A23
     closeRoll: function () { closeRoll(); if (st.root) { rerender(); } }, roll: function () { return st.roll; }, edit: edit, resync: resync,
     // §341 9A-4: 保存・読みこみ（テストからも呼ぶ）。reload ＝ ページの読みなおしと同じ（メモリの曲を捨てて、保存から開く）
