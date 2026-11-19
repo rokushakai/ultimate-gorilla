@@ -2680,6 +2680,10 @@
       }
     }
     var rp = energyRecPlan(p), rn = rp.reduce(function (a, q) { return a + (q.ok ? q.n : 0); }, 0);
+    // §345 A27: 演奏の表情（トラックごと）
+    var M2 = DM(), hl = p.tracks.filter(function (t) { return t.kind === "midi" && !M2.isAudio(t) && t.clips.some(function (c) { return c.notes && c.notes.length; }); });
+    x += '<p class="small dxm-thead">&#x1F3AD; 演奏の表情（トラックごと・元の音符は変えません。細かくはピアノロール・ステップ入力の &#x1F3AD;）</p><ul class="dxm-hum small">' + hl.map(function (t) { var hh = M2.humOf(t); return '<li>' + esc(t.name) + '：' + (hh ? '<b>' + esc(M2.HUM_PRESETS[hh.pre].name) + ' ' + hh.amt + '%</b>' : 'なし') + '</li>'; }).join("") + '</ul>';
+    x += '<div class="dxm-go"><button class="modal-btn dxm-b" data-xm="fHum">&#x1F3AD; 伴奏にまとめて ナチュラル 50%</button>' + (hl.some(function (t) { return M2.humOf(t); }) ? '<button class="modal-btn dxm-b" data-xm="fHumOff">表情をまとめて外す</button>' : '') + '</div><p class="small">メロディ・ハモりのトラックは変えません（ピアノロールで 1 つずつ）。↶ 1 回で戻せます。</p>';
     x += '<div class="dxm-go"><button class="modal-btn dxm-b" data-xm="fRec">&#x2728; おすすめの起伏にする（' + L.length + ' セクション・伴奏 ' + rn + ' つ）</button></div><p class="small">イントロ・A メロはひかえめ、B メロで少し上げ、サビでふやし、ラストサビをいちばん厚く、間奏・アウトロはひかえめにします（↶ 1 回で戻せます）。</p>';
     return x + '</div>';
   }
@@ -3415,6 +3419,7 @@
         }
         if (v === "fCancel") { ui.fsec = ""; ui.flvl = 0; ui.fplan = null; pvStop(); re(); return; } // §345 A26
         if (v === "fAdopt") { pvStop(); var fpl = energyPlan(p, ui.fsec, ui.flvl); if (!fpl.ok || !fpl.n) { ui.msg = "&#x26A0;&#xFE0F; " + esc(fpl.why || "作りなおす伴奏がありません"); re(); return; } var fsn = h.snapAll ? h.snapAll() : h.snap(), far = energyApply(p, fpl); ui.msg = "「" + esc(fpl.sec.name) + "」を " + ENERGY[fpl.lvl - 1][1] + " にしました（伴奏 " + far.n + " つ・↶ で戻せます）"; ui.fsec = ""; ui.flvl = 0; h.commit(fsn, ui.msg); return; }
+        if (v === "fHum" || v === "fHumOff") { pvStop(); var hsn = h.snapAll ? h.snapAll() : h.snap(), hn = 0; p.tracks.forEach(function (t) { if (t.kind !== "midi" || DM().isAudio(t)) { return; } if (v === "fHumOff") { if (t.ext && t.ext.hum) { delete t.ext.hum; hn++; } return; } if (/^メロディ/.test(t.name) || (t.ext && (t.ext.icon === "&#x1F3A4;" || t.ext.harm))) { return; } if (!t.clips.some(function (c) { return c.ext && c.ext.xgen; })) { return; } t.ext = t.ext || {}; t.ext.hum = { pre: "natural", amt: 50, seed: 1 }; hn++; }); if (!hn) { ui.msg = "変えるトラックがありません"; re(); return; } ui.msg = (v === "fHum" ? "伴奏 " + hn + " トラックに ナチュラル 50% を使いました" : hn + " トラックの表情を外しました") + "（元の音符はそのまま・↶ で戻せます）"; h.commit(hsn, ui.msg); return; } // §345 A27
         if (v === "fRec") { pvStop(); var rps = energyRecPlan(p), fsn2 = h.snapAll ? h.snapAll() : h.snap(), nn = 0; rps.forEach(function (q) { if (q.ok) { nn += energyApply(p, q).n; } }); ui.msg = "おすすめの起伏にしました（" + rps.length + " セクション・伴奏 " + nn + " つ・↶ 1 回で戻せます）"; h.commit(fsn2, ui.msg); return; }
         if (v === "hAdd") { pvStop(); var hpl = harmPlan(p, ui.hsrc, ui.hkind, ui.hsnd); if (!hpl.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(hpl.why); re(); return; } var hsn = h.snapAll ? h.snapAll() : h.snap(), har = harmApply(p, hpl); if (!har.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(har.why); re(); return; } ui.msg = "「" + esc(har.track.name) + "」を足しました（" + hpl.stats.notes + " 音・元のメロディはそのまま・↶ で戻せます。ピアノロールで直せます）"; h.commit(hsn, ui.msg, har.track.id); return; } // §345 A25
         if (v === "mySaveFile" && ui.myBlob && window.UGDaw && window.UGDaw.saveFile) { ui.mySaved = ""; window.UGDaw.saveFile(ui.myBlob, ui.myFile, function (r) { ui.mySaved = r; if (h.isView()) { re(); } }); return; }

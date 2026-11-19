@@ -159,23 +159,113 @@
   }
   // 曲の tick の [from, to) に始まる音符（クリップの中だけ・長さはクリップの終わりで切る）。tick の早い順
   // → { tick, end（d＝0 なら tick と同じ）, d, m, v, track（ID）, clip（ID）}
-  function noteEvents(p, from, to) {
-    var out = [], i, j, k;
+  // §345 A27: 演奏の表情（トラックの ext.hum）があれば tick・end・d・v に表情をつける（どの音を出すかは元の位置で決める・rel は元のまま）。hov ＝ { トラックの ID: hum か null }（試聴の A／B）
+  function noteEvents(p, from, to, hov) {
+    var out = [], i, j, k, bars = null;
     for (i = 0; p && i < p.tracks.length; i++) {
       var t = p.tracks[i];
       if (t.kind !== "midi") { continue; }
+      var hm = hov && hov.hasOwnProperty(t.id) ? humClean(hov[t.id]) : humOf(t);
       for (j = 0; j < t.clips.length; j++) {
-        var c = t.clips[j], cs = c.start, ce = c.start + c.len;
+        var c = t.clips[j], cs = c.start, ce = c.start + c.len, hp = null;
         if (c.type !== "midi" || ce <= from || cs >= to) { continue; }
+        if (hm && c.notes.length) { if (!bars || bars[bars.length - 1] <= ce) { bars = humBars(p, ce + PPQ * 8); } hp = humPlanClip(p, t, c, hm, bars); }
         for (k = 0; k < c.notes.length; k++) {
           var n = c.notes[k], rel = n[0] - (c.offset || 0), at = cs + rel;
           if (rel < 0 || rel >= c.len || at < from || at >= to) { continue; }
+          if (hp && hp[k]) { out.push({ tick: hp[k].tick, end: hp[k].end, d: hp[k].d, m: n[2], v: hp[k].v, track: t.id, clip: c.id, ti: i, rel: rel }); continue; }
           out.push({ tick: at, end: n[1] > 0 ? Math.min(at + n[1], ce) : at, d: n[1], m: n[2], v: n[3], track: t.id, clip: c.id, ti: i, rel: rel });
         }
       }
     }
     out.sort(function (a, b) { return a.tick - b.tick || a.ti - b.ti || a.m - b.m; });
     return out;
+  }
+
+  // ---------- §345 A27 演奏の表情（ヒューマナイズ）----------
+  // トラックの ext.hum = { pre, amt（1〜100）, seed（1〜9999）}。元の音符は変えず、noteEvents（再生・WAV・ステム・MIDI）で表情をつける。ない・量 0 ＝ いまとまったく同じ
+  // プリセット（量 100% のとき）: vj 強さのゆらぎ・tj 位置のゆらぎ（tick）・push 位置のかたより（tick・＋は後ろ）・lj 長さのゆらぎ（割合）・lb 長さのかたより・acc 拍のアクセント・vb 強さのかたより（割合）
+  var HUM_PRESETS = {
+    natural: { name: "ナチュラル", en: "Natural", vj: 0.08, tj: 14, push: 0, lj: 0.06, lb: 0, acc: 0.08, vb: 0 },
+    tight: { name: "タイト", en: "Tight", vj: 0.04, tj: 5, push: 0, lj: 0.03, lb: -0.02, acc: 0.06, vb: 0 },
+    laid: { name: "レイドバック", en: "Laid Back", vj: 0.06, tj: 12, push: 18, lj: 0.05, lb: 0.03, acc: 0.05, vb: -0.02 },
+    energetic: { name: "エナジェティック", en: "Energetic", vj: 0.07, tj: 9, push: -8, lj: 0.05, lb: -0.08, acc: 0.12, vb: 0.05 },
+    ballad: { name: "ソフトバラード", en: "Soft Ballad", vj: 0.05, tj: 16, push: 8, lj: 0.05, lb: 0.06, acc: 0.05, vb: -0.08 }
+  };
+  var HUM_ORDER = ["natural", "tight", "laid", "energetic", "ballad"];
+  function humClean(h) {
+    if (!isObj(h) || typeof h.pre !== "string" || !HUM_PRESETS.hasOwnProperty(h.pre)) { return null; }
+    var a = int(h.amt, 0, 0, 100);
+    return a > 0 ? { pre: h.pre, amt: a, seed: int(h.seed, 1, 1, 9999) } : null;
+  }
+  function humOf(t) { return t && t.ext ? humClean(t.ext.hum) : null; }
+  // 決まった計算のゆらぎ（−1〜1・乱数は使わない）
+  function humMul(a, b) { return ((((a >>> 16) * b) & 0xFFFF) * 65536 + (a & 0xFFFF) * b) >>> 0; }
+  function humRnd(s) { var h = 2166136261, i; s = String(s); for (i = 0; i < s.length; i++) { h = humMul((h ^ s.charCodeAt(i)) >>> 0, 16777619); } h = humMul((h ^ (h >>> 15)) >>> 0, 2246822519); h = (h ^ (h >>> 13)) >>> 0; return (h % 20001) / 10000 - 1; }
+  // 小節の線（tick の列・end まで）
+  function humBars(p, end) { var out = [0], t = 0, ms = meters(p), i = 0, cur = ms[0]; while (t <= end && out.length < 100000) { while (i + 1 < ms.length && ms[i + 1].tick <= t) { i++; cur = ms[i]; } t += ticksPerBar(cur); out.push(t); } return out; }
+  function humBarAt(bars, tick) { var lo = 0, hi = bars.length - 1; while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (bars[mid] <= tick) { lo = mid; } else { hi = mid - 1; } } return lo; }
+  // 拍の強さ（1 小節の頭・0.4 拍の頭・−0.3 裏・−0.6 そのほか）。6/8・12/8 などは 3 つずつの拍
+  function humLevel(p, bars, at, swing) {
+    var b = humBarAt(bars, at), bs = bars[b], m = meterAt(p, bs), comp = m.den === 8 && m.num % 3 === 0 && m.num > 3, beatT = comp ? PPQ * 3 / 2 : Math.round(PPQ * 4 / (m.den || 4)), half = comp ? PPQ / 2 : beatT / 2, into = at - bs, lv;
+    lv = into === 0 ? 1 : (into % beatT === 0 ? 0.4 : (half >= 1 && into % half === 0 ? -0.3 : -0.6));
+    if (swing && !comp && into % PPQ === PPQ / 2) { lv -= 0.3; }
+    return lv;
+  }
+  // クリップの音符ごとの表情 → c.notes と同じ並びの { tick（曲の tick）, end, d, v } か null（クリップの外の音）
+  // きまり: 同じ位置の音（和音）は同じだけずらす・となりの音の位置との間の半分より小さくずらす（順番は入れかわらない）・小節の線とクリップの端をこえない・長さ 0 は 0 のまま・ドラムは長さを変えない・同じ高さの次の音と重ねない
+  function humPlanClip(p, t, c, h, bars) {
+    var P = HUM_PRESETS[h.pre], A = h.amt / 100, drum = isDrum(t), o = c.offset || 0, cs = c.start, ce = c.start + c.len, tk = String(t.id || ""), seed = h.seed;
+    var swing = swingOf(t) > 0 || !!(p && p.ext && Number(p.ext.xmGroove) > 0), out = [], on = [], seen = {}, sh = {}, i, k;
+    for (i = 0; i < c.notes.length; i++) { var r0 = c.notes[i][0] - o; if (r0 >= 0 && r0 < c.len && !seen[r0]) { seen[r0] = 1; on.push(r0); } }
+    on.sort(function (a, b) { return a - b; });
+    for (k = 0; k < on.length; k++) {
+      var at = cs + on[k], b = humBarAt(bars, at), bs = bars[b], be = b + 1 < bars.length ? bars[b + 1] : at + PPQ * 4;
+      var gp = k > 0 ? Math.floor((on[k] - on[k - 1] - 1) / 2) : 1e9, gn = k + 1 < on.length ? Math.floor((on[k + 1] - on[k] - 1) / 2) : 1e9;
+      var s = Math.round(A * ((drum ? 0.6 : 1) * P.tj * humRnd(seed + "|" + tk + "|t|" + at) + P.push));
+      s = Math.max(-gp, Math.min(gn, s));
+      s = Math.max(Math.max(cs, bs) - at, Math.min(Math.min(ce - 1, be - 1) - at, s));
+      sh[on[k]] = s;
+    }
+    var nextSame = {}, last = {}, ord = [];
+    for (i = 0; i < c.notes.length; i++) { ord.push(i); }
+    ord.sort(function (x, y) { return c.notes[x][0] - c.notes[y][0] || x - y; });
+    for (k = ord.length - 1; k >= 0; k--) { var nn = c.notes[ord[k]], rr = nn[0] - o; if (rr < 0 || rr >= c.len) { continue; } nextSame[ord[k]] = last.hasOwnProperty(nn[2]) ? last[nn[2]] : null; if (last[nn[2]] === undefined || last[nn[2]] !== rr) { last[nn[2]] = rr; } }
+    for (i = 0; i < c.notes.length; i++) {
+      var n = c.notes[i], rel = n[0] - o;
+      if (rel < 0 || rel >= c.len) { out.push(null); continue; }
+      var a0 = cs + rel, t1 = a0 + sh[rel], lv = humLevel(p, bars, a0, swing);
+      var v = n[3] * (1 + A * P.vb) + A * P.acc * lv + A * P.vj * humRnd(seed + "|" + tk + "|v|" + a0 + "|" + n[2]);
+      v = Math.round(Math.max(0.05, Math.min(1, v)) * 1000) / 1000;
+      var d = n[1], end;
+      if (d > 0) {
+        var d1 = drum ? d : Math.max(1, Math.round(d * (1 + A * (P.lb + P.lj * humRnd(seed + "|" + tk + "|l|" + a0 + "|" + n[2])))));
+        end = Math.min(t1 + d1, ce);
+        var ns = nextSame[i];
+        if (ns !== null && ns !== undefined && ns > rel) { end = Math.min(end, cs + ns + sh[ns]); }
+        end = Math.max(t1 + 1, end);
+        d = end - t1;
+      } else { end = t1; d = 0; }
+      out.push({ tick: t1, end: end, d: d, v: v });
+    }
+    return out;
+  }
+  // 選んだ音符（なければ全部）に表情を書きこむ（音符を書きかえる）→ 書きかえた数
+  function humWrite(p, t, c, h, sel) {
+    h = humClean(h);
+    if (!h || !c || c.type !== "midi" || !c.notes.length) { return 0; }
+    var bars = humBars(p, c.start + c.len + PPQ * 8), pl = humPlanClip(p, t, c, h, bars), o = c.offset || 0, n = 0, i;
+    for (i = 0; i < c.notes.length; i++) {
+      var x = pl[i], note = c.notes[i];
+      if (!x || (sel && sel.indexOf(note) < 0)) { continue; }
+      note[0] = x.tick - c.start + o; if (note[1] > 0) { note[1] = x.d; } note[3] = x.v; n++;
+    }
+    sortNotes(c);
+    // 同じ高さの重なり（選ばなかった音とのあいだ）を切る
+    var by = {}, j;
+    for (i = 0; i < c.notes.length; i++) { (by[c.notes[i][2]] = by[c.notes[i][2]] || []).push(c.notes[i]); }
+    for (var m in by) { if (by.hasOwnProperty(m)) { var L = by[m]; for (j = 0; j + 1 < L.length; j++) { if (L[j][1] > 0 && L[j][0] + L[j][1] > L[j + 1][0]) { L[j][1] = Math.max(1, L[j + 1][0] - L[j][0]); } } } }
+    return n;
   }
 
   // ---------- §341 9A-3: ピアノロールの編集（クリップの中の音符・tick は整数・NoteEvent の形はそのまま）----------
@@ -2204,6 +2294,7 @@
     snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete,
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
+    HUM_PRESETS: HUM_PRESETS, HUM_ORDER: HUM_ORDER, humClean: humClean, humOf: humOf, humRnd: humRnd, humBars: humBars, humPlanClip: humPlanClip, humWrite: humWrite, // §345 A27
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
     addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack,
     STEP: STEP, DRUM_KIT: DRUM_KIT, drumInstrument: drumInstrument, isDrum: isDrum, addDrumTrack: addDrumTrack, stepCount: stepCount, findStep: findStep, toggleStep: toggleStep,
