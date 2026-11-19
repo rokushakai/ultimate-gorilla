@@ -2061,6 +2061,8 @@
       var it = plan.items[i], t = it.track;
       if (!t && it.part.preset === "drum") { if (p.tracks.length >= MAX_TRACKS) { return { ok: false, why: "トラックを足せませんでした" }; } t = newTrack(p, it.part.name, drumInstrument()); t.ext.icon = "&#x1F941;"; t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); } // 9B-3: ドラム（空のパターンは作らない）
       if (!t) { t = addTrack(p, it.part.name, it.part.preset); if (!t) { return { ok: false, why: "トラックを足せませんでした" }; } if (it.part.patch) { t.instrument = patchInstrument(it.part.patch, it.part.patchName); } t.ext.icon = box.from === "synth" ? "&#x1F39B;&#xFE0F;" : box.from === "strings" ? "&#x1F3BB;" : (box.from === "horn" ? "&#x1F3BA;" : (it.part.preset === "pluck" || box.from === "bass" || box.from === "guitar" ? "&#x1F3B8;" : "&#x1F3B5;")); t.ext.src = { game: box.from, inbox: box.id }; tracks.push(t); }
+      if (!it.track && it.part.cc) { midiCcApply(t, it.part.cc, plan.dest || 0); }
+      if (!it.track && it.part.preset !== "drum" && it.part.prog !== null && it.part.prog !== undefined && t.instrument) { t.instrument.ext = t.instrument.ext || {}; t.instrument.ext.gm = it.part.prog; } // §345 A33: 元の GM の番号を残す（書き出しで同じ番号） // §345 A33: 新しいトラックだけ（いまあるトラックのミキサーは変えない）
       for (j = 0; j < it.clips.length; j++) {
         var q = it.clips[j], nm = str(it.part.name + "（" + box.name + "）" + (it.clips.length > 1 ? " " + (j + 1) : ""), "", 40);
         var c = newMidiClip(p, t, q.start, q.len, q.notes, nm);
@@ -2075,6 +2077,7 @@
   // ---------- §342 9B-4: 標準 MIDI ファイル（SMF）の読み込み・書き出し（画面を持たない・バイトの配列）----------
   var MIDI_MAX_BYTES = 1048576, MIDI_MAX_EVENTS = 200000, MIDI_MAX_NOTES = 20000, MIDI_MAX_MS = 3000, MIDI_MAX_TRKS = 64, MIDI_MAX_TICK = 2147483647;
   var MIDI_DRUM_LO = 35, MIDI_DRUM_HI = 81, MIDI_DRUM_LEN = PPQ / 8, MIDI_DRUM_CH = 9;
+  var MIDI_CC_KEEP = { 1: "mod", 7: "vol", 10: "pan", 11: "expr" }, MIDI_MAX_CC = 60000; // §345 A33: 取りこむ CC → オートメーションの種類
   var MIDI_DRUM_EXTRA = { 83: 1, 84: 1 }; // §345 A11-2: 35〜81 の外でも読みこむ番号（DAW が鳴らせる Jingle Bell・Bell Tree）
   // DAW だけのドラムの番号 → GM の番号（ゴリラウクレレ・メロディくずしの書き出しと同じ表。0 ＝ 書かない）
   var DRUM_GM = { 21: 44, 23: 46, 24: 40, 22: 38, 26: 0, 25: 0 };
@@ -2084,6 +2087,7 @@
     71: "ホイッスル（短）", 72: "ホイッスル（長）", 73: "ギロ（短）", 74: "ギロ（長）", 75: "クラベス", 76: "ウッドブロック（高）", 77: "ウッドブロック（低）", 78: "クイーカ（ミュート）", 79: "クイーカ（開）", 80: "トライアングル（ミュート）", 81: "トライアングル（開）" , 83: "スレイベル（Jingle Bell）", 84: "ベルツリー" };
   // シンセのプリセット → 近い GM の音色（0 から）。読みこみは GM の音色 → プリセット
   var MIDI_PRESET_GM = { lead: 81, chip: 80, pad: 89, spad: 50, brass: 62, bass: 38, acid: 39, pluck: 24, bell: 14, organ: 16, wobble: 87, soft: 79 };
+  function hasGm(t) { var g = t && t.instrument && t.instrument.ext ? Number(t.instrument.ext.gm) : NaN; return isFinite(g) && g >= 0 && g <= 127; } // §345 A33: 音色の GM の番号を持っている（クリスマスの音色・MIDI から読みこんだ）ならそれを使う
   function extGm(t) { var g = t && t.instrument && t.instrument.ext ? Number(t.instrument.ext.gm) : NaN; return isFinite(g) && g >= 0 && g <= 127 ? Math.round(g) : 80; } // §343（無ければ いままでの 80）
   function midiGmPreset(g) {
     g = Number(g);
@@ -2145,7 +2149,7 @@
       if (!drum) {
         preset = t.instrument && t.instrument.ext && typeof t.instrument.ext.preset === "string" ? t.instrument.ext.preset : "";
         if (/^[a-z0-9_-]{1,24}$/.test(preset)) { evs.push([0, 0, midiMeta(0x04, midiUtf8("ugsynth:" + preset))]); }
-        evs.push([0, 1, [0xC0 | ch, MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : extGm(t)]]); // §343: クリスマスの音色は ext.gm
+        evs.push([0, 1, [0xC0 | ch, hasGm(t) ? extGm(t) : (MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : extGm(t))]]); // §343: クリスマスの音色は ext.gm
       }
       if (!autoActive(t, "vol")) { evs.push([0, 1, [0xB0 | ch, 7, Math.max(0, Math.min(127, Math.round(num(t.vol, 80, 0, 100) * 1.27)))]]); } // §345 A28: オートメーションがあれば CC7 はその線
       if (!autoActive(t, "pan")) { evs.push([0, 1, [0xB0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + num(t.pan, 0, -1, 1) * 63)))]]); }
@@ -2176,7 +2180,7 @@
   // 📥 バイト → 調べた結果（曲は作らない）→ { ok, why, ... }。断るときは ok: false と理由
   function midiParse(u8, clock) {
     var n = u8 ? u8.length : 0, t0 = clock ? clock() : Date.now(), evN = 0, noteN = 0;
-    var cnt = { cc: 0, sus: 0, bend: 0, at: 0, sysex: 0, text: 0, lyric: 0, marker: 0, key: 0, meta: 0, chunk: 0, orphan: 0, overlap: 0, open: 0, noEot: 0 };
+    var cnt = { cc: 0, ccKeep: 0, sus: 0, bend: 0, at: 0, sysex: 0, text: 0, lyric: 0, marker: 0, key: 0, meta: 0, chunk: 0, orphan: 0, overlap: 0, open: 0, noEot: 0 }; // §345 A33: ccKeep ＝ 取りこむ CC（1・7・10・11）
     var tempos = [], meters0 = [], trks = [];
     function fail(why) { return { ok: false, why: why }; }
     function tag(o) { return String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]); }
@@ -2194,7 +2198,7 @@
     if (!div) { return fail("ヘッダーの時刻の単位（division）が 0 です"); }
     var pos = 8 + hl;
     function track(a, z, ti) {
-      var p = a, tick = 0, run = 0, notes = [], open = {}, prog = {}, name = "", inst = "", eot = false, k;
+      var p = a, tick = 0, run = 0, notes = [], open = {}, prog = {}, name = "", inst = "", eot = false, k, ccs = [], marks = []; // §345 A33
       function vlq() { var v = 0, c, b; for (c = 0; c < 4; c++) { if (p >= z) { return -1; } b = u8[p++]; v = v * 128 + (b & 0x7F); if (!(b & 0x80)) { return v; } } return -2; }
       while (p < z && !eot) {
         evN++;
@@ -2218,7 +2222,7 @@
           else if (ty === 0x51) { if (ln === 3) { var us = (u8[a2] << 16) + (u8[a2 + 1] << 8) + u8[a2 + 2]; if (us > 0) { tempos.push([tick, us, ti]); } } else { cnt.meta++; } }
           else if (ty === 0x58) { if (ln >= 2) { meters0.push([tick, u8[a2], u8[a2 + 1] <= 6 ? Math.pow(2, u8[a2 + 1]) : 0]); } else { cnt.meta++; } }
           else if (ty === 0x05) { cnt.lyric++; }
-          else if (ty === 0x06) { cnt.marker++; }
+          else if (ty === 0x06) { cnt.marker++; marks.push([tick, midiText(u8, a2, p)]); }
           else if (ty >= 0x01 && ty <= 0x0F) { cnt.text++; }
           else if (ty === 0x59) { cnt.key++; }
           else { cnt.meta++; }
@@ -2242,14 +2246,14 @@
         } else if (hi === 0x80 || hi === 0x90) {
           var q = open[key];
           if (q && q.length) { var ix = q.shift(); notes[ix][1] = tick - notes[ix][0]; } else { cnt.orphan++; }
-        } else if (hi === 0xB0) { cnt.cc++; if (d1 === 64) { cnt.sus++; } }
+        } else if (hi === 0xB0) { cnt.cc++; if (d1 === 64) { cnt.sus++; } if (MIDI_CC_KEEP[d1]) { cnt.ccKeep++; if (ccs.length < MIDI_MAX_CC) { ccs.push([tick, ch, d1, d2]); } } }
         else if (hi === 0xC0) { if (prog[ch] === undefined) { prog[ch] = d1; } }
         else if (hi === 0xE0) { cnt.bend++; }
         else { cnt.at++; }
       }
       if (!eot) { cnt.noEot++; }
       for (k in open) { if (open.hasOwnProperty(k)) { while (open[k].length) { var oi = open[k].shift(); notes[oi][1] = Math.max(0, tick - notes[oi][0]); cnt.open++; } } }
-      return { ok: true, name: name, inst: inst, notes: notes, prog: prog, end: tick };
+      return { ok: true, name: name, inst: inst, notes: notes, prog: prog, end: tick, ccs: ccs, marks: marks };
     }
     while (pos < n) {
       if (pos + 8 > n) { return fail("ファイルの終わりが壊れています"); }
@@ -2302,7 +2306,9 @@
         ns.sort(function (x, y) { return x[0] - y[0] || x[2] - y[2]; });
         nm = tr.name ? (chs.length > 1 ? tr.name.substring(0, 34) + " " + (ch + 1) + "ch" : tr.name) : (r.format === 0 ? "チャンネル " + (ch + 1) : "トラック " + (i + 1) + (chs.length > 1 ? " " + (ch + 1) + "ch" : ""));
         if (!tr.name && ch === MIDI_DRUM_CH) { nm = r.format === 0 || chs.length > 1 ? "ドラム（10ch）" : "ドラム"; }
-        parts.push({ key: "p" + parts.length, name: str(nm, "トラック", 40), ch: ch + 1, trk: i + 1, drum: ch === MIDI_DRUM_CH, prog: pg === undefined ? null : pg, preset: m0 && midiPresetOk(m0[1]) ? m0[1] : midiGmPreset(pg), notes: ns });
+        var cc = {}, q2; // §345 A33: そのチャンネルの CC（1・7・10・11）→ { vol: [[tick, 値]], pan, expr, mod }
+        for (q2 = 0; q2 < tr.ccs.length; q2++) { var e2 = tr.ccs[q2]; if (e2[1] !== ch) { continue; } var kd = MIDI_CC_KEEP[e2[2]]; (cc[kd] = cc[kd] || []).push([tk(e2[0]), e2[3]]); }
+        parts.push({ key: "p" + parts.length, name: str(nm, "トラック", 40), ch: ch + 1, trk: i + 1, drum: ch === MIDI_DRUM_CH, prog: pg === undefined ? null : pg, preset: m0 && midiPresetOk(m0[1]) ? m0[1] : midiGmPreset(pg), notes: ns, cc: cc });
         total += ns.length;
       }
     }
@@ -2311,12 +2317,16 @@
     if (bars > MAX_BARS) { return { ok: false, why: "曲が長すぎます（" + bars + " 小節・" + MAX_BARS + " 小節まで）" }; }
     // 入らないもの
     if (cnt.sus) { skipped.push("サステインペダル " + cnt.sus + " 個（音の長さは鍵盤を離した所まで）"); }
-    if (cnt.cc - cnt.sus > 0) { skipped.push("コントロールチェンジ（音量・定位など）" + (cnt.cc - cnt.sus) + " 個"); }
+    if (cnt.cc - cnt.sus - cnt.ccKeep > 0) { skipped.push("コントロールチェンジ（音量・パン・Expression・Modulation のほか）" + (cnt.cc - cnt.sus - cnt.ccKeep) + " 個"); } // §345 A33: CC1・7・10・11 は取りこむ
+    if (cnt.ccKeep) { notices.push("CC（音量 7・パン 10・Expression 11・Modulation 1）" + cnt.ccKeep + " 個は、新しく作るトラックの音量・パン・オートメーションにします"); }
     if (cnt.bend) { skipped.push("ピッチベンド " + cnt.bend + " 個"); }
     if (cnt.at) { skipped.push("アフタータッチ " + cnt.at + " 個"); }
     if (cnt.sysex) { skipped.push("SysEx " + cnt.sysex + " 個"); }
     if (cnt.lyric) { skipped.push("歌詞 " + cnt.lyric + " 個"); }
-    if (cnt.marker) { skipped.push("マーカー " + cnt.marker + " 個（セクションにはしません）"); }
+    var markers = [], mseen = {}; // §345 A33: マーカー → 新しい曲ではセクション
+    for (i = 0; i < r.trks.length; i++) { for (j = 0; j < r.trks[i].marks.length; j++) { var mk = r.trks[i].marks[j], mt0 = tk(mk[0]), mn = sectionName(mk[1]); if (mn && !mseen[mt0]) { mseen[mt0] = 1; markers.push({ tick: mt0, name: mn }); } } }
+    markers.sort(function (a, b) { return a.tick - b.tick; });
+    if (cnt.marker) { notices.push("マーカー " + cnt.marker + " 個は、新しい曲として取りこむときセクションにします（いまの曲に足すときは入れません）"); }
     if (cnt.text) { skipped.push("テキスト " + cnt.text + " 個"); }
     if (cnt.key) { skipped.push("調号 " + cnt.key + " 個"); }
     if (cnt.meta) { skipped.push("そのほかのメタイベント " + cnt.meta + " 個"); }
@@ -2329,7 +2339,7 @@
     if (r.ntrks !== r.trks.length) { notices.push("ヘッダーのトラック数（" + r.ntrks + "）と、実際のトラック（" + r.trks.length + "）がちがいます"); }
     var base = String(fileName || "MIDI").replace(/\.(mid|midi|smf)$/i, "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/^\s+|\s+$/g, "").substring(0, 40) || "MIDI";
     return { ok: true, file: str(String(fileName || ""), "", 80), name: base, format: r.format, division: div, trks: r.trks.length, notes: total, bpm: bpm, meter: { num: mnum, den: mden }, len: len, bars: bars,
-      sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, tempoChanges: tempoChanges, meterChanges: meterChanges, parts: parts, skipped: skipped, notices: notices };
+      sec: Math.round(len / PPQ * 60 / bpm * 10) / 10, tempoChanges: tempoChanges, meterChanges: meterChanges, markers: markers, parts: parts, skipped: skipped, notices: notices };
   }
   // ドラムのパートの音符（GM の 35〜81 と 83・84（§345 A11-2: DAW が鳴らせるスレイベル・ベルツリー）はそのまま・ほかは入れない・長さ 0）→ { notes, drop: { 番号: 数 } }
   function midiDrumNotes(notes) {
@@ -2346,16 +2356,86 @@
         var dn = midiDrumNotes(pt.notes), k, dl = [];
         for (k in dn.drop) { if (dn.drop.hasOwnProperty(k)) { dl.push("番号 " + k + "（" + dn.drop[k] + " 個）"); } }
         if (dl.length) { drops.push({ key: pt.key, name: pt.name, text: dl.join("・"), n: pt.notes.length - dn.notes.length }); }
-        parts.push({ key: pt.key, name: pt.name, preset: "drum", notes: dn.notes });
-      } else { parts.push({ key: pt.key, name: pt.name, preset: pt.preset, notes: pt.notes }); }
+        parts.push({ key: pt.key, name: pt.name, preset: "drum", notes: dn.notes, cc: pt.cc || null });
+      } else { parts.push({ key: pt.key, name: pt.name, preset: pt.preset, notes: pt.notes, cc: pt.cc || null, prog: pt.prog === undefined ? null : pt.prog }); } // §345 A33
     }
     return { box: { id: id || ("m" + Date.now().toString(36)), from: "midi", name: info.name, bpm: info.bpm, meter: info.meter.num, len: info.len, parts: parts, skipped: [], tempoRows: info.tempoChanges.length }, drops: drops };
+  }
+  // §345 A33: 途中の拍子の変化（小節の頭にあり・DAW で使える拍子だけ）→ { added, skipped }
+  function midiMetersIn(p, list) {
+    var out = { added: 0, skipped: 0 }, i;
+    for (i = 0; i < list.length; i++) {
+      var m = list[i], b = tickToBar(p, m.tick);
+      if (!(m.num >= 1 && m.num <= 32) || [1, 2, 4, 8, 16].indexOf(m.den) < 0 || barToTick(p, b.bar - 1) !== m.tick) { out.skipped++; continue; }
+      p.tempo.meters.push({ tick: m.tick, num: m.num, den: m.den }); p.tempo.meters.sort(function (a, c) { return a.tick - c.tick; }); out.added++;
+    }
+    return out;
+  }
+  // §345 A33: マーカー → セクション（小節の頭へ・次のマーカーまで・32 個まで）
+  function midiSectionsIn(p, list, len) {
+    var bs = [], i, seen = {};
+    for (i = 0; i < list.length; i++) { var b = tickToBar(p, list[i].tick).bar - 1; if (!seen[b]) { seen[b] = 1; bs.push({ bar: b, name: list[i].name }); } }
+    var endBar = tickToBar(p, Math.max(0, (len || 0) - 1)).bar, n = 0;
+    if (!isArr(p.markers)) { p.markers = []; }
+    for (i = 0; i < bs.length && n < MAX_SECTIONS; i++) {
+      var b0 = bs[i].bar, b1 = i + 1 < bs.length ? bs[i + 1].bar : Math.max(endBar, b0 + 1), t0 = barToTick(p, b0), t1 = barToTick(p, b1);
+      if (!(t1 > t0)) { continue; }
+      p.markers.push({ kind: "section", id: nextSectionId(p), tick: t0, len: t1 - t0, name: bs[i].name, color: SECTION_COLORS[n % SECTION_COLORS.length] }); n++;
+    }
+    return n;
+  }
+  // §345 A33: CC の列（[tick, 0〜127]）→ オートメーションの点（[tick, 0〜1, "lin"|"step"]・64 個まで）。
+  // 1 拍より近い変化は線（書き出しは線を 16 分ごとの CC にする）・離れた変化は段（その時刻で切りかわる）。線の点は、ずれが CC の 1 目もりより小さいところまで間引く
+  function midiCcLane(target, list) {
+    var pts = [], i, last = -1e9;
+    for (i = 0; i < list.length; i++) {
+      var v = list[i][1], real = target === "vol" ? v / 1.27 : (target === "pan" ? (v - 64) / 63 : (target === "expr" ? v / 1.27 : v)), n = autoNorm(target, target === "expr" ? Math.round(v / 127 * 1000) / 10 : real);
+      if (n === null) { continue; }
+      var kind = list[i][0] - last <= PPQ && pts.length ? "lin" : "step";
+      if (pts.length && pts[pts.length - 1][0] === list[i][0]) { pts[pts.length - 1] = [list[i][0], n, pts[pts.length - 1][2]]; } else { pts.push([list[i][0], n, kind]); }
+      last = list[i][0];
+    }
+    if (pts.length) { pts[0][2] = "lin"; }
+    function simplify(eps) {
+      var keep = [], j;
+      for (j = 0; j < pts.length; j++) { keep[j] = j === 0 || j === pts.length - 1 || pts[j][2] === "step" || (j + 1 < pts.length && pts[j + 1][2] === "step"); }
+      function rdp(a, b) {
+        if (b - a < 2) { return; }
+        var k, worst = -1, wi = -1;
+        for (k = a + 1; k < b; k++) { var t = (pts[k][0] - pts[a][0]) / (pts[b][0] - pts[a][0]), e = Math.abs(pts[a][1] + (pts[b][1] - pts[a][1]) * t - pts[k][1]); if (e > worst) { worst = e; wi = k; } }
+        if (worst > eps) { keep[wi] = true; rdp(a, wi); rdp(wi, b); }
+      }
+      var s0 = 0; for (j = 1; j < pts.length; j++) { if (keep[j]) { rdp(s0, j); s0 = j; } }
+      return pts.filter(function (q, ix) { return keep[ix]; });
+    }
+    var eps = 0.6 / 127, outp = simplify(eps), g = 0;
+    while (outp.length > AUTO_MAX_POINTS && g++ < 20) { eps *= 1.6; outp = simplify(eps); }
+    return outp.slice(0, AUTO_MAX_POINTS);
+  }
+  // §345 A33: パートの CC → 新しいトラック（1 つの値だけ ＝ フェーダー／パン、変わる ＝ オートメーション。Expression 100・Modulation 0 のままなら入れない）
+  function midiCcApply(t, cc, dest) {
+    if (!cc) { return 0; }
+    var n = 0, k;
+    for (k in cc) {
+      if (!cc.hasOwnProperty(k) || !isArr(cc[k]) || !cc[k].length) { continue; }
+      var l = cc[k], same = l.every(function (x) { return x[1] === l[0][1]; });
+      if (same && l[0][0] === 0 && (k === "vol" || k === "pan")) { if (k === "vol") { t.vol = num(Math.round(l[0][1] / 1.27), 80, 0, 100); } else { t.pan = Math.round(num((l[0][1] - 64) / 63, 0, -1, 1) * 100) / 100; } n++; continue; }
+      if (same && ((k === "expr" && l[0][1] === 127) || (k === "mod" && l[0][1] === 0))) { continue; }
+      var pts = midiCcLane(k, l).map(function (q) { return [q[0] + (dest || 0), q[1], q[2]]; });
+      if (!pts.length) { continue; }
+      if (!isArr(t.auto)) { t.auto = []; }
+      t.auto = t.auto.filter(function (a) { return !(a && a.target === k); });
+      t.auto.push({ target: k, on: true, points: pts }); n++;
+      if (k === "vol") { t.vol = num(Math.round(l[0][1] / 1.27), 80, 0, 100); }
+    }
+    return n;
   }
   // 新しい曲（ファイルの BPM・拍子）
   function midiNewProject(info, withTempo) {
     var p = newProject({ name: info.name, bpm: info.bpm, meter: info.meter.num }), i;
     p.tempo.meters[0].den = info.meter.den;
     if (withTempo && midiTempoCheck(info).ok) { for (i = 0; i < info.tempoChanges.length; i++) { p.tempo.points.push({ tick: info.tempoChanges[i].tick, bpm: info.tempoChanges[i].bpm }); } p.tempo.points.sort(function (a, b) { return a.tick - b.tick; }); } // 9B-12: 途中のテンポもそのまま
+    midiMetersIn(p, info.meterChanges || []); midiSectionsIn(p, info.markers || [], info.len); // §345 A33
     return p;
   }
 
@@ -2369,6 +2449,7 @@
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
     linkMasks: linkMasks, // §345 A29
+    midiCcLane: midiCcLane, midiCcApply: midiCcApply, midiMetersIn: midiMetersIn, midiSectionsIn: midiSectionsIn, MIDI_CC_KEEP: MIDI_CC_KEEP, // §345 A33
     autoMove: autoMove, autoCopy: autoCopy, autoPaste: autoPaste, autoCC: autoCC, autoCCEvents: autoCCEvents, // §345 A28
     HUM_PRESETS: HUM_PRESETS, HUM_ORDER: HUM_ORDER, humClean: humClean, humOf: humOf, humRnd: humRnd, humBars: humBars, humPlanClip: humPlanClip, humWrite: humWrite, // §345 A27
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,

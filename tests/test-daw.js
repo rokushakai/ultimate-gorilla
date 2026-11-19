@@ -2357,7 +2357,7 @@ module.exports = async function () {
   var r1 = MM.midiRead(f1, "song.mid");
   ok(r1.ok && r1.format === 1 && r1.trks === 3 && r1.parts.length === 2 && r1.bpm === 120 && r1.meter.num === 4 && r1.parts[0].name === "Piano <b>" && r1.parts[0].preset === "spad" && r1.parts[1].name === "Drums" && r1.parts[1].drum, "Format 1: conductor track, names, program 48 → strings pad, channel 10 drums", r1.why || r1.parts);
   ok(JSON.stringify(r1.parts[0].notes) === JSON.stringify([[0, 960, 60, 1], [0, 960, 64, 0.008], [0, 960, 67, 0.504], [960, 240, 72, 0.709]]), "Format 1: ticks ×10 (96 → 960), lengths, velocities 127 / 1 / 64 / 90", r1.parts[0].notes);
-  ok(r1.tempoChanges.length === 1 && r1.tempoChanges[0].bar === 3 && r1.tempoChanges[0].bpm === 90 && r1.tempoChanges[0].tick === 7680 && r1.skipped.join().indexOf("マーカー 1 個") >= 0 && r1.skipped.join().indexOf("歌詞 1 個") >= 0, "Format 1: the tempo change at bar 3 (→ 90) is found; marker / lyric listed", r1.tempoChanges);
+  ok(r1.tempoChanges.length === 1 && r1.tempoChanges[0].bar === 3 && r1.tempoChanges[0].bpm === 90 && r1.tempoChanges[0].tick === 7680 && r1.notices.join().indexOf("マーカー 1 個") >= 0 && r1.markers.length === 1 && r1.skipped.join().indexOf("マーカー") < 0 && r1.skipped.join().indexOf("歌詞 1 個") >= 0, "Format 1: the tempo change at bar 3 (→ 90) is found; the marker is taken in (§345 A33: becomes a section in a new song), the lyric listed as not taken in", r1.tempoChanges);
   var mb1 = MM.midiBox(r1, {}, "mtest"), bd1 = mb1.box.parts[1];
   ok(bd1.preset === "drum" && bd1.notes.map(function (n) { return n[0] + ":" + n[2] + ":" + n[1]; }).join() === "0:35:0,480:36:0,480:81:0" && mb1.drops.length === 1 && mb1.drops[0].text === "番号 30（1 個）・番号 82（1 個）", "drums: GM 35〜81 kept as they are (length 0), 30 / 82 not imported and listed", mb1.drops);
   var mb1s = MM.midiBox(r1, { p1: "synth", p0: "drum" }, "mtest2");
@@ -2990,8 +2990,12 @@ module.exports = async function () {
   var rqA = await impZ(DA2, blobAB(exA.blob)); DA2.proj.open(rqA.id);
   ok(exA.ok && rqA.ok && JSON.stringify(DA2.project().tracks.map(function (t) { return t.auto; })) === autoA, "ZIP → empty storage: the automation comes back", rqA.why);
   WA2.UGArcade.stop(); DA2.reset();
+  // §345 A33 で仕様を変えた: 音量・パン・Expression・Modulation は CC として運ぶ（EQ は MIDI に決まった番号がないので運ばない）
+  var preA = DA9.project().tracks.filter(function (t) { return t.clips.some(function (c) { return c.notes && c.notes.length; }); }).map(function (t) { return t.auto.filter(function (a) { return MA.autoActive(t, a.target) && ["vol", "pan", "expr", "mod"].indexOf(a.target) >= 0; }).map(function (a) { return a.target; }).sort().join(); });
+  var hadEq = DA9.project().tracks.some(function (t) { return t.auto.some(function (a) { return /^eq\./.test(a.target) && a.points.length; }); });
   var xA = DA9.midi.exportNow(); DA9.midi.open(new Uint8Array(xA.bytes), "auto.mid"); var rxA = DA9.midi.importNow();
-  ok(xA.ok && rxA.ok && DA9.project().tracks.every(function (t) { return !t.auto.length; }), "MIDI export / import: the automation is not carried (MIDI has no lanes here)");
+  var postA = DA9.project().tracks.map(function (t) { return t.auto.filter(function (a) { return a.points.length; }).map(function (a) { return a.target; }).sort().join(); });
+  ok(xA.ok && rxA.ok && hadEq && preA.some(function (x) { return x; }) && JSON.stringify(postA) === JSON.stringify(preA) && DA9.project().tracks.every(function (t) { return !t.auto.some(function (a) { return /^eq\./.test(a.target); }); }), "MIDI export / import: volume / pan / Expression / Modulation lanes come back through CC; EQ lanes are not carried (no MIDI number for them)", [preA, postA]);
   ok(SA.ultimateGorillaSaveV2 === rpgA, "the RPG save is untouched (9B-9)");
   AA.stop(); DA9.reset();
   var errA = CA.errors.filter(function (x) { return !/not MP3/.test(x); });
