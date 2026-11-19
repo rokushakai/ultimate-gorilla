@@ -80,11 +80,11 @@
     var bus = UG && UG.audio && UG.audio.ctx === ac && UG.audio.bus ? UG.audio.bus : ac.destination;
     var master = UG && UG.audio && UG.audio.ctx === ac && UG.audio.master ? UG.audio.master : null;
     function chain(dest) {
-      var g = ac.createGain(), pn = null, av = null;
-      if (!pl.wav) { av = ac.createGain(); av.gain.value = 1; av.connect(g); } // 9B-9: 音量のオートメーション（FX のあと・フェーダーの前）。WAV では使う出口にだけ（fxBuild で）
+      var g = ac.createGain(), pn = null, av = null, ae = null;
+      if (!pl.wav) { av = ac.createGain(); av.gain.value = 1; av.connect(g); ae = ac.createGain(); ae.gain.value = 1; ae.connect(av); } // §345 A28: ae ＝ Expression // 9B-9: 音量のオートメーション（FX のあと・フェーダーの前）。WAV では使う出口にだけ（fxBuild で）
       if (ac.createStereoPanner) { try { pn = ac.createStereoPanner(); pn.pan.value = t.pan; g.connect(pn); pn.connect(dest); } catch (e) { pn = null; } }
       if (!pn) { g.connect(dest); }
-      return { g: g, pn: pn, av: av };
+      return { g: g, pn: pn, av: av, ae: ae };
     }
     var mm = masterOf(); // §341 9A-6: トラック → DAW のマスター → 共有のバス・マスター（RPG やほかのゲームの音量は変えない）
     mx = { main: chain(mm.bus), dry: mm.dry ? chain(mm.dry) : null, syn: null, voices: [], srcs: [], ac: ac };
@@ -124,8 +124,9 @@
     var ac = pl.ac, live = DM().fxLive(t), b;
     if (pl.wav) { // 書き出し: 設定は変わらないので、道は 1 つ（クロスフェード用のゲインは作らない）
       if (!c.av && DM().autoActive(t, "vol")) { c.av = ac.createGain(); c.av.gain.value = 1; c.av.connect(c.g); } // 9B-9: 音量のオートメーションのあるトラックだけ
-      if (!live.sig) { c.inp = c.av || c.g; c.sig = ""; autoBind(t, c, true, true); return; }
-      try { b = fxBranch(ac, t, live, !!c.pn); b.out.connect(c.av || c.g); c.inp = b.inp; c.br = b; c.sig = live.sig; if (b.pn) { c.pn.pan.value = 0; } } catch (e) { c.inp = c.av || c.g; c.sig = ""; }
+      if (!c.ae && DM().autoActive(t, "expr")) { c.ae = ac.createGain(); c.ae.gain.value = 1; c.ae.connect(c.av || c.g); } // §345 A28: Expression のあるトラックだけ
+      if (!live.sig) { c.inp = c.ae || c.av || c.g; c.sig = ""; autoBind(t, c, true, true); return; }
+      try { b = fxBranch(ac, t, live, !!c.pn); b.out.connect(c.ae || c.av || c.g); c.inp = b.inp; c.br = b; c.sig = live.sig; if (b.pn) { c.pn.pan.value = 0; } } catch (e) { c.inp = c.ae || c.av || c.g; c.sig = ""; }
       autoBind(t, c, true, true);
       return;
     }
@@ -135,7 +136,7 @@
     var bg = ac.createGain(), t0 = ac.currentTime, old = c.br;
     bg.gain.value = now || !old ? 1 : 0;
     if (b.inp) { c.inp.connect(b.inp); b.out.connect(bg); } else { c.inp.connect(bg); }
-    bg.connect(c.av || c.g);
+    bg.connect(c.ae || c.av || c.g);
     b.bg = bg; var first = !old; c.br = b; c.sig = live.sig; c.key = key;
     autoBind(t, c, first, true); // 9B-9: 新しい道のパン・EQ（はじめてなら音量も）に、いまの位置から先を予約
     if (old) {
@@ -173,7 +174,7 @@
     return r;
   }
   // ---------- §342 9B-9: オートメーションの予約（AudioParam の setValueAtTime・linearRampToValueAtTime。タイマーで値を書きつづけない）----------
-  var AUTO_MAP = { "vol": function (v) { return v; }, "pan": function (v) { return v * 2 - 1; }, "eq.low": function (v) { return v * 24 - 12; }, "eq.mid": function (v) { return v * 24 - 12; }, "eq.high": function (v) { return v * 24 - 12; } };
+  var AUTO_MAP = { "vol": function (v) { return v; }, "expr": function (v) { return v; }, "pan": function (v) { return v * 2 - 1; }, "eq.low": function (v) { return v * 24 - 12; }, "eq.mid": function (v) { return v * 24 - 12; }, "eq.high": function (v) { return v * 24 - 12; } };
   function holdAt(param, now) { try { if (param.cancelAndHoldAtTime) { param.cancelAndHoldAtTime(now); } else { param.cancelScheduledValues(now); } } catch (e) {} }
   // 区間 s の [from, to] を予約。mode: "set"（その時刻に値を置く）／ "ramp"（前の値から 5ms で移る: 折り返し・途中から）
   function autoSeg(param, a, target, s, from, to, mode, now) {
@@ -205,7 +206,8 @@
   function chainParams(t, c) {
     var o = {}, f = DM().fxOf(t), bands = ["low", "mid", "high"], k;
     if (c.av) { o.vol = c.av.gain; }
-    if (c.br && c.br.pn) { o.pan = c.br.pn.pan; } else if (c.pn && (!c.inp || c.inp === c.g || c.inp === c.av)) { o.pan = c.pn.pan; }
+    if (c.ae) { o.expr = c.ae.gain; } // §345 A28
+    if (c.br && c.br.pn) { o.pan = c.br.pn.pan; } else if (c.pn && (!c.inp || c.inp === c.g || c.inp === c.av || c.inp === c.ae)) { o.pan = c.pn.pan; }
     if (c.br && c.br.eq && c.br.eq.length === 3 && !f.bypass && f.eq.on) { for (k = 0; k < 3; k++) { o["eq." + bands[k]] = c.br.eq[k].gain; } }
     return o;
   }
@@ -708,7 +710,7 @@
       for (i = 0; mx.srcs && i < mx.srcs.length; i++) { try { var sct = mx.ac ? mx.ac.currentTime : 0, sg = mx.srcs[i].g.gain; sg.cancelScheduledValues(sct); sg.setTargetAtTime(0, sct, 0.01); mx.srcs[i].src.stop(sct + 0.06); } catch (e6) {} }
       mx.srcs = [];
       (function (m) { var l0 = [m.main, m.dry], k0; for (k0 = 0; k0 < l0.length; k0++) { if (l0[k0]) { try { l0[k0].g.gain.setTargetAtTime(0, l0[k0].g.context ? l0[k0].g.context.currentTime : 0, 0.01); } catch (e5) {} } } })(mx); // 9A-7: 先に予約したドラムの音も残らないように、外す前に 0 へ
-      (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} if (l[k].br) { branchOff(l[k].br); l[k].br = null; } if (l[k].inp && l[k].inp !== l[k].g && l[k].inp !== l[k].av) { try { l[k].inp.disconnect(); } catch (e7) {} } if (l[k].av) { try { l[k].av.disconnect(); } catch (e8) {} } if (l[k].tr) { try { l[k].tr.disconnect(); } catch (e9) {} } if (l[k].td) { try { l[k].td.disconnect(); } catch (e10) {} } } } }, 150); })(mx); // 9B-8: FX のノードも・9B-9: オートメーションのゲインも・9B-11: センドも
+      (function (m) { setTimeout(function () { var l = [m.main, m.dry], k; for (k = 0; k < l.length; k++) { if (l[k]) { try { l[k].g.disconnect(); if (l[k].pn) { l[k].pn.disconnect(); } } catch (e3) {} if (l[k].br) { branchOff(l[k].br); l[k].br = null; } if (l[k].inp && l[k].inp !== l[k].g && l[k].inp !== l[k].av && l[k].inp !== l[k].ae) { try { l[k].inp.disconnect(); } catch (e7) {} } if (l[k].av) { try { l[k].av.disconnect(); } catch (e8) {} } if (l[k].ae) { try { l[k].ae.disconnect(); } catch (e10) {} } if (l[k].tr) { try { l[k].tr.disconnect(); } catch (e9) {} } if (l[k].td) { try { l[k].td.disconnect(); } catch (e10) {} } } } }, 150); })(mx); // 9B-8: FX のノードも・9B-9: オートメーションのゲインも・9B-11: センドも
     }
     if (mix.__ref) { refOff(mix.__ref); mix.__ref = null; } // 9B-20
     var ms = mix.__master;
@@ -5620,10 +5622,10 @@
   // 画面の値: 音量 0〜100・パン −100（L）〜100（R）・EQ −12〜+12dB
   function auUi(target, real) { return target === "pan" ? Math.round(real * 100) : real; }
   function auReal(target, ui) { return target === "pan" ? Number(ui) / 100 : Number(ui); }
-  function auText(target, real) { return target === "pan" ? panText(real) : (target === "vol" ? String(Math.round(real)) : (real > 0 ? "+" : "") + real + "dB"); }
+  function auText(target, real) { return target === "pan" ? panText(real) : (target === "vol" || target === "expr" || target === "mod" ? String(Math.round(real)) : (real > 0 ? "+" : "") + real + "dB"); } // §345 A28: Expression・Modulation は数
   function auPos(p, tick) { var M = DM(), b = M.tickToBar(p, tick).bar, t0 = M.barToTick(p, b - 1), m = M.meterAt(p, t0), bt = M.PPQ * 4 / m.den; return { bar: b, beat: Math.round((1 + (tick - t0) / bt) * 100) / 100 }; }
   function auPosText(q) { return q.bar + "小節 " + q.beat + "拍"; }
-  function openAuto(tid, from) { var o = st.au || {}; st.view = "auto"; st.au = { track: tid, target: o.target || "vol", msg: "", from: from || "arr", bar: o.bar || 1, beat: o.beat || 1 }; }
+  function openAuto(tid, from) { var o = st.au || {}; st.view = "auto"; st.au = { track: tid, target: o.target || "vol", msg: "", from: from || "arr", bar: o.bar || 1, beat: o.beat || 1, snap: o.snap !== undefined ? o.snap : 960, sel: null, ca: o.ca, cb: o.cb, pbar: o.pbar }; }
   // 編集（↶ に写し・自動保存・再生中なら同じ位置から鳴らしなおす ＝ 新しい値で予約しなおす）
   var auApi = {
     set: function (id, target, bar, beat, ui) { var p = project(), M = DM(), t = M.findTrack(p, id), tick = M.autoTickAt(p, bar, beat); if (!t) { return { ok: false, why: "トラックがありません" }; } if (tick === null) { return { ok: false, why: "位置がおかしいです（小節 1〜" + 256 + "・拍 1〜その小節の拍の数）" }; } var snap = snapTracks(), r = M.autoSet(p, t, target, tick, auReal(target, ui)); if (r.ok) { auDone(snap); } return r; },
@@ -5642,10 +5644,10 @@
     var on = a && a.on !== false && a.points.length, base = M.autoNorm(target, M.autoStatic(t, target));
     if (on) {
       pts.push(X(0) + "," + Y(a.points[0][1]));
-      for (i = 0; i < a.points.length; i++) { if (a.points[i][2] === "step" && i > 0) { pts.push(X(a.points[i][0]) + "," + Y(a.points[i - 1][1])); } pts.push(X(a.points[i][0]) + "," + Y(a.points[i][1])); dots += '<circle cx="' + X(a.points[i][0]) + '" cy="' + Y(a.points[i][1]) + '" r="4"/>'; }
+      for (i = 0; i < a.points.length; i++) { if (a.points[i][2] === "step" && i > 0) { pts.push(X(a.points[i][0]) + "," + Y(a.points[i - 1][1])); } pts.push(X(a.points[i][0]) + "," + Y(a.points[i][1])); var sl = st.au && st.au.sel === a.points[i][0]; dots += '<circle' + (sl ? ' class="sel"' : '') + ' cx="' + X(a.points[i][0]) + '" cy="' + Y(a.points[i][1]) + '" r="' + (sl ? 7 : 4) + '"/>'; } // §345 A28: 選んだ点は大きく
       pts.push(W + "," + Y(a.points[a.points.length - 1][1]));
     } else { pts.push("0," + Y(base)); pts.push(W + "," + Y(base)); }
-    var mid = target === "vol" ? "" : '<line class="dau-mid" x1="0" x2="' + W + '" y1="' + Y(0.5) + '" y2="' + Y(0.5) + '"/>';
+    var mid = target === "vol" || target === "expr" || target === "mod" ? "" : '<line class="dau-mid" x1="0" x2="' + W + '" y1="' + Y(0.5) + '" y2="' + Y(0.5) + '"/>';
     return '<svg class="dau-g" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" data-end="' + end + '" role="img" aria-label="オートメーションのグラフ">' + mid +
       '<polyline class="dau-line' + (on ? '' : ' off') + '" points="' + pts.join(" ") + '"/>' + dots + '<line class="dau-ph" x1="0" x2="0" y1="0" y2="' + H + '"/></svg>';
   }
@@ -5656,16 +5658,17 @@
     h = '<div class="daw dm dau">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-au="back">&#x2190; ' + (au.from === "mix" ? "ミキサー" : "アレンジ") + '</button><b>&#x1F4C8; オートメーション</b></div>' +
       '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-au="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-au="stop" title="停止">&#x23F9;&#xFE0F;</button>' +
-        '<button class="modal-btn daw-tbtn" data-au="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;</button><span class="daw-pos">1.1</span></div>' +
+        '<button class="modal-btn daw-tbtn" data-au="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;</button><button class="modal-btn daw-tbtn" data-au="redo" title="やりなおし"' + (st.redo.length ? '' : ' disabled') + '>&#x21B7;</button><span class="daw-pos">1.1</span></div>' + // §345 A28: ↷
       '<div class="dm-row"><label class="dau-trk">トラック <select data-au="track">';
     for (i = 0; i < p.tracks.length; i++) { h += '<option value="' + p.tracks[i].id + '"' + (p.tracks[i].id === t.id ? ' selected' : '') + '>' + escHtml(p.tracks[i].name) + '</option>'; }
     h += '</select></label><div class="dau-tgs">';
-    for (i = 0; i < M.AUTO_ORDER.length; i++) { var k = M.AUTO_ORDER[i], on = M.autoActive(t, k); h += '<button class="modal-btn dau-tg' + (k === tg ? ' sel' : '') + (on ? ' on' : '') + '" data-aut="' + k + '">' + M.AUTO_TARGETS[k].name.replace("EQ ", "") + (on ? ' &#x1F4C8;' : '') + '</button>'; }
+    for (i = 0; i < M.AUTO_ORDER.length; i++) { var k = M.AUTO_ORDER[i], on = M.autoActive(t, k); h += '<button class="modal-btn dau-tg' + (k === tg ? ' sel' : '') + (on ? ' on' : '') + '" data-aut="' + k + '">' + (M.AUTO_TARGETS[k].short || M.AUTO_TARGETS[k].name.replace("EQ ", "")) + (on ? ' &#x1F4C8;' : '') + '</button>'; }
     h += '</div></div>' +
       '<div class="dm-row"><div class="dfx-sw"><b>' + d.name + '</b><button class="modal-btn dfx-tog' + (a && a.on !== false ? ' on' : '') + '" data-au="on">' + (a && a.on !== false ? 'ON' : 'OFF') + '</button></div>' +
       '<p class="small dfx-note">' + (eqOff ? '&#x26A0;&#xFE0F; EQ が OFF（またはバイパス）なので、音には効きません（点は残ります）。' : (act ? '効いています（点 ' + a.points.length + ' 個・その間は' + (tg === "vol" ? 'フェーダー' : (tg === "pan" ? 'ミキサーのパン' : 'FX のつまみ')) + 'の代わり）。' : (a && a.on === false ? 'OFF: ふだんの値（' + auText(tg, M.autoStatic(t, tg)) + '）で鳴ります。点は残っています。' : '点がありません: ふだんの値（' + auText(tg, M.autoStatic(t, tg)) + '）で鳴ります。'))) + '</p>' +
       auSvg(p, t, a, tg) +
       '<p class="small dfx-note">いまの値（<span class="dau-at">' + auPosText(auPos(p, Math.max(0, Math.round(st.cue || 0)))) + '</span>）: <b class="dau-now">' + auText(tg, M.autoNow(t, tg, Math.max(0, Math.round(st.cue || 0)))) + '</b></p></div>' +
+      auTargetNote(tg) + auSelHtml(p, t, a, tg) + // §345 A28
       '<div class="dm-row"><b class="small">点を足す（同じ位置なら値を変える）</b><div class="dau-add">' +
         '<label>小節<input type="number" class="dfx-num" inputmode="numeric" min="1" max="256" step="1" value="' + au.bar + '" data-auf="bar"></label>' +
         '<label>拍<input type="number" class="dfx-num" inputmode="decimal" min="1" step="0.25" value="' + au.beat + '" data-auf="beat"></label>' +
@@ -5681,6 +5684,111 @@
       h += '<button class="modal-btn daw-small dfx-all" data-au="clear">&#x1F5D1;&#xFE0F; 点を全部消す</button>';
     } else { h += '<p class="small dfx-note">まだありません。上で小節・拍・値を入れて「➕ 足す」。</p>'; }
     return h + '</div>' + saveNoteHtml() + '<p class="small dsv-note">点の間は直線でつなぎ、最初の点より前・最後の点より後は、その点の値のままです。音量・パンはオートメーションの値がそのまま使われ（フェーダーの値は残ります）、ミュート・ソロがいつも優先です。EQ は FX の EQ が ON のときだけ効きます。点を足す・直す・消す・ON／OFF は ↶ で戻せます。MIDI の書き出しには入りません（JSON・ZIP には入ります）。</p></div>';
+  }
+  // ---------- §345 A28: グラフで点を編集（タップ ＝ 足す・点をタップ ＝ 選ぶ・ドラッグ ＝ 動かす）・選んだ点の微調整・範囲のコピーと貼り付け ----------
+  var AU_W = 340, AU_H = 96, AU_SNAPS = [[960, "1 拍"], [480, "1/2 拍"], [240, "1/4 拍"], [0, "1 小節"]];
+  function auEnd(p, a) { var M = DM(); return Math.max(M.songEndTick(p), a && a.points.length ? a.points[a.points.length - 1][0] + M.PPQ * 4 : 0); }
+  function auSnapTick(p, raw) {
+    var M = DM(), sn = st.au && st.au.snap !== undefined ? st.au.snap : 960, lim = M.barToTick(p, 256) - 1, tk;
+    raw = Math.max(0, raw);
+    if (sn === 0) { var b = M.tickToBar(p, raw).bar - 1, t0 = M.barToTick(p, b), t1 = M.barToTick(p, b + 1); tk = raw - t0 < t1 - raw ? t0 : t1; } else { tk = Math.round(raw / sn) * sn; }
+    return Math.max(0, Math.min(lim, tk));
+  }
+  // 0〜1 のグラフの位置 → 値（0〜1・その種類の刻みに合わせる）
+  function auNormAt(target, fy) { var M = DM(), n = 1 - (fy * AU_H - 4) / (AU_H - 8); n = Math.max(0, Math.min(1, n)); return M.autoNorm(target, M.autoReal(target, n)); }
+  // fx・fy（グラフの中の 0〜1）の近くの点（グラフの幅 340 のうち ±near）→ tick か null
+  function auNear(p, t, target, fx, fy, near) {
+    var M = DM(), a = M.autoLane(t, target), end = auEnd(p, a), i, best = null, bd = 1e9;
+    if (!a || !a.points.length) { return null; }
+    for (i = 0; i < a.points.length; i++) { var dx = (a.points[i][0] / end - fx) * AU_W, dy = ((1 - a.points[i][1]) * (AU_H - 8) + 4 - fy * AU_H), d = Math.sqrt(dx * dx + dy * dy); if (d < bd) { bd = d; best = a.points[i][0]; } }
+    return bd <= (near || 14) ? best : null;
+  }
+  var auEdit = {
+    // グラフをタップ: 点の近く ＝ 選ぶ・それ以外 ＝ 点を足して選ぶ
+    tap: function (fx, fy, near) {
+      var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target; if (!t) { return { ok: false }; }
+      var hit = auNear(p, t, tg, fx, fy, near);
+      if (hit !== null) { st.au.sel = hit; st.au.msg = ""; return { ok: true, sel: hit }; }
+      var a = M.autoLane(t, tg), tick = auSnapTick(p, fx * auEnd(p, a)), n = auNormAt(tg, fy), snap = snapTracks(), r = M.autoSet(p, t, tg, tick, M.autoReal(tg, n));
+      if (!r.ok) { st.au.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      auDone(snap); st.au.sel = tick; st.au.msg = (r.replaced ? "同じ位置の点の値を変えました" : "点を足しました") + "（" + auPosText(auPos(p, tick)) + "・" + auText(tg, r.value) + "）";
+      return { ok: true, added: !r.replaced, sel: tick };
+    },
+    // 選んだ点を（fx, fy）へ動かす（指をはなしたとき 1 回・↶ 1 回）
+    drag: function (from, fx, fy) {
+      var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target; if (!t) { return { ok: false }; }
+      var a = M.autoLane(t, tg), to = auSnapTick(p, fx * auEnd(p, a)), n = auNormAt(tg, fy), snap = snapTracks(), r = M.autoMove(p, t, tg, from, to, n);
+      if (!r.ok) { st.au.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      auDone(snap); st.au.sel = to; st.au.msg = "点を動かしました（" + auPosText(auPos(p, to)) + "・" + auText(tg, M.autoReal(tg, n)) + "）"; return r;
+    },
+    // 選んだ点: dt（tick）・dv（画面の値の刻み）
+    nudge: function (dt, dv) {
+      var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target, a = t ? M.autoLane(t, tg) : null, sel = st.au.sel, i, q = null;
+      for (i = 0; a && i < a.points.length; i++) { if (a.points[i][0] === sel) { q = a.points[i]; } }
+      if (!q) { st.au.msg = "&#x26A0;&#xFE0F; 点を選んでください（グラフの点をタップ）"; return { ok: false }; }
+      var d = M.AUTO_TARGETS[tg], to = Math.max(0, q[0] + dt), real = M.autoReal(tg, q[1]) + dv * d.step, n = M.autoNorm(tg, real), snap = snapTracks(), r = M.autoMove(p, t, tg, q[0], to, n);
+      if (!r.ok) { st.au.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      auDone(snap); st.au.sel = to; st.au.msg = auPosText(auPos(p, to)) + "・" + auText(tg, M.autoReal(tg, n)); return r;
+    },
+    del: function () { var p = project(), M = DM(), t = M.findTrack(p, st.au.track); if (!t || st.au.sel === null || st.au.sel === undefined) { return false; } var ok0 = auApi.del(t.id, st.au.target, st.au.sel); if (ok0) { st.au.sel = null; st.au.msg = "点を消しました（↶ で戻せます）"; } return ok0; },
+    // 範囲（小節 a〜b）をコピー
+    copy: function (ba, bb) {
+      var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target; ba = Math.max(1, Math.round(Number(ba)) || 1); bb = Math.max(ba, Math.round(Number(bb)) || ba);
+      var c = t ? M.autoCopy(t, tg, M.barToTick(p, ba - 1), M.barToTick(p, bb)) : null;
+      st.au.ca = ba; st.au.cb = bb;
+      if (!c) { st.au.msg = "&#x26A0;&#xFE0F; " + ba + "〜" + bb + " 小節に点がありません"; return { ok: false }; }
+      c.from = t.name; c.bars = bb - ba + 1; c.bar0 = ba; st.auClip = c; st.au.msg = c.n + " 個の点をコピーしました（" + ba + "〜" + bb + " 小節）。貼り付ける小節を入れてください"; return { ok: true, n: c.n };
+    },
+    paste: function (bar) {
+      var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target; bar = Math.max(1, Math.round(Number(bar)) || 1); st.au.pbar = bar;
+      if (!t) { return { ok: false }; }
+      var snap = snapTracks(), r = M.autoPaste(p, t, tg, M.barToTick(p, bar - 1), st.auClip);
+      if (!r.ok) { st.au.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); return r; }
+      auDone(snap); st.au.msg = r.added + " 個の点を " + bar + " 小節目から貼り付けました" + (r.removed ? "（その範囲の点 " + r.removed + " 個を置きかえ）" : "") + (r.dropped ? "・入らなかった点 " + r.dropped + " 個（64 個まで・曲の外）" : "") + "（↶ で戻せます）"; return r;
+    },
+    // 選んだ点の 1 小節前から鳴らす
+    play: function () { var p = project(), M = DM(), sel = st.au.sel; if (sel === null || sel === undefined) { return startPlay(); } var b = Math.max(0, M.tickToBar(p, sel).bar - 2); return startPlay({ from: M.barToTick(p, b) }); }
+  };
+  function auSelHtml(p, t, a, tg) {
+    var M = DM(), sel = st.au.sel, q = null, i, sn = st.au.snap !== undefined ? st.au.snap : 960;
+    for (i = 0; a && i < a.points.length; i++) { if (a.points[i][0] === sel) { q = a.points[i]; } }
+    var h = '<div class="dm-row dau-edit"><div class="dau-snap small">グリッド ' + AU_SNAPS.map(function (s0) { return '<button class="daw-ced-c' + (s0[0] === sn ? ' on' : '') + '" data-au="snap:' + s0[0] + '">' + s0[1] + '</button>'; }).join("") + '</div>';
+    if (q) {
+      var stepT = sn || M.ticksPerBar(M.meterAt(p, q[0])), big = tg === "mod" ? 8 : (tg === "pan" ? 10 : (tg.indexOf("eq.") === 0 ? 2 : 5));
+      h += '<div class="dau-selrow"><b class="small">選んだ点: ' + auPosText(auPos(p, q[0])) + '・' + auText(tg, M.autoReal(tg, q[1])) + '</b><br>' +
+        '<button class="daw-ced-c" data-au="nudge:' + (-stepT) + ':0">&#x25C0; 前へ</button><button class="daw-ced-c" data-au="nudge:' + stepT + ':0">後ろへ &#x25B6;</button>' +
+        '<button class="daw-ced-c" data-au="nudge:0:' + big + '">&#x25B2; 上げる</button><button class="daw-ced-c" data-au="nudge:0:' + (-big) + '">&#x25BC; 下げる</button>' +
+        '<button class="daw-ced-c" data-au="seldel">&#x1F5D1;&#xFE0F; 消す</button><button class="daw-ced-c" data-au="selplay">&#x25B6;&#xFE0F; 1 小節前から</button></div>';
+    } else { h += '<p class="small dfx-note">グラフの空いた所をタップ ＝ 点を足す（グリッドに合わせる）・点をタップ ＝ 選ぶ・選んだ点をドラッグ ＝ 動かす（指をはなしたとき 1 回だけ ↶ に入ります）。</p>'; }
+    var bars = Math.max(1, M.tickToBar(p, Math.max(0, M.songEndTick(p) - 1)).bar), cb = st.auClip;
+    h += '<div class="dau-cp small">コピー <input type="number" class="dfx-num" inputmode="numeric" min="1" max="256" value="' + (st.au.ca || 1) + '" data-auf="ca" aria-label="コピーのはじまりの小節"> 〜 <input type="number" class="dfx-num" inputmode="numeric" min="1" max="256" value="' + (st.au.cb || Math.min(4, bars)) + '" data-auf="cb" aria-label="コピーの終わりの小節"> 小節 <button class="daw-ced-c" data-au="copy">&#x1F4CB; コピー</button>' +
+      (cb ? '<br>コピー中: ' + escHtml(M.AUTO_TARGETS[cb.target] ? M.AUTO_TARGETS[cb.target].name : cb.target) + ' ' + cb.n + ' 個（' + escHtml(cb.from) + '・' + cb.bar0 + ' 小節目から ' + cb.bars + ' 小節）→ <input type="number" class="dfx-num" inputmode="numeric" min="1" max="256" value="' + (st.au.pbar || 1) + '" data-auf="pbar" aria-label="貼り付ける小節"> 小節目へ <button class="daw-ced-c" data-au="paste">貼り付け</button>（同じ種類なら、ほかのトラックにも）' : '') + '</div>';
+    return h + '</div>';
+  }
+  function auTargetNote(tg) {
+    if (tg === "mod") { return '<p class="small dfx-note dau-midi">&#x2139;&#xFE0F; <b>MIDI だけ</b>: ゴリラの音源の鳴り方は変わりません。MIDI に CC1（モジュレーション）として書き出すので、Cubasis などの音源でビブラート・音色の変化に使えます（どう変わるかは受けとる音源しだい）。</p>'; }
+    if (tg === "expr") { return '<p class="small dfx-note">Expression は、音量（フェーダー・音量のオートメーション）とは別の、もう一段の音量です（100 ＝ そのまま）。再生・WAV・ステムに効き、MIDI では CC11 になります。</p>'; }
+    if (tg.indexOf("eq.") === 0) { return '<p class="small dfx-note">EQ のオートメーションは再生・WAV・ステムに効きますが、MIDI には入りません（MIDI に決まった番号がないため）。</p>'; }
+    return '<p class="small dfx-note">MIDI では ' + (tg === "vol" ? "CC7（ボリューム）" : "CC10（パン）") + ' として書き出します。</p>';
+  }
+  // グラフの指の操作
+  function auBindGraph(root, ctl) {
+    var g = root.querySelector && root.querySelector(".dau-g"); if (!g || !g.addEventListener) { return; }
+    var p = project(), M = DM(), t = M.findTrack(p, st.au.track), tg = st.au.target, drag = null;
+    function fxy(e) { var r = g.getBoundingClientRect(); return { fx: Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1))), fy: Math.max(0, Math.min(1, (e.clientY - r.top) / (r.height || 1))), sx: AU_W / (r.width || 1) }; }
+    g.addEventListener("pointerdown", function (e) {
+      var q = fxy(e), hit = auNear(p, t, tg, q.fx, q.fy, 16 * q.sx);
+      if (e.preventDefault) { e.preventDefault(); }
+      if (hit !== null && hit === st.au.sel) { drag = { from: hit, moved: false, q: q }; try { g.setPointerCapture(e.pointerId); } catch (e1) {} return; }
+      auEdit.tap(q.fx, q.fy, 16 * q.sx); renderAuto(root, ctl);
+    });
+    g.addEventListener("pointermove", function (e) {
+      if (!drag) { return; }
+      var q = fxy(e), dot = g.querySelector("circle.sel"); drag.moved = true; drag.q = q;
+      if (dot) { dot.setAttribute("cx", Math.round(q.fx * AU_W)); dot.setAttribute("cy", Math.round(q.fy * AU_H)); }
+    });
+    function up() { if (!drag) { return; } var d = drag; drag = null; if (d.moved) { auEdit.drag(d.from, d.q.fx, d.q.fy); } renderAuto(root, ctl); }
+    g.addEventListener("pointerup", up); g.addEventListener("pointercancel", function () { drag = null; renderAuto(root, ctl); });
   }
   function auHead(root, tick) {
     var p = st.project, t = DM().findTrack(p, st.au.track), now = root.querySelector(".dau-now"), at = root.querySelector(".dau-at"), ph = root.querySelector(".dau-ph"), g = root.querySelector(".dau-g");
@@ -5705,6 +5813,13 @@
         if (v === "play") { startPlay(); renderAuto(root, ctl); return; }
         if (v === "stop") { transportStop(); renderAuto(root, ctl); return; }
         if (v === "undo") { ops.undo(); return; }
+        if (v === "redo") { ops.redo(); return; } // §345 A28
+        if (v && v.indexOf("snap:") === 0) { au.snap = Number(v.substring(5)); renderAuto(root, ctl); return; }
+        if (v && v.indexOf("nudge:") === 0) { var nq = v.split(":"); auEdit.nudge(Number(nq[1]), Number(nq[2])); renderAuto(root, ctl); return; }
+        if (v === "seldel") { auEdit.del(); renderAuto(root, ctl); return; }
+        if (v === "selplay") { auEdit.play(); renderAuto(root, ctl); return; }
+        if (v === "copy") { auEdit.copy(val("ca"), val("cb")); renderAuto(root, ctl); return; }
+        if (v === "paste") { auEdit.paste(val("pbar")); renderAuto(root, ctl); return; }
         if (v === "on") { var a0 = M.autoLane(t, tg); auApi.on(t.id, tg, !(a0 && a0.on !== false)); }
         else if (v === "add") {
           au.bar = val("bar"); au.beat = val("beat");
@@ -5712,18 +5827,19 @@
           au.msg = r.ok ? (r.replaced ? "同じ位置の点の値を変えました" : "点を足しました") + "（" + auText(tg, r.value) + "）" : "&#x26A0;&#xFE0F; " + r.why;
         }
         else if (v === "clear") { auApi.clear(t.id, tg); au.msg = "点を全部消しました（↶ で戻せます）"; }
-        else if ((x = el.getAttribute("data-aut"))) { au.target = x; }
+        else if ((x = el.getAttribute("data-aut"))) { au.target = x; au.sel = null; }
         else if ((x = el.getAttribute("data-aud"))) { auApi.del(t.id, tg, Number(x)); au.msg = "点を消しました"; }
         renderAuto(root, ctl);
       };
     }
     var sel = root.querySelector('select[data-au="track"]');
-    if (sel) { sel.onchange = function () { au.track = sel.value; au.msg = ""; renderAuto(root, ctl); }; }
+    if (sel) { sel.onchange = function () { au.track = sel.value; au.msg = ""; au.sel = null; renderAuto(root, ctl); }; }
     var ins = root.querySelectorAll("input[data-aupv]");
     for (k = 0; k < ins.length; k++) {
       ins[k].onchange = function (ev) { var el = ev.currentTarget, r = auApi.setTick(t.id, tg, Number(el.getAttribute("data-aupv")), el.value); au.msg = r.ok ? "値を変えました（" + auText(tg, r.value) + "）" : "&#x26A0;&#xFE0F; " + (r.why || "変えられませんでした"); renderAuto(root, ctl); };
     }
     drawHead();
+    auBindGraph(root, ctl); // §345 A28
   }
 
   // ---------- §342 9B-1: 曲の構成（セクション）・小節へ・クリップの繰り返し・セクションの複製 ----------
@@ -6010,8 +6126,9 @@
       out.push("エフェクト・マスター・シンセの音色の中身（近い GM の音色の番号と名前だけ入ります）");
       out.push(f.muted ? "ミュート・ソロ（" + f.muted + " 本。全部のトラックを書き出します）" : "ミュート・ソロ（全部のトラックを書き出します）");
       if (f.swing) { out.push("ドラムのスイング（格子の位置で書き出します）"); }
+      if (f.autoEq) { out.push("EQ のオートメーション（" + f.autoEq + " 本・MIDI に決まった番号がないため。WAV・ステムには入ります）"); } // §345 A28
       var dm = [], k; for (k in f.drumMap) { if (f.drumMap.hasOwnProperty(k)) { dm.push(M.drumName(Number(k)) + " " + f.drumMap[k] + " 打 → " + M.drumName(M.DRUM_GM[k])); } }
-      h += '<div class="small">入るもの: 音符（高さ・位置・長さ・強さ）・トラック名・BPM・拍子' + (f.tempos > 1 ? '（テンポの変化 ' + (f.tempos - 1) + ' か所も）' : '') + '・セクションの名前（マーカー）<br>入らないもの: ' + escHtml(out.join("・")) + '</div>';
+      h += '<div class="small">入るもの: 音符（高さ・位置・長さ・強さ）・トラック名・BPM・拍子' + (f.tempos > 1 ? '（テンポの変化 ' + (f.tempos - 1) + ' か所も）' : '') + '・セクションの名前（マーカー）' + (f.cc && (f.cc.vol + f.cc.pan + f.cc.expr + f.cc.mod) ? '・オートメーション（' + [["vol", "音量 CC7"], ["pan", "パン CC10"], ["expr", "Expression CC11"], ["mod", "Modulation CC1"]].filter(function (z) { return f.cc[z[0]]; }).map(function (z) { return z[1] + " " + f.cc[z[0]]; }).join("・") + '）' : '') + '<br>入らないもの: ' + escHtml(out.join("・")) + '</div>'; /* §345 A28 */
       if (dm.length || f.drumDrop) { h += '<div class="small uke-daw-warn">&#x26A0;&#xFE0F; ' + (dm.length ? 'ゴリラDAW だけのドラムの番号は GM の近い番号で書きます: ' + escHtml(dm.join("・")) : '') + (f.drumDrop ? (dm.length ? '<br>' : '') + '音のない操作（チョークなど）' + f.drumDrop + ' 個は書きません' : '') + '</div>'; }
       h += '<div class="small">音色はほかのソフトでは同じになりません（シンセは 1〜16ch・ドラムは 10ch）</div>';
     }
@@ -6343,6 +6460,7 @@
     reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.redo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
+    auEdit: auEdit, auState: function () { return { au: st.au, clip: st.auClip || null }; }, // §345 A28
     hum: { act: function (v) { var f = rollClip() || (st.steps ? DM().findClip(project(), st.steps.clip) : null); if (!f) { return false; } if (v !== "hum" && !st.humOpen) { st.humOpen = true; } var r = humAct(v, f); if (st.root) { rerender(); } return r; }, html: function () { var f = rollClip() || (st.steps ? DM().findClip(project(), st.steps.clip) : null); return f ? humHtml(project(), f, "data-roll") : ""; }, state: function () { return { open: !!st.humOpen, ui: st.humUI, opts: pl && pl.opts ? pl.opts.hum : null }; } }, // §345 A27
     redo: function () { return edit.redo(); }, redoN: function () { return st.redo.length; },
     phrase: { copy: function () { var f = rollClip(); return f ? phrCopy(project(), f.clip, f.track) : null; }, paste: function (t, at, mode) { return phrPaste(project(), t, at, st.clip2, mode); }, sel: function (a) { if (a === "all") { var f = rollClip(); st.roll.ms = f ? f.clip.notes.slice() : []; } else if (a && a.length !== undefined) { st.roll.ms = a; } return st.roll ? phrMs(rollClip().clip) : []; }, act: function (v) { var f = rollClip(); if (!f || !st.root) { return false; } var r0 = phrAct(v, f, st.root); if (r0) { rerender(); } return r0; }, clip: function () { return st.clip2; }, fix: fixOverlaps, bars: function (a, b) { var f = rollClip(); return f ? phrSelBars(project(), f.clip, a, b) : 0; } }, // §345 A24

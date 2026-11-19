@@ -519,13 +519,15 @@
   // 画面の値 ↔ 0〜1: 音量 0〜100 ÷ 100・パン (−1〜1 + 1) ÷ 2・EQ (−12〜+12dB + 12) ÷ 24
   var AUTO_MAX_POINTS = 64;
   var AUTO_TARGETS = {
-    "vol": { name: "音量", lo: 0, hi: 100, step: 1, unit: "" },
-    "pan": { name: "パン", lo: -1, hi: 1, step: 0.01, unit: "" },
+    "vol": { name: "音量", lo: 0, hi: 100, step: 1, unit: "", cc: 7 },
+    "pan": { name: "パン", lo: -1, hi: 1, step: 0.01, unit: "", cc: 10 },
+    "expr": { name: "Expression", short: "Expr", lo: 0, hi: 100, step: 1, unit: "", cc: 11 }, // §345 A28: 音量のもう一段（音に効く・MIDI は CC11）
+    "mod": { name: "Modulation", short: "Mod", lo: 0, hi: 127, step: 1, unit: "", cc: 1, midiOnly: true }, // §345 A28: MIDI だけ（CC1・ゴリラの音源の鳴り方は変わらない）
     "eq.low": { name: "EQ LOW", lo: -12, hi: 12, step: 0.5, unit: "dB" },
     "eq.mid": { name: "EQ MID", lo: -12, hi: 12, step: 0.5, unit: "dB" },
     "eq.high": { name: "EQ HIGH", lo: -12, hi: 12, step: 0.5, unit: "dB" }
   };
-  var AUTO_ORDER = ["vol", "pan", "eq.low", "eq.mid", "eq.high"];
+  var AUTO_ORDER = ["vol", "pan", "expr", "mod", "eq.low", "eq.mid", "eq.high"];
   function autoMaxTick() { return MAX_BARS * PPQ * 32; } // 曲の上限の外（拍子が変わっても 256 小節に収まる大きさ）。画面では曲の上限で調べる
   function autoNorm(target, v) { var d = AUTO_TARGETS[target]; v = Number(v); if (!d || typeof v !== "number" || !isFinite(v)) { return null; } v = Math.max(d.lo, Math.min(d.hi, Math.round(v / d.step) * d.step)); return Math.round((v - d.lo) / (d.hi - d.lo) * 1e6) / 1e6; }
   function autoReal(target, n) { var d = AUTO_TARGETS[target]; if (!d) { return 0; } var v = d.lo + Math.max(0, Math.min(1, Number(n) || 0)) * (d.hi - d.lo); return Math.round(Math.round(v / d.step) * d.step * 1000) / 1000; }
@@ -608,7 +610,68 @@
   function autoOn(t, target, on) { if (!t || !AUTO_TARGETS[target]) { return false; } autoHost(t, target).on = !!on; return true; }
   function autoClear(t, target) { var a = autoLane(t, target); if (!a) { return false; } a.points = []; return true; }
   // 画面の値（いまの位置）: オートメーションが効いていれば その値、でなければ ふだんの値
-  function autoStatic(t, target) { if (target === "vol") { return num(t.vol, 80, 0, 100); } if (target === "pan") { return num(t.pan, 0, -1, 1); } var f = fxOf(t); return f.eq[target.split(".")[1]]; }
+  function autoStatic(t, target) { if (target === "vol") { return num(t.vol, 80, 0, 100); } if (target === "pan") { return num(t.pan, 0, -1, 1); } if (target === "expr") { return 100; } if (target === "mod") { return 0; } /* §345 A28 */ var f = fxOf(t); return f.eq[target.split(".")[1]]; }
+  // ---------- §345 A28: 点の移動・範囲のコピーと貼り付け・MIDI の CC ----------
+  // 点を動かす（from の点を to へ・値も）。to にほかの点があれば断る → { ok, why, tick }
+  function autoMove(p, t, target, from, to, n) {
+    var a = autoLane(t, target), i, k = -1;
+    if (!a || !isArr(a.points)) { return { ok: false, why: "点がありません" }; }
+    for (i = 0; i < a.points.length; i++) { if (a.points[i][0] === from) { k = i; } }
+    if (k < 0) { return { ok: false, why: "点がありません" }; }
+    to = Math.round(Number(to));
+    if (!isFinite(to) || to < 0 || to >= barToTick(p, MAX_BARS)) { return { ok: false, why: "曲の外には動かせません" }; }
+    for (i = 0; i < a.points.length; i++) { if (i !== k && a.points[i][0] === to) { return { ok: false, why: "その位置には、もう点があります" }; } }
+    var nv = n === undefined || n === null ? a.points[k][1] : Math.round(Math.max(0, Math.min(1, Number(n))) * 1e6) / 1e6;
+    a.points[k] = [to, nv, a.points[k][2] === "step" ? "step" : "lin"];
+    a.points.sort(function (x, y) { return x[0] - y[0]; });
+    return { ok: true, tick: to };
+  }
+  // [from, to) の点を写す → { target, pts: [[rel, n, kind]], span, n }（曲は変えない）
+  function autoCopy(t, target, from, to) {
+    var a = autoLane(t, target), out = [], i;
+    if (!a || !isArr(a.points) || !(to > from)) { return null; }
+    for (i = 0; i < a.points.length; i++) { var q = a.points[i]; if (q[0] >= from && q[0] < to) { out.push([q[0] - from, q[1], q[2] === "step" ? "step" : "lin"]); } }
+    return out.length ? { target: target, pts: out, span: to - from, n: out.length } : null;
+  }
+  // at から貼る（[at, at＋span) の点は置きかえ）→ { ok, why, added, removed, dropped }。target がちがえば断る（値の意味がちがう）
+  function autoPaste(p, t, target, at, clip) {
+    if (!clip || !isArr(clip.pts) || !clip.pts.length) { return { ok: false, why: "コピーした点がありません" }; }
+    if (clip.target !== target) { return { ok: false, why: "ちがう種類（" + (AUTO_TARGETS[clip.target] ? AUTO_TARGETS[clip.target].name : clip.target) + "）の点は貼れません" }; }
+    at = Math.round(Number(at)); var lim = barToTick(p, MAX_BARS);
+    if (!isFinite(at) || at < 0 || at >= lim) { return { ok: false, why: "位置がおかしいです" }; }
+    var a = autoHost(t, target), keep = [], removed = 0, dropped = 0, added = 0, i;
+    for (i = 0; i < a.points.length; i++) { if (a.points[i][0] >= at && a.points[i][0] < at + clip.span) { removed++; } else { keep.push(a.points[i]); } }
+    for (i = 0; i < clip.pts.length; i++) {
+      var tk = at + clip.pts[i][0];
+      if (tk >= lim || keep.length >= AUTO_MAX_POINTS) { dropped++; continue; }
+      keep.push([tk, clip.pts[i][1], clip.pts[i][2]]); added++;
+    }
+    keep.sort(function (x, y) { return x[0] - y[0]; });
+    a.points = keep;
+    return { ok: true, added: added, removed: removed, dropped: dropped };
+  }
+  // MIDI の CC（Control Change）にする: 音量 → CC7・パン → CC10・Expression → CC11・Modulation → CC1。EQ は MIDI の決まった CC がないので入れない
+  function autoCC(target, n) {
+    if (target === "vol") { return Math.max(0, Math.min(127, Math.round(n * 100 * 1.27))); }
+    if (target === "pan") { return Math.max(0, Math.min(127, Math.round(64 + (n * 2 - 1) * 63))); }
+    if (target === "expr") { return Math.max(0, Math.min(127, Math.round(n * 127))); }
+    if (target === "mod") { return Math.max(0, Math.min(127, Math.round(n * 127))); }
+    return null;
+  }
+  // レーン → [[tick, CC の値]]（点の間の直線は 16 分音符ごと・同じ値はくり返さない・最初は tick 0）
+  function autoCCEvents(a, target, end) {
+    var ps = a && isArr(a.points) ? a.points : [], out = [], last = -1, i, tk;
+    if (!ps.length || autoCC(target, 0) === null) { return out; }
+    function put(tick, n) { var v = autoCC(target, n); if (v !== last) { out.push([tick, v]); last = v; } }
+    put(0, ps[0][1]);
+    for (i = 1; i < ps.length; i++) {
+      var p0 = ps[i - 1], p1 = ps[i];
+      if (p1[2] === "step") { put(p1[0], p1[1]); continue; }
+      for (tk = Math.ceil((p0[0] + 1) / (PPQ / 4)) * (PPQ / 4); tk < p1[0]; tk += PPQ / 4) { put(tk, p0[1] + (p1[1] - p0[1]) * (tk - p0[0]) / (p1[0] - p0[0])); }
+      put(p1[0], p1[1]);
+    }
+    return out.filter(function (e) { return e[0] <= Math.max(end, ps[ps.length - 1][0]); });
+  }
   function autoNow(t, target, tick) { return autoActive(t, target) ? autoReal(target, autoValueAt(autoLane(t, target), tick)) : autoStatic(t, target); }
 
   // ---------- §342 9B-11: センド FX（トラック → DAW 専用のリバーブ・ディレイ → Wet だけ → DAW のマスター）----------
@@ -2053,7 +2116,7 @@
   }
   // 📤 曲 → SMF Format 1（PPQ 960）。鳴る音符（noteEvents）だけ。→ { ok, why, bytes, info }
   function midiExport(p) {
-    var ev = noteEvents(p, 0, Infinity), by = {}, i, j, info = { tracks: [], notes: 0, audio: 0, empty: 0, drumMap: {}, drumDrop: 0, tempos: 0, meters: 0, sections: 0, muted: 0, swing: 0 };
+    var ev = noteEvents(p, 0, Infinity), by = {}, i, j, info = { tracks: [], notes: 0, audio: 0, empty: 0, drumMap: {}, drumDrop: 0, tempos: 0, meters: 0, sections: 0, muted: 0, swing: 0, cc: { vol: 0, pan: 0, expr: 0, mod: 0 }, autoEq: 0 }, songEnd = songEndTick(p);
     for (i = 0; i < ev.length; i++) { (by[ev[i].track] = by[ev[i].track] || []).push(ev[i]); }
     var cond = [[0, 0, midiMeta(0x03, midiUtf8(str(p.name, "Gorilla DAW", 40)))]], ms = meters(p), ps = points(p), sec = sectionsOf(p);
     for (i = 0; i < ms.length; i++) { var dd = Math.round(Math.log(ms[i].den || 4) / Math.LN2); cond.push([ms[i].tick, 0, [0xFF, 0x58, 0x04, ms[i].num, dd, 24, 8]]); info.meters++; }
@@ -2075,8 +2138,10 @@
         if (/^[a-z0-9_-]{1,24}$/.test(preset)) { evs.push([0, 0, midiMeta(0x04, midiUtf8("ugsynth:" + preset))]); }
         evs.push([0, 1, [0xC0 | ch, MIDI_PRESET_GM.hasOwnProperty(preset) ? MIDI_PRESET_GM[preset] : extGm(t)]]); // §343: クリスマスの音色は ext.gm
       }
-      evs.push([0, 1, [0xB0 | ch, 7, Math.max(0, Math.min(127, Math.round(num(t.vol, 80, 0, 100) * 1.27)))]]);
-      evs.push([0, 1, [0xB0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + num(t.pan, 0, -1, 1) * 63)))]]);
+      if (!autoActive(t, "vol")) { evs.push([0, 1, [0xB0 | ch, 7, Math.max(0, Math.min(127, Math.round(num(t.vol, 80, 0, 100) * 1.27)))]]); } // §345 A28: オートメーションがあれば CC7 はその線
+      if (!autoActive(t, "pan")) { evs.push([0, 1, [0xB0 | ch, 10, Math.max(0, Math.min(127, Math.round(64 + num(t.pan, 0, -1, 1) * 63)))]]); }
+      ["vol", "pan", "expr", "mod"].forEach(function (k) { if (!autoActive(t, k)) { return; } autoCCEvents(autoLane(t, k), k, songEnd).forEach(function (e) { evs.push([e[0], 1, [0xB0 | ch, AUTO_TARGETS[k].cc, e[1]]]); info.cc[k]++; }); });
+      if (autoActive(t, "eq.low") || autoActive(t, "eq.mid") || autoActive(t, "eq.high")) { info.autoEq++; }
       for (j = 0; j < list.length; j++) {
         var e = list[j], m = e.m, on = e.tick, off;
         if (drum && DRUM_GM.hasOwnProperty(m)) {
@@ -2294,6 +2359,7 @@
     snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete,
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
+    autoMove: autoMove, autoCopy: autoCopy, autoPaste: autoPaste, autoCC: autoCC, autoCCEvents: autoCCEvents, // §345 A28
     HUM_PRESETS: HUM_PRESETS, HUM_ORDER: HUM_ORDER, humClean: humClean, humOf: humOf, humRnd: humRnd, humBars: humBars, humPlanClip: humPlanClip, humWrite: humWrite, // §345 A27
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
     addClip: addClip, duplicateClip: duplicateClip, moveClip: moveClip, resizeClip: resizeClip, deleteClip: deleteClip, hiddenNotes: hiddenNotes, deleteTrack: deleteTrack,

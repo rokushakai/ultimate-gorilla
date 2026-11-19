@@ -2973,7 +2973,7 @@ module.exports = async function () {
   DA9.ops.undo(); ok(MA.autoLane(DA9.project().tracks[1], "pan").points.length === nPA, "↶ brings the deleted point back");
   // --- 画面 ---
   pA = DA9.project(); LA = pA.tracks[0]; BA = pA.tracks[1];
-  ok(DA9.showAuto(LA.id, "vol") && RA9.innerHTML.indexOf("オートメーション") >= 0 && (RA9.innerHTML.match(/data-aut="/g) || []).length === 5 && (RA9.innerHTML.match(/<circle /g) || []).length === 2 && (RA9.innerHTML.match(/data-aupv="/g) || []).length === 2 && RA9.innerHTML.indexOf("点（2 ／ 64）") >= 0 && RA9.innerHTML.indexOf('data-auf="bar"') >= 0 && RA9.innerHTML.indexOf("dau-now") >= 0, "📈 screen: track, 5 targets, graph with the points, point list with values, add form, current value");
+  ok(DA9.showAuto(LA.id, "vol") && RA9.innerHTML.indexOf("オートメーション") >= 0 && (RA9.innerHTML.match(/data-aut="/g) || []).length === 7 /* §345 A28: Expression・Modulation を足して 7 */ && (RA9.innerHTML.match(/<circle /g) || []).length === 2 && (RA9.innerHTML.match(/data-aupv="/g) || []).length === 2 && RA9.innerHTML.indexOf("点（2 ／ 64）") >= 0 && RA9.innerHTML.indexOf('data-auf="bar"') >= 0 && RA9.innerHTML.indexOf("dau-now") >= 0, "📈 screen: track, 5 targets, graph with the points, point list with values, add form, current value");
   ok(DA9.showAuto(LA.id, "eq.mid") && RA9.innerHTML.indexOf("dau-tg sel on") >= 0, "EQ MID lane is shown as active");
   DA9.fx.set(LA.id, "eq", "on", false); DA9.showAuto(LA.id, "eq.mid"); ok(RA9.innerHTML.indexOf("EQ が OFF") >= 0, "EQ OFF → the 📈 screen says it has no effect"); DA9.fx.set(LA.id, "eq", "on", true);
   DA9.showMixer(); var mhA = RA9.innerHTML;

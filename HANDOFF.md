@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.04** |
+| 現在バージョン | **v3.05** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.05] 🦍 A28・オートメーション**（§345）: モデルの `AUTO_TARGETS`（expr・mod と cc）・`autoMove`・`autoCopy`・`autoPaste`・`autoCC`・`autoCCEvents`・`midiExport` の CC と `info.cc`・`info.autoEq`。DAW の出口に `ae`（Expression）・`auEdit`・`auBindGraph`。次は A29（セクションのつなぎ・フィル）
 - **[v3.04] 🦍 A27・演奏の表情**（§345）: モデルの `HUM_PRESETS`・`humOf`・`humPlanClip`・`humWrite`・`noteEvents` の第 4 引数（試聴の上書き）・トラックの `ext.hum = { pre, amt, seed }`。DAW の 🎭（`humHtml`・`humAct`・`UGDaw.hum`）・↷（`edit.redo`・`st.redo`・`UGDaw.redo`）。次は A28（オートメーション・いまの 📈 9B-9 を広げる）
 - **[v3.03] 🦍 A26・仕上げのスタジオ**（§345）: 🎄 `finishTab`・`finishSteps`・`energyPlan(p, セクションの id, 1〜5)`・`energyApply`・`energyRecPlan`・`energyItems`（A／B）・`ENERGY`・`p.ext.xmEnergy`・DAW の `xmHost.go`。`swapPlan` が 12/8 を 6/8 のパターンで作るように（いままでの不具合）。v3.0 シリーズ（A23〜A26）はここまで
 - **[v3.02] 🦍 A25・ハモりづくり**（§345）: 🎄 `harmPlan(p, 主旋律の id, 種類, 音色)`・`harmApply`・`harmTab`・`HARM_KINDS`（up・down・oct・chord・counter）・`HARM_SNDS`・トラックの `ext.harm`。次は A26（仕上げのスタジオ）
