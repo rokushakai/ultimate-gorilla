@@ -2827,7 +2827,7 @@
     var p = h.project(), M = DM(), L = M.sectionsOf(p), x = '<div class="dxm-finish">', i, steps = finishSteps(p);
     x += '<p class="small">曲を仕上げる道案内です。順番どおりでなくてかまいません（どこからでも開けます）。</p><ol class="dxm-steps">';
     for (i = 0; i < steps.length; i++) { var s = steps[i]; x += '<li class="' + (s.done ? 'dxm-done' : '') + '"><span>' + (s.done ? '&#x2705; ' : '&#x2B1C; ') + esc(s.name) + (s.info ? ' <small>（' + esc(s.info) + '）</small>' : '') + '<br><small>' + esc(s.how) + '</small></span><button class="modal-btn dxm-b" data-xfin="' + s.act + '">開く</button></li>'; }
-    x += '</ol>';
+    x += '</ol><div class="dxm-go"><button class="modal-btn dxm-b" data-xm="fMixa">&#x1FA7A; ミックスの補助（ピーク・音割れ・バランスを測る）</button></div>'; // §345 A30
     // 盛り上がり
     x += '<p class="small dxm-thead">セクションの盛り上がり（同じパターンのまま、音の多さと強さを変えます・手で直したクリップは変えません）</p>';
     if (!L.length) { return x + '<p class="small">セクション（マーカー）がありません。</p></div>'; }
@@ -3585,6 +3585,7 @@
           if (!cap.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(cap.why); re(); return; }
           var sv = mySave(cap.item); ui.msg = sv.ok ? "「" + esc(cap.item.meta.name) + "」をマイテンプレートに保存しました（" + cap.item.meta.tracks + " トラック）" : "&#x26A0;&#xFE0F; " + esc(sv.why); re(); return;
         }
+        if (v === "fMixa") { pvStop(); if (h.go) { h.go("mixa"); } return; } // §345 A30
         if (v === "lSeed" && ui.lopt) { pvStop(); ui.lopt.seed = (ui.lopt.seed || 1) % 99 + 1; re(); return; } // §345 A29
         if (v === "lCancel") { pvStop(); ui.lsec = ""; ui.lopt = null; ui.lplan = null; re(); return; }
         if (v === "lAdopt" && ui.lsec) { pvStop(); var lpl = linkPlan(p, ui.lsec, ui.lopt); if (!lpl.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(lpl.why); re(); return; } var lsn = h.snapAll ? h.snapAll() : h.snap(), lar = linkApply(p, lpl); ui.msg = "「" + esc(lpl.sec.name) + "→" + esc(lpl.next.name) + "」につなぎを足しました（音 " + lpl.n + " 個・元のクリップはそのまま・↶ で戻せます）"; ui.lsec = ""; ui.lopt = null; h.commit(lsn, ui.msg); return; }
@@ -3699,6 +3700,7 @@
     planSecs: planSecs, mmss: mmss, timeNote: timeNote, WAV_LIMIT: WAV_LIMIT,
     trimOverlaps: trimOverlaps,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
+    catOf: catOf, // §345 A30
     linkPlan: linkPlan, linkApply: linkApply, linkRemove: linkRemove, linkRecPlans: linkRecPlans, linkRecOpt: linkRecOpt, linkRebuild: linkRebuild, linkItems: linkItems, linkHtml: linkHtml, linkOf: linkOf, LINK_KINDS: LINK_KINDS, // §345 A29
     energyPlan: energyPlan, energyApply: energyApply, energyRecPlan: energyRecPlan, energyItems: energyItems, finishSteps: finishSteps, finishTab: finishTab, ENERGY: ENERGY, swapPlan2: swapPlan,
     harmPlan: harmPlan, harmApply: harmApply, harmTab: harmTab, HARM_KINDS: HARM_KINDS, HARM_SNDS: HARM_SNDS,

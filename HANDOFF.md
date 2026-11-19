@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.06** |
+| 現在バージョン | **v3.07** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.07] 🦍 A30・ミックスの補助**（§345）: DAW の `mixRange`・`mixTracks`・`mixRole`・`mixRun`（1 本ずつ・やめられる）・`mixAdvise`（diag と sug）・`mixOvOf`・`mixApplySug`・画面 `st.view = "mixa"`・`UGDaw.mixa`。書き出しの `ro.range`／`rangePlan`。試聴の上書き `pl.opts.mix`（`tVol`・`tPan`・`masterVol`）。A27〜A30 はここまで。次は iPhone・Cubasis 3・耳の確かめ（IPHONE_QA_DAW.md）と、同じページで 2 回描くとビットが一致しない件の原因
 - **[v3.06] 🦍 A29・セクションのつなぎ**（§345）: 🎄 `linkPlan(p, セクションの id, { kinds, dens, str, seed })`・`linkApply`・`linkRemove`・`linkRecPlans`・`linkRebuild`・`linkItems`・`linkHtml`・`p.ext.xmLinks`（o・mask・clips）・トラックの `ext.linkTrack`。モデルの `linkMasks`（`noteEvents` がマスクを見る）。次は A30（ミックスの補助）
 - **[v3.05] 🦍 A28・オートメーション**（§345）: モデルの `AUTO_TARGETS`（expr・mod と cc）・`autoMove`・`autoCopy`・`autoPaste`・`autoCC`・`autoCCEvents`・`midiExport` の CC と `info.cc`・`info.autoEq`。DAW の出口に `ae`（Expression）・`auEdit`・`auBindGraph`。次は A29（セクションのつなぎ・フィル）
 - **[v3.04] 🦍 A27・演奏の表情**（§345）: モデルの `HUM_PRESETS`・`humOf`・`humPlanClip`・`humWrite`・`noteEvents` の第 4 引数（試聴の上書き）・トラックの `ext.hum = { pre, amt, seed }`。DAW の 🎭（`humHtml`・`humAct`・`UGDaw.hum`）・↷（`edit.redo`・`st.redo`・`UGDaw.redo`）。次は A28（オートメーション・いまの 📈 9B-9 を広げる）

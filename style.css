@@ -2071,3 +2071,15 @@ button.daw-pos[data-act="goBar"] { min-width: 64px; min-height: 36px; background
 /* §345 A29 つなぎ・道案内の「開く」を 1 行に */
 .dxm-steps li .dxm-b { white-space: nowrap; flex: 0 0 auto; }
 .dxm-links { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+/* §345 A30 ミックスの補助 */
+.dm-mixa { margin-left: auto; }
+.dma-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; flex-wrap: wrap; }
+.dma-n { flex: 0 0 34%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dma-bar { flex: 1 1 30%; height: 8px; background: rgba(128,128,128,0.25); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.dma-bar i { display: block; height: 100%; background: #6fc36f; }
+.dma-bar i.hot { background: #e0a84f; }
+.dma-bar i.clip { background: #e05f5f; }
+.dma-v { flex: 1 1 100%; opacity: 0.85; }
+.dma-diag { margin: 4px 0; padding-left: 1.2em; }
+.dma-sug { display: block; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.25); }
+.dma-sug span { opacity: 0.85; }

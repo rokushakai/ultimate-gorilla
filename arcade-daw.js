@@ -82,7 +82,7 @@
     function chain(dest) {
       var g = ac.createGain(), pn = null, av = null, ae = null;
       if (!pl.wav) { av = ac.createGain(); av.gain.value = 1; av.connect(g); ae = ac.createGain(); ae.gain.value = 1; ae.connect(av); } // §345 A28: ae ＝ Expression // 9B-9: 音量のオートメーション（FX のあと・フェーダーの前）。WAV では使う出口にだけ（fxBuild で）
-      if (ac.createStereoPanner) { try { pn = ac.createStereoPanner(); pn.pan.value = t.pan; g.connect(pn); pn.connect(dest); } catch (e) { pn = null; } }
+      if (ac.createStereoPanner) { try { pn = ac.createStereoPanner(); pn.pan.value = tPan(t); g.connect(pn); pn.connect(dest); } catch (e) { pn = null; } }
       if (!pn) { g.connect(dest); }
       return { g: g, pn: pn, av: av, ae: ae };
     }
@@ -104,7 +104,7 @@
     function add(x) { if (b.out) { b.out.connect(x); } else { b.inp = x; } b.out = x; b.nodes.push(x); }
     // パンを先に: DynamicsCompressorNode はモノの音もステレオで出す（Chrome で確かめた）ので、あとのパンだとモノの音の真ん中の −3dB が消えて +3dB になる。
     // 先にパン（同じ pan）→ 出口のパンは 0（ステレオはそのまま通る）にすると、FX が中立のときは前と同じ音
-    if (withPan && ac.createStereoPanner) { n = ac.createStereoPanner(); n.pan.value = Math.max(-1, Math.min(1, Number(t.pan) || 0)); add(n); b.pn = n; }
+    if (withPan && ac.createStereoPanner) { n = ac.createStereoPanner(); n.pan.value = Math.max(-1, Math.min(1, Number(tPan(t)) || 0)); add(n); b.pn = n; }
     if (live.eq) {
       var bands = ["low", "mid", "high"];
       for (k = 0; k < 3; k++) { var bd = M.FX_BANDS[bands[k]]; n = ac.createBiquadFilter(); n.type = bd.type; n.frequency.value = bd.freq; n.Q.value = bd.q; n.gain.value = eqGain(f, bands[k]); add(n); b.eq.push(n); }
@@ -562,7 +562,11 @@
   // 再生中の出口の遅れ（秒）: リミッターの先読み（録音の自動の補正に足す）
   function masterLatency(ac) { var k = masterRtKey(st.project); return ac && limKey(k) && limState(ac) === "ok" ? limSamples(ac.sampleRate, k === "t") / ac.sampleRate : 0; }
   // §341 9A-6: DAW のマスター（ゲイン 2 つ: 共有のバスへ・共有の残響を通さない出口へ）。ゲイン ＝ master.vol ÷ 100
-  function masterVol() { var p = st.project, v = p && p.master ? Number(p.master.vol) : 80; return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
+  // §345 A30: ミックスの補助の試聴（B）だけ、曲は変えずに音量・パンを上書き（pl.opts.mix ＝ { トラックの ID: { vol, pan }, __master: { vol } }）
+  function mixOv(id) { var o = pl && pl.opts && pl.opts.mix; return o && o[id] ? o[id] : null; }
+  function tVol(t) { var o = mixOv(t.id); return o && o.vol !== undefined ? o.vol : t.vol; }
+  function tPan(t) { var o = mixOv(t.id); return o && o.pan !== undefined ? o.pan : t.pan; }
+  function masterVol() { var p = st.project, mo = mixOv("__master"), v = mo && mo.vol !== undefined ? Number(mo.vol) : (p && p.master ? Number(p.master.vol) : 80); return (isFinite(v) ? Math.max(0, Math.min(100, v)) : 80) / 100; }
   function masterOf() {
     var m = pl.mix.__master;
     if (m) { return m; }
@@ -583,13 +587,13 @@
   function rampTo(param, v, now) { try { if (now) { param.value = v; } else { param.setTargetAtTime(v, pl.ac.currentTime, 0.01); } } catch (e) { param.value = v; } }
   function setMasterGain() { if (!pl || !pl.mix.__master) { return; } var m = pl.mix.__master, v = masterVol() * abDaw(); rampTo(m.bus.gain, v, false); if (m.dry) { rampTo(m.dry.gain, v, false); } }
   function setGain(t, mx, now) {
-    var on = DM().audible(st.project, t), v = on ? (DM().autoActive(t, "vol") ? 1 : t.vol / 100) : 0, ac = pl.ac, list = [mx.main, mx.dry], i, ap = DM().autoActive(t, "pan"); // 9B-9: 音量のオートメーション中はフェーダーの代わりに av（ミュート・ソロはここで 0）
+    var on = DM().audible(st.project, t), v = on ? (DM().autoActive(t, "vol") ? 1 : tVol(t) / 100) : 0, ac = pl.ac, list = [mx.main, mx.dry], i, ap = DM().autoActive(t, "pan"); // 9B-9: 音量のオートメーション中はフェーダーの代わりに av（ミュート・ソロはここで 0）
     for (i = 0; i < list.length; i++) {
       if (!list[i]) { continue; }
       rampTo(list[i].g.gain, v, now);
       if (ap) { continue; } // 9B-9: パンはオートメーションが動かす
-      if (list[i].br && list[i].br.pn) { rampTo(list[i].br.pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9B-8: FX の道の頭のパン（出口のパンは 0 のまま）
-      else if (list[i].pn) { rampTo(list[i].pn.pan, Math.max(-1, Math.min(1, Number(t.pan) || 0)), now); } // 9A-6: パンもなめらかに
+      if (list[i].br && list[i].br.pn) { rampTo(list[i].br.pn.pan, Math.max(-1, Math.min(1, Number(tPan(t)) || 0)), now); } // 9B-8: FX の道の頭のパン（出口のパンは 0 のまま）
+      else if (list[i].pn) { rampTo(list[i].pn.pan, Math.max(-1, Math.min(1, Number(tPan(t)) || 0)), now); } // 9A-6: パンもなめらかに
     }
   }
   // ミュート・ソロ・音量を、鳴っているトラックにすぐ反映
@@ -792,7 +796,7 @@
     var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, from)); } catch (e2) {} }
     var dl0 = Math.max(0, Number(opts.delay) || 0), pf0 = perfNow(), ct0 = ac.currentTime;
     pl = { ac: ac, mix: {}, segs: [{ t0: ct0 + START_LEAD + dl0, tick0: from, fresh: true }], cur: from, loop: loop, la: a, segEnd: b, endAt: 0, pass: 0, timer: null, raf: null, clip: clip,
-      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined, hum: opts.hum || null }, muteClip: opts.muteClip || null, shadow: opts.shadow || null, late: { n: 0, max: 0 }, prep: [], start: null }; // 9B-18: late ＝ 遅れた音・9B-19: prep ＝ 準備のあいだ後回しにする時刻の予約
+      opts: { a: a, b: b, loop: loop, clip: clip, fixedB: opts.b !== undefined, hum: opts.hum || null, mix: opts.mix || null }, muteClip: opts.muteClip || null, shadow: opts.shadow || null, late: { n: 0, max: 0 }, prep: [], start: null }; // 9B-18: late ＝ 遅れた音・9B-19: prep ＝ 準備のあいだ後回しにする時刻の予約
     for (i = 0; i < p.tracks.length; i++) { mixFor(p.tracks[i]); warm(p.tracks[i]); }
     // §341 9A-7: ドラムのトラックがあれば生ドラムのサンプルを読みはじめる（終わるまでは作る音）
     for (i = 0; i < p.tracks.length; i++) { if (DM().isDrum(p.tracks[i])) { try { if (UG.loadSamples && UG.DRUM !== undefined) { UG.loadSamples([UG.DRUM]); } } catch (e5) {} break; } }
@@ -990,7 +994,7 @@
     var o = pl.opts, t = Math.floor(playTick()), M = DM(), p = st.project;
     if (!o.fixedB && !o.loop) { o.b = M.playEndTick(p); }
     if (t < o.a || t >= o.b) { t = o.loop ? o.a : t; }
-    return startPlay({ from: t, a: o.a, b: o.b, loop: o.loop, clip: o.clip, hum: o.hum || null });
+    return startPlay({ from: t, a: o.a, b: o.b, loop: o.loop, clip: o.clip, hum: o.hum || null, mix: o.mix || null });
   }
   // ---------- プレイヘッド（画面だけ。音の時計から位置を計算）----------
   function drawHead() {
@@ -1075,6 +1079,7 @@
     if (M && p && st.view === "ref") { renderRef(root, ctl); return; } // 9B-20
     if (M && p && st.view === "lufs") { renderLufs(root, ctl); return; } // 9B-13
     if (M && p && st.view === "auto") { renderAuto(root, ctl); return; } // 9B-9
+    if (M && p && st.view === "mixa") { renderMixa(root, ctl); return; } // §345 A30
     if (M && p && st.view === "steps") { renderSteps(root, ctl); return; }
     if (M && p && st.view === "aedit") { renderAedit(root, ctl); return; } // 9A-13
     if (M && p && st.view === "lib") { renderLib(root, ctl); return; } // 9A-15
@@ -2330,7 +2335,7 @@
   var xmHost = {
     project: function () { return project(); },
     snap: function () { return snapTracks(); },
-    go: function (v) { var p = project(), mel = p.tracks.filter(function (t0) { return /^メロディ/.test(t0.name) || (t0.ext && t0.ext.icon === "&#x1F3A4;"); })[0]; if (v === "mel") { var mc = mel ? (mel.clips.filter(function (c0) { return c0.notes && c0.notes.length; })[0] || mel.clips[0]) : null; if (mc && openRoll(mc.id)) { rerender(); return true; } st.view = "arr"; rerender(); return false; } if (v === "mix") { st.view = "mix"; rerender(); return true; } if (v === "proj") { st.view = "proj"; rerender(); return true; } st.view = "arr"; rerender(); return true; }, // §345 A26: 仕上げの道案内から
+    go: function (v) { var p = project(), mel = p.tracks.filter(function (t0) { return /^メロディ/.test(t0.name) || (t0.ext && t0.ext.icon === "&#x1F3A4;"); })[0]; if (v === "mel") { var mc = mel ? (mel.clips.filter(function (c0) { return c0.notes && c0.notes.length; })[0] || mel.clips[0]) : null; if (mc && openRoll(mc.id)) { rerender(); return true; } st.view = "arr"; rerender(); return false; } if (v === "mix") { st.view = "mix"; rerender(); return true; } if (v === "mixa") { openMixa("fin"); rerender(); return true; } if (v === "proj") { st.view = "proj"; rerender(); return true; } st.view = "arr"; rerender(); return true; }, // §345 A26: 仕上げの道案内から
     snapAll: function () { var p = project(); return { __all: true, tracks: JSON.parse(JSON.stringify(p.tracks)), markers: JSON.parse(JSON.stringify(p.markers || [])), tempo: JSON.parse(JSON.stringify(p.tempo)), ext: JSON.parse(JSON.stringify(p.ext || {})) }; }, // §345 A4: 曲のコード（ext）も ↶ で戻す
     restore: function (s) { project().tracks = s; },
     commit: function (snap, note, tid, cid) { pushUndo(snap); st.anote = note ? String(note) : ""; if (cid) { st.sel = { kind: "clip", id: cid }; } else if (tid) { st.sel = { kind: "track", id: tid }; } st.reveal = true; markDirty(); if (pl) { resync(); } rerender(); return true; },
@@ -2786,6 +2791,11 @@
     return r;
   }
   // 9B-15: 区切って予約できるか（OfflineAudioContext の suspend がある・止まったままになったことがない・SynthTrack のエンジンでない）。できないと全部を先に予約するので、長い曲ほどとても遅い（長さの 2 乗に近い）
+  // §345 A30: 範囲 [a, b) だけの描き方（余韻は 1.5 秒・残響の長さは見ない）
+  function rangePlan(p, rg) {
+    var M = DM(), a = Math.max(0, Math.round(rg.a)), b = Math.max(a + 1, Math.round(rg.b)), music = M.tickToSec(p, b) - M.tickToSec(p, a), sec = music + 1.5, frames = Math.ceil(sec * WAV_RATE);
+    return { a: a, endTick: b, bars: M.tickToBar(p, Math.max(0, b - 1)).bar - M.tickToBar(p, a).bar + 1, music: music, sec: sec, frames: frames, bytes: 44 + frames * 4, ok: music > 0 && music <= WAV_MAX_MUSIC, why: music > 0 ? "" : "範囲がありません", tail: 1.5, tailCapped: false, memMB: Math.round(frames * 16 / 1048576), long: false, chunk: wavCanChunk() };
+  }
   function wavCanChunk() {
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, Y = window.UGSynth;
     return !!(OAC && OAC.prototype && typeof OAC.prototype.suspend === "function") && !wav.noSuspend && !(Y && Y.track);
@@ -2806,7 +2816,7 @@
   }
   // 曲全体を描く → cb(blob, why, stats, plan)
   function renderSong(cb, ro) { // ro（9B-14）: { job, onProgress } ＝ 進み具合（約 2 秒ごと）・やめる。§345 A12: proj ＝ 描く曲（無ければいまの曲）・noSend ＝ 共有のリバーブ・ディレイを入れない
-    var p = (ro && ro.proj) || project(), M = DM(), UG = window.UGMelody, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, plan = wavPlan(p), id;
+    var p = (ro && ro.proj) || project(), M = DM(), UG = window.UGMelody, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, plan = ro && ro.range ? rangePlan(p, ro.range) : wavPlan(p), id; // §345 A30: range ＝ その範囲だけ描く（ミックスの補助）
     if (!plan.ok) { cb(null, plan.why); return; }
     if (!OAC || !UG || !UG.audioInit || !UG.encodeWav) { cb(null, "このブラウザでは書き出せません（OfflineAudioContext がありません）"); return; }
     if (!UG.audioInit()) { cb(null, "音の準備ができませんでした"); return; }
@@ -2839,8 +2849,9 @@
       if (fx.dlySend && A.dlySend) { fx.dlySend.gain.value = A.dlySend.gain.value; }
       if (ro && ro.noSend) { if (fx.revSend) { fx.revSend.gain.value = 0; } if (fx.dlySend) { fx.dlySend.gain.value = 0; } } // §345 A12: ステムは共有の残響なし
       A.ctx = off; A.master = mst; A.bus = fx.bus; A.revSend = fx.revSend || null; A.dlySend = fx.dlySend || null;
-      pl = { ac: off, mix: {}, segs: [{ t0: 0, tick0: 0, fresh: true }], cur: 0, loop: false, la: 0, segEnd: plan.endTick, endAt: 0, pass: 0, timer: null, raf: null, clip: null, wav: true, opts: { a: 0, b: plan.endTick, loop: false, clip: null } };
-      var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, 0)); } catch (e1) {} }
+      var pa = plan.a || 0; // §345 A30: 描きはじめ（ふつうは 0）
+      pl = { ac: off, mix: {}, segs: [{ t0: 0, tick0: pa, fresh: true }], cur: pa, loop: false, la: pa, segEnd: plan.endTick, endAt: 0, pass: 0, timer: null, raf: null, clip: null, wav: true, opts: { a: pa, b: plan.endTick, loop: false, clip: null } };
+      var E = SE(); if (E && E.setTempo) { try { E.setTempo(M.bpmAt(p, pa)); } catch (e1) {} }
       for (var ti = 0; ti < p.tracks.length; ti++) { mixFor(p.tracks[ti]); }
       // 9B-14: 区切って予約する（suspend で止まるたびに数秒先まで）。全部の音を先に作ると、まだ鳴らない音のノードも毎回処理されて、長い曲ほど（長さの 2 乗に近く）遅くなるため。
       // 予約は書き出しを始めたときの曲の写し（あとから直しても混ざらない）。SynthTrack（finish が要る）・suspend の無いブラウザは、これまでどおり全部を先に予約する
@@ -2851,9 +2862,9 @@
         pc = JSON.parse(JSON.stringify(p));
         for (ti = 0; ti < pc.tracks.length; ti++) { var ct = pc.tracks[ti], cm = pl.mix[ct.id]; if (cm && M.audible(pc, ct)) { trackIn(ct, cm, "main"); } } // 出口（FX・オートメーション）は頭で作る（途中で作らない）
         rcur = Math.min(plan.endTick, segTick(pc, pl.segs[0], WAV_AHEAD));
-        schedule(pc, 0, rcur, pl.segs[0]); voCollect(pl);
+        schedule(pc, pa, rcur, pl.segs[0]); voCollect(pl);
       } else {
-        schedule(p, 0, plan.endTick, pl.segs[0]);
+        schedule(p, pa, plan.endTick, pl.segs[0]);
         for (id in pl.mix) { if (pl.mix.hasOwnProperty(id) && pl.mix[id] && pl.mix[id].syn && pl.mix[id].syn.finish) { try { pl.mix[id].syn.finish(); } catch (e3) {} } }
       }
       rpl = pl; rA = { ctx: off, master: mst, bus: fx.bus, revSend: fx.revSend || null, dlySend: fx.dlySend || null };
@@ -5120,7 +5131,7 @@
   function mixHtml(p) {
     var i, h, mv = p.master ? Math.round(clampNum(p.master.vol, 0, 100, VOL0)) : VOL0, ps = panSupported();
     h = '<div class="daw dm">' +
-      '<div class="daw-top"><button class="modal-btn daw-small" data-mx="back">&#x2190; アレンジ</button><b>&#x1F39A;&#xFE0F; ミキサー</b></div>' +
+      '<div class="daw-top"><button class="modal-btn daw-small" data-mx="back">&#x2190; アレンジ</button><b>&#x1F39A;&#xFE0F; ミキサー</b><button class="modal-btn daw-small dm-mixa" data-mx="mixa" title="ピーク・音割れ・バランスを測る">&#x1FA7A; ミックスの補助</button></div>' + // §345 A30
       projBarHtml(p) +
       '<div class="daw-transport"><button class="modal-btn daw-tbtn' + (pl ? " daw-on" : "") + '" data-mx="play" title="再生">&#x25B6;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-mx="stop" title="停止">&#x23F9;&#xFE0F;</button><span class="daw-pos">1.1</span></div>' +
       '<div class="dm-row dm-master"><div class="dm-name"><b>DAW のマスター</b><span class="small"></span><button class="modal-btn dm-fxb dm-mfx' + (DM().masterLive(p).sig ? " on" : "") + '" data-mx="masterFx" title="マスター EQ・ピークリミッター">&#x1F39A;&#xFE0F; MASTER</button><button class="modal-btn dm-fxb dm-sfx' + (DM().sendLive(p).rev || DM().sendLive(p).dly ? " on" : "") + '" data-mx="sendFx" title="リバーブ・ディレイ（センドの戻り）">&#x1F30A; FX</button></div>' +
@@ -5148,6 +5159,7 @@
       els[k].onclick = function (ev) {
         var el = ev.currentTarget, v = el.getAttribute("data-mx"), id;
         if (v === "back") { st.view = "arr"; render(root, ctl); return; }
+        if (v === "mixa") { openMixa("mix"); render(root, ctl); return; } // §345 A30
         if (v === "play") { startPlay(); renderMix(root, ctl); return; }
         if (v === "stop") { transportStop(); renderMix(root, ctl); return; }
         if (v === "resetMaster") { mixer.resetMaster(); renderMix(root, ctl); return; }
@@ -5790,6 +5802,173 @@
     function up() { if (!drag) { return; } var d = drag; drag = null; if (d.moved) { auEdit.drag(d.from, d.q.fx, d.q.fy); } renderAuto(root, ctl); }
     g.addEventListener("pointerup", up); g.addEventListener("pointercancel", function () { drag = null; renderAuto(root, ctl); });
   }
+  // ---------- §345 A30 ミックスの補助（🩺）: ピーク・音割れ・音量のバランス・左右 → 診断の数字と、音楽の目安のおすすめ（分けて出す）----------
+  // 測り方: 範囲（いちばんにぎやかな所の 8 小節・または曲全体）を、マスター（いまの FX・リミッターのまま）→ トラック 1 本ずつ（ステムと同じ・センドなし）の順に描いて数える。重いので 1 本ずつ・やめられる
+  var mxa = { busy: false, job: null, state: "", res: null, pct: 0, step: "", msg: "", how: "loud", adv: null, pick: null, from: "mix" };
+  var MIX_ROLE = { melody: ["メロディ", 0], harm: ["ハモり", -5], drum: ["ドラム", -2], bass: ["ベース", -4], keys: ["コード楽器", -7], str: ["ストリングス・パッド", -8], bell: ["ベル・キラキラ", -13], audio: ["録音", 0], other: ["そのほか", -7] };
+  function mixRole(t) {
+    var M = DM(), X0 = XM(), x = null, i;
+    if (M.isAudio(t)) { return "audio"; }
+    if (t.ext && t.ext.harm) { return "harm"; }
+    if (isMelT(t)) { return "melody"; }
+    if (M.isDrum(t)) { return "drum"; }
+    if (t.ext && t.ext.linkTrack) { return t.ext.linkTrack === "chord" ? "keys" : t.ext.linkTrack; }
+    for (i = 0; i < t.clips.length && !x; i++) { if (t.clips[i].ext && t.clips[i].ext.xgen && t.clips[i].ext.xgen.pat) { x = t.clips[i].ext.xgen.pat; } }
+    var cat = x && X0 && X0.catOf ? X0.catOf(x) : "";
+    return cat === "bass" ? "bass" : (cat === "keys" ? "keys" : (cat === "str" ? "str" : (cat === "bell" || cat === "bells" ? "bell" : "other")));
+  }
+  // 範囲: いちばんにぎやかな所（ラストサビ → サビ → B メロ → …）の頭から 8 小節（短ければそのセクション）・セクションがなければ頭から 8 小節
+  function mixRange(p, how) {
+    var M = DM(), end = M.songEndTick(p), L = M.sectionsOf(p), X0 = XM(), i, best = null, pri = { last: 6, chorus: 5, drop: 4, solo: 3, B: 2, A: 1 };
+    if (how === "all") { return { a: 0, b: end, name: "曲全体" }; }
+    for (i = 0; i < L.length; i++) { var ty = X0 && X0.secTypeOfName ? X0.secTypeOfName(L[i].name) : "", s0 = pri[ty] || 0; if (!best || s0 > best.s) { best = { s: s0, sec: L[i] }; } }
+    var a = best ? best.sec.tick : 0, b0 = M.barToTick(p, M.tickToBar(p, a).bar - 1 + 8), b = Math.min(best ? best.sec.tick + best.sec.len : end, b0, end);
+    if (!(b > a)) { a = 0; b = Math.min(end, M.barToTick(p, 8)); }
+    return { a: a, b: b, name: best ? best.sec.name + "（" + M.tickToBar(p, a).bar + "〜" + (M.tickToBar(p, b - 1).bar) + " 小節）" : "頭から 8 小節" };
+  }
+  // 測るトラック（鳴る・その範囲に音がある・16 本まで）
+  function mixTracks(p, rg) {
+    var M = DM();
+    return p.tracks.filter(function (t) {
+      if (!M.audible(p, t)) { return false; }
+      return t.clips.some(function (c) { if (c.start >= rg.b || c.start + c.len <= rg.a) { return false; } if (c.type === "audio") { return true; } return c.notes.some(function (n) { var at = c.start + n[0] - (c.offset || 0); return at >= rg.a && at < rg.b; }); });
+    }).slice(0, 16);
+  }
+  function dB(x) { return x > 0 ? Math.round(20 * Math.log10(x) * 10) / 10 : -120; }
+  function mixStat(stt) { if (!stt) { return null; } var l = stt.L ? stt.L.rms : 0, r = stt.R ? stt.R.rms : l; return { peak: dB(stt.peak), rms: dB(Math.sqrt((l * l + r * r) / 2)), lr: r > 0 ? (l > 0 ? Math.max(-60, Math.min(60, Math.round(20 * Math.log10(l / r) * 10) / 10)) : -60) : (l > 0 ? 60 : 0), clip: stt.clip || 0 }; }
+  // 1 つ描く（素材・楽器の録音を読みこんでから）
+  function mixRenderOne(p, q, hasDrum, rg, job, noSend, cb) {
+    var UG = window.UGMelody, started = false, tm = null;
+    function go() { if (started) { return; } started = true; if (tm) { clearTimeout(tm); } if (job.canceled) { cb(null, "やめました"); return; } renderSong(function (blob, why, stt) { cb(blob ? stt : null, why, stt); }, { job: job, proj: q, noSend: noSend, range: rg }); }
+    ensureAssets(p, function () { var smp = XM() ? XM().progsOf(q) : [], progs = (hasDrum && UG.DRUM !== undefined ? [UG.DRUM] : []).concat(smp); if (progs.length && UG.loadSamples) { tm = setTimeout(go, WAV_SAMPLE_WAIT); try { UG.loadSamples(progs, go); } catch (e) { go(); } } else { go(); } });
+  }
+  function mixRun(how, onStep, onDone) {
+    if (mxa.busy || wav.busy || stm.busy) { return false; }
+    var p = project(), M = DM(), rg = mixRange(p, how), ts = mixTracks(p, rg), steps = [{ kind: "master" }].concat(ts.map(function (t) { return { kind: "track", t: t }; })), k = 0, res = { range: rg, how: how, master: null, tracks: [], at: Date.now() };
+    if (!ts.length) { mxa.state = "fail"; mxa.msg = "その範囲に鳴る音がありません"; if (onDone) { onDone(); } return false; }
+    stopPlay(false);
+    var job = mxa.job = { canceled: false }; mxa.busy = true; wav.busy = true; mxa.state = "busy"; mxa.msg = ""; mxa.pct = 0; mxa.adv = null; mxa.pick = null;
+    function fin(state, msg) { mxa.busy = false; wav.busy = false; mxa.job = null; mxa.state = state; mxa.msg = msg || ""; if (state === "done") { mxa.res = res; mxa.adv = mixAdvise(project(), res); mxa.pick = mxa.adv.sug.map(function () { return true; }); } dgLog("mixa", { s: state }); if (onDone) { onDone(); } }
+    function next() {
+      if (job.canceled) { fin("canceled", "やめました（曲は変えていません）"); return; }
+      if (k >= steps.length) { fin("done"); return; }
+      var s = steps[k], q = s.kind === "master" ? JSON.parse(JSON.stringify(p)) : stemProject(p, s.t.id), hasDrum = s.kind === "master" ? p.tracks.some(function (t) { return M.isDrum(t); }) : M.isDrum(s.t);
+      if (s.kind === "master") { q.tracks.forEach(function (t) { t.solo = false; }); }
+      mxa.step = s.kind === "master" ? "マスター" : s.t.name; mxa.pct = Math.round(k / steps.length * 100); if (onStep) { onStep(); }
+      mixRenderOne(p, q, hasDrum, rg, job, s.kind !== "master", function (stt, why) {
+        if (job.canceled) { fin("canceled", "やめました（曲は変えていません）"); return; }
+        var ms = stt ? mixStat(stt) : (/音がありません/.test(why || "") ? { peak: -120, rms: -120, lr: 0, clip: 0 } : null);
+        if (!ms) { fin("fail", why || "測れませんでした"); return; }
+        if (s.kind === "master") { res.master = ms; } else { ms.id = s.t.id; ms.name = s.t.name; ms.role = mixRole(s.t); ms.vol = s.t.vol; ms.pan = s.t.pan; res.tracks.push(ms); }
+        k++; setTimeout(next, 0);
+      });
+    }
+    next();
+    return true;
+  }
+  // 診断（数字）とおすすめ（目安）→ { diag: [{ lv, text }], sug: [{ kind, id, name, from, to, db, why }] }。曲は変えない
+  function mixAdvise(p, res) {
+    var M = DM(), out = { diag: [], sug: [] }, mv = p.master ? clampNum(p.master.vol, 0, 100, VOL0) : VOL0, m = res.master, i;
+    if (!m) { return out; }
+    // 診断
+    if (m.clip > 0) { out.diag.push({ lv: "warn", text: "マスターで音割れ（0dBFS に届いたサンプル " + m.clip + " 個）" }); }
+    else if (m.peak > -1) { out.diag.push({ lv: "warn", text: "マスターのピークが " + m.peak + "dBFS（−1dBFS より上・ほかのアプリや変換で割れやすい）" }); }
+    else { out.diag.push({ lv: "ok", text: "マスターのピーク " + m.peak + "dBFS（音割れなし）" }); }
+    if (m.rms < -30 && m.peak < -10) { out.diag.push({ lv: "info", text: "全体が小さめ（RMS " + m.rms + "dB）" }); }
+    if (Math.abs(m.lr) > 2) { out.diag.push({ lv: "warn", text: (m.lr > 0 ? "左" : "右") + "に " + Math.abs(m.lr) + "dB かたよっている" }); } else { out.diag.push({ lv: "ok", text: "左右の差 " + Math.abs(m.lr) + "dB（ほぼまん中）" }); }
+    res.tracks.forEach(function (t) { if (t.clip > 0) { out.diag.push({ lv: "warn", text: "「" + t.name + "」だけで音割れ（" + t.clip + " 個）" }); } });
+    // おすすめ: 役割ごとの目安の音量差（基準 ＝ メロディ／録音。なければいちばん大きいトラック）
+    var live = res.tracks.filter(function (t) { return t.rms > -70; }), ref = null;
+    live.forEach(function (t) { if ((t.role === "melody" || t.role === "audio") && (!ref || t.rms > ref.rms)) { ref = t; } });
+    if (!ref) { live.forEach(function (t) { if (!ref || t.rms - MIX_ROLE[t.role][1] > ref.rms - MIX_ROLE[ref.role][1]) { ref = t; } }); }
+    var base = ref ? ref.rms - MIX_ROLE[ref.role][1] : null;
+    live.forEach(function (t) {
+      if (base === null || t === ref) { return; }
+      var tr = M.findTrack(p, t.id); if (!tr || M.autoActive(tr, "vol")) { return; }
+      var want = base + MIX_ROLE[t.role][1], d = Math.round((want - t.rms) * 10) / 10;
+      if (Math.abs(d) < 3 || (d > 0 && d < 4)) { return; } // 上げるのは 4dB 以上はずれたときだけ（まばらな楽器は RMS が小さく出るため）
+      d = Math.max(-9, Math.min(6, d));
+      var nv = Math.round(Math.max(1, Math.min(100, tr.vol * Math.pow(10, d / 20)))), real = Math.round(20 * Math.log10(nv / Math.max(1, tr.vol)) * 10) / 10;
+      if (nv === Math.round(tr.vol)) { return; }
+      out.sug.push({ kind: "vol", id: t.id, name: t.name, from: Math.round(tr.vol), to: nv, db: real, why: MIX_ROLE[t.role][0] + "は " + (ref.name) + " より " + Math.abs(MIX_ROLE[t.role][1] - MIX_ROLE[ref.role][1]) + "dB くらい" + (MIX_ROLE[t.role][1] < MIX_ROLE[ref.role][1] ? "小さめ" : "") + "が目安（いま " + (Math.round((t.rms - ref.rms) * 10) / 10) + "dB）" + (nv >= 100 && d > real + 0.5 ? "・音量 100 で上げきれない（ほかを下げる手も）" : "") });
+    });
+    // 左右: かたよりの向きにいちばん効いているトラックを、半分まん中へ
+    if (Math.abs(m.lr) > 2) {
+      var dir = m.lr > 0 ? -1 : 1, cand = null;
+      res.tracks.forEach(function (t) { var tr = M.findTrack(p, t.id); if (!tr || M.autoActive(tr, "pan")) { return; } var pn = Number(tr.pan) || 0, w = pn * dir * Math.pow(10, t.rms / 20); if (pn * dir > 0 && (!cand || w > cand.w)) { cand = { t: t, tr: tr, w: w }; } });
+      if (cand) { var np = Math.round(Number(cand.tr.pan) / 2 * 100) / 100; out.sug.push({ kind: "pan", id: cand.t.id, name: cand.t.name, from: Number(cand.tr.pan), to: np, why: "左右のかたよりをへらす（" + panText(Number(cand.tr.pan)) + " → " + panText(np) + "）" }); }
+    }
+    // 音割れ・ピーク: マスターの音量を、ピークが −1.5dBFS になるまで下げる（バランスは変わらない）
+    if (m.clip > 0 || m.peak > -1) {
+      var down = Math.round((m.peak + 1.5) * 10) / 10, nm = Math.max(1, Math.round(mv * Math.pow(10, -Math.max(0.5, down) / 20)));
+      out.sug.push({ kind: "master", id: "__master", name: "マスター", from: Math.round(mv), to: nm, db: Math.round(20 * Math.log10(nm / Math.max(1, mv)) * 10) / 10, why: "ピークを −1.5dBFS くらいに（全部のバランスはそのまま）" });
+    }
+    return out;
+  }
+  // おすすめの上書き（試聴の B・採用）
+  function mixOvOf(adv, pick) { var o = {}; (adv ? adv.sug : []).forEach(function (s0, i) { if (pick && !pick[i]) { return; } o[s0.id] = o[s0.id] || {}; if (s0.kind === "pan") { o[s0.id].pan = s0.to; } else { o[s0.id].vol = s0.to; } }); return o; }
+  function mixApplySug(p, adv, pick) {
+    var M = DM(), n = 0; (adv ? adv.sug : []).forEach(function (s0, i) { if (pick && !pick[i]) { return; } if (s0.kind === "master") { p.master = p.master || {}; p.master.vol = s0.to; n++; return; } var t = M.findTrack(p, s0.id); if (!t) { return; } if (s0.kind === "pan") { t.pan = s0.to; } else { t.vol = s0.to; } n++; });
+    return n;
+  }
+  function mixaPlay(b) { var rg = mxa.res ? mxa.res.range : mixRange(project(), mxa.how); return startPlay({ a: rg.a, b: rg.b, from: rg.a, loop: true, mix: b ? mixOvOf(mxa.adv, mxa.pick) : {} }); }
+  function mixaHtml(p) {
+    var r = mxa.res, a = mxa.adv, i, rg = mixRange(p, mxa.how), pv = pl && pl.opts && pl.opts.mix ? (Object.keys(pl.opts.mix).length ? "B" : "A") : "";
+    function bar(db, cls) { var w = Math.max(0, Math.min(100, (db + 60) / 60 * 100)); return '<span class="dma-bar"><i class="' + (cls || "") + '" style="width:' + w.toFixed(1) + '%"></i></span>'; }
+    var h = '<div class="daw dm dma"><div class="daw-top"><button class="modal-btn daw-small" data-ma="back">&#x2190; ' + (mxa.from === "fin" ? "仕上げ" : "ミキサー") + '</button><b>&#x1FA7A; ミックスの補助</b></div>' +
+      '<div class="daw-transport"><button class="modal-btn daw-tbtn" data-ma="stop" title="停止">&#x23F9;&#xFE0F;</button><button class="modal-btn daw-tbtn" data-ma="undo" title="戻す"' + (st.undo.length ? '' : ' disabled') + '>&#x21B6;</button><button class="modal-btn daw-tbtn" data-ma="redo" title="やりなおし"' + (st.redo.length ? '' : ' disabled') + '>&#x21B7;</button><span class="daw-pos">1.1</span></div>';
+    h += '<div class="dm-row"><p class="small">各トラックとマスターのピーク（いちばん大きな瞬間）・RMS（平均の大きさ）・音割れ・左右を測って、音量のバランスの目安を出します。<b>数字は機械の測定で、「プロの品質」かどうかは数字だけでは決まりません。</b>おすすめは目安なので、▶ A／▶ B で聴いて、使うかどうかを決めてください。</p>' +
+      '<div class="dxm-opt"><span class="small">測る所</span><button class="daw-ced-c' + (mxa.how === "loud" ? ' on' : '') + '" data-ma="how:loud">にぎやかな 8 小節（はやい）</button><button class="daw-ced-c' + (mxa.how === "all" ? ' on' : '') + '" data-ma="how:all">曲全体（おそい）</button></div>' +
+      '<p class="small">' + escHtml(rg.name) + '・マスター ＋ トラック ' + mixTracks(p, rg).length + ' 本を 1 本ずつ描きます' + (mxa.how === "all" ? '（長い曲は時間がかかります。スマホでは「にぎやかな 8 小節」がおすすめ）' : '') + '</p>' +
+      (mxa.busy ? '<p class="small">測っています… <b>' + escHtml(mxa.step) + '</b> ' + mxa.pct + '%</p><button class="modal-btn daw-small" data-ma="cancel">やめる</button>' : '<button class="modal-btn dau-addb" data-ma="run">&#x1FA7A; 測る</button>') +
+      (mxa.msg ? '<p class="small dau-msg">' + escHtml(mxa.msg) + '</p>' : '') + '</div>';
+    if (r && !mxa.busy) {
+      h += '<div class="dm-row"><b class="small">診断（測った数字）・' + escHtml(r.range.name) + '</b><ul class="dma-diag small">' + a.diag.map(function (d0) { return '<li class="dma-' + d0.lv + '">' + (d0.lv === "warn" ? "&#x26A0;&#xFE0F; " : (d0.lv === "ok" ? "&#x2705; " : "&#x2139;&#xFE0F; ")) + escHtml(d0.text) + '</li>'; }).join("") + '</ul>';
+      h += '<div class="dma-row dma-m"><span class="dma-n"><b>マスター</b></span>' + bar(r.master.peak, r.master.clip ? "clip" : (r.master.peak > -1 ? "hot" : "")) + '<span class="dma-v small">ピーク ' + r.master.peak + '・RMS ' + r.master.rms + '</span></div>';
+      for (i = 0; i < r.tracks.length; i++) { var t0 = r.tracks[i]; h += '<div class="dma-row"><span class="dma-n">' + escHtml(t0.name) + ' <small>' + MIX_ROLE[t0.role][0] + '</small></span>' + bar(t0.peak, t0.clip ? "clip" : (t0.peak > -1 ? "hot" : "")) + '<span class="dma-v small">ピーク ' + t0.peak + '・RMS ' + t0.rms + (Math.abs(t0.lr) >= 60 ? '・' + (t0.lr > 0 ? '左だけ' : '右だけ') : (Math.abs(t0.lr) >= 1 ? '・' + (t0.lr > 0 ? '左' : '右') + ' +' + Math.abs(t0.lr) + 'dB' : '')) + '</span></div>'; }
+      h += '<p class="small">dBFS（0 ＝ 音割れの手前）。バー ＝ ピーク（−60〜0）。ベル・キラキラのように ときどき鳴る楽器は、RMS（平均）が小さく出ます。</p></div>';
+      h += '<div class="dm-row"><b class="small">おすすめ（音楽の目安・使うものを選べます）</b>';
+      if (!a.sug.length) { h += '<p class="small">目安から大きく（3dB 以上）はずれたトラックはありません。</p>'; }
+      for (i = 0; i < a.sug.length; i++) { var s0 = a.sug[i]; h += '<label class="dma-sug small"><input type="checkbox" data-mas="' + i + '"' + (mxa.pick && mxa.pick[i] ? ' checked' : '') + '> <b>' + escHtml(s0.name) + '</b> ' + (s0.kind === "pan" ? 'パン ' + panText(s0.from) + ' → ' + panText(s0.to) : '音量 ' + s0.from + ' → ' + s0.to + '（' + (s0.db > 0 ? '+' : '') + s0.db + 'dB）') + '<br><span>' + escHtml(s0.why) + '</span></label>'; }
+      if (a.sug.length) { h += '<div class="dxm-go"><button class="modal-btn dxm-b' + (pv === "A" ? ' on' : '') + '" data-ma="pa">&#x25B6;&#xFE0F; A（いま）</button><button class="modal-btn dxm-b' + (pv === "B" ? ' on' : '') + '" data-ma="pb">&#x25B6;&#xFE0F; B（おすすめ）</button><button class="modal-btn dxm-b dxm-main" data-ma="apply">&#x2705; 選んだおすすめを使う</button></div><p class="small">▶ は測った所をくり返します。B は曲を変えずに鳴らすだけ。使ったあとも ↶ 1 回で戻せます。</p>'; }
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+  function renderMixa(root, ctl) {
+    root.innerHTML = mixaHtml(project());
+    if (!root.querySelectorAll) { return; }
+    var els = root.querySelectorAll("button"), k, re2 = function () { renderMixa(root, ctl); };
+    for (k = 0; k < els.length; k++) {
+      els[k].onclick = function (ev) {
+        var v = ev.currentTarget.getAttribute("data-ma");
+        if (v === "back") { if (pl && pl.opts && pl.opts.mix) { transportStop(); } if (mxa.from === "fin") { st.view = "arr"; render(root, ctl); try { window.UGDaw.xmas.open(); } catch (e0) {} return; } st.view = "mix"; render(root, ctl); return; }
+        if (v === "stop") { transportStop(); re2(); return; }
+        if (v === "undo") { ops.undo(); return; }
+        if (v === "redo") { ops.redo(); return; }
+        mixaAct(v, re2);
+      };
+    }
+    var cbs = root.querySelectorAll("input[data-mas]");
+    for (k = 0; k < cbs.length; k++) { cbs[k].onchange = function (ev) { var i = Number(ev.currentTarget.getAttribute("data-mas")); if (mxa.pick) { mxa.pick[i] = !!ev.currentTarget.checked; } if (pl && pl.opts && pl.opts.mix && Object.keys(pl.opts.mix).length) { mixaPlay(true); } re2(); }; }
+    drawHead();
+  }
+  function mixaAct(v, re2) {
+    if (v && v.indexOf("how:") === 0) { mxa.how = v.substring(4); mxa.res = null; mxa.adv = null; re2 && re2(); return true; }
+    if (v === "run") { mixRun(mxa.how, function () { if (re2) { re2(); } }, function () { if (re2) { re2(); } }); if (re2) { re2(); } return true; }
+    if (v === "cancel") { if (mxa.job) { mxa.job.canceled = true; } return true; }
+    if (v === "pa" || v === "pb") { mixaPlay(v === "pb"); if (re2) { re2(); } return true; }
+    if (v === "apply") {
+      if (!mxa.adv || !mxa.adv.sug.length) { return true; }
+      var snap = xmHost.snapAll(), p = project(), n = mixApplySug(p, mxa.adv, mxa.pick);
+      if (pl) { transportStop(); }
+      if (!n) { mxa.msg = "使うおすすめが選ばれていません"; if (re2) { re2(); } return true; }
+      pushUndo(snap); markDirty(); mxa.msg = "おすすめを " + n + " つ使いました（↶ で戻せます）。もう一度 🩺 測ると、変えたあとの数字が見られます"; mxa.res = null; mxa.adv = null; mxa.pick = null;
+      if (re2) { re2(); } return true;
+    }
+    return false;
+  }
+  function openMixa(from) { st.view = "mixa"; mxa.from = from || "mix"; if (!mxa.busy) { mxa.msg = ""; } }
   function auHead(root, tick) {
     var p = st.project, t = DM().findTrack(p, st.au.track), now = root.querySelector(".dau-now"), at = root.querySelector(".dau-at"), ph = root.querySelector(".dau-ph"), g = root.querySelector(".dau-g");
     if (!t) { return; }
@@ -6460,6 +6639,7 @@
     reset: function () { recCancel(""); rec.open = false; rec.msg = ""; rec.result = null; st.aedit = null; recFreeFail(); if (sv.timer) { clearTimeout(sv.timer); sv.timer = null; } stopPlay(false); clearTail(); audForget(); st.undo.length = 0; st.redo.length = 0; st.anote = ""; st.steps = null; st.chooseAdd = false; st.confirmDel = null; st.project = null; st.sel = null; st.scroll = 0; st.msg = ""; st.view = "arr"; st.roll = null; sv.status = "demo"; sv.msg = ""; sv.note = ""; sv.at = 0; },
     // §341 9A-3: ピアノロール（テストからも呼ぶ）
     openRoll: function (id) { var ok = openRoll(id); if (ok && st.root) { rerender(); } return ok; },
+    mixa: { range: function (how) { return mixRange(project(), how); }, tracks: function (how) { return mixTracks(project(), mixRange(project(), how)); }, role: mixRole, advise: function (res) { return mixAdvise(project(), res); }, ov: mixOvOf, apply: mixApplySug, open: function (from) { openMixa(from); if (st.root) { rerender(); } return true; }, act: function (v) { var r = mixaAct(v, st.root ? function () { rerender(); } : null); return r; }, state: function () { return mxa; }, set: function (res) { mxa.res = res; mxa.adv = mixAdvise(project(), res); mxa.pick = mxa.adv.sug.map(function () { return true; }); if (st.root) { rerender(); } return mxa.adv; }, rangePlan: function (a, b) { return rangePlan(project(), { a: a, b: b }); }, playOpts: function () { return pl && pl.opts ? pl.opts.mix : null; } }, // §345 A30
     auEdit: auEdit, auState: function () { return { au: st.au, clip: st.auClip || null }; }, // §345 A28
     hum: { act: function (v) { var f = rollClip() || (st.steps ? DM().findClip(project(), st.steps.clip) : null); if (!f) { return false; } if (v !== "hum" && !st.humOpen) { st.humOpen = true; } var r = humAct(v, f); if (st.root) { rerender(); } return r; }, html: function () { var f = rollClip() || (st.steps ? DM().findClip(project(), st.steps.clip) : null); return f ? humHtml(project(), f, "data-roll") : ""; }, state: function () { return { open: !!st.humOpen, ui: st.humUI, opts: pl && pl.opts ? pl.opts.hum : null }; } }, // §345 A27
     redo: function () { return edit.redo(); }, redoN: function () { return st.redo.length; },
