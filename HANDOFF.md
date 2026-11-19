@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.08** |
+| 現在バージョン | **v3.09** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.09] 🦍 A32・フリーズ／バウンス**（§345）: DAW の `frz`（buf・key）・`frzKey`・`frzState`（ok／stale／nobuf）・`frzSet`（`pl.frz`）・`frzSched`（音声を鳴らす）・`frzRender`（`renderSong` の `rawGain`・5 番目の引数 buf）・`frzMake`・`frzOff`・`frzBounce`（短い ＝ importWav・長い ＝ longImport＋stageCommit）・`tPan`／`chainParams`／`setGain` のフリーズの扱い・`UGDaw.frz`。トラックの `ext.frz`。次は A33（MIDI の互換）
 - **[v3.08] 🦍 A31・書き出しの安定**（§345）: `renderSong` に `renderKey`（鍵）・`rcache`・`pcmDiff`・`rcOk`。鍵が同じなら描いたうえでくらべ、±1 LSB のゆれだけなら前の WAV を返す（`ro.noCache` でそろえない）。`UGDaw.wav.cache`（state・clear・key・diff）。原因は Chrome の足し算の順番（GAME_DESIGN の A31）。**次は A32（フリーズ）→ A33（MIDI）→ A34（速さ）**。続きは GAME_DESIGN の「A31〜A34」と TODO の Version 3.08〜 から
 - **[v3.07] 🦍 A30・ミックスの補助**（§345）: DAW の `mixRange`・`mixTracks`・`mixRole`・`mixRun`（1 本ずつ・やめられる）・`mixAdvise`（diag と sug）・`mixOvOf`・`mixApplySug`・画面 `st.view = "mixa"`・`UGDaw.mixa`。書き出しの `ro.range`／`rangePlan`。試聴の上書き `pl.opts.mix`（`tVol`・`tPan`・`masterVol`）。A27〜A30 はここまで。次は iPhone・Cubasis 3・耳の確かめ（IPHONE_QA_DAW.md）と、同じページで 2 回描くとビットが一致しない件の原因
 - **[v3.06] 🦍 A29・セクションのつなぎ**（§345）: 🎄 `linkPlan(p, セクションの id, { kinds, dens, str, seed })`・`linkApply`・`linkRemove`・`linkRecPlans`・`linkRebuild`・`linkItems`・`linkHtml`・`p.ext.xmLinks`（o・mask・clips）・トラックの `ext.linkTrack`。モデルの `linkMasks`（`noteEvents` がマスクを見る）。次は A30（ミックスの補助）

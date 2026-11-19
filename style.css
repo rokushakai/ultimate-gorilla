@@ -2083,3 +2083,7 @@ button.daw-pos[data-act="goBar"] { min-width: 64px; min-height: 36px; background
 .dma-diag { margin: 4px 0; padding-left: 1.2em; }
 .dma-sug { display: block; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.25); }
 .dma-sug span { opacity: 0.85; }
+/* §345 A32 フリーズ */
+.dfz { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(128,128,128,0.25); }
+.dfz-b { font-size: 0.9em; }
+.dfz-b.dfz-stale { opacity: 0.45; filter: grayscale(1); }
