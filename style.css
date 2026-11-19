@@ -2068,3 +2068,6 @@ button.daw-pos[data-act="goBar"] { min-width: 64px; min-height: 36px; background
 .daw-tbtn.daw-hum { box-shadow: inset 0 -3px 0 #e0a84f; }
 .pr-hum .daw-ced-c.on { outline: 2px solid #e0a84f; }
 .dxm-hum { margin: 4px 0; padding-left: 1.2em; }
+/* §345 A29 つなぎ・道案内の「開く」を 1 行に */
+.dxm-steps li .dxm-b { white-space: nowrap; flex: 0 0 auto; }
+.dxm-links { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }

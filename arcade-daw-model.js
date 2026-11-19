@@ -161,7 +161,7 @@
   // → { tick, end（d＝0 なら tick と同じ）, d, m, v, track（ID）, clip（ID）}
   // §345 A27: 演奏の表情（トラックの ext.hum）があれば tick・end・d・v に表情をつける（どの音を出すかは元の位置で決める・rel は元のまま）。hov ＝ { トラックの ID: hum か null }（試聴の A／B）
   function noteEvents(p, from, to, hov) {
-    var out = [], i, j, k, bars = null;
+    var out = [], i, j, k, bars = null, masks = linkMasks(p); // §345 A29: つなぎの所だけ元のドラム・ベースを鳴らさない
     for (i = 0; p && i < p.tracks.length; i++) {
       var t = p.tracks[i];
       if (t.kind !== "midi") { continue; }
@@ -173,6 +173,7 @@
         for (k = 0; k < c.notes.length; k++) {
           var n = c.notes[k], rel = n[0] - (c.offset || 0), at = cs + rel;
           if (rel < 0 || rel >= c.len || at < from || at >= to) { continue; }
+          if (masks.length && linkMasked(masks, t.id, at)) { continue; }
           if (hp && hp[k]) { out.push({ tick: hp[k].tick, end: hp[k].end, d: hp[k].d, m: n[2], v: hp[k].v, track: t.id, clip: c.id, ti: i, rel: rel }); continue; }
           out.push({ tick: at, end: n[1] > 0 ? Math.min(at + n[1], ce) : at, d: n[1], m: n[2], v: n[3], track: t.id, clip: c.id, ti: i, rel: rel });
         }
@@ -182,6 +183,14 @@
     return out;
   }
 
+  // §345 A29: つなぎのマスク（p.ext.xmLinks[セクション].mask ＝ [[トラック, from, to]]）
+  function linkMasks(p) {
+    var e = p && p.ext && p.ext.xmLinks, out = [], k, i;
+    if (!isObj(e)) { return out; }
+    for (k in e) { if (e.hasOwnProperty(k) && isObj(e[k]) && isArr(e[k].mask)) { for (i = 0; i < e[k].mask.length; i++) { var q = e[k].mask[i]; if (isArr(q) && q.length >= 3 && typeof q[0] === "string" && isFinite(q[1]) && isFinite(q[2])) { out.push(q); } } } }
+    return out;
+  }
+  function linkMasked(masks, tid, at) { var i; for (i = 0; i < masks.length; i++) { if (masks[i][0] === tid && at >= masks[i][1] && at < masks[i][2]) { return true; } } return false; }
   // ---------- §345 A27 演奏の表情（ヒューマナイズ）----------
   // トラックの ext.hum = { pre, amt（1〜100）, seed（1〜9999）}。元の音符は変えず、noteEvents（再生・WAV・ステム・MIDI）で表情をつける。ない・量 0 ＝ いまとまったく同じ
   // プリセット（量 100% のとき）: vj 強さのゆらぎ・tj 位置のゆらぎ（tick）・push 位置のかたより（tick・＋は後ろ）・lj 長さのゆらぎ（割合）・lb 長さのかたより・acc 拍のアクセント・vb 強さのかたより（割合）
@@ -2359,6 +2368,7 @@
     snap: snap, noteAdd: noteAdd, noteSet: noteSet, noteDelete: noteDelete,
     FORMAT: FORMAT, SCHEMA: SCHEMA, MAX_JSON: MAX_JSON, newProjectId: newProjectId, emptyProject: emptyProject, noteCount: noteCount,
     toRecord: toRecord, fromRecord: fromRecord, parseRecordText: parseRecordText,
+    linkMasks: linkMasks, // §345 A29
     autoMove: autoMove, autoCopy: autoCopy, autoPaste: autoPaste, autoCC: autoCC, autoCCEvents: autoCCEvents, // §345 A28
     HUM_PRESETS: HUM_PRESETS, HUM_ORDER: HUM_ORDER, humClean: humClean, humOf: humOf, humRnd: humRnd, humBars: humBars, humPlanClip: humPlanClip, humWrite: humWrite, // §345 A27
     MAX_TRACKS: MAX_TRACKS, barTicks: barTicks, trackEnd: trackEnd, overlapClip: overlapClip, addTrack: addTrack, moveTrack: moveTrack,
