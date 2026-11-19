@@ -2815,11 +2815,45 @@
     return out;
   }
   // 曲全体を描く → cb(blob, why, stats, plan)
+  // ---------- §345 A31 書き出しのそろえ（同じ曲・同じ設定なら、前と同じ WAV にそろえる）----------
+  // 調べてわかったこと: Chrome の OfflineAudioContext は、3 つ以上の音が 1 つの入口で合わさるとき足し算の順番が毎回変わり、浮動小数の最下位（約 1e-7）がずれる。
+  // 16 bit にすると約 0.01% のサンプルが ±1 LSB ちがう（ゴリラのコードの乱数ではない・素の Web Audio でも起きる）。描きなおすかぎり避けられないので、
+  // 何も変えていない曲（鍵が同じ）をもう一度書き出したときは、いつもどおり描いたうえで前の WAV と比べ、差が「計算のゆれ」（±1 以内・ごく一部）なら前の WAV を返す（バイトまで同じ）。
+  // それより大きな差なら新しく描いたほうを使う（本当に音が変わったときは必ず新しい音）。描くしくみ・ログはいつも新しく描いた結果（テストが本当に描いたものを見られるように）
+  var rcache = { key: "", blob: null, stt: null, plan: null, hits: 0, miss: 0, stores: 0, skip: "", last: null, big: 0 }, RCACHE_MAX = 48 * 1048576, RC_NOISE_FRAC = 0.005;
+  function renderKey(p, ro) {
+    var M = DM(), UG = window.UGMelody, A = UG && UG.audio || {}, S = UG && UG.samples || {}, X0 = XM(), drum = p.tracks.some(function (t) { return M.isDrum(t); });
+    var progs = X0 && X0.progsOf ? X0.progsOf(p) : [], smp = progs.map(function (g) { var n = UG && UG.sampleFiles ? UG.sampleFiles[g] : null; return g + ":" + (n && S.state ? (S.state[n] || "") : "-"); });
+    var body = JSON.stringify(p, function (k, v) { return k === "saved" || k === "updated" || k === "practice" ? undefined : v; });
+    var txt = JSON.stringify([body, A.revSend ? A.revSend.gain.value : null, A.dlySend ? A.dlySend.gain.value : null, A.master ? A.master.gain.value : null, S.drumKit || "", S.kickRate || 1, drum && UG && UG.sampleReady ? !!UG.sampleReady(UG.DRUM) : null, smp, ro && ro.range ? [ro.range.a, ro.range.b] : null, !!(ro && ro.noSend), WAV_RATE]);
+    return M.hash(txt) + "-" + M.hash("g" + txt) + "-" + txt.length;
+  }
+  // しまってよいか（代わりの音で描いた・素材を読みこみ中・大きすぎるときは しまわない）
+  function rcOk(p, blob) {
+    var M = DM(), UG = window.UGMelody, X0 = XM();
+    if (!blob || blob.size > RCACHE_MAX) { return "size"; }
+    if (X0 && X0.needLoad && X0.needLoad(p)) { return "samples"; }
+    if (p.tracks.some(function (t) { return M.isDrum(t); }) && UG && UG.sampleReady && !UG.sampleReady(UG.DRUM)) { return "drum"; }
+    if (audNeedLoad(p)) { return "assets"; }
+    return "";
+  }
+  function rcClear() { rcache.key = ""; rcache.blob = null; rcache.stt = null; rcache.plan = null; }
+  // 2 つの WAV（ArrayBuffer）の差 → { same（ヘッダーと長さ）, n, nDiff, maxAbs }
+  function pcmDiff(a, b) {
+    var out = { same: false, n: 0, nDiff: 0, maxAbs: 0 }, i;
+    if (!a || !b || a.byteLength !== b.byteLength || a.byteLength < 44) { return out; }
+    var ua = new Uint8Array(a, 0, 44), ub = new Uint8Array(b, 0, 44); for (i = 0; i < 44; i++) { if (ua[i] !== ub[i]) { return out; } }
+    var A2 = new Int16Array(a, 44, (a.byteLength - 44) >> 1), B2 = new Int16Array(b, 44, (b.byteLength - 44) >> 1), d;
+    out.same = true; out.n = A2.length;
+    for (i = 0; i < A2.length; i++) { d = A2[i] - B2[i]; if (d) { out.nDiff++; if (d < 0) { d = -d; } if (d > out.maxAbs) { out.maxAbs = d; } } }
+    return out;
+  }
   function renderSong(cb, ro) { // ro（9B-14）: { job, onProgress } ＝ 進み具合（約 2 秒ごと）・やめる。§345 A12: proj ＝ 描く曲（無ければいまの曲）・noSend ＝ 共有のリバーブ・ディレイを入れない
     var p = (ro && ro.proj) || project(), M = DM(), UG = window.UGMelody, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, plan = ro && ro.range ? rangePlan(p, ro.range) : wavPlan(p), id; // §345 A30: range ＝ その範囲だけ描く（ミックスの補助）
     if (!plan.ok) { cb(null, plan.why); return; }
     if (!OAC || !UG || !UG.audioInit || !UG.encodeWav) { cb(null, "このブラウザでは書き出せません（OfflineAudioContext がありません）"); return; }
     if (!UG.audioInit()) { cb(null, "音の準備ができませんでした"); return; }
+    var rkey = ro && ro.noCache ? "" : renderKey(p, ro); // §345 A31（音の準備のあと: 共有の残響の量を鍵に入れるため）
     // §341 9A-10: 鳴らすはずの音声の素材が無い・読めないときは書き出さない（無音のまま成功にしない）
     var ti0, cj, miss = [];
     for (ti0 = 0; ti0 < p.tracks.length; ti0++) {
@@ -2889,7 +2923,20 @@
       var blob = null;
       try { blob = UG.encodeWav(buf); } catch (e6) { blob = null; }
       if (!blob) { cb(null, "WAV にできませんでした", stt, plan); return; }
-      cb(blob, "", stt, plan);
+      // §345 A31: 鍵が同じなら前の WAV と比べて、計算のゆれだけなら前の WAV を返す
+      var why0 = rkey ? rcOk(p, blob) : "nokey";
+      function keep0() { rcache.skip = why0; if (!why0) { rcache.key = rkey; rcache.blob = blob; rcache.stt = stt; rcache.plan = plan; rcache.stores++; } cb(blob, "", stt, plan); }
+      if (!why0 && rkey === rcache.key && rcache.blob && rcache.blob.size === blob.size) {
+        var old = rcache.blob, ost = rcache.stt, opl = rcache.plan;
+        luReadBlob(old, function (ab1) { luReadBlob(blob, function (ab2) {
+          var df = pcmDiff(ab1, ab2); rcache.last = { n: df.n, nDiff: df.nDiff, maxAbs: df.maxAbs, same: df.same };
+          if (df.same && df.maxAbs <= 1 && df.nDiff <= Math.max(16, df.n * RC_NOISE_FRAC)) { rcache.hits++; cb(old, "", ost, opl); return; }
+          rcache.big++; rcache.miss++; keep0();
+        }); });
+        return;
+      }
+      if (rkey) { rcache.miss++; rcache.last = null; }
+      keep0();
     }
     off.oncomplete = function (ev) { fin(ev.renderedBuffer); };
     // 9B-14: 鳴り終わった声を出口から外す（つないだままだと、終わった声のノードも毎回処理されて、曲の後ろほど遅くなる）。終わり（はなした音が消える時刻）から WAV_VO_KEEP 秒あとに外す（そのころは音が無い）
@@ -2975,8 +3022,9 @@
       if (tm) { clearTimeout(tm); }
       var samplesOk = !hasDrum || !UG.sampleReady || !!UG.sampleReady(UG.DRUM);
       wav.pct = 0;
+      var hits0 = rcache.hits; // §345 A31
       renderSong(function (blob, why, stt, pln) {
-        wav.busy = false; wav.job = null; wav.stats = stt || null; wav.ms = Date.now() - job.t0;
+        wav.busy = false; wav.job = null; wav.stats = stt || null; wav.ms = Date.now() - job.t0; wav.cached = rcache.hits > hits0;
         if (job.canceled) { wav.state = "canceled"; wav.msg = "やめました（描いた音は捨てました）"; }
         else if (!blob) { wav.state = "fail"; wav.msg = why || "書き出せませんでした"; }
         else {
@@ -3419,7 +3467,7 @@
     else {
       if (wav.state === "done" && wav.blob) {
         var w = wav.stats;
-        h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + (isDbg() && wav.diag ? '<br><span class="small dp-diag">診断: 指紋 ' + escHtml(wav.diag.fp) + '・再生 ' + wav.diag.live + 'Hz・録音の展開 ' + wav.diag.dec + 'Hz・ドラムの録音 ' + (wav.diag.drum ? "あり" : "なし") + '・' + wav.diag.ms + 'ms</span>' : '') + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
+        h += '<div class="daw-info">&#x2705; 書き出しました: ' + escHtml(wav.name) + (wav.cached ? '<br><span class="small dp-cached">前と同じ曲・同じ設定なので、前に書き出した WAV と同じ中身にそろえました（描きなおした差はブラウザの計算のゆれ ±1 だけでした）</span>' : '') + (isDbg() && wav.diag ? '<br><span class="small dp-diag">診断: 指紋 ' + escHtml(wav.diag.fp) + '・再生 ' + wav.diag.live + 'Hz・録音の展開 ' + wav.diag.dec + 'Hz・ドラムの録音 ' + (wav.diag.drum ? "あり" : "なし") + '・' + wav.diag.ms + 'ms</span>' : '') + '<br><span class="small">' + (Math.round(w.sec * 100) / 100) + ' 秒・' + mb(wav.blob.size) + '・' + w.rate + 'Hz・ピーク L ' + w.L.peak + ' ／ R ' + w.R.peak + '</span>' + (wav.note ? '<br><span class="small">&#x26A0;&#xFE0F; ' + escHtml(wav.note) + '</span>' : '') + '</div>' +
           '<div class="dp-btns"><button class="modal-btn" data-pj="wavSave">&#x1F4BE; ファイルに保存（共有）</button>' + (wav.url ? '<a class="modal-btn dp-dl" href="' + wav.url + '" download="' + escHtml(wav.name) + '">&#x2B07;&#xFE0F; ダウンロード</a>' : '') + '</div>' + fileSaveNote(wav.saved) + '';
       } else if (wav.state === "fail" || wav.state === "canceled") { h += '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(wav.msg) + '</div>'; }
       h += pln.ok ? '<button class="modal-btn dp-wavgo" data-pj="wav">&#x1F3B5; WAV を書き出す</button>' : '<div class="daw-msg">&#x26A0;&#xFE0F; ' + escHtml(pln.why) + '</div>';
@@ -6651,7 +6699,7 @@
     ced: { open: function (b) { cedOpen(b); rerender(); }, click: function (v) { return st.root ? cedClick(v, st.root, st.ctl) : false; }, state: function () { return st.ced; }, html: function () { return cedHtml(project()); } }, // §345 A19
     handoff: { info: function () { return handoffInfo(project()); }, text: function () { return handoffText(project()); }, html: function () { return handoffHtml(project()); }, state: function () { return ho; } }, // §345 A17
     stem: { plan: function () { return stemPlan(project()); }, one: stemOne, all: stemAll, cancel: stemCancel, state: function () { return stm; }, project: stemProject, html: function () { return stemHtml(project()); } }, // §345 A12
-    wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
+    wav: { plan: function () { return wavPlan(project()); }, start: wavExport, cancel: wavCancel, state: function () { return wav; }, render: renderSong, cache: { state: function () { return { key: rcache.key, has: !!rcache.blob, hits: rcache.hits, miss: rcache.miss, stores: rcache.stores, skip: rcache.skip, bytes: rcache.blob ? rcache.blob.size : 0, last: rcache.last, big: rcache.big }; }, diff: pcmDiff, clear: rcClear, key: function (ro) { return renderKey(project(), ro); } }, /* §345 A31 */ stats: bufStats, RATE: WAV_RATE, MAX: WAV_MAX_MUSIC, TAIL: WAV_TAIL },
     hear: hear, steps: steps, openEditor: function (id) { var ok = openEditor(id); if (ok && st.root) { rerender(); } return ok; }, ops: ops, mixer: mixer, fx: fxApi, lufs: luApi, showLufs: function () { st.view = "lufs"; if (st.root) { renderLufs(st.root, st.ctl); } return true; }, master: msApi, meter: { set: function (on) { if (!!on !== lm.on) { lm.on = !!on; if (lm.on) { lm.state = pl ? "wait" : "idle"; if (pl) { lmAttach(true); } } else { lmClear(); } } return lm.on; }, reset: function () { var r0 = !!lm.node; lm.live = null; lm.full = null; lm.fullAt = -1; lm.upd = 0; lm.late = { n: 0, max: 0 }; if (r0) { lmDetach(""); lmAttach(true); } return true; }, state: function () { return { on: lm.on, state: lm.state, node: !!lm.node, n: lm.live ? lm.live.count() : 0, tp: lm.tp }; }, setTp: function (on) { return lmSetTp(on); }, values: function () { return lmValues(); }, NAME: LM_NAME },
     ref: { // 9B-20: 🎧 リファレンス・長い音声の読みこみ（テスト・確かめ用も）
       state: function () { var p = project(), M = DM(), r = M.refOf(p), s = M.refSpan(p); return { ref: r ? JSON.parse(JSON.stringify(r)) : null, span: s ? { start: s.start, end: s.end, dur: s.dur, kind: s.asset.kind || "wav", long: !!s.asset.long } : null, ab: st.refAB || "both", loaded: !!(s && aud.buf[s.asset.id]), stage: stageInfo(), playEnd: M.playEndTick(p), songEnd: M.songEndTick(p), node: !!(pl && pl.mix.__ref), srcs: pl && pl.mix.__ref ? pl.mix.__ref.srcs.length : 0, gain: refGainVal(p), daw: abDaw() }; },
