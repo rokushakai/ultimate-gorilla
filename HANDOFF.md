@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.01** |
+| 現在バージョン | **v3.02** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.02] 🦍 A25・ハモりづくり**（§345）: 🎄 `harmPlan(p, 主旋律の id, 種類, 音色)`・`harmApply`・`harmTab`・`HARM_KINDS`（up・down・oct・chord・counter）・`HARM_SNDS`・トラックの `ext.harm`。次は A26（仕上げのスタジオ）
 - **[v3.01] 🦍 A24・フレーズの道具**（§345）: `st.roll.ms`（選んだ音）・`st.clip2`（コピー）・`phrCopy`／`phrPaste(p, t, 曲の tick, cb, "replace"|"mix")`／`phrTranspose`／`phrMove`／`phrLen`／`phrVel`／`fixOverlaps`・`phrHtml`／`phrAct`（`UGDaw.phrase`）。次は A25（ハモり）
 - **[v3.00] 🦍 A23・メロディの補助**（§345）: `rollAssist`・`noteKind`・`assistGridHtml`／`assistBarHtml`（`.pr-cbar` は幅 0・`.pr-inner` は flex）・`st.rollAssist`・ステップ入力 `st.roll.step`・`stepAct`（`UGDaw.roll2`）。次は A24（フレーズの道具）
 - **[v2.99] 🦍 A22・iPhone の仕上げ**（§345）: `.daw-tpwrap`（sticky）・`data-act="goBar"`（位置のボタン・`class="daw-pos"` のまま）・`tpFollow`／`tpFollowTick`（`UGDaw.follow()`）・「[」「]」。12/8 の作りなおしは `regenClip` で 6/8 ×2 小節。総合のテスト `tests/test-flow2.js`。§345 A19〜A22 はここまで

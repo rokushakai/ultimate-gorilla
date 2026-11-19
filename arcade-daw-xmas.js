@@ -2478,6 +2478,126 @@
     return true;
   }
 
+  // ---------- §345 A25 ハモりづくり（主旋律 → 上ハモ・下ハモ・オクターブ・コードの音・対旋律の候補）----------
+  // 決まった計算（同じ曲・同じ設定なら同じ音符）。元のメロディは変えない。結果は編集できる候補
+  var HARM_KINDS = [["up", "上ハモ"], ["down", "下ハモ"], ["oct", "オクターブ（下）"], ["chord", "コードの音を優先"], ["counter", "すき間の対旋律"]];
+  var HARM_SNDS = [["xm-choir", "コーラス"], ["xm-strings", "ストリングス"], ["xm-warmpiano", "ピアノ"], ["xm-choirpad", "声のようなパッド"], ["xm-flute", "フルート"]];
+  function harmScale(sk) { return sk.key === null ? null : (sk.kmode === "min" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11]).map(function (x) { return (x + sk.key) % 12; }); }
+  function inSc(sc, m) { return sc.indexOf(((m % 12) + 12) % 12) >= 0; }
+  // スケールの上で steps 度動かす（スケールの外の音からは、まず近いスケールの音へ）
+  function scaleStep(sc, m, steps) { var dir = steps > 0 ? 1 : -1, n = Math.abs(steps), g = 0; while (n > 0 && g++ < 48) { m += dir; if (inSc(sc, m)) { n--; } } return m; }
+  // 曲の tick → その小節のコードの構成音（無ければ null）
+  function chordPcsAt(p, sc0, tick, key) { var M = DM(), b = M.tickToBar(p, tick).bar - 1, id = sc0[b]; return id ? chordOf(key, id) : null; }
+  // 主旋律のトラック → 見本 { ok, why, kind, src, clips: [{ start, len, name, notes }], stats }
+  function harmPlan(p, tid, kind, snd) {
+    var M = DM(), t = M.findTrack(p, tid), sk = songKey(p), sc = harmScale(sk), cmap = songChords(p);
+    if (!t || t.kind !== "midi" || M.isDrum(t) || M.isAudio(t)) { return { ok: false, why: "メロディ（MIDI）のトラックを選んでください" }; }
+    if (!HARM_KINDS.some(function (k) { return k[0] === kind; })) { return { ok: false, why: "ハモりの種類を選んでください" }; }
+    if (kind !== "oct" && !sc) { return { ok: false, why: "曲のキーがないので、スケールに沿ったハモりは作れません（🎼 コード でキーを決めるか、オクターブを使ってください）" }; }
+    var all = []; t.clips.forEach(function (c) { if (c.type === "midi") { c.notes.forEach(function (n) { all.push({ c: c, n: n, at: c.start + n[0] - (c.offset || 0) }); }); } });
+    if (!all.length) { return { ok: false, why: "このトラックに音符がありません（先にメロディを入れてください）" }; }
+    var lo = 127, hi = 0; all.forEach(function (x) { lo = Math.min(lo, x.n[2]); hi = Math.max(hi, x.n[2]); });
+    var prev = null, st0 = { notes: 0, leaps: 0, cross: 0, sameDirLeaps: 0, chordTones: 0, withChord: 0, outRange: 0, maxLeap: 0 }, out = [], prevMel = null;
+    function choose(cands, m) { // 前のハモりの音から近い（跳ばない）ものを選ぶ
+      var best = null, bd = 999; cands.forEach(function (c) { if (c === null || c < 24 || c > 100) { return; } var d = prev === null ? 0 : Math.abs(c - prev); if (d < bd) { bd = d; best = c; } }); return best;
+    }
+    all.sort(function (a, b) { return a.at - b.at || b.n[2] - a.n[2]; });
+    var lastAt = -1;
+    all.forEach(function (x) {
+      if (x.at === lastAt) { return; } // 同じ位置の 2 つめの音（和音）は、いちばん上だけ
+      lastAt = x.at;
+      var m = x.n[2], ch = chordPcsAt(p, cmap, x.at, sk.key === null ? 0 : sk.key), pcs = ch ? ch.pcs : null, isCt = function (v) { return pcs && pcs.indexOf(((v % 12) + 12) % 12) >= 0; }, h = null;
+      if (kind === "oct") { h = m - 12 >= 36 ? m - 12 : m + 12; }
+      else if (kind === "up" || kind === "down") {
+        var dir = kind === "up" ? 1 : -1, third = scaleStep(sc, m, 2 * dir), fourth = scaleStep(sc, m, 3 * dir), cands = [];
+        if (isCt(third) || !isCt(fourth)) { cands.push(third); } if (isCt(fourth)) { cands.push(fourth); }
+        h = choose(cands.filter(function (v) { return Math.abs(v - m) >= 3; }), m); if (h === null) { h = third; }
+      } else if (kind === "chord") {
+        if (pcs) { var c2 = [], v; for (v = m - 3; v >= m - 9; v--) { if (isCt(v)) { c2.push(v); } } h = choose(c2, m); }
+        if (h === null) { h = scaleStep(sc, m, -2); }
+      }
+      if (kind === "counter") { return; }
+      out.push({ at: x.at, d: x.n[1], m: h, v: Math.max(0.3, Math.round(x.n[3] * 0.8 * 1000) / 1000), mel: m });
+      prev = h;
+    });
+    if (kind === "counter") { // メロディが休んでいる拍に、コードの音を 4 分音符で（なめらかに）
+      var PPQ = M.PPQ, end = 0, pv = null, sounding = function (tk) { return all.some(function (x) { return x.at <= tk && tk < x.at + Math.min(PPQ, Math.max(x.n[1], PPQ / 4)); }); }; // 鳴りはじめの 1 拍だけ「ふさがっている」（のばしている音のあいだは対旋律が動ける）
+      // 主旋律の音があるクリップの、最初の音の拍から最後の音の終わりまで（メロディのないセクションは埋めない）
+      var spans = []; t.clips.forEach(function (c) { if (c.type !== "midi" || !c.notes.length) { return; } var f0 = null, l0 = 0; c.notes.forEach(function (n) { var a0 = c.start + n[0] - (c.offset || 0); if (f0 === null || a0 < f0) { f0 = a0; } l0 = Math.max(l0, a0 + Math.max(n[1], PPQ / 4)); }); spans.push([Math.floor(f0 / PPQ) * PPQ, l0]); });
+      var mid = Math.round((lo + hi) / 2) - 7;
+      for (var si = 0; si < spans.length; si++) for (var tk = spans[si][0]; tk < spans[si][1]; tk += PPQ) {
+        if (sounding(tk)) { continue; }
+        var ch2 = chordPcsAt(p, cmap, tk, sk.key), cc = [], z;
+        if (!ch2) { continue; }
+        for (z = mid - 7; z <= mid + 7; z++) { if (ch2.pcs.indexOf(((z % 12) + 12) % 12) >= 0) { cc.push(z); } }
+        var target = pv === null ? mid : pv, bz = null, bdz = 999; cc.forEach(function (z2) { var d = Math.abs(z2 - target) + (z2 === pv ? 1.5 : 0); if (d < bdz) { bdz = d; bz = z2; } });
+        if (bz === null) { continue; }
+        out.push({ at: tk, d: PPQ, m: bz, v: 0.6, mel: null }); pv = bz;
+      }
+    }
+    // 評価（目安）
+    var lastH = null, lastM = null;
+    out.forEach(function (o) {
+      st0.notes++;
+      var ch3 = chordPcsAt(p, cmap, o.at, sk.key === null ? 0 : sk.key);
+      if (ch3) { st0.withChord++; if (ch3.pcs.indexOf(((o.m % 12) + 12) % 12) >= 0) { st0.chordTones++; } }
+      if (o.m < 36 || o.m > 88) { st0.outRange++; }
+      if (o.mel !== null && ((kind === "up" && o.m < o.mel) || ((kind === "down" || kind === "chord" || kind === "oct") && o.m > o.mel && !(kind === "oct" && o.m === o.mel + 12)))) { st0.cross++; }
+      if (lastH !== null) { var lp = Math.abs(o.m - lastH); st0.maxLeap = Math.max(st0.maxLeap, lp); if (lp > 7) { st0.leaps++; } if (o.mel !== null && lastM !== null) { var dm = o.mel - lastM, dh = o.m - lastH; if (Math.abs(dm) >= 5 && Math.abs(dh) >= 5 && dm * dh > 0) { st0.sameDirLeaps++; } } }
+      lastH = o.m; lastM = o.mel;
+    });
+    // クリップ（主旋律と同じ区切り）に分ける
+    var clips = t.clips.filter(function (c) { return c.type === "midi"; }).map(function (c) {
+      var ns = out.filter(function (o) { return o.at >= c.start && o.at < c.start + c.len; }).map(function (o) { var lt = o.at - c.start; return [lt, Math.max(1, Math.min(o.d > 0 ? o.d : PPQ0(), c.len - lt)), Math.max(0, Math.min(127, o.m)), o.v]; });
+      return { start: c.start, len: c.len, name: ((c.ext && c.ext.name) || "") + "（" + lbl(HARM_KINDS, kind) + "）", notes: M.cleanNotes(ns) };
+    });
+    function PPQ0() { return M.PPQ; }
+    st0.chordRate = st0.withChord ? Math.round(st0.chordTones / st0.withChord * 100) : null;
+    return { ok: true, kind: kind, src: tid, srcName: t.name, snd: snd || HARM_SNDS[0][0], clips: clips, stats: st0, range: [out.reduce(function (a, o) { return Math.min(a, o.m); }, 127), out.reduce(function (a, o) { return Math.max(a, o.m); }, 0)] };
+  }
+  // 新しいトラックとして足す（曲を変える・↶ は呼ぶ側）→ { ok, track }
+  function harmApply(p, pl) {
+    var M = DM(); if (!pl || !pl.ok) { return { ok: false, why: "見本がありません" }; }
+    if (p.tracks.length >= M.MAX_TRACKS) { return { ok: false, why: "トラックは " + M.MAX_TRACKS + " 本までです" }; }
+    var t = makeTrack(p, pl.snd, (pl.srcName + "の" + lbl(HARM_KINDS, pl.kind)).substring(0, 30));
+    if (!t) { return { ok: false, why: "トラックを足せませんでした" }; }
+    t.ext.harm = { src: pl.src, kind: pl.kind };
+    var srcIdx = -1, i; for (i = 0; i < p.tracks.length; i++) { if (p.tracks[i].id === pl.src) { srcIdx = i; } }
+    if (srcIdx >= 0) { p.tracks.splice(p.tracks.indexOf(t), 1); p.tracks.splice(srcIdx + 1, 0, t); } // 主旋律のすぐ下に
+    pl.clips.forEach(function (c) { if (c.notes.length) { M.newMidiClip(p, t, c.start, c.len, JSON.parse(JSON.stringify(c.notes)), c.name); } });
+    return { ok: true, track: t };
+  }
+  // 試聴（主旋律 ＋ ハモり・はじめの音から 4 小節）
+  function harmItems(h, pl) {
+    var p = h.project(), M = DM(), src = M.findTrack(p, pl.src), first = null, out = [];
+    src.clips.forEach(function (c) { c.notes.forEach(function (n) { var a = c.start + n[0] - (c.offset || 0); if (first === null || a < first) { first = a; } }); });
+    if (first === null) { return out; }
+    var b0 = M.barToTick(p, M.tickToBar(p, first).bar - 1), b1 = b0 + 4 * M.ticksPerBar(M.meterAt(p, b0)), sp = 60 / M.bpmAt(p, b0) / M.PPQ;
+    function add(clips, ins) { clips.forEach(function (c) { c.notes.forEach(function (n) { var a = c.start + n[0] - (c.offset || 0); if (a >= b0 && a < b1) { out.push({ at: (a - b0) * sp, m: n[2], v: n[3], sec: Math.max(0.05, n[1] * sp), ins: ins }); } }); }); }
+    add(src.clips, instrument(trackSnd(src) || "xm-musicbox"));
+    add(pl.clips, instrument(pl.snd));
+    return out;
+  }
+  function harmTab(h) {
+    var p = h.project(), M = DM(), x = '<div class="dxm-harm"><p class="small">主旋律から、ハモりや対旋律の<b>候補</b>を作ります（曲のコード・スケール・音域を見て作ります）。試聴して、よければ新しいトラックに足します（元のメロディは変えません。足したあとピアノロールで直せます）。</p>';
+    var ts = p.tracks.filter(function (t) { return t.kind === "midi" && !M.isDrum(t) && !M.isAudio(t) && t.clips.some(function (c) { return c.notes && c.notes.length; }); });
+    if (!ts.length) { return x + '<p class="dxm-warn">音符のある MIDI のトラックがありません。先にメロディを入れてください。</p></div>'; }
+    if (!ui.hsrc || !ts.some(function (t) { return t.id === ui.hsrc; })) { var mt = ts.filter(function (t) { return /^メロディ/.test(t.name); })[0]; ui.hsrc = (mt || ts[0]).id; }
+    x += '<div class="dxm-opt dxm-forms"><span>主旋律</span>' + ts.map(function (t) { return chip("data-xhsrc", t.id, esc(t.name), ui.hsrc === t.id); }).join("") + '</div>';
+    x += '<div class="dxm-opt dxm-forms"><span>種類</span>' + HARM_KINDS.map(function (k) { return chip("data-xhkind", k[0], k[1], ui.hkind === k[0]); }).join("") + '</div>';
+    x += '<div class="dxm-opt dxm-forms"><span>音色</span>' + HARM_SNDS.map(function (k) { return chip("data-xhsnd", k[0], k[1], (ui.hsnd || HARM_SNDS[0][0]) === k[0]); }).join("") + '</div>';
+    if (ui.hkind) {
+      var pl = harmPlan(p, ui.hsrc, ui.hkind, ui.hsnd); ui.hplan = pl;
+      if (!pl.ok) { x += '<p class="dxm-warn">&#x26A0;&#xFE0F; ' + esc(pl.why) + '</p>'; }
+      else {
+        var s = pl.stats;
+        x += '<div class="dxm-prev small"><b>見本: ' + esc(pl.srcName) + ' → ' + esc(lbl(HARM_KINDS, pl.kind)) + '</b>・' + s.notes + ' 音・音域 ' + esc(noteNameX(pl.range[0])) + '〜' + esc(noteNameX(pl.range[1])) + '<br>目安: ' + (s.chordRate !== null ? 'コードの音 ' + s.chordRate + '%・' : '') + '大きな跳躍（7 半音より大）' + s.leaps + '・いちばん大きな跳躍 ' + s.maxLeap + ' 半音・主旋律との交差 ' + s.cross + '・同じ向きの大きな跳躍 ' + s.sameDirLeaps + (s.outRange ? '・音域の外 ' + s.outRange : '') + '<br>機械の目安です。自然に聞こえるかは試聴して決めてください（足したあと手で直せます）。</div>';
+        x += '<div class="dxm-go">' + pvBtn("hm", "&#x25B6;&#xFE0F; 主旋律と試聴") + '<button class="modal-btn dxm-b dxm-main" data-xm="hAdd">&#x2795; 新しいトラックとして足す</button></div>';
+      }
+    } else { x += '<p class="small">種類を選ぶと見本が出ます。</p>'; }
+    return x + '</div>';
+  }
+  function noteNameX(m) { var NN = ["C", "C#", "D", "E♭", "E", "F", "F#", "G", "A♭", "A", "B♭", "B"]; return NN[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); }
   // ---------- 🎧 リファレンス解析 Lite（FFT の特徴だけ・推薦は目安）----------
   function fft(re, im) { // その場で（長さは 2 の累乗）
     var n = re.length, i, j = 0, k, len;
@@ -2790,7 +2910,7 @@
 
   // ---------- 画面（DAW の host から呼ぶ）----------
   var XM_KEY = "ultimateGorillaXmasV1";
-  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", gbpm: null, gamt: null, gmeter: "", gmel: false, mcond: null, manal: "", mres: null, mysel: null, myselP: "", myname: "", mydel: "", mykey: null, myUrl: "", myFile: "", an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
+  var ui = { tab: "sound", cat: "bells", pcat: "drum", g: null, dest: "", bar: 1, snd: "", msg: "", last: null, tpl: "", tplMode: "new", tplBar: 1, tplPlan: null, form: "std", tplKey: null, tplKmode: null, tq: "", tgen: "", tmood: "", tmeter: "", tbpm: "", tfam: "", tsel: null, part: null, asec: null, aclip: null, aopt: null, atpl: "", csel: null, cedit: {}, cpick: "", cprog: "p1", chow: "keep", ckey: 0, ckm: "maj", gbpm: null, gamt: null, gmeter: "", gmel: false, mcond: null, manal: "", mres: null, hsrc: "", hkind: "", hsnd: "", hplan: null, mysel: null, myselP: "", myname: "", mydel: "", mykey: null, myUrl: "", myFile: "", an: null, anStart: 0, anLen: 2, anBusy: false, pvState: "", pvWhat: "" };
   function lsGet() { try { var s = window.localStorage.getItem(XM_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
   function lsPut() { try { window.localStorage.setItem(XM_KEY, JSON.stringify({ g: ui.g })); } catch (e) {} }
   function g0() { if (!ui.g) { var s = lsGet(); ui.g = genClean(s && s.g ? s.g : { seed: 1 }); } return ui.g; }
@@ -2804,7 +2924,7 @@
     var p = h.project(), M = DM(), m0 = M.meterAt(p, 0), x = '<div class="daw dxm">' +
       '<div class="daw-top"><button class="modal-btn daw-small" data-xm="back">&#x2190; もどる</button><b>&#x1F384; クリスマス制作</b><span class="daw-pname">' + esc(p.name) + '・' + m0.num + '/' + m0.den + '・BPM ' + M.bpmAt(p, 0) + '</span></div>' +
       '<div class="dxm-tabs" role="tablist">' + chip("data-xtab", "sound", "&#x1F514; 音色", ui.tab === "sound") + chip("data-xtab", "pat", "&#x1F3BC; パターン", ui.tab === "pat") + chip("data-xtab", "gen", "&#x1F3B9; 伴奏", ui.tab === "gen") +
-        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "groove", "&#x1F941; グルーヴ", ui.tab === "groove") + chip("data-xtab", "match", "&#x1F3A4; おすすめ", ui.tab === "match") + chip("data-xtab", "my", "&#x1F5C2;&#xFE0F; マイ", ui.tab === "my") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
+        chip("data-xtab", "tpl", "&#x1F384; テンプレート", ui.tab === "tpl") + chip("data-xtab", "arr", "&#x1F501; 差しかえ", ui.tab === "arr") + chip("data-xtab", "chord", "&#x1F3BC; コード", ui.tab === "chord") + chip("data-xtab", "groove", "&#x1F941; グルーヴ", ui.tab === "groove") + chip("data-xtab", "match", "&#x1F3A4; おすすめ", ui.tab === "match") + chip("data-xtab", "my", "&#x1F5C2;&#xFE0F; マイ", ui.tab === "my") + chip("data-xtab", "harm", "&#x1F3B6; ハモり", ui.tab === "harm") + chip("data-xtab", "ana", "&#x1F3A7; 解析", ui.tab === "ana") + '</div>' +
       (ui.msg ? '<div class="daw-msg dxm-msg">' + ui.msg + '</div>' : '');
     if (ui.tab === "sound") { x += soundTab(h); }
     else if (ui.tab === "pat") { x += patTab(h, m0); }
@@ -2814,6 +2934,7 @@
     else if (ui.tab === "chord") { x += chordTab(h); }
     else if (ui.tab === "groove") { x += grooveTab(h); }
     else if (ui.tab === "match") { x += matchTab(h); }
+    else if (ui.tab === "harm") { x += harmTab(h); } // §345 A25
     else if (ui.tab === "my") { if (ui.myselP !== h.project().id) { ui.mysel = null; ui.myname = ""; ui.myselP = h.project().id; } x += myTab(h); }
     else { x += anaTab(h); }
     x += '<p class="small dxm-foot">&#x1F4DD; ここで作る伴奏・音色は、一般的なコード進行・リズム・音作りから作ったものです（有名な曲のメロディ・フレーズは入っていません）。録音の音色の権利は、音色の下に書いてあります（CC BY はクレジットの表記が要ります）。</p></div>';
@@ -3027,6 +3148,7 @@
           else if (v === "so" || v === "sn") { pvPlay(secItems(h, v === "sn"), v, pvState); }
           else if (v.indexOf("d:") === 0) { var pld = tplPlan(null, v.substring(2), "new", 1, g.seed, ui.form); if (pld.ok) { pvPlay(previewTpl(h, pld), v, pvState); } else { ui.msg = "&#x26A0;&#xFE0F; " + esc(pld.why); } }
           else if (v === "ra") { playRef(h, pvState); }
+          else if (v === "hm" && ui.hplan && ui.hplan.ok) { pvPlay(harmItems(h, ui.hplan), v, pvState); } // §345 A25
           else if (v.indexOf("my:") === 0) { var myi = myGet(v.substring(3)); if (myi) { pvPlay(myItems(myi), v, pvState); } }
           else if (v.indexOf("rb:") === 0) { var a = ui.an, id = v.substring(3), s = sound(id), m = a && a.midi !== null ? a.midi : 60, items; if (s && s[3] === "drum") { items = hearItems(id); } else { var lo = (s && s[5].lo) || 36, hi = (s && s[5].hi) || 96; while (m < lo) { m += 12; } while (m > hi) { m -= 12; } items = [{ at: 0, m: m, v: 0.8, sec: Math.min(2, ui.anLen), ins: instrument(id) }]; } pvPlay(items, v, pvState); }
           re(); return;
@@ -3064,6 +3186,9 @@
         if ((v = el.getAttribute("data-xgv")) !== null && v !== undefined && v !== "") { ui.gamt = clamp(Math.round(Number(v)) || 0, 0, 100); pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xmeter"))) { ui.gmeter = /^(4\/4|3\/4|6\/8|12\/8)$/.test(v) ? v : ""; re(); return; }
         if ((v = el.getAttribute("data-xmmel")) !== null && v !== undefined && v !== "") { ui.gmel = v === "1"; re(); return; }
+        if ((v = el.getAttribute("data-xhsrc"))) { ui.hsrc = v; pvStop(); re(); return; } // §345 A25
+        if ((v = el.getAttribute("data-xhkind"))) { ui.hkind = v; pvStop(); re(); return; }
+        if ((v = el.getAttribute("data-xhsnd"))) { ui.hsnd = v; pvStop(); re(); return; }
         if ((v = el.getAttribute("data-xmyt"))) { var ms0 = ui.mysel || [], mi0 = ms0.indexOf(v); if (mi0 >= 0) { ms0.splice(mi0, 1); } else if (M.findTrack(p, v)) { ms0.push(v); } ui.mysel = ms0; re(); return; }
         if ((v = el.getAttribute("data-xmynew"))) {
           pvStop(); var mit = myGet(v); if (!mit) { ui.msg = "&#x26A0;&#xFE0F; 見つかりません"; re(); return; }
@@ -3199,6 +3324,7 @@
           if (!cap.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(cap.why); re(); return; }
           var sv = mySave(cap.item); ui.msg = sv.ok ? "「" + esc(cap.item.meta.name) + "」をマイテンプレートに保存しました（" + cap.item.meta.tracks + " トラック）" : "&#x26A0;&#xFE0F; " + esc(sv.why); re(); return;
         }
+        if (v === "hAdd") { pvStop(); var hpl = harmPlan(p, ui.hsrc, ui.hkind, ui.hsnd); if (!hpl.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(hpl.why); re(); return; } var hsn = h.snapAll ? h.snapAll() : h.snap(), har = harmApply(p, hpl); if (!har.ok) { ui.msg = "&#x26A0;&#xFE0F; " + esc(har.why); re(); return; } ui.msg = "「" + esc(har.track.name) + "」を足しました（" + hpl.stats.notes + " 音・元のメロディはそのまま・↶ で戻せます。ピアノロールで直せます）"; h.commit(hsn, ui.msg, har.track.id); return; } // §345 A25
         if (v === "mySaveFile" && ui.myBlob && window.UGDaw && window.UGDaw.saveFile) { ui.mySaved = ""; window.UGDaw.saveFile(ui.myBlob, ui.myFile, function (r) { ui.mySaved = r; if (h.isView()) { re(); } }); return; }
         if (v === "myExpAll") { var la = myList(); ui.msg = la.length && myLink(la, "ぜんぶ" + la.length) ? "下のボタンで JSON を保存できます（" + la.length + " 個）" : "&#x26A0;&#xFE0F; 書き出せませんでした"; re(); return; }
         if (v === "mRec") { pvStop(); micDone = function (r) { if (r.an) { ui.mres = r.an; analysisToCond(r.an); } else if (!r.ok) { ui.mres = { ok: false, why: r.why }; } if (h.isView()) { re(); } }; micStart(function (r) { if (!r.ok) { ui.mres = { ok: false, why: r.why }; } else if (r.an) { micDone(r); return; } if (h.isView()) { re(); } }); return; }
@@ -3303,6 +3429,7 @@
     planSecs: planSecs, mmss: mmss, timeNote: timeNote, WAV_LIMIT: WAV_LIMIT,
     trimOverlaps: trimOverlaps,
     TPLS: TPLS, SECS: SECS, tplPlan: tplPlan, tplApply: tplApply, tplNewProject: tplNewProject,
+    harmPlan: harmPlan, harmApply: harmApply, harmTab: harmTab, HARM_KINDS: HARM_KINDS, HARM_SNDS: HARM_SNDS,
     myCapture: myCapture, myList: myList, mySave: mySave, myDel: myDel, myGet: myGet, myProject: myProject, myItems: myItems, myExport: myExport, myImport: myImport, myAdd: myAdd, myTab: myTab, MY_KEY: MY_KEY,
     styleAnalyze: styleAnalyze, analysisToCond: analysisToCond, analysisHtml: analysisHtml, micStop: micStop, KPROF: KPROF,
     styleScore: styleScore, styleRank: styleRank, matchProject: matchProject, matchTab: matchTab,
