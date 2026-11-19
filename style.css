@@ -2059,3 +2059,8 @@ button.daw-pos[data-act="goBar"] { min-width: 64px; min-height: 36px; background
 .pr-note.pr-ms { outline: 2px solid #ffd166; outline-offset: 1px; }
 .pr-phr input[type=number] { width: 4.2em; min-height: 32px; font-size: 16px; }
 .pr-phr select { min-height: 32px; font-size: 14px; max-width: 12em; }
+/* §345 A26 仕上げ */
+.dxm-steps { margin: 6px 0; padding-left: 1.4em; }
+.dxm-steps li { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.25); }
+.dxm-steps li.dxm-done span { color: #8fd18f; }
+.dxm-chip.dxm-cur { outline: 2px dashed #8fd18f; }

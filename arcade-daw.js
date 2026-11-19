@@ -2321,6 +2321,7 @@
   var xmHost = {
     project: function () { return project(); },
     snap: function () { return snapTracks(); },
+    go: function (v) { var p = project(), mel = p.tracks.filter(function (t0) { return /^メロディ/.test(t0.name) || (t0.ext && t0.ext.icon === "&#x1F3A4;"); })[0]; if (v === "mel") { var mc = mel ? (mel.clips.filter(function (c0) { return c0.notes && c0.notes.length; })[0] || mel.clips[0]) : null; if (mc && openRoll(mc.id)) { rerender(); return true; } st.view = "arr"; rerender(); return false; } if (v === "mix") { st.view = "mix"; rerender(); return true; } if (v === "proj") { st.view = "proj"; rerender(); return true; } st.view = "arr"; rerender(); return true; }, // §345 A26: 仕上げの道案内から
     snapAll: function () { var p = project(); return { __all: true, tracks: JSON.parse(JSON.stringify(p.tracks)), markers: JSON.parse(JSON.stringify(p.markers || [])), tempo: JSON.parse(JSON.stringify(p.tempo)), ext: JSON.parse(JSON.stringify(p.ext || {})) }; }, // §345 A4: 曲のコード（ext）も ↶ で戻す
     restore: function (s) { project().tracks = s; },
     commit: function (snap, note, tid, cid) { pushUndo(snap); st.anote = note ? String(note) : ""; if (cid) { st.sel = { kind: "clip", id: cid }; } else if (tid) { st.sel = { kind: "track", id: tid }; } st.reveal = true; markDirty(); if (pl) { resync(); } rerender(); return true; },

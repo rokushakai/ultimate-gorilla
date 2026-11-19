@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.02** |
+| 現在バージョン | **v3.03** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.03] 🦍 A26・仕上げのスタジオ**（§345）: 🎄 `finishTab`・`finishSteps`・`energyPlan(p, セクションの id, 1〜5)`・`energyApply`・`energyRecPlan`・`energyItems`（A／B）・`ENERGY`・`p.ext.xmEnergy`・DAW の `xmHost.go`。`swapPlan` が 12/8 を 6/8 のパターンで作るように（いままでの不具合）。v3.0 シリーズ（A23〜A26）はここまで
 - **[v3.02] 🦍 A25・ハモりづくり**（§345）: 🎄 `harmPlan(p, 主旋律の id, 種類, 音色)`・`harmApply`・`harmTab`・`HARM_KINDS`（up・down・oct・chord・counter）・`HARM_SNDS`・トラックの `ext.harm`。次は A26（仕上げのスタジオ）
 - **[v3.01] 🦍 A24・フレーズの道具**（§345）: `st.roll.ms`（選んだ音）・`st.clip2`（コピー）・`phrCopy`／`phrPaste(p, t, 曲の tick, cb, "replace"|"mix")`／`phrTranspose`／`phrMove`／`phrLen`／`phrVel`／`fixOverlaps`・`phrHtml`／`phrAct`（`UGDaw.phrase`）。次は A25（ハモり）
 - **[v3.00] 🦍 A23・メロディの補助**（§345）: `rollAssist`・`noteKind`・`assistGridHtml`／`assistBarHtml`（`.pr-cbar` は幅 0・`.pr-inner` は flex）・`st.rollAssist`・ステップ入力 `st.roll.step`・`stepAct`（`UGDaw.roll2`）。次は A24（フレーズの道具）
