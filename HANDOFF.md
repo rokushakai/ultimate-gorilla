@@ -12,7 +12,7 @@
 | 公開URL | https://rokushakai.github.io/ultimate-gorilla/ |
 | GitHub リポジトリ | https://github.com/rokushakai/ultimate-gorilla |
 | デバッグURL | https://rokushakai.github.io/ultimate-gorilla/?debug=1 |
-| 現在バージョン | **v3.10** |
+| 現在バージョン | **v3.11** |
 | ブランチ | main |
 
 ---
@@ -102,6 +102,7 @@
   - **デバッグ20本（§140）**: `btn-debug-v59-*`
   - **BGM_DATA生成音・切替タイミング・save schema・ゲームロジック: 変更なし**
   - **旧v0.52.1「BGMファイル再生基盤」はv0.59で実装済み**
+- **[v3.11] 🦍 A34・スマホの速さ**（§345）: `clipHtml` の `svg.daw-minis`（音符ごとの要素をやめた）・`tpFollowTick` の `tpFol`（幅とスクロールは 0.3 秒ごと）・フリーズの 1 チャンネル（`frzRender`・`frzSched` のアップミックス・`bufBytes`・バウンスは 2 チャンネルに）。はかり方と前後の数字は GAME_DESIGN の A34。**A31〜A34 はここまで。次の候補**: ▶ 直後の停止・iPhone Safari／Cubasis 3／耳の確認（IPHONE_QA_DAW.md の「後日まとめて（A31〜A34）」）
 - **[v3.10] 🦍 A33・MIDI の互換**（§345）: モデルの `midiParse`（ccs・marks）・`midiRead`（parts[].cc・markers）・`midiBox`（cc・prog）・`importApply`（`midiCcApply`・`ext.gm`）・`midiNewProject`（`midiMetersIn`・`midiSectionsIn`）・`midiCcLane`・`hasGm`。独立のパーサー `tests/smf-ref.js`。外部の照合（作業用・midi-file）の手順は GAME_DESIGN の A33。次は A34（スマホの速さ・はかってから）
 - **[v3.09] 🦍 A32・フリーズ／バウンス**（§345）: DAW の `frz`（buf・key）・`frzKey`・`frzState`（ok／stale／nobuf）・`frzSet`（`pl.frz`）・`frzSched`（音声を鳴らす）・`frzRender`（`renderSong` の `rawGain`・5 番目の引数 buf）・`frzMake`・`frzOff`・`frzBounce`（短い ＝ importWav・長い ＝ longImport＋stageCommit）・`tPan`／`chainParams`／`setGain` のフリーズの扱い・`UGDaw.frz`。トラックの `ext.frz`。次は A33（MIDI の互換）
 - **[v3.08] 🦍 A31・書き出しの安定**（§345）: `renderSong` に `renderKey`（鍵）・`rcache`・`pcmDiff`・`rcOk`。鍵が同じなら描いたうえでくらべ、±1 LSB のゆれだけなら前の WAV を返す（`ro.noCache` でそろえない）。`UGDaw.wav.cache`（state・clear・key・diff）。原因は Chrome の足し算の順番（GAME_DESIGN の A31）。**次は A32（フリーズ）→ A33（MIDI）→ A34（速さ）**。続きは GAME_DESIGN の「A31〜A34」と TODO の Version 3.08〜 から

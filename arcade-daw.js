@@ -873,11 +873,15 @@
   }
   // §345 A22: 再生位置を追いかけて横にスクロール（モバイルははじめ ON・PC ははじめ OFF・ボタンで切りかえ）
   function tpFollow() { return st.follow === undefined || st.follow === null ? vw.lay !== "pc" : !!st.follow; }
+  var tpFol = { arr: null, w: 0, sl: 0, at: -1e9 }; // §345 A34: 幅とスクロール位置は 0.3 秒ごと（と自分で動かしたとき）だけ読む
   function tpFollowTick(root, tick) {
     if (!pl || pl.clip || !tpFollow() || !root || !root.querySelector || st.view !== "arr") { return; }
-    var arr = root.querySelector(".daw-arr"); if (!arr || !arr.clientWidth) { return; }
-    var x = tickX(tick), vis = Math.max(40, arr.clientWidth - HEAD_W), sl = arr.scrollLeft || 0;
-    if (x < sl || x > sl + vis * 0.85) { try { arr.scrollLeft = Math.max(0, x - Math.round(vis * 0.15)); st.scroll = arr.scrollLeft; } catch (e) {} }
+    var arr = root.querySelector(".daw-arr"); if (!arr) { return; }
+    var now = perfNow();
+    if (arr !== tpFol.arr || now - tpFol.at > 300) { tpFol.arr = arr; tpFol.w = arr.clientWidth; tpFol.sl = arr.scrollLeft || 0; tpFol.at = now; }
+    if (!tpFol.w) { return; }
+    var x = tickX(tick), vis = Math.max(40, tpFol.w - HEAD_W), sl = tpFol.sl;
+    if (x < sl || x > sl + vis * 0.85) { try { var ns = Math.max(0, x - Math.round(vis * 0.15)); arr.scrollLeft = ns; st.scroll = ns; tpFol.sl = ns; } catch (e) {} }
   }
   function posText() { var p = project(), M = DM(), b = M.tickToBar(p, tpNow()); return b.bar + "." + b.beat; }
   // ボタン（モバイル・PC Studio で同じ）
@@ -1059,13 +1063,14 @@
     if (c.type === "midi" && c.notes.length) {
       var lo = 127, hi = 0, i, n;
       for (i = 0; i < c.notes.length; i++) { lo = Math.min(lo, c.notes[i][2]); hi = Math.max(hi, c.notes[i][2]); }
-      var span = Math.max(6, hi - lo), top = 15, ht = LANE_H - 6 - top - 4;
+      var span = Math.max(6, hi - lo), top = 15, ht = LANE_H - 6 - top - 4, d = []; // §345 A34: 音符ごとの要素をやめて、クリップに SVG の線 1 本（見た目は同じ・DOM の数が音符の数 → 1）
       for (i = 0; i < c.notes.length; i++) {
         n = c.notes[i];
         if (n[0] >= c.len) { continue; }
         var nx = tickX(n[0]), nw = Math.max(2, tickX(n[0] + Math.max(n[1], 120)) - nx - 1), ny = top + Math.round((hi - n[2]) / span * (ht - 3));
-        h += '<i class="daw-mini" style="left:' + nx + 'px;width:' + nw + 'px;top:' + ny + 'px;"></i>';
+        d.push("M" + nx + " " + (ny + 1.5) + "h" + nw);
       }
+      if (d.length) { h += '<svg class="daw-minis" width="' + w + '" height="' + (LANE_H - 6) + '" aria-hidden="true"><path d="' + d.join("") + '"/></svg>'; }
     }
     return h + '</div>';
   }
@@ -2841,7 +2846,8 @@
   // 再生・書き出しのときに使うフリーズ（{ トラックの ID: { buf, s0, fx } }）
   function frzSet(p) { var o = null, i; for (i = 0; p && i < p.tracks.length; i++) { var t = p.tracks[i]; if (frzState(p, t) === "ok") { o = o || {}; o[t.id] = { buf: frz.buf[t.id].buf, s0: frz.buf[t.id].s0, fx: frzOf(t).fx !== false }; } } return o; }
   function frzOn(t) { return !!(pl && pl.frz && pl.frz[t.id]); }
-  function frzBytes() { var n = 0, k; for (k in frz.buf) { if (frz.buf.hasOwnProperty(k) && frz.buf[k]) { n += frz.buf[k].buf.length * frz.buf[k].buf.numberOfChannels * 4; } } return n; }
+  function frzBytes() { var n = 0, k; for (k in frz.buf) { if (frz.buf.hasOwnProperty(k) && frz.buf[k]) { n += bufBytes(frz.buf[k].buf); } } return n; }
+  function bufBytes(b) { return b ? b.length * b.numberOfChannels * 4 : 0; } // §345 A34
   // [from, to) で鳴らしはじめるフリーズの音声（区間の頭なら途中から）
   function frzSched(p, from, to, seg, fresh) {
     if (!pl.frz || pl.clip) { return; }
@@ -2858,6 +2864,7 @@
         try {
           var mx = mixFor(t), c = mx.main, inp = trackIn(t, mx, "main"), dest = f.fx ? (c.ae || c.av || c.g) : inp, ac = pl.ac, src = ac.createBufferSource(), g = ac.createGain(), w = at(st0);
           src.buffer = f.buf; src.connect(g); g.connect(dest);
+          if (f.buf.numberOfChannels === 1) { try { g.channelCount = 2; g.channelCountMode = "explicit"; g.channelInterpretation = "speakers"; } catch (e1) {} } // §345 A34: 1 チャンネル → 左右に同じ値（モノのアップミックス・−3dB にならない）
           if (off > 0.0005) { g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(1, w + 0.005); } else { g.gain.value = 1; }
           if (st0 + dur < s1 - 0.0005) { g.gain.setValueAtTime(1, at(st0 + dur) - 0.005); g.gain.linearRampToValueAtTime(0, at(st0 + dur)); }
           src.start(w, off, dur); mx.srcs.push({ src: src, g: g, end: w + dur }); rec.ok = true;
@@ -2889,9 +2896,11 @@
         while (a < n && Math.abs(L[a]) < 1e-7 && Math.abs(R[a]) < 1e-7) { a++; }
         while (b > a && Math.abs(L[b]) < 1e-7 && Math.abs(R[b]) < 1e-7) { b--; }
         if (a >= n) { cb({ ok: false, why: "このトラックは音がありません" }); return; }
-        var len = b - a + 1, nb;
-        try { nb = (UG.audio && UG.audio.ctx ? UG.audio.ctx : null) ? UG.audio.ctx.createBuffer(2, len, buf.sampleRate) : new window.AudioBuffer({ numberOfChannels: 2, length: len, sampleRate: buf.sampleRate }); } catch (e) { cb({ ok: false, why: "音声をしまう場所を作れませんでした（メモリ）" }); return; }
-        nb.getChannelData(0).set(L.subarray(a, b + 1)); nb.getChannelData(1).set(R.subarray(a, b + 1));
+        var len = b - a + 1, nb, same = L !== R, nch, q3; // §345 A34: 左右がまったく同じ（まん中のトラック）なら 1 チャンネル（メモリが半分）
+        if (L === R) { same = true; } else { for (q3 = a; q3 <= b; q3++) { if (L[q3] !== R[q3]) { same = false; break; } } }
+        nch = same ? 1 : 2;
+        try { nb = (UG.audio && UG.audio.ctx ? UG.audio.ctx : null) ? UG.audio.ctx.createBuffer(nch, len, buf.sampleRate) : new window.AudioBuffer({ numberOfChannels: nch, length: len, sampleRate: buf.sampleRate }); } catch (e) { cb({ ok: false, why: "音声をしまう場所を作れませんでした（メモリ）" }); return; }
+        nb.getChannelData(0).set(L.subarray(a, b + 1)); if (nch === 2) { nb.getChannelData(1).set(R.subarray(a, b + 1)); }
         cb({ ok: true, buf: nb, s0: a / buf.sampleRate, key: key, peak: stt ? stt.peak : 0 });
       }, { job: job, proj: q, noSend: true, rawGain: true, noCache: true, onProgress: function (pc) { frz.pct = pc; var r0 = st.root, el = r0 && r0.querySelector ? r0.querySelector(".dfz-pct") : null; if (el) { el.textContent = pc + "%"; } } });
     }
@@ -2910,14 +2919,14 @@
     frzRender(p, tid, withFx !== false, job, function (r) {
       frz.busy = false; wav.busy = false; frz.job = null; frz.tid = "";
       if (!r.ok) { frz.msg = "&#x26A0;&#xFE0F; " + escHtml(r.why); if (onDone) { onDone(r); } return; }
-      var others = frzBytes() - (frz.buf[tid] ? frz.buf[tid].buf.length * 8 : 0);
-      if (others + r.buf.length * 8 > frz.MAX) { frz.msg = "&#x26A0;&#xFE0F; フリーズの音声が多すぎます（" + Math.round((others + r.buf.length * 8) / 1048576) + "MB・" + Math.round(frz.MAX / 1048576) + "MB まで）。ほかのトラックのフリーズを解除してください"; if (onDone) { onDone({ ok: false, why: "memory" }); } return; }
+      var others = frzBytes() - (frz.buf[tid] ? bufBytes(frz.buf[tid].buf) : 0);
+      if (others + bufBytes(r.buf) > frz.MAX) { frz.msg = "&#x26A0;&#xFE0F; フリーズの音声が多すぎます（" + Math.round((others + bufBytes(r.buf)) / 1048576) + "MB・" + Math.round(frz.MAX / 1048576) + "MB まで）。ほかのトラックのフリーズを解除してください"; if (onDone) { onDone({ ok: false, why: "memory" }); } return; }
       if (st.project !== p || !M.findTrack(p, tid)) { frz.msg = "とちゅうで曲が変わったので、やめました"; if (onDone) { onDone({ ok: false }); } return; }
       var snap = snapTracks(), tt = M.findTrack(p, tid);
       frz.buf[tid] = { buf: r.buf, s0: r.s0 }; frz.key[tid] = r.key;
       tt.ext = tt.ext || {}; tt.ext.frz = { on: true, fx: withFx !== false, key: r.key, sec: Math.round((r.buf.length / r.buf.sampleRate) * 100) / 100, at: Date.now() };
       pushUndo(snap); markDirty();
-      frz.msg = "「" + escHtml(tt.name) + "」をフリーズしました（音声 " + tt.ext.frz.sec + " 秒・約 " + Math.round(r.buf.length * 8 / 1048576 * 10) / 10 + "MB。シンセの計算をしないで鳴らします・↶ で戻せます）";
+      frz.msg = "「" + escHtml(tt.name) + "」をフリーズしました（音声 " + tt.ext.frz.sec + " 秒・約 " + Math.round(bufBytes(r.buf) / 1048576 * 10) / 10 + "MB。シンセの計算をしないで鳴らします・↶ で戻せます）";
       if (onDone) { onDone({ ok: true }); }
     });
     return true;
@@ -2928,7 +2937,9 @@
     var p = project(), M = DM(), t = M.findTrack(p, tid), UG = window.UGMelody;
     if (!t || frzState(p, t) !== "ok") { frz.msg = "&#x26A0;&#xFE0F; 先にフリーズしてください（いまの中身で）"; if (onDone) { onDone({ ok: false }); } return false; }
     var why = assetAddWhy(); if (why) { frz.msg = "&#x26A0;&#xFE0F; " + escHtml(why); if (onDone) { onDone({ ok: false }); } return false; }
-    var f = frz.buf[tid], blob = UG.encodeWav(f.buf), snap0 = xmHost.snapAll(), u0 = st.undo.length;
+    var f = frz.buf[tid], src0 = f.buf, snap0 = xmHost.snapAll(), u0 = st.undo.length;
+    if (src0.numberOfChannels === 1) { var mono0 = src0, monoD = mono0.getChannelData(0); src0 = { numberOfChannels: 2, length: mono0.length, sampleRate: mono0.sampleRate, getChannelData: function () { return monoD; } }; } // §345 A34: 1 チャンネル → 左右に同じ値の 2 チャンネル
+    var blob = UG.encodeWav(src0);
     luReadBlob(blob, function (ab) {
       if (!ab) { frz.msg = "&#x26A0;&#xFE0F; 音声を作れませんでした"; if (onDone) { onDone({ ok: false }); } return; }
       var ra = M.addAudioTrack(p); if (!ra.ok) { frz.msg = "&#x26A0;&#xFE0F; " + escHtml(ra.why); if (onDone) { onDone({ ok: false }); } return; }
@@ -2958,7 +2969,7 @@
     if (M.isAudio(t)) { return ''; }
     if (frz.busy && frz.tid === t.id) { return h + '&#x1F9CA; フリーズしています… <b class="dfz-pct">' + frz.pct + '%</b> <button class="modal-btn daw-small" data-tr="frzCancel">やめる</button></div>'; }
     if (!f) { h += '&#x1F9CA; <b>フリーズ</b>: 重いトラックを音声にして、シンセの計算をへらします（元の音符と音色は残ります・解除で元どおり）。FX（EQ・コンプ）を' + (frz.fx ? 'ふくめる' : 'ふくめない（あとで変えられる）') + '。'; }
-    else if (s === "ok") { h += '&#x1F9CA; <b>フリーズ中</b>（音声 ' + f.sec + ' 秒・約 ' + Math.round(frz.buf[t.id].buf.length * 8 / 1048576 * 10) / 10 + 'MB・FX ' + (f.fx !== false ? 'ふくむ' : 'ふくまない（いま効かせる）') + '）。音量・センドはいつもどおり動かせます。'; }
+    else if (s === "ok") { h += '&#x1F9CA; <b>フリーズ中</b>（音声 ' + f.sec + ' 秒・約 ' + Math.round(bufBytes(frz.buf[t.id].buf) / 1048576 * 10) / 10 + 'MB' + (frz.buf[t.id].buf.numberOfChannels === 1 ? '（左右が同じなので 1ch）' : '') + '・FX ' + (f.fx !== false ? 'ふくむ' : 'ふくまない（いま効かせる）') + '）。音量・センドはいつもどおり動かせます。'; }
     else if (s === "stale") { h += '&#x26A0;&#xFE0F; フリーズのあとで中身（音符・音色・FX・パン・テンポなど）が変わったので、いまはシンセで鳴らしています。「作りなおす」で新しくします。'; }
     else { h += '&#x1F9CA; フリーズの印はありますが、音声がまだありません（曲を開きなおしたあと・音声は保存しないため）。いまはシンセで鳴らしています。'; }
     return h + (frz.msg && (frz.tid === t.id || !frz.busy) ? '<br>' + frz.msg : '') + '</div>';

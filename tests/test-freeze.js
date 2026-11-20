@@ -68,7 +68,7 @@ module.exports = async function () {
   var notes0 = JSON.stringify(t.clips.map(function (c) { return c.notes; })), inst0 = JSON.stringify(t.instrument);
   var r = await make(tid, true);
   t = M.findTrack(D.project(), tid);
-  ok(r.ok && t.ext.frz && t.ext.frz.on && t.ext.frz.fx === true && F.state(tid) === "ok" && F.info().buf[tid] && F.info().buf[tid].buf.numberOfChannels === 2, "フリーズ: the track gets an audio buffer and is marked frozen (state ok)", r.why);
+  ok(r.ok && t.ext.frz && t.ext.frz.on && t.ext.frz.fx === true && F.state(tid) === "ok" && F.info().buf[tid] && [1, 2].indexOf(F.info().buf[tid].buf.numberOfChannels) >= 0, "フリーズ: the track gets an audio buffer (§345 A34: 1 channel when left and right are identical, else 2) and is marked frozen (state ok)", r.why);
   ok(JSON.stringify(t.clips.map(function (c) { return c.notes; })) === notes0 && JSON.stringify(t.instrument) === inst0, "the original MIDI notes and the instrument are kept as they were");
   ok(F.bytes() > 0 && F.info().buf[tid].s0 >= 0, "memory is counted (bytes) and the silent head is trimmed (start " + F.info().buf[tid].s0.toFixed(3) + " s)");
   // 3. 再生: 音符を鳴らさず、音声を鳴らす
