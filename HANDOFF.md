@@ -1252,6 +1252,18 @@
 5. git commit → git push origin main
 ```
 
+### Mac の開発環境とバックアップ（2026-11-21 〜）
+
+- 開発は Windows から **M2 Mac mini（VS Code）** に移った（v3.12・e29f054 で確認）。
+- 自動テスト: `node tests/run.js`（v3.12 で 2960 件・Mac で約 94 秒）。
+- Golden Audio: Mac では `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node tools/synth-golden.js`（`tools/synth-golden.js` のいつもの場所は Windows の chrome.exe）。v3.12 で 36/36 OK。
+- 研究ブランチ `daw-mvp-9a` は、このリポジトリとは別のフォルダー `../ug-research/` に戻してある（未コミットの研究ファイルもふくむ）。**push 禁止・main にはまぜない**。
+- 公開のあとのバックアップは、このリポジトリの外の `../ug-tools/ug-backup.sh`（`selfcheck` → `create <世代名>` → `nas <世代名>`）。手順は DEVELOPMENT_CHECKLIST.md の「公開後のバックアップ」、戻し方は ug-tools の RESTORE.md。ug-tools はローカルだけの Git リポジトリで、push しない。
+- NAS の世代の形は、**世代名**で分かれる（版の番号ではない。v3.12 には両方の形がある）:
+  - `2026-11-20_v312-release` まで: Windows で作った世代（形は時期によってちがう。多くはバンドル 1 つと SHA256SUMS、研究の patch・untracked/・cubasis-untracked/。BACKUP-INFO.txt はない）
+  - `2026-11-21_v312-release` から: Mac の形（main と研究のバンドル 2 つ・refs の一覧・BACKUP-INFO.txt・MANIFEST.txt・SHA256SUMS・ug-tools/）
+- NAS のアドレス・手元の絶対パス・認証情報は、このリポジトリ（公開）に書かない。
+
 ---
 
 ## セーブデータ周りの注意

@@ -17,7 +17,7 @@
 ## 実装中チェック
 
 - [ ] 既存コードは ES5 で書いている（`var`、アロー関数なし、テンプレートリテラルなし）。新しいシンセのコード（CLAUDE.md の技術ルール B）は別のルール
-- [ ] シンセの音を変える作業では `node tools/synth-golden.js` で旧音色（patch v1）の基準とくらべた（§330）
+- [ ] シンセの音を変える作業では `node tools/synth-golden.js` で旧音色（patch v1）の基準とくらべた（§330）。Mac では Chrome の場所を渡す: `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node tools/synth-golden.js`
 - [ ] 新しいモーダルは `.modal` / `.modal-box` クラスを使っている
 - [ ] 新しいボタンは `.modal-btn` または `.shop-menu-btn` を使っている
 - [ ] 新しいフラグを `saveGame()` / `loadGame()` / `newGame()` 全部に追加した
@@ -83,6 +83,23 @@
 
 ---
 
+## 公開後のバックアップ（Mac・世代名 `2026-11-21_v312-release` 〜）
+
+バックアップの道具 `ug-backup.sh` は、このリポジトリの外の `../ug-tools/` にある（ローカルだけの別の Git リポジトリ。使い方・戻し方はその README.md・RESTORE.md）。
+NAS のアドレス・手元の絶対パスは、このリポジトリ（公開）に書かない。
+
+- [ ] main がきれい（`git status` が空）で、push とタグ（`pages-vX.XX`）が済んでいる
+- [ ] ほかのターミナルで `ug-backup` が動いていない（`pgrep -fl ug-backup` が空）
+- [ ] 世代名を決めた（`YYYY-MM-DD_vNNN-release`。手元にも NAS にも同じ名前がない）
+- [ ] `../ug-tools/ug-backup.sh selfcheck` が OK
+- [ ] `../ug-tools/ug-backup.sh create <世代名>` が `DONE`（手元の照合・復元テスト・今の作業フォルダーとの一致・リポジトリが変わっていない）
+- [ ] Finder で NAS の共有フォルダーをつないだ
+- [ ] `../ug-tools/ug-backup.sh nas <世代名>` が `DONE`（NAS で照合・読み戻し・復元テスト・`existing generations unchanged`）
+- [ ] 失敗したら: 再実行・上書き・作りかけの世代の削除をしない。表示された `!! step` / `!! cause` と記録のファイルを報告して、人が決める
+- [ ] NAS の macOS の補助ファイル（`._*`）は消さない（`dot_clean` もしない）
+
+---
+
 ## よくあるミス
 
 | ミス | 対策 |
@@ -94,3 +111,5 @@
 | デバッグボタンを通常UIに出してしまった | `DEBUG_MODE` 条件で囲む |
 | `loadGame()` の新フラグで古いセーブが落ちた | `!!data.flag` / `data.val \|\| defaultVal` 形式に直す |
 | `openModal()` / `closeModal()` を使わず直接 `hidden` を操作した | 既存の関数を使う |
+| Mac で Golden Audio が Chrome を見つけられない | `CHROME=` で Chrome の場所を渡す（スクリプトのいつもの場所は Windows の chrome.exe） |
+| バックアップが失敗したので、同じ世代名でやりなおした・作りかけを消した | しない。原因を報告し、新しい世代名にするか・作りかけをどうするかを人が決める |
